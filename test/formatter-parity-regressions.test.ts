@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { carveToHtml, parse, renderCarve } from '../src/index.js'
+import { SourceUnspellableError } from '../src/source/source-unspellable-error.js'
 
 it.each(["- - p `a\n > b` q\n", "- 1. p `a\n > b` q\n", "- p\n\n  - q `a\n > b` r\n", "r[^n]\n\n[^n]: p `a\n  [x]: y` q\n", "r[^n]\n\n[^n]: - p `a\n   > b` q\n", "> - - p `a\n>  > b` q\n", "- p `a\n > b` q\n", "- p `a\n >\nb` q\n", "- p `a\n [x]: y` q\n", "> - p `a\n>  > b` q\n", '`\n\t> x\n', '~``` x\n[d]: u ```\n', '`\n``\n', '`\n``x\n', '1. [d]: u\n', '- A\n{x}\n*[A]: }\n'])(
   'preserves rendered content when formatting %j',
@@ -37,8 +38,11 @@ it('allocates heading suffixes without reusing an existing heading id', () => {
   expect(carveToHtml(source)).toContain('id="A-3"')
 })
 
+// Under rule A the continuation ` > b` opens a quote (spec model), so a lone `\r`
+// is refused like `\n`.
 it('normalizes a constructed carriage return before guarding a quote line', () => {
-  const out = renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value: 'a\r> b' }] }] })
-  expect(out).toBe('`a\n > b`\n')
-  expect(carveToHtml(out)).toContain('<code>a\n&gt; b</code>')
+  const render = (value: string) => () =>
+    renderCarve({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'code', value }] }] })
+  expect(render('a\r> b')).toThrow(SourceUnspellableError)
+  expect(render('a\n> b')).toThrow(SourceUnspellableError)
 })

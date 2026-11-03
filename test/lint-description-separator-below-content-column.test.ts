@@ -23,6 +23,8 @@ describe(rule, () => {
         rule,
         'markdown-definition-paragraph',
       ])
+    } else if (name === 'double-colon') {
+      expect(warnings.map(warning => warning.rule)).toContain('block-opener-overindented')
     } else if (name !== 'within-description' && name !== 'correct-document') expect(warnings).toEqual(actual)
   })
 
@@ -31,7 +33,6 @@ describe(rule, () => {
     ['tab', '- a\n\t:: term\n : detail\n', 3, 2, ':', 4],
     ['quote', '> - a\n>   :: term\n>  : detail\n', 3, 4, ':', 4],
     ['quoted blank', '> - a\n>   :: term\n>\n>  : detail\n', 4, 4, ':', 4],
-    ['term marker', '- a\n  :: term\n :: next\n', 3, 2, '::', 2],
   ])('%s marker range', (_name, source, line, column, marker, target) => {
     const actual = findings(source as string)
     expect(actual).toHaveLength(1)
@@ -46,6 +47,8 @@ describe(rule, () => {
     '- a\n  :: term\n \\: detail\n',
     '- a\n  :: term\n ::: note\n',
     '- a\n  :: term\n  ```\n  : detail\n  ```\n',
+    // A term marker past the closed item opens a new list (carve#3885).
+    '- a\n  :: term\n :: next\n',
   ])('ignores literal and payload lines', source => {
     expect(findings(source)).toEqual([])
   })

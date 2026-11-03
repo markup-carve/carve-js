@@ -54,9 +54,9 @@ const drifted: Array<[string, string]> = [
 describe('a comment below a sub-list in a tight item', () => {
   it('is written where a re-parse reads it back into the OUTER item', () => {
     const source = '- - d\n\n  %% q\na\n'
-    expect(carveToCarve(source)).toBe('- - d\n\n  %% q\n\na\n')
-    // The failing spelling, named so a regression cannot pass by accident.
-    expect(carveToCarve(source)).not.toBe('- - d\n  %% q\n\na\n')
+    // A comment closes no indentation container (markup-carve/carve#4884), so the
+    // sub-list above no longer claims it and no separator is owed.
+    expect(carveToCarve(source)).toBe('- - d\n  %% q\n\na\n')
   })
 
   it('reaches a fixpoint on the reported document rather than walking right', () => {

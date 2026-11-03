@@ -97,7 +97,7 @@ it.each(['code', 'raw_inline', 'literal_inline', 'math'] as const)('retains the 
   }
 })
 
-it.each(['[r]: /target', '> continuation'])('preserves display math around %s continuations', continuation => {
+it.each(['[r]: /target'])('preserves display math around %s continuations', continuation => {
   const document = resolve(parse('paragraph\n'))
   const paragraph = document.children[0]
   if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
@@ -106,6 +106,22 @@ it.each(['[r]: /target', '> continuation'])('preserves display math around %s co
   expect(result.totalLosses).toBe(0)
   expect(payloads(resolve(parse(result.value)))).toEqual(payloads(document))
   expect(carveToCarve(result.value)).toBe(result.value)
+})
+
+// Under rule A a `>` continuation opens a quote at any indentation, so the span has no spelling.
+it('refuses display math around a > continuation', () => {
+  const document = resolve(parse('paragraph\n'))
+  const paragraph = document.children[0]
+  if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+  const node: InlineNode = { type: 'math', display: true, content: 'x\n> continuation' }
+  paragraph.children = [node]
+  try {
+    renderCarveWithReport(document)
+    expect.fail('expected a source refusal')
+  } catch (error) {
+    expect(error).toBeInstanceOf(SourceUnspellableError)
+    expect(error).toMatchObject({ nodeType: 'math', node })
+  }
 })
 
 it('refuses an unspellable imported verbatim leaf without deleting its payload', () => {

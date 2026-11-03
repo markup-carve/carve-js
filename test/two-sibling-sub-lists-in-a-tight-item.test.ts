@@ -148,7 +148,7 @@ describe('two sibling sub-lists in a tight item', () => {
     roundTrips('> > - a\n> >\n> >\n> >\n> > - b\n')
     roundTrips('- x\n\n  > - a\n  >\n  >\n  >\n  > - b\n')
     roundTrips('- x\n\n  > - o\n  >\n  >   - a\n  >\n  >\n  >\n  >   - b\n')
-    expect(carveToCarve(':: t\n:  - a\n\n\n\n   - b\n')).toBe(':: t\n: - a\n\n   - b\n')
+    expect(carveToCarve(':: t\n:  - a\n\n\n\n   - b\n')).toBe(':: t\n: - a\n\n\n\n  - b\n')
     roundTrips(':: t\n:  - a\n\n\n\n   - b\n')
   })
 

@@ -52,9 +52,12 @@ it('ends a quoted caption at a marker on the item content column (carve#4060)', 
   }
 })
 
-it('does not claim a quote marker inside an inline code span', () => {
+// Under rule A the fence opens a code block in the item, and the deeper closer does
+// not close it, so the quote marker and the rest stay payload (spec model).
+it('does not claim a quote marker inside an open code fence', () => {
   const html = carveToHtml('- a\n  ```\n   > q\n   ```\n  - m')
-  expect(html).toContain('    <ul>\n      <li>m</li>')
+  expect(html).toContain('<pre><code> &gt; q\n ```\n- m</code></pre>')
+  expect(html).not.toContain('<blockquote>')
 })
 
 it('ends an authored quote claim on a quoted heading or table', () => {

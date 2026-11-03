@@ -35,11 +35,10 @@ describe('a definition marker below a nested term column', () => {
     expect(normalize(carveToHtml(source))).toContain('<dt>inner</dt>\n<dd>tail</dd>\n</dl>\n</dd>\n</dl>\n</li>')
   })
 
-  it('lets a list marker end a term even past the surviving body column', () => {
+  // As in the spec model: the list ends the inner description and stays in the outer body.
+  it('lets a list marker end the inner description past the surviving body column', () => {
     const source = '- a\n  :: outer\n  :  detail\n       :: inner\n      :  tail\n      - item\n'
-    const html = normalize(carveToHtml(source))
-    expect(html).toContain('<dt>inner\n:  tail</dt>')
-    expect(html).toMatch(/<\/dl>\n<ul>\n<li>item<\/li>/)
+    expect(normalize(carveToHtml(source))).toContain('<dt>inner</dt>\n<dd>tail</dd>\n</dl>\n<ul>\n<li>item</li>\n</ul>\n</dd>\n</dl>\n</li>')
   })
 
   it('ends a description sibling at a closed below-column fence', () => {

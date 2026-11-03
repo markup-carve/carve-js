@@ -19,11 +19,10 @@ describe('fmt keeps a region marker on its line (CARVE-P11-073)', () => {
     JSON.stringify(toAstJson(parse(source)), (key, value) => (key === 'pos' || key === 'srcByteLength' ? undefined : value))
 
   it.each([
-    // A comment that is not a marker clears X1 retention at the content column,
-    // so the marker under it stays there too.
-    ['- a\n%% note\n%% #endregion r\n', '- a\n  %% note\n  %% #endregion r\n'],
-    // A marker retained in a nested item goes back to that item's marker column.
-    ['- x\n  - y\n%% #endregion r\n', '- x\n  - y\n  %% #endregion r\n'],
+    // A comment closes no indentation container (markup-carve/carve#4884): both
+    // lines sit at document level after the list and stay there.
+    ['- a\n%% note\n%% #endregion r\n', '- a\n\n%% note\n%% #endregion r\n'],
+    ['- x\n  - y\n%% #endregion r\n', '- x\n  - y\n%% #endregion r\n'],
     // A blank the author wrote below a list stays.
     ['- a\n\n%% #endregion r\n', '- a\n\n%% #endregion r\n'],
     // A definition above a marker is not hoisted past it, so the item keeps it.
