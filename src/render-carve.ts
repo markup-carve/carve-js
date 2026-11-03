@@ -3941,10 +3941,13 @@ class CarveRenderSession {
           return body
         }
         let itemSource = spellItem(renderItem(node.tight))
-        // A writer boundary expands to an authored blank between direct children.
-        // Under L1 the item then re-reads loose, so spell that loose lead on the
-        // first pass rather than making a second fmt pass add its paragraph gap.
-        if (node.tight && itemSource.includes(this.boundaryTag()))
+        // A boundary between direct same-marker child lists expands to an
+        // authored blank at this item's level. A boundary nested in a child
+        // description or list remains owned by that child under L1.
+        const directListBoundary = item.children.some((child, index) =>
+          child.type === 'list' && item.children[index + 1]?.type === 'list' &&
+          listsWouldMerge(child, item.children[index + 1] as List))
+        if (node.tight && directListBoundary && itemSource.includes(this.boundaryTag()))
           itemSource = spellItem(renderItem(false))
         if (needsReadback && !readsBack(itemSource)) {
           const looseItemSource = spellItem(renderItem(false))
