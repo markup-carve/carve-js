@@ -83,4 +83,14 @@ describe('carve#5012 transparent single-line blocks', () => {
   it('keeps comment placement when positions are disabled', () => {
     expect(carveToCarve('a\n%% c\nb', { positions: false })).toBe('a\n%% c\nb\n')
   })
+
+  it('runs extension matchers only on the visible parse', () => {
+    let calls = 0
+    const extensions = [{ name: 'count', matchInline: () => { calls++; return null }, matchBlock: () => { calls++; return null } }]
+    parse('a\nb', { extensions })
+    const visibleCalls = calls
+    calls = 0
+    parse('a\n%% c\nb', { extensions })
+    expect(calls).toBe(visibleCalls)
+  })
 })

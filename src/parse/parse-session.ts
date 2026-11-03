@@ -501,6 +501,9 @@ export class ParseSession extends InlineParseSession {
     delete authoredOptions.onOverindentedOpener
     delete authoredOptions.onInvalidContainerMetadata
     delete authoredOptions.onDanglingBlockAttributes
+    // The restoration pass only harvests core comment and definition nodes.
+    // Extension callbacks may have state, so only the visible parse invokes them.
+    delete authoredOptions.extensions
     const authored = transparentLines ? new ParseSession().parse(authoredSource, authoredOptions, false) : null
     const erasedAbbreviations = transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : []
     const originalLexer = transparentLines ? new Lexer(source, opts) : null
