@@ -16,16 +16,23 @@ export function attachedLeadIsList(lexer: Lexer): boolean {
     if (end !== -1) k = end
   }
   skipCommentParagraph()
+  // A note's body is part of it, so a lead after two lazy lines is still measured (carve#5034).
+  let inNoteBody = false
   for (let ln = lexer.peek(k); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
     isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
-    RE_COMMENT_LINE.test(ln.trimStart()) ||
-    // A note's lazy text is part of it.
-    (k > 0 && RE_FOOTNOTE_DEF.test(lexer.peek(k - 1)!.trimStart()) && !isListMarkerLine(ln.trimStart()))); ln = lexer.peek(k)) {
+    RE_COMMENT_LINE.test(ln.trimStart()) || (inNoteBody && skippedNoteBodyLine(ln))); ln = lexer.peek(k)) {
+    inNoteBody = RE_FOOTNOTE_DEF.test(ln.trimStart()) || (inNoteBody && skippedNoteBodyLine(ln))
     k++
     skipCommentParagraph()
   }
   const lead = lexer.peek(k)
   return lead === undefined || isListMarkerLine(lead.trimStart())
+}
+
+/** A line a skipped note definition takes along: up to a blank, a comment line or a block opener (CARVE-P9-067). */
+function skippedNoteBodyLine(line: string): boolean {
+  const lead = line.trimStart()
+  return !isBlankLine(line) && !/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead)
 }
 
 function payloadCloserInBody(lexer: Lexer, marker: string, bodyColumn: number): boolean {
@@ -267,8 +274,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           RE_COMMENT_LINE.test(follower.trimStart()))) break
       // A skipped note definition takes its body along: lines up to a blank or a block opener (CARVE-P9-067, carve#5034).
       if (lexer.atDocumentLevel && RE_FOOTNOTE_DEF.test(follower.trimStart())) {
-        for (let body = lexer.lineAt(followerIndex + 1); body !== undefined && !isBlankLine(body) &&
-            !/^::? /.test(body.trimStart()) && !RE_COMMENT_LINE.test(body.trimStart()) && !lineOpensItemBlock(body.trimStart()); body = lexer.lineAt(++followerIndex + 1));
+        for (let body = lexer.lineAt(followerIndex + 1); body !== undefined && skippedNoteBodyLine(body); body = lexer.lineAt(++followerIndex + 1));
       }
       follower = lexer.lineAt(++followerIndex)
     }
