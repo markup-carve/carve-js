@@ -390,6 +390,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const followerSlice = indentColumns(attached.lines[0] ?? '')
     const lines = [head.content, ...attached.lines.map(line => sliceColumns(line, Math.min(followerSlice, indentColumns(line)), true))]
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
+    // A quoted line right after the block, at the stacked quote's source column, is still that quote's (§17 L3).
+    const quoteOffset = itemSource.search(/(?:> )+\+[ \t]*$/)
+    if (attached.lines.length > 0 && quoteOffset >= 0 && isStackedFirstBlockQuoteMarker(itemSource)) {
+      const root = lexer.rootLines ?? lexer.lines
+      const quoteColumn = sourceColumnAt(itemSource, quoteOffset)
+      const hostDepth = quotePrefixDepth(itemSource)
+      const quoted = lexer.peek()
+      const quotedSource = quoted === undefined ? undefined : root[lexer.lineNumber(lexer.pos) - 1]
+      if (quotedSource !== undefined && sourceColumn(quotedSource, hostDepth) === quoteColumn &&
+          RE_BLOCKQUOTE.test(quoted!.trimStart())) {
+        for (let next = lexer.peek(); next !== undefined && !isBlankLine(next) &&
+            indentColumns(next) >= followerSlice && !isSiblingMarker(shape, next); next = lexer.peek()) {
+          lines.push(sliceColumns(next, followerSlice, true))
+          numbers.push(lexer.lineNumber(lexer.pos))
+          lexer.consume()
+        }
+      }
+    }
     const emptyQuotedFollower = isStackedFirstBlockQuoteMarker(itemSource) &&
       /^>\s*$/.test(attached.lines[0] ?? '') && /^> \+[ \t]*$/.test(head.content)
     if (emptyQuotedFollower) lines[0] = head.content.replace(/\+[ \t]*$/, '>')
