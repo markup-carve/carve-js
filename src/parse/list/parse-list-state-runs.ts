@@ -220,7 +220,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     if (!state.literalLayout && !rebased && !state.ownedAuthored && (state.deepest?.ownedColumn ?? -1) < 0 &&
         (state.deepest?.commentAtColumn || line.wasCommentAtColumn) && marker) {
       state.retainedMarker = true
-      state.lazyFoldable = false
+      state.lazyFoldable = markerLineState(text).leavesParagraphOpen
       state.commentAtColumn = false
       return true
     }
@@ -241,11 +241,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     // A new sibling marker replaces the closed descendant's claim with its
     // own marker-line paragraph claim.
     if (!closedDescendantMarker) return false
-    if (!closedFootnoteMarker) {
-      state.retainedMarker = true
-      return endsOnBlock(state)
-    }
-    state.retainedMarker = false
+    state.retainedMarker = !closedFootnoteMarker
     state.lazyFoldable = markerLineState(text).leavesParagraphOpen
     return true
   }
