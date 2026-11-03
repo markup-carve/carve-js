@@ -246,6 +246,26 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
   return count
 }
 
+/** Whether these lines leave a code fence open at their end. */
+function leavesFenceOpen(lines: readonly string[]): boolean {
+  let close: RegExp | null = null
+  let column = 0
+  for (const line of lines) {
+    const text = line.trimStart()
+    // A closer counts only at its opener's column; an indented run is payload.
+    if (close !== null) {
+      if (indentColumns(line) === column && close.test(text)) close = null
+      continue
+    }
+    const code = RE_FENCE.exec(text) ?? RE_RAW_FENCE.exec(text)
+    if (code !== null) {
+      close = fenceCloseRe(RE_FENCE.test(text) ? code[2]! : code[1]!)
+      column = indentColumns(line)
+    }
+  }
+  return close !== null
+}
+
 function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockNode[] {
   if (letters !== null) restoreLetters(blocks, letters)
   return blocks
@@ -1680,6 +1700,16 @@ export class ParseSession extends InlineParseSession {
     if (!(quoteMarkerLine && isContinuationMarker(quotePlusBody.trimStart()) &&
         (quotePlusColumn === physicalQuoteColumn || quotePlusDecision?.owner?.kind === 'list' &&
           quotePlusDecision.owner.column === quotePlusColumn))) return false
+    // A `+` with nothing to attach never disappears (carve#4449): a fence the quote left open takes it
+    // as payload, and otherwise it is read as any other unmarked line.
+    const follower = lexer.peek(1)
+    if (follower === undefined || isBlankLine(follower)) {
+      if (!leavesFenceOpen(q.inner)) return false
+      q.innerLineNumbers.push(lexer.lineNumber(lexer.pos))
+      q.inner.push(stripLazyFrame(ln))
+      lexer.consume()
+      return true
+    }
     lexer.consume()
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       lexer,
