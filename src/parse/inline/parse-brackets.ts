@@ -1,5 +1,6 @@
 import { destinationSlotEnds } from '../../link-destination.js'
 import { extendsGrapheme } from '../../grapheme-extender.js'
+import { isEmptyAttrs, isValidInlineAttrPayload, parseAttrs } from '../../extension/attribute-parser.js'
 
 export const AUTOLINK_BODY_EXCLUDED = '\\p{White_Space}\\p{Cf}\\p{Cc}'
 
@@ -97,6 +98,23 @@ export function buildBracketMap(
     (lastRunStart.get(openLen) ?? -1) >= j + openLen ? verbatimSpanEnd(s, j).end : undefined
   let lastDelimitedCommentClose: number | undefined
   let lastEditorialCommentClose: number | undefined
+  const referenceAttributeEnd = (at: number): number | undefined => {
+    let quote: '"' | "'" | undefined
+    for (let k = at + 1; k < s.length; k++) {
+      const ch = s[k]
+      if (ch === '\n' || ch === '\r') return undefined
+      if (quote) {
+        if (ch === '\\') { k++; continue }
+        if (ch === quote) quote = undefined
+      } else if (ch === '"' || ch === "'") quote = ch
+      else if (ch === '{') return undefined
+      else if (ch === '}') {
+        const payload = s.slice(at + 1, k)
+        return isValidInlineAttrPayload(payload) && !isEmptyAttrs(parseAttrs(payload)) ? k + 1 : undefined
+      }
+    }
+    return undefined
+  }
   const opaqueEnd = (j: number, inImageAlt: boolean): number | undefined => {
     if (s[j] !== '{' || (s[j + 1] !== '%' && s[j + 1] !== '#') || extendsGrapheme(s, j + 2)) return undefined
     if (inImageAlt && s[j + 1] === '%') return undefined
@@ -162,6 +180,7 @@ export function buildBracketMap(
   const walk = (structural: Set<number> | undefined, literal?: Set<number>, demoted?: Set<number>): number[] => {
     const unclosed: number[] = []
     const stack: number[] = []
+    const referenceEnds = new Set<number>()
     // Most inline runs have no image label. Avoid tracking its nesting there.
     const imageAlt: boolean[] | undefined = s.includes('![') ? [] : undefined
     let lastBang = -1
@@ -174,6 +193,10 @@ export function buildBracketMap(
         lastEscaped = ++j
         continue
       }
+      // Only suppress comment recognition at the start of a consumed
+      // attribute. Brackets inside its payload keep their usual pairing.
+      const attributeEnd = ch === '{' && referenceEnds.has(j) ? referenceAttributeEnd(j) : undefined
+      if (attributeEnd !== undefined) referenceEnds.add(attributeEnd)
       // A `[` or `]` inside a verbatim span is literal text. An unclosed run
       // swallows every later `]` for a label opened before it.
       if (ch === '`') {
@@ -196,7 +219,7 @@ export function buildBracketMap(
       // literal, so a `]` inside cannot close a label (carve#403). An unclosed
       // opener is not a comment and is left alone.
       const inImageAlt = imageAlt ? (imageAlt[imageAlt.length - 1] ?? false) : false
-      const commentEnd = ch === '{' ? opaqueEnd(j, inImageAlt) : undefined
+      const commentEnd = ch === '{' && attributeEnd === undefined ? opaqueEnd(j, inImageAlt) : undefined
       if (commentEnd === undefined && ch === '{' && (s[j + 1] === '#' || (s[j + 1] === '%' && !inImageAlt))) structural?.add(-1)
       if (commentEnd !== undefined) {
         j = commentEnd - 1
@@ -235,6 +258,7 @@ export function buildBracketMap(
         imageAlt?.pop()
         if (open !== undefined) {
           map.set(open, j)
+          if (s[open - 1] === ']') referenceEnds.add(j + 1)
           const slotEnd = stack.length > 0 ? nestedSlotEnd(j) : undefined
           if (slotEnd !== undefined) j = slotEnd - 1
         }
@@ -267,6 +291,8 @@ export function buildBracketMap(
       }
     }
     const imageDepth = [!asLink && s[open - 1] === '!' && bangEscapes % 2 === 0]
+    const bracketOpens = [open]
+    const referenceEnds = new Set<number>()
     let rescanBang = -1
     for (let j = open + 1; j < s.length; j++) {
       if (--budget < 0) return undefined
@@ -275,6 +301,8 @@ export function buildBracketMap(
         j++
         continue
       }
+      const attributeEnd = ch === '{' && referenceEnds.has(j) ? referenceAttributeEnd(j) : undefined
+      if (attributeEnd !== undefined) referenceEnds.add(attributeEnd)
       if (ch === '`') {
         let openLen = 1
         while (s[j + openLen] === '`') openLen++
@@ -285,7 +313,7 @@ export function buildBracketMap(
         continue
       }
       const inImageAlt = imageDepth[imageDepth.length - 1] ?? false
-      const commentEnd = opaqueEnd(j, inImageAlt)
+      const commentEnd = attributeEnd === undefined ? opaqueEnd(j, inImageAlt) : undefined
       if (commentEnd !== undefined) {
         budget -= commentEnd - j
         j = commentEnd - 1
@@ -298,10 +326,15 @@ export function buildBracketMap(
         continue
       }
       if (ch === '!') rescanBang = j
-      if (ch === '[') imageDepth.push(inImageAlt || rescanBang === j - 1)
+      if (ch === '[') {
+        imageDepth.push(inImageAlt || rescanBang === j - 1)
+        bracketOpens.push(j)
+      }
       else if (ch === ']') {
         imageDepth.pop()
+        const bracketOpen = bracketOpens.pop()
         if (imageDepth.length === 0) return j
+        if (bracketOpen !== undefined && s[bracketOpen - 1] === ']') referenceEnds.add(j + 1)
         const slotEnd = nestedSlotEnd(j)
         if (slotEnd !== undefined) {
           budget -= slotEnd - j
