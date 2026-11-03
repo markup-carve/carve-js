@@ -265,6 +265,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()) ||
           RE_FOOTNOTE_DEF.test(follower.trimStart()))) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
+      // A skipped note definition takes its body along: lines up to a blank or a block opener (CARVE-P9-067, carve#5034).
+      if (lexer.atDocumentLevel && RE_FOOTNOTE_DEF.test(follower.trimStart())) {
+        for (let body = lexer.lineAt(followerIndex + 1); body !== undefined && !isBlankLine(body) &&
+            !/^::? /.test(body.trimStart()) && !RE_COMMENT_LINE.test(body.trimStart()) && !lineOpensItemBlock(body.trimStart()); body = lexer.lineAt(++followerIndex + 1));
+      }
       follower = lexer.lineAt(++followerIndex)
     }
     const followerSource = follower === undefined ? undefined
