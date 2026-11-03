@@ -115,6 +115,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     walkMarkerOwnerPrefix,
   } = helpers
 
+  const attachesQuote = (lines: readonly string[]): boolean =>
+    /^>/.test(lines.find(line => !isBlankLine(line) && !isBlockAttributeLine(line.trimStart())) ?? '')
+  // The `<dd>` body column a column-0 line of a `+`-attached block leaves open: 0 after a term, -1 outside a description list.
+  const attachedBodyColumnAfter = (line: string, column: number): number => {
+    if (indentColumns(line) !== 0) return column
+    if (RE_DEFLIST_TERM.test(line)) return 0
+    const dd = column >= 0 ? RE_DEFLIST_DEF.exec(line) : null
+    return dd ? 1 + dd[1]!.length : column
+  }
+  // A marker below the item's column ends the item: only plain text continues an attached quote lazily (CARVE-P2-008).
+  const endsAttachedQuote = (line: string, column: number): boolean =>
+    indentColumns(line, column) < column && !/^[ \t]*>/.test(line) && isListMarkerLine(line.trimStart())
+
   function classifyItemContinuation({ lexer, line, pendingBlankCount, itemQuoteDepth,
     physicalItemMarkerColumn, contentCol, baseIndent, previousNestedLine }: {
     lexer: Lexer
@@ -1349,6 +1362,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Indices in `nested` that hold a `+`-injected blank separator. These keep
     // the attached block parsing standalone but never loosen the list (Bug B).
     const plusSeparators = new Set<number>()
+    // The `<dd>` body column a `+`-attached description list left open; its lines sit at their source columns in `nested`.
+    let attachedDescriptionBody = -1
     const opaqueBlankLines = new Set<number>()
     const commentBoundaryBlanks: Array<{ openerIndex: number; lines: number[] }> = []
     let inlineFenceScanned = 0
@@ -1910,7 +1925,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // `plusColumn` is a source column; the attached lines are this lexer's.
       const localPlusColumn = plusColumn - physicalItemMarkerColumn + baseIndent
       let ownBlock = false
+      // The body column of the attached description list's open `<dd>`: a line there is the `<dd>`'s (PART 0 S2).
+      let attachedBodyColumn = -1
+      const quoteAttached = attachesQuote(attachedLines)
       for (let k = 0; k < attachedLines.length; k++) {
+        attachedBodyColumn = attachedBodyColumnAfter(attachedLines[k]!, attachedBodyColumn)
+        if (k > 0 && quoteAttached && !ownBlock && endsAttachedQuote(attachedLines[k]!, contentCol)) {
+          lexer.pos -= attachedLines.length - k
+          attachedLines.length = k
+          attachedLineNumbers.length = k
+          break
+        }
         // A later block at the item's content column is the item's own. Once
         // that block leaves no paragraph open, a line below the item column
         // must return to the ordinary ownership walk (PART 0 S4).
@@ -1925,6 +1950,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
         // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
         const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
+          !(attachedBodyColumn > 0 && contentCol >= attachedBodyColumn) &&
           (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
         // The lines of that block are measured from the same column.
         ownBlock ||= ownOpener
@@ -1943,6 +1969,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         trackItemLazyState(attachedLine, lazyState)
         if (lazyState.opaque?.kind !== 'code') authoredFenceBase = 0
       }
+      attachedDescriptionBody = attachedBodyColumn
       // The `+` takes one block: the blank after an unclosed fence is the host's separator, not payload (carve#4048).
       if (lazyState.opaque?.kind === 'code' && (lexer.peek() === undefined || isBlankLine(lexer.peek()!))) {
         const opener = attachedLines.map(line => line.trimStart()).find(line => opensCodeFence(line))
@@ -2266,7 +2293,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line at the content column, in the order the item reads it.
     const placeContentLine = (l: string): void => {
       strippedPrefix = undefined
-      placed = sliceColumns(l, contentCol, true, prefix => { strippedPrefix = prefix })
+      if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
+      placed = sliceColumns(l, attachedDescriptionBody > 0 ? 0 : contentCol, true, prefix => { strippedPrefix = prefix })
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
           isListMarkerLine(placed.trimStart())) blockedNoteClaimFloor = undefined
       if (lazyState.opaque === null && descendantOpaque === null &&
