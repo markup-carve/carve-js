@@ -151,6 +151,18 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
 
+  it('keeps a trailing erased quoted line in its authored quote', () => {
+    const source = '> a\n> %% c\nb\n'
+    const quote = parse(source).children[0]
+    expect(quote?.type).toBe('block_quote')
+    if (quote?.type !== 'block_quote') return
+    expect(quote.children.map((node) => node.type)).toEqual(['paragraph', 'comment'])
+    expect(quote.pos?.endLine).toBe(2)
+    expect(carveToHtml(renderCarve(parse(source)))).toBe(carveToHtml(source))
+    expect(carveToCarve(source)).toContain('> a\n> %% c\n')
+    expect(renderCarve(fromAstJson(carveToAstJson(source)))).toContain('> a\n> %% c\n')
+  })
+
   it('writes edits to restored transparent nodes', () => {
     expect(canonicalCarveWrite('a\n%% old\nb', {}, (document) => {
       const comment = document.children.find((node) => node.type === 'comment')

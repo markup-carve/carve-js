@@ -1,7 +1,7 @@
 import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
-import type { AbbreviationDef, BlockNode, Comment, DefinitionList, Document, InlineNode, List, Paragraph } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionList, Document, InlineNode, List, ListItem, Paragraph } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -143,7 +143,10 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
   for (const block of blocks) {
     if (block.type === 'list') {
       for (let i = 0; i < block.items.length - 1; i++) {
-        const before = block.items[i]?.pos?.endOffset
+        const item = block.items[i]
+        const visibleEnd = item?.children.at(-1)?.pos?.endOffset
+        const itemEnd = item?.pos?.endOffset
+        const before = visibleEnd === undefined ? itemEnd : Math.min(visibleEnd, itemEnd ?? visibleEnd)
         const after = block.items[i + 1]?.pos?.startOffset
         if (before !== undefined && after !== undefined && before <= offset && offset < after)
           return { list: block, after: i }
@@ -207,16 +210,25 @@ function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDe
 
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
 export function hydrateTransparentDefinitionGaps(document: Document): void {
-  const authoredSource = (block: Comment | AbbreviationDef): string =>
-    ' '.repeat(Math.max(0, (block.pos?.startColumn ?? 1) - 1)) +
-      (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
-        `*[${block.abbr}]: ${block.expansion}`)
-  const visit = (blocks: BlockNode[]): void => {
+  const authoredSource = (block: Comment | AbbreviationDef, quoteDepth: number): string => {
+    const column = block.pos?.startColumn ?? 1
+    const quoted = column > 1 ? quoteDepth : 0
+    return '> '.repeat(quoted) +
+      ' '.repeat(Math.max(0, column - 1 - 2 * quoted)) +
+        (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
+          `*[${block.abbr}]: ${block.expansion}`)
+  }
+  const visit = (blocks: BlockNode[], quoteDepth: number): void => {
     for (const block of blocks) {
+      if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
+          block.transparentSource === undefined) {
+        block.transparentSource = authoredSource(block, quoteDepth)
+        block.transparentOriginalValue = block.content
+      }
       if ((block.type === 'comment' && !block.block || block.type === 'abbreviation_def') &&
           !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
-        const source = authoredSource(block)
+        const source = authoredSource(block, quoteDepth)
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset)
         if (match) {
@@ -242,14 +254,14 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           }
         }
       }
-      if (block.type === 'list') for (const item of block.items) visit(item.children)
+      if (block.type === 'list') for (const item of block.items) visit(item.children, quoteDepth)
       else if (block.type === 'definition_list') for (const item of block.items)
-        for (const definition of item.definitions) visit(definition)
+        for (const definition of item.definitions) visit(definition, quoteDepth)
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
-        visit(block.children as BlockNode[])
+        visit(block.children as BlockNode[], quoteDepth + (block.type === 'block_quote' ? 1 : 0))
     }
   }
-  visit(document.children)
+  visit(document.children, 0)
 }
 
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
@@ -270,6 +282,33 @@ function visibleParagraphLines(paragraph: Paragraph, stream: TransparentLineStre
   return visible
 }
 
+/** A visible container can end before its last erased line; source ownership still names it. */
+function authoredContainerBlocks(document: Document, owners: Map<number, string>):
+  Map<string, { blocks: BlockNode[]; containers: Array<BlockQuote | List | ListItem> }> {
+  const blocksByOwner = new Map<string, { blocks: BlockNode[]; containers: Array<BlockQuote | List | ListItem> }>()
+  const visit = (blocks: BlockNode[]): void => {
+    for (const block of blocks) {
+      if (block.type === 'block_quote') {
+        const owner = owners.get(block.pos?.startLine ?? -1)?.match(/^.*\/quote:\d+/)?.[0]
+        if (owner) blocksByOwner.set(owner, { blocks: block.children, containers: [block] })
+      }
+      if (block.type === 'list') {
+        for (const item of block.items) {
+          const owner = owners.get(item.pos?.startLine ?? -1)?.match(/^.*\/item:\d+/)?.[0]
+          if (owner) blocksByOwner.set(owner, { blocks: item.children, containers: [item, block] })
+          visit(item.children)
+        }
+      } else if (block.type === 'definition_list') {
+        for (const item of block.items) for (const definition of item.definitions) visit(definition)
+      } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
+        visit(block.children as BlockNode[])
+      }
+    }
+  }
+  visit(document.children)
+  return blocksByOwner
+}
+
 const followingFromLine = new WeakMap<Paragraph, number>()
 
 function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (child: InlineNode) => string): void {
@@ -288,6 +327,8 @@ function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (ch
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
 export function restoreTransparentComments(document: Document, authored: Document, stream: TransparentLineStream): void {
   const comments = authoredComments(authored)
+  const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
+  const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
   for (const index of stream.erased) {
     const original = stream.original[index]!
     const rest = original.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '')
@@ -316,9 +357,23 @@ export function restoreTransparentComments(document: Document, authored: Documen
         gap.list.transparentBetweenItems.push({ after: gap.after, source: original, node: comment, originalValue: comment.content })
         comment.transparentInList = true
       }
-      const siblings = containingBlocks(blocks, comment.pos.startOffset)
+      const owner = ownersByLine.get(index + 1)
+      const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
+      const siblings = owned?.blocks ?? containingBlocks(blocks, comment.pos.startOffset)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > comment.pos!.startOffset!)
       siblings.splice(at < 0 ? siblings.length : at, 0, comment)
+      if (owner && comment.pos.endOffset !== undefined) {
+        const parts = owner.split('/')
+        for (let depth = 2; depth <= parts.length; depth++) {
+          for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
+            if (container.pos?.endOffset !== undefined && container.pos.endOffset < comment.pos.endOffset) {
+              container.pos.endLine = comment.pos.endLine
+              if (comment.pos.endColumn !== undefined) container.pos.endColumn = comment.pos.endColumn
+              container.pos.endOffset = comment.pos.endOffset
+            }
+          }
+        }
+      }
     }
   }
 }
