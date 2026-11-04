@@ -93,21 +93,6 @@ function transparentNodeSource(entry: { source: string; node: Comment | Abbrevia
     `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`)
 }
 
-// A body line below the body column that directly follows the line above it; the writer keeps it there.
-function bodyLineBelowColumn(blocks: BlockNode[], bodyColumn: number): boolean {
-  return hasLineBelowBody(blocks, bodyColumn) || blocks.some((block, index) => {
-    const above = blocks[index - 1]?.pos?.endLine
-    return above !== undefined && block.pos?.startLine === above + 1 && (block.pos.startColumn ?? bodyColumn) < bodyColumn
-  })
-}
-
-function hasLineBelowBody(blocks: BlockNode[], bodyColumn: number): boolean {
-  const only = blocks[0]
-  if (blocks.length !== 1 || only?.type !== 'paragraph') return false
-  const first = only.pos?.startLine
-  return only.children.some((child) => child.pos !== undefined && child.pos.startLine !== first && (child.pos.startColumn ?? bodyColumn) < bodyColumn)
-}
-
 function nestedTightItemLosesTightness(item: ListItem): boolean {
   return item.children.some((child, index) => {
     const previous = item.children[index - 1]
@@ -4198,9 +4183,8 @@ class CarveRenderSession {
       if (line <= from || line >= to || pos?.startColumn === undefined || pos.startColumn < contentColumn || this.footnotesWrittenInPlace.has(label)) continue
       const blocks = ownValue(this.documentFootnoteDefs, label)
       if (blocks === undefined) continue
-      // CARVE-P11-079 (a): the note is collected unless a region marker below fixes it, or
-      // a line below its body column needs the note's own column (corpus 228, 637).
-      if (!this.staysAboveAMarker(line) && !bodyLineBelowColumn(blocks, pos.startColumn + 2)) continue
+      // CARVE-P11-079 (a): the note is collected unless a region marker below fixes it.
+      if (!this.staysAboveAMarker(line)) continue
       this.footnotesWrittenInPlace.add(label)
       const written = this.renderOneFootnoteDef(label, blocks, ctx)
       const offset = ' '.repeat(Math.max(0, contentColumn - item.pos.startColumn))
