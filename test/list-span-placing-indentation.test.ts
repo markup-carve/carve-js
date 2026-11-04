@@ -41,15 +41,14 @@ describe('a list span holds the indentation that places its marker', () => {
     expect(nested.items[0].pos).toMatchObject({ startLine: 2, startColumn: 3, startOffset: 6 })
   })
 
-  it('starts a rebased list in a footnote body at its marker', () => {
-    // spec corpus 410-a-footnote-continuation-survives-a-blank-run-2: the body
-    // rebases over-indented blocks with sublists included, so the marker column
-    // IS the block's base and the span begins there (carve-js#1516).
+  it('starts a list in a footnote body at the body column', () => {
+    // spec corpus 410-a-footnote-continuation-survives-a-blank-run-2: the note's
+    // body column is two past its `[` (carve#5063).
     const ast = carveToAstJson('See[^1].\n\n[^1]: a\n\n\n    - b\n') as any
     const list = ast.children[1].children[1]
 
     expect(list.type).toBe('list')
-    expect(list.pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 24 })
-    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 5, startOffset: 24 })
+    expect(list.pos).toMatchObject({ startLine: 6, startColumn: 3, startOffset: 22 })
+    expect(list.items[0].pos).toMatchObject({ startLine: 6, startColumn: 3, startOffset: 22 })
   })
 })

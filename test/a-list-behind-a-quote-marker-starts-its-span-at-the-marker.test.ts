@@ -2,9 +2,8 @@ import { expect, it } from 'vitest'
 import { parse } from '../src/index.js'
 import type { Position } from '../src/ast.js'
 
-// PART 12 section 4: a container's span may begin in the line's leading
-// indentation, which places a nested marker. Behind a quote marker the run is not
-// leading indentation, so the span begins at the list marker.
+// CARVE-P12-013 as ruled on carve#5063: a list's span begins at its owner's
+// content column, which behind a quote marker is the quote's content column.
 type Node = { type: string; pos?: Position; children?: Node[]; items?: Node[] }
 const starts = (source: string): string[] => {
   const found: string[] = []
@@ -17,17 +16,17 @@ const starts = (source: string): string[] => {
   return found
 }
 
-it('starts a list written past the quote column at its marker', () => {
+it('starts a list written past the quote column at the quote content column', () => {
   expect(starts('>   - a\n> - b\n>     - c\n>       :::\n1. lazy\n')).toEqual([
-    'list@4:5', 'list_item@4:5',
+    'list@2:3', 'list_item@2:3',
     'list_item@10:3',
-    'list@20:7', 'list_item@20:7',
+    'list@18:5', 'list_item@18:5',
     'list@36:1', 'list_item@36:1',
   ])
 })
 
-it('starts a list past the column of a nested quote at its marker', () => {
-  expect(starts('> >   - a\n')).toEqual(['list@6:7', 'list_item@6:7'])
+it('starts a list past the column of a nested quote at the nested quote content column', () => {
+  expect(starts('> >   - a\n')).toEqual(['list@4:5', 'list_item@4:5'])
 })
 
 it('keeps the indentation latitude where only indentation precedes the list', () => {

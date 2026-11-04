@@ -13,8 +13,8 @@ describe('nested source boundaries', () => {
   it('places an ordered marker after a tab consumed by its parent', () => {
     const outer = ast('- outer\n\t1. a\n').children[0]
     const nested = outer.items[0].children[1]
-    start(nested, 9, 2, 2)
-    start(nested.items[0], 9, 2, 2)
+    start(nested, 8, 2, 1)
+    start(nested.items[0], 8, 2, 1)
     expect(outer.pos.startOffset).toBeLessThanOrEqual(nested.pos.startOffset)
     expect(outer.pos.endOffset).toBeGreaterThanOrEqual(nested.pos.endOffset)
   })
@@ -26,8 +26,8 @@ describe('nested source boundaries', () => {
     start(nested.items[0], 13, 2, 4)
 
     const deep = ast('> - outer\n>   > \t1. a\n').children[0].children[0].items[0].children[1]
-    start(deep.children[0], 17, 2, 8)
-    start(deep.children[0].items[0], 17, 2, 8)
+    start(deep.children[0], 16, 2, 7)
+    start(deep.children[0].items[0], 16, 2, 7)
   })
 
   it('ends closerless lists and items at their last placed children', () => {

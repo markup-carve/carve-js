@@ -1,3 +1,4 @@
+import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
@@ -686,6 +687,7 @@ export class ParseSession extends InlineParseSession {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
     toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
+    anchorListsAtOwnerColumns(doc, strippedBom ? '\ufeff' + source : source)
     if (transparentLines) {
       for (const node of authored?.children ?? []) {
         if (node.type !== 'link_reference_definition' || !node.pos ||

@@ -250,8 +250,8 @@ describe('relative continuation marker columns', () => {
     const nested = outer.items[0]?.children[1]
     expect(nested?.type).toBe('list')
     if (nested?.type !== 'list') return
-    expect(nested.pos).toMatchObject({ startLine: 2, startColumn: 2, startOffset: 5 })
-    expect(nested.items[0]?.pos).toMatchObject({ startLine: 2, startColumn: 2, startOffset: 5 })
+    expect(nested.pos).toMatchObject({ startLine: 2, startColumn: 1, startOffset: 4 })
+    expect(nested.items[0]?.pos).toMatchObject({ startLine: 2, startColumn: 1, startOffset: 4 })
   })
 
   it.each([
