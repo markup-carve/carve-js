@@ -11,6 +11,7 @@ import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence } from '../block/parse-block-boundaries.js'
+import { quotedPayloadCloserAhead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
@@ -2712,6 +2713,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         {
           terminatorFree: false,
           payloadFenceCloser: marker => payloadFenceCloserInItem(marker, fenceLineIndex),
+          quotePayloadFenceCloser: marker => quotedPayloadCloserAhead(lexer, marker, fenceLineIndex, quotePayloadMisses, endsItem),
           ...itemFrameFacts(lineFacts(trackedContent, nestedOrigins.get(nested.length - 1))),
           // A tab split at the item column leaves generated spaces with no
           // matching source origin. Measure that residual run in its new text.
@@ -2868,6 +2870,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       payloadMisses.set(char, { from, maxRun })
       return false
     }
+    const quotePayloadMisses: PayloadMisses = new Map()
+    const endsItem = (line: string): boolean => isListMarkerLine(line) && indentColumns(line) <= baseIndent
     const admitContentLine = (l: string): void => {
       if (childSpan !== undefined && lazyState.opaque === childSpan.state && !isBlankLine(l) &&
           indentColumns(l, childSpan.column) < childSpan.column && commentFenceRun(l.trimStart()) !== childSpan.run) {
