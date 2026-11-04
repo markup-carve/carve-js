@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml } from '../src/index.js'
+import { writtenReadsBackAs } from '../src/render-carve.js'
 
 // PART 11 §6 (carve#4973): every break is written `***`. The readback check
 // that guards sources holding `%%`, `]:` or `+` must not count the dropped
@@ -41,5 +42,9 @@ describe('fmt writes a canonical break next to a readback trigger', () => {
       expect(carveToCarve(once)).toBe(once)
       expect(carveToHtml(once)).toBe(carveToHtml(src))
     }
+  })
+
+  it('still compares a marker attribute that names the break type', () => {
+    expect(writtenReadsBackAs('{type=thematic_break marker=a}\np\n', '{type=thematic_break marker=b}\np\n')).toBe(false)
   })
 })

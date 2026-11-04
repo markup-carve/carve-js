@@ -574,14 +574,14 @@ function stableJson(value: unknown): string {
 /**
  * Key-order-insensitive view of a node tree.
  */
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return mergeTextRuns(flattenRubyForComparison(value)).map(canonical)
+function canonical(value: unknown, inAttrs = false): unknown {
+  if (Array.isArray(value)) return mergeTextRuns(flattenRubyForComparison(value)).map((part) => canonical(part, inAttrs))
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       if (key === 'header' && 'span' in (value as Record<string, unknown>)) continue
       // The canonical writer spells every break `***` (carve#4973), so the marker is no tree difference.
-      if (key === 'marker' && (value as { type?: unknown }).type === 'thematic_break') continue
+      if (!inAttrs && key === 'marker' && (value as { type?: unknown }).type === 'thematic_break') continue
       if (
         key === 'pos' ||
         key === 'footnoteDefPos' ||
@@ -596,7 +596,7 @@ function canonical(value: unknown): unknown {
       const field = (value as Record<string, unknown>)[key]
       // A hand-built tree may carry an empty map the parser omits.
       if (key === 'footnoteDefs' && field && typeof field === 'object' && Object.keys(field).length === 0) continue
-      out[key] = canonical(field)
+      out[key] = canonical(field, inAttrs || key === 'attrs')
     }
     return out
   }
