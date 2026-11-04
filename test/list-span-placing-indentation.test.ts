@@ -41,6 +41,14 @@ describe('a list span holds the indentation that places its marker', () => {
     expect(nested.items[0].pos).toMatchObject({ startLine: 2, startColumn: 3, startOffset: 6 })
   })
 
+  it('counts the whole separator run and no marker attribute in the parent column', () => {
+    // CARVE-P2-010 and CARVE-P9-083: the item column is the marker plus its separator spaces.
+    const wide = (carveToAstJson('-   x\n    - a\n') as any).children[0].items[0].children[1]
+    expect(wide.pos).toMatchObject({ startLine: 2, startColumn: 5, startOffset: 10 })
+    const attributed = (carveToAstJson('-{#x} a\n   - b\n') as any).children[0].items[0].children[1]
+    expect(attributed.pos).toMatchObject({ startLine: 2, startColumn: 3, startOffset: 10 })
+  })
+
   it('starts a list in a footnote body at the body column', () => {
     // spec corpus 410-a-footnote-continuation-survives-a-blank-run-2: the note's
     // body column is two past its `[` (carve#5063).
