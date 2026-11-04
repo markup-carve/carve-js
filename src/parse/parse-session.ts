@@ -2861,7 +2861,15 @@ export class ParseSession extends InlineParseSession {
         const startPosition = positionAt(from), endPosition = positionAt(to)
         const value = text.slice(from, to)
         // A run joined across a stripped indent or quote prefix is not a source slice (CARVE-P12-022).
-        const contiguous = endPosition.offset - startPosition.offset === [...value].length
+        const pieces = value.split('\n')
+        const sourceLine = (offset: number): string =>
+          (lexer.rootLines ?? lexer.lines)[positionAt(offset).line - 1] ?? ''
+        let contiguous = pieces.length === 1 || sourceLine(from).endsWith(pieces[0]!)
+        for (let piece = 1, at = from; piece < pieces.length && contiguous; piece++) {
+          at += pieces[piece - 1]!.length + 1
+          const line = sourceLine(at)
+          contiguous = piece === pieces.length - 1 ? line.startsWith(pieces[piece]!) : line === pieces[piece]
+        }
         paragraphNode.children.push({ type: 'text', value,
           ...(lexer.hasDocumentOffsets && contiguous ? { pos: {
             startLine: startPosition.line, startColumn: startPosition.column, startOffset: startPosition.offset,

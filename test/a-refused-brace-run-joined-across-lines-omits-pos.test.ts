@@ -45,6 +45,13 @@ describe('a refused brace run joined across lines', () => {
     expect(node.pos?.endOffset).toBe(7)
   })
 
+  it('keeps pos on a source slice holding an astral character', () => {
+    const node = text('{title="\u{1F600}"\n#x}\n')
+    expect(node.value).toBe('{title="\u{1F600}"\n#x}')
+    expect(node.pos?.startOffset).toBe(0)
+    expect(node.pos?.endOffset).toBe(14)
+  })
+
   it('changes neither the HTML nor the written form', () => {
     const source = '- {x\n  y}\n\n  b\n- a\n'
     expect(renderHtml(parse(source))).toContain('<p>{x\ny}</p>')
