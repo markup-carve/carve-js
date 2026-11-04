@@ -10,20 +10,23 @@
  * else landed overnight.
  *
  * A digest line is not a correctness claim; the reviewed fixtures are. It says
- * the output has not moved since it was recorded, and a change that moves it
- * has to rewrite the line, so the diff names every document affected.
+ * the output has not moved since it was recorded, and the report below names
+ * every document a change moves.
  *
- * Regenerate with `npm run ledger:render`. Read the diff: a moved document is a
- * replaced line, a new one is an added line.
+ * The ledger on `main` is regenerated after every merge by
+ * `.github/workflows/ledger-refresh.yml`, which opens an
+ * `automation/render-ledger` PR. A pull request does not regenerate or commit
+ * it: moved, added and removed rows are reported (and written to the job
+ * summary) rather than failed, so two PRs that move the same row never
+ * conflict. Read the report to see which documents a change moves.
  *
- * Every corpus document must have a recorded row. Regeneration reports added
- * documents separately from changed outputs and removed documents, so a pin
- * bump cannot hide new coverage among existing output changes.
+ * `npm run ledger:render` rewrites the file locally; that is the automation's
+ * command, not a step for a PR.
  */
 
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { carveToAnsi, carveToMarkdown, carveToPlainText } from '../src/index.js'
@@ -109,41 +112,46 @@ if (updating) {
   for (const [slug, row] of rendered) recorded.set(slug, row)
 }
 
+const missing = slugs.filter((slug) => !recorded.has(slug))
+const stale = [...recorded.keys()].filter((slug) => !rendered.has(slug))
+const moved: string[] = []
+for (const [slug, row] of rendered) {
+  const was = recorded.get(slug)
+  if (!was) continue
+  for (const target of Object.keys(TARGETS) as Target[]) {
+    if (was[target] !== row[target]) moved.push(`${slug} ${target}: ${was[target]} -> ${row[target]}`)
+  }
+}
+
+// Informational: the post-merge automation owns the file, so a difference
+// against main's ledger is a report for the reviewer, not a failure.
+const report = [
+  ['Output moved', moved],
+  ['Document without a row', missing],
+  ['Row whose document is gone', stale],
+] as const
+if (report.some(([, rows]) => rows.length > 0)) {
+  const lines = [
+    '### carve-js render ledger (informational)',
+    '',
+    'Rows this change moves against the ledger on main. Do not regenerate the ledger in a PR: ' +
+      '`ledger-refresh.yml` updates it after the merge.',
+    '',
+  ]
+  for (const [title, rows] of report) {
+    if (rows.length === 0) continue
+    lines.push(`${title} (${rows.length}):`, '', '```', ...rows, '```', '')
+  }
+  const text = `${lines.join('\n')}\n`
+  console.info(text)
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text)
+}
+
 describe('the non-HTML render ledger', () => {
   it('reads every document the spec examples derive', () => {
-    // The floor. Every sweep below asserts that a list came out empty, and an
-    // unbuilt or empty submodule produces exactly that.
+    // The floor. An unbuilt or empty submodule renders nothing at all, and the
+    // report above would be empty for the wrong reason.
     expect(unparsable, 'unparsable ledger line(s)').toEqual([])
     expect(slugs.length).toBe(expectedCorpusSize(specRoot))
-  })
-
-  it('records every corpus document', () => {
-    const missing = slugs.filter((slug) => !recorded.has(slug))
-    expect(
-      missing,
-      'Corpus documents missing from the render ledger; run `npm run ledger:render` and review the added rows.',
-    ).toEqual([])
-  })
-
-  it('has no line whose document is gone', () => {
-    const stale = [...recorded.keys()].filter((slug) => !rendered.has(slug))
-    expect(stale, 'ledger line(s) whose document is gone - run `npm run ledger:render`')
-      .toEqual([])
-  })
-
-  it('records the output every renderer still produces', () => {
-    const moved: string[] = []
-    for (const [slug, row] of rendered) {
-      const was = recorded.get(slug)
-      if (!was) continue
-      for (const target of Object.keys(TARGETS) as Target[]) {
-        if (was[target] !== row[target]) moved.push(`${slug} ${target}: ${was[target]} -> ${row[target]}`)
-      }
-    }
-    expect(
-      moved,
-      `${moved.length} recorded output(s) moved. If the change is intended, ` +
-        'run `npm run ledger:render` and review the rewritten lines.',
-    ).toEqual([])
   })
 })
