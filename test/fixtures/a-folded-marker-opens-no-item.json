@@ -2,22 +2,22 @@
   {
     "id": "corpus-615-1",
     "source": ":: t\n: d\n  - para\n    [r]: /u\nx\n\n[r][]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-2",
     "source": ":: t\n: d\n  1. para\n     [r]: /u\nx\n\n[r][]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol>\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol>\n      <li>para\nx</li>\n    </ol>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-3",
     "source": "[^n]: d\n  - para\n    [r]: /u\nx\n\n[r][] [^n]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para\nx</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "corpus-615-4",
     "source": ":: t\n: d\n  - para\n    [r]: /u\n  more\n\n[r][]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para</li>\n    </ul>\n    <p>more</p>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para\nmore</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-5",
@@ -32,7 +32,7 @@
   {
     "id": "fold-0",
     "source": ":: t\n: d\n  - para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-1",
@@ -62,7 +62,7 @@
   {
     "id": "fold-6",
     "source": ":: t\n: d\n  1. para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol>\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol>\n      <li>para\nx</li>\n    </ol>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-7",
@@ -122,7 +122,7 @@
   {
     "id": "fold-18",
     "source": ":: t\n: d\n  - [ ] para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"para\"> para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul class=\"task-list\">\n      <li><input type=\"checkbox\" disabled aria-label=\"para x\"> para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-19",
@@ -152,7 +152,7 @@
   {
     "id": "fold-24",
     "source": ":: t\n: d\n  + para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n+ para</dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n+ para\nx</dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-25",
@@ -182,7 +182,7 @@
   {
     "id": "fold-30",
     "source": ":: t\n: d\n  * para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-31",
@@ -212,7 +212,7 @@
   {
     "id": "fold-36",
     "source": ":: t\n: d\n  - [x] para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul class=\"task-list\">\n      <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"para\"> para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul class=\"task-list\">\n      <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"para x\"> para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-37",
@@ -242,7 +242,7 @@
   {
     "id": "fold-42",
     "source": ":: t\n: d\n  1) para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol data-delim=\")\">\n      <li>para</li>\n    </ol>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ol data-delim=\")\">\n      <li>para\nx</li>\n    </ol>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fold-43",
@@ -272,7 +272,7 @@
   {
     "id": "fold-48",
     "source": "[^n]: d\n  - para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para\nx</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-49",
@@ -302,7 +302,7 @@
   {
     "id": "fold-54",
     "source": "[^n]: d\n  1. para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ol>\n        <li>para</li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ol>\n        <li>para\nx</li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-55",
@@ -362,7 +362,7 @@
   {
     "id": "fold-66",
     "source": "[^n]: d\n  - [ ] para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul class=\"task-list\">\n        <li><input type=\"checkbox\" disabled aria-label=\"para\"> para</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul class=\"task-list\">\n        <li><input type=\"checkbox\" disabled aria-label=\"para x\"> para\nx</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-67",
@@ -392,7 +392,7 @@
   {
     "id": "fold-72",
     "source": "[^n]: d\n  + para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d\n+ para<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d\n+ para\nx<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-73",
@@ -422,7 +422,7 @@
   {
     "id": "fold-78",
     "source": "[^n]: d\n  * para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul>\n        <li>para\nx</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-79",
@@ -452,7 +452,7 @@
   {
     "id": "fold-84",
     "source": "[^n]: d\n  - [x] para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul class=\"task-list\">\n        <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"para\"> para</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ul class=\"task-list\">\n        <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"para x\"> para\nx</li>\n      </ul>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-85",
@@ -482,7 +482,7 @@
   {
     "id": "fold-90",
     "source": "[^n]: d\n  1) para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<p>x</p>\n<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ol data-delim=\")\">\n        <li>para</li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+    "html": "<p><a href=\"/u\">r</a> <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> [^f]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>d</p>\n      <ol data-delim=\")\">\n        <li>para\nx</li>\n      </ol>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
   },
   {
     "id": "fold-91",
@@ -532,7 +532,7 @@
   {
     "id": "fence-run-48",
     "source": ":: t\n: d\n  - para\n    [r]: /u\nx\n\n[r][] [^n] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para</li>\n    </ul>\n  </dd>\n</dl>\n<p>x</p>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>para\nx</li>\n    </ul>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^n] [^f]</p>"
   },
   {
     "id": "fence-run-49",

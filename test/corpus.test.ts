@@ -19,6 +19,7 @@ import { carveToHtml } from '../src/index.js'
 import { expectedCorpusSize } from './helpers/corpus-population.js'
 import { RULED_HTML_AHEAD_OF_PIN } from './ruled-ahead-of-pin-5015.js'
 import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
+import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -1471,6 +1472,22 @@ const IMPLEMENTED = new Set([
   'a-name-ending-in-a-hyphen-leaves-the-next-marker-free',
   'an-accepted-plus-needs-a-follower-that-reaches-its-host',
   'an-invisible-line-keeps-a-description-entry-open',
+  'a-blank-inside-a-attached-description-keeps-the-list-tight',
+  'a-column-0-comment-before-a-sibling-keeps-the-blank-that-loosens-the-list',
+  'a-comment-line-below-a-nested-line-block-s-column-stays-in-its-span',
+  'a-comment-span-on-a-description-or-note-marker-line-closes-below-its-column',
+  'a-descendant-comment-span-closes-between-its-own-column-and-its-item-s',
+  'a-fence-a-quote-s-attached-block-opens-ends-with-its-container',
+  'a-marked-blank-inside-a-quoted-verse-span-leaves-the-stanza-open',
+  'a-nested-quote-after-a-quoted-list-leaves-a-marker-line-lazy',
+  'a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open',
+  'a-quoted-span-after-a-hosted-span-s-closer-leaves-the-follower-outside',
+  'a-span-s-closer-after-a-blank-keeps-the-list-tight',
+  'a-task-box-gap-keeps-a-nested-description-at-its-content-column',
+  'a-termless-colon-line-a-quote-attaches-opens-no-fence',
+  'an-empty-comment-span-is-written-as-adjacent-delimiters',
+  'an-unclosed-fence-in-a-marker-line-note-cannot-retain-the-following-line',
+  'an-unresolved-reference-in-a-heading-cross-reference-clone',
 ])
 
 /**
@@ -1494,12 +1511,10 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN,
   ...RULED_5013_HTML,
   ...RULED_5016_HTML,
+  ...RULED_HTML_AHEAD_OF_PIN_5012,
 ])
-// carve-js#3105 is separate from empty destinations. The spec pin includes
-// these three newer corpus rows; keep their measured lag explicit until that
-// parser change lands.
-const behindSpec = new Map<string, string>([
-])
+// The quote sibling list fix on main retired the three #947 parser lag declarations.
+const behindSpec = new Map<string, string>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it

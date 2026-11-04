@@ -1,4 +1,5 @@
 import { ownLines } from './parse/block/block-ownership.js'
+import { hydrateTransparentDefinitionGaps } from './parse/block/transparent-lines.js'
 import { toAstJson } from './ast-json.js'
 import { escapeUnclosedImageEditorialOpeners } from './carve-escape.js'
 import { renderHtml } from './render-html.js'
@@ -12,10 +13,10 @@ import { allocateDashes, wordAfter, wordBeforeGrapheme } from './parse/inline/pa
 import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
+  AbbreviationDef,
   Attrs,
   BlockNode,
   Comment,
-  DefinitionItem,
   DefinitionList,
   Document,
   Figure,
@@ -65,6 +66,24 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
   /** Reproduce recorded author spellings (a GFM separator row, a recorded non-default thematic-break marker) for source-preserving output. */
   preserveTableSeparators?: boolean
+}
+
+/** A transparent line keeps its authored column through list and quote writing. */
+function restoreTransparentLineColumns(source: string): string {
+  if (!source.includes('\0')) return source
+  return source.split('\n').map((line) => {
+    const marker = line.indexOf('\0')
+    return marker < 0 ? line : line.slice(marker + 1)
+  }).join('\n')
+}
+
+function transparentNodeSource(entry: { source: string; node: Comment | AbbreviationDef; originalValue: string }): string {
+  const { node, source, originalValue } = entry
+  const value = node.type === 'comment' ? node.content : `${node.abbr}\0${node.expansion}`
+  if (value === originalValue) return source
+  const prefix = /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(source)?.[0] ?? ''
+  return prefix + (node.type === 'comment' ? `%% ${node.content}` :
+    `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`)
 }
 
 // A body line below the body column that directly follows the line above it; the writer keeps it there.
@@ -232,12 +251,14 @@ interface CarveContext {
  */
 export function renderCarve(ast: Document, opts: CarveRenderOptions = {}): string {
   hydrateResolvedEmptyReferences(ast)
+  hydrateTransparentDefinitionGaps(ast)
   return new CarveRenderSession().renderCarve(ast, opts)
 }
 
 /** For an unchanged default parse, matching source bytes prove the minimal form reads back. */
 export function renderCarveFromParsedSource(ast: Document, source: string, opts: CarveRenderOptions = {}): string {
   hydrateResolvedEmptyReferences(ast)
+  hydrateTransparentDefinitionGaps(ast)
   return new CarveRenderSession().renderCarve(ast, opts, source)
 }
 
@@ -403,6 +424,11 @@ function treeOf(src: string): string | null {
   }
 }
 
+/** Check the parsed tree after a source writer has crossed an invisible line. */
+export function renderedReadsBack(ast: Document, source: string): boolean {
+  return treeOf(source) === stableJson(ast)
+}
+
 
 /**
  * Which headings carry the id a fresh parse would give them.
@@ -551,13 +577,16 @@ function canonical(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      if (key === 'header' && 'span' in (value as Record<string, unknown>)) continue
       if (
         key === 'pos' ||
         key === 'footnoteDefPos' ||
         key === 'definitionSpans' ||
         key === 'definitionLines' ||
         key === 'termSpans' ||
-        key === 'srcByteLength'
+        key === 'srcByteLength' ||
+        key === 'separatorWidths' ||
+        key.startsWith('transparent')
       )
         continue
       const field = (value as Record<string, unknown>)[key]
@@ -2863,9 +2892,9 @@ class CarveRenderSession {
     for (;;) {
       this.multiLineVerbatim = new Map()
       const out = this.renderCarveOnce(ast, opts, parsedSource)
-      if (this.multiLineVerbatim.size === 0) return relaxPlusEscapes(out)
+      if (this.multiLineVerbatim.size === 0) return restoreTransparentLineColumns(relaxPlusEscapes(out))
       const missing = missingVerbatimPayloads(ast, out, this.multiLineVerbatim)
-      if (missing.length === 0) return out
+      if (missing.length === 0) return restoreTransparentLineColumns(out)
       for (const key of missing) {
         const next = (this.verbatimSpellings.get(key) ?? 0) + 1
         if (next >= VERBATIM_SPELLINGS) {
@@ -3476,7 +3505,10 @@ class CarveRenderSession {
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
               : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
-                (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list'))
+                (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
+                (block.type === 'comment' && (/^[ \t]+/.test(block.transparentSource ?? '') ||
+                  !block.block && ctx.quoteDepth > 0 &&
+                  previousBlock.pos?.endLine !== undefined && block.pos?.startLine === previousBlock.pos.endLine + 1)))
           ) {
             parts[parts.length - 1] += `\n${text}`
           } else if ((listSeparated || descriptionListsMerge) && parts.length > 0) {
@@ -3600,6 +3632,29 @@ class CarveRenderSession {
           ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered,
           ctx.lineBlockDepth > 0,
         )
+        let withComments = text
+        if (node.transparentComments?.length) {
+          const sourceLines = node.transparentVisibleLines ?? [...new Set(node.children
+            .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
+            .map((child) => child.pos!.startLine))]
+          const written = text.split('\n')
+          for (const [index, line] of sourceLines.entries()) {
+            const following = node.transparentFollowingLines?.find((entry) => entry.line === line)
+            if (following && index < written.length) {
+              const renderedLine = written[index]!
+              const authored = following.source
+              const prefix = renderedLine && authored.endsWith(renderedLine)
+                ? authored.slice(0, -renderedLine.length)
+                : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? ''
+              written[index] = `\0${prefix}${renderedLine}`
+            }
+          }
+          for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
+            const after = sourceLines.filter((line) => line < comment.line).length
+            written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource(comment)}`)
+          }
+          withComments = written.join('\n')
+        }
         // AN EMPTY LINE INSIDE A STANZA IS SPELLED `%%`, and nothing else spells
         // it (PART 9 §23). A blank line ENDS a stanza, so writing one here would
         // return one stanza as two; a comment-only line is the one construct that
@@ -3621,17 +3676,17 @@ class CarveRenderSession {
         // consumes, so the stanza ends in one - and the position after it is the
         // closing fence, not an empty verse line.
         if (ctx.lineBlockDepth > 0) {
-          return withAttrs(text.replace(/^$(?=\n)/gm, '%%'))
+          return withAttrs(withComments.replace(/^$(?=\n)/gm, '%%'))
         }
         // PART 11 §1 / CARVE-P11-002 and §5 keep guarded dashes as paragraph text
         // in list items and descriptions while emitting their source run bare.
         if (this.markerColumnGuardParagraphs.has(node)) {
-          return withAttrs(text.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
+          return withAttrs(withComments.replace(/\n (?=-{3,}[ \t]*(?:\n|$))/g, `\n${this.sentinels[6]}`))
         }
 
         // A bare plus at a host marker column is consumed even when refused.
         // Escape a literal plus before the surrounding host supplies columns.
-        return withAttrs(text.replace(/^\+(?=\n|$)/, '\\+'))
+        return withAttrs(withComments.replace(/^\+(?=\n|$)/, '\\+'))
       }
       case 'code_block': {
         const fence = safeFence(node.content, 3)
@@ -3750,7 +3805,7 @@ class CarveRenderSession {
         // spelled, so raising the body alone would leave `{loose}` at the body
         // minimum with the `::` line a column past it - a shape no author writes
         // and one the rebase then has to reconcile a line at a time.
-        return withLooseAttrs(node, attrs, this.renderDefinitionList(node.items, ctx), (body) => this.normalize(body))
+        return withLooseAttrs(node, attrs, this.renderDefinitionList(node, ctx), (body) => this.normalize(body))
       case 'figure':
         return withAttrs(this.renderFigure(node, ctx))
       case 'figure_group': {
@@ -3778,6 +3833,7 @@ class CarveRenderSession {
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
+        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
         return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
       case 'link_reference_definition': {
         // PART 12 §10 gave this a node precisely so the writer can put the line
@@ -3799,6 +3855,9 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
+        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
+        if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined)
+          return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
         // inline one (carve#581) in joining a percent-leading content onto the
         // marker. At block level the comment-LINE marker is exactly `%%`; a run
@@ -3964,6 +4023,9 @@ class CarveRenderSession {
           if (readsBack(looseItemSource)) itemSource = looseItemSource
         }
         out += itemSource
+        for (const gap of node.transparentBetweenItems ?? []) {
+          if (gap.after === idx) out += `\0${transparentNodeSource(gap)}\n`
+        }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
       return trimEndNonNbsp(out)
@@ -4364,14 +4426,20 @@ class CarveRenderSession {
     return [`:: ${singleLineText(line)}`, ...comments].join('\n')
   }
 
-  private renderDefinitionList(items: DefinitionItem[], ctx: CarveContext): string {
+  private renderDefinitionList(node: DefinitionList, ctx: CarveContext): string {
     const out: string[] = []
+    const appendGaps = (item: number, afterDescription: number, afterTerm = -1): void => {
+      for (const gap of node.transparentBetweenDescriptions ?? []) {
+        if (gap.item === item && gap.afterDescription === afterDescription && gap.afterTerm === afterTerm)
+          out.push(`\0${transparentNodeSource(gap)}`)
+      }
+    }
     // Every entry writes its own description line, so consecutive `::` lines
     // never end up sharing one: the list writes back with the grouping it
     // parsed from.
-    for (const item of items) {
+    for (const [itemIndex, item] of node.items.entries()) {
       // A term is one line like a heading (carve#4861), so a break collapses to a space.
-      for (const term of item.terms) {
+      for (const [termIndex, term] of item.terms.entries()) {
         const outer = this.inTerm
         this.inTerm = true
         try {
@@ -4379,6 +4447,7 @@ class CarveRenderSession {
         } finally {
           this.inTerm = outer
         }
+        appendGaps(itemIndex, -1, termIndex)
       }
       item.definitions.forEach((def, index) => {
         // An EMPTY description whose line carries a hoisted definition is one the
@@ -4394,6 +4463,7 @@ class CarveRenderSession {
             const written = this.renderBlock(definition, ctx)
             this.definitionsWrittenInPlace.add(definition as unknown as object)
             out.push(`: ${written}`)
+            appendGaps(itemIndex, index)
             return
           }
           const label = line === undefined ? undefined : this.footnoteDefsByLine.get(line)
@@ -4406,6 +4476,7 @@ class CarveRenderSession {
             const [first, ...rest] = written.split('\n')
             out.push(`: ${first}`)
             for (const l of rest) out.push(`${DEFINITION_BODY_INDENT}${l}`)
+            appendGaps(itemIndex, index)
             return
           }
         }
@@ -4454,6 +4525,7 @@ class CarveRenderSession {
         }
         if (written === '') {
           out.push(`: ${EMPTY_BODY_SENTINEL}`)
+          appendGaps(itemIndex, index)
 
           return
         }
@@ -4465,6 +4537,7 @@ class CarveRenderSession {
           if (!line.startsWith(tag)) out.push(`${DEFINITION_BODY_INDENT}${line}`)
           else out.push(outerDescriptionBody ? line : line.slice(tag.length))
         }
+        appendGaps(itemIndex, index)
       })
     }
     return out.join('\n')

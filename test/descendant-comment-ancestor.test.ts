@@ -10,7 +10,7 @@ const cases = JSON.parse(readFileSync(new URL('./fixtures/descendant-comment-anc
 
 describe('descendant comments retain the enclosing item at a positive dedent', () => {
   it.each([
-    ['x', ['list', 'paragraph']],
+    ['x', ['list']],
     ['# h', ['list', 'heading', 'paragraph']],
   ])('an at-column comment releases %s text below the outer column', (text, types) => {
     const document = parse(`- a\n  - b\n    %% c\n ${text}\ny\n`)

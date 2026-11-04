@@ -63,7 +63,7 @@ describe('a definition interrupts a paragraph a plus attached', () => {
     [
       'a definition after a colon fence line interrupts',
       '- +\nn\n  ::: note\n  [r]: /u\n  :::\n',
-      "<ul>\n  <li>n\n::: note\n    <div>\n\n    </div>\n  </li>\n</ul>",
+      "<ul>\n  <li>n\n::: note\n:::</li>\n</ul>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)

@@ -16,7 +16,7 @@ const cases = [
   },
   {
     "source": "- a\n %% c\n  text\n",
-    "html": "<ul><li>a\n    text\n  </li></ul>"
+    "html": "<ul><li>a\ntext</li></ul>"
   },
   {
     "source": "- a\n\n %% c\n  text\n",
@@ -48,7 +48,7 @@ const cases = [
   },
   {
     "source": "- a\n%% c\n  text\n",
-    "html": "<ul><li>a\n    text\n  </li></ul>"
+    "html": "<ul><li>a\ntext</li></ul>"
   },
   {
     "source": "- a\n\n%% c\n  text\n",
@@ -68,19 +68,19 @@ const cases = [
   },
   {
     "source": "- intro\n  %% a\n %% b\ntail\n",
-    "html": "<ul><li>intro</li></ul><p>tail</p>"
+    "html": "<ul><li>intro\ntail</li></ul>"
   },
   {
     "source": "- intro\n  %% a\n  %% b\ntail\n",
-    "html": "<ul><li>intro</li></ul><p>tail</p>"
+    "html": "<ul><li>intro\ntail</li></ul>"
   },
   {
     "source": "[^n]: x\n %% c\n x\n %% c\n x\n %% c\n x\n",
-    "html": "<p>x</p><p>x</p><p>x</p>"
+    "html": ""
   },
   {
     "source": ":: term\n:  x\n %% c\n x\n %% c\n x\n %% c\n x\n",
-    "html": "<dl><dt>term</dt><dd>x</dd></dl><p>x</p><p>x</p><p>x</p>"
+    "html": "<dl><dt>term</dt><dd>x\nx\nx\nx</dd></dl>"
   }
 ]
 

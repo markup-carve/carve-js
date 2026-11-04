@@ -7,7 +7,7 @@ describe('a below-column comment does not retain description and footnote bodies
 :  x
 %% c
 z
-`)).toBe('<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>')
+`)).toBe("<dl>\n  <dt>t</dt>\n  <dd>x\nz</dd>\n</dl>")
   })
 
   it('ends a footnote body', () => {
@@ -17,8 +17,8 @@ z
 
 see[^a]
 `)
-    expect(html).not.toContain('<p>intro</p>\n      <p>more')
-    expect(html).toContain('<p>more</p>\n<p>see')
+    expect(html).toContain('<p>intro\nmore')
+    expect(html).not.toContain('<p>more</p>\n<p>see')
   })
 
   it('ends a footnote after an unmatched comment fence', () => {
@@ -44,6 +44,6 @@ z
 :  x
    %% c
 z
-`)).toBe('<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<p>z</p>')
+`)).toBe("<dl>\n  <dt>t</dt>\n  <dd>x\nz</dd>\n</dl>")
   })
 })

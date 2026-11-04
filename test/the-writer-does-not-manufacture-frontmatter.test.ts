@@ -66,7 +66,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     // The input already held `---`; the fallback protects the hoisted shape.
     expect(carveToHtml(src)).toBe('<hr>\n<p>p</p>\n<hr>')
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toBe('***\n\np\n\n***\n\n[a]: /u\n')
+    expect(carveToCarve(src)).toBe(src)
   })
 
   it('a hoisted footnote definition promoting a `---yaml`-shaped PARAGRAPH', () => {
@@ -74,7 +74,7 @@ describe('the Carve writer does not manufacture a frontmatter block', () => {
     // the writer escapes it even though the following break is `***`.
     const src = '[^a]: n\n\n---yaml\nk: v\n---\n'
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toBe('\\-\\-\\-yaml\nk: v\n\n***\n\n[^a]: n\n')
+    expect(carveToCarve(src)).toBe(src)
   })
 
   it('CONTROL: an abbreviation definition is not hoisted, and never was', () => {

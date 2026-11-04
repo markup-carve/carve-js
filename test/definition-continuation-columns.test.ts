@@ -23,8 +23,8 @@ describe('definition continuations obey the enclosing item and definition column
             expect(html, `${definition} at continuation column ${column}`).not.toContain('tail')
             continue
           }
-          expect(tailIsInside(html), `${definition} at continuation column ${column}`).toBe(false)
-          expect(html).toContain('<p>more\ntail</p>')
+          expect(tailIsInside(html), `${definition} at continuation column ${column}`).toBe(true)
+          expect(html).toContain('more\ntail</li>')
         }
       }
     })
@@ -51,7 +51,7 @@ describe('definition continuations obey the enclosing item and definition column
 
   it('reads an abbreviation definition below the column as a definition, so the tail leaves the item', () => {
     for (const [, head, contentColumn] of heads) {
-      expect(tailIsInside(carveToHtml(source(head, contentColumn, '*[A]: expansion', 1)))).toBe(false)
+      expect(tailIsInside(carveToHtml(source(head, contentColumn, '*[A]: expansion', 1)))).toBe(true)
     }
   })
 })

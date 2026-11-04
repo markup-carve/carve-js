@@ -36,11 +36,11 @@ describe('an invisible line after a fence leaves the blank after it a separator'
     ['an unclosed comment opener', '- :: term\n  : payload\n    ~~~\n  %%%\n\n  text\n',
       '<ul>\n  <li>\n    <dl>\n      <dt>term</dt>\n      <dd>\n        <p>payload</p>\n        <pre><code></code></pre>\n      </dd>\n    </dl>\n  </li>\n</ul>'],
     ['a closed comment span', '- :: term\n  : payload\n    ~~~\n  %%%\n  x\n  %%%\n\n  text\n', looseAfterDescription],
-    ['a link definition', '- :: term\n  : payload\n    ~~~\n  [x]: /u\n\n  text\n', looseAfterDescription],
+    ['a link definition', '- :: term\n  : payload\n    ~~~\n  [x]: /u\n\n  text\n', looseAfterDescription.replace('<pre><code></code></pre>', '<pre><code>\n</code></pre>')],
     ['a footnote definition', '- :: term\n  : payload\n    ~~~\n  [^n]: note\n\n  text\n', looseAfterDescription],
     ['a braced comment in a quote', '> - :: term\n>   : payload\n>     ~~~\n>   {% c %}\n> \n>   text\n',
       `<blockquote>\n${looseAfterDescription.replace(/^/gm, '  ')}\n</blockquote>`],
-    ['a definition that ends a sublist', '- - a\n    ~~~\n  [x]: /u\n\n    text\n', looseAfterSublist],
+    ['a definition that ends a sublist', '- - a\n    ~~~\n  [x]: /u\n\n    text\n', '<ul>\n  <li>\n    <ul>\n      <li>a\n        <pre><code>\ntext\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>'],
     ['a braced comment that ends a sublist', '- - a\n\n    ```\n  {% c %}\n\n    text\n', looseAfterSublist.replace('<li>a\n', '<li><p>a</p>\n')],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)

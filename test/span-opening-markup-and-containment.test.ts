@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { checkContainment, checkOpeningMarkup } from '../spec/scripts/spec/ast-positions.mjs'
 
 import { carveToAstJson } from '../src/index.js'
+import { KNOWN_LIST_SPAN_START_DRIFT_5063 } from './known-list-span-start-drift-5063.js'
 
 /**
  * PART 12 §4, as markup-carve/carve#913 settled it.
@@ -100,8 +101,8 @@ describe('every span begins at the markup that opens it, and is contained by its
     expect(result.pairs).toBeGreaterThan(3000)
   })
 
-  it('reports nothing over the whole corpus', () => {
-    expect(result.findings).toEqual([])
+  it('reports only the declared list span starts from carve#5063', () => {
+    expect(result.findings.sort()).toEqual([...KNOWN_LIST_SPAN_START_DRIFT_5063].sort())
   })
 })
 

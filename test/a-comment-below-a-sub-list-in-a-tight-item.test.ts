@@ -87,10 +87,10 @@ describe('a comment below a sub-list in a tight item', () => {
   // sub-list" gains a blank line in one of these and fails.
   it.each([
     ['at the top level, below a list', '- z\n\n%% q\nZ\n', '- z\n\n%% q\n\nZ\n'],
-    ['below a paragraph in a single-level item', '- d\n\n  %% q\nZ\n', '- d\n  %% q\n\nZ\n'],
-    ['below a quote', '- > q\n\n  %% q\nZ\n', '- > q\n  %% q\n\nZ\n'],
-    ['below a definition list', '- t\n  : b\n\n  %% q\nZ\n', '- t\n  : b\n  %% q\n\nZ\n'],
-    ['below another comment', '- %% c0\n\n  %% q\nZ\n', '- %% c0\n  %% q\n\nZ\n'],
+    ['below a paragraph in a single-level item', '- d\n\n  %% q\nZ\n', "- d\n  %% q\n\nZ\n"],
+    ['below a quote', '- > q\n\n  %% q\nZ\n', "- > q\n  %% q\n\nZ\n"],
+    ['below a definition list', '- t\n  : b\n\n  %% q\nZ\n', "- t\n  : b\n  %% q\n\nZ\n"],
+    ['below another comment', '- %% c0\n\n  %% q\nZ\n', "- %% c0\n  %% q\n\nZ\n"],
     [
       'a comment FENCE below a sub-list',
       '- - z\n\n  %%%\n  body\n  %%%\nZ\n',

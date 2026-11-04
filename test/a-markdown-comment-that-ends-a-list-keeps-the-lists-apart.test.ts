@@ -18,7 +18,7 @@ describe('a Markdown comment that ends a list', () => {
   })
 
   it('ends only the nested list it stands left of', () => {
-    expect(markdownToCarve('- x\n  - a\n\n  <!-- c -->\n\n  - b\n- y\n')).toBe('- x\n\n  - a\n\n  %% c\n\n\n\n  - b\n\n- y\n')
+    expect(markdownToCarve('- x\n  - a\n\n  <!-- c -->\n\n  - b\n- y\n')).toBe('- x\n\n  - a\n  %% c\n\n\n\n  - b\n\n- y\n')
   })
 
   it('ends a list in a quote', () => {
@@ -30,7 +30,7 @@ describe('a Markdown comment that ends a list', () => {
   })
 
   it('ends the inner list of a compact `- - a` item', () => {
-    expect(markdownToCarve('- - a\n\n  <!-- c -->\n\n  - b\n')).toBe("- - a\n\n  %% c\n\n\n\n  - b\n")
+    expect(markdownToCarve('- - a\n\n  <!-- c -->\n\n  - b\n')).toBe("{loose}\n- - a\n  %% c\n\n\n\n  - b\n")
   })
 
   it('leaves the same lines in fenced code alone', () => {

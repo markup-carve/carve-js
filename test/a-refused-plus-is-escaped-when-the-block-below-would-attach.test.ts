@@ -5,13 +5,13 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 describe('a refused plus is escaped when the block below would attach', () => {
   it.each([
 
-    ['- - +\n\n  > q\n', "- - %%\n\n  > q\n"],
-    ['- - +\n\n  ```\n  x\n  ```\n', "- - %%\n\n  ```\n  x\n  ```\n"],
-    ['- - +\n\n  # H\n', "- - %%\n\n  # H\n"],
-    ['- - +\n\n  {.c}\n  > q\n', "- - %%\n\n  {.c}\n  > q\n"],
-    ['- foo\n  1. +\n   > b\n', "- foo\n  1. %%\n  > b\n"],
-    ['- - - +\n\n    > q\n', "- - - %%\n\n    > q\n"],
-    ['> - - +\n>\n>   > q\n', "> - - %%\n>\n>   > q\n"],
+    ['- - +\n\n  > q\n', '- - +\n\n  > q\n'],
+    ['- - +\n\n  ```\n  x\n  ```\n', '- - +\n\n  ```\n  x\n  ```\n'],
+    ['- - +\n\n  # H\n', '- - +\n\n  # H\n'],
+    ['- - +\n\n  {.c}\n  > q\n', '- - +\n\n  {.c}\n  > q\n'],
+    ['- foo\n  1. +\n   > b\n', '- foo\n  1. +\n   > b\n'],
+    ['- - - +\n\n    > q\n', '- - - +\n\n    > q\n'],
+    ['> - - +\n>\n>   > q\n', '> - - +\n>\n>   > q\n'],
 
   ])('%j', (source, written) => {
     expect(carveToCarve(source)).toBe(written)
@@ -20,9 +20,9 @@ describe('a refused plus is escaped when the block below would attach', () => {
   })
 
   it.each([
-    ['- - +\n\n  para\n', "- - %%\n\n  para\n"],
-    ['- - +\n\n  $$\n  x\n  $$\n', "- - %%\n\n  $$\n  x\n  $$\n"],
-    ['- - +\n\n  - b\n', "- - %%\n\n  - b\n"],
+    ['- - +\n\n  para\n', '- - +\n\n  para\n'],
+    ['- - +\n\n  $$\n  x\n  $$\n', '- - +\n\n  $$\n  x\n  $$\n'],
+    ['- - +\n\n  - b\n', '- - +\n\n  - b\n'],
   ])('preserves the loose reading of %j', (source, written) => {
     expect(carveToCarve(source)).toBe(written)
     expect(carveToHtml(written)).toBe(carveToHtml(source))

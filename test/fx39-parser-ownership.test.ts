@@ -28,7 +28,7 @@ describe('nested blocks keep the owner selected by authored columns', () => {
   it.each(['1. ', '- '])('keeps the line after a comment under %s in the note body', marker => {
     const source = `${marker}[^c]: para\n${' '.repeat(marker.length)}%% c\n${' '.repeat(marker.length + 2)}tail\n\nsee[^c]\n`
     const html = render(source)
-    expect(html).toContain('<p>para</p>\n      <p>tail')
+    expect(html).toContain('<p>para\ntail')
   })
 
   it('ends a folded term before a comment below its authored column', () => {

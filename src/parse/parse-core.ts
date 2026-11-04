@@ -220,6 +220,8 @@ export function appendLinkReferenceDefinitions(
       lexer.lines, lexer.sourceOffsetMap ?? lexer.lineOffsets, def.line, source.length,
       lexer.lineStartColumn(def.line),
     )
+    node.pos.startLine = lexer.lineNumber(def.line)
+    node.pos.endLine = lexer.lineNumber(def.line)
     // A definition is a leaf: it starts at its own `[`, past any container
     // prefix or indentation, and ends at its line's end in the SOURCE, which a
     // container's cut can make longer than the lexer line (carve#4952).

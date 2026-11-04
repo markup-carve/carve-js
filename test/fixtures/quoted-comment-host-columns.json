@@ -119,7 +119,7 @@
     {
       "name": "23-preservation-23",
       "source": "> - a\n> %% note\n> - next\ntail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>a</li>\n    <li>next\ntail</li>\n  </ul>\n</blockquote>"
+      "html": "<blockquote>\n  <ul>\n    <li><p>a</p></li>\n    <li><p>next\ntail</p></li>\n  </ul>\n</blockquote>"
     },
     {
       "name": "overindented-next-depth1-commentcol0-code",

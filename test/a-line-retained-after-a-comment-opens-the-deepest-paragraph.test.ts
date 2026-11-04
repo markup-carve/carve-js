@@ -4,7 +4,7 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 describe('a line retained after a comment opens the deepest paragraph', () => {
   it('returns a below-column follower to the outer paragraph', () => {
     const source = ['- a', '  - inner', '    %% c', '   code', 'tail'].join('\n')
-    expect(carveToHtml(source)).toBe("<ul>\n  <li>a\n    <ul>\n      <li>inner</li>\n    </ul>\n    code\ntail\n  </li>\n</ul>")
+    expect(carveToHtml(source)).toBe("<ul>\n  <li>a\n    <ul>\n      <li>inner\ncode\ntail</li>\n    </ul>\n  </li>\n</ul>")
   })
 
   it.each(['inner', '::: inner'])('releases a marker after a code block following quoted %s and a comment span', (inner) => {

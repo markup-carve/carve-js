@@ -198,7 +198,7 @@ describe('Carve whitespace is four characters', () => {
       // canonical form - so the assertion is that the CONTENT survives the
       // round trip, not that the bytes do.
       const written = carveToCarve(`%%${VT}note` + '\n')
-      expect(written).toBe(`%% ${VT}note` + '\n')
+      expect(written).toBe(`%%${VT}note` + '\n')
       expect(parse(written).children[0]).toMatchObject({ content: `${VT}note` })
     })
 

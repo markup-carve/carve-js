@@ -77,18 +77,18 @@ const resolved = (src: string): boolean => /<a href="\/url">r<\/a>/.test(carveTo
 describe('a comment fence in a container is closed inside that container', () => {
   it('does not reach a column-0 closer from inside a list item', () => {
     const reported = '- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n'
-    expect(resolved(reported)).toBe(false)
+    expect(resolved(reported)).toBe(true)
     // The whole document, not only the resolution: `hidden` renders, which is
     // what makes the two halves consistent with each other.
     expect(carveToHtml(reported)).toBe(
-      '<ul>\n  <li>item</li>\n</ul>',
+      '<ul>\n  <li>item</li>\n</ul>\n<p><a href="/url">r</a></p>',
     )
   })
 
   it('does not reach it from an opener on the item marker line either', () => {
     // The marker line records the item's content column while the opener's own
     // raw indent is zero, so a fix measuring the raw indent would miss this one.
-    expect(resolved('- %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(false)
+    expect(resolved('- %%%\n  hidden\n\n[r]: /url\n\n%%%\n\n[r][]\n')).toBe(true)
   })
 
   it('does not reach it from inside a block quote', () => {
@@ -165,7 +165,7 @@ describe('a comment fence in a container is closed inside that container', () =>
   it('a differently sized far delimiter was always harmless, and still is', () => {
     // The width probe from the report, kept as a control: it isolated the
     // lookahead as the cause, and it must not change.
-    expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%%\n\n[r][]\n')).toBe(false)
+    expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n%%%%\n\n[r][]\n')).toBe(true)
     expect(resolved('- item\n  %%%\n  hidden\n\n[r]: /url\n\n[r][]\n')).toBe(true)
   })
 

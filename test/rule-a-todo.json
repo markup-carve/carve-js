@@ -18,20 +18,8 @@
   "quoted-colon-remaining-parity.test.ts": {
     "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
   },
-  "corpus-canonical-form.test.ts": {
-    "the pinned canonical form > is what fmt produces for 187-a-comment-fence-is-a-comment-at-any-column-too": "markup-carve/carve#4995",
-    "the pinned canonical form > is what fmt produces for 192-a-comment-fence-under-a-nested-item-does-not-close-it-either": "markup-carve/carve#4995"
-  },
-  "corpus-render-fixtures.test.ts": {
-    "spec corpus non-HTML render fixtures > fmt: 187-a-comment-fence-is-a-comment-at-any-column-too": "markup-carve/carve#4995",
-    "spec corpus non-HTML render fixtures > fmt: 192-a-comment-fence-under-a-nested-item-does-not-close-it-either": "markup-carve/carve#4995"
-  },
-  "hosted-colon-literal-ownership.test.ts": {
-    "review8-c02-below-column-comment-044": "markup-carve/carve#5007"
-  },
   "render-carve.test.ts": {
     "renderCarve corpus > 187-a-comment-fence-is-a-comment-at-any-column-too: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995",
-    "renderCarve corpus > 192-a-comment-fence-under-a-nested-item-does-not-close-it-either: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995",
-    "renderCarve corpus > has no pinned canonical form that re-parses differently from its source": "markup-carve/carve#4995"
+    "renderCarve corpus > 192-a-comment-fence-under-a-nested-item-does-not-close-it-either: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995"
   }
 }

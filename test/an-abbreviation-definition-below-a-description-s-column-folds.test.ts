@@ -8,7 +8,7 @@ describe("an abbreviation definition below a description's column", () => {
 
   it('defines when its source column misses the description body', () => {
     expect(html(':: t\n:  d\n  *[A]: a\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
+      "<dl>\n  <dt>t</dt>\n  <dd>d\ntail</dd>\n</dl>",
     )
   })
 
@@ -24,7 +24,7 @@ describe("an abbreviation definition below a description's column", () => {
   it('answers the same for the nested spelling it already answered', () => {
     // This line misses the description column but reaches the item's column.
     expect(html('- :: t\n  :  d\n   *[A]: a\n  tail\n')).toBe(
-      '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d</dd>\n    </dl>\n    tail\n  </li>\n</ul>',
+      "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d\ntail</dd>\n    </dl>\n  </li>\n</ul>",
     )
   })
 
@@ -41,7 +41,7 @@ describe("an abbreviation definition below a description's column", () => {
     // never recognized it in a container, the other two fold because of the
     // column. Two reasons, one answer.
     expect(html(':: t\n:  d\n  [r]: /u\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
+      "<dl>\n  <dt>t</dt>\n  <dd>d\ntail</dd>\n</dl>",
     )
     expect(html(':: t\n:  d\n  [^f]: n\ntail\n')).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>',

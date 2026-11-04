@@ -34,7 +34,7 @@ describe('an abbreviation definition in every container', () => {
 
   it('hoists exactly one node per definition, in source order', () => {
     const doc = parse('*[X]: y\n\n> *[A]: b\n\nz\n')
-    expect(doc.children.map(node => node.type)).toEqual(['abbreviation_def', 'block_quote', 'abbreviation_def', 'paragraph'])
+    expect(doc.children.map(node => node.type)).toEqual(['abbreviation_def', 'abbreviation_def', 'block_quote', 'paragraph'])
   })
 
   it('starts the hoisted span at its marker, not at the container prefix', () => {

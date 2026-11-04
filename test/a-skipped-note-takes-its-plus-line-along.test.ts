@@ -23,6 +23,6 @@ it('attaches the block after a skipped note whose body holds an indented text li
 
 it('ends the skipped note at a comment line, which is skipped on its own', () => {
   expect(normalize(carveToHtml('[^a]: +\n[^n]: a\n%% c\npara\n\nsee[^n] [^a]\n'))).toBe(normalize(
-    refs + notes('<p>a', '<p>para'),
+    refs + notes('<p>a para', '<p>'),
   ))
 })

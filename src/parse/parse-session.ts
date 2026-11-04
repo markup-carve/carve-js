@@ -1,5 +1,6 @@
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
+import type { Comment } from '../ast.js'
 import type {
   Admonition,
   Attrs,
@@ -163,6 +164,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
+import { authoredAbbreviations, directCommentNodes, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -457,8 +459,10 @@ export class ParseSession extends InlineParseSession {
     return this.quoteSiblingSeparators.has(line)
   }
 
-  parse(source: string, opts: ParseOptions = {}): Document {
+  parse(source: string, opts: ParseOptions = {}, transparent = true,
+    precomputedOwnership?: ReturnType<typeof ownLines>): Document {
     const sourceByteLength = utf8ByteLength(source)
+    const dropRequested = opts.positions === false
     this.recordPositions = opts.positions !== false
     this.blockLineSpans = new WeakMap()
     this.authoredBlankPrefixes = new WeakMap()
@@ -475,6 +479,7 @@ export class ParseSession extends InlineParseSession {
     // is a heading, not literal text. Only here in the root entry -- nested
     // sub-lexers (blockquote/admonition/extension bodies) keep a leading BOM
     // literal (`> ﻿# T` stays a quoted paragraph), matching carve-php / carve-rs.
+    const authoredSource = source
     const strippedBom = source.charCodeAt(0) === 0xfeff
     if (strippedBom) source = source.slice(1)
     // Replace any NUL (U+0000) with the U+FFFD replacement character so a control
@@ -483,12 +488,50 @@ export class ParseSession extends InlineParseSession {
     // A lone surrogate becomes U+FFFD too, so output is always well-formed
     // (CARVE-P0-023).
     source = replaceLoneSurrogates(source)
+    const transparentLines = transparent ? transparentLineStream(source) : null
+    // Restoration needs source positions even when the public AST omits them.
+    // Parse once with positions, then remove them at the return boundary.
+    if (transparentLines && dropRequested) {
+      opts = { ...opts, positions: true }
+      this.recordPositions = true
+    }
+    const authoredOptions = { ...opts, positions: true }
+    delete authoredOptions.onUnclosedContainer
+    delete authoredOptions.onUnclosedCodeFence
+    delete authoredOptions.onRefusedContinuationMarker
+    delete authoredOptions.onDroppedComment
+    delete authoredOptions.onOverindentedOpener
+    delete authoredOptions.onInvalidContainerMetadata
+    delete authoredOptions.onDanglingBlockAttributes
+    // The restoration pass only harvests core comment and definition nodes.
+    // Extension callbacks may have state, so only the visible parse invokes them.
+    delete authoredOptions.extensions
+    const directComments = transparentLines && authoredSource === source && !source.includes('\r')
+      ? directCommentNodes(transparentLines) : null
+    const authored = transparentLines && !directComments ? new ParseSession().parse(authoredSource, authoredOptions, false,
+      authoredSource === source ? transparentLines.authoredOwnership : undefined) : null
+    const erasedAbbreviations = transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : []
+    const originalLexer = transparentLines ? new Lexer(source, opts) : null
     const lexer = new Lexer(
-      source,
+      transparentLines?.lines ?? source,
       opts,
       0,
       opts.onUnclosedContainer || opts.onDanglingBlockAttributes || opts.onInvalidContainerMetadata ? new Set<string>() : undefined,
     )
+    if (transparentLines && originalLexer) {
+      lexer.sourceLineMap = transparentLines.sourceLines.map((index) => index + 1)
+      lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
+      if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
+      const erased = new Set(transparentLines.erased)
+      let previousVisible = ''
+      lexer.rootLines = transparentLines.original.map((line, index) => {
+        if (erased.has(index)) return previousVisible
+        previousVisible = line
+        return line
+      })
+      lexer.documentLineCount = originalLexer.documentLineCount
+      lexer.documentLacksFinalBreak = originalLexer.documentLacksFinalBreak
+    }
     // POSITIONS STILL INDEX THE FILE, not the stripped text. Slicing the mark off
     // shifted every offset in the document by one codepoint, so a consumer that
     // sliced the original bytes by a reported span got the character before the
@@ -500,17 +543,29 @@ export class ParseSession extends InlineParseSession {
     // with a fixed width of one, so it reuses it rather than adding a second
     // spelling. `linePrefixWidths` moves with it: the mark occupies the first
     // column of the first line, so the content of that line starts at column 2.
-    if (strippedBom) {
+    if (strippedBom && !transparentLines) {
       lexer.sourceOffsetMap = lexer.lineOffsets.map((offset) => offset + 1)
       lexer.linePrefixWidths = lexer.lineOffsets.map((_offset, index) => (index === 0 ? 1 : 0))
     }
     lexer.atDocumentLevel = true
     // Consume leading frontmatter first so `lexer.pos` marks the end of the
     // metadata region; the def passes and parseBlocks all start from there.
-    lexer.consumeFrontmatter()
-    const sourceLines = lexer.lines
-    const ownership = ownLines(lexer.lines as string[], lexer.pos)
+    if (!transparentLines || transparentLines.sourceLines[0] === 0) lexer.consumeFrontmatter()
+    const sourceLines = transparentLines?.original ?? lexer.lines
+    const ownership = precomputedOwnership ?? ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
+    if (transparentLines && lexer.rootLines) {
+      // A code opener uses the ownership walk's column after transparent
+      // lines have gone. Keep the authored root lines for other lookups.
+      const visibleRoot = lexer.rootLines.slice()
+      for (let index = 0; index < transparentLines.sourceLines.length; index++) {
+        const originalIndex = transparentLines.sourceLines[index]!
+        if (/^[ \t]*`{3,}/.test(transparentLines.original[originalIndex]!)) {
+          visibleRoot[originalIndex] = lexer.lines[index]!
+        }
+      }
+      lexer.rootLines = visibleRoot
+    }
     this.skippedAbbreviationLines = new Set([...ownership.skippedAbbreviations.keys()]
       .filter((index) => !ownership.separatingAbbreviations.has(index)).map((index) => lexer.lineNumber(index)))
     this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
@@ -528,6 +583,31 @@ export class ParseSession extends InlineParseSession {
     // First pass: collect abbreviation and reference-link definitions so
     // they can be resolved regardless of document order (grammar §6).
     this.collectLinkDefs(lexer)
+    if (transparentLines) {
+      const visibleAbbreviations = new Map<string, number>()
+      for (const [index, [name]] of lexer.collectedAbbreviations ?? []) {
+        visibleAbbreviations.set(name, transparentLines.sourceLines[index]!)
+      }
+      for (const definition of erasedAbbreviations) {
+        if (definition.pos!.startLine - 1 <= (visibleAbbreviations.get(definition.abbr) ?? -1)) continue
+        lexer.abbrDefs.set(definition.abbr, definition.expansion)
+      }
+    }
+    if (transparentLines) {
+      for (const node of authored?.children ?? []) {
+        if (node.type !== 'link_reference_definition' || !node.pos ||
+            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
+        const key = normalizeRefLabel(node.label)
+        const current = lexer.linkDefs.get(key)
+        const currentLine = current?.line === undefined ? -1 : transparentLines.sourceLines[current.line]!
+        if (currentLine >= node.pos.startLine - 1) continue
+        lexer.linkDefs.set(key, {
+          rawLabel: node.label, href: node.href,
+          ...(node.title === undefined ? {} : { title: node.title }),
+          ...(node.attrs === undefined ? {} : { attrs: node.attrs }),
+        })
+      }
+    }
     const children = this.parseBlocks(lexer, 0)
     hoistContainerAbbreviations(lexer)
     insertSkippedAbbreviationDefinitions(children, lexer, sourceLines, strippedBom ? '\ufeff' + source : source)
@@ -547,10 +627,31 @@ export class ParseSession extends InlineParseSession {
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
     doc.srcByteLength = sourceByteLength
-    if (opts.positions === false) {
+    if (opts.positions === false && !transparentLines) {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
     toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
+    if (transparentLines) {
+      for (const node of authored?.children ?? []) {
+        if (node.type !== 'link_reference_definition' || !node.pos ||
+            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
+        const key = normalizeRefLabel(node.label)
+        const winner = lexer.linkDefs.get(key)
+        if (winner?.rawLabel !== node.label || winner.href !== node.href) continue
+        for (let i = doc.children.length - 1; i >= 0; i--) {
+          const existing = doc.children[i]!
+          if (existing.type === 'link_reference_definition' && normalizeRefLabel(existing.label) === key) doc.children.splice(i, 1)
+        }
+        doc.children.push(node)
+      }
+      restoreTransparentComments(doc, authored, transparentLines, directComments ?? undefined)
+      restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
+      dropTransparentScaffoldText(doc, transparentLines)
+      splitTransparentQuoteParagraphs(doc, transparentLines)
+    }
+    if (dropRequested) {
+      return this.skipPositionDrop ? doc : dropPositions(doc)
+    }
     return doc
   }
 
@@ -953,7 +1054,13 @@ export class ParseSession extends InlineParseSession {
       if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
       // A consumed `+` keeps its `%%` stand-in so the writer can spell it; see dropStandInPositions.
       if (l.trimStart() === '%%' && this.consumedMarkerLines.has(lexer.lineNumber(lexer.pos - 1))) {
-        const standIn = { type: 'comment' as const, block: false, content: '' }
+        const standIn: Comment = { type: 'comment', block: false, content: '' }
+        const root = lexer.documentRoot ?? lexer
+        const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+        if (authoredLine?.trimEnd().endsWith('+') && !authoredLine.includes('%%')) {
+          standIn.transparentSource = authoredLine
+          standIn.transparentOriginalValue = ''
+        }
         unplacedBlocks.add(standIn)
         return standIn
       }
@@ -968,7 +1075,17 @@ export class ParseSession extends InlineParseSession {
       // class, so a `%%<VT>note` line had its vertical tab eaten as the
       // separator and `carve fmt` wrote a SPACE back in its place: a character
       // the clause calls content, replaced by one the author did not write.
-      return { type: 'comment', block: false, content: commentLineContent(l) }
+      const comment: Comment = { type: 'comment', block: false, content: commentLineContent(l) }
+      const root = lexer.documentRoot ?? lexer
+      const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+      // A refused or consumed `+` is represented internally by a `%%` line.
+      // After #5012, writing that stand-in changes layout, so retain its
+      // authored spelling for the source writer.
+      if (l === '%%' && authoredLine?.trimEnd().endsWith('+') && !authoredLine.includes('%%')) {
+        comment.transparentSource = authoredLine
+        comment.transparentOriginalValue = ''
+      }
+      return comment
     }
     if (RE_LINE_BLOCK_OPEN.test(line)) return this.parseLineBlock(lexer)
     if (RE_HARDBREAKS_OPEN.test(line)) return this.parseHardBreaksBlock(lexer)

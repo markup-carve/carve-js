@@ -70,10 +70,8 @@ describe("the continuation marker's column gate reaches every container", () => 
       const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
       expect(html(marker(src))).toBe(ruledMarker.get(marker(src)))
       expect(html(comment(src))).toBe(footnote
-        ? what.includes('at its minimum')
-          ? reference + notes + '<p>intro</p><p>more' + backlink + '</p></li></ol></section>'
-          : '<p>more</p>' + reference + notes + '<p>intro' + backlink + '</p></li></ol></section>'
-        : '<dl><dt>term</dt><dd>intro</dd></dl><p>more</p>')
+        ? reference + notes + '<p>intro more' + backlink + '</p></li></ol></section>'
+        : '<dl><dt>term</dt><dd>intro more</dd></dl>')
     })
   }
 

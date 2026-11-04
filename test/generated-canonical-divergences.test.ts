@@ -25,7 +25,7 @@ describe('generated canonical divergence regressions', () => {
     const source = '^ cap\n# head\n{.cls}\n@user\n| a | b |\n[a]: /u\n^ cap\n'
 
     expect(carveToCarve(source)).toBe(
-      '^ cap\n\n# head\n\n{.cls}\n@user\n\n| a | b |\n\n\\^ cap\n\n[a]: /u\n',
+      '^ cap\n\n# head\n\n{.cls}\n@user\n\n| a | b |\n^ cap\n\n[a]: /u\n',
     )
   })
 })

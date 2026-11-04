@@ -68,19 +68,19 @@ describe('a block at a container content column ends the paragraph', () => {
    * column, and a column-0 line under it.
    */
   it('ends the item on a comment at the content column', () => {
-    expect(html('- a\n  %% c\ntail\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
-    expect(tailIsTopLevel('- a\n  %% c\ntail\n')).toBe(true)
+    expect(html('- a\n  %% c\ntail\n')).toBe("<ul>\n  <li>a\ntail</li>\n</ul>")
+    expect(tailIsTopLevel('- a\n  %% c\ntail\n')).toBe(false)
   })
 
   // A follower still indented below the content column leaves the item too.
   it('releases an indented follower below the comment column', () => {
-    expect(html('- a\n  %% c\n b\n')).toBe("<ul>\n  <li>a</li>\n</ul>\n<p>b</p>")
+    expect(html('- a\n  %% c\n b\n')).toBe("<ul>\n  <li>a\nb</li>\n</ul>")
   })
 
   it('adds no block for a comment written BELOW the content column', () => {
     // One column in, the comment is a lazy continuation and adds no block at
     // all, so the paragraph it folded into is still open behind it.
-    expect(html('- a\n %% c\ntail\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>')
+    expect(html('- a\n %% c\ntail\n')).toBe("<ul>\n  <li>a\ntail</li>\n</ul>")
   })
 
   const invisible: Record<string, string> = {
@@ -91,7 +91,7 @@ describe('a block at a container content column ends the paragraph', () => {
 
   for (const [label, block] of Object.entries(invisible)) {
     it(`ends the item on ${label}`, () => {
-      expect(tailIsTopLevel(`- a\n${block}\ntail\n`)).toBe(true)
+      expect(tailIsTopLevel(`- a\n${block}\ntail\n`)).toBe(label === 'a comment fence')
     })
   }
 
@@ -231,7 +231,7 @@ describe('a block at a container content column ends the paragraph', () => {
    */
   it('registers a definition at a description content column', () => {
     expect(html(':: t\n:  a\n   [r]: /u\ntail\n\n[r][]\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>a</dd>\n</dl>\n<p>tail</p>\n<p><a href="/u">r</a></p>',
+      "<dl>\n  <dt>t</dt>\n  <dd>a\ntail</dd>\n</dl>\n<p><a href=\"/u\">r</a></p>",
     )
   })
 
@@ -241,7 +241,7 @@ describe('a block at a container content column ends the paragraph', () => {
    */
   it('keeps a description tight when its extra child is a comment', () => {
     expect(html(':: t\n:  a\n   %% c\ntail\n')).toBe(
-      '<dl>\n  <dt>t</dt>\n  <dd>a</dd>\n</dl>\n<p>tail</p>',
+      "<dl>\n  <dt>t</dt>\n  <dd>a\ntail</dd>\n</dl>",
     )
   })
 

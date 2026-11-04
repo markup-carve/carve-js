@@ -223,8 +223,8 @@ describe('closed colon fences in quoted items (carve#2925)', () => {
 
   it('ends the quote at an unprefixed link definition', () => {
     const source = '> - ::: box\n[x]: /u\n>   :::\n>   :::bad\n>   :::\n- tail\n'
-    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'block_quote', 'list', 'link_reference_definition'])
-    expect(carveToHtml(source)).toContain('</blockquote>\n<blockquote>')
+    expect(parse(source).children.map(node => node.type)).toEqual(['block_quote', 'list', 'link_reference_definition'])
+    expect(carveToHtml(source)).toContain('</blockquote>\n<ul>')
   })
 
   it('ends both quote and item before an unmarked line below the item', () => {

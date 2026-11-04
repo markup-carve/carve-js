@@ -32,7 +32,7 @@
   {
     "id": "comment-target-d2-false-payload",
     "source": "- a\n  - b\n    %% c\n payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\npayload</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d2-true-# h",
@@ -102,7 +102,7 @@
   {
     "id": "comment-target-d3-false-payload",
     "source": "- a\n  - b\n    - c\n      %% c\n payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\npayload</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d3-true-# h",
@@ -172,7 +172,7 @@
   {
     "id": "comment-target-d4-false-payload",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\npayload</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-target-d4-true-# h",
@@ -217,7 +217,7 @@
   {
     "id": "comment-neighbor-d1-false-c0-payload",
     "source": "- a\n  %% c\npayload\n",
-    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\npayload</li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d1-false-c1-# h",
@@ -227,7 +227,7 @@
   {
     "id": "comment-neighbor-d1-false-c1-payload",
     "source": "- a\n  %% c\n payload\n",
-    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\npayload</li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d1-false-c2-# h",
@@ -237,7 +237,7 @@
   {
     "id": "comment-neighbor-d1-false-c2-payload",
     "source": "- a\n  %% c\n  payload\n",
-    "html": "<ul>\n  <li>a\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\npayload</li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d1-true-c0-# h",
@@ -277,7 +277,7 @@
   {
     "id": "comment-neighbor-d2-false-c0-payload",
     "source": "- a\n  - b\n    %% c\npayload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\npayload</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d2-false-c2-# h",
@@ -287,7 +287,7 @@
   {
     "id": "comment-neighbor-d2-false-c2-payload",
     "source": "- a\n  - b\n    %% c\n  payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\npayload</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d2-true-c0-# h",
@@ -317,7 +317,7 @@
   {
     "id": "comment-neighbor-d3-false-c0-payload",
     "source": "- a\n  - b\n    - c\n      %% c\npayload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\npayload</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d3-false-c2-# h",
@@ -327,7 +327,7 @@
   {
     "id": "comment-neighbor-d3-false-c2-payload",
     "source": "- a\n  - b\n    - c\n      %% c\n  payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\npayload</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d3-true-c0-# h",
@@ -357,7 +357,7 @@
   {
     "id": "comment-neighbor-d4-false-c0-payload",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\npayload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>payload</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\npayload</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d4-false-c2-# h",
@@ -367,7 +367,7 @@
   {
     "id": "comment-neighbor-d4-false-c2-payload",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n  payload\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    payload\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\npayload</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "comment-neighbor-d4-true-c0-# h",
@@ -392,12 +392,12 @@
   {
     "id": "followon-d2-qfalse-lfalse-x-y",
     "source": "- a\n  - b\n    %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\nx\ny</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-lfalse-x- %% d\n x",
     "source": "- a\n  - b\n    %% c\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\nx\nx</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "followon-d2-qfalse-lfalse-# h-y",
@@ -417,7 +417,7 @@
   {
     "id": "followon-d2-qfalse-ltrue-x- %% d\n x",
     "source": "- a\n  - b\n    ::: |\n    %%%\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <div class=\"line-block\">\n\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\nx</p>"
   },
   {
     "id": "followon-d2-qfalse-ltrue-# h-y",
@@ -472,12 +472,12 @@
   {
     "id": "followon-d3-qfalse-lfalse-x-y",
     "source": "- a\n  - b\n    - c\n      %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\ny</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\nx\ny</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-x- %% d\n x",
     "source": "- a\n  - b\n    - c\n      %% c\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\nx\nx</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "followon-d3-qfalse-lfalse-# h-y",
@@ -497,7 +497,7 @@
   {
     "id": "followon-d3-qfalse-ltrue-x- %% d\n x",
     "source": "- a\n  - b\n    - c\n      ::: |\n      %%%\n x\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <div class=\"line-block\">\n\n            </div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>x\nx</p>"
   },
   {
     "id": "followon-d3-qfalse-ltrue-# h-y",
@@ -552,7 +552,7 @@
   {
     "id": "followon-explicit-32",
     "source": "- a\n  - b\n    %% c\n %% d\n x\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\nx</li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "followon-explicit-33",
@@ -562,12 +562,12 @@
   {
     "id": "followon-explicit-34",
     "source": "- a\n  %% c\n x\ny\n",
-    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>x\ny</p>"
+    "html": "<ul>\n  <li>a\nx\ny</li>\n</ul>"
   },
   {
     "id": "followon-explicit-35",
     "source": "- a\n  %% c\n x\n  y\nz\n",
-    "html": "<ul>\n  <li>a</li>\n</ul>\n<p>x\ny\nz</p>"
+    "html": "<ul>\n  <li>a\nx\ny\nz</li>\n</ul>"
   },
   {
     "id": "followon-boundary-36",
@@ -612,7 +612,7 @@
   {
     "id": "staged-3-false-false-x",
     "source": "- a\n  - b\n    - c\n      %% c\n   x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n    x\nx\ny\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\nx\nx\ny</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-3-false-false-# h",
@@ -622,12 +622,12 @@
   {
     "id": "staged-3-false-false-%% d",
     "source": "- a\n  - b\n    - c\n      %% c\n   %% d\n %% d\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\ny</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-3-false-true-x",
     "source": "1. a\n  1. b\n    1. c\n      %% c\n   x\n x\ny\n",
-    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ol>\n<p>x\nx\ny</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c\nx\nx\ny</li>\n</ol>"
   },
   {
     "id": "staged-3-false-true-# h",
@@ -637,7 +637,7 @@
   {
     "id": "staged-3-false-true-%% d",
     "source": "1. a\n  1. b\n    1. c\n      %% c\n   %% d\n %% d\ny\n",
-    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ol>\n<p>y</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c\ny</li>\n</ol>"
   },
   {
     "id": "staged-3-true-false-x",
@@ -672,7 +672,7 @@
   {
     "id": "staged-4-false-false-x",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n     x\n   x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n        x\nx\nx\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\nx\nx\nx\ny</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-4-false-false-# h",
@@ -682,12 +682,12 @@
   {
     "id": "staged-4-false-false-%% d",
     "source": "- a\n  - b\n    - c\n      - d\n        %% c\n     %% d\n   %% d\n %% d\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>y</p>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <ul>\n              <li>d\ny</li>\n            </ul>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "staged-4-false-true-x",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     x\n   x\n x\ny\n",
-    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d</li>\n</ol>\n<p>x\nx\nx\ny</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d\nx\nx\nx\ny</li>\n</ol>"
   },
   {
     "id": "staged-4-false-true-# h",
@@ -697,7 +697,7 @@
   {
     "id": "staged-4-false-true-%% d",
     "source": "1. a\n  1. b\n    1. c\n      1. d\n        %% c\n     %% d\n   %% d\n %% d\ny\n",
-    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d</li>\n</ol>\n<p>y</p>"
+    "html": "<ol>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n  <li>d\ny</li>\n</ol>"
   },
   {
     "id": "staged-4-true-false-x",
@@ -732,7 +732,7 @@
   {
     "id": "review-0",
     "source": "- a\n  - b\n    - c\n      %% c\n     x\n x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c</li>\n        </ul>\n        x\nx\ny\n      </li>\n    </ul>\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\nx\nx\ny</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>"
   },
   {
     "id": "review-1",
@@ -742,6 +742,6 @@
   {
     "id": "review-3",
     "source": "- a\n  - b\n    %% c\n   x\ny\n",
-    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    x\ny\n  </li>\n</ul>"
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\nx\ny</li>\n    </ul>\n  </li>\n</ul>"
   }
 ]

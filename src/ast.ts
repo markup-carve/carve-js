@@ -133,6 +133,12 @@ export interface Heading extends BaseNode {
 export interface Paragraph extends BaseNode {
   type: 'paragraph'
   children: InlineNode[]
+  /** Runtime source placement for line comments erased before layout. */
+  transparentComments?: Array<{ line: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
+  /** Authored lines following a transparent boundary in this paragraph. */
+  transparentFollowingLines?: Array<{ line: number; source: string }>
+  /** Visible source line order retained when public positions are omitted. */
+  transparentVisibleLines?: number[]
   /** Set after reference resolution when the paragraph contains one resolved image. */
   blockImage?: true
 }
@@ -189,6 +195,8 @@ export interface List extends BaseNode {
   bareMarker?: true
   tight: boolean
   items: ListItem[]
+  /** Invisible source lines that fell between adjacent items before layout. */
+  transparentBetweenItems?: Array<{ after: number; source: string; node: Comment | AbbreviationDef; originalValue: string }>
 }
 
 /** The task marker characters an item can record (PART 12, `taskState`). */
@@ -491,6 +499,11 @@ export interface DefinitionItem {
 export interface DefinitionList extends BaseNode {
   type: 'definition_list'
   items: DefinitionItem[]
+  /** Authored invisible lines between terms or descriptions, written at that boundary. */
+  transparentBetweenDescriptions?: Array<{
+    item: number; afterDescription: number; afterTerm: number; source: string
+    node: Comment | AbbreviationDef; originalValue: string
+  }>
   /**
    * PART 9 §17 L7: the container's descriptions render as BLOCKS rather than as
    * inline runs, because a preceding `{loose}` block-attribute line said so.
@@ -531,6 +544,10 @@ export interface AbbreviationDef extends BaseNode {
   type: 'abbreviation_def'
   abbr: string
   expansion: string
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
+  transparentInList?: true
+  transparentInDefinitionList?: true
 }
 
 /**
@@ -580,6 +597,12 @@ export interface RawBlock extends BaseNode {
 export interface Comment extends BaseNode {
   type: 'comment'
   block: boolean
+  /** Its source line is written through the paragraph that crosses it. */
+  transparentInParagraph?: true
+  transparentInList?: true
+  transparentInDefinitionList?: true
+  transparentSource?: string
+  transparentOriginalValue?: string
   /** Present only for the explicitly closed `{% … %}` inline form. */
   delimited?: boolean
   content: string
