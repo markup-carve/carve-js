@@ -123,9 +123,8 @@ describe('the canonical writer emits the markers first', () => {
     }
   })
 
-  it('still promotes a span-marker header row with a delimiter row', () => {
-    // `header_cell` admits no span marker, so that shape keeps the fallback.
-    expect(fmt('| < | b |\n|---|---|\n| x | y |')).toBe('| < | b |\n|---|---|\n| x | y |\n')
+  it('writes a span-marker header row natively (carve#4980)', () => {
+    expect(fmt('| < | b |\n|---|---|\n| x | y |')).toBe('|= < |= b |\n| x | y |\n')
   })
 })
 

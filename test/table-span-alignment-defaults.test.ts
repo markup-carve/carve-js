@@ -12,7 +12,7 @@ describe('table span alignment defaults', () => {
   })
 
   it('keeps a header cell containing a span glyph literal', () => {
-    const html = carveToHtml('|a|= <|\n|b|= ^|\n')
+    const html = carveToHtml('|a|= \\<|\n|b|= \\^|\n')
     expect(html).toContain('<tr><td>a</td><th scope="row">&lt;</th></tr>')
     expect(html).toContain('<tr><td>b</td><th scope="row">^</th></tr>')
   })

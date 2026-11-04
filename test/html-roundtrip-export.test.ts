@@ -228,7 +228,7 @@ describe('the HTML carriers', () => {
 
   it('still comes back as the |= form with the option OFF', () => {
     const src = '| a | b |\n|:-----|---:|\n| 1 | 2 |\n'
-    expect(htmlToCarve(carveToHtml(src)).value).toBe('|=< a |=> b |\n| 1 | 2 |\n')
+    expect(htmlToCarve(carveToHtml(src)).value).toBe('|={<} a |={>} b |\n| 1 | 2 |\n')
   })
 
   it('imports the deprecated spelling of the carrier too', () => {

@@ -44,7 +44,7 @@ describe('a rowspan holds its column through its last row', () => {
       + '</tbody></table>'
     expect(codes(html)).toEqual([])
     expect(back(html)).toContain('<td style="text-align: right;">q</td>')
-    expect(carve(html)).toBe('{header-rows=1}\n|> A |< B |~ C |\n| x | y | z |\n| ^ |> q | r |\n')
+    expect(carve(html)).toBe('{header-rows=1}\n|{>} A |{<} B |{~} C |\n| x | y | z |\n| ^ |{>} q | r |\n')
   })
 
   /**
@@ -65,7 +65,7 @@ describe('a rowspan holds its column through its last row', () => {
     // stays local and q3 keeps its explicit marker.
     expect(rendered).toContain('<td style="text-align: right;">q3</td>')
     expect(carve(html)).toBe(
-      '{header-rows=1}\n|> A |< B |~ C |\n| x | y | z |\n| ^ |> q1 | r1 |\n| ^ |> q2 | r2 |\n|> q3 | r3 |\n',
+      '{header-rows=1}\n|{>} A |{<} B |{~} C |\n| x | y | z |\n| ^ |{>} q1 | r1 |\n| ^ |{>} q2 | r2 |\n|{>} q3 | r3 |\n',
     )
   })
 
@@ -109,7 +109,7 @@ describe('a rowspan holds its column through its last row', () => {
 
     const html = '<table><thead><tr><th colspan="3" style="text-align:center">H</th><th style="text-align:left">K</th></tr></thead>'
       + '<tbody><tr><td style="text-align:center">p</td><td style="text-align:center">q</td><td style="text-align:right">s</td><td style="text-align:left">t</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|=~ H | < | < |=< K |\n| p |~ q |> s | t |\n')
+    expect(carve(html)).toBe('|={~} H |= < |= < |={<} K |\n| p |{~} q |{>} s | t |\n')
     const rendered = back(html)
     for (const [cell, css] of [['p', 'center'], ['q', 'center'], ['s', 'right'], ['t', 'left']] as const) {
       expect(rendered).toContain(`<td style="text-align: ${css};">${cell}</td>`)
@@ -121,16 +121,16 @@ describe('a rowspan holds its column through its last row', () => {
    */
   it('leaves the unspanned cases where they were', () => {
     const shared = '<table><thead><tr><th style="text-align:right">h</th></tr></thead><tbody><tr><td style="text-align:right">a</td></tr></tbody></table>'
-    expect(carve(shared)).toBe('|=> h |\n| a |\n')
+    expect(carve(shared)).toBe('|={>} h |\n| a |\n')
 
     const differing = '<table><thead><tr><th style="text-align:right">h</th></tr></thead><tbody><tr><td style="text-align:left">a</td></tr></tbody></table>'
-    expect(carve(differing)).toBe('|=> h |\n|< a |\n')
+    expect(carve(differing)).toBe('|={>} h |\n|{<} a |\n')
 
     const headless = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td style="text-align:right">a</td></tr></tbody></table>'
-    expect(carve(headless)).toBe('|= h |\n|> a |\n')
+    expect(carve(headless)).toBe('|= h |\n|{>} a |\n')
 
-    expect(carve('<table><tr><td style="text-align:right">a</td><td>b</td></tr></table>')).toBe('|> a | b |\n')
-    expect(carve('<table><tr><td style="text-align:left;vertical-align:top">a</td></tr></table>')).toBe('|<^ a |\n')
+    expect(carve('<table><tr><td style="text-align:right">a</td><td>b</td></tr></table>')).toBe('|{>} a | b |\n')
+    expect(carve('<table><tr><td style="text-align:left;vertical-align:top">a</td></tr></table>')).toBe('|{<^} a |\n')
   })
 
   /**

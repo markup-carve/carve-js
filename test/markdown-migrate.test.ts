@@ -498,7 +498,7 @@ describe('markdownToCarve — GFM tables', () => {
 
   it('maps GFM column alignment to the |= glued markers (< ~ >)', () => {
     const md = ['| L | C | R |', '| :-- | :--: | --: |', '| a | b | c |'].join('\n')
-    expect(conv(md)).toBe(['|=< L |=~ C |=> R |', '| a | b | c |'].join('\n'))
+    expect(conv(md)).toBe(['|={<} L |={~} C |={>} R |', '| a | b | c |'].join('\n'))
   })
 
   it('converts inline markup inside header cells', () => {

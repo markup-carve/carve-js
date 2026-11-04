@@ -2043,10 +2043,12 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     .some(key => node.attrs?.keyValues?.[key] !== undefined)
   let headerEnd = node.rowGroups ? node.rowGroups.headRows : 0
   if (!node.rowGroups && !rejectedPartition) {
+    // An orphan placeholder takes its row's kind when a header owns a cell
+    // of that row (T9, carve#4980).
     while (
       headerEnd < grid.length &&
-      grid[headerEnd]!.some((e) => !e.skip) &&
-      grid[headerEnd]!.every((e) => e.cell.header || e.skip)
+      grid[headerEnd]!.some((e) => !e.skip && e.cell.header) &&
+      grid[headerEnd]!.every((e) => e.cell.header || e.skip || e.cell.span)
     ) headerEnd++
   }
   const footerStart = node.rowGroups ? grid.length - node.rowGroups.footRows : grid.length
@@ -2061,14 +2063,10 @@ function renderTable(node: Table, opts: RenderOptions, level: number): string {
     const hr = grid[r]!
     for (let c = 0; c < hr.length; c++) {
       const entry = hr[c]!
-      // GFM delimiter alignment is carried by a consumed colspan slot too.
-      if ((!entry.cell.header || !entry.cell.align) || (entry.skip && entry.cell.span !== 'colspan')) continue
-      columnAlign[c] = entry.cell.align
-    }
-    for (let c = 0; c < hr.length; c++) {
-      const entry = hr[c]!
-      if (entry.skip || !entry.cell.header || !entry.cell.valign) continue
-      columnValign[c] = entry.cell.valign
+      // A placeholder's alignment-only block sets its column too, covered or not.
+      if (!entry.cell.header && !entry.cell.span) continue
+      if (entry.cell.align && (!entry.skip || entry.cell.span)) columnAlign[c] = entry.cell.align
+      if (entry.cell.valign && (!entry.skip || entry.cell.span)) columnValign[c] = entry.cell.valign
     }
   }
   for (let r = 0; r < grid.length; r++) {

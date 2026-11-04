@@ -3076,8 +3076,7 @@ function writeTableRow(
   let row = ''
   for (let c = 0; c < width; c++) {
     const cell = convertInline((cells[c] ?? '').replace(/\\\|/g, '|'), dialect, false, false, undefined, true, true, reportEmptyLosses)
-    const originalPrefix = prefixes[c] ?? ''
-    const prefix = cell.trim() === '' ? originalPrefix.replace(/<|\^/g, '') : originalPrefix
+    const prefix = prefixes[c] ?? ''
     row += '|' + padCell(prefix, escapeSpanMarkerPayload(cell, prefix))
   }
   return row + '|'
@@ -4781,8 +4780,7 @@ function restorePrefixedInlineRun(
         const delimiter = held[idx + 1]!.body.trim()
         const headerCells = splitTableRow(body.trim())
         const markers = splitTableRow(delimiter).map(alignMarker)
-        const delimiterNeeded = headerCells.some((cell, column) => cell.trim() === '' && markers[column] === '<')
-        const headers = delimiterNeeded ? [] : markers.map((align) => `=${align}`)
+        const headers = markers.map(headerPrefix)
         tableWidth = headerCells.length
         const previousLine = inlineRunSourceLine
         inlineRunSourceLine = runPartSourceLine(part)
@@ -4790,9 +4788,6 @@ function restorePrefixedInlineRun(
         inlineRunSourceLine = previousLine
         if (keepTableHeader(header, runPartSourceLine(part))) {
           out.push(openingPrefix(part.prefix + marker) + emitContainerLine(header, 'verbatim', {
-            listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(marker), prefix: part.prefix + marker,
-          }).line)
-          if (delimiterNeeded) out.push(openingPrefix(part.prefix + marker) + emitContainerLine(delimiter, 'verbatim', {
             listDepth: RE_LIST_MARKER.test(part.prefix) ? 1 : 0, quoteDepth: quoteDepth(marker), prefix: part.prefix + marker,
           }).line)
         }
@@ -6830,7 +6825,12 @@ function escapeBlockOpener(text: string): string {
   return text
 }
 
-/** Map a GFM delimiter cell to Carve's column-alignment marker (glued to `|=`). */
+/** A native header prefix; alignment leads the cell attribute block (carve#5091). */
+function headerPrefix(align: '' | '<' | '>' | '~'): string {
+  return align ? `={${align}}` : '='
+}
+
+/** Map a GFM delimiter cell to Carve's column-alignment symbol. */
 function alignMarker(cell: string): '' | '<' | '>' | '~' {
   const left = cell.startsWith(':')
   const right = cell.endsWith(':')
@@ -8783,15 +8783,13 @@ function writeTableLine(st: MarkdownConversion, ln: MarkdownLine, i: number): nu
       // header; a mismatch (e.g. `a | b` over `---`) is not a table, so leave
       // it for the setext/thematic-break handling below.
       if (aligns.length === headerCells.length) {
-        const delimiterNeeded = headerCells.some((cell, column) => cell.trim() === '' && aligns[column] === '<')
-        const header = writeTableRow(headerCells, delimiterNeeded ? [] : aligns.map((align) => `=${align}`), dialect)
+        const header = writeTableRow(headerCells, aligns.map(headerPrefix), dialect)
         if (st.prevType !== 'blank' && out.length > 0) out.push('')
         // At the container's content column, so the converted header keeps
         // the item that holds it. Written at column 0 it left the item while
         // the body rows stayed behind, splitting one table into two blocks.
         if (keepTableHeader(header, sourceLine(i))) {
           out.push(containerPad + header)
-          if (delimiterNeeded) out.push(containerPad + next)
         }
         i++ // consume the delimiter row
         st.prevType = 'text'

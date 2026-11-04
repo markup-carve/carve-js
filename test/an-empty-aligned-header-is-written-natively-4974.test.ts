@@ -9,7 +9,7 @@ const tree = (source: string): string => JSON.stringify(parse(source).children, 
 describe('an empty aligned header cell is written with native |= cells', () => {
   it('writes the ticket shape without a separator row', () => {
     const source = '| | b |\n|:--|---|\n| 1 | 2 |\n'
-    expect(carveToCarve(source)).toBe('|=< |= b |\n| 1 | 2 |\n')
+    expect(carveToCarve(source)).toBe('|={<} |= b |\n| 1 | 2 |\n')
   })
 
   it('keeps HTML, tree and bytes across 864 variants', () => {

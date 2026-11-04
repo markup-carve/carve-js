@@ -96,7 +96,7 @@ describe('a table GFM does read is untouched', () => {
 
   it('keeps the alignment markers a delimiter row carries', () => {
     expect(migrated('| L | C | R |\n| :-- | :--: | --: |\n| a | b | c |\n')).toBe(
-      '|=< L |=~ C |=> R |\n| a | b | c |\n',
+      '|={<} L |={~} C |={>} R |\n| a | b | c |\n',
     )
   })
 

@@ -71,7 +71,7 @@ describe('a header cell is not written so its content reads as alignment', () =>
   it('CONTROL: a cell that already carries an alignment is padded', () => {
     // The scan consumes exactly one marker, so the emitted alignment already
     // shields the content behind it; canonical padding still applies uniformly.
-    expect(carveToCarve('|=< ~x~ |\n| y |\n')).toBe('|=< ~x~ |\n| y |\n')
+    expect(carveToCarve('|=< ~x~ |\n| y |\n')).toBe('|={<} ~x~ |\n| y |\n')
     expect(roundTrips('|=< ~x~ |\n| y |\n')).toBe(true)
   })
 

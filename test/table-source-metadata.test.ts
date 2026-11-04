@@ -169,7 +169,7 @@ it('distinguishes implicit zero bodies from an explicit empty body', () => {
   expect(renderHtml(parse(exported.value!))).toBe(renderHtml(ast))
 })
 
-it.each(['colspan', 'rowspan'])('reports a header flag lost on a %s placeholder', (span) => {
+it.each(['colspan', 'rowspan'])('keeps the header flag of a %s placeholder (carve#5091)', (span) => {
   const ast = document({})
   const table = ast.children[0]
   if (table.type !== 'table') throw new Error('Expected a table')
@@ -178,11 +178,11 @@ it.each(['colspan', 'rowspan'])('reports a header flag lost on a %s placeholder'
   cell.header = true
   cell.children = []
   const result = renderCarveWithConversionReport(ast)
-  expect(result.report.diagnostics.map(({ code, node, field }) => ({ code, node, field }))).toEqual([{ code: 'field-unspellable', node: 'table_cell', field: 'header' }])
+  expect(result.report.diagnostics).toEqual([])
   const reparsed = parse(result.value!)
   const after = reparsed.children[0]
   if (after.type !== 'table') throw new Error('Expected a table')
-  expect((span === 'colspan' ? after.rows[0].cells[1] : after.rows[1].cells[0]).header).toBe(false)
+  expect((span === 'colspan' ? after.rows[0].cells[1] : after.rows[1].cells[0]).header).toBe(true)
   cell.header = false
   expect(renderCarveWithConversionReport(ast).report.diagnostics).toEqual([])
 })

@@ -25,7 +25,7 @@ describe('a trailing header span writes the native form', () => {
       '<table><caption>Results</caption>' +
       '<thead><tr><th>Engine</th><th colspan="2">Timing</th></tr></thead>' +
       '<tbody><tr><td>carve-js</td><td>12ms</td><td>ok</td></tr></tbody></table>'
-    expect(carve(html)).toBe('|= Engine |= Timing | < |\n| carve-js | 12ms | ok |\n^ Results\n')
+    expect(carve(html)).toBe('|= Engine |= Timing |= < |\n| carve-js | 12ms | ok |\n^ Results\n')
   })
 
   it('is fmt-idempotent and renders the colspan', () => {
@@ -34,26 +34,23 @@ describe('a trailing header span writes the native form', () => {
     expect(back(src)).toContain('<th scope="col" colspan="2">Timing</th>')
   })
 
-  it('keeps the delimiter row for a leading span, which has no anchor', () => {
+  it('writes a leading header span natively (carve#4980)', () => {
     expect(carve('<table><tbody><tr><td colspan="2">a</td></tr><tr><td>b</td><td>c</td></tr></tbody></table>'))
       .not.toContain('|=')
-    // A header row that opens on a span still needs the delimiter to promote it.
     const leading = '| < | b |\n|---|---|\n| c | d |\n'
-    expect(renderCarve(parse(leading))).toBe(leading)
+    expect(renderCarve(parse(leading))).toBe('|= < |= b |\n| c | d |\n')
   })
 
   it('writes native cells when a real cell follows a header span', () => {
     // H spans three columns, then K - the span is mid-row, not trailing.
     const midSpan = '|~ H | < | < |< K |\n|---|---|---|---|\n| p | q |> s | t |\n'
-    const written = '|=~ H | < | < |=< K |\n| p | q |> s | t |\n'
+    const written = '|={~} H |= < |= < |={<} K |\n| p | q |{>} s | t |\n'
     expect(renderCarve(parse(midSpan))).toBe(written)
     expect(renderCarve(parse(written))).toBe(written)
   })
 
-  it('keeps the delimiter row for a trailing rowspan, which does not absorb left', () => {
-    // A first-row `^` is not a header cell on its own, so the native form would
-    // drop the row out of the header. Only a trailing colspan run may go native.
+  it('writes a trailing rowspan header-kind (carve#4980)', () => {
     const rowspan = '| A | ^ |\n|---|---|\n| x | y |\n'
-    expect(renderCarve(parse(rowspan))).toBe(rowspan)
+    expect(renderCarve(parse(rowspan))).toBe('|= A |= ^ |\n| x | y |\n')
   })
 })

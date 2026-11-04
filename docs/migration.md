@@ -110,7 +110,8 @@ cat post.txt | carve migrate --from bbcode
 It also rewrites **GFM tables** to Carve's native form: a header row followed by
 a `| --- |` delimiter row becomes `|=`-prefixed header cells, and the delimiter
 row is dropped (Carve needs no separator). Column alignment from the delimiter
-(`:--`, `--:`, `:--:`) is glued onto the header marker as `|=<`, `|=>`, `|=~`:
+(`:--`, `--:`, `:--:`) leads the header cell's attribute block as `|={<}`,
+`|={>}`, `|={~}`:
 
 ```md
 | L | C | R |
@@ -121,7 +122,7 @@ row is dropped (Carve needs no separator). Column alignment from the delimiter
 becomes
 
 ```
-|=< L |=~ C |=> R |
+|={<} L |={~} C |={>} R |
 | a | b | c |
 ```
 

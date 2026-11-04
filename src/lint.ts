@@ -34,6 +34,7 @@ import {
   parse,
   isTableRow,
   isBlockAttributeLine,
+  readBracedCellPrefix,
   readCellAttributeBlock,
   scanCellMarkerRun,
   rowAttrsFromLine,
@@ -2745,6 +2746,24 @@ function reportUnterminatedMarkerRun(
     `The table kind marker has no terminating space, so it is literal cell content. Add a space after the marker run${blockSuffix} to make it a header.`)
 }
 
+/**
+ * The released 0.1.13 alignment prefix (`|=> x |`), still read with the tree of
+ * its braced spelling until 0.2.0 (carve#5091). `carve fmt` rewrites it.
+ */
+function reportDeprecatedCellAlignment(
+  text: string,
+  report: (column: number, length: number, message: string) => void,
+): void {
+  if (/^(?:= +| *)[<^] *$/.test(text) || readBracedCellPrefix(text)) return
+  const run = scanCellMarkerRun(text)
+  if (run.alignEnd === run.alignStart || text[run.end] !== ' ') return
+  const symbols = text.slice(run.alignStart, run.alignEnd)
+  const block = text.slice(run.alignEnd, run.end)
+  const braced = `${run.header ? '=' : ''}{${symbols}${block ? ` ${block.slice(1, -1)}` : ''}}`
+  report(run.alignStart + 1, symbols.length,
+    `The table cell alignment prefix "${text.slice(0, run.end)}" is the deprecated 0.1.13 spelling, removed in 0.2.0. Alignment symbols now lead the cell's attribute block: write "${braced}" (carve fmt rewrites it).`)
+}
+
 /** Every glyph an alignment run is spelled with, valid or not. */
 const TABLE_MARKER_GLYPHS: ReadonlySet<string> = new Set('<>~^v?')
 
@@ -2776,6 +2795,8 @@ function collectTableCellMarkerWarnings(
     for (const { text, start } of splitTableRowSpans(body)) {
       // A whole-cell ^ or < is a span marker (T4), not a marker run (T11).
       if (/^[ \t]*[<^][ \t]*$/.test(text)) continue
+      reportDeprecatedCellAlignment(text, (column, length, message) =>
+        push(i + 1, prefixWidth + indent + start + column, length, 'deprecated-cell-alignment', message))
       reportUnterminatedMarkerRun(text, (column, length, message) =>
         push(i + 1, prefixWidth + indent + start + column, length, 'table-marker-run-padding', message))
       const block = readCellAttributeBlock(text)

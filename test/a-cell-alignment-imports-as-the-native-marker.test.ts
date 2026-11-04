@@ -20,7 +20,7 @@ describe('a cell alignment imports as the native marker', () => {
   it('maps text-align onto the marker run in every mode', () => {
     const html = '<table><tr><td style="text-align:right">a</td><td>b</td></tr></table>'
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-      expect(imported(html, mode)).toBe('|> a | b |\n')
+      expect(imported(html, mode)).toBe('|{>} a | b |\n')
       expect(codes(html, mode)).toEqual([])
     }
   })
@@ -28,14 +28,14 @@ describe('a cell alignment imports as the native marker', () => {
   it('maps vertical-align through the inherited-horizontal marker', () => {
     for (const [value, run] of [['top', '?^'], ['middle', '?~'], ['bottom', '?v']] as const) {
       const html = `<table><tr><td style="vertical-align:${value}">a</td><td>b</td></tr></table>`
-      expect(imported(html, 'semantic')).toBe(`|${run} a | b |\n`)
+      expect(imported(html, 'semantic')).toBe(`|{${run}} a | b |\n`)
       expect(codes(html, 'semantic')).toEqual([])
     }
   })
 
   it('writes both axes as one run', () => {
     const html = '<table><tr><td style="text-align:left;vertical-align:top">a</td></tr></table>'
-    expect(imported(html, 'semantic')).toBe('|<^ a |\n')
+    expect(imported(html, 'semantic')).toBe('|{<^} a |\n')
   })
 
   /**
@@ -59,7 +59,7 @@ describe('a cell alignment imports as the native marker', () => {
    * key-value spelling, which is the reason this ticket is not a preference.
    */
   it('is a fixed point through HTML', () => {
-    for (const src of ['|> a | b |\n', '|?^ a | b |\n', '|<^ a |\n', '|=> h |\n| a |\n', '| a | b |\n| c |> d |\n']) {
+    for (const src of ['|{>} a | b |\n', '|{?^} a | b |\n', '|{<^} a |\n', '|={>} h |\n| a |\n', '| a | b |\n| c |{>} d |\n']) {
       const first = renderHtml(parse(src))
       const back = htmlToCarve(first, { mode: 'roundtrip' }).value
       expect(back).toBe(src)
@@ -121,16 +121,16 @@ describe('a cell alignment imports as the native marker', () => {
    */
   it('leaves a body cell bare where the head already says it', () => {
     const shared = '<table><thead><tr><th style="text-align:right">h</th></tr></thead><tbody><tr><td style="text-align:right">a</td></tr></tbody></table>'
-    expect(imported(shared, 'semantic')).toBe('|=> h |\n| a |\n')
+    expect(imported(shared, 'semantic')).toBe('|={>} h |\n| a |\n')
 
     // A cell that DISAGREES with its column keeps its own run: that is the only
     // thing overriding the default.
     const differing = '<table><thead><tr><th style="text-align:right">h</th></tr></thead><tbody><tr><td style="text-align:left">a</td></tr></tbody></table>'
-    expect(imported(differing, 'semantic')).toBe('|=> h |\n|< a |\n')
+    expect(imported(differing, 'semantic')).toBe('|={>} h |\n|{<} a |\n')
 
     // And a column with no default at all leaves every cell stating its own.
     const headless = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td style="text-align:right">a</td></tr></tbody></table>'
-    expect(imported(headless, 'semantic')).toBe('|= h |\n|> a |\n')
+    expect(imported(headless, 'semantic')).toBe('|= h |\n|{>} a |\n')
   })
 
   /**
@@ -147,7 +147,7 @@ describe('a cell alignment imports as the native marker', () => {
     ]) {
       expect(codes(html, 'semantic')).toEqual(['attribute-dropped'])
     }
-    expect(imported('<table><tr><td align="right" style="text-align:left">a</td></tr></table>', 'semantic')).toBe('|< a |\n')
+    expect(imported('<table><tr><td align="right" style="text-align:left">a</td></tr></table>', 'semantic')).toBe('|{<} a |\n')
   })
 
   /**

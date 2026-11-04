@@ -172,41 +172,96 @@ export function scanCellMarkerRun(src: string): {
   }
 }
 
+type Horizontal = 'left' | 'right' | 'center'
+type Vertical = 'top' | 'middle' | 'bottom'
+
+/**
+ * D3 (carve#5091): one glued symbol run leading a cell attribute block,
+ * `{>^ .num}`. A third symbol, a duplicate axis or a non-space separator
+ * leaves the whole block literal. `rest` is the ordinary attribute payload.
+ */
+export function readCellAlignmentPayload(payload: string): { align?: Horizontal; valign?: Vertical; rest: string } | undefined {
+  const match = /^([<>~?])([\^~v])?(?= |$)/.exec(payload)
+  if (!match) return undefined
+  const [, h, v] = match
+  if (h === '?' && v === undefined) return undefined
+  const align: Horizontal | undefined = h === '<' ? 'left' : h === '>' ? 'right' : h === '~' ? 'center' : undefined
+  const valign: Vertical | undefined = v === '^' ? 'top' : v === 'v' ? 'bottom' : v === '~' ? 'middle' : undefined
+  const rest = payload.slice(match[0].length).replace(/^ +/, '')
+  if (/^[^\S ]/.test(rest) || /^[<>~?^v](?: |$)/.test(rest)) return undefined
+  if (rest !== '' && (!isValidInlineAttrPayload(rest) || isEmptyAttrs(parseAttrs(rest)))) return undefined
+  return { ...(align ? { align } : {}), ...(valign ? { valign } : {}), rest }
+}
+
+/**
+ * The braced prefix `=`? `{...}` of a cell, ending at its T11 space. `legacy`
+ * is never set here; see {@link scanCellMarkerRun} for the 0.1.13 spelling.
+ */
+export function readBracedCellPrefix(src: string): {
+  header: boolean
+  align?: Horizontal
+  valign?: Vertical
+  attrs?: Attrs
+  alignOnly: boolean
+  blockStart: number
+  end: number
+} | undefined {
+  const start = src[0] === '=' ? 1 : 0
+  if (src[start] !== '{') return undefined
+  const m = RE_INLINE_ATTR.exec(src.slice(start))
+  if (!m || src[start + m[0].length] !== ' ') return undefined
+  const end = start + m[0].length
+  const aligned = readCellAlignmentPayload(m[1]!)
+  if (aligned) {
+    return {
+      header: start === 1,
+      ...(aligned.align ? { align: aligned.align } : {}),
+      ...(aligned.valign ? { valign: aligned.valign } : {}),
+      ...(aligned.rest ? { attrs: parseAttrs(aligned.rest) } : {}),
+      alignOnly: aligned.rest === '',
+      blockStart: start,
+      end,
+    }
+  }
+  const block = readCellAttributeBlock(src, start)
+  if (!block) return undefined
+  return { header: start === 1, attrs: block.attrs, alignOnly: false, blockStart: start, end }
+}
+
 export function parseCellMarkers(src: string): {
   header: boolean
   span?: 'rowspan' | 'colspan'
-  align?: 'left' | 'right' | 'center'
-  valign?: 'top' | 'middle' | 'bottom'
+  align?: Horizontal
+  valign?: Vertical
   attrs?: Attrs
   content: string
 } {
-  // A lone span glyph takes precedence over an empty alignment run.
-  const trimmedSource = trimCellPadding(src)
-  if (trimmedSource === '<' || trimmedSource === '^') return { header: false, span: trimmedSource === '<' ? 'colspan' : 'rowspan', content: '' }
+  // A padded `^` or `<`, also after a header `=` and its space, is a span (T4).
+  const glyph = /^(?:= +| *)([<^]) *$/.exec(src)
+  if (glyph) return { header: src[0] === '=', span: glyph[1] === '<' ? 'colspan' : 'rowspan', content: '' }
 
-  // Spec §5 T11: THE MARKER RUN ENDS AT A SPACE. The kind marker, the alignment
-  // run and the attribute block are ONE run, and a cell carrying any of them
-  // must follow it with one literal space. Without that space there is no run
-  // and every character of it is content, so `|=hot= |` is the highlight its
-  // author wrote rather than a header cell holding `hot=`. The closing pipe is
-  // not a terminator (`|= |` is the empty header cell) and neither is a tab,
-  // which PART 7 gives no padding role inline. The run is ATOMIC: a rejected
-  // alignment run takes the `=` with it, so without the space the cell is not
-  // a header either.
-  const run = scanCellMarkerRun(src)
-  if (run.end > 0 && src[run.end] === ' ') {
-    const { header, align, valign, attrs } = run
-    // A tight prefix was consumed; the rest is content.
-    const content = trimCellPadding(src.slice(run.end))
-    if ((align !== undefined || valign !== undefined) && attrs !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), attrs, content }
-    if (align !== undefined || valign !== undefined) return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), content }
-    if (attrs !== undefined) return { header, attrs, content }
-    return { header, content }
+  const braced = readBracedCellPrefix(src)
+  if (braced) {
+    const { header, align, valign, attrs } = braced
+    const content = trimCellPadding(src.slice(braced.end))
+    const aligned = { ...(align ? { align } : {}), ...(valign ? { valign } : {}) }
+    // An alignment-only block keeps a lone glyph a span (T4).
+    if (braced.alignOnly && (content === '<' || content === '^')) return { header, span: content === '<' ? 'colspan' : 'rowspan', ...aligned, content: '' }
+    return { header, ...aligned, ...(attrs ? { attrs } : {}), content }
   }
 
-  // No tight prefix: the whole trimmed text is content.
-  const trimmed = trimCellPadding(src)
-  return { header: false, content: trimmed }
+  // Spec §5 T11: THE MARKER RUN ENDS AT A SPACE. Without it every character is
+  // content, so `|=hot= |` is a highlight. The closing pipe and a tab are not
+  // terminators. The released 0.1.13 alignment prefix (`|=> x |`) is still
+  // read here, with the same tree as its braced spelling, until 0.2.0.
+  const run = scanCellMarkerRun(src)
+  if (run.end > 0 && src[run.end] === ' ' && (run.alignEnd > run.alignStart || (run.header && run.end === 1))) {
+    const { header, align, valign, attrs } = run
+    const content = trimCellPadding(src.slice(run.end))
+    return { header, ...(align ? { align } : {}), ...(valign ? { valign } : {}), ...(attrs ? { attrs } : {}), content }
+  }
+
+  return { header: false, content: trimCellPadding(src) }
 }
 
 /**
