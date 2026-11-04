@@ -31,12 +31,7 @@ type Target = keyof typeof targets
  * It is declared in this file rather than beside the `.fmt` map because only
  * this suite reads a `.md` sidecar.
  */
-const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map([
-  ['84-single-line-headings-10', {
-    reason: 'carve#5015: the blank before the direct child heading loosens the quoted list',
-    md: '> - a\n>\n>   ### b \\###\n',
-  }],
-])
+const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }> = new Map()
 
 /** The bytes this engine is ahead of the pinned sidecar with, if it is. */
 const aheadOfPin = (fixture: { slug: string; target: Target }) => {

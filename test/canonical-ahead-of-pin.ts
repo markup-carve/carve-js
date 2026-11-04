@@ -8,8 +8,6 @@ import { RULED_5013_FMT } from './ruled-5013-ahead-of-pin.js'
 import { RULED_FMT_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 import { RULED_FMT_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
 import { RULED_FMT_AHEAD_OF_PIN_5109 } from './ruled-5109-ahead-of-pin.js'
-import { RULED_FMT_AHEAD_OF_PIN_5160 } from './ruled-5160-ahead-of-pin.js'
-import { RULED_FMT_AHEAD_OF_PIN_5157 } from './ruled-5157-ahead-of-pin.js'
 
 export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: string }> = new Map([
   ...RULED_FMT_AHEAD_OF_PIN,
@@ -17,6 +15,4 @@ export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: 
   ...RULED_FMT_AHEAD_OF_PIN_5012,
   ...RULED_FMT_AHEAD_OF_PIN_5091,
   ...RULED_FMT_AHEAD_OF_PIN_5109,
-  ...RULED_FMT_AHEAD_OF_PIN_5160,
-  ...RULED_FMT_AHEAD_OF_PIN_5157,
 ])
