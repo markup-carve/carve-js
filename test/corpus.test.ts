@@ -1522,10 +1522,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_5080_HTML,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
-// carve#5132 lands in its own PR; until then carve-js keeps its pinned reading.
-const behindSpec = new Map<string, string>([
-  ['955-a-quote-plus-after-a-quote-attached-paragraph-is-a-letter', '<blockquote><p>q</p></blockquote>'],
-])
+const behindSpec = new Map<string, string>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it

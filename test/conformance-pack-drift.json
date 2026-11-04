@@ -1,12 +1,4 @@
 {
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
-  "entries": [
-    {
-      "ticket": "markup-carve/carve#5132",
-      "cause": "carve-js has not ported the model fix yet: a quote plus after a quote-attached paragraph is a letter",
-      "cases": [
-        "lazy-5e5b39627ed0"
-      ]
-    }
-  ]
+  "entries": []
 }
