@@ -339,12 +339,14 @@ function dropStandIns(doc: Document): void {
     }
     if (value === null || typeof value !== 'object') return
     const item = value as { type?: string; children?: unknown[]; definitions?: unknown[][]; definitionSpans?: Array<object | undefined> }
-    item.definitions?.forEach((children, index) => {
+    // An attribute's `keyValues` may hold a `children` or `definitions` key with a string value.
+    if (Array.isArray(item.definitions)) item.definitions.forEach((children, index) => {
+      if (!Array.isArray(children)) return
       const recorded = item.definitionSpans?.[index]
       if (recorded !== undefined && unplacedBlocks.has(children.at(-1) as object)) endsAtConsumedMarker.add(recorded)
       item.definitions![index] = placed(children)
     })
-    if (item.children !== undefined && !STAND_IN_FREE.has(item.type ?? '')) item.children = placed(item.children)
+    if (Array.isArray(item.children) && !STAND_IN_FREE.has(item.type ?? '')) item.children = placed(item.children)
     if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
     for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
   }
@@ -380,7 +382,8 @@ function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset
     }
     // A description's recorded span covers its marker line; its children supply the end.
     const item = value as { definitions?: Array<Array<{ pos?: Span }>>; definitionSpans?: Array<Span | undefined> }
-    item.definitions?.forEach((children, index) => {
+    if (Array.isArray(item.definitions)) item.definitions.forEach((children, index) => {
+      if (!Array.isArray(children)) return
       const recorded = item.definitionSpans?.[index]
       const last = children.length > 0 ? endOf(children[children.length - 1]!) : undefined
       if (recorded === undefined || last?.endOffset === undefined || !children.some((child) => unplacedBlocks.has(child))) return

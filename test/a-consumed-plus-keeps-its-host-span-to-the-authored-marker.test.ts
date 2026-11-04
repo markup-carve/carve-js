@@ -36,6 +36,11 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
     expect(host?.[0].pos && [host[0].pos.startOffset, host[0].pos.endOffset]).toEqual([start, end])
   })
 
+  it.each(['{children=x}\n- a\n+\n', '{definitions=x}\n- a\n+\n'])('reads an attribute key named like a child array in %j', (source) => {
+    const list = wire(source).children![0]!
+    expect(list.items![0]!.children!.map((child) => child.type)).toEqual(['paragraph'])
+  })
+
   // carve#5145: a list item whose body is only the `+` keeps no stand-in child either.
   it('places an emptied list item from the source', () => {
     const item = (wire('- +\n- b\n').children![0]!).items![0]!
