@@ -72,6 +72,7 @@ export function transparentLineStream(source: string): TransparentLineStream | n
 
 /** Ordinary space-indented comments have a source span without parsing the full authored tree. */
 export function directCommentNodes(stream: TransparentLineStream): Map<number, Comment> | null {
+  if (stream.original.some((line) => /[^\x00-\x7F]|\t/.test(line))) return null
   const found = new Map<number, Comment>()
   for (const index of stream.erased) {
     const line = stream.original[index]!

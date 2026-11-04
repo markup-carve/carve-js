@@ -178,6 +178,12 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToCarve(source)).toBe(source)
   })
 
+  it('reports codepoint offsets after a non-BMP character', () => {
+    const comment = parse('😀\n%% c\nb').children.find((node) => node.type === 'comment')
+    expect(comment?.pos?.startOffset).toBe(2)
+    expect(comment?.pos?.endOffset).toBe(6)
+  })
+
   it('reconstructs a footnote comment from AST wire positions', () => {
     const source = '[^a]: intro\n  %% c\n  more\n\nuse[^a]\n'
     const direct = renderCarve(parse(source))
