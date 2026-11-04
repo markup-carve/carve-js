@@ -116,6 +116,28 @@ describe('table column metadata', () => {
     expect(padding(source)).toEqual([])
   })
 
+  // The braced alignment that `carve fmt` writes (carve#5091 D3) ends at its
+  // space too.
+  it.each([
+    ['={>} a', '<th scope="col" style="text-align: right;">a</th>'],
+    ['={<} a', '<th scope="col" style="text-align: left;">a</th>'],
+    ['={~} a', '<th scope="col" style="text-align: center;">a</th>'],
+    ['={<^} a', '<th scope="col" style="text-align: left; vertical-align: top;">a</th>'],
+    ['={> .x} a', '<th scope="col" class="x" style="text-align: right;">a</th>'],
+    ['{>} a', '<td style="text-align: right;">a</td>'],
+  ])('does not report the braced alignment prefix |%s |', (cell, html) => {
+    const source = `|${cell} |\n`
+    expect(carveToHtml(source)).toContain(html)
+    expect(padding(source)).toEqual([])
+  })
+
+  it('reads a padded braced header like the deprecated spelling', () => {
+    expect(rules('|= Fruit |={>} Price |\n| a | 1 |\n')).not.toContain('table-marker-run-padding')
+    const overlap = rules('{aligns="left"}\n|={>} H |\n| a |\n')
+    expect(overlap).toContain('table-column-overlap')
+    expect(overlap).not.toContain('table-marker-run-padding')
+  })
+
   it.each([
     ['=>a', 2, 1, 'alignment run ">"'],
     ['=<^a', 2, 2, 'alignment run "<^"'],
