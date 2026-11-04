@@ -4,6 +4,7 @@ import { parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
 import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
+import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
 
 /** A removed layout boundary can change ownership of later source lines. */
 function hasUnrepresentedAuthoredLine(document: Document, source: string, written: string,
@@ -34,6 +35,7 @@ function hasUnrepresentedAuthoredLine(document: Document, source: string, writte
   for (const pos of Object.values(document.footnoteDefPos ?? {})) {
     for (let line = pos.startLine; line <= pos.endLine; line++) represented.add(line)
   }
+  for (const line of losingFootnoteLines(document)) represented.add(line)
   const erased = new Set(stream.erased)
   return stream.original.some((line, index) => !erased.has(index) && line.trim() !== '' &&
     !represented.has(index + 1) && !written.includes(line.trim()))

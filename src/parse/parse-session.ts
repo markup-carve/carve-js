@@ -166,6 +166,7 @@ import {
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
+import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
@@ -698,6 +699,7 @@ export class ParseSession extends InlineParseSession {
     if (lexer.frontmatter) doc.frontmatter = lexer.frontmatter
     if (lexer.footnoteDefs.size) doc.footnoteDefs = Object.fromEntries(lexer.footnoteDefs)
     if (lexer.footnoteDefPos.size) doc.footnoteDefPos = Object.fromEntries(lexer.footnoteDefPos)
+    recordLosingFootnoteLines(doc, lexer.losingFootnoteLines)
     if (ownership.letters !== null) restoreLetters(doc, ownership.letters)
     if (this.consumedMarkerLines.size > 0) {
       const bom = strippedBom ? 1 : 0

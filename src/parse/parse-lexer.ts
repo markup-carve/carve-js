@@ -369,6 +369,10 @@ export class Lexer {
   footnoteDefs: Map<string, BlockNode[]>
   /** Where each definition sits in the source, parallel to `footnoteDefs`. */
   footnoteDefPos: Map<string, Position>
+  /** Source lines read by a duplicate footnote definition that lost to an earlier one. */
+  losingFootnoteLines: Set<number>
+  /** Source lines each winning footnote definition read, keyed like `footnoteDefs`. */
+  footnoteDefLines: Map<string, number[]>
   // True for sub-lexers over already-nested block content (list item /
   // blockquote / admonition bodies). Informational only: under the §10
   // Markdown-like rule a visible block interrupts a paragraph at EVERY level
@@ -486,6 +490,8 @@ export class Lexer {
     this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
     this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
     this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
+    this.losingFootnoteLines = inherited?.losingFootnoteLines ?? new Set()
+    this.footnoteDefLines = inherited?.footnoteDefLines ?? new Map()
     this.parseOptions = opts
     this.unclosedContainerKeys = unclosedContainerKeys
     this.lineNumberOffset = lineNumberOffset
