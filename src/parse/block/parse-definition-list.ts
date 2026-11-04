@@ -1211,6 +1211,17 @@ export function createDefinitionListParser(
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) reachColumn = entryColumn()
       return entryColumn() === reachColumn
     }
+    // A comment after a term is the first block of the next description (CARVE-P12-027).
+    let held: Comment[] = []
+    let heldTerm: InlineNode[] | undefined
+    const keep = (definitions: BlockNode[][], terms: InlineNode[][]) => (comment: Comment): void => {
+      if (definitions.length) {
+        definitions.at(-1)!.push(comment)
+        return
+      }
+      if (!held.length) heldTerm = terms.at(-1)
+      held.push(comment)
+    }
     while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry()) && entryReachesList()) {
       const terms: InlineNode[][] = []
       const termSpans: (Position | undefined)[] = []
@@ -1220,6 +1231,9 @@ export function createDefinitionListParser(
       let currentTermSourceColumn = listColumn
       let currentTermReturned = false
       while (!lexer.eof()) {
+        // Terms run until a description, across blank and comment lines (CARVE-P12-027).
+        if (!RE_DEFLIST_TERM.test(peekEntry()) && (terms.length === 0 ||
+          !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers, parseSession, keep(definitions, terms)))) break
         const t = RE_DEFLIST_TERM.exec(peekEntry())
         if (!t || !entryReachesList()) break
         const termLineIndex = lexer.pos
@@ -1251,11 +1265,7 @@ export function createDefinitionListParser(
         // readability, matching djot. The blank is a separator only - it does not
         // end the entry when a `:  ` definition follows.
         if (!RE_DEFLIST_DEF.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_DEF, helpers,
-          parseSession, comment => {
-            // A skipped comment stays with the entry before it, so spans keep source order.
-            if (definitions.length) definitions.at(-1)!.push(comment)
-            else terms.at(-1)?.push(comment)
-          })) break
+          parseSession, keep(definitions, terms))) break
         const defLineIndex = lexer.pos
         const defSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(defLineIndex) - 1] ?? ''
         const defMarkerOffset = defSource.indexOf(':')
@@ -1267,7 +1277,10 @@ export function createDefinitionListParser(
         if (!d) break
         lexer.consume()
         definitionLines.push(lexer.lineNumber(defLineIndex))
-        definitions.push(parseDefBody(descriptionLead(d[2]!), defLineIndex, deflistContentCol(d[1]!)))
+        const body = parseDefBody(descriptionLead(d[2]!), defLineIndex, deflistContentCol(d[1]!))
+        body.unshift(...held)
+        held = []
+        definitions.push(body)
         // The description's own extent anchors to its MARKER LINE. The wire
         // derives the END from the placed children (definition-list-wire.ts), so
         // this only supplies the start and the fallback when the body produced no
@@ -1284,8 +1297,10 @@ export function createDefinitionListParser(
       }
       items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
       if (!RE_DEFLIST_TERM.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers,
-        parseSession, comment => definitions.at(-1)?.push(comment))) break
+        parseSession, keep(definitions, terms))) break
     }
+    // No description followed: the comments stay with the term they came after.
+    heldTerm?.push(...held)
     return { type: 'definition_list', items }
   }
 

@@ -2,7 +2,7 @@ import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
 import { commentLineContent } from './parse-block-scan-core.js'
-import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionItem, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -334,19 +334,40 @@ function betweenListItems(blocks: BlockNode[], offset: number, settle: (blocks: 
   return null
 }
 
+// Entries stand in source order, so only the last one starting before a line can hold or precede it.
+// Every entry is a candidate when a probed one has no recorded line.
+function itemsBefore(items: readonly DefinitionItem[], line: number): number[] {
+  const first = (item: DefinitionItem): number | undefined => item.termSpans?.[0]?.startLine ?? item.definitionLines?.[0]
+  let lo = 0
+  let hi = items.length - 1
+  let found = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const start = first(items[mid]!)
+    if (start === undefined) return items.map((_item, index) => index)
+    if (start < line) {
+      found = mid
+      lo = mid + 1
+    } else hi = mid - 1
+  }
+  return found < 0 ? [] : [found]
+}
+
 function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
   { list: DefinitionList; item: number; afterDescription: number; afterTerm: number } | null {
   for (const block of candidateBlocks(blocks, offset)) {
     if ((spanOf(block)?.startOffset ?? Infinity) > offset || offset >= (spanOf(block)?.endOffset ?? -1)) continue
     if (block.type === 'definition_list') {
-      for (const item of block.items) {
-        for (const definition of item.definitions) {
+      const items = itemsBefore(block.items, line)
+      for (const itemIndex of items) {
+        for (const definition of block.items[itemIndex]!.definitions) {
           const nested = betweenDescriptions(definition, offset, line)
           if (nested) return nested
         }
       }
       let preceding: { item: number; afterDescription: number; afterTerm: number; line: number } | undefined
-      block.items.forEach((item, itemIndex) => {
+      for (const itemIndex of items) {
+        const item = block.items[itemIndex]!
         item.termSpans?.forEach((span, termIndex) => {
           const start = span?.startLine
           if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
@@ -356,7 +377,7 @@ function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
           if (start !== undefined && start < line && (preceding?.line ?? -1) < start)
             preceding = { item: itemIndex, afterDescription: definitionIndex, afterTerm: -1, line: start }
         })
-      })
+      }
       if (preceding) return { list: block, item: preceding.item, afterDescription: preceding.afterDescription,
         afterTerm: preceding.afterTerm }
     } else if (block.type === 'list') {
@@ -379,6 +400,23 @@ function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDe
     afterTerm: gap.afterTerm,
     source, node, originalValue })
   node.transparentInDefinitionList = true
+}
+
+/** A comment after a term leads the description that follows, with any comments before it (CARVE-P12-027). */
+function placeInDescription(gap: { list: DefinitionList; item: number; afterDescription: number; afterTerm: number },
+  node: Comment): boolean {
+  const item = gap.list.items[gap.item]
+  const description = gap.afterTerm >= 0 ? item?.definitions[0] : item?.definitions[gap.afterDescription]
+  if (!description) return false
+  const offset = node.pos!.startOffset!
+  if (description.some((child) => (spanOf(child)?.startOffset ?? Infinity) <= offset && offset < (spanOf(child)?.endOffset ?? -1))) return false
+  const at = description.findIndex((child) => (spanOf(child)?.startOffset ?? -1) > offset)
+  if (at < 0 || description.slice(0, at).some((child) => child.type !== 'comment')) return false
+  description.splice(at, 0, node)
+  // Written at the description's column, not at its authored spot.
+  delete node.transparentSource
+  delete node.transparentOriginalValue
+  return true
 }
 
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
@@ -408,10 +446,12 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       return out
     }
     const pending: Array<{ block: BlockNode; quotes: QuoteChain; base: number | undefined;
-      markerLine: number | undefined }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
+      markerLine: number | undefined; description?: BlockNode[] }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
     for (let at = 0; at < pending.length; at++) {
-      const { block, quotes, base, markerLine } = pending[at]!
+      const { block, quotes, base, markerLine, description } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
+      // A comment a description holds before another of its blocks is inside it, not a gap (CARVE-P12-027).
+      if (block.type === 'comment' && description && description.indexOf(block) < description.length - 1) continue
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
         block.transparentSource = authoredSource(block, chain(quotes))
@@ -451,7 +491,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         for (const child of item.children) pending.push({ block: child, quotes, base: itemContentColumn(item), markerLine: item.pos?.startLine })
       else if (block.type === 'definition_list') for (const item of block.items)
         for (const [index, definition] of item.definitions.entries())
-          for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index] })
+          for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index], description: definition })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
         const inner = block.type === 'block_quote' ? { base, outer: quotes } : quotes
         for (const child of block.children as BlockNode[]) pending.push({ block: child, quotes: inner,
@@ -573,6 +613,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
+      if (descriptionGap && placeInDescription(descriptionGap, comment)) continue
       if (descriptionGap) recordDescriptionGap(descriptionGap, original, comment, comment.content)
       const gap = betweenListItems(blocks, comment.pos.startOffset, placeHoisted)
       if (gap) {

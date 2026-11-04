@@ -1312,7 +1312,11 @@ export function attachBlockPos(
             ...((node as { children?: Array<{ pos?: Position }> }).children ?? []),
             ...((node as { items?: Array<{ pos?: Position }> }).items ?? []),
           ]
-    const lastOwned = [...kids].reverse().find((child) => child.pos !== undefined)?.pos
+    // A description without a span of its own still ends at its last placed child (CARVE-P12-027).
+    const placed = (child: { pos?: Position; children?: Array<{ pos?: Position }> }): Position | undefined =>
+      child.pos ?? (type === 'definition_list' ? [...(child.children ?? [])].reverse().find((c) => c.pos)?.pos : undefined)
+    let lastOwned: Position | undefined
+    for (let at = kids.length - 1; at >= 0 && lastOwned === undefined; at--) lastOwned = placed(kids[at]!)
     if (lastOwned) {
       node.pos.endLine = lastOwned.endLine
       if (lastOwned.endColumn !== undefined) node.pos.endColumn = lastOwned.endColumn

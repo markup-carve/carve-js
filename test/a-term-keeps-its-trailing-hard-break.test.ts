@@ -7,7 +7,8 @@ describe('a definition term keeps its trailing hard break', () => {
     [':: t\\\n: d\n', ':: t\\\n: d\n'],
     [':: t \\\n: d\n', ':: t \\\n: d\n'],
     ['- x\n  :: t\\\n  : d\n', '- x\n  :: t\\\n  : d\n'],
-    [':: t\\\n%% c\n: d\n', ':: t\\\n%% c\n: d\n'],
+    // A comment after a term is the description's first block (carve#5167).
+    [':: t\\\n%% c\n: d\n', ':: t\\\n: %% c\n\n  d\n'],
     [':: t\\\\\\\n: d\n', ':: t\\\\\\\n: d\n'],
     [':: t\\\\\n: d\n', ':: t\\\\\n: d\n'],
   ])('%j', (source, written) => {
