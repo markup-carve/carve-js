@@ -327,18 +327,21 @@ function leavesFenceOpen(lines: readonly string[]): boolean {
 
 type Span = { endLine: number; endColumn?: number; endOffset?: number }
 
-// A description whose body is only a consumed `+` holds no blocks (CARVE-P11-040).
-function dropStandInOnlyDescriptions(doc: Document): void {
+// A description or list item whose body is only a consumed `+` holds no blocks (CARVE-P11-040).
+function dropStandInOnlyBodies(doc: Document): void {
+  const standInOnly = (children: unknown[]): boolean =>
+    children.length > 0 && children.every((child) => unplacedBlocks.has(child as object))
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visit(item)
       return
     }
     if (value === null || typeof value !== 'object') return
-    const item = value as { definitions?: unknown[][] }
+    const item = value as { type?: string; children?: unknown[]; definitions?: unknown[][] }
     item.definitions?.forEach((children, index) => {
-      if (children.length > 0 && children.every((child) => unplacedBlocks.has(child as object))) item.definitions![index] = []
+      if (standInOnly(children)) item.definitions![index] = []
     })
+    if (item.type === 'list_item' && item.children !== undefined && standInOnly(item.children)) item.children = []
     if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
     for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
   }
@@ -702,7 +705,7 @@ export class ParseSession extends InlineParseSession {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
         return { offset: lexer.lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
       })
-      dropStandInOnlyDescriptions(doc)
+      dropStandInOnlyBodies(doc)
     }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.

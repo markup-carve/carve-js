@@ -65,17 +65,17 @@ const cases: Array<[string, string, string]> = [
   [
     'a quote below an emptied sub-list item',
     '- - +\n\n  > b\nZ\n',
-    "- - +\n\n  > b\n  > Z\n",
+    "- - {empty}\n\n  > b\n  > Z\n",
   ],
   [
     'a quote below an emptied sub-list item, ordered host',
     '1. - +\n\n   > b\nZ\n',
-    "1. - +\n\n   > b\n   > Z\n",
+    "1. - {empty}\n\n   > b\n   > Z\n",
   ],
   [
     'a quote below an emptied sub-list item, item in a div',
     '::: h\n- - +\n\n  > b\nZ\n:::\n',
-    "::: h\n- - +\n\n  > b\n  > Z\n:::\n",
+    "::: h\n- - {empty}\n\n  > b\n  > Z\n:::\n",
   ],
 ]
 
@@ -117,8 +117,8 @@ describe('the spellings the fix leaves alone', () => {
   const controls: Array<[string, string, string]> = [
     ['corpus 285, a marker-column run below a paragraph', '- x\n+\n> q\n+\n> q\n', '- x\n+\n> q\n+\n> q\n'],
     ['a sub-list whose last item is not empty', '- - +\n  x\n\n  > b\nZ\n', "- - x\n\n  > b\n  > Z\n"],
-    ['a heading below an emptied sub-list item', '- - +\n\n  # H\nZ\n', "- - +\n\n  # H\n\nZ\n"],
-    ['a paragraph below an emptied sub-list item', '- - +\n\n  p\nZ\n', "- - +\n\n  p\n  Z\n"],
+    ['a heading below an emptied sub-list item', '- - +\n\n  # H\nZ\n', "- - {empty}\n\n  # H\n\nZ\n"],
+    ['a paragraph below an emptied sub-list item', '- - +\n\n  p\nZ\n', "- - {empty}\n\n  p\n  Z\n"],
   ]
 
   for (const [name, source, written] of controls) {
