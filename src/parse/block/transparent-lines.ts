@@ -131,21 +131,24 @@ export function authoredAbbreviations(document: Document, erased: number[]): Abb
 }
 
 // Reset per pass so a tree edited between passes is measured again.
-let derivedSpans = new WeakMap<object, { start: number; end: number } | null>()
+let derivedSpans = new WeakMap<object, Span | null>()
+
+type Span = { startOffset: number; endOffset: number }
 
 /** A node's offsets, derived from its placed content where a PART 12 reader left it without `pos` (carve#5136). */
-function spanOf(node: object | undefined): { start: number; end: number } | undefined {
+function spanOf(node: object | undefined): Span | undefined {
   if (!node) return undefined
   const pos = (node as { pos?: Position }).pos
-  if (pos?.startOffset !== undefined && pos.endOffset !== undefined) return { start: pos.startOffset, end: pos.endOffset }
+  if (pos?.startOffset !== undefined && pos.endOffset !== undefined) return pos as Span
   if (derivedSpans.has(node)) return derivedSpans.get(node) ?? undefined
-  let found: { start: number; end: number } | null = null
+  let found: Span | null = null
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const part of value) visit(part)
     } else if (value !== null && typeof value === 'object') {
       const inner = spanOf(value)
-      if (inner) found = { start: Math.min(found?.start ?? inner.start, inner.start), end: Math.max(found?.end ?? inner.end, inner.end) }
+      if (inner) found = { startOffset: Math.min(found?.startOffset ?? inner.startOffset, inner.startOffset),
+        endOffset: Math.max(found?.endOffset ?? inner.endOffset, inner.endOffset) }
     }
   }
   for (const [key, value] of Object.entries(node)) if (key !== 'pos' && key !== 'attrs' && typeof value === 'object') visit(value)
@@ -156,7 +159,7 @@ function spanOf(node: object | undefined): { start: number; end: number } | unde
 function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[] } | null {
   for (const block of blocks) {
     const span = spanOf(block)
-    if (span && span.start <= offset && offset < span.end) {
+    if (span && span.startOffset <= offset && offset < span.endOffset) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
       const children = block.type === 'list' ? block.items.map((item) => item.children) :
         block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
@@ -174,18 +177,18 @@ function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: 
 function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   for (const block of blocks) {
     const span = spanOf(block)
-    if (!span || span.start > offset || offset >= span.end) continue
+    if (!span || span.startOffset > offset || offset >= span.endOffset) continue
     if (block.type === 'list') {
       for (const item of block.items) {
-        if ((spanOf(item)?.start ?? Infinity) <= offset && offset < (spanOf(item)?.end ?? -1)) {
+        if ((spanOf(item)?.startOffset ?? Infinity) <= offset && offset < (spanOf(item)?.endOffset ?? -1)) {
           return containingBlocks(item.children, offset)
         }
       }
     } else if (block.type === 'definition_list') {
       for (const item of block.items) {
         for (const definition of item.definitions) {
-          if (definition.some((child) => (spanOf(child)?.start ?? Infinity) <= offset &&
-              offset < (spanOf(child)?.end ?? -1))) return containingBlocks(definition, offset)
+          if (definition.some((child) => (spanOf(child)?.startOffset ?? Infinity) <= offset &&
+              offset < (spanOf(child)?.endOffset ?? -1))) return containingBlocks(definition, offset)
         }
       }
     } else if ('children' in block && Array.isArray(block.children) &&
@@ -215,10 +218,10 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
     if (block.type === 'list') {
       for (let i = 0; i < block.items.length - 1; i++) {
         const item = block.items[i]
-        const visibleEnd = spanOf(item?.children.at(-1))?.end
-        const itemEnd = spanOf(item)?.end
+        const visibleEnd = spanOf(item?.children.at(-1))?.endOffset
+        const itemEnd = spanOf(item)?.endOffset
         const before = visibleEnd === undefined ? itemEnd : Math.min(visibleEnd, itemEnd ?? visibleEnd)
-        const after = spanOf(block.items[i + 1])?.start
+        const after = spanOf(block.items[i + 1])?.startOffset
         if (before !== undefined && after !== undefined && before <= offset && offset < after)
           return { list: block, after: i }
       }
@@ -237,7 +240,7 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
 function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
   { list: DefinitionList; item: number; afterDescription: number; afterTerm: number } | null {
   for (const block of blocks) {
-    if ((spanOf(block)?.start ?? Infinity) > offset || offset >= (spanOf(block)?.end ?? -1)) continue
+    if ((spanOf(block)?.startOffset ?? Infinity) > offset || offset >= (spanOf(block)?.endOffset ?? -1)) continue
     if (block.type === 'definition_list') {
       for (const item of block.items) {
         for (const definition of item.definitions) {
