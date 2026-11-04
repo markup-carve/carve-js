@@ -10,7 +10,7 @@ what canonical form is.
 
 
 ```yaml
-- uses: markup-carve/carve-js@0.1.12
+- uses: markup-carve/carve-js@0.1.15
   with:
     files: 'docs/**/*.crv'   # default: **/*.crv
 ```
@@ -30,7 +30,7 @@ A run exits 1 when a document has problems and 2 when a check could not run;
 ```yaml
 repos:
   - repo: https://github.com/markup-carve/carve-js
-    rev: 0.1.12
+    rev: 0.1.15
     hooks:
       - id: carve-fmt      # report; use carve-fmt-write to fix in place
       - id: carve-lint
