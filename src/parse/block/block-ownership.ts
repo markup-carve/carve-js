@@ -497,7 +497,7 @@ export function ownLines(
       // A lone `+` reaches the marker column of an open marker container.
       if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f)) {
         plus = f
-        plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out)
+        plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out, contentColumn(f))
         break
       }
       if (f.kind === 'quote') {
@@ -550,7 +550,7 @@ export function ownLines(
     function reopenPlus(): void {
       if (plus || !attachedHost || !CONT_MARKER.test(m.rest)) return
       plus = reopenAttachedHost(attachedHost)
-      if (plus) plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, plus.kind, out)
+      if (plus) plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, plus.kind, out, contentColumn(plus))
     }
     const consumeMarker = (): boolean => {
       const host = plus
@@ -906,7 +906,7 @@ export function ownLines(
           frame.plusBody = true
           // Past the one space after a `>` and behind a lead tab, the `+` is text.
           const reason = frame.kind === 'quote' && m.col > 0 || leadTab ? 'right'
-            : refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind)
+            : refusal(at, frame.docMarker!, frames.filter((f) => f.kind === 'quote' && f !== frame).length, frame.kind, undefined, contentColumn(frame))
           if (frame.kind === 'quote' && m.col > 0) {
             spellPlusAsLetter()
           } else if (reason !== null) {
@@ -1058,6 +1058,10 @@ export function ownLines(
     return letters[STANDS_FOR.indexOf(ch)]!
   }
 
+  function contentColumn(host: Frame): number {
+    return host.kind === 'item' || host.kind === 'dd' || host.kind === 'note' ? host.docMarker! + host.col - host.markerCol! : Infinity
+  }
+
   // The one attach rule (carve#4409): the next line stands at `marker` through the
   // host's `quotes` prefixes and is not the host's sibling. The host decides nothing else.
   function reachesDescendantQuote(k: number, column: number): boolean {
@@ -1070,7 +1074,8 @@ export function ownLines(
   }
 
   // `quoteLead` is the `+` line's written quote prefix, which its skipped followers share.
-  function refusal(at: number, marker: number, quotes: number, host: Frame['kind'], quoteLead?: string): RefusedPlus['reason'] | null {
+  // `content` is the host's content column: an invisible line the host keeps there is skipped too (carve#5130).
+  function refusal(at: number, marker: number, quotes: number, host: Frame['kind'], quoteLead?: string, content = Infinity): RefusedPlus['reason'] | null {
     // An attribute run leads the attached block, so the block after it decides (carve#4278, carve#4447).
     const skippedAbbr: Array<[number, string, string]> = []
     const skippedLinks: number[] = []
@@ -1081,7 +1086,10 @@ export function ownLines(
     const notes: number[] = []
     const chained: number[] = []
     let nextVisible = at + 1
+    let firstKept = Infinity
     const decide = (reason: RefusedPlus['reason'] | null): RefusedPlus['reason'] | null => {
+      // A refused `+` moves no line, so its skip ends at the first line off the marker column.
+      if (reason !== null && firstKept !== Infinity) dropKept()
       // A later marker in the same forward search has already offered its
       // follower, even when the first marker ultimately refuses that block.
       for (const index of chained) claimedMarkers.add(index)
@@ -1106,6 +1114,12 @@ export function ownLines(
           cuts.set(index, [{ at: 0, removed: prefix.length - quoteLead.length }])
           prefix = quoteLead
         }
+        // A line skipped past the marker column stands at it, so its indentation maps to no column.
+        const past = index >= firstKept ? Math.min(docColumn(lines[index]!, indentCols(rest).rest) - marker, /^ */.exec(rest)![0].length) : 0
+        if (past > 0) {
+          cuts.set(index, [...cuts.get(index) ?? [], { at: prefix.length, removed: past }])
+          rest = rest.slice(past)
+        }
         // Invisible lines between a marker and the first visible follower
         // remain invisible even when that marker is refused.
         // A line comment keeps its text; a fence's lines stay bare `%%` lines, since a body line
@@ -1127,6 +1141,16 @@ export function ownLines(
       }
       for (const index of notes) skippedNotes.add(index)
       return reason
+    }
+    function dropKept(): void {
+      const before = (list: number[]): void => { list.splice(0, list.length, ...list.filter((index) => index < firstKept)) }
+      before(comments)
+      before(notes)
+      before(chained)
+      before(skippedLinks)
+      skippedAbbr.splice(0, skippedAbbr.length, ...skippedAbbr.filter(([index]) => index < firstKept))
+      for (const index of [...fences.keys()]) if (index >= firstKept) fences.delete(index)
+      for (const set of [fenced, closers]) for (const index of [...set]) if (index >= firstKept) set.delete(index)
     }
     // A quote prefix left of the container holding that quote carries nothing (carve#4396).
     const floors: number[] = []
@@ -1150,14 +1174,24 @@ export function ownLines(
       if (/^(?:>[ \t]*)*$/.test(n.rest)) return decide('blank')
       const rest = trimEndSpaceTab(n.rest)
       const col = docColumn(next, n.rest)
-      if (col !== marker) return decide(col < marker ? 'left' : 'right')
+      const kept = col !== marker && col >= content
+      if (col !== marker && !kept) return decide(col < marker ? 'left' : 'right')
+      if (kept) firstKept = Math.min(firstKept, k)
       // Invisible definitions at the marker column defer the attachment
       // decision to the next visible line.
       const abbr = quotes === 0 ? RE_ABBR_DEF.exec(rest) : null
       if (abbr) { skippedAbbr.push([k, abbr[1]!, abbr[2]!]); continue }
       if (isLinkDefLine(rest)) { skippedLinks.push(k); continue }
-      if (CONT_MARKER.test(rest)) { chained.push(k); continue }
-      if (isAttrLine(rest)) continue
+      if (CONT_MARKER.test(rest)) {
+        if (kept) return decide('right')
+        chained.push(k)
+        continue
+      }
+      if (isAttrLine(rest)) {
+        // Kept past the marker column, it is read at the marker column, as one written there.
+        if (kept) comments.push(k)
+        continue
+      }
       // A paragraph of only braced comments is skipped as a `%%` line is (carve#4799); in an item a marker ends it (carve#4890).
       const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k, host === 'item')
       if (paragraphEnd !== -1) {
@@ -1167,6 +1201,7 @@ export function ownLines(
       const comment = COMMENT_FENCE.exec(rest)
       if (comment) {
         const opener = k
+        let missed = false
         for (k++; k < lines.length; k++) {
           let closer = indentCols(lines[k]!)
           for (let q = 0; q < quotes; q++) {
@@ -1175,6 +1210,14 @@ export function ownLines(
             closer = indentCols(quoteRest(closer.rest))
           }
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
+          // A span kept at the content column ends at a nonblank line below it (CARVE-P0-005).
+          if (kept && closer.rest.trim() !== '' && docColumn(lines[k]!, closer.rest) < content) { missed = true; break }
+        }
+        if (missed) {
+          for (let line = opener; line < k; line++) { comments.push(line); fenced.add(line) }
+          fences.set(opener, k)
+          k--
+          continue
         }
         // An unclosed span runs to the end of the document (PART 9 §28).
         for (let line = opener; line <= Math.min(k, lines.length - 1); line++) { comments.push(line); fenced.add(line) }
@@ -1188,7 +1231,9 @@ export function ownLines(
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))
-          if (body.rest === '' || /^::? /.test(body.rest) || classify(body.rest, frames[0]!, k, body.col).kind !== 'text') break
+          // An attribute line folds into the note's paragraph like text (CARVE-P9-013).
+          if (body.rest === '' || /^::? /.test(body.rest) ||
+              classify(body.rest, frames[0]!, k, body.col).kind !== 'text' && !isAttrLine(trimEndSpaceTab(body.rest))) break
         }
         for (let line = opener; line < k; line++) notes.push(line)
         k--
@@ -1199,6 +1244,7 @@ export function ownLines(
         k += wrapped
         continue
       }
+      if (kept) return decide('right')
       // A closer ends a body and is no block.
       if (COLON_CLOSER.test(rest) && frames.some((f) => f.kind === 'colon' && f.run === COLON_CLOSER.exec(rest)![1]!.length)) return decide('document')
       if (host === 'item' && matchMarker(rest) !== null) return decide('sibling')

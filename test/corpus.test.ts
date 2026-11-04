@@ -1522,11 +1522,8 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_5080_HTML,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
-// carve#5130 and carve#5132 land in their own PRs; until then carve-js keeps its pinned reading.
+// carve#5132 lands in its own PR; until then carve-js keeps its pinned reading.
 const behindSpec = new Map<string, string>([
-  ['954-a-plus-skips-every-invisible-line-its-host-keeps', '<ul>\n  <li></li>\n</ul>\n<p>text</p>'],
-  ['954-a-plus-skips-every-invisible-line-its-host-keeps-2', '<ul>\n  <li></li>\n</ul>\n<p>text</p>'],
-  ['954-a-plus-skips-every-invisible-line-its-host-keeps-3', '<ul>\n  <li></li>\n</ul>\n<pre><code>z\n</code></pre>\n<p>r<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>x<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
   ['955-a-quote-plus-after-a-quote-attached-paragraph-is-a-letter', '<blockquote><p>q</p></blockquote>'],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
