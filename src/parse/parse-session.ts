@@ -327,6 +327,24 @@ function leavesFenceOpen(lines: readonly string[]): boolean {
 
 type Span = { endLine: number; endColumn?: number; endOffset?: number }
 
+// A description whose body is only a consumed `+` holds no blocks (CARVE-P11-040).
+function dropStandInOnlyDescriptions(doc: Document): void {
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    const item = value as { definitions?: unknown[][] }
+    item.definitions?.forEach((children, index) => {
+      if (children.length > 0 && children.every((child) => unplacedBlocks.has(child as object))) item.definitions![index] = []
+    })
+    if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
+    for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
+  }
+  visit(doc)
+}
+
 // Blocks whose content is inline or verbatim: no stand-in sits inside them.
 const STAND_IN_FREE = new Set(['paragraph', 'heading', 'code_block', 'raw_block', 'table', 'line_block', 'thematic_break', 'comment'])
 
@@ -679,6 +697,7 @@ export class ParseSession extends InlineParseSession {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
         return { offset: lexer.lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
       })
+      dropStandInOnlyDescriptions(doc)
     }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.

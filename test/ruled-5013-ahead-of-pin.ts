@@ -6,14 +6,14 @@ export const RULED_5013_FMT: ReadonlyMap<string, { reason: string; fmt: string }
     "436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not-2",
     {
       "reason": "carve#5013 forward-only continuation marker",
-      "fmt": ":: t\n: %%\n\nflush\n"
+      "fmt": ":: t\n: {empty}\n\nflush\n"
     }
   ],
   [
     "436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not-4",
     {
       "reason": "carve#5013 forward-only continuation marker",
-      "fmt": ":: t\n: %%\n\nflush\n"
+      "fmt": ":: t\n: {empty}\n\nflush\n"
     }
   ],
 ])
