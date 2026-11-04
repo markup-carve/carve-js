@@ -565,7 +565,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     sub.hostBody = 'footnote'
     sub.hostBodyRoot = 'footnote'
     const body = bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : hooks.parseBlocks(sub, 0)
-    if (!wins) return null
+    const ownLines: number[] = []
+    for (let index = defLineIndex; index < lexer.pos; index++) ownLines.push(lexer.lineNumber(index))
+    if (!wins) {
+      for (const line of ownLines) lexer.losingFootnoteLines.add(line)
+      return null
+    }
+    // A same-label note nested in this body was read first, and loses to this one.
+    for (const line of lexer.footnoteDefs.has(label) ? lexer.footnoteDefLines.get(label) ?? [] : []) {
+      lexer.losingFootnoteLines.add(line)
+    }
+    lexer.footnoteDefLines.set(label, ownLines)
     lexer.footnoteDefs.set(label, body)
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
