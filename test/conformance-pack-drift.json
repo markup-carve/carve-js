@@ -51,7 +51,6 @@
       "ticket": "markup-carve/carve#5080",
       "cause": "the pinned pack predates ruled block brace continuation columns",
       "cases": [
-        "lazy-10bd0503f93b",
         "lazy-2a563a548fec",
         "lazy-40c0fe50b2b8",
         "lazy-4bc0393d24b2",
