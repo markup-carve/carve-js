@@ -53,6 +53,7 @@ import { ownValue, setOwn } from '../own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
 import { promotedImageAttrs } from '../extension/attribute-merge.js'
+import { omitSpansAcrossErasedLines } from './erased-line-spans.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
 export interface FrontmatterNode {
@@ -507,6 +508,7 @@ export function toAstJson(doc: Document): AstJsonDocument {
   // from no source, and §12 explicitly does not check the value. carve-php took
   // the same route for the same reason (carve-php#917).
   const out: AstJsonDocument = { type: 'document', children, srcByteLength: doc.srcByteLength ?? 0 }
+  omitSpansAcrossErasedLines(out as unknown as Parameters<typeof omitSpansAcrossErasedLines>[0])
   return out
 }
 

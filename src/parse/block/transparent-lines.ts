@@ -2,7 +2,7 @@ import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
 import { commentLineContent } from './parse-block-scan-core.js'
-import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionList, Document, InlineNode, List, ListItem, Paragraph } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -130,11 +130,33 @@ export function authoredAbbreviations(document: Document, erased: number[]): Abb
   return found.sort((a, b) => a.pos!.startLine - b.pos!.startLine)
 }
 
+// Reset per pass so a tree edited between passes is measured again.
+let derivedSpans = new WeakMap<object, { start: number; end: number } | null>()
+
+/** A node's offsets, derived from its placed content where a PART 12 reader left it without `pos` (carve#5136). */
+function spanOf(node: object | undefined): { start: number; end: number } | undefined {
+  if (!node) return undefined
+  const pos = (node as { pos?: Position }).pos
+  if (pos?.startOffset !== undefined && pos.endOffset !== undefined) return { start: pos.startOffset, end: pos.endOffset }
+  if (derivedSpans.has(node)) return derivedSpans.get(node) ?? undefined
+  let found: { start: number; end: number } | null = null
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const part of value) visit(part)
+    } else if (value !== null && typeof value === 'object') {
+      const inner = spanOf(value)
+      if (inner) found = { start: Math.min(found?.start ?? inner.start, inner.start), end: Math.max(found?.end ?? inner.end, inner.end) }
+    }
+  }
+  for (const [key, value] of Object.entries(node)) if (key !== 'pos' && key !== 'attrs' && typeof value === 'object') visit(value)
+  derivedSpans.set(node, found)
+  return found ?? undefined
+}
+
 function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[] } | null {
   for (const block of blocks) {
-    const pos = block.pos
-    if (pos?.startOffset !== undefined && pos.endOffset !== undefined &&
-        pos.startOffset <= offset && offset < pos.endOffset) {
+    const span = spanOf(block)
+    if (span && span.start <= offset && offset < span.end) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
       const children = block.type === 'list' ? block.items.map((item) => item.children) :
         block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
@@ -151,20 +173,19 @@ function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: 
 
 function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   for (const block of blocks) {
-    const pos = block.pos
-    if (pos?.startOffset === undefined || pos.endOffset === undefined ||
-        pos.startOffset > offset || offset >= pos.endOffset) continue
+    const span = spanOf(block)
+    if (!span || span.start > offset || offset >= span.end) continue
     if (block.type === 'list') {
       for (const item of block.items) {
-        if ((item.pos?.startOffset ?? Infinity) <= offset && offset < (item.pos?.endOffset ?? -1)) {
+        if ((spanOf(item)?.start ?? Infinity) <= offset && offset < (spanOf(item)?.end ?? -1)) {
           return containingBlocks(item.children, offset)
         }
       }
     } else if (block.type === 'definition_list') {
       for (const item of block.items) {
         for (const definition of item.definitions) {
-          if (definition.some((child) => (child.pos?.startOffset ?? Infinity) <= offset &&
-              offset < (child.pos?.endOffset ?? -1))) return containingBlocks(definition, offset)
+          if (definition.some((child) => (spanOf(child)?.start ?? Infinity) <= offset &&
+              offset < (spanOf(child)?.end ?? -1))) return containingBlocks(definition, offset)
         }
       }
     } else if ('children' in block && Array.isArray(block.children) &&
@@ -194,10 +215,10 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
     if (block.type === 'list') {
       for (let i = 0; i < block.items.length - 1; i++) {
         const item = block.items[i]
-        const visibleEnd = item?.children.at(-1)?.pos?.endOffset
-        const itemEnd = item?.pos?.endOffset
+        const visibleEnd = spanOf(item?.children.at(-1))?.end
+        const itemEnd = spanOf(item)?.end
         const before = visibleEnd === undefined ? itemEnd : Math.min(visibleEnd, itemEnd ?? visibleEnd)
-        const after = block.items[i + 1]?.pos?.startOffset
+        const after = spanOf(block.items[i + 1])?.start
         if (before !== undefined && after !== undefined && before <= offset && offset < after)
           return { list: block, after: i }
       }
@@ -216,7 +237,7 @@ function betweenListItems(blocks: BlockNode[], offset: number): { list: List; af
 function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
   { list: DefinitionList; item: number; afterDescription: number; afterTerm: number } | null {
   for (const block of blocks) {
-    if ((block.pos?.startOffset ?? Infinity) > offset || offset >= (block.pos?.endOffset ?? -1)) continue
+    if ((spanOf(block)?.start ?? Infinity) > offset || offset >= (spanOf(block)?.end ?? -1)) continue
     if (block.type === 'definition_list') {
       for (const item of block.items) {
         for (const definition of item.definitions) {
@@ -262,6 +283,7 @@ function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDe
 
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
 export function hydrateTransparentDefinitionGaps(document: Document): void {
+  derivedSpans = new WeakMap()
   const authoredSource = (block: Comment | AbbreviationDef, quoteDepth: number): string => {
     const column = block.pos?.startColumn ?? 1
     const quoted = column > 1 ? quoteDepth : 0
@@ -389,6 +411,7 @@ function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (ch
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
 export function restoreTransparentComments(document: Document, authored: Document | null,
   stream: TransparentLineStream, direct?: Map<number, Comment>): void {
+  derivedSpans = new WeakMap()
   const comments = direct ?? (authored ? authoredComments(authored) : new Map<number, Comment>())
   const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
   const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
@@ -434,7 +457,9 @@ export function restoreTransparentComments(document: Document, authored: Documen
           container.pos.endOffset = comment.pos.endOffset
         }
       }
-      if (owner && comment.pos.endOffset !== undefined) {
+      // Only an owner that received the comment ends on its line; one it was
+      // hoisted out of keeps its own end (CARVE-P12-014, carve#5136).
+      if (owned && owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
         for (let depth = 2; depth <= parts.length; depth++) {
           for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
