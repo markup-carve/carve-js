@@ -1,6 +1,7 @@
 import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
+import { commentLineContent } from './parse-block-scan-core.js'
 import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionList, Document, InlineNode, List, ListItem, Paragraph } from '../../ast.js'
 
 export interface TransparentLineStream {
@@ -9,6 +10,8 @@ export interface TransparentLineStream {
   sourceLines: number[]
   erased: number[]
   authoredTrace: TraceRecord[]
+  authoredOwnership?: ReturnType<typeof ownLines>
+  originalOffsets: number[]
 }
 
 const REGION_MARKER = /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/
@@ -21,8 +24,22 @@ export function transparentLineStream(source: string): TransparentLineStream | n
   const lexer = new Lexer(source)
   lexer.consumeFrontmatter()
   const original = [...lexer.lines]
+  let terminal = original.length - 1
+  while (terminal >= 0 && original[terminal] === '') terminal--
+  const last = original[terminal]
+  const prefix = original.slice(0, terminal).join('\n')
+  // A final ordinary comment in a plain text/list source has no later layout
+  // decision to affect. It can be erased without a second deep ownership walk.
+  if (lexer.pos === 0 && !source.includes('\t') && !/[^\x00-\x7F]/.test(source) &&
+      terminal >= 0 && original.length - terminal <= 2 && last !== undefined &&
+      /^ *%%(?!%)(?:[ \t]|$)/.test(last) && !REGION_MARKER.test(last.trimStart()) &&
+      !/[%`~<>{}|:\[\]\\+#]/.test(prefix)) {
+    return { lines: original.filter((_line, index) => index !== terminal), original,
+      sourceLines: original.map((_line, index) => index).filter((index) => index !== terminal),
+      erased: [terminal], authoredTrace: [], originalOffsets: lexer.lineOffsets }
+  }
   const trace: TraceRecord[] = []
-  ownLines(original, lexer.pos, trace)
+  const authoredOwnership = ownLines(original, lexer.pos, trace)
   const erased: number[] = []
   for (const record of trace) {
     if (record.step !== 'S5' || record.form !== 'leaf') continue
@@ -49,7 +66,25 @@ export function transparentLineStream(source: string): TransparentLineStream | n
       sourceLines.push(index)
     }
   }
-  return { lines, original, sourceLines, erased, authoredTrace: trace }
+  return { lines, original, sourceLines, erased, authoredTrace: trace, authoredOwnership,
+    originalOffsets: lexer.lineOffsets }
+}
+
+/** Ordinary space-indented comments have a source span without parsing the full authored tree. */
+export function directCommentNodes(stream: TransparentLineStream): Map<number, Comment> | null {
+  const found = new Map<number, Comment>()
+  for (const index of stream.erased) {
+    const line = stream.original[index]!
+    const prefix = /^ */.exec(line)![0]
+    const rest = line.slice(prefix.length)
+    if (!/^%%(?!%)(?:[ \t]|$)/.test(rest)) return null
+    const startOffset = stream.originalOffsets[index]! + prefix.length
+    found.set(index + 1, { type: 'comment', block: false, content: commentLineContent(rest),
+      pos: { startLine: index + 1, endLine: index + 1,
+        startColumn: prefix.length + 1, endColumn: line.length + 1,
+        startOffset, endOffset: stream.originalOffsets[index]! + line.length } })
+  }
+  return found
 }
 
 function authoredComments(document: Document): Map<number, Comment> {
@@ -139,6 +174,20 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   return blocks
 }
 
+function trailingListOwner(blocks: BlockNode[], column: number):
+  { blocks: BlockNode[]; containers: Array<List | ListItem> } | null {
+  for (const block of blocks) {
+    if (block.type !== 'list') continue
+    for (const item of [...block.items].reverse()) {
+      const nested = trailingListOwner(item.children, column)
+      if (nested) return { blocks: nested.blocks, containers: [block, item, ...nested.containers] }
+      if (item.children[0]?.pos?.startColumn === column)
+        return { blocks: item.children, containers: [block, item] }
+    }
+  }
+  return null
+}
+
 function betweenListItems(blocks: BlockNode[], offset: number): { list: List; after: number } | null {
   for (const block of blocks) {
     if (block.type === 'list') {
@@ -220,14 +269,15 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
           `*[${block.abbr}]: ${block.expansion}`)
   }
-  const visit = (blocks: BlockNode[], quoteDepth: number): void => {
+  const visit = (blocks: BlockNode[], quoteDepth: number, markerLine?: number): void => {
     for (const block of blocks) {
+      const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
-          block.transparentSource === undefined) {
+          !onMarkerLine && block.transparentSource === undefined) {
         block.transparentSource = authoredSource(block, quoteDepth)
         block.transparentOriginalValue = block.content
       }
-      if ((block.type === 'comment' && !block.block || block.type === 'abbreviation_def') &&
+      if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
           !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
         const source = authoredSource(block, quoteDepth)
@@ -256,11 +306,13 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           }
         }
       }
-      if (block.type === 'list') for (const item of block.items) visit(item.children, quoteDepth)
+      if (block.type === 'list') for (const item of block.items) visit(item.children, quoteDepth, item.pos?.startLine)
       else if (block.type === 'definition_list') for (const item of block.items)
-        for (const definition of item.definitions) visit(definition, quoteDepth)
+        for (const [index, definition] of item.definitions.entries())
+          visit(definition, quoteDepth, item.definitionLines?.[index])
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
-        visit(block.children as BlockNode[], quoteDepth + (block.type === 'block_quote' ? 1 : 0))
+        visit(block.children as BlockNode[], quoteDepth + (block.type === 'block_quote' ? 1 : 0),
+          block.type === 'block_quote' ? block.pos?.startLine : markerLine)
     }
   }
   visit(document.children, 0)
@@ -328,8 +380,9 @@ function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (ch
 }
 
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
-export function restoreTransparentComments(document: Document, authored: Document, stream: TransparentLineStream): void {
-  const comments = authoredComments(authored)
+export function restoreTransparentComments(document: Document, authored: Document | null,
+  stream: TransparentLineStream, direct?: Map<number, Comment>): void {
+  const comments = direct ?? (authored ? authoredComments(authored) : new Map<number, Comment>())
   const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
   const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
   for (const index of stream.erased) {
@@ -362,9 +415,18 @@ export function restoreTransparentComments(document: Document, authored: Documen
       }
       const owner = ownersByLine.get(index + 1)
       const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
-      const siblings = owned?.blocks ?? containingBlocks(blocks, comment.pos.startOffset)
+      const trailing = stream.authoredTrace.length === 0 ? trailingListOwner(blocks, comment.pos.startColumn ?? 1) : null
+      const siblings = owned?.blocks ?? trailing?.blocks ?? containingBlocks(blocks, comment.pos.startOffset)
       const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > comment.pos!.startOffset!)
       siblings.splice(at < 0 ? siblings.length : at, 0, comment)
+      for (const container of trailing?.containers ?? []) {
+        if (container.pos?.endOffset !== undefined && comment.pos.endOffset !== undefined &&
+            container.pos.endOffset < comment.pos.endOffset) {
+          container.pos.endLine = comment.pos.endLine
+          if (comment.pos.endColumn !== undefined) container.pos.endColumn = comment.pos.endColumn
+          container.pos.endOffset = comment.pos.endOffset
+        }
+      }
       if (owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
         for (let depth = 2; depth <= parts.length; depth++) {

@@ -164,7 +164,7 @@ import { InlineParseSession } from './inline/parse-inline-session.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
-import { authoredAbbreviations, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
+import { authoredAbbreviations, directCommentNodes, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -459,7 +459,8 @@ export class ParseSession extends InlineParseSession {
     return this.quoteSiblingSeparators.has(line)
   }
 
-  parse(source: string, opts: ParseOptions = {}, transparent = true): Document {
+  parse(source: string, opts: ParseOptions = {}, transparent = true,
+    precomputedOwnership?: ReturnType<typeof ownLines>): Document {
     const sourceByteLength = utf8ByteLength(source)
     const dropRequested = opts.positions === false
     this.recordPositions = opts.positions !== false
@@ -505,7 +506,10 @@ export class ParseSession extends InlineParseSession {
     // The restoration pass only harvests core comment and definition nodes.
     // Extension callbacks may have state, so only the visible parse invokes them.
     delete authoredOptions.extensions
-    const authored = transparentLines ? new ParseSession().parse(authoredSource, authoredOptions, false) : null
+    const directComments = transparentLines && authoredSource === source && !source.includes('\r')
+      ? directCommentNodes(transparentLines) : null
+    const authored = transparentLines && !directComments ? new ParseSession().parse(authoredSource, authoredOptions, false,
+      authoredSource === source ? transparentLines.authoredOwnership : undefined) : null
     const erasedAbbreviations = transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : []
     const originalLexer = transparentLines ? new Lexer(source, opts) : null
     const lexer = new Lexer(
@@ -548,7 +552,7 @@ export class ParseSession extends InlineParseSession {
     // metadata region; the def passes and parseBlocks all start from there.
     if (!transparentLines || transparentLines.sourceLines[0] === 0) lexer.consumeFrontmatter()
     const sourceLines = transparentLines?.original ?? lexer.lines
-    const ownership = ownLines(lexer.lines as string[], lexer.pos)
+    const ownership = precomputedOwnership ?? ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
     if (transparentLines && lexer.rootLines) {
       // A code opener uses the ownership walk's column after transparent
@@ -589,8 +593,8 @@ export class ParseSession extends InlineParseSession {
         lexer.abbrDefs.set(definition.abbr, definition.expansion)
       }
     }
-    if (transparentLines && authored) {
-      for (const node of authored.children) {
+    if (transparentLines) {
+      for (const node of authored?.children ?? []) {
         if (node.type !== 'link_reference_definition' || !node.pos ||
             !transparentLines.erased.includes(node.pos.startLine - 1)) continue
         const key = normalizeRefLabel(node.label)
@@ -627,8 +631,8 @@ export class ParseSession extends InlineParseSession {
       return this.skipPositionDrop ? doc : dropPositions(doc)
     }
     toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
-    if (transparentLines && authored) {
-      for (const node of authored.children) {
+    if (transparentLines) {
+      for (const node of authored?.children ?? []) {
         if (node.type !== 'link_reference_definition' || !node.pos ||
             !transparentLines.erased.includes(node.pos.startLine - 1)) continue
         const key = normalizeRefLabel(node.label)
@@ -640,7 +644,7 @@ export class ParseSession extends InlineParseSession {
         }
         doc.children.push(node)
       }
-      restoreTransparentComments(doc, authored, transparentLines)
+      restoreTransparentComments(doc, authored, transparentLines, directComments ?? undefined)
       restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
       dropTransparentScaffoldText(doc, transparentLines)
       splitTransparentQuoteParagraphs(doc, transparentLines)
@@ -1050,7 +1054,13 @@ export class ParseSession extends InlineParseSession {
       if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
       // A consumed `+` keeps its `%%` stand-in so the writer can spell it; see dropStandInPositions.
       if (l.trimStart() === '%%' && this.consumedMarkerLines.has(lexer.lineNumber(lexer.pos - 1))) {
-        const standIn = { type: 'comment' as const, block: false, content: '' }
+        const standIn: Comment = { type: 'comment', block: false, content: '' }
+        const root = lexer.documentRoot ?? lexer
+        const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+        if (authoredLine?.trimEnd().endsWith('+') && !authoredLine.includes('%%')) {
+          standIn.transparentSource = authoredLine
+          standIn.transparentOriginalValue = ''
+        }
         unplacedBlocks.add(standIn)
         return standIn
       }

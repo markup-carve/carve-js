@@ -172,6 +172,12 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(renderCarve(fromAstJson(carveToAstJson(source)))).toContain('> a\n> %% c\n')
   })
 
+  it('keeps a comment authored on a list marker line in that list', () => {
+    const source = '- %%\n'
+    expect(carveToHtml(renderCarve(parse(source)))).toBe(carveToHtml(source))
+    expect(carveToCarve(source)).toBe(source)
+  })
+
   it('reconstructs a footnote comment from AST wire positions', () => {
     const source = '[^a]: intro\n  %% c\n  more\n\nuse[^a]\n'
     const direct = renderCarve(parse(source))
