@@ -37,8 +37,9 @@ function hasUnrepresentedAuthoredLine(document: Document, source: string, writte
   }
   for (const line of losingFootnoteLines(document)) represented.add(line)
   const erased = new Set(stream.erased)
+  // A consumed `+` leaves no node (CARVE-P11-040), so its bare line has nothing to represent it.
   return stream.original.some((line, index) => !erased.has(index) && line.trim() !== '' &&
-    !represented.has(index + 1) && !written.includes(line.trim()))
+    !represented.has(index + 1) && !written.includes(line.trim()) && !/^[ \t]*\+[ \t]*$/.test(line))
 }
 
 function withPromotedImages(document: Document): Document {
