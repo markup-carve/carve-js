@@ -288,6 +288,8 @@ export function createDefinitionListParser(
       let nestedItemParagraphOpen = false
       let nestedItemRefusedAttachment = false
       let nestedAttributeRun: string | null = null
+      let nestedAttributeColumn = 0
+      let nestedAttributeShallow = false
       let nestedDescriptionOpened = false
       let nestedLeadScans: ReturnType<typeof descriptionLeadFenceScans> | undefined
       let commentPayloadState: ItemLazyState | null = null
@@ -699,11 +701,21 @@ export function createDefinitionListParser(
         bodyLineNumbers.push(lexer.lineNumber(lineIndex))
         let closedNestedAttribute = false
         if (nestedAttributeRun !== null) {
+          if (indentColumns(ln) <= nestedAttributeColumn) nestedAttributeShallow = true
           const result = continueWrappedAttributeBlock(nestedAttributeRun, dedented.trimStart())
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
-          closedNestedAttribute = result.verdict === 'attributes'
+          closedNestedAttribute = result.verdict === 'attributes' && !nestedAttributeShallow
+          if (result.verdict !== 'open' && nestedAttributeShallow) {
+            nestedItemParagraphOpen = true
+            lazyState.lazyFoldable = true
+            nestedAttributeShallow = false
+          }
         } else if (!lazyState.literalLayout && nestedItemColumn > 0 && indentColumns(dedented) >= nestedItemColumn &&
-            opensWrappedAttributeBlock(dedented.trimStart())) nestedAttributeRun = dedented.trimStart()
+            opensWrappedAttributeBlock(dedented.trimStart())) {
+          nestedAttributeRun = dedented.trimStart()
+          nestedAttributeColumn = indentColumns(ln)
+          nestedAttributeShallow = false
+        }
         // ASK THE FOLD OF THE BODY AS THE BODY WILL READ IT
         // (markup-carve/carve#1911). `sliceColumns` removes the body's content
         // column and KEEPS the rest, so an opener written one column past it
@@ -1016,11 +1028,18 @@ export function createDefinitionListParser(
           return 'continue'
         }
         if (nestedAttributeRun !== null) {
+          if (indentColumns(ln) <= nestedAttributeColumn) nestedAttributeShallow = true
           const result = continueWrappedAttributeBlock(nestedAttributeRun, below)
           nestedAttributeRun = result.verdict === 'open' ? result.run : null
           if (result.verdict === 'attributes' || result.verdict === 'open') {
+            const refused = result.verdict !== 'open' && nestedAttributeShallow
+            if (refused) {
+              nestedItemParagraphOpen = true
+              lazyState.lazyFoldable = true
+              nestedAttributeShallow = false
+            }
             const decision = foldLazyLine(ln, below, atDocumentColumn)
-            if (result.verdict === 'attributes') lazyState.lazyFoldable = false
+            if (result.verdict === 'attributes' && !refused) lazyState.lazyFoldable = false
             return decision
           }
         }

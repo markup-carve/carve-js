@@ -1,31 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-const h = (s: string) => carveToHtml(s)
-
-// A wrapped attribute block is the same leaf at any column (corpus 787, 793, carve#4089): it ends the
-// paragraph and its owner reads it, so the line after it is the owner's.
+// carve#5080: a continuation at or below the brace column leaves the run as paragraph text.
 describe('a below-column wrapped attribute opener', () => {
-  it('keeps the next lazy line in the nested paragraph', () => {
-    expect(h('- - a\n {c\n}\nx\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p c="">x</p>',
-    )
-  })
-
-  it('stays text in a single item and inside a quote', () => {
-    expect(h('- a\n {c\n}\nx\n')).toBe('<ul>\n  <li>a</li>\n</ul>\n<p c="">x</p>')
-    expect(h('> 1. a\n>  {c\n> }\n> x\n')).toBe('<blockquote>\n  <ol>\n    <li>a</li>\n  </ol>\n  <p c="">x</p>\n</blockquote>')
-  })
-
-  it('stays text when an enclosing item admitted it below its column', () => {
-    expect(h('10. - a\n  {c\n}\nx\n')).toBe(
-      '<ol start="10">\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ol>\n<p c="">x</p>',
-    )
-  })
-
-  it('still closes the paragraph at the outer item content column', () => {
-    expect(h('- - a\n   {c\n}\nx\n')).toBe(
-      '<ul>\n  <li>\n    <ul>\n      <li>a</li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>',
-    )
+  it.each([
+    ['- - a\n {c\n}\nx\n', '<ul>\n  <li>\n    <ul>\n      <li>a\n{c\n}\nx</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- a\n {c\n}\nx\n', '<ul>\n  <li>a\n{c\n}\nx</li>\n</ul>'],
+    ['> 1. a\n>  {c\n> }\n> x\n', '<blockquote>\n  <ol>\n    <li>a\n{c\n}\nx</li>\n  </ol>\n</blockquote>'],
+    ['10. - a\n  {c\n}\nx\n', '<ol start="10">\n  <li>\n    <ul>\n      <li>a\n{c\n}\nx</li>\n    </ul>\n  </li>\n</ol>'],
+    ['- - a\n   {c\n}\nx\n', '<ul>\n  <li>\n    <ul>\n      <li>a\n{c\n}\nx</li>\n    </ul>\n  </li>\n</ul>'],
+  ])('renders %j as paragraph text', (source, expected) => {
+    expect(carveToHtml(source)).toBe(expected)
   })
 })

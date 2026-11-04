@@ -112,7 +112,7 @@ function scanParagraph(source: string, start: number, key: string, context: Retu
   return kind === 'paragraph'
 }
 
-function validAttributeLines(source: string, start: number, end: number, paragraphContext: boolean, heldContext?: ReturnType<typeof attributeContext>): boolean {
+function validInlineAttributeLines(source: string, start: number, end: number, paragraphContext: boolean, heldContext?: ReturnType<typeof attributeContext>): boolean {
   const span = source.slice(start, end)
   let newline = span.indexOf('\n')
   if (newline < 0) return true
@@ -140,12 +140,12 @@ export function plainCommentEnd(source: string, start: number): number | undefin
     if (depth > 0 && comment.split('\n').slice(1).some(raw => attributeLine(raw, depth)?.trim() === '')) return undefined
   }
   const end = start + comment.length
-  return validAttributeLines(source, start, end, true) ? end : undefined
+  return end
 }
 
 export type DjotAttributeToken = { key: string; source: string; append: boolean }
 
-export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true, preserveShorthand = false): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
+export function readAttributes(source: string, start: number, carve = false, table = false, paragraphContext = true, preserveShorthand = false, validateInlineColumns = true): { end: number; source: string; tokens: DjotAttributeToken[] } | undefined {
   const parts: string[] = []
   const tokens: DjotAttributeToken[] = []
   let lastClassAssignment = -1
@@ -160,8 +160,8 @@ export function readAttributes(source: string, start: number, carve = false, tab
         for (let n = 0; n < context.depth; n++) { const quote = /^[ \t]*>(?:[ \t]|$)/.exec(source.slice(i)); if (!quote) break; i += quote[0].length }
       } else i++
     }
-    if (source[i] === '}' && source.slice(start + 1, i).includes('\n') && !validAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
     if (source[i] === '}') {
+      if (validateInlineColumns && source.slice(start + 1, i).includes('\n') && !validInlineAttributeLines(source, start, i + 1, paragraphContext && parts.length === 0, context)) return undefined
       if (carve && table) {
         for (let at = start; at <= i; at++) {
           if (source[at] === '\\') at++

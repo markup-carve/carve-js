@@ -1718,7 +1718,7 @@ export function renderCarrierAttributeBlock(attrs: Attrs | undefined): string {
 
 function renderBlockAttrs(attrs: Attrs | undefined): string {
   const rendered = renderAttrs(attrs)
-  return rendered
+  return rendered.replace(/\n/g, '\n ')
 }
 
 function renderAttrs(attrs: Attrs | undefined, markers: string = '', escapeEnclosure = markers !== ''): string {
@@ -5348,6 +5348,10 @@ class CarveRenderSession {
     function renderInlineDispatch(): string {
     switch (node.type) {
       case 'text':
+        // A refused wrapped attribute is already literal paragraph text. Its
+        // shallow closer keeps the brace from opening an attribute on reparse.
+        // Braced comments need the usual escape probe because they can vanish.
+        if (node.value.startsWith('{') && !node.value.startsWith('{%') && node.value.includes('\n')) return cleanEscapedText(node)
         return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
       case 'escaped_text':
         // The author escaped this character; the writer says so again. No

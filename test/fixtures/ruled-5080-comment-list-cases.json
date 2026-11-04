@@ -1,0 +1,50 @@
+[
+  {
+    "source": "- {% c\n  d %}\n\n  Body.\n",
+    "html": "<ul><li>{% c\nd %}\n    Body.</li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% c\n  d %}\n\n  text\n",
+    "html": "<ul><li><p>a</p><p>{% c\nd %}</p><p>text</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% c\n  d %}\n- b\n",
+    "html": "<ul><li><p>a</p><p>{% c\nd %}</p></li><li><p>b</p></li></ul>"
+  },
+  {
+    "source": "- +\n{% c\nd %}\n\n# H\n",
+    "html": "<ul><li></li></ul><p>{% c\nd %}</p><section id=\"H\"><h1>H</h1></section>"
+  },
+  {
+    "source": "> +\n{% c\nd %}\n\nx\n",
+    "html": "<blockquote></blockquote><p>{% c\nd %}</p><p>x</p>"
+  },
+  {
+    "source": "- +\n{% c\nd %}\n# H\n",
+    "html": "<ul><li>{% c\nd %}\n# H</li></ul>"
+  },
+  {
+    "source": "- {% a\n  b\n  c %}\n\n  Body.\n",
+    "html": "<ul><li>{% a\nb\nc %}\n    Body.</li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% a\n  b\n  c %}\n\n  text\n",
+    "html": "<ul><li><p>a</p><p>{% a\nb\nc %}</p><p>text</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% a\n  b\n  c %}\n- b\n",
+    "html": "<ul><li><p>a</p><p>{% a\nb\nc %}</p></li><li><p>b</p></li></ul>"
+  },
+  {
+    "source": "- +\n{% a\nb\nc %}\n\n# H\n",
+    "html": "<ul><li></li></ul><p>{% a\nb\nc %}</p><section id=\"H\"><h1>H</h1></section>"
+  },
+  {
+    "source": "> +\n{% a\nb\nc %}\n\nx\n",
+    "html": "<blockquote></blockquote><p>{% a\nb\nc %}</p><p>x</p>"
+  },
+  {
+    "source": "- +\n{% a\nb\nc %}\n# H\n",
+    "html": "<ul><li>{% a\nb\nc %}\n# H</li></ul>"
+  }
+]
