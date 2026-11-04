@@ -294,6 +294,7 @@ export function createDefinitionListParser(
       let nestedDescriptionOpened = false
       let nestedLeadScans: ReturnType<typeof descriptionLeadFenceScans> | undefined
       let commentPayloadState: ItemLazyState | null = null
+      let commentPayloadIndent = 0
       const paragraphFenceLines = new Set<number>()
       const lazyParagraphFenceLines = new Set<number>()
       const authoredOpeners = new Set<number>()
@@ -348,8 +349,10 @@ export function createDefinitionListParser(
         // Keep payload classification separate from the actual span state.
         // An unfinished prefix can leave a paragraph open for S4, but blocks
         // inside a completed comment must not change the surrounding state.
+        const indent = atContentColumn ? indentColumns(stripLazyFrame(bodyLines.at(-1) ?? '')) : -1
         if (lazyState.opaque === null && commentFenceRun(content) !== undefined) {
           commentPayloadState = { ...lazyState, quoteInner: null }
+          commentPayloadIndent = indent
         }
         // A marker at the body's column 0 opens a sub-item frame, as in a note body (PART 0 S3, carve#4860).
         const framed = atContentColumn && !content.startsWith(LAZY_FRAME)
@@ -369,7 +372,8 @@ export function createDefinitionListParser(
         }
         if (lazyState.opaque?.kind === 'comment' && commentPayloadState !== null) {
           trackItemLazyState(content, commentPayloadState, atContentColumn, () => false)
-          lazyState.lazyFoldable = commentPayloadState.lazyFoldable
+          // Only a line left of the opener misses the comment's owner; one inside is payload (PART 0 S1).
+          if (indent < commentPayloadIndent) lazyState.lazyFoldable = commentPayloadState.lazyFoldable
         } else {
           commentPayloadState = null
         }
