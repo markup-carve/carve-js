@@ -24,8 +24,13 @@ export type DefinitionEntryNode = DefinitionTermNode | DefinitionDescriptionNode
 function span(nodes: { pos?: Position }[]): Position | undefined {
   if (nodes.length === 0) return undefined
   const first = nodes[0]?.pos
-  const last = nodes[nodes.length - 1]?.pos
+  let last = nodes[nodes.length - 1]?.pos
   if (first === undefined || last === undefined) return undefined
+  // A comment from an erased line follows the paragraph folded across it
+  // while ending inside it (carve#5136).
+  for (const node of nodes) {
+    if ((node.pos?.endOffset ?? -1) > (last.endOffset ?? Infinity)) last = node.pos!
+  }
 
   // Derived, not invented: the union of spans the parser actually recorded, so
   // it covers exactly the content of the term or description and nothing else.
@@ -74,6 +79,14 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
     })
   }
   return out
+}
+
+function firstPlacedLine(nodes: unknown[]): number | undefined {
+  for (const node of nodes) {
+    const line = (node as { pos?: Position } | null)?.pos?.startLine
+    if (typeof line === 'number') return line
+  }
+  return undefined
 }
 
 /** A wire position, when the payload carries a usable one. */
@@ -127,7 +140,9 @@ export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
       // for that reason - a skipped `undefined` would shift every later index.
       const pos = readPos(entry.pos)
       current.definitionSpans!.push(pos)
-      current.definitionLines!.push(pos?.startLine)
+      // A description joined across an erased line omits pos (carve#5136);
+      // the writer still places comments by the line it starts on.
+      current.definitionLines!.push(pos?.startLine ?? firstPlacedLine(entry.children))
     }
   }
 
