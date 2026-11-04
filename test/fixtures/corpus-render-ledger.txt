@@ -2,7 +2,7 @@
 # <slug> md:<digest> txt:<digest> ansi:<digest>, sha-256 truncated to 16 hex.
 # Regenerate with `npm run ledger:render`.
 01-emphasis md:d5d7ee17615105e9 txt:80a8419726311419 ansi:683288d5c9760c62
-01-emphasis-10 md:30b8aa92efc67d28 txt:30b8aa92efc67d28 ansi:30b8aa92efc67d28
+01-emphasis-10 md:0000000000000000 txt:30b8aa92efc67d28 ansi:30b8aa92efc67d28
 01-emphasis-11 md:1dedabae37bcee1e txt:1dedabae37bcee1e ansi:1dedabae37bcee1e
 01-emphasis-12 md:aa69779cbf583744 txt:18f1d657ee645e98 ansi:da3fa0a3e42a2893
 01-emphasis-13 md:739dc5feb23a1d5c txt:22e048e03b9d73d2 ansi:b935189b5c7bfc45

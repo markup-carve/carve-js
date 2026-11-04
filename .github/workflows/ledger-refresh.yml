@@ -14,7 +14,7 @@ name: Ledger refresh
 
 on:
   push:
-    branches: [main]
+    branches: [main, dryrun/ledger-refresh]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BRANCH: automation/render-ledger
+  BRANCH: automation/render-ledger-dryrun
 
 jobs:
   refresh:
@@ -84,7 +84,7 @@ jobs:
           if [ -z "$open_pr" ]; then
             body="Regenerated after ${GITHUB_SHA} by ledger-refresh.yml (npm run ledger:render, npm run drift:prune). Generated files only."
             if ! gh pr create --repo "$REPO" --base main --head "$BRANCH" \
-              --title "chore: refresh render ledger and pack drift" \
+              --title "DRY RUN (close me): refresh render ledger and pack drift" \
               --body "$body" --label chore --label area:tooling; then
               echo "::error::Pushed $BRANCH but could not open its PR. Add a BUMP_TOKEN secret to this repo, or allow GitHub Actions to create pull requests (Settings > Actions > General)."
               exit 1
