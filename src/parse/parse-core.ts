@@ -895,6 +895,7 @@ export {
   isGfmDelimiterRow,
   joinFragment,
   parseCellMarkers,
+  readBracedCellPrefix,
   readCellAttributeBlock,
   scanCellMarkerRun,
   trimCellPadding,

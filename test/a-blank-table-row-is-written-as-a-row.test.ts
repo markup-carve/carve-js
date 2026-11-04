@@ -33,8 +33,8 @@ describe('a table row whose every cell is blank', () => {
     ['a header row above a body row', table(row(header('')), row(cell('a'))), '|= |\n| a |\n'],
     ['a row between two filled ones', table(row(cell('a')), row(cell('')), row(cell('b'))), '| a |\n| |\n| b |\n'],
     ['a row carrying attributes', table({ ...row(cell('')), attrs: { classes: ['x'] } }, row(cell('a'))), '| |{.x}\n| a |\n'],
-    ['a marked empty cell', table(row(header('', { align: 'center', attrs: { classes: ['x'] } }))), '|=~{.x} |\n'],
-    ['an alignment marker', table(row(cell('', { align: 'right' })), row(cell('a'))), '|> |\n| a |\n'],
+    ['a marked empty cell', table(row(header('', { align: 'center', attrs: { classes: ['x'] } }))), '|={~ .x} |\n'],
+    ['an alignment marker', table(row(cell('', { align: 'right' })), row(cell('a'))), '|{>} |\n| a |\n'],
   ])('is written as a row for %s, and reads back the same', (_, document, carve) => {
     const written = renderCarve(document)
     expect(written).toBe(carve)

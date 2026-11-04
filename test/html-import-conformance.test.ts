@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { htmlToAst, htmlToCarve, toAstJson } from '../src/index.js'
+import { RULED_HTML_IMPORT_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
+
 
 const root = resolve(import.meta.dirname, '../spec/tests/html-import')
 
@@ -22,7 +24,9 @@ const root = resolve(import.meta.dirname, '../spec/tests/html-import')
  *  - and it must still DIFFER from the pinned golden, so the entry fails and
  *    has to be deleted in the same commit that moves the pin.
  */
-const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([])
+const AHEAD_OF_PIN = new Map<string, { reason: string; carve?: string; ast?: unknown; report?: unknown }>([
+  ...RULED_HTML_IMPORT_AHEAD_OF_PIN_5091,
+])
 
 /**
  * The two fields that record WHERE a node was written rather than what it is.

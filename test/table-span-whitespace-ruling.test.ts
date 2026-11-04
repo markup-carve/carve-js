@@ -16,7 +16,7 @@ describe('lone table span glyphs ignore space padding', () => {
   })
 
   it('keeps a glyph literal after a consumed kind or attribute run', () => {
-    expect(carveToHtml('|= <|\n')).toContain('<th scope="col">&lt;</th>')
+    expect(carveToHtml('|= \\<|\n')).toContain('<th scope="col">&lt;</th>')
     expect(carveToHtml('|{.x} <|\n')).toContain('<td class="x">&lt;</td>')
   })
 

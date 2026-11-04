@@ -42,7 +42,7 @@ describe('a Markdown table imports as canonical rows', () => {
     [
       'pads unpadded cells and keeps alignment on the header',
       ['| L | R |', '|:--|--:|', '|  x  |y|', ''].join('\n'),
-      ['|=< L |=> R |', '| x | y |', ''].join('\n'),
+      ['|={<} L |={>} R |', '| x | y |', ''].join('\n'),
     ],
     [
       'writes an empty cell as one space',
@@ -62,7 +62,7 @@ describe('a Markdown table imports as canonical rows', () => {
     [
       'writes a quoted table with a native header',
       ['> | a | b |', '> |:--|--:|', '> | 1   | 2   |', ''].join('\n'),
-      ['> |=< a |=> b |', '> | 1 | 2 |', ''].join('\n'),
+      ['> |={<} a |={>} b |', '> | 1 | 2 |', ''].join('\n'),
     ],
     [
       'keeps a plain line under a table as the one-cell row GFM reads',
@@ -99,7 +99,7 @@ describe('a Markdown table imports as canonical rows', () => {
 
   it('does not read a literal `<` or `^` cell as a span marker', () => {
     const out = markdownToCarve(['| < | b |', '|---|---|', '| x | ^ |', ''].join('\n'))
-    expect(out).toBe(['|= < |= b |', '| x | \\^ |', ''].join('\n'))
+    expect(out).toBe(['|= \\< |= b |', '| x | \\^ |', ''].join('\n'))
     expect(carveToCarve(out)).toBe(out)
     const html = carveToHtml(out)
     expect(html).not.toContain('colspan')

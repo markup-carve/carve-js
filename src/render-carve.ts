@@ -7,10 +7,9 @@ import { MAX_NESTING_DEPTH } from './parse.js'
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { extendsGrapheme, LEADING_EXTENDER_REASON } from './grapheme-extender.js'
 import { tableDisplayWidth } from './table/table-display-width.js'
-import { trimCellPadding } from './parse/table/parse-table-cells.js'
 import { openVerbatimRun } from './parse/block/parse-block-boundaries.js'
 import { allocateDashes, wordAfter, wordBeforeGrapheme } from './parse/inline/parse-inline-core.js'
-import { tableSourceAttrs, tableNeedsDelimiterHeader, authoredSeparator } from './table/table-source-metadata.js'
+import { tableSourceAttrs, authoredSeparator } from './table/table-source-metadata.js'
 import { delimitedSource } from './table/delimited-table.js'
 import type {
   AbbreviationDef,
@@ -1321,11 +1320,12 @@ function escapedIn(nodes: InlineNode[], from: number, texts: string[]): (index: 
 }
 
 /**
- * Escape a bare cell payload that would otherwise re-read as a span marker.
- * A valid marker run or attribute block keeps the payload in the content slot.
+ * Escape a bare cell payload that would otherwise re-read as a span marker:
+ * after no prefix, a header `=`, or an alignment-only block (carve#5091).
+ * Ordinary attributes already make the glyph literal.
  */
 export function escapeSpanMarkerPayload(payload: string, prefix = ''): string {
-  if (prefix !== '' || !cellPayloadIsSpanMarker(payload)) return payload
+  if (!/^=?(?:\{[<>~?][\^~v]?\})?$/.test(prefix) || !cellPayloadIsSpanMarker(payload)) return payload
   return '\\' + payload
 }
 
@@ -1854,6 +1854,19 @@ function renderCitationMetadata(attrs: Attrs | undefined): string {
     ([key, value]) => `${escapeAttrKey(key)}="${escapeQuotedValue(value, '"')}"`,
   )
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
+}
+
+/** A cell's alignment symbols, glued, as they lead its attribute block (carve#5091). */
+function cellAlignmentSymbols(horizontal: TableCell['align'], vertical: TableCell['valign']): string {
+  const valign = vertical === 'top' ? '^' : vertical === 'middle' ? '~' : vertical === 'bottom' ? 'v' : ''
+  const align = alignMarker(horizontal)
+  return align || valign ? `${align || '?'}${valign}` : ''
+}
+
+/** The `{...}` block of a cell: alignment symbols first, then its attributes. */
+function cellAttributeBlock(symbols: string, attrs: string): string {
+  if (!symbols) return attrs
+  return attrs ? `{${symbols} ${attrs.slice(1, -1)}}` : `{${symbols}}`
 }
 
 function alignMarker(align: TableCell['align']): string {
@@ -4575,15 +4588,12 @@ class CarveRenderSession {
   }
 
   /**
-   * Tables prefer the NATIVE header form: an `=` on each header cell, plus the
-   * per-cell `<`/`>`/`~` alignment markers.
+   * Tables use the NATIVE header form: an `=` on each header cell, alignment
+   * symbols leading the cell attribute block (`|={>} Price |`). The canonical
+   * writer never writes a separator row (PART 11 §6h, carve#4980); only the
+   * preservation mode keeps an authored one.
    *
-   * A colspan cell is always written plain (`| < |`) and absorbs into the
-   * `|=` header on its left, so a head row with spans keeps the native form
-   * (`|= Engine | < |= Timing |`). Only two shapes need a generated separator
-   * (carve#4974 ruling A): a placeholder with no origin in the row (any `^`, or
-   * a `<` in column 0), and a placeholder carrying an alignment, which a plain
-   * `| < |` cannot spell.
+   * A header-kind placeholder keeps its `=` (`|= ^ |`, `|= < |`).
    */
   private renderTable(node: Table, ctx: CarveContext): string {
     const rows: string[] = []
@@ -4597,7 +4607,7 @@ class CarveRenderSession {
       throw new SourceUnspellableError('table', 'separatorWidths would promote non-header cells', node)
     }
     const authored = this.preserveTableSeparators ? authoredSeparator(node) : undefined
-    const needsDelimiter = authored !== undefined || tableNeedsDelimiterHeader(node)
+    const needsDelimiter = authored !== undefined
     let separator = needsDelimiter
       ? authored ?? `|${first!.cells.map(cell => {
         const left = cell.align === 'left' || cell.align === 'center' ? ':' : ''
@@ -4730,11 +4740,12 @@ class CarveRenderSession {
     // With a cell attribute the block stays GLUED to the pipe, which is where the
     // grammar puts it, and the space goes between it and the marker.
     const spanMarker = cell.span === 'rowspan' ? '^' : '<'
+    // A separator colon already spells the horizontal axis.
+    const symbols = cellAlignmentSymbols(alignIsColonSpelled ? undefined : cell.align, cell.valign)
     if (cell.span === 'rowspan' || cell.span === 'colspan') {
-      return padCell(attrs, spanMarker)
+      const kind = cell.header && markHeader ? '=' : ''
+      return padCell(`${kind}${attrs ? attrs : cellAttributeBlock(symbols, '')}`, spanMarker)
     }
-    const align = alignIsColonSpelled ? '' : alignMarker(cell.align)
-    const valign = cell.valign === 'top' ? '^' : cell.valign === 'middle' ? '~' : cell.valign === 'bottom' ? 'v' : ''
     // MARKER RUN FIRST, THEN THE BLOCK. The grammar binds a cell's attributes
     // after the kind marker and after the alignment marker, so `|={.x} h |` is
     // an attributed header cell. Writing the block ahead of the markers instead
@@ -4747,13 +4758,8 @@ class CarveRenderSession {
       const content = cell.blocks === undefined
         ? this.renderInlines(cell.children ?? [], ctx)
         : this.renderInlines(inlineContentOfCellBlocks(cell.blocks), ctx).replace(/\\*\r?\n/g, ' ')
-      const empty = trimCellPadding(content) === ''
       const kind = cell.header && markHeader ? '=' : ''
-      // `|=< |` is an empty left-aligned header; only an unmarked `|< |` reads as a span.
-      const writtenAlign = empty && align === '<' && !kind ? '' : align
-      const writtenValign = empty && valign === '^' ? '' : valign
-      const writtenInherited = !writtenAlign && writtenValign ? '?' : ''
-      const prefix = `${kind}${writtenAlign}${writtenInherited}${writtenValign}${attrs}`
+      const prefix = `${kind}${cellAttributeBlock(symbols, attrs)}`
       const paddedContent = !cell.header && content.startsWith('\\= ') ? content.slice(1) : content
       return padCell(prefix, escapeSpanMarkerPayload(paddedContent, prefix))
     } finally {

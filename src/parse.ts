@@ -37,6 +37,7 @@ export {
   parseAttrs,
   rawBracketRunCloses,
   rawImageBracketRunCloses,
+  readBracedCellPrefix,
   readCellAttributeBlock,
   scanCellMarkerRun,
   rowAttrsFromLine,

@@ -132,14 +132,6 @@ export function preservesTableColumns(table: Table, attrs: Attrs | undefined): b
   })
 }
 
-export function tableNeedsDelimiterHeader(table: Table): boolean {
-  const first = table.rows[0]
-  if (!first?.cells.length || !first.cells.every(cell => cell.header)) return false
-  // carve#4974 ruling A: only an orphan placeholder or a placeholder carrying an
-  // alignment lacks a native spelling that keeps the tree.
-  return first.cells.some((cell, i) => cell.span === 'rowspan' || (cell.span === 'colspan' && (i === 0 || cell.align !== undefined)))
-}
-
 /** Write recorded dash counts and header alignment colons ([CARVE-P11-066]).
  * Entry count controls separator width. Invalid unvalidated widths are omitted;
  * the caller refuses valid widths that would promote non-header cells.

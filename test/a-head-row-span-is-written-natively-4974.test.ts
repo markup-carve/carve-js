@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
 
-// carve#4974 ruling A: fmt writes a separator row only for a placeholder with no
-// origin in the head row (a `^`, or a `<` in column 0) or one carrying an alignment.
+// carve#4980 stage 1 replaced carve#4974 ruling A: fmt never writes a separator row.
 // A placeholder's `header` flag follows its spelling, so the tree check ignores it.
 const strip = (key: string, value: unknown): unknown => {
   if (key === 'pos' || key === 'separatorWidths') return undefined
@@ -14,13 +13,13 @@ const separatorRow = /^(?:[> ]*|\s*)\|[-:|]+\|$/m
 
 describe('a head row with spans is written with native |= cells', () => {
   it('writes a real cell after a header span natively', () => {
-    expect(carveToCarve('| A | < | B |\n|---|---|:--|\n| 1 | 2 | 3 |\n')).toBe('|= A | < |=< B |\n| 1 | 2 | 3 |\n')
+    expect(carveToCarve('| A | < | B |\n|---|---|:--|\n| 1 | 2 | 3 |\n')).toBe('|= A |= < |={<} B |\n| 1 | 2 | 3 |\n')
   })
 
-  it('keeps the separator for an aligned covered placeholder', () => {
+  it('writes an aligned covered placeholder natively', () => {
     const source = '| A | < |\n|---|:--|\n| 1 | 2 |\n'
     const once = carveToCarve(source)
-    expect(once).toMatch(separatorRow)
+    expect(once).toBe('|= A |={<} < |\n| 1 | 2 |\n')
     expect(carveToHtml(once)).toBe(carveToHtml(source))
   })
 
@@ -45,10 +44,9 @@ describe('a head row with spans is written with native |= cells', () => {
             separator.push(colons[x % 4]!); x = Math.floor(x / 4)
           }
           const source = wrap(`| ${head.join(' | ')} |\n|${separator.join('|')}|\n| ${head.map((_, i) => `v${i}`).join(' | ')} |\n`)
-          const ruled = head.includes('^') || head[0] === '<' || head.some((cell, i) => cell === '<' && separator[i] !== '---')
           const once = carveToCarve(source)
           const label = `variant ${count}: ${JSON.stringify(source)}`
-          expect(separatorRow.test(once), label).toBe(ruled)
+          expect(separatorRow.test(once), label).toBe(false)
           expect(carveToHtml(once), label).toBe(carveToHtml(source))
           expect(tree(once), label).toBe(tree(source))
           expect(carveToCarve(once), label).toBe(once)

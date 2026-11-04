@@ -14,7 +14,7 @@ import { carveToCarve, carveToHtml } from '../src/index.js'
 describe('fmt keeps a lone span marker padded', () => {
   it('a colspan marker is not glued to the pipe', () => {
     const src = '| < | b |\n|---|---|\n| c | d |\n'
-    expect(carveToCarve(src)).toBe('| < | b |\n|---|---|\n| c | d |\n')
+    expect(carveToCarve(src)).toBe('|= < |= b |\n| c | d |\n')
   })
 
   it('a rowspan marker is not glued either', () => {

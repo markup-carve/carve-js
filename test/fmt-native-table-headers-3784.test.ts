@@ -25,9 +25,9 @@ describe('fmt writes native table headers (#3784)', () => {
 
   it.each([
     ['---', '|= H0 |'],
-    [':---', '|=< H0 |'],
-    ['---:', '|=> H0 |'],
-    [':---:', '|=~ H0 |'],
+    [':---', '|={<} H0 |'],
+    ['---:', '|={>} H0 |'],
+    [':---:', '|={~} H0 |'],
   ])('carries separator alignment %s onto the header', (separator, header) => {
     const input = source([separator], ['| data |'])
     const output = carveToCarve(input)
