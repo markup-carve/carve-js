@@ -753,19 +753,19 @@
   },
   {
     "source": ": `A\n  Civil. text`",
-    "html": "<dl>\n<dt><code>A\nCivil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
+    "html": "<dl>\n<dt><code>A Civil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
   },
   {
     "source": ": `A\r\n  Civil. text`",
-    "html": "<dl>\n<dt><code>A\nCivil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
+    "html": "<dl>\n<dt><code>A Civil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
   },
   {
     "source": "before\n\n: `A\n  Civil. text`",
-    "html": "<p>before</p>\n<dl>\n<dt><code>A\nCivil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
+    "html": "<p>before</p>\n<dl>\n<dt><code>A Civil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
   },
   {
     "source": "before\r\n\r\n: `A\r\n  Civil. text`",
-    "html": "<p>before</p>\n<dl>\n<dt><code>A\nCivil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
+    "html": "<p>before</p>\n<dl>\n<dt><code>A Civil. text</code></dt>\n<dd>\n</dd>\n</dl>\n"
   },
   {
     "source": ": `A & <B>\n  : C`",

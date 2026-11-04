@@ -1,10 +1,4 @@
 {
-  "djot-definition-boundaries.test.ts": {
-    "empty Djot definition terms and descriptions preserve Native structure": "#3921"
-  },
-  "djot-empty-definitions.test.ts": {
-    "empty Djot definition terms and descriptions preserve Native structure": "#3921"
-  },
   "render-carve.test.ts": {
     "renderCarve corpus > 187-a-comment-fence-is-a-comment-at-any-column-too: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995",
     "renderCarve corpus > 192-a-comment-fence-under-a-nested-item-does-not-close-it-either: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995"
