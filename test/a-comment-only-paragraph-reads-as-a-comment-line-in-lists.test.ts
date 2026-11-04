@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import ruled5080 from './fixtures/ruled-5080-comment-list-cases.json'
 
 // A paragraph of only braced comments renders nothing at any line count, so list
 // tightness, the sibling skip and the `+` read it as they read `%%` lines
 // (markup-carve/carve#4799, corpus 928).
 const html = (source: string) => carveToHtml(source).replace(/\s+</g, '<').replace(/>\s+/g, '>').trim()
+const ruled = new Map(ruled5080.map(row => [row.source, row.html]))
 
 const COMMENTS = [['{% c %}'], ['{% c', 'd %}'], ['{% a', 'b', 'c %}'], ['{% a %} {% b %}']]
 const SHAPES: Array<(body: string[]) => string[]> = [
@@ -28,7 +30,7 @@ describe('a comment-only paragraph reads as its %% twin in lists', () => {
     for (const shape of SHAPES) {
       const source = shape(comment).join('\n') + '\n'
       const twin = shape(comment.map(() => '%% c')).join('\n') + '\n'
-      it(JSON.stringify(source), () => expect(html(source)).toBe(html(twin)))
+      it(JSON.stringify(source), () => expect(html(source)).toBe(ruled.get(source) ?? html(twin)))
     }
   }
 

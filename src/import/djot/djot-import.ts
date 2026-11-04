@@ -1134,14 +1134,14 @@ function imageQuoteLayout(source: string, omitQuoteDelimiters: boolean): string 
         onComment: (start, end) => comments.set(start, end),
       })
       for (const [start, end] of [...comments].reverse()) {
-        const attrs = readAttributes(label, start)
+        const attrs = readAttributes(label, start, false, false, true, false, true)
         if (attrs && attrs.source !== '{}') continue
         label = label.slice(0, start) + '{%%}' + label.slice(attrs?.end ?? end)
       }
       const mask = maskDjotCodeAndDestinations(label).split('')
       for (let i = 0; i < label.length; i++) {
         if (mask[i] !== '{' || isDjotEscaped(label, i)) continue
-        const attrs = readAttributes(label, i)
+        const attrs = readAttributes(label, i, false, false, true, false, true)
         if (!attrs) continue
         if (attrs.source !== '{}') for (let at = i; at < attrs.end; at++) if (mask[at] !== '\n') mask[at] = ' '
         i = attrs.end - 1
@@ -1289,7 +1289,71 @@ function collapseLiteralNestedImages(source: string): string {
 /** Convert a Djot document to Carve source. */
 export function djotToCarve(djot: string): string {
   resetParagraphContext()
-  try { return spellEmptyItemPlaceholders(convertDjotInput(recoverDjotAttributes(replaceLoneSurrogates(djot)).source)) } finally { resetParagraphContext() }
+  try {
+    const protectedRuns = protectBlockBraceRuns(replaceLoneSurrogates(djot))
+    return protectedRuns.restore(spellEmptyItemPlaceholders(convertDjotInput(recoverDjotAttributes(protectedRuns.source).source)))
+  } finally { resetParagraphContext() }
+}
+
+/** Preserve block brace runs verbatim while importing their surrounding blocks. */
+function protectBlockBraceRuns(source: string): { source: string; restore: (output: string) => string } {
+  if (!source.includes('{') || !source.includes('\n')) return { source, restore: output => output }
+  const lines = source.split('\n')
+  const insideImageLabel: boolean[] = []
+  let labelDepth = 0
+  for (const line of lines) {
+    insideImageLabel.push(labelDepth > 0)
+    for (let at = 0; at < line.length; at++) {
+      if (line[at] === '\\') { at++; continue }
+      if (labelDepth > 0) {
+        if (line[at] === '[') labelDepth++
+        else if (line[at] === ']') labelDepth--
+      } else if (line[at] === '!' && line[at + 1] === '[') { labelDepth = 1; at++ }
+    }
+  }
+  const outputLines: string[] = []
+  const values: string[] = []
+  const tokens: string[] = []
+  const prefixes: string[] = []
+  const insertedBlanks: boolean[] = []
+  const prefix = `DJOTBRACELITERAL${freeMarkerSerial(source, 'DJOTBRACELITERAL')}Q`
+  let offset = 0
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const at = djotStructuralPrefixEnd(line)
+    if (insideImageLabel[i]) { outputLines.push(line); offset += line.length + 1; continue }
+    if (line[at] !== '{' || line[at + 1] === '%') { outputLines.push(line); offset += line.length + 1; continue }
+    const start = offset + at
+    const attributes = readAttributes(source, start, false, false, true, false, false)
+    if (!attributes || !source.slice(start, attributes.end).includes('\n') || continuesParagraph(source, start)) { outputLines.push(line); offset += line.length + 1; continue }
+    const endLine = i + source.slice(start, attributes.end).split('\n').length - 1
+    // A refused run passes through verbatim: the reader refuses it from the
+    // same columns Djot does. An accepted run is converted like any other.
+    const paragraphEnd = endLine + 1
+    const runLines = lines.slice(i, paragraphEnd)
+    if (runLines.slice(1).every(next => djotStructuralPrefixEnd(next) > at)) {
+      outputLines.push(line)
+      offset += line.length + 1
+      continue
+    }
+    const token = `${prefix}${values.length}Z`
+    tokens.push(token)
+    values.push(lines.slice(i, paragraphEnd).join('\n').slice(at))
+    prefixes.push(line.slice(0, at))
+    insertedBlanks.push(i > 0 && lines[i - 1]!.trim() !== '')
+    if (insertedBlanks.at(-1)) outputLines.push('')
+    outputLines.push(line.slice(0, at) + token)
+    for (let j = i; j < paragraphEnd; j++) offset += lines[j]!.length + 1
+    i = paragraphEnd - 1
+  }
+  if (!values.length) return { source, restore: output => output }
+  return { source: outputLines.join('\n'), restore: output => {
+    for (let n = 0; n < values.length; n++) {
+      if (insertedBlanks[n]) output = output.replace(`\n\n${prefixes[n]}${tokens[n]}`, `\n${prefixes[n]}${tokens[n]}`)
+      output = output.replaceAll(tokens[n]!, values[n]!)
+    }
+    return output
+  } }
 }
 
 function convertDjotInput(djot: string, preserveReferenceBreaks = false, omitQuoteDelimiters = false, nulShielded = false, skipHeadingTargets = false): string {

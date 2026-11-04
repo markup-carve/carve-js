@@ -1402,6 +1402,9 @@ export function ownLines(
   }
 
   function wrappedAttrRun(rest: string, depth: number, at: number): number | null {
+    let openerLine = lines[at]!
+    for (let q = 0; q < depth && isQuoteLine(indentCols(openerLine).rest); q++) openerLine = quoteRest(indentCols(openerLine).rest)
+    const openerColumn = indentCols(openerLine).col
     let collected = rest
     for (let j = at + 1; j < lines.length; j++) {
       let line: string | null = lines[j]!
@@ -1409,7 +1412,7 @@ export function ownLines(
         const quoted: string = indentCols(line).rest
         line = isQuoteLine(quoted) ? quoteRest(quoted) : null
       }
-      if (line === null || line.trim() === '' || /^[ \t]*\{/.test(line)) return null
+      if (line === null || line.trim() === '' || indentCols(line).col <= openerColumn || /^[ \t]*\{/.test(line)) return null
       const closed = line.includes('}')
       if (!closed && !isValidAttrPayload(`\n${line}\n`)) return null
       collected += `\n${line}`

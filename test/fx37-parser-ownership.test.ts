@@ -29,7 +29,7 @@ describe('parser ownership across nested marker bodies', () => {
   })
 
   it('ends a nested item claim after a wrapped attribute closes', () => {
-    const html = carveToHtml('- - a\n   {c\n}\nx\n')
+    const html = carveToHtml('- - a\n   {c\n    }\nx\n')
     expect(html).toContain('<li>a</li>')
     expect(html).toContain('</ul>\n<p>x</p>')
   })

@@ -458,7 +458,16 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   // like.
   function attributeRun(line: LazyLine): boolean {
     const { content, state } = line
-    if (trackWrappedAttributeRun(state, content)) return endsOnBlock(state)
+    const column = line.atContentColumn
+      ? line.facts?.whitespace ?? indentColumns(content)
+      : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))
+    if (trackWrappedAttributeRun(state, content, column)) return endsOnBlock(state)
+    if (state.refusedBraceRun) {
+      state.refusedBraceRun = false
+      state.refusedBraceFollower = true
+      state.lazyFoldable = true
+      return true
+    }
     if (line.atContentColumn && state.divDepth > 0 && (content[0] === ' ' || content[0] === '\t') &&
         isBlockAttributeLine(content.trimStart())) return endsOnBlock(state)
     return false
@@ -467,6 +476,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   function blankLine(line: LazyLine): boolean {
     const { state } = line
     if (!isBlankLine(line.content)) return false
+    state.refusedBraceFollower = false
     delete state.termAfterComment
     if (state.descriptionHasTerm === false) state.inDefList = false
     // A blank is a separator; a `:  def` may follow it (djot allows a blank

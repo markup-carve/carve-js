@@ -75,12 +75,13 @@ describe('a quoted attribute value stops at the newline', () => {
     // `continuation` sits BETWEEN two tokens, never inside one, so this is
     // still a single block. A fix that keyed on "the payload contains a
     // newline" instead of on the quoted RUN breaks exactly here.
-    expect(carveToHtml('{.a\n.b}\n\nparagraph\n')).toBe('<p class="a b">paragraph</p>')
+    // carve#5080: the continuation sits past the opening `{`.
+    expect(carveToHtml('{.a\n .b}\n\nparagraph\n')).toBe('<p class="a b">paragraph</p>')
   })
 
   it('CONTROL a completed quoted value may be followed by a continuation', () => {
     // The value ends on its own line; the break after it is the separator.
-    expect(carveToHtml('{k="a"\n.b}\n\nparagraph\n')).toBe('<p k="a" class="b">paragraph</p>')
+    expect(carveToHtml('{k="a"\n .b}\n\nparagraph\n')).toBe('<p k="a" class="b">paragraph</p>')
   })
 
   it('CONTROL a BLANK line still ends the block rather than padding it', () => {

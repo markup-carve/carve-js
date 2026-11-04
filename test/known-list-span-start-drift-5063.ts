@@ -113,8 +113,6 @@ export const KNOWN_LIST_SPAN_START_DRIFT_5063: ReadonlySet<string> = new Set([
   "806-a-marker-folds-into-the-paragraph-a-first-block-plus-took: pos does not begin at the markup that opens \"list_item\" at $.children[1].items[0]: offset 9, expected 8 at its owner's content column",
   "81-paragraph-interruption-15: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[1]: offset 7, expected 6 at its owner's content column",
   "81-paragraph-interruption-15: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[1].items[0]: offset 7, expected 6 at its owner's content column",
-  "821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-2: pos does not begin at the markup that opens \"list\" at $.children[1]: offset 14, expected 12 at its owner's content column",
-  "821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-2: pos does not begin at the markup that opens \"list_item\" at $.children[1].items[0]: offset 14, expected 12 at its owner's content column",
   "821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-3: pos does not begin at the markup that opens \"list\" at $.children[0].children[1]: offset 20, expected 18 at its owner's content column",
   "821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-3: pos does not begin at the markup that opens \"list_item\" at $.children[0].children[1].items[0]: offset 20, expected 18 at its owner's content column",
   "821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column: pos does not begin at the markup that opens \"list\" at $.children[1]: offset 12, expected 10 at its owner's content column",

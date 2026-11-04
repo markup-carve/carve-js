@@ -1,0 +1,58 @@
+[
+  {
+    "source": "- a\n\n  {.c\n}\n- s\n",
+    "html": "<ul><li><p>a</p><p>{.c}</p></li><li><p>s</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {.c\n  }\n- s\n",
+    "html": "<ul><li><p>a</p><p>{.c}</p></li><li><p>s</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {.c\n  .d}\n- s\n",
+    "html": "<ul><li><p>a</p><p>{.c.d}</p></li><li><p>s</p></li></ul>"
+  },
+  {
+    "source": "1. a\n\n   {.c\n}\n2. s\n",
+    "html": "<ol><li><p>a</p><p>{.c}</p></li><li><p>s</p></li></ol>"
+  },
+  {
+    "source": "> - a\n>\n>   {.c\n> }\n> - s\n",
+    "html": "<blockquote><ul><li><p>a</p><p>{.c}</p></li><li><p>s</p></li></ul></blockquote>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n}\npara\n",
+    "html": "<ul><li>a<ul><li>b{.c}para</li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n.d}\npara\n",
+    "html": "<ul><li>a<ul><li>b{.c.d}para</li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n\n    {.c\n}\npara\n",
+    "html": "<ul><li>a<ul><li><p>b</p><p>{.c}para</p></li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n}\n- s\n",
+    "html": "<ul><li>a<ul><li>b{.c}</li></ul></li><li>s</li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n\n    {.c\n    }\n  - s\n",
+    "html": "<ul><li>a<ul><li><p>b</p><p>{.c}</p></li><li><p>s</p></li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n }\npara\n",
+    "html": "<ul><li>a<ul><li>b{.c}para</li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n  }\npara\n",
+    "html": "<ul><li>a<ul><li>b{.c}para</li></ul></li></ul>"
+  },
+  {
+    "source": "- a\n  - b\n    {.c\n  .d}\npara\n",
+    "html": "<ul><li>a<ul><li>b{.c.d}para</li></ul></li></ul>"
+  },
+  {
+    "source": "1. a\n   - b\n     {.c\n    }\n  para\n",
+    "html": "<ol><li>a<ul><li>b{.c}para</li></ul></li></ol>"
+  }
+]

@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml, lintCarve } from '../src/index.js'
+import ruled5080 from './fixtures/ruled-5080-wrapped-list-cases.json'
 
 const flat = (html: string): string => html.split('\n').map((line) => line.trim()).join('')
+const ruled = new Map(ruled5080.map(row => [row.source, row.html]))
 
 // markup-carve/carve#3421 rulings 1 and 3 (22 October), which carve-js already followed.
 describe('ruled readings of carve#3421 that carve-js already gave', () => {
-  it('reads a wrapped attribute whose closer sits below the column like the one-line form', () => {
+  // carve#5080 replaced this reading: a closer at or below the `{` column refuses the run.
+  it('reads a wrapped attribute whose closer sits below the column as paragraph text', () => {
     const source = '- a\n  {.c\n}\npara\n'
-    expect(flat(carveToHtml(source))).toBe(flat(carveToHtml('- a\n  {.c}\npara\n')))
-    expect(flat(carveToHtml(source))).toBe('<ul><li>a</li></ul><p>para</p>')
-    expect(lintCarve(source).map((warning) => warning.rule)).toContain('unattached-block-attribute')
+    expect(flat(carveToHtml(source))).toBe('<ul><li>a{.c}para</li></ul>')
+    expect(lintCarve(source).map((warning) => warning.rule)).not.toContain('unattached-block-attribute')
   })
 
   const hosted: Array<[string, string]> = [
@@ -102,7 +104,7 @@ describe('a dangling wrapped attribute after a blank line in an item', () => {
     it(`loosens ${JSON.stringify(source)} like the one-line form`, () => {
       const oneLine = source.replace(/\{\.c\n[ >]*(\.d)?\}/, (_, d: string | undefined) => `{.c${d ? ' .d' : ''}}`)
       expect(oneLine).not.toBe(source)
-      expect(flat(carveToHtml(source))).toBe(flat(carveToHtml(oneLine)))
+      expect(flat(carveToHtml(source))).toBe(ruled.get(source) ?? flat(carveToHtml(oneLine)))
       expect(flat(carveToHtml(source))).toContain('<li><p>')
     })
   }
@@ -125,7 +127,7 @@ describe('a wrapped attribute in a nested item closed below its column', () => {
     it(`reads ${JSON.stringify(source)} like the one-line form`, () => {
       const oneLine = source.replace(/\{\.c\n *(\.d)?\}/, (_, d: string | undefined) => `{.c${d ? ' .d' : ''}}`)
       expect(oneLine).not.toBe(source)
-      expect(flat(carveToHtml(source))).toBe(flat(carveToHtml(oneLine)))
+      expect(flat(carveToHtml(source))).toBe(ruled.get(source) ?? flat(carveToHtml(oneLine)))
     })
   }
 })

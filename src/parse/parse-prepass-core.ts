@@ -993,15 +993,26 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
   if (!/^\{/.test(firstLine ?? lexer.peek()!)) return null
   let collected = ''
   let count = 0
+  let openingColumn = 0
+  const columns = (value: string): number => {
+    let column = 0
+    for (const char of /^[ \t]*/.exec(value)![0]) column = char === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
+    return column
+  }
   for (;;) {
     const line = lexer.peek(count)
     if (line === undefined || (count > 0 && isBlankLine(line))) return null
     if (count > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count))) return null
+    if (count > 0 && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + count))) return null
+    if (count > 0 && columns(line) <= openingColumn) return null
     const closed = line.includes('}')
     // A continuation is a complete attribute fragment: quoted values cannot
     // cross a newline. Reject a later opener before re-reading its whole tail.
     if (count > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return null
     collected += (count === 0 ? '' : '\n') + line
+    // A glued brace begins a new run; its opening column is measured on the
+    // source line, including any padding before that brace.
+    if (count === 0) openingColumn = columns(firstLine ?? line)
     count++
     const attrs = parseBlockAttributeRun(collected)
     if (attrs) return { attrs, count }

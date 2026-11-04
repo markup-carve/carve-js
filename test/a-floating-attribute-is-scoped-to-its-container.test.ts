@@ -40,7 +40,7 @@ describe('a floating attribute is scoped to the container that holds it', () => 
   })
 
   it('a WRAPPED block is one block, and ends a definition body', () => {
-    expect(carveToHtml(':: t\n:  d\n   {.k\n   #x}\ntail\n')).toBe(
+    expect(carveToHtml(':: t\n:  d\n   {.k\n    #x}\ntail\n')).toBe(
       '<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>tail</p>',
     )
     // The single-line spelling of the same document, which already answered
@@ -51,13 +51,13 @@ describe('a floating attribute is scoped to the container that holds it', () => 
   })
 
   it('a WRAPPED block ends an item and a quote the same way', () => {
-    expect(carveToHtml('- a\n  {.k\n  #x}\ntail\n')).toBe(
+    expect(carveToHtml('- a\n  {.k\n   #x}\ntail\n')).toBe(
       '<ul>\n  <li>a</li>\n</ul>\n<p>tail</p>',
     )
     // carve-rs still attaches this one FORWARD out of the quote, which is the
     // answer its own single-line reading rejects; §15 A5 makes one block one
     // block however many lines it takes, so the two spellings agree here.
-    expect(norm(carveToHtml('> q\n> {.k\n> #x}\ntail\n'))).toBe(
+    expect(norm(carveToHtml('> q\n> {.k\n>  #x}\ntail\n'))).toBe(
       norm(carveToHtml('> q\n> {.k}\ntail\n')),
     )
   })

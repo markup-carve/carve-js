@@ -211,6 +211,11 @@ export interface ItemLazyState {
   // open - otherwise `{.k` / `#x}` reads as two lines of prose and the container
   // keeps a paragraph nothing opened (markup-carve/carve#1281).
   attrRun: string | null
+  attrColumn?: number
+  attrShallow?: boolean
+  refusedBraceRun?: boolean
+  refusedBraceFollower?: boolean
+  attrOwnerColumn?: number
   /**
    * The leading run a container INSIDE the item currently owns, or -1.
    *

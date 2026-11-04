@@ -48,7 +48,7 @@ describe('definition-like lines stay in their paragraph', () => {
     expect(html(`* : |\n${indent}[f]: t\n`)).toBe('<ul>\n  <li>: |</li>\n</ul>')
   })
 
-  it.each(['{.a}', '{.a\n.b}'])('lets valid attributes end prose (%j)', (attributes) => {
+  it.each(['{.a}', '{.a\n .b}'])('lets valid attributes end prose (%j)', (attributes) => {
     const classes = attributes.includes('.b') ? 'a b' : 'a'
     expect(html(`[][d]\n${attributes}\n- [d]: u\n`)).toBe(
       `<p><a href="u"></a></p>\n<ul class="${classes}">\n  <li></li>\n</ul>`,

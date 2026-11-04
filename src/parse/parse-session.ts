@@ -1,4 +1,5 @@
 import { recordUnboundCaption } from './block/caption-fallback.js'
+import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import type { Comment } from '../ast.js'
 import type {
@@ -147,6 +148,7 @@ import {
   stripLazyFrame,
   stripPositions,
   probeBlockAttributes,
+  parseBlockAttributeRun,
   subLexer,
   taskMatch,
   toCodepointPositions,
@@ -247,6 +249,59 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
     count += run.count
   }
   return count
+}
+
+/** Whether the comment-only paragraph at the cursor sits on blank lines between two items of a list. */
+function commentBetweenListSiblings(lexer: Lexer): boolean {
+  const end = commentOnlyParagraphEnd((offset) => lexer.peek(offset), 0)
+  if (end <= 1 || !isBlankLine(lexer.peek(end))) return false
+  const column = indentColumns(lexer.peek()!)
+  let next = end
+  while (lexer.peek(next) !== undefined && isBlankLine(lexer.peek(next))) next++
+  const after = lexer.peek(next)
+  if (after === undefined || indentColumns(after) > column || !isListMarkerLine(after.trimStart())) return false
+  let back = lexer.pos - 1
+  if (back < 0 || !isBlankLine(lexer.lineAt(back))) return false
+  while (back >= 0 && isBlankLine(lexer.lineAt(back))) back--
+  const before = back >= 0 ? lexer.lineAt(back) : undefined
+  return before !== undefined && (indentColumns(before) > column || isListMarkerLine(before.trimStart()))
+}
+
+/** A block brace run refused only because a continuation is too shallow. */
+function refusedBraceLines(lexer: Lexer): number {
+  const first = lexer.peek()
+  if (!first?.trimStart().startsWith('{')) return 0
+  // Between a container's siblings a comment-only paragraph stays an invisible line (CARVE-P9-013).
+  // A comment-only paragraph between two items of one list is an invisible line (CARVE-P9-013).
+  if (first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
+  const openerColumn = indentColumns(first)
+  const comment = first.trimStart().startsWith('{%')
+  const lines: string[] = []
+  let shallow = false
+  let quoted: string | null = null
+  let depth = 0
+  for (let n = 0; ; n++) {
+    const line = lexer.peek(n)
+    if (line === undefined || isBlankLine(line)) return 0
+    if (n > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) return 0
+    if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
+    if (n > 0 && (indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)))) shallow = true
+    lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
+    if (comment) {
+      if (line.includes('%}')) return shallow ? n + 1 : 0
+      continue
+    }
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]!
+      if (quoted) {
+        if (ch === '\\') i++
+        else if (ch === quoted) quoted = null
+      } else if (ch === '"' || ch === "'") quoted = ch
+      else if (ch === '{') depth++
+      else if (ch === '}') depth--
+    }
+    if (depth <= 0) return shallow && parseBlockAttributeRun(lines.join('\n')) !== null ? n + 1 : 0
+  }
 }
 
 /** Whether these lines leave a code fence open at their end. */
@@ -2582,6 +2637,22 @@ export class ParseSession extends InlineParseSession {
    */
   private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     const lines: string[] = []
+    const literalLines: Array<[number, number, boolean]> = []
+    let afterRefusal = false
+    let refusedFence: RegExp | null = null
+    let openInlineCode = 0
+    const scanInlineCode = (line: string): void => {
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '\\') { i++; continue }
+        if (line[i] !== '`') continue
+        let end = i + 1
+        while (line[end] === '`') end++
+        const width = end - i
+        if (openInlineCode === 0) openInlineCode = width
+        else if (openInlineCode === width) openInlineCode = 0
+        i = end - 1
+      }
+    }
     let imageCaptionSlot = false
     let captionAtContentColumn = false
     let mathCaptionChecked = false
@@ -2599,6 +2670,30 @@ export class ParseSession extends InlineParseSession {
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
+      let openedRefusedFence = false
+      if (afterRefusal && refusedFence === null) {
+        const opener = /^[ \t]*(`{3,}|~{3,})[ \t]*$/.exec(ln)?.[1]
+        if (opener) {
+          const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length},}[ \\t]*$`)
+          for (let n = 1; lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!); n++) {
+            if (closer.test(lexer.peek(n)!)) { refusedFence = closer; openedRefusedFence = true; break }
+          }
+        }
+      }
+      // A braced comment inside an already-open paragraph is inline content.
+      // Only one starting a block-position paragraph can be a refused block run.
+      const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+      const inlineCommentContext = lexer.hostBody === 'list' ||
+        lexer.hostBody === null && !/^[ \t]*>/.test(sourceLine)
+      const refusedLines = flattened || openInlineCode !== 0 || lines.length > 0 && ln.trimStart().startsWith('{%') && inlineCommentContext
+        ? 0 : refusedBraceLines(lexer)
+      if (refusedLines > 0) {
+        const start = lines.length
+        for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
+        literalLines.push([start, lines.length, ln.trimStart().startsWith('{%')])
+        afterRefusal = true
+        continue
+      }
       if (codeInclude && lines.length > 0) break
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
@@ -2633,7 +2728,7 @@ export class ParseSession extends InlineParseSession {
       // looping forever on the same line.
       if (
         !flattened &&
-        lines.length > 0 &&
+        lines.length > 0 && !afterRefusal &&
         !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
         ((((!ln.startsWith(LAZY_FRAME) || (lexer.hostBody === 'list' &&
           !RE_FOOTNOTE_DEF.test(stripLazyFrame(ln)))) && (lexer.consumesHostedLinkDefs === 'all' ||
@@ -2652,6 +2747,12 @@ export class ParseSession extends InlineParseSession {
       // where a framed line becomes text, so it comes off here.
       const received = stripLazyFrame(ln)
       lines.push(received)
+      scanInlineCode(received)
+      if (openedRefusedFence) afterRefusal = true
+      else if (refusedFence !== null) {
+        if (refusedFence.test(received)) { refusedFence = null; afterRefusal = false }
+        else afterRefusal = true
+      } else afterRefusal = false
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
@@ -2688,6 +2789,69 @@ export class ParseSession extends InlineParseSession {
         startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
+    }
+    if (literalLines.length > 0) {
+      const normalizedLines = text.split('\n')
+      const offsets = [0]
+      for (const line of normalizedLines) offsets.push(offsets.at(-1)! + line.length + 1)
+      const positionAt = (offset: number): { line: number; column: number; offset: number } => {
+        let line = 0
+        while (line + 1 < offsets.length && offsets[line + 1]! <= offset) line++
+        const point = anchors?.[line] ?? {
+          offset: lexer.lineOffset(startLineIndex + line) + (line === 0 ? firstLead : 0),
+          column: lexer.lineStartColumn(startLineIndex + line) + (line === 0 ? firstLead : 0),
+          line: lexer.lineNumber(startLineIndex + line),
+        }
+        const delta = [...text.slice(offsets[line]!, offset)].length
+        return { line: point.line, column: point.column + delta, offset: point.offset + delta }
+      }
+      const parseSegment = (from: number, to: number): Paragraph['children'] => {
+        const segment = text.slice(from, to)
+        const start = positionAt(from)
+        const lineAnchors = [start]
+        for (let i = 0; i < segment.length; i++) if (segment[i] === '\n') lineAnchors.push(positionAt(from + i + 1))
+        return this.parseInline(segment, lexer.abbrDefs, lexer.linkDefs, {
+          anchored: lexer.hasDocumentOffsets,
+          baseOffset: start.offset,
+          startLine: start.line,
+          startColumn: start.column,
+          ...(lineAnchors.length > 1 ? { lineAnchors } : {}),
+        })
+      }
+      let at = 0
+      paragraphNode.children = []
+      const addLiteralText = (from: number, to: number): void => {
+        if (from === to) return
+        const startPosition = positionAt(from), endPosition = positionAt(to)
+        paragraphNode.children.push({ type: 'text', value: text.slice(from, to),
+          ...(lexer.hasDocumentOffsets ? { pos: {
+            startLine: startPosition.line, startColumn: startPosition.column, startOffset: startPosition.offset,
+            endLine: endPosition.line, endColumn: endPosition.column, endOffset: endPosition.offset,
+          } } : {}),
+        })
+      }
+      for (const [start, end, comment] of literalLines) {
+        const from = offsets[start]!
+        const to = offsets[end]! - 1
+        if (from > at) paragraphNode.children.push(...parseSegment(at, from))
+        if (comment) {
+          let lineStart = from
+          for (let i = from; i < to; i++) if (text[i] === '\n') {
+            addLiteralText(lineStart, i)
+            const before = positionAt(i), after = positionAt(i + 1)
+            paragraphNode.children.push({ type: 'soft_break',
+              ...(lexer.hasDocumentOffsets ? { pos: {
+                startLine: before.line, startColumn: before.column, startOffset: before.offset,
+                endLine: after.line, endColumn: after.column, endOffset: after.offset,
+              } } : {}),
+            })
+            lineStart = i + 1
+          }
+          addLiteralText(lineStart, to)
+        } else addLiteralText(from, to)
+        at = to
+      }
+      if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
     }
     if (codeIncludeLiteral) {
       const startOffset = lexer.lineOffset(startLineIndex) + firstLead

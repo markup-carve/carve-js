@@ -268,7 +268,6 @@ const KNOWN_LOSSES = new Set<string>([
   '811-a-lazy-line-after-a-narrower-list-in-a-note-folds-into-its-item.crv',
   '815-a-line-below-an-empty-div-after-a-first-block-plus-is-not-lazy-4.crv',
   '815-a-line-below-an-empty-div-after-a-first-block-plus-is-not-lazy.crv',
-  '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-2.crv',
   '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column-3.crv',
   '821-an-attribute-run-after-a-lone-plus-leads-a-sublist-at-the-content-column.crv',
   '826-a-comment-or-link-definition-at-a-body-s-column-refuses-a-first-block-plus-3.crv',

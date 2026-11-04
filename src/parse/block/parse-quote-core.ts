@@ -633,7 +633,12 @@ export function trackQuoteHostFence(
   }
   const b = openQuoteHosts(q, paragraph)
   if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
-    const closed = trackWrappedAttributeRun(state, b.inner)
+    const closed = trackWrappedAttributeRun(state, b.inner, b.at)
+    if (state.refusedBraceRun) {
+      state.refusedBraceRun = false
+      state.mode = { kind: 'paragraph' }
+      return true
+    }
     if (closed) {
       closeBlockQuoteParagraph(state)
       return true
@@ -673,6 +678,9 @@ export interface BlockQuoteLazyState {
    * copy of `ItemLazyState.attrRun`, and read the same way.
    */
   attrRun: string | null
+  attrColumn?: number
+  attrShallow?: boolean
+  refusedBraceRun?: boolean
   /**
    * Widths of the colon fences open in this quote, innermost last, so a bare
    * `:::` run reads as the innermost container's closer only on an EXACT width
@@ -898,9 +906,17 @@ export function classifyQuotedLine(
   // than instead of them. See `trackItemLazyState` for the whole of the reason;
   // THE CONTAINER KIND IS NOT A PARAMETER (carve#920), so the quote reads it the
   // same way.
-  if (!state.hostAttrTracked && trackWrappedAttributeRun(state, content)) {
-    closeBlockQuoteParagraph(state)
-    return null
+  if (!state.hostAttrTracked) {
+    const closed = trackWrappedAttributeRun(state, content)
+    if (state.refusedBraceRun) {
+      state.refusedBraceRun = false
+      state.mode = { kind: 'paragraph' }
+      return null
+    }
+    if (closed) {
+      closeBlockQuoteParagraph(state)
+      return null
+    }
   }
   if (isBlankLine(content)) {
     closeBlockQuoteParagraph(state)
@@ -1487,16 +1503,25 @@ export function continueWrappedAttributeBlock(
  * both have.
  */
 export function trackWrappedAttributeRun(
-  state: { attrRun: string | null },
+  state: { attrRun: string | null; attrColumn?: number; attrShallow?: boolean; refusedBraceRun?: boolean },
   content: string,
+  column = indentColumns(content),
 ): boolean {
   if (state.attrRun !== null) {
+    if (column <= (state.attrColumn ?? 0)) state.attrShallow = true
     const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content)
     state.attrRun = verdict === 'open' ? run : null
-
-    return verdict === 'attributes'
+    if (verdict !== 'open') {
+      state.refusedBraceRun = state.attrShallow === true && verdict === 'attributes'
+      state.attrShallow = false
+    }
+    return verdict === 'attributes' && state.refusedBraceRun !== true
   }
-  if (opensWrappedAttributeBlock(content)) state.attrRun = content
+  if (opensWrappedAttributeBlock(content)) {
+    state.attrRun = content
+    state.attrColumn = column
+    state.attrShallow = false
+  }
 
   return false
 }
