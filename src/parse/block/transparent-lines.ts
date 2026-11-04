@@ -237,19 +237,27 @@ function candidateBlocks<T extends object>(blocks: readonly T[], offset: number)
   return out.reverse()
 }
 
-/** `quotes` counts the quotes between `blocks` and the paragraph. */
-function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[]; quotes: number } | null {
+/** The content column of a list item, where a quote it holds puts its marker. */
+function itemContentColumn(item: ListItem): number | undefined {
+  return item.children[0]?.pos?.startColumn
+}
+
+/** `quotes` holds, per quote between `blocks` and the paragraph, the least column of its marker (outermost first). */
+function containingParagraph(blocks: BlockNode[], offset: number, base?: number):
+  { paragraph: Paragraph; siblings: BlockNode[]; quotes: Array<number | undefined> } | null {
   for (const block of candidateBlocks(blocks, offset)) {
     const span = spanOf(block)
     if (span && span.startOffset <= offset && offset < span.endOffset) {
-      if (block.type === 'paragraph') return { paragraph: block, siblings: blocks, quotes: 0 }
-      const children = block.type === 'list' ? candidateItems(block.items, offset).map((index) => block.items[index]!.children) :
-        block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
+      if (block.type === 'paragraph') return { paragraph: block, siblings: blocks, quotes: [] }
+      type Scope = [BlockNode[], number | undefined]
+      const children: Scope[] = block.type === 'list' ?
+        candidateItems(block.items, offset).map((index): Scope => [block.items[index]!.children, itemContentColumn(block.items[index]!)]) :
+        block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions.map((definition): Scope => [definition, base])) :
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
-          [block.children as BlockNode[]] : []
-      for (const child of children) {
-        const match = containingParagraph(child, offset)
-        if (match) return block.type === 'block_quote' ? { ...match, quotes: match.quotes + 1 } : match
+          [[block.children as BlockNode[], block.type === 'block_quote' ? undefined : base]] : []
+      for (const [child, childBase] of children) {
+        const match = containingParagraph(child, offset, childBase)
+        if (match) return block.type === 'block_quote' ? { ...match, quotes: [base, ...match.quotes] } : match
       }
     }
   }
@@ -373,24 +381,30 @@ function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDe
 export function hydrateTransparentDefinitionGaps(document: Document): void {
   derivedSpans = new WeakMap()
   blockIndexes = new WeakMap()
-  const authoredSource = (block: Comment | AbbreviationDef, quoteDepth: number): string => {
+  // A quote marker goes at the content column of the item holding the quote, so the line stays in
+  // that item; otherwise right after the marker before it.
+  const authoredSource = (block: Comment | AbbreviationDef, quotes: ReadonlyArray<number | undefined>): string => {
     const column = block.pos?.startColumn ?? 1
-    const quoted = column > 1 ? quoteDepth : 0
-    return '> '.repeat(quoted) +
-      ' '.repeat(Math.max(0, column - 1 - 2 * quoted)) +
-        (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
-          `*[${block.abbr}]: ${block.expansion}`)
+    let source = ''
+    let next = 1
+    if (column > 1) for (const quote of quotes) {
+      const at = Math.max(quote ?? next, next)
+      source += ' '.repeat(at - next) + '> '
+      next = at + 2
+    }
+    return source + ' '.repeat(Math.max(0, column - next)) +
+      (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
+        `*[${block.abbr}]: ${block.expansion}`)
   }
-  const visit = (blocks: BlockNode[], quoteDepth: number, markerLine?: number): void => {
-    const rootDepth = quoteDepth
-    const pending: Array<{ block: BlockNode; quoteDepth: number; markerLine: number | undefined }> =
-      blocks.map((block) => ({ block, quoteDepth, markerLine }))
+  const visit = (blocks: BlockNode[], markerLine?: number): void => {
+    const pending: Array<{ block: BlockNode; quotes: Array<number | undefined>; base: number | undefined;
+      markerLine: number | undefined }> = blocks.map((block) => ({ block, quotes: [], base: undefined, markerLine }))
     for (let at = 0; at < pending.length; at++) {
-      const { block, quoteDepth, markerLine } = pending[at]!
+      const { block, quotes, base, markerLine } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
-        block.transparentSource = authoredSource(block, quoteDepth)
+        block.transparentSource = authoredSource(block, quotes)
         block.transparentOriginalValue = block.content
       }
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
@@ -399,7 +413,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset)
         // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
-        const source = authoredSource(block, match ? rootDepth + match.quotes : quoteDepth)
+        const source = authoredSource(block, match ? match.quotes : quotes)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -424,19 +438,20 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         }
       }
       if (block.type === 'list') for (const item of block.items)
-        for (const child of item.children) pending.push({ block: child, quoteDepth, markerLine: item.pos?.startLine })
+        for (const child of item.children) pending.push({ block: child, quotes, base: itemContentColumn(item), markerLine: item.pos?.startLine })
       else if (block.type === 'definition_list') for (const item of block.items)
         for (const [index, definition] of item.definitions.entries())
-          for (const child of definition) pending.push({ block: child, quoteDepth, markerLine: item.definitionLines?.[index] })
+          for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index] })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
         for (const child of block.children as BlockNode[]) pending.push({ block: child,
-          quoteDepth: quoteDepth + (block.type === 'block_quote' ? 1 : 0),
+          quotes: block.type === 'block_quote' ? [...quotes, base] : quotes,
+          base: block.type === 'block_quote' ? undefined : base,
           markerLine: block.type === 'block_quote' ? block.pos?.startLine : markerLine })
     }
   }
-  visit(document.children, 0)
+  visit(document.children)
   for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {}))
-    visit(blocks, 0, document.footnoteDefPos?.[label]?.startLine)
+    visit(blocks, document.footnoteDefPos?.[label]?.startLine)
 }
 
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {

@@ -84,6 +84,11 @@ function restoreTransparentLineColumns(source: string): string {
   }).join('\n')
 }
 
+/** Whether a transparent line is indented; inside a list, an indent behind its quotes counts too. */
+function indentedTransparentLine(source: string | undefined, inList: boolean): boolean {
+  return /^[ \t]+/.test(source ?? '') || inList && /^[ \t]+/.test((source ?? '').replace(/^(?:[ \t]*>[ ]?)+/, ''))
+}
+
 function transparentNodeSource(entry: { source: string; node: Comment | AbbreviationDef; originalValue: string }): string {
   const { node, source, originalValue } = entry
   const value = node.type === 'comment' ? node.content : `${node.abbr}\0${node.expansion}`
@@ -3542,7 +3547,7 @@ class CarveRenderSession {
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
                 (block.type === 'comment' && ((!this.canonicalTransparentLines ||
                   (block.transparentInParagraph || block.transparentInList || block.transparentInDefinitionList) &&
-                  !this.canonicalTrailingComments.has(block)) && /^[ \t]+/.test(block.transparentSource ?? '') ||
+                  !this.canonicalTrailingComments.has(block)) && indentedTransparentLine(block.transparentSource, ctx.listDepth > 0) ||
                   !block.block && ctx.quoteDepth > 0 &&
                   previousBlock.pos?.endLine !== undefined && block.pos?.startLine === previousBlock.pos.endLine + 1)))
           ) {
