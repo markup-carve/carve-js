@@ -1,0 +1,94 @@
+name: Ledger refresh
+
+# Two committed files record facts about main, not about a pull request:
+# test/fixtures/corpus-render-ledger.txt (carve-js's own md/txt/ansi digests)
+# and the stale declarations in test/conformance-pack-drift.json. PRs report
+# differences against them without failing; this job brings them back in line
+# with main after each merge, through one automation PR.
+#
+# The branch is pushed with GITHUB_TOKEN, which starts no workflow, so the job
+# dispatches ci.yml on the branch; its check runs land on the head commit,
+# which is what branch protection reads. The PR is opened with BUMP_TOKEN when
+# the repo has it, else GITHUB_TOKEN, which works only while the repo allows
+# GitHub Actions to create pull requests; otherwise the step fails and says so.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: ledger-refresh
+  cancel-in-progress: true
+
+env:
+  BRANCH: automation/render-ledger
+
+jobs:
+  refresh:
+    if: github.repository == 'markup-carve/carve-js'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Regenerate the render ledger
+        run: npm run ledger:render
+
+      - name: Prune stale pack drift declarations
+        run: npm run drift:prune
+
+      - name: Open, update or close the automation PR
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_TOKEN || github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          files="test/fixtures/corpus-render-ledger.txt test/conformance-pack-drift.json"
+          open_pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+
+          if git diff --quiet -- $files; then
+            echo "Ledger and drift file match main."
+            if [ -n "$open_pr" ]; then
+              gh pr close "$open_pr" --repo "$REPO" --delete-branch \
+                --comment "main already matches; closing."
+            fi
+            exit 0
+          fi
+
+          git diff --stat -- $files | tee -a "$GITHUB_STEP_SUMMARY"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$BRANCH"
+          git add -- $files
+          git commit -q -m "chore: refresh render ledger and pack drift for ${GITHUB_SHA::8}"
+          # The branch carries only this generated commit, rebuilt from main each run.
+          git push --force origin "$BRANCH"
+
+          if [ -z "$open_pr" ]; then
+            body="Regenerated after ${GITHUB_SHA} by ledger-refresh.yml (npm run ledger:render, npm run drift:prune). Generated files only."
+            if ! gh pr create --repo "$REPO" --base main --head "$BRANCH" \
+              --title "chore: refresh render ledger and pack drift" \
+              --body "$body" --label chore --label area:tooling; then
+              echo "::error::Pushed $BRANCH but could not open its PR. Add a BUMP_TOKEN secret to this repo, or allow GitHub Actions to create pull requests (Settings > Actions > General)."
+              exit 1
+            fi
+          fi
+
+          gh workflow run ci.yml --repo "$REPO" --ref "$BRANCH"
