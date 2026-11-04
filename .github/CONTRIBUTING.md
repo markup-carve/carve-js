@@ -99,6 +99,27 @@ missing from it fails the build and an entry naming no corpus pair fails it too.
 Implementing a feature therefore means adding its category to `IMPLEMENTED` as
 well as making the parser handle it.
 
+### Generated files a PR does not regenerate
+
+Two committed files are kept in line with `main` by
+`.github/workflows/ledger-refresh.yml`, which runs after every merge and opens an
+`automation/render-ledger` PR. Do not run their regeneration commands in a PR:
+two PRs that rewrite the same rows conflict with each other.
+
+- `test/fixtures/corpus-render-ledger.txt` holds digests of the Markdown,
+  plain-text and ANSI output of every corpus document. On a PR,
+  `test/corpus-render-ledger.test.ts` lists the rows your change moves in the
+  test log and the job summary and does not fail. Read the list to see which
+  documents you moved.
+- `test/conformance-pack-drift.json` declares the conformance pack cases this
+  engine renders differently from the spec model. A NEW difference is still a
+  failure: fix it, or declare its ids under the ticket for its cause in the same
+  PR. A declaration whose case now passes is stale; it is reported, and the
+  automation removes it after the merge.
+
+`npm run ledger:render` and `npm run drift:prune` are the commands the
+automation runs.
+
 ## Writing tests
 
 Test files are named for the behavior they pin, one sentence per file:
