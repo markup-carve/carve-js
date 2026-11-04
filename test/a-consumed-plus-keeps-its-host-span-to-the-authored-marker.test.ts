@@ -25,7 +25,6 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
   })
 
   it.each([
-    ['- +\n- b\n', [0, 3]],
     ['- a\n+\n', [0, 5]],
     ['> +\n', [0, 3]],
     [':: t\n: q\n+\n+\n', [5, 10]],
@@ -36,6 +35,13 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
     const doc = wire(source)
     const host = [...walk(doc)].find(([node]) => node.type !== 'document' && node.children?.some((child) => child.type === 'comment' && child.pos === undefined))
     expect(host?.[0].pos && [host[0].pos.startOffset, host[0].pos.endOffset]).toEqual([start, end])
+  })
+
+  // carve#5145: a list item whose body is only the `+` keeps no stand-in child either.
+  it('places an emptied list item from the source', () => {
+    const item = (wire('- +\n- b\n').children![0]!).items![0]!
+    expect(item.children).toEqual([])
+    expect(item.pos && [item.pos.startOffset, item.pos.endOffset]).toEqual([0, 3])
   })
 
   // carve#5108: a description whose body is only the `+` keeps no stand-in child.
