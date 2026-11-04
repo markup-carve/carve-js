@@ -156,12 +156,53 @@ function spanOf(node: object | undefined): Span | undefined {
   return found ?? undefined
 }
 
+// Items stand in source order, so only the last one starting at or before an offset can hold it
+// (carve-js#4392). Every item is a candidate when a probed item has no offsets.
+function candidateItems(items: readonly ListItem[], offset: number): number[] {
+  let lo = 0
+  let hi = items.length - 1
+  let found = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const start = spanOf(items[mid])?.startOffset
+    if (start === undefined) return items.map((_item, index) => index)
+    if (start <= offset) {
+      found = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return found < 0 ? [] : [found]
+}
+
+// The gap after item i ends where item i + 1 starts. An empty item can end before it starts,
+// so the gap before the first item past the offset is a candidate too.
+function candidateGaps(items: readonly ListItem[], offset: number): number[] {
+  if (items.length < 2) return []
+  let lo = 1
+  let hi = items.length - 1
+  let first = items.length
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const start = spanOf(items[mid])?.startOffset
+    if (start === undefined) return items.slice(0, -1).map((_item, index) => index)
+    if (start > offset) {
+      first = mid
+      hi = mid - 1
+    } else {
+      lo = mid + 1
+    }
+  }
+  return [first - 1, first].filter((index) => index < items.length - 1)
+}
+
 function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[] } | null {
   for (const block of blocks) {
     const span = spanOf(block)
     if (span && span.startOffset <= offset && offset < span.endOffset) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
-      const children = block.type === 'list' ? block.items.map((item) => item.children) :
+      const children = block.type === 'list' ? candidateItems(block.items, offset).map((index) => block.items[index]!.children) :
         block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
           [block.children as BlockNode[]] : []
@@ -179,7 +220,7 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
     const span = spanOf(block)
     if (!span || span.startOffset > offset || offset >= span.endOffset) continue
     if (block.type === 'list') {
-      for (const item of block.items) {
+      for (const item of candidateItems(block.items, offset).map((index) => block.items[index]!)) {
         if ((spanOf(item)?.startOffset ?? Infinity) <= offset && offset < (spanOf(item)?.endOffset ?? -1)) {
           return containingBlocks(item.children, offset)
         }
@@ -213,24 +254,27 @@ function trailingListOwner(blocks: BlockNode[], column: number):
   return null
 }
 
-function betweenListItems(blocks: BlockNode[], offset: number): { list: List; after: number } | null {
+function betweenListItems(blocks: BlockNode[], offset: number, settle: (blocks: BlockNode[]) => void = () => {}):
+  { list: List; after: number } | null {
   for (const block of blocks) {
     if (block.type === 'list') {
-      for (let i = 0; i < block.items.length - 1; i++) {
-        const item = block.items[i]
-        const visibleEnd = spanOf(item?.children.at(-1))?.endOffset
+      const candidates = candidateItems(block.items, offset)
+      for (const i of candidateGaps(block.items, offset)) {
+        const item = block.items[i]!
+        settle(item.children)
+        const visibleEnd = spanOf(item.children.at(-1))?.endOffset
         const itemEnd = spanOf(item)?.endOffset
         const before = visibleEnd === undefined ? itemEnd : Math.min(visibleEnd, itemEnd ?? visibleEnd)
         const after = spanOf(block.items[i + 1])?.startOffset
         if (before !== undefined && after !== undefined && before <= offset && offset < after)
           return { list: block, after: i }
       }
-      for (const item of block.items) {
-        const nested = betweenListItems(item.children, offset)
+      for (const i of candidates) {
+        const nested = betweenListItems(block.items[i]!.children, offset, settle)
         if (nested) return nested
       }
     } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
-      const nested = betweenListItems(block.children as BlockNode[], offset)
+      const nested = betweenListItems(block.children as BlockNode[], offset, settle)
       if (nested) return nested
     }
   }
@@ -263,8 +307,8 @@ function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
       if (preceding) return { list: block, item: preceding.item, afterDescription: preceding.afterDescription,
         afterTerm: preceding.afterTerm }
     } else if (block.type === 'list') {
-      for (const item of block.items) {
-        const nested = betweenDescriptions(item.children, offset, line)
+      for (const index of candidateItems(block.items, offset)) {
+        const nested = betweenDescriptions(block.items[index]!.children, offset, line)
         if (nested) return nested
       }
     } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
@@ -418,6 +462,24 @@ export function restoreTransparentComments(document: Document, authored: Documen
   const comments = direct ?? (authored ? authoredComments(authored) : new Map<number, Comment>())
   const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
   const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
+  // Hoisted comments are placed in one merge per sibling list, so later lookups do not walk them
+  // (carve-js#4392). The lookups never match a comment; only insertAfterParagraph reads placed ones.
+  const hoisted = new Map<BlockNode[], Comment[]>()
+  const placeHoisted = (only?: BlockNode[]): void => {
+    for (const [siblings, pending] of hoisted) {
+      if (only && siblings !== only) continue
+      const merged: BlockNode[] = []
+      let next = 0
+      for (const comment of pending) {
+        while (next < siblings.length && (siblings[next]!.pos?.startOffset ?? Infinity) <= comment.pos!.startOffset!) merged.push(siblings[next++]!)
+        merged.push(comment)
+      }
+      while (next < siblings.length) merged.push(siblings[next++]!)
+      siblings.length = 0
+      for (const block of merged) siblings.push(block)
+      hoisted.delete(siblings)
+    }
+  }
   for (const index of stream.erased) {
     const original = stream.original[index]!
     const rest = original.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '')
@@ -436,11 +498,12 @@ export function restoreTransparentComments(document: Document, authored: Documen
       match.paragraph.transparentComments.push({ line: index + 1, source: original, node: comment, originalValue: comment.content })
       recordFollowingLines(match.paragraph, index + 1, (child) => stream.original[child.pos!.startLine - 1]!)
       comment.transparentInParagraph = true
+      placeHoisted()
       insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
       if (descriptionGap) recordDescriptionGap(descriptionGap, original, comment, comment.content)
-      const gap = betweenListItems(blocks, comment.pos.startOffset)
+      const gap = betweenListItems(blocks, comment.pos.startOffset, placeHoisted)
       if (gap) {
         gap.list.transparentBetweenItems ??= []
         gap.list.transparentBetweenItems.push({ after: gap.after, source: original, node: comment, originalValue: comment.content })
@@ -450,8 +513,11 @@ export function restoreTransparentComments(document: Document, authored: Documen
       const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
       const trailing = stream.authoredTrace.length === 0 ? trailingListOwner(blocks, comment.pos.startColumn ?? 1) : null
       const siblings = owned?.blocks ?? trailing?.blocks ?? containingBlocks(blocks, comment.pos.startOffset)
-      const at = siblings.findIndex((block) => (block.pos?.startOffset ?? Infinity) > comment.pos!.startOffset!)
-      siblings.splice(at < 0 ? siblings.length : at, 0, comment)
+      const pending = hoisted.get(siblings)
+      if (pending && pending.at(-1)!.pos!.startOffset! > comment.pos.startOffset) placeHoisted()
+      if (hoisted.has(siblings)) hoisted.get(siblings)!.push(comment)
+      else hoisted.set(siblings, [comment])
+      if (stream.authoredTrace.length === 0) placeHoisted()
       for (const container of trailing?.containers ?? []) {
         if (container.pos?.endOffset !== undefined && comment.pos.endOffset !== undefined &&
             container.pos.endOffset < comment.pos.endOffset) {
@@ -476,6 +542,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       }
     }
   }
+  placeHoisted()
 }
 
 export function restoreTransparentAbbreviations(document: Document, definitions: AbbreviationDef[], stream: TransparentLineStream): void {
