@@ -597,9 +597,14 @@ export class ParseSession extends InlineParseSession {
       lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
       if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
       const erased = new Set(transparentLines.erased)
+      const scaffolds = new Map<number, string>()
+      transparentLines.sourceLines.forEach((index, at) => {
+        if (erased.has(index)) scaffolds.set(index, transparentLines.lines[at]!)
+      })
       let previousVisible = ''
       lexer.rootLines = transparentLines.original.map((line, index) => {
-        if (erased.has(index)) return previousVisible
+        // A retained quote prefix is that quote's blank line (PART 0 S1).
+        if (erased.has(index)) return scaffolds.get(index) ?? previousVisible
         previousVisible = line
         return line
       })

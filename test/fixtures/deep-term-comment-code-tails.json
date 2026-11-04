@@ -902,32 +902,32 @@
   {
     "id": "term-comment-break-controls-156",
     "source": "> - :: term\n>      %% hidden\n>   paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-158",
     "source": "> - :: term\n>      %% hidden\n>   paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-162",
     "source": "> - :: term\n>      %% hidden\n>     paragraph\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-163",
     "source": "> - :: term\n>      %% hidden\n>     paragraph\n>     ```\n>     code\n>     ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-164",
     "source": "> - :: term\n>      %% hidden\n>     paragraph\n>   ~~~\n>   code\n>   ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-165",
     "source": "> - :: term\n>      %% hidden\n>     paragraph\n>     ~~~\n>     code\n>     ~~~\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl>\n      paragraph\n      <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "term-comment-break-controls-168",
@@ -1302,32 +1302,32 @@
   {
     "id": "term-comment-break-controls-300",
     "source": "> > - :: term\n> >      %% hidden\n> >   paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-302",
     "source": "> > - :: term\n> >      %% hidden\n> >   paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-306",
     "source": "> > - :: term\n> >      %% hidden\n> >     paragraph\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-307",
     "source": "> > - :: term\n> >      %% hidden\n> >     paragraph\n> >     ```\n> >     code\n> >     ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-308",
     "source": "> > - :: term\n> >      %% hidden\n> >     paragraph\n> >   ~~~\n> >   code\n> >   ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-309",
     "source": "> > - :: term\n> >      %% hidden\n> >     paragraph\n> >     ~~~\n> >     code\n> >     ~~~\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl>\n        paragraph\n        <pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p>paragraph</p><pre><code>code\n</code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "term-comment-break-controls-312",
@@ -4192,12 +4192,12 @@
   {
     "id": "comment-term-claude-658",
     "source": "> - :: term\n>      %% hidden\n>    ``` raw=html\n>    a\n>   {#payload}\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-659",
     "source": "> - :: term\n>      %% hidden\n>    ``` raw=html\n>    a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-660",
@@ -4242,12 +4242,12 @@
   {
     "id": "comment-term-claude-674",
     "source": "> - :: term\n>      %% hidden\n>     ``` raw=html\n>     a\n>   {#payload}\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-675",
     "source": "> - :: term\n>      %% hidden\n>     ``` raw=html\n>     a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-676",
@@ -4292,12 +4292,12 @@
   {
     "id": "comment-term-claude-690",
     "source": "> - :: term\n>      %% hidden\n>       ``` raw=html\n>       a\n>   {#payload}\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-691",
     "source": "> - :: term\n>      %% hidden\n>       ``` raw=html\n>       a\n>     {\n>     #payload\n>     }\n>   ```\n> after\n",
-    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote>"
+    "html": "<blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote>"
   },
   {
     "id": "comment-term-claude-692",
@@ -5592,12 +5592,12 @@
   {
     "id": "comment-term-claude-1042",
     "source": "> > - :: term\n> >      %% hidden\n> >    ``` raw=html\n> >    a\n> >   {#payload}\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1043",
     "source": "> > - :: term\n> >      %% hidden\n> >    ``` raw=html\n> >    a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1044",
@@ -5642,12 +5642,12 @@
   {
     "id": "comment-term-claude-1058",
     "source": "> > - :: term\n> >      %% hidden\n> >     ``` raw=html\n> >     a\n> >   {#payload}\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1059",
     "source": "> > - :: term\n> >      %% hidden\n> >     ``` raw=html\n> >     a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1060",
@@ -5692,12 +5692,12 @@
   {
     "id": "comment-term-claude-1074",
     "source": "> > - :: term\n> >      %% hidden\n> >       ``` raw=html\n> >       a\n> >   {#payload}\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na</code><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na</code></p><pre id=\"payload\"><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1075",
     "source": "> > - :: term\n> >      %% hidden\n> >       ``` raw=html\n> >       a\n> >     {\n> >     #payload\n> >     }\n> >   ```\n> > after\n",
-    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><code> raw=html\na\n{\n#payload\n}</code><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><dl><dt>term</dt></dl><p><code> raw=html\na\n{\n#payload\n}</code></p><pre><code></code></pre></li></ul><p>after</p></blockquote></blockquote>"
   },
   {
     "id": "comment-term-claude-1076",
