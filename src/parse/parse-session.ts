@@ -708,7 +708,8 @@ export class ParseSession extends InlineParseSession {
       const bom = strippedBom ? 1 : 0
       dropStandInPositions(doc, (line) => {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
-        return { offset: lexer.lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
+        // `line` numbers the source, not the stream with erased lines removed.
+        return { offset: (originalLexer ?? lexer).lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
       })
       dropStandIns(doc)
     }
