@@ -142,6 +142,11 @@ export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
       // carry a position keeps the rest of them lined up. Pushed unconditionally
       // for that reason - a skipped `undefined` would shift every later index.
       const pos = readPos(entry.pos)
+      // A wire span ending past its content ends at a consumed `+`; keep it.
+      const content = span(entry.children as { pos?: Position }[])
+      if (pos?.endOffset !== undefined && content?.endOffset !== undefined && pos.endOffset > content.endOffset) {
+        endsAtConsumedMarker.add(pos)
+      }
       current.definitionSpans!.push(pos)
       // A description joined across an erased line omits pos (carve#5136);
       // the writer still places comments by the line it starts on.
