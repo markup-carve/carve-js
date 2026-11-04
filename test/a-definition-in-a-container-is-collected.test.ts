@@ -13,9 +13,9 @@ describe('a definition in a container is collected to the end of the document', 
     expect(carveToHtml(written)).toBe(carveToHtml(source))
   })
 
-  it('keeps a note whose body line sits below its body column', () => {
-    const source = '- a\n  [^f]: x\n  more\n\nsee[^f]\n'
-    expect(carveToCarve(source)).toBe(source)
+  // carve#5109: CARVE-P11-079 (a) has no exception for a lazy line at the note's own column.
+  it('collects a note whose body line sits below its body column', () => {
+    expect(carveToCarve('- a\n  [^f]: x\n  more\n\nsee[^f]\n')).toBe('- a\n\nsee[^f]\n\n[^f]: x\n  more\n')
   })
 
   it('stays idempotent when a + separates the note body', () => {
