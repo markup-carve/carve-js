@@ -65,6 +65,14 @@ export interface CarveRenderOptions extends RenderLossSinkOptions {
   alignTables?: boolean
   /** Reproduce recorded author spellings (a GFM separator row, a recorded non-default thematic-break marker) for source-preserving output. */
   preserveTableSeparators?: boolean
+  /** Ignore the authored spelling of erased lines; `canonicalCarveWrite` keeps the result only when it reads back. */
+  canonicalTransparentLines?: boolean
+}
+
+/** The `%%` stand-in of a consumed `+`: the source holds no comment there (CARVE-P12-022). */
+function isPlusStandIn(node: { type: string; content?: unknown; transparentSource?: string }): boolean {
+  return node.type === 'comment' && node.content === '' && node.transparentSource !== undefined &&
+    node.transparentSource.trimEnd().endsWith('+') && !node.transparentSource.includes('%%')
 }
 
 /** A transparent line keeps its authored column through list and quote writing. */
@@ -428,6 +436,11 @@ export function renderedReadsBack(ast: Document, source: string): boolean {
   return treeOf(source) === stableJson(ast)
 }
 
+/** Whether `written` parses to the tree `source` parses to. */
+export function writtenReadsBackAs(source: string, written: string): boolean {
+  const expected = treeOf(source)
+  return expected !== null && treeOf(written) === expected
+}
 
 /**
  * Which headings carry the id a fresh parse would give them.
@@ -2902,6 +2915,8 @@ class CarveRenderSession {
   private renderedVerbatimTail = false
   private alignTables = false
   private preserveTableSeparators = false
+  private canonicalTransparentLines = false
+  private canonicalTrailingComments = new WeakSet<Comment | AbbreviationDef>()
   private indentedHostDepth = 0
   private pendingMarkerLineShift = 0
 
@@ -2922,6 +2937,7 @@ class CarveRenderSession {
     // authority on whether a continuation line opens a block in its host; the
     // spans that do not read back take their next spelling (carve-js#3939).
     this.verbatimSpellings = new Map()
+    this.canonicalTransparentLines = opts.canonicalTransparentLines === true
     for (;;) {
       this.multiLineVerbatim = new Map()
       const out = this.renderCarveOnce(ast, opts, parsedSource)
@@ -3539,7 +3555,9 @@ class CarveRenderSession {
               : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
-                (block.type === 'comment' && (/^[ \t]+/.test(block.transparentSource ?? '') ||
+                (block.type === 'comment' && ((!this.canonicalTransparentLines ||
+                  (block.transparentInParagraph || block.transparentInList || block.transparentInDefinitionList) &&
+                  !this.canonicalTrailingComments.has(block)) && /^[ \t]+/.test(block.transparentSource ?? '') ||
                   !block.block && ctx.quoteDepth > 0 &&
                   previousBlock.pos?.endLine !== undefined && block.pos?.startLine === previousBlock.pos.endLine + 1)))
           ) {
@@ -3684,6 +3702,11 @@ class CarveRenderSession {
           }
           for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
             const after = sourceLines.filter((line) => line < comment.line).length
+            // Below the paragraph's last line the comment is a block of its own (PART 11 §2).
+            if (this.canonicalTransparentLines && after >= written.length) {
+              this.canonicalTrailingComments.add(comment.node)
+              continue
+            }
             written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource(comment)}`)
           }
           withComments = written.join('\n')
@@ -3866,7 +3889,8 @@ class CarveRenderSession {
         return withAttrs(`${fence}=${escapeFormat(node.format)}\n${content}${closerSeparator}${fence}`)
       }
       case 'abbreviation_def':
-        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
+        if ((node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) &&
+            !this.canonicalTrailingComments.has(node)) return ''
         return `*[${escapeAbbr(node.abbr)}]: ${escapePlainLine(node.expansion)}`
       case 'link_reference_definition': {
         // PART 12 §10 gave this a node precisely so the writer can put the line
@@ -3888,9 +3912,13 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
-        if (node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) return ''
-        if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined)
+        if ((node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) &&
+            !this.canonicalTrailingComments.has(node)) {
+          return ''
+        } else if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined &&
+            (!this.canonicalTransparentLines || isPlusStandIn(node))) {
           return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
+        }
         // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
         // inline one (carve#581) in joining a percent-leading content onto the
         // marker. At block level the comment-LINE marker is exactly `%%`; a run
@@ -4057,7 +4085,10 @@ class CarveRenderSession {
         }
         out += itemSource
         for (const gap of node.transparentBetweenItems ?? []) {
-          if (gap.after === idx) out += `\0${transparentNodeSource(gap)}\n`
+          if (gap.after !== idx) continue
+          // After the last item the comment is a block of its own (PART 11 §2).
+          if (this.canonicalTransparentLines && idx === node.items.length - 1) this.canonicalTrailingComments.add(gap.node)
+          else out += `\0${transparentNodeSource(gap)}\n`
         }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
@@ -4463,8 +4494,11 @@ class CarveRenderSession {
     const out: string[] = []
     const appendGaps = (item: number, afterDescription: number, afterTerm = -1): void => {
       for (const gap of node.transparentBetweenDescriptions ?? []) {
-        if (gap.item === item && gap.afterDescription === afterDescription && gap.afterTerm === afterTerm)
-          out.push(`\0${transparentNodeSource(gap)}`)
+        if (gap.item !== item || gap.afterDescription !== afterDescription || gap.afterTerm !== afterTerm) continue
+        // After the list's last description the comment is a block of its own (PART 11 §2).
+        if (this.canonicalTransparentLines && afterTerm === -1 && item === node.items.length - 1 &&
+            afterDescription === node.items[item]!.definitions.length - 1) this.canonicalTrailingComments.add(gap.node)
+        else out.push(`\0${transparentNodeSource(gap)}`)
       }
     }
     // Every entry writes its own description line, so consecutive `::` lines

@@ -2,12 +2,12 @@ import type { Document } from '../ast.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
-import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, type CarveRenderOptions } from '../render-carve.js'
+import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 
 /** A removed layout boundary can change ownership of later source lines. */
-function hasUnrepresentedAuthoredLine(document: Document, source: string, written: string): boolean {
-  const stream = transparentLineStream(source)
+function hasUnrepresentedAuthoredLine(document: Document, source: string, written: string,
+  stream = transparentLineStream(source)): boolean {
   if (!stream || source.includes('\0')) return false
   const represented = new Set<number>()
   const leaves = new Set([
@@ -39,6 +39,12 @@ function hasUnrepresentedAuthoredLine(document: Document, source: string, writte
     !represented.has(index + 1) && !written.includes(line.trim()))
 }
 
+function withPromotedImages(document: Document): Document {
+  promoteBlockImages(document.children, true)
+  for (const body of Object.values(document.footnoteDefs ?? {})) promoteBlockImages(body, true)
+  return document
+}
+
 export function canonicalCarveWrite(
   source: string,
   opts: ParseOptions & CarveRenderOptions = {},
@@ -48,17 +54,26 @@ export function canonicalCarveWrite(
 ): string {
   const document = parseDocument(source, opts)
   const transformed = transform?.(document) === true
-  promoteBlockImages(document.children, true)
-  if (document.footnoteDefs) {
-    for (const body of Object.values(document.footnoteDefs)) promoteBlockImages(body, true)
-  }
+  withPromotedImages(document)
   // Figures can be promoted after parsing, and empty references can gain a
   // runtime resolution bit. Extensions can also change the default parse.
   const canReuseSource = parsedSourceHint === source && !transformed &&
     !source.includes('![') && !source.includes('[]') && !opts.extensions?.length
-  const written = canReuseSource
-    ? renderCarveFromParsedSource(document, source, opts)
-    : renderCarve(document, opts)
+  const render = (options: ParseOptions & CarveRenderOptions): string => canReuseSource
+    ? renderCarveFromParsedSource(document, source, options)
+    : renderCarve(document, options)
+  // An erased line is written canonically wherever that keeps the tree; its
+  // authored spelling is the fallback (PART 11 §2, carve#5012).
+  const stream = !transformed && !opts.extensions?.length ? transparentLineStream(source) : null
+  if (stream) {
+    const canonicalOpts = { ...opts, canonicalTransparentLines: true }
+    const candidate = render(canonicalOpts)
+    // A canonical form is a fixpoint; an authored line it cannot settle keeps the authored spelling.
+    if (writtenReadsBackAs(source, candidate) && !hasUnrepresentedAuthoredLine(document, source, candidate, stream ?? undefined) &&
+        renderCarve(withPromotedImages(parseDocument(candidate, opts)), canonicalOpts) === candidate)
+      return candidate
+  }
+  const written = render(opts)
   // The parser used to leave `%%` stand-ins from `+` as layout boundaries.
   // With transparent lines, a formatter candidate must prove its readback;
   // preserve the authored spelling when no canonical candidate does.

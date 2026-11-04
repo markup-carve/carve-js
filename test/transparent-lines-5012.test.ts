@@ -44,7 +44,7 @@ describe('carve#5012 transparent single-line blocks', () => {
     const written = carveToCarve(source)
     expect(carveToHtml(written)).toBe(html)
     expect(carveToCarve(written)).toBe(written)
-    if (invisible === '%% c') expect(written).toContain('      > %% c\n')
+    if (invisible === '%% c') expect(written).toContain('  > %% c\n')
   })
 
   it('keeps spans, footnotes and attribute lines block-level', () => {
