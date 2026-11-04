@@ -3559,8 +3559,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (!nestedIndexByLine.has(lineNumber)) nestedIndexByLine.set(lineNumber, index)
       }
       if (blankBeforeNestedContinuation) loose = true
-      let commentOnlyLead = commentOnlyParagraphEnd(
-        (index) => index === 0 ? content : nested[index - 1], 0) > 1
+      const commentLeadEnd = commentOnlyParagraphEnd((index) => index === 0 ? content : nested[index - 1], 0)
+      let commentOnlyLead = commentLeadEnd > 1 && nested.slice(0, commentLeadEnd - 1).some(line => indentColumns(line) === 0)
       for (const child of children) {
         // A refused, literal brace comment still occupies the comment-only
         // lead slot for list tightness, although its paragraph is visible.

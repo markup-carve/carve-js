@@ -44,19 +44,22 @@ describe('a refused brace run in a container', () => {
     ['{% x\ny %}\n\npara\n', '<p>{% x\ny %}</p>\n<p>para</p>'],
     ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>'],
     ['[][d]\n{.a\n .b}\n- [d]: u\n', '<p><a href="u"></a></p>\n<ul class="a b">\n  <li></li>\n</ul>'],
+    ['- {% x\n   y %}\n\n  para\n\n  para2\n- next\n', '<ul>\n  <li><p>para</p>\n    <p>para2</p>\n  </li>\n  <li><p>next</p></li>\n</ul>'],
     ['- {% x\n  y %}\n\n  para\n\n  para2\n- next\n', '<ul>\n  <li><p>{% x\ny %}</p>\n    <p>para</p>\n    <p>para2</p>\n  </li>\n  <li><p>next</p></li>\n</ul>'],
   ])('renders %j as the spec model', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })
 
   it('escapes literal text that would reparse as a wrapped attribute', () => {
-    for (const value of ['{.x\n .y}', '{.x\n .y}\nhello', '{.a\n#x}\npara']) {
+    for (const value of ['{.x\n .y}', '{.x\n .y}\nhello', '{.a\n#x}\npara', '{.a\n#x}\n*bold*', '{.a\n#x} *b*']) {
       const document = parse('para')
       const paragraph = document.children[0]
       if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
       paragraph.children = [{ type: 'text', value }]
-      expect(carveToHtml(renderCarve(document))).not.toContain('class=')
-      expect(carveToHtml(renderCarve(document))).toContain('{')
+      const html = carveToHtml(renderCarve(document))
+      expect(html).not.toContain('class=')
+      expect(html).not.toContain('<strong>')
+      expect(html).toContain('{')
     }
   })
 })

@@ -1716,16 +1716,24 @@ export function renderCarrierAttributeBlock(attrs: Attrs | undefined): string {
   return renderAttrs(attrs, '>')
 }
 
-/** Whether text opening with a wrapped brace run has a continuation at its `{` column before the run closes. */
-function refusedBraceText(value: string): boolean {
-  const lines = value.split('\n')
+/** The end of a wrapped brace run that opens this text and has a continuation at its `{` column, or 0. */
+function refusedBraceTextEnd(value: string): number {
   let depth = 0
-  for (let n = 0; n < lines.length; n++) {
-    if (n > 0 && !/^[ \t]/.test(lines[n]!)) return true
-    for (const char of lines[n]!) depth += char === '{' ? 1 : char === '}' ? -1 : 0
-    if (depth <= 0) return false
+  let refused = false
+  let lineStart = true
+  for (let at = 0; at < value.length; at++) {
+    const char = value[at]!
+    if (lineStart && at > 0 && char !== ' ' && char !== '\t') refused = true
+    lineStart = char === '\n'
+    depth += char === '{' ? 1 : char === '}' ? -1 : 0
+    if (depth > 0) continue
+    let next = at + 1
+    while (value[next] === ' ' || value[next] === '\t') next++
+    // A glued block continues the run; anything else on the closing line makes it prose.
+    if (value[next] === '{') { at = next - 1; continue }
+    return refused && (next === value.length || value[next] === '\n') ? at + 1 : 0
   }
-  return false
+  return 0
 }
 
 function renderBlockAttrs(attrs: Attrs | undefined): string {
@@ -5363,7 +5371,13 @@ class CarveRenderSession {
         // A refused wrapped attribute is already literal paragraph text. Its
         // shallow closer keeps the brace from opening an attribute on reparse.
         // Braced comments need the usual escape probe because they can vanish.
-        if (node.value.startsWith('{') && !node.value.startsWith('{%') && refusedBraceText(node.value)) return cleanEscapedText(node)
+        if (node.value.startsWith('{') && !node.value.startsWith('{%')) {
+          const end = refusedBraceTextEnd(node.value)
+          if (end > 0) {
+            const rest = cleanEscapedText(node).slice(end)
+            return node.value.slice(0, end) + (rest === '' ? '' : renderSession.escapeText(rest, captionCanOpen, nextOpensBacktickRun))
+          }
+        }
         return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
       case 'escaped_text':
         // The author escaped this character; the writer says so again. No
