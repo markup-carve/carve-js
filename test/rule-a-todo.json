@@ -15,9 +15,6 @@
   "nested-list-source-boundaries.test.ts": {
     "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
   },
-  "quoted-colon-remaining-parity.test.ts": {
-    "preserves the shared Native ownership controls through Source and AST rendering": "#3922"
-  },
   "render-carve.test.ts": {
     "renderCarve corpus > 187-a-comment-fence-is-a-comment-at-any-column-too: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995",
     "renderCarve corpus > 192-a-comment-fence-under-a-nested-item-does-not-close-it-either: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995"

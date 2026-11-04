@@ -682,6 +682,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       quoted[1] ?? '',
       inner,
       () => true,
+      true, undefined, undefined, true, undefined,
+      line.facts?.quotePayloadFenceCloser,
     )
     state.quoteInner = inner
     state.lazyFoldable = blockQuoteParagraphOpen(inner)

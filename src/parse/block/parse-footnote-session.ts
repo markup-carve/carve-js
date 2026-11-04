@@ -1,5 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
@@ -7,6 +8,7 @@ import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentCo
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
 const payloadMisses = new WeakMap<Lexer, Map<string, { from: number; maxRun: number }>>()
+const quotePayloadMisses = new WeakMap<Lexer, PayloadMisses>()
 // Whether the first visible line a `+` attaches, past attribute, definition and comment lines, is a list marker.
 export function attachedLeadIsList(lexer: Lexer): boolean {
   let k = 0
@@ -52,6 +54,12 @@ function payloadCloserInBody(lexer: Lexer, marker: string, bodyColumn: number): 
   }
   misses.set(key, { from: lexer.pos, maxRun })
   return false
+}
+
+function quoteMissesOf(lexer: Lexer): PayloadMisses {
+  let misses = quotePayloadMisses.get(lexer)
+  if (misses === undefined) quotePayloadMisses.set(lexer, misses = new Map())
+  return misses
 }
 
 interface FootnoteHooks {
@@ -446,7 +454,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         ? content : lazyState.literalColon !== undefined ? content : trackedFootnoteContent(content)
       trackItemLazyState(tracked, lazyState, true, (run) => commentBlockHasCloser(lexer, run),
         framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false,
-          payloadFenceCloser: marker => payloadCloserInBody(lexer, marker, bodyColumn) })
+          payloadFenceCloser: marker => payloadCloserInBody(lexer, marker, bodyColumn),
+          quotePayloadFenceCloser: marker => quotedPayloadCloserAhead(lexer, marker, lexer.pos, quoteMissesOf(lexer)) })
       // A fence in a description's marker-line body opens no lazy paragraph.
       // Only a line reaching this note's body column can replace its paragraph claim (carve#4627).
       const description = RE_DEFLIST_DEF.exec(content)

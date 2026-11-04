@@ -60,6 +60,38 @@ export function fenceCloseRe(marker: string): RegExp {
   return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
+export type PayloadMisses = Map<string, { from: number; stop: number; maxRun: number }>
+
+/**
+ * Does a quoted line-block payload run pair with a later run in its quote? The first
+ * unquoted line, or one `ends` names, stops the search (carve#5062). A miss refutes
+ * every wider run of that character before the same stop.
+ */
+export function quotedPayloadCloserAhead(
+  lines: { lineAt(i: number): string | undefined; lineCount: number },
+  marker: string,
+  from: number,
+  misses: PayloadMisses,
+  ends?: (line: string) => boolean,
+): boolean {
+  const char = marker[0]!
+  const miss = misses.get(char)
+  if (miss !== undefined && from >= miss.from && from < miss.stop && marker.length > miss.maxRun) return false
+  const close = fenceCloseRe(marker)
+  let maxRun = 0
+  let i = from + 1
+  for (; i < lines.lineCount; i++) {
+    const line = lines.lineAt(i)!
+    if (!/^[ \t]*>/.test(line) || ends?.(line)) break
+    const text = line.replace(/^(?:[ \t]*>)+/, '').replace(/^[ \t]+/, '')
+    if (close.test(text)) return true
+    const run = /^(`{3,}|~{3,})[ \t]*$/.exec(text)?.[1]
+    if (run !== undefined && run[0] === char) maxRun = Math.max(maxRun, run.length)
+  }
+  misses.set(char, { from, stop: i, maxRun })
+  return false
+}
+
 /** True when `line`, already at its container's content column, opens a code or raw fence. */
 export function opensCodeFence(line: string): boolean {
   return RE_FENCE.test(line) || RE_RAW_FENCE.test(line)
@@ -572,7 +604,7 @@ function closesHostParagraph(q: QuoteHostLine, b: QuoteHostBody): boolean {
       if (blockStart || markerLineState(inner).leavesParagraphOpen) return false
     } else {
       const quote = host.quote.state ??= replayHostedQuote(host.quote.opener)
-      trackBlockQuoteLazyState(hosted[1] ?? '', quote, () => true)
+      trackBlockQuoteLazyState(hosted[1] ?? '', quote, () => true, true, undefined, undefined, true, undefined, q.payloadCloser)
       if (blockQuoteParagraphOpen(quote)) return false
     }
     closeBlockQuoteParagraph(state)

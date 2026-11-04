@@ -1053,6 +1053,8 @@ export function nestedItemHoldsOpenParagraph(content: string, memo?: Map<number,
 export interface ItemLineFacts {
   /** Whether a line-block payload fence run pairs with a later run (carve-php#3137). */
   payloadFenceCloser?: (marker: string) => boolean
+  /** The same question for a line block in a quote the item hosts. */
+  quotePayloadFenceCloser?: (marker: string) => boolean
   terminatorFree: boolean
   whitespace?: number | undefined
   prefixMemo?: Map<number, number> | undefined

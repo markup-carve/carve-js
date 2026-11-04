@@ -42,7 +42,7 @@
   {
     "id": "audit-8",
     "source": "> - ::: |\n>   x\n> %% note\n> - not a marker\n>   :::\n- tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </li>\n    <li>not a marker\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-9",
@@ -112,7 +112,7 @@
   {
     "id": "audit-22",
     "source": "> - :::: |\n>   x\n> %% note\n> - not a marker\n>   ::::\n- tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </li>\n    <li>not a marker\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-23",
@@ -182,7 +182,7 @@
   {
     "id": "audit-36",
     "source": "> - ::::: |\n>   x\n> %% note\n> - not a marker\n>   :::::\n- tail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </li>\n    <li>not a marker\n      <div>\n\n      </div>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-37",
@@ -252,7 +252,7 @@
   {
     "id": "audit-50",
     "source": "> > - ::: |\n> >   x\n> > %% note\n> > - not a marker\n> >   :::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>x</p>\n        </div>\n      </li>\n      <li>not a marker\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-51",
@@ -322,7 +322,7 @@
   {
     "id": "audit-64",
     "source": "> > - :::: |\n> >   x\n> > %% note\n> > - not a marker\n> >   ::::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>x</p>\n        </div>\n      </li>\n      <li>not a marker\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-65",
@@ -392,7 +392,7 @@
   {
     "id": "audit-78",
     "source": "> > - ::::: |\n> >   x\n> > %% note\n> > - not a marker\n> >   :::::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"line-block\">\n          <p>x</p>\n        </div>\n      </li>\n      <li>not a marker\n        <div>\n\n        </div>\n      </li>\n    </ul>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-79",
@@ -462,7 +462,7 @@
   {
     "id": "audit-92",
     "source": "> > > - ::: |\n> > >   x\n> > > %% note\n> > > - not a marker\n> > >   :::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n        <li>not a marker\n          <div>\n\n          </div>\n        </li>\n      </ul>\n    </blockquote>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-93",
@@ -532,7 +532,7 @@
   {
     "id": "audit-106",
     "source": "> > > - :::: |\n> > >   x\n> > > %% note\n> > > - not a marker\n> > >   ::::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n        <li>not a marker\n          <div>\n\n          </div>\n        </li>\n      </ul>\n    </blockquote>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-107",
@@ -602,7 +602,7 @@
   {
     "id": "audit-120",
     "source": "> > > - ::::: |\n> > >   x\n> > > %% note\n> > > - not a marker\n> > >   :::::\n- tail\n",
-    "html": "<blockquote>\n  <blockquote>\n    <blockquote>\n      <ul>\n        <li>\n          <div class=\"line-block\">\n            <p>x</p>\n          </div>\n        </li>\n        <li>not a marker\n          <div>\n\n          </div>\n        </li>\n      </ul>\n    </blockquote>\n  </blockquote>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+    "html": "<blockquote><blockquote><blockquote><ul><li><div class=\"line-block\"><p>x</p></div></li><li><p>not a marker</p><div></div></li></ul></blockquote></blockquote></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-121",
@@ -642,12 +642,12 @@
   {
     "id": "audit-128",
     "source": "> - a\n>\n>     ::: box\n>     x\n>   :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <div class=\"box\"><p>x</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><p>a</p><div class=\"box\"><p>x</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-129",
     "source": "> - a\n>\n>     ::: |\n>     x\n>   :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <div class=\"line-block\"><p>x</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><p>a</p><div class=\"line-block\"><p>x</p></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "audit-130",
@@ -672,12 +672,12 @@
   {
     "id": "shifted-1-```-None",
     "source": "> - b\n>\n>   :::\n>     ::: |\n>     ```\n>   :::\n>   para\n>   ```\nlazy\n",
-    "html": "<blockquote><ul><li>b\n      <div><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>b</p><div><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote>"
   },
   {
     "id": "shifted-1-```-box",
     "source": "> - b\n>\n>   ::: box\n>     ::: |\n>     ```\n>   :::\n>   para\n>   ```\nlazy\n",
-    "html": "<blockquote><ul><li>b\n      <div class=\"box\"><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>b</p><div class=\"box\"><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote>"
   },
   {
     "id": "desc-code-1-```",
@@ -692,12 +692,12 @@
   {
     "id": "shifted-1-~~~-None",
     "source": "> - b\n>\n>   :::\n>     ::: |\n>     ~~~\n>   :::\n>   para\n>   ~~~\nlazy\n",
-    "html": "<blockquote><ul><li>b\n      <div><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>b</p><div><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote>"
   },
   {
     "id": "shifted-1-~~~-box",
     "source": "> - b\n>\n>   ::: box\n>     ::: |\n>     ~~~\n>   :::\n>   para\n>   ~~~\nlazy\n",
-    "html": "<blockquote><ul><li>b\n      <div class=\"box\"><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>b</p><div class=\"box\"><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote>"
   },
   {
     "id": "desc-code-1-~~~",
@@ -717,12 +717,12 @@
   {
     "id": "shifted-2-```-None",
     "source": "> > - b\n> >\n> >   :::\n> >     ::: |\n> >     ```\n> >   :::\n> >   para\n> >   ```\nlazy\n",
-    "html": "<blockquote><blockquote><ul><li>b\n        <div><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><p>b</p><div><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
   },
   {
     "id": "shifted-2-```-box",
     "source": "> > - b\n> >\n> >   ::: box\n> >     ::: |\n> >     ```\n> >   :::\n> >   para\n> >   ```\nlazy\n",
-    "html": "<blockquote><blockquote><ul><li>b\n        <div class=\"box\"><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><p>b</p><div class=\"box\"><div class=\"line-block\"><p><code>\n:::\npara\n</code><br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
   },
   {
     "id": "desc-code-2-```",
@@ -737,12 +737,12 @@
   {
     "id": "shifted-2-~~~-None",
     "source": "> > - b\n> >\n> >   :::\n> >     ::: |\n> >     ~~~\n> >   :::\n> >   para\n> >   ~~~\nlazy\n",
-    "html": "<blockquote><blockquote><ul><li>b\n        <div><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><p>b</p><div><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
   },
   {
     "id": "shifted-2-~~~-box",
     "source": "> > - b\n> >\n> >   ::: box\n> >     ::: |\n> >     ~~~\n> >   :::\n> >   para\n> >   ~~~\nlazy\n",
-    "html": "<blockquote><blockquote><ul><li>b\n        <div class=\"box\"><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
+    "html": "<blockquote><blockquote><ul><li><p>b</p><div class=\"box\"><div class=\"line-block\"><p>~~~<br>\n:::<br>\npara<br>\n~~~<br>\nlazy</p></div></div></li></ul></blockquote></blockquote>"
   },
   {
     "id": "desc-code-2-~~~",
@@ -857,7 +857,7 @@
   {
     "id": "review-dedented-line-comment",
     "source": "> - ::: |\n>   x\n> %% note\n>   y\n>   :::\ntail\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"line-block\">\n        <p>x</p>\n      </div>\n    </li>\n  </ul>\n  <p>y</p>\n  <div>\n\n  </div>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote><ul><li><div class=\"line-block\"><p>x</p><p>y</p></div></li></ul></blockquote><p>tail</p>"
   },
   {
     "id": "shifted-initial-marker-descendant",
@@ -937,7 +937,7 @@
   {
     "id": "php-comment-dedent",
     "source": "- item\n\n  ::: |\n  %%%\n dedented payload\n  %%%\n  :::\n",
-    "html": "<ul><li>item\n    <div class=\"line-block\"></div></li></ul><p>dedented payload</p>"
+    "html": "<ul><li><p>item</p><div class=\"line-block\"></div></li></ul><p>dedented payload</p>"
   },
   {
     "id": "js-blank-literal-tabs",
@@ -1027,7 +1027,7 @@
   {
     "id": "final-blank-marker",
     "source": "> - a\n>\n>   - ::: box\n>     body\n> - next\n>     :::\n- tail\n",
-    "html": "<blockquote><ul><li>a\n      <ul><li><div class=\"box\"><p>body</p></div></li></ul></li><li>next\n      <div></div></li></ul></blockquote><ul><li>tail</li></ul>"
+    "html": "<blockquote><ul><li><p>a</p><ul><li><div class=\"box\"><p>body</p></div></li></ul></li><li><p>next</p><div></div></li></ul></blockquote><ul><li>tail</li></ul>"
   },
   {
     "id": "shift-nested-bare-2-False",
@@ -1037,7 +1037,7 @@
   {
     "id": "shift-nested-bare-2-True",
     "source": ">   - a\n> - b\n>     - c\n>\n>   :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
+    "html": "<blockquote><ul><li><p>a</p></li><li><p>b</p><ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   },
   {
     "id": "shift-nested-bare-4-False",
@@ -1047,6 +1047,6 @@
   {
     "id": "shift-nested-bare-4-True",
     "source": ">   - a\n> - b\n>     - c\n>\n>     :::\n1. lazy\n",
-    "html": "<blockquote><ul><li>a</li><li>b\n      <ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
+    "html": "<blockquote><ul><li><p>a</p></li><li><p>b</p><ul><li>c</li></ul><div></div></li></ul></blockquote><ol><li>lazy</li></ol>"
   }
 ]
