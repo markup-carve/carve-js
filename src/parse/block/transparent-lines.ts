@@ -189,9 +189,57 @@ function candidateGaps(items: readonly ListItem[], offset: number): number[] {
   return [first - 1, first].filter((index) => index < items.length - 1)
 }
 
+type BlockIndex = { length: number; starts: number[]; ends: number[]; reach: number[] } | { length: number; unsorted: true }
+let blockIndexes = new WeakMap<readonly object[], BlockIndex>()
+
+// Sibling blocks stand in source order, so only those starting at or before an offset and reaching
+// past it can hold it (carve-js#4392). `reach` is the furthest end so far, which finds overlapping
+// siblings too. An array with a block that has no usable offsets is scanned in full.
+function candidateBlocks<T extends object>(blocks: readonly T[], offset: number): readonly T[] {
+  if (blocks.length < 16) return blocks
+  let index = blockIndexes.get(blocks)
+  if (index === undefined || index.length !== blocks.length) {
+    const starts: number[] = []
+    const ends: number[] = []
+    const reach: number[] = []
+    let sorted = true
+    for (const block of blocks) {
+      const span = spanOf(block)
+      const start = span?.startOffset
+      const end = span?.endOffset
+      if (start === undefined || end === undefined || Number.isNaN(start) || Number.isNaN(end) ||
+          start < (starts.at(-1) ?? -Infinity)) {
+        sorted = false
+        break
+      }
+      starts.push(start)
+      ends.push(end)
+      reach.push(Math.max(reach.at(-1) ?? -Infinity, end))
+    }
+    index = sorted ? { length: blocks.length, starts, ends, reach } : { length: blocks.length, unsorted: true }
+    blockIndexes.set(blocks, index)
+  }
+  if ('unsorted' in index) return blocks
+  let lo = 0
+  let hi = blocks.length - 1
+  let found = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (index.starts[mid]! <= offset) {
+      found = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  const out: T[] = []
+  for (let i = found; i >= 0 && index.reach[i]! > offset; i--) if (index.ends[i]! > offset) out.push(blocks[i]!)
+  return out.reverse()
+}
+
 /** `quotes` counts the quotes between `blocks` and the paragraph. */
 function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[]; quotes: number } | null {
-  for (const block of blocks) {
+  for (const block of candidateBlocks(blocks, offset)) {
     const span = spanOf(block)
     if (span && span.startOffset <= offset && offset < span.endOffset) {
       if (block.type === 'paragraph') return { paragraph: block, siblings: blocks, quotes: 0 }
@@ -209,7 +257,7 @@ function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: 
 }
 
 function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
-  for (const block of blocks) {
+  for (const block of candidateBlocks(blocks, offset)) {
     const span = spanOf(block)
     if (!span || span.startOffset > offset || offset >= span.endOffset) continue
     if (block.type === 'list') {
@@ -249,7 +297,7 @@ function trailingListOwner(blocks: BlockNode[], column: number):
 
 function betweenListItems(blocks: BlockNode[], offset: number, settle: (blocks: BlockNode[]) => void = () => {}):
   { list: List; after: number } | null {
-  for (const block of blocks) {
+  for (const block of candidateBlocks(blocks, offset)) {
     if (block.type === 'list') {
       const candidates = candidateItems(block.items, offset)
       for (const i of candidateGaps(block.items, offset)) {
@@ -276,7 +324,7 @@ function betweenListItems(blocks: BlockNode[], offset: number, settle: (blocks: 
 
 function betweenDescriptions(blocks: BlockNode[], offset: number, line: number):
   { list: DefinitionList; item: number; afterDescription: number; afterTerm: number } | null {
-  for (const block of blocks) {
+  for (const block of candidateBlocks(blocks, offset)) {
     if ((spanOf(block)?.startOffset ?? Infinity) > offset || offset >= (spanOf(block)?.endOffset ?? -1)) continue
     if (block.type === 'definition_list') {
       for (const item of block.items) {
@@ -324,6 +372,7 @@ function recordDescriptionGap(gap: { list: DefinitionList; item: number; afterDe
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
 export function hydrateTransparentDefinitionGaps(document: Document): void {
   derivedSpans = new WeakMap()
+  blockIndexes = new WeakMap()
   const authoredSource = (block: Comment | AbbreviationDef, quoteDepth: number): string => {
     const column = block.pos?.startColumn ?? 1
     const quoted = column > 1 ? quoteDepth : 0
@@ -454,6 +503,7 @@ function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (ch
 export function restoreTransparentComments(document: Document, authored: Document | null,
   stream: TransparentLineStream, direct?: Map<number, Comment>): void {
   derivedSpans = new WeakMap()
+  blockIndexes = new WeakMap()
   const comments = direct ?? (authored ? authoredComments(authored) : new Map<number, Comment>())
   const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
   const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
@@ -541,6 +591,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
 }
 
 export function restoreTransparentAbbreviations(document: Document, definitions: AbbreviationDef[], stream: TransparentLineStream): void {
+  blockIndexes = new WeakMap()
   for (const definition of definitions) {
     const line = definition.pos!.startLine
     const match = containingParagraph(document.children, definition.pos!.startOffset!)
