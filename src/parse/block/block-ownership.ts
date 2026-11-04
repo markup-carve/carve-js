@@ -483,6 +483,7 @@ export function ownLines(
       return deeper
     }
 
+    restoreAttachedQuote()
     endAttachedColonAtSibling()
     let reached = 0
     let plus: Frame | null = null
@@ -962,6 +963,16 @@ export function ownLines(
       top().last = 'dd'
       top().para = false
       attachedHost = null
+    }
+
+    // Behind a quote host's own `>` a `+` right after the attached block continues that quote (carve#5132).
+    function restoreAttachedQuote(): void {
+      const host = attachedHost?.at(-1)
+      if (host?.kind !== 'quote' || frames.includes(host)) return
+      const rest = restInQuotes(at, attachedHost!.filter((f) => f.kind === 'quote').length)
+      if (rest === undefined || !CONT_MARKER.test(trimEndSpaceTab(rest).trimStart())) return
+      frames.length = 0
+      frames.push(...attachedHost!)
     }
 
     function reopenAttachedHost(host: Frame[]): Frame | null {
