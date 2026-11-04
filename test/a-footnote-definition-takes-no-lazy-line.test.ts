@@ -28,7 +28,8 @@ it.each([
 
 it.each([
   ['> - para\n>   [^f]: n\n>   more\ntail\n', quotedList],
-  ['> - para\n>   [r]: /u\ntail\n', `${quotedList}<p>tail</p>`],
+  // The erased definition goes with its `>`, so the item paragraph takes the line (carve#5129).
+  ['> - para\n>   [r]: /u\ntail\n', '<blockquote><ul><li>para tail</li></ul></blockquote>'],
 ])('keeps the unchanged neighbor %j', (source, expected) => {
   expect(html(source)).toBe(expected)
 })

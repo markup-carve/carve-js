@@ -17,7 +17,7 @@
   {
     "id": "link-definition",
     "source": "1. - > para\n     > [r]: /u\ntail\n",
-    "html": "<ol>\n  <li>\n    <ul>\n      <li>\n        <blockquote><p>para</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ol>\n<p>tail</p>"
+    "html": "<ol>\n  <li>\n    <ul>\n      <li>\n        <blockquote><p>para\ntail</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ol>"
   },
   {
     "id": "attribute-line",

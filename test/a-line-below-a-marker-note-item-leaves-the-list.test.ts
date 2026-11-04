@@ -165,8 +165,8 @@ it("starts the following paragraph at quote level", () => {
   <hr>
   <ol>
     <li id="fn1">
-      <p>text</p>
-      <p>more</p>
+      <p>text
+more</p>
       <pre><code>code
 </code></pre>
       <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>

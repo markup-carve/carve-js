@@ -1,11 +1,5 @@
 /** Checker findings at the spec pin: markers left of their owner column (#5063) and the one-space item column (carve#5105). */
 export const KNOWN_LIST_SPAN_START_DRIFT_5063: ReadonlySet<string> = new Set([
-  "132-thematic-break-requires-contiguous-markers-6: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[0]: offset 3, expected 2 at its owner's content column",
-  "132-thematic-break-requires-contiguous-markers-6: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[0].items[0]: offset 3, expected 2 at its owner's content column",
-  "178-a-flush-left-line-needs-an-open-paragraph-to-fold-into-7: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[1]: offset 10, expected 8 at its owner's content column",
-  "178-a-flush-left-line-needs-an-open-paragraph-to-fold-into-7: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[1].items[0]: offset 10, expected 8 at its owner's content column",
-  "442-a-marker-folds-only-strictly-between-the-item-s-base-and-content-column-7: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[1]: offset 13, expected 11 at its owner's content column",
-  "442-a-marker-folds-only-strictly-between-the-item-s-base-and-content-column-7: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[1].items[0]: offset 13, expected 11 at its owner's content column",
   "507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-14: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[1].children[0]: offset 20 starts before its owner's content column 6",
   "507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-14: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[1].children[0].items[0]: offset 20 starts before its owner's content column 6",
   "643-a-first-block-marker-takes-a-list-at-a-note-s-or-description-s-marker-column-2: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[0]: offset 9 starts before its owner's content column 2",

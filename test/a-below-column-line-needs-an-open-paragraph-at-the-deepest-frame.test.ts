@@ -20,12 +20,16 @@ describe('a block at a quoted item content column leaves the quote for the line 
     ['a heading', '# H', '<h1>H</h1>'],
     ['a thematic break', '***', '<hr>'],
     ['a table', '| t |', '<table><tbody><tr><td>t</td></tr></tbody></table>'],
-    ['a link definition', '[x]: /u', ''],
     ['an attribute line', '{.c}', ''],
   ])('%s', (_name, block, rendered) => {
     expect(read(lines('> - a', `>   ${block}`, 'tail'))).toBe(
       `<blockquote><ul><li>a${rendered === '' ? '' : `\n${rendered}`}</li></ul></blockquote><p>tail</p>`,
     )
+  })
+
+  // The erased definition goes with its `>`, so the item paragraph takes `tail` (carve#5129).
+  it('a link definition', () => {
+    expect(read(lines('> - a', '>   [x]: /u', 'tail'))).toBe('<blockquote><ul><li>a\ntail</li></ul></blockquote>')
   })
 
   it('a term', () => {

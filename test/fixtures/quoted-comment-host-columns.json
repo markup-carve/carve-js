@@ -104,7 +104,7 @@
     {
       "name": "20-preservation-20",
       "source": "> - a\n> %% note\ntail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<p>tail</p>"
+      "html": "<blockquote>\n  <ul>\n    <li>a\ntail</li>\n  </ul>\n</blockquote>"
     },
     {
       "name": "21-preservation-21",
@@ -114,12 +114,12 @@
     {
       "name": "22-preservation-22",
       "source": "> - a\n> %% note\n>   ```\n>   x\n>   ```\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "23-preservation-23",
       "source": "> - a\n> %% note\n> - next\ntail\n",
-      "html": "<blockquote>\n  <ul>\n    <li><p>a</p></li>\n    <li><p>next\ntail</p></li>\n  </ul>\n</blockquote>"
+      "html": "<blockquote>\n  <ul>\n    <li>a</li>\n    <li>next\ntail</li>\n  </ul>\n</blockquote>"
     },
     {
       "name": "overindented-next-depth1-commentcol0-code",
