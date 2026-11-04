@@ -3559,12 +3559,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (!nestedIndexByLine.has(lineNumber)) nestedIndexByLine.set(lineNumber, index)
       }
       if (blankBeforeNestedContinuation) loose = true
-      const commentOnlyLead = commentOnlyParagraphEnd(
+      let commentOnlyLead = commentOnlyParagraphEnd(
         (index) => index === 0 ? content : nested[index - 1], 0) > 1
       for (const child of children) {
         // A refused, literal brace comment still occupies the comment-only
         // lead slot for list tightness, although its paragraph is visible.
-        if (previousVisibleSpan === undefined && commentOnlyLead && child.type === 'paragraph') continue
+        if (previousVisibleSpan === undefined && commentOnlyLead && child.type === 'paragraph') {
+          commentOnlyLead = false
+          continue
+        }
         if (child.type === 'comment' || child.type === 'abbreviation_def') {
           // A comment below the nested list's column has ended that list.
           const commentSpan = session.blockLineSpan(child)

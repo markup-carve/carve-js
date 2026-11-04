@@ -30,3 +30,33 @@ describe('block brace continuations pass the opening column', () => {
     expect(djotToCarve('{#one\nkey=1}\nalpha\n')).toBe('{#one\nkey=1}\nalpha\n')
   })
 })
+
+// Each row is the spec model's output at carve main.
+describe('a refused brace run in a container', () => {
+  it.each([
+    ['- a\n  - b\n\n    {.c\n    }\n  - s\n', '<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <p>{.c\n}</p>\n      </li>\n      <li><p>s</p></li>\n    </ul>\n  </li>\n</ul>'],
+    ['- a\n  - b\n\n  {.c\n  #d}\n\n  - c\n', '<ul>\n  <li><p>a</p>\n    <ul>\n      <li>b</li>\n    </ul>\n    <p>{.c\n#d}</p>\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- a\n  - b\n    {.c\n }\npara\n', '<ul>\n  <li>a\n    <ul>\n      <li>b\n{.c\n}\npara</li>\n    </ul>\n  </li>\n</ul>'],
+    ['> {.a\n>  #x}\npara\n', '<blockquote>\n\n</blockquote>\n<p>para</p>'],
+    ['> te{xt\n{\n> [a]: /u {.c}\n lazy\n', '<blockquote><p>te{xt\n{</p></blockquote>\n<p>lazy</p>'],
+    [':: term\n: def\n  {.a\n }\npara\n', '<dl>\n  <dt>term</dt>\n  <dd>def\n{.a\n}\npara</dd>\n</dl>'],
+    ['- item\n  {.a\n  #x}\n# h\n', '<ul>\n  <li>item\n{.a\n#x}</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>'],
+    ['{% x\ny %}\n\npara\n', '<p>{% x\ny %}</p>\n<p>para</p>'],
+    ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>'],
+    ['[][d]\n{.a\n .b}\n- [d]: u\n', '<p><a href="u"></a></p>\n<ul class="a b">\n  <li></li>\n</ul>'],
+    ['- {% x\n  y %}\n\n  para\n\n  para2\n- next\n', '<ul>\n  <li><p>{% x\ny %}</p>\n    <p>para</p>\n    <p>para2</p>\n  </li>\n  <li><p>next</p></li>\n</ul>'],
+  ])('renders %j as the spec model', (source, html) => {
+    expect(carveToHtml(source)).toBe(html)
+  })
+
+  it('escapes literal text that would reparse as a wrapped attribute', () => {
+    for (const value of ['{.x\n .y}', '{.x\n .y}\nhello', '{.a\n#x}\npara']) {
+      const document = parse('para')
+      const paragraph = document.children[0]
+      if (paragraph?.type !== 'paragraph') throw new Error('expected a paragraph')
+      paragraph.children = [{ type: 'text', value }]
+      expect(carveToHtml(renderCarve(document))).not.toContain('class=')
+      expect(carveToHtml(renderCarve(document))).toContain('{')
+    }
+  })
+})

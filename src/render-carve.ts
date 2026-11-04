@@ -1716,6 +1716,18 @@ export function renderCarrierAttributeBlock(attrs: Attrs | undefined): string {
   return renderAttrs(attrs, '>')
 }
 
+/** Whether text opening with a wrapped brace run has a continuation at its `{` column before the run closes. */
+function refusedBraceText(value: string): boolean {
+  const lines = value.split('\n')
+  let depth = 0
+  for (let n = 0; n < lines.length; n++) {
+    if (n > 0 && !/^[ \t]/.test(lines[n]!)) return true
+    for (const char of lines[n]!) depth += char === '{' ? 1 : char === '}' ? -1 : 0
+    if (depth <= 0) return false
+  }
+  return false
+}
+
 function renderBlockAttrs(attrs: Attrs | undefined): string {
   const rendered = renderAttrs(attrs)
   return rendered.replace(/\n/g, '\n ')
@@ -5351,7 +5363,7 @@ class CarveRenderSession {
         // A refused wrapped attribute is already literal paragraph text. Its
         // shallow closer keeps the brace from opening an attribute on reparse.
         // Braced comments need the usual escape probe because they can vanish.
-        if (node.value.startsWith('{') && !node.value.startsWith('{%') && node.value.includes('\n')) return cleanEscapedText(node)
+        if (node.value.startsWith('{') && !node.value.startsWith('{%') && refusedBraceText(node.value)) return cleanEscapedText(node)
         return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
       case 'escaped_text':
         // The author escaped this character; the writer says so again. No
