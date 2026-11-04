@@ -20,6 +20,9 @@ export interface DefinitionDescriptionNode {
 
 export type DefinitionEntryNode = DefinitionTermNode | DefinitionDescriptionNode
 
+/** Recorded description spans that end at a consumed `+` the tree no longer holds (CARVE-P12-020). */
+export const endsAtConsumedMarker = new WeakSet<object>()
+
 /** The span covering a run of nodes, when every one of them carries one. */
 function span(nodes: { pos?: Position }[]): Position | undefined {
   if (nodes.length === 0) return undefined
@@ -69,7 +72,7 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
       const recorded = item.definitionSpans?.[index]
       const derived = span(definition)
       const pos = recorded ? { ...recorded } : derived
-      if (pos && recorded && derived) {
+      if (pos && recorded && derived && !endsAtConsumedMarker.has(recorded)) {
         pos.endLine = derived.endLine
         if (derived.endColumn !== undefined) pos.endColumn = derived.endColumn
         if (derived.endOffset !== undefined) pos.endOffset = derived.endOffset

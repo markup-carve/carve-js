@@ -8,6 +8,7 @@ import { parse } from '../src/parse.js'
  * continuation-marker rule (PART 9 §17 L3, carve#3421) a bare `+` there
  * attaches the line below it, so the writer escapes it (PART 11 §2). Below a
  * nested task fence, one extra column keeps the plus literal without an escape.
+ * Since carve#5157 a refused `+` here leaves no node, so the writer writes none.
  */
 
 const shape = (src: string): string =>
@@ -27,15 +28,15 @@ const writes = (src: string, expected: string): void => {
 
 describe('a refused + written below a sub-list', () => {
   it.each([
-    ['bullet below a fence', '- - ```\n\n\n  +\ntail\n', '- - ```\n\n\n  +\ntail\n'],
-    ['ordered below a fence', '- 1. ```\n\n\n  +\ntail\n', '- 1. ```\n\n\n  +\ntail\n'],
-    ['task below a fence', '- - [ ] ```js\n        x\n\n  +\ntail\n', '- - [ ] ```js\n        x\n\n  +\ntail\n'],
-    ['bullet below a div', '- - ::: d\n  +\ntail\n', '- - ::: d\n  +\ntail\n'],
-    ['inside a quote', '> - - ```\n>\n>\n>   +\n> tail\n', '> - - ```\n>\n>\n>   +\n> tail\n'],
-    ['in a loose item', '- - ```\n\n\n  +\ntail\n\n  more\n', '- - ```\n\n\n  +\ntail\n\n  more\n'],
-  ])('writes the + (%s)', (_name, src, expected) => writes(src, expected))
+    ['bullet below a fence', '- - ```\n\n\n  +\ntail\n', '- - ```\n\n\n    ```\n\ntail\n'],
+    ['ordered below a fence', '- 1. ```\n\n\n  +\ntail\n', '- 1. ```\n\n\n     ```\n\ntail\n'],
+    ['task below a fence', '- - [ ] ```js\n        x\n\n  +\ntail\n', '- - [ ] ```js\n        x\n\n    ```\n\ntail\n'],
+    ['bullet below a div', '- - ::: d\n  +\ntail\n', '- - ::: d\n\n    :::\n\ntail\n'],
+    ['inside a quote', '> - - ```\n>\n>\n>   +\n> tail\n', '> - - ```\n>\n>\n>     ```\n>\n> tail\n'],
+    ['in a loose item', '- - ```\n\n\n  +\ntail\n\n  more\n', '- - ```\n\n\n    ```\n\ntail\n\nmore\n'],
+  ])('leaves no + (%s, carve#5157)', (_name, src, expected) => writes(src, expected))
 
-  it('leaves a + bare when no line follows it', () => {
-    writes('- - ```\n  +\n\ntail\n', '- - ```\n  +\n\ntail\n')
+  it('leaves no + when no line follows it', () => {
+    writes('- - ```\n  +\n\ntail\n', '- - ```\n    ```\n\ntail\n')
   })
 })

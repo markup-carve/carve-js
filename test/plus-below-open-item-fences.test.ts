@@ -115,8 +115,8 @@ describe('a refused continuation marker below an open verbatim fence', () => {
     expect(item?.type).toBe('list')
     if (item?.type !== 'list') return
     expect(item.items[0]?.children.at(-1)).toMatchObject({ type: 'code_block', content: '' })
-    expect(children.slice(1, 3)).toMatchObject([{ type: 'comment' }, { type: 'comment' }])
-    expect(children.at(-1)).toMatchObject({ type: 'paragraph' })
+    // The consumed markers leave no node (carve#5157).
+    expect(children.map((child) => child.type)).toEqual(['list', 'paragraph'])
   })
 
   it('keeps the source line of a following paragraph', () => {

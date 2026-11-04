@@ -13,15 +13,13 @@ function* walk(node: Node, path = '$'): Generator<[Node, string]> {
   }
 }
 
-// carve#5013 writes a consumed `+` as a `%%` stand-in, one column wider than the `+`.
+// carve#5013 writes a consumed `+` as a `%%` stand-in, one column wider than the `+`; carve#5157 leaves no node for it.
 // Spans must come from the source: no stand-in span, no sibling overlap, every node inside its parent.
 describe('a consumed plus keeps its host span to the authored marker', () => {
-  it('ends the first item after its plus and leaves the stand-in unplaced (carve-js#4367)', () => {
+  it('ends the first item after its plus and leaves no stand-in (carve-js#4367, carve#5157)', () => {
     const list = wire('- a\n+\n- x\n').children![0]!
     expect(list.items!.map((item) => [item.pos?.startOffset, item.pos?.endOffset])).toEqual([[0, 5], [6, 9]])
-    const standIn = list.items![0]!.children![1]!
-    expect(standIn).toMatchObject({ type: 'comment', content: '' })
-    expect(standIn.pos).toBeUndefined()
+    expect(list.items![0]!.children!.map((child) => child.type)).toEqual(['paragraph'])
   })
 
   it.each([
@@ -33,7 +31,8 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
     ['- a\r\n+\r\n- x\r\n', [0, 6]],
   ])('places the host of %j from the source', (source, [start, end]) => {
     const doc = wire(source)
-    const host = [...walk(doc)].find(([node]) => node.type !== 'document' && node.children?.some((child) => child.type === 'comment' && child.pos === undefined))
+    expect([...walk(doc)].some(([node]) => node.type === 'comment')).toBe(false)
+    const host = [...walk(doc)].find(([node]) => ['list_item', 'block_quote', 'definition_description'].includes(node.type))
     expect(host?.[0].pos && [host[0].pos.startOffset, host[0].pos.endOffset]).toEqual([start, end])
   })
 
