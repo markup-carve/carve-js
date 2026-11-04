@@ -2,6 +2,13 @@
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
   "entries": [
     {
+      "ticket": "markup-carve/carve#5156",
+      "cause": "the pinned pack predates the model fix: a refused marker-line + in a quote opens no paragraph; current carve main is the oracle",
+      "cases": [
+        "lazy-408e39e5714b"
+      ]
+    },
+    {
       "ticket": "markup-carve/carve#5015",
       "cause": "PART 9 §17 L1 changes list tightness for authored direct-child blanks; the pinned pack predates the ruling",
       "cases": [

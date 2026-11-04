@@ -395,7 +395,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     while (content[markerEnd] === ' ' || content[markerEnd] === '\t') markerEnd--
     const stackedMarker = content[markerEnd] === '+' &&
       /^(?:(?:[-*] (?:\[[ xX_>\/!?-]\] )?|\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ))+\+[ \t]*$/.test(content)
-    if (lexer.peek() !== undefined && (stackedMarker || isStackedFirstBlockQuoteMarker(itemSource)) &&
+    // A `+` the ownership walk refused reads as its `%%` stand-in and attaches nothing (§17 L3, carve#5156).
+    const refusedStackedPlus = content[markerEnd] !== '+'
+    if (lexer.peek() !== undefined && (stackedMarker || isStackedFirstBlockQuoteMarker(itemSource) && !refusedStackedPlus) &&
         !firstItemAttachBoundary(lexer.peek()!)) {
       return stackedFirstBlockItem(lexer, session, shape, head, itemSource, isItemAttachBoundary)
     }
