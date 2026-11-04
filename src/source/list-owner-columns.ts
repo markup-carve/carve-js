@@ -1,7 +1,7 @@
 import type { Document, Position } from '../ast.js'
 
 const PREFIX = /[ \t]*> ?|[ \t]*: +|[ \t]*\[\^[^\]]+\]: +|[ \t]*(?:[-*.]|[0-9]+[.)]|[a-zA-Z]+[.)]) /y
-const ITEM_MARKER = /([ \t]*)([-*.]|[0-9]+[.)]|[a-zA-Z]+[.)])(?:\{[^}]*\})?( )/y
+const ITEM_MARKER = /([ \t]*)([-*.]|[0-9]+[.)]|[a-zA-Z]+[.)])(?:\{[^}]*\})?( +)/y
 const DESCRIPTION_MARKER = /: +/y
 
 /**
