@@ -242,7 +242,10 @@ function itemContentColumn(item: ListItem): number | undefined {
   return item.children[0]?.pos?.startColumn
 }
 
-/** `quotes` holds, per quote between `blocks` and the paragraph, the least column of its marker (outermost first). */
+/** Per quote around a line, the least column of its marker; linked to the quote outside it. */
+type QuoteChain = { base: number | undefined; outer: QuoteChain } | undefined
+
+/** `quotes` holds, per quote between `blocks` and the paragraph, the least column of its marker (innermost first). */
 function containingParagraph(blocks: BlockNode[], offset: number, base?: number):
   { paragraph: Paragraph; siblings: BlockNode[]; quotes: Array<number | undefined> } | null {
   for (const block of candidateBlocks(blocks, offset)) {
@@ -257,7 +260,8 @@ function containingParagraph(blocks: BlockNode[], offset: number, base?: number)
           [[block.children as BlockNode[], block.type === 'block_quote' ? undefined : base]] : []
       for (const [child, childBase] of children) {
         const match = containingParagraph(child, offset, childBase)
-        if (match) return block.type === 'block_quote' ? { ...match, quotes: [base, ...match.quotes] } : match
+        if (match && block.type === 'block_quote') match.quotes.push(base)
+        if (match) return match
       }
     }
   }
@@ -383,11 +387,12 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
   blockIndexes = new WeakMap()
   // A quote marker goes at the content column of the item holding the quote, so the line stays in
   // that item; otherwise right after the marker before it.
-  const authoredSource = (block: Comment | AbbreviationDef, quotes: ReadonlyArray<number | undefined>): string => {
+  const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>): string => {
     const column = block.pos?.startColumn ?? 1
     let source = ''
     let next = 1
-    if (column > 1) for (const quote of quotes) {
+    if (column > 1) for (let index = innermostFirst.length - 1; index >= 0; index--) {
+      const quote = innermostFirst[index]
       const at = Math.max(quote ?? next, next)
       source += ' '.repeat(at - next) + '> '
       next = at + 2
@@ -397,14 +402,19 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         `*[${block.abbr}]: ${block.expansion}`)
   }
   const visit = (blocks: BlockNode[], markerLine?: number): void => {
-    const pending: Array<{ block: BlockNode; quotes: Array<number | undefined>; base: number | undefined;
-      markerLine: number | undefined }> = blocks.map((block) => ({ block, quotes: [], base: undefined, markerLine }))
+    const chain = (quotes: QuoteChain): Array<number | undefined> => {
+      const out: Array<number | undefined> = []
+      for (let at = quotes; at; at = at.outer) out.push(at.base)
+      return out
+    }
+    const pending: Array<{ block: BlockNode; quotes: QuoteChain; base: number | undefined;
+      markerLine: number | undefined }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
     for (let at = 0; at < pending.length; at++) {
       const { block, quotes, base, markerLine } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
-        block.transparentSource = authoredSource(block, quotes)
+        block.transparentSource = authoredSource(block, chain(quotes))
         block.transparentOriginalValue = block.content
       }
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
@@ -413,7 +423,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset)
         // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
-        const source = authoredSource(block, match ? match.quotes : quotes)
+        const source = authoredSource(block, match ? match.quotes : chain(quotes))
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -442,11 +452,12 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       else if (block.type === 'definition_list') for (const item of block.items)
         for (const [index, definition] of item.definitions.entries())
           for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index] })
-      else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
-        for (const child of block.children as BlockNode[]) pending.push({ block: child,
-          quotes: block.type === 'block_quote' ? [...quotes, base] : quotes,
+      else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
+        const inner = block.type === 'block_quote' ? { base, outer: quotes } : quotes
+        for (const child of block.children as BlockNode[]) pending.push({ block: child, quotes: inner,
           base: block.type === 'block_quote' ? undefined : base,
           markerLine: block.type === 'block_quote' ? block.pos?.startLine : markerLine })
+      }
     }
   }
   visit(document.children)
