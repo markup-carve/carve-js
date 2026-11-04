@@ -114,7 +114,7 @@
     {
       "name": "22-preservation-22",
       "source": "> - a\n> %% note\n>   ```\n>   x\n>   ```\n- tail\n",
-      "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
+      "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<ul>\n  <li>tail</li>\n</ul>"
     },
     {
       "name": "23-preservation-23",

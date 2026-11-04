@@ -21,7 +21,10 @@ export function tightDjotDefinitionDescriptions(source: string): string {
   const clearLoose = (node: BlockNode): void => {
     if (!node.pos || node.pos.startLine < 2) return
     const line = node.pos.startLine - 2, marker = /\{loose\}[ \t]*$/.exec(lines[line]!)
-    if (marker) edits.push({ start: offsets[line]! + marker.index, end: offsets[line]! + marker.index + marker[0].length, value: '%%' })
+    if (!marker) return
+    // An erased `%%` would keep its quote prefix, a quote blank (PART 0 S1), so a marker-only line goes whole.
+    if (/^[ \t>]*$/.test(lines[line]!.slice(0, marker.index))) edits.push({ start: offsets[line]!, end: offsets[line]! + lines[line]!.length + 1, value: '' })
+    else edits.push({ start: offsets[line]! + marker.index, end: offsets[line]! + marker.index + marker[0].length, value: '%%' })
   }
   const clearGap = (before: BlockNode['pos'], after: BlockNode['pos'], boundary = false, ownerPrefix = ''): void => {
     if (!before || !after || after.startOffset === undefined) return
