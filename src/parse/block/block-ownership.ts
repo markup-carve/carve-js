@@ -561,7 +561,7 @@ export function ownLines(
       lead(host.markerCanon!)
       if (plusReason !== null) {
         refuse(plusReason, host.kind)
-        if (host.kind === 'quote') host.para = false
+        host.para = false
         consumedMarkers.add(at)
         if (plusReason === 'sibling' && attachedHost?.some((frame) => frame.kind === 'quote')) quoteSiblingSeparators.add(at)
         src = ' '.repeat(plusReason === 'claimed' || crossedDescendant ? 0 : Math.max(0, host.canon - host.markerCanon!)) + '%%'
