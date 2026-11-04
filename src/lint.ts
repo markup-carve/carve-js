@@ -2723,6 +2723,7 @@ function reportUnterminatedMarkerRun(
   text: string,
   report: (column: number, length: number, message: string) => void,
 ): void {
+  if (readBracedCellPrefix(text)) return
   const run = scanCellMarkerRun(text)
   if (run.end === 0 || text[run.end] === ' ') return
   const blockSuffix = run.attrs ? ' and its attribute block' : ''
