@@ -28,7 +28,6 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
     ['- +\n- b\n', [0, 3]],
     ['- a\n+\n', [0, 5]],
     ['> +\n', [0, 3]],
-    [':: t\n : +\nl\n: b\n', [6, 9]],
     [':: t\n: q\n+\n+\n', [5, 10]],
     [':: t\n: +\n    flush\n', [5, 18]],
     ['﻿- a\n+\n- x\n', [1, 6]],
@@ -37,6 +36,13 @@ describe('a consumed plus keeps its host span to the authored marker', () => {
     const doc = wire(source)
     const host = [...walk(doc)].find(([node]) => node.type !== 'document' && node.children?.some((child) => child.type === 'comment' && child.pos === undefined))
     expect(host?.[0].pos && [host[0].pos.startOffset, host[0].pos.endOffset]).toEqual([start, end])
+  })
+
+  // carve#5108: a description whose body is only the `+` keeps no stand-in child.
+  it('places an emptied description from the source', () => {
+    const description = [...walk(wire(':: t\n : +\nl\n: b\n'))].find(([node]) => node.type === 'definition_description')?.[0]
+    expect(description?.children).toEqual([])
+    expect(description?.pos && [description.pos.startOffset, description.pos.endOffset]).toEqual([6, 9])
   })
 
   it.each([
