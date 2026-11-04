@@ -898,7 +898,7 @@ export function ownLines(
       // A quote's lazy reading of that shape is still open (carve#4404), so a quoted stack keeps the shape.
       const form = leadTab ? TEXT : classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
       if (form.kind === 'text') {
-        let refusedItemMarker = false
+        let refusedMarker = false
         if (leadTab && frames.some((f) => f.kind === 'quote')) {
           tabQuoteFollower.value = { at, depth: frames.filter((f) => f.kind === 'quote').length }
         }
@@ -914,7 +914,7 @@ export function ownLines(
             respell('%%')
             consumedMarkers.add(at)
             rewritten = true
-            refusedItemMarker = frame.kind === 'item'
+            refusedMarker = true
             if (frame.kind === 'note') noteTextFollower.value = { at, prefix: noteReaderPrefix(), item: false }
             if (frame.kind === 'item' && frames.some((f) => f.kind === 'note')) {
               noteTextFollower.value = { at, prefix: noteReaderPrefix() + '    ', item: true }
@@ -929,8 +929,9 @@ export function ownLines(
           }
         }
         lead(m.col)
-        frame.para = !refusedItemMarker && frame.plus !== at
-        frame.last = refusedItemMarker ? null : 'para'
+        // A refused `+` opens no paragraph in any host (PART 9 §17 L3, carve#5156).
+        frame.para = !refusedMarker && frame.plus !== at
+        frame.last = refusedMarker ? null : 'para'
         return
       }
       if (frame.kind === 'quote') {
