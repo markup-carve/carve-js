@@ -451,6 +451,11 @@ export class ParseSession extends InlineParseSession {
   private skippedCommentFences = new Map<number, { closer: number; content: string }>()
   /** Document lines whose consumed `+` the ownership walk wrote as a `%%` stand-in. */
   private consumedMarkerLines = new Set<number>()
+  private quoteSiblingSeparators = new Set<number>()
+
+  isQuoteSiblingSeparator(line: number): boolean {
+    return this.quoteSiblingSeparators.has(line)
+  }
 
   parse(source: string, opts: ParseOptions = {}): Document {
     const sourceByteLength = utf8ByteLength(source)
@@ -511,6 +516,7 @@ export class ParseSession extends InlineParseSession {
     this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
       [lexer.lineNumber(index), { closer: lexer.lineNumber(closer), content }]))
     this.consumedMarkerLines = new Set([...ownership.consumedMarkers].map((index) => lexer.lineNumber(index)))
+    this.quoteSiblingSeparators = new Set([...ownership.quoteSiblingSeparators].map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -618,6 +624,7 @@ export class ParseSession extends InlineParseSession {
     const ownership = ownLines(sub.lines as string[], 0)
     sub.applyOwnership(ownership)
     for (const index of ownership.consumedMarkers) this.consumedMarkerLines.add(sub.lineNumber(index))
+    for (const index of ownership.quoteSiblingSeparators) this.quoteSiblingSeparators.add(sub.lineNumber(index))
     this.collectLinkDefs(sub)
     if (!this.activeMatchers.length) return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
     const prevCtx = this.activeMatcherCtx

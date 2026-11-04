@@ -3380,6 +3380,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (separatingBlanks >= 3) flags.hardBoundary = true
       else flags.loose = true
     }
+    // A quote's consumed `+` can stand between list siblings without an
+    // authored empty line. Ownership keeps its comment stand-in so the quote
+    // stays open; the marker still separates the siblings at this list level.
+    if (nextIsSibling() && session.isQuoteSiblingSeparator(lexer.lineNumber(lexer.pos) - 1)) flags.loose = true
 
     // Child spans identify which authored blank lines separate blocks.
     // Blanks within a fence or nested item remain inside that child's span.
@@ -3671,6 +3675,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     lexer.pos = start
     if (!sibling) return
     if (blanks > 0 || flags.invisibleTailBlank) flags.loose = true
+    for (let index = start; index < k; index++) {
+      if (session.isQuoteSiblingSeparator(lexer.lineNumber(index))) flags.loose = true
+    }
     for (const node of session.parseInvisibleRun(lexer, k)) {
       if (node.type === 'abbreviation_def' && node.pos?.startLine !== undefined) {
         lexer.skippedAbbreviations?.set(node.pos.startLine - 1, [node.abbr, node.expansion])
