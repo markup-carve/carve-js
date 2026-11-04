@@ -1,19 +1,9 @@
 {
-  "a-list-behind-a-quote-marker-starts-its-span-at-the-marker.test.ts": {
-    "keeps the indentation latitude where only indentation precedes the list": "#3921"
-  },
   "djot-definition-boundaries.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
   },
   "djot-empty-definitions.test.ts": {
     "empty Djot definition terms and descriptions preserve Native structure": "#3921"
-  },
-  "list-span-placing-indentation.test.ts": {
-    "a list span holds the indentation that places its marker > starts a nested list at its parent's content column, not at its marker": "#3921",
-    "a list span holds the indentation that places its marker > starts an indented top-level list at column 1": "#3921"
-  },
-  "nested-list-source-boundaries.test.ts": {
-    "nested source boundaries > keeps authored tabs in a list container opening span": "#3921"
   },
   "render-carve.test.ts": {
     "renderCarve corpus > 187-a-comment-fence-is-a-comment-at-any-column-too: matches the spec's canonical form, which re-parses differently": "markup-carve/carve#4995",
