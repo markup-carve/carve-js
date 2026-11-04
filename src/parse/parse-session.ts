@@ -2,6 +2,7 @@ import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
+import { endsAtConsumedMarker } from '../ast/definition-list-wire.js'
 import type { Comment } from '../ast.js'
 import type {
   Admonition,
@@ -328,21 +329,24 @@ function leavesFenceOpen(lines: readonly string[]): boolean {
 
 type Span = { endLine: number; endColumn?: number; endOffset?: number }
 
-// A description or list item whose body is only a consumed `+` holds no blocks (CARVE-P11-040).
-function dropStandInOnlyBodies(doc: Document): void {
-  const standInOnly = (children: unknown[]): boolean =>
-    children.length > 0 && children.every((child) => unplacedBlocks.has(child as object))
+// A consumed `+` leaves no node (CARVE-P11-040): the writer writes what the tree holds.
+function dropStandIns(doc: Document): void {
+  const placed = (children: unknown[]): unknown[] => children.filter((child) => !unplacedBlocks.has(child as object))
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visit(item)
       return
     }
     if (value === null || typeof value !== 'object') return
-    const item = value as { type?: string; children?: unknown[]; definitions?: unknown[][] }
-    item.definitions?.forEach((children, index) => {
-      if (standInOnly(children)) item.definitions![index] = []
+    const item = value as { type?: string; children?: unknown[]; definitions?: unknown[][]; definitionSpans?: Array<object | undefined> }
+    // An attribute's `keyValues` may hold a `children` or `definitions` key with a string value.
+    if (Array.isArray(item.definitions)) item.definitions.forEach((children, index) => {
+      if (!Array.isArray(children)) return
+      const recorded = item.definitionSpans?.[index]
+      if (recorded !== undefined && unplacedBlocks.has(children.at(-1) as object)) endsAtConsumedMarker.add(recorded)
+      item.definitions![index] = placed(children)
     })
-    if (item.type === 'list_item' && item.children !== undefined && standInOnly(item.children)) item.children = []
+    if (Array.isArray(item.children) && !STAND_IN_FREE.has(item.type ?? '')) item.children = placed(item.children)
     if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
     for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
   }
@@ -378,7 +382,8 @@ function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset
     }
     // A description's recorded span covers its marker line; its children supply the end.
     const item = value as { definitions?: Array<Array<{ pos?: Span }>>; definitionSpans?: Array<Span | undefined> }
-    item.definitions?.forEach((children, index) => {
+    if (Array.isArray(item.definitions)) item.definitions.forEach((children, index) => {
+      if (!Array.isArray(children)) return
       const recorded = item.definitionSpans?.[index]
       const last = children.length > 0 ? endOf(children[children.length - 1]!) : undefined
       if (recorded === undefined || last?.endOffset === undefined || !children.some((child) => unplacedBlocks.has(child))) return
@@ -707,7 +712,7 @@ export class ParseSession extends InlineParseSession {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
         return { offset: lexer.lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
       })
-      dropStandInOnlyBodies(doc)
+      dropStandIns(doc)
     }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
@@ -1138,7 +1143,7 @@ export class ParseSession extends InlineParseSession {
       const l = lexer.consume()
       // The stand-in for an abbreviation definition a `+` skipped; the document holds its node.
       if (l === '%%' && this.skippedAbbreviationLines.has(lexer.lineNumber(lexer.pos - 1))) return null
-      // A consumed `+` keeps its `%%` stand-in so the writer can spell it; see dropStandInPositions.
+      // A consumed `+`'s `%%` stand-in; dropStandIns removes it once spans are derived.
       if (l.trimStart() === '%%' && this.consumedMarkerLines.has(lexer.lineNumber(lexer.pos - 1))) {
         const standIn: Comment = { type: 'comment', block: false, content: '' }
         const root = lexer.documentRoot ?? lexer

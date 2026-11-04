@@ -8,9 +8,8 @@ it('leaves a column-zero empty quote outside a stacked first-block plus', () => 
   const outer = list.items[0]?.children[0]
   if (outer?.type !== 'block_quote') throw new Error('expected outer quote')
   expect(outer.pos).toMatchObject({ startLine: 1, startColumn: 3, endLine: 1 })
-  // The consumed `+` leaves a stand-in comment the source never held, so it is unplaced (carve#5013, CARVE-P12-022).
-  expect(outer.children[0]).toMatchObject({ type: 'comment', content: '' })
-  expect(outer.children[0]?.pos).toBeUndefined()
+  // The consumed `+` leaves no node (carve#5157, CARVE-P11-040).
+  expect(outer.children).toEqual([])
 })
 
 it('folds a column-two follower into the plus of three stacked items', () => {
