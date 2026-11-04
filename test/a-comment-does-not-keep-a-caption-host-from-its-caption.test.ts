@@ -15,7 +15,7 @@ describe('a comment does not keep a caption host from its caption', () => {
 
   it('captions an image behind a braced comment', () => {
     expect(h('{%%}![a](/i)\n^ cap')).toBe('<figure><img src="/i" alt="a"><figcaption>cap</figcaption></figure>')
-    expect(h('{%x\ny%}![a](/i)\n^ cap')).toBe('<figure><img src="/i" alt="a"><figcaption>cap</figcaption></figure>')
+    expect(h('{%x\n y%}![a](/i)\n^ cap')).toBe('<figure><img src="/i" alt="a"><figcaption>cap</figcaption></figure>')
     expect(h('> {%x%}![a](/i)\n> ^ cap')).toBe(
       '<blockquote><figure><img src="/i" alt="a"><figcaption>cap</figcaption></figure></blockquote>',
     )

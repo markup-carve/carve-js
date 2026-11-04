@@ -61,7 +61,7 @@ describe('a definition list ends at its last placed child', () => {
   it('stops before the wrapped spelling of the same attribute block', () => {
     // §15 A5 lets one attribute block wrap, so the list consumed two lines
     // here rather than one. Neither of them is a child.
-    const source = ':: t\n:  d\n   {.k\n   #x}\ntail\n'
+    const source = ':: t\n:  d\n   {.k\n    #x}\ntail\n'
     expect(spanOf(source, 'definition_list')).toEqual([0, 9])
   })
 

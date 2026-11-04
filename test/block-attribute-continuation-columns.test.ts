@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parse as parseDjot, renderHTML } from '@djot/djot'
 import { carveToHtml, djotToCarve, parse, renderCarve } from '../src/index.js'
 
 describe('block brace continuations pass the opening column', () => {
@@ -22,8 +23,10 @@ describe('block brace continuations pass the opening column', () => {
     expect(renderCarve(document)).toBe('{title="a\n b"}\npara\n')
   })
 
-  it('passes multiline Djot block braces through with their columns', () => {
+  it('imports multiline Djot block braces as djot.js reads their columns', () => {
     const source = '{% x\ny %}\n\n{% x\n  y %}\n\n{#one\nkey=1}\nalpha\n\n{#two\n  key=2}\nbeta\n'
-    expect(djotToCarve(source)).toBe(source)
+    const flat = (html: string) => html.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim()
+    expect(flat(carveToHtml(djotToCarve(source)))).toBe(flat(renderHTML(parseDjot(source))))
+    expect(djotToCarve('{#one\nkey=1}\nalpha\n')).toBe('{#one\nkey=1}\nalpha\n')
   })
 })

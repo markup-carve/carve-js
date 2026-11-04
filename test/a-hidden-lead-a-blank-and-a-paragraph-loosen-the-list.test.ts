@@ -23,7 +23,7 @@ describe('a hidden lead, a blank and a paragraph loosen the list', () => {
     ],
     [
       'a wrapped attribute block',
-      '- {x\n  y}\n\n  b\n- a\n',
+      '- {x\n   y}\n\n  b\n- a\n',
       "<ul>\n  <li><p x=\"\" y=\"\">b</p></li>\n  <li>a</li>\n</ul>",
     ],
     [

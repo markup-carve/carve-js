@@ -140,7 +140,7 @@ export function plainCommentEnd(source: string, start: number): number | undefin
     if (depth > 0 && comment.split('\n').slice(1).some(raw => attributeLine(raw, depth)?.trim() === '')) return undefined
   }
   const end = start + comment.length
-  return end
+  return validInlineAttributeLines(source, start, end, true) ? end : undefined
 }
 
 export type DjotAttributeToken = { key: string; source: string; append: boolean }

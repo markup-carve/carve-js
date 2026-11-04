@@ -1626,7 +1626,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // The open-run test comes first, so a deep ladder pays nothing per level.
       if (deepAttr?.attrRun != null && (admission.kind !== 'content' ||
           lazyState.ownedColumn >= 0 && indentColumns(l) < contentCol + lazyState.ownedColumn) &&
-          trackWrappedAttributeRun(deepAttr, stripLazyFrame(l).trimStart(), indentColumns(stripLazyFrame(l)))) deepAttributeClosed = true
+          trackWrappedAttributeRun(deepAttr, stripLazyFrame(l).trimStart(),
+            // In the descendant's coordinates: below its content column, so never past its brace.
+            indentColumns(stripLazyFrame(l)) - contentCol - Math.max(0, lazyState.ownedColumn))) deepAttributeClosed = true
       if (deepAttr?.refusedBraceRun) {
         deepAttr.refusedBraceRun = false
         deepAttr.lazyFoldable = true
@@ -3129,9 +3131,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lexer.consume()
     }
 
-    const followsRefusedRun = (): boolean => {
+    // A refused run's paragraph takes the next line only inside the item that
+    // holds it; a line below that column is read as after any paragraph.
+    const insideRefusedHolder = (l: string): boolean => {
+      let holderColumn = contentCol
+      for (let frame: ItemLazyState | null | undefined = lazyState; frame && frame.ownedColumn >= 0 && !frame.ownedAuthored;
+        frame = frame.deepest) holderColumn += frame.ownedColumn
+      return indentColumns(l) >= holderColumn
+    }
+    const followsRefusedRun = (l: string): boolean => {
       const last = nestedSourceLines.at(-1)
       if (!last?.includes('}')) return false
+      const previous = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
+      if (previous === undefined || isBlankLine(previous) || !insideRefusedHolder(l)) return false
       const run: string[] = []
       for (let at = nestedSourceLines.length - 1; at >= 0; at--) {
         const line = nestedSourceLines[at]!
@@ -3156,8 +3168,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) && !/^(`{3,}|~{3,})/.test(l.trimStart()) || isListMarkerLine(l.trimStart()) && followsRefusedRun() &&
-          indentColumns(l) >= contentCol) && !isBlankLine(l)) {
+      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) && !/^(`{3,}|~{3,})/.test(l.trimStart()) &&
+          insideRefusedHolder(l) || isListMarkerLine(l.trimStart()) && followsRefusedRun(l)) && !isBlankLine(l)) {
         lazyState.refusedBraceFollower = false
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)

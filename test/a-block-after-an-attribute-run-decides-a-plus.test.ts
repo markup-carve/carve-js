@@ -34,7 +34,7 @@ describe('the block after an attribute run decides a plus', () => {
     ],
     [
       'a wrapped attribute block',
-      '- a\n+\n{x\ny}\n  - c\n',
+      '- a\n+\n{x\n y}\n  - c\n',
       "<ul>\n  <li>a</li>\n</ul>\n<ul x=\"\" y=\"\">\n  <li>c</li>\n</ul>",
     ],
     [

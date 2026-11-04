@@ -46,5 +46,21 @@
   {
     "source": "- +\n{% a\nb\nc %}\n# H\n",
     "html": "<ul><li>{% a\nb\nc %}\n# H</li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% c\n  d %}\n",
+    "html": "<ul><li><p>a</p><p>{% c\nd %}</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% c\n  d %}\n# H\n",
+    "html": "<ul><li><p>a</p><p>{% c\nd %}</p></li></ul><section id=\"H\"><h1>H</h1></section>"
+  },
+  {
+    "source": "- a\n\n  {% a\n  b\n  c %}\n",
+    "html": "<ul><li><p>a</p><p>{% a\nb\nc %}</p></li></ul>"
+  },
+  {
+    "source": "- a\n\n  {% a\n  b\n  c %}\n# H\n",
+    "html": "<ul><li><p>a</p><p>{% a\nb\nc %}</p></li></ul><section id=\"H\"><h1>H</h1></section>"
   }
 ]

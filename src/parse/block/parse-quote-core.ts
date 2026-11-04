@@ -633,7 +633,7 @@ export function trackQuoteHostFence(
   }
   const b = openQuoteHosts(q, paragraph)
   if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
-    const closed = trackWrappedAttributeRun(state, b.inner)
+    const closed = trackWrappedAttributeRun(state, b.inner, b.at)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
       state.mode = { kind: 'paragraph' }
@@ -1512,7 +1512,7 @@ export function trackWrappedAttributeRun(
     const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content)
     state.attrRun = verdict === 'open' ? run : null
     if (verdict !== 'open') {
-      state.refusedBraceRun = state.attrShallow === true
+      state.refusedBraceRun = state.attrShallow === true && verdict === 'attributes'
       state.attrShallow = false
     }
     return verdict === 'attributes' && state.refusedBraceRun !== true

@@ -267,6 +267,7 @@ export function createDefinitionListParser(
         lazyFoldable: false,
         inDefList: false,
         attrRun: null,
+        attrOwnerColumn: contentCol,
         ownedColumn: -1,
         ownedAuthored: false,
       }

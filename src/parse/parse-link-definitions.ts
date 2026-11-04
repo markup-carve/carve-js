@@ -688,7 +688,7 @@ export function createLinkDefinitionCollector(
     if (matcherProbeCandidate && paraWasOpen && !markerInterrupts) {
       s.lazyProbeBudget = spendLazyProbeBudget(s.lexer, idx, s.lazyProbeBudget)
     }
-    const closesAttributes = trackWrappedAttributeRun(s.attributeState, line)
+    const closesAttributes = trackWrappedAttributeRun(s.attributeState, line, indentColumns(v.kept))
     s.paraState = isBlankLine(raw) || closesAttributes ? 'no' : 'ask'
     s.paraDepth =
       s.paraState === 'no' ? 0 : paragraphReallyOpen ? paraDepthAbove : s.openCols.length

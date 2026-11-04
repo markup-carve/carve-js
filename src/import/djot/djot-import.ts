@@ -1322,23 +1322,21 @@ function protectBlockBraceRuns(source: string): { source: string; restore: (outp
     const line = lines[i]!
     const at = djotStructuralPrefixEnd(line)
     if (insideImageLabel[i]) { outputLines.push(line); offset += line.length + 1; continue }
-    if (line[at] !== '{') { outputLines.push(line); offset += line.length + 1; continue }
+    if (line[at] !== '{' || line[at + 1] === '%') { outputLines.push(line); offset += line.length + 1; continue }
     const start = offset + at
     const attributes = readAttributes(source, start, false, false, true, false, false)
     if (!attributes || !source.slice(start, attributes.end).includes('\n') || continuesParagraph(source, start)) { outputLines.push(line); offset += line.length + 1; continue }
     const endLine = i + source.slice(start, attributes.end).split('\n').length - 1
-    // Both accepted and refused runs pass through. The reader now decides
-    // their block status from the original columns.
+    // A refused run passes through verbatim: the reader refuses it from the
+    // same columns Djot does. An accepted run is converted like any other.
     const paragraphEnd = endLine + 1
     const runLines = lines.slice(i, paragraphEnd)
-    const accepted = !line.slice(at).startsWith('{%') && runLines.slice(1).every(next => djotStructuralPrefixEnd(next) > at)
-    const following = lines[paragraphEnd]
-    if (accepted && following !== undefined && /^\[[^\]\n]+\]:/.test(following.slice(djotStructuralPrefixEnd(following)))) {
+    if (runLines.slice(1).every(next => djotStructuralPrefixEnd(next) > at)) {
       outputLines.push(line)
       offset += line.length + 1
       continue
     }
-    const token = accepted ? `{#${prefix}${values.length}Z}` : `${prefix}${values.length}Z`
+    const token = `${prefix}${values.length}Z`
     tokens.push(token)
     values.push(lines.slice(i, paragraphEnd).join('\n').slice(at))
     prefixes.push(line.slice(0, at))

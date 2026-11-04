@@ -251,15 +251,29 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
   return count
 }
 
+/** Whether the comment-only paragraph at the cursor sits on blank lines between two items of a list. */
+function commentBetweenListSiblings(lexer: Lexer): boolean {
+  const end = commentOnlyParagraphEnd((offset) => lexer.peek(offset), 0)
+  if (end <= 1 || !isBlankLine(lexer.peek(end))) return false
+  const column = indentColumns(lexer.peek()!)
+  let next = end
+  while (lexer.peek(next) !== undefined && isBlankLine(lexer.peek(next))) next++
+  const after = lexer.peek(next)
+  if (after === undefined || indentColumns(after) > column || !isListMarkerLine(after.trimStart())) return false
+  let back = lexer.pos - 1
+  if (back < 0 || !isBlankLine(lexer.lineAt(back))) return false
+  while (back >= 0 && isBlankLine(lexer.lineAt(back))) back--
+  const before = back >= 0 ? lexer.lineAt(back) : undefined
+  return before !== undefined && (indentColumns(before) > column || isListMarkerLine(before.trimStart()))
+}
+
 /** A block brace run refused only because a continuation is too shallow. */
 function refusedBraceLines(lexer: Lexer): number {
   const first = lexer.peek()
   if (!first?.trimStart().startsWith('{')) return 0
-  if (first.trimStart().startsWith('{%')) {
-    const end = commentOnlyParagraphEnd((offset) => lexer.peek(offset), 0)
-    if (lexer.hostBody !== 'list' && end > 1 && isBlankLine(lexer.peek(end)) &&
-        (lexer.pos === 0 || isBlankLine(lexer.lineAt(lexer.pos - 1)))) return 0
-  }
+  // Between a container's siblings a comment-only paragraph stays an invisible line (CARVE-P9-013).
+  // A comment-only paragraph between two items of one list is an invisible line (CARVE-P9-013).
+  if (first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
   const openerColumn = indentColumns(first)
   const comment = first.trimStart().startsWith('{%')
   const lines: string[] = []

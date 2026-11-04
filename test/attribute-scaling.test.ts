@@ -35,16 +35,17 @@ describe('attribute parsing work', () => {
   })
 
   it('keeps a valid wrapped block after malformed attribute openers', () => {
-    const html = carveToHtml('{abcd\n{abcd\n\n{#valid\n.class}\ntext\n')
+    const html = carveToHtml('{abcd\n{abcd\n\n{#valid\n .class}\ntext\n')
     expect(html).toContain('<p>{abcd\n{abcd</p>')
     expect(html).toContain('<p id="valid" class="class">text</p>')
   })
 
   it('keeps valid three-line attributes after a rejected opener inside containers', () => {
     for (const source of [
-      '{abcd\n{#valid\n  .class\nrole=note}\ntext\n',
-      '> {abcd\n> {#valid\n>   .class\n> role=note}\n> text\n',
-      '- {abcd\n  {#valid\n    .class\n  role=note}\n  text\n',
+      // carve#5080: every continuation sits past its `{`.
+      '{abcd\n{#valid\n  .class\n role=note}\ntext\n',
+      '> {abcd\n> {#valid\n>   .class\n>  role=note}\n> text\n',
+      '- {abcd\n  {#valid\n    .class\n   role=note}\n  text\n',
     ]) {
       const html = carveToHtml(source)
       expect(html).toContain('id="valid" class="class" role="note"')
