@@ -198,4 +198,11 @@ export const KNOWN_LIST_SPAN_START_DRIFT_5063: ReadonlySet<string> = new Set([
   "879-a-shifted-line-block-keeps-a-lazy-follower-at-its-reader-column: pos does not begin at the markup that opens \"list_item\" at $.children[1].children[1].items[0]: offset 15, expected 13 at its owner's content column",
   "880-an-own-line-plus-reaches-a-marker-line-quote-at-its-authored-column-2: pos does not begin at the markup that opens \"list\" at $.children[1].children[0].children[1]: offset 24, expected 20 at its owner's content column",
   "880-an-own-line-plus-reaches-a-marker-line-quote-at-its-authored-column-2: pos does not begin at the markup that opens \"list_item\" at $.children[1].children[0].children[1].items[0]: offset 24, expected 20 at its owner's content column",
+  // The transparent-line port exposes these existing definition parent spans.
+  "350-a-definition-at-a-container-s-content-column-6: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [8, 22] is not inside \"definition_description\" at $.children[0].items[1] [5, 17]",
+  "435-the-continuation-marker-s-column-gate-reaches-every-container-6: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [11, 28] is not inside \"definition_description\" at $.children[0].items[1] [8, 21]",
+  "444-an-opener-at-or-past-a-description-body-s-column-closes-its-paragraph-9: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [11, 35] is not inside \"definition_description\" at $.children[0].items[1] [8, 30]",
+  "449-a-comment-below-a-description-body-s-column-ends-the-body-13: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [8, 23] is not inside \"definition_description\" at $.children[0].items[1] [5, 15]",
+  "449-a-comment-below-a-description-body-s-column-ends-the-body-5: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [8, 16] is not inside \"definition_description\" at $.children[0].items[1] [5, 14]",
+  "449-a-comment-below-a-description-body-s-column-ends-the-body-8: span outside its parent: \"paragraph\" at $.children[0].items[1].children[0] [8, 22] is not inside \"definition_description\" at $.children[0].items[1] [5, 14]",
 ])

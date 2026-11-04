@@ -271,7 +271,10 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           `*[${block.abbr}]: ${block.expansion}`)
   }
   const visit = (blocks: BlockNode[], quoteDepth: number, markerLine?: number): void => {
-    for (const block of blocks) {
+    const pending: Array<{ block: BlockNode; quoteDepth: number; markerLine: number | undefined }> =
+      blocks.map((block) => ({ block, quoteDepth, markerLine }))
+    for (let at = 0; at < pending.length; at++) {
+      const { block, quoteDepth, markerLine } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
@@ -307,17 +310,20 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           }
         }
       }
-      if (block.type === 'list') for (const item of block.items) visit(item.children, quoteDepth, item.pos?.startLine)
+      if (block.type === 'list') for (const item of block.items)
+        for (const child of item.children) pending.push({ block: child, quoteDepth, markerLine: item.pos?.startLine })
       else if (block.type === 'definition_list') for (const item of block.items)
         for (const [index, definition] of item.definitions.entries())
-          visit(definition, quoteDepth, item.definitionLines?.[index])
+          for (const child of definition) pending.push({ block: child, quoteDepth, markerLine: item.definitionLines?.[index] })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading')
-        visit(block.children as BlockNode[], quoteDepth + (block.type === 'block_quote' ? 1 : 0),
-          block.type === 'block_quote' ? block.pos?.startLine : markerLine)
+        for (const child of block.children as BlockNode[]) pending.push({ block: child,
+          quoteDepth: quoteDepth + (block.type === 'block_quote' ? 1 : 0),
+          markerLine: block.type === 'block_quote' ? block.pos?.startLine : markerLine })
     }
   }
   visit(document.children, 0)
-  for (const blocks of Object.values(document.footnoteDefs ?? {})) visit(blocks, 0)
+  for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {}))
+    visit(blocks, 0, document.footnoteDefPos?.[label]?.startLine)
 }
 
 function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node: Comment | AbbreviationDef): void {
