@@ -580,6 +580,8 @@ function canonical(value: unknown): unknown {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       if (key === 'header' && 'span' in (value as Record<string, unknown>)) continue
+      // The canonical writer spells every break `***` (carve#4973), so the marker is no tree difference.
+      if (key === 'marker' && (value as { type?: unknown }).type === 'thematic_break') continue
       if (
         key === 'pos' ||
         key === 'footnoteDefPos' ||
