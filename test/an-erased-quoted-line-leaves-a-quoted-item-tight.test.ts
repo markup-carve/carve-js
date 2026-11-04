@@ -3,7 +3,7 @@ import { carveToHtml } from '../src/index.js'
 
 const compact = (source: string): string => carveToHtml(source).replace(/>\s+</g, '><').trim()
 
-// carve-js#4386, PART 0 S1: an erased line keeps its `>` prefix, which is the quote's blank line.
+// carve#5129, PART 0 S1: an erased line goes with its `>` prefix, so a quoted item reads as its unquoted twin.
 describe('an erased line in a quoted list item', () => {
   it.each([
     ['comment at the item column', '> - a\n>   %% n\n>   x\n'],
@@ -11,13 +11,13 @@ describe('an erased line in a quoted list item', () => {
     ['empty comment', '> - a\n>   %%\n>   x\n'],
     ['link definition', '> - a\n>   [x]: /u\n>   x\n'],
     ['ordered item', '> 1. a\n>    %% n\n>    x\n'],
-  ])('separates two paragraphs: %s', (_name, source) => {
-    expect(compact(source)).toMatch(/<li><p>a<\/p><p>x<\/p><\/li>/)
+  ])('keeps one paragraph: %s', (_name, source) => {
+    expect(compact(source)).toMatch(/<li>a\nx<\/li>/)
   })
 
   it('in a nested quote', () => {
     expect(compact('> > - a\n> >   %% n\n> >   x\n'))
-      .toBe('<blockquote><blockquote><ul><li><p>a</p><p>x</p></li></ul></blockquote></blockquote>')
+      .toBe('<blockquote><blockquote><ul><li>a\nx</li></ul></blockquote></blockquote>')
   })
 
   it('leaves the unquoted item tight', () => {

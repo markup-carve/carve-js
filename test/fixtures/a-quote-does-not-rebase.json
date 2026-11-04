@@ -7,7 +7,7 @@
   {
     "id": "corpus-615-8",
     "source": "- > para\n  >  [r]: /u\ntail\n\n[r][]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para\ntail</p></blockquote>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-9",
@@ -22,12 +22,12 @@
   {
     "id": "corpus-615-11",
     "source": "> - > para\n>   >  [r]: /u\ntail\n\n[r][]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a></p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p><a href=\"/u\">r</a></p>"
   },
   {
     "id": "corpus-615-12",
     "source": "> :: t\n> : d\n>   [r]: /u\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d\ntail</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "corpus-615-13",
@@ -42,7 +42,7 @@
   {
     "id": "q-96",
     "source": "- > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<ul>\n  <li>\n    <blockquote><p>para\ntail</p></blockquote>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-97",
@@ -62,7 +62,7 @@
   {
     "id": "q-100",
     "source": "- a\n  > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ul>\n  <li>a\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ul>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<ul>\n  <li>a\n    <blockquote><p>para\ntail</p></blockquote>\n  </li>\n</ul>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-101",
@@ -82,7 +82,7 @@
   {
     "id": "q-104",
     "source": ":: t\n: > para\n  >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para</p></blockquote>\n  </dd>\n</dl>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>para\ntail</p></blockquote>\n  </dd>\n</dl>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-105",
@@ -102,7 +102,7 @@
   {
     "id": "q-108",
     "source": "1. > para\n   >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<ol>\n  <li>\n    <blockquote><p>para</p></blockquote>\n  </li>\n</ol>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<ol>\n  <li>\n    <blockquote><p>para\ntail</p></blockquote>\n  </li>\n</ol>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-109",
@@ -122,7 +122,7 @@
   {
     "id": "q-112",
     "source": "> > para\n> >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <blockquote><p>para</p></blockquote>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<blockquote>\n  <blockquote><p>para\ntail</p></blockquote>\n</blockquote>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-113",
@@ -142,7 +142,7 @@
   {
     "id": "q-116",
     "source": "> - > para\n>   >  [r]: /u\ntail\n\n[r][] [^f]\n",
-    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p>tail</p>\n<p><a href=\"/u\">r</a> [^f]</p>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>para\ntail</p></blockquote>\n    </li>\n  </ul>\n</blockquote>\n<p><a href=\"/u\">r</a> [^f]</p>"
   },
   {
     "id": "q-117",
@@ -162,7 +162,7 @@
   {
     "id": "qd-120",
     "source": "> :: t\n> : d\n>   [r]: /u\ntail\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d</dd>\n  </dl>\n</blockquote>\n<p>tail</p>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>d\ntail</dd>\n  </dl>\n</blockquote>"
   },
   {
     "id": "qd-121",

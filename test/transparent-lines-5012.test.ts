@@ -36,10 +36,10 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(carveToHtml('para\n*[AB]: Alpha Beta\nAB')).toBe('<p>para\n<abbr title="Alpha Beta">AB</abbr></p>')
   })
 
-  it.each(['%% c', '[r]: /u', '*[A]: B'])('keeps a marker-line note quote split across %s', (invisible) => {
+  it.each(['%% c', '[r]: /u', '*[A]: B'])('joins a marker-line note quote across %s (carve#5129)', (invisible) => {
     const source = `[^n]: > a\n      > ${invisible}\n      > b\n\nsee[^n]\n`
     const html = carveToHtml(source)
-    expect(html).toContain('<blockquote>\n        <p>a</p>\n        <p>b</p>\n      </blockquote>')
+    expect(html).toContain('<blockquote><p>a\nb</p></blockquote>')
     expect(html).not.toContain('&gt;')
     const written = carveToCarve(source)
     expect(carveToHtml(written)).toBe(html)
@@ -166,7 +166,8 @@ describe('carve#5012 transparent single-line blocks', () => {
     expect(quote?.type).toBe('block_quote')
     if (quote?.type !== 'block_quote') return
     expect(quote.children.map((node) => node.type)).toEqual(['paragraph', 'comment'])
-    expect(quote.pos?.endLine).toBe(2)
+    // The comment goes with its `>`, so `b` continues the quoted paragraph (carve#5129).
+    expect(quote.pos?.endLine).toBe(3)
     expect(carveToHtml(renderCarve(parse(source)))).toBe(carveToHtml(source))
     expect(carveToCarve(source)).toContain('> a\n> %% c\n')
     expect(renderCarve(fromAstJson(carveToAstJson(source)))).toContain('> a\n> %% c\n')

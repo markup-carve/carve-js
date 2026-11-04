@@ -65,14 +65,14 @@ ${lastBlock}
 </section>`)
   })
 
-  it('ends the quote after a link definition following a marker-line footnote', () => {
+  // The erased definition goes with its `>`, so the note paragraph takes `tail` (carve#5129).
+  it('folds a line after a link definition into a marker-line footnote', () => {
     const source = ['> - [^n]: text', '>     more', '>     [r]: /u', 'tail'].join('\n')
     expect(carveToHtml(source)).toBe(`<blockquote>
   <ul>
     <li></li>
   </ul>
-</blockquote>
-<p>tail</p>`)
+</blockquote>`)
   })
 
   it.each([

@@ -22,9 +22,9 @@ describe('invisible followers of a continuation marker', () => {
     )
   })
 
-  it('collects a quoted abbreviation, which ends the paragraph the refused plus stays in', () => {
+  it('collects a quoted abbreviation, which goes with its `>` (carve#5129)', () => {
     expect(carveToHtml('> a\n> +\n> *[A]: b\n> text\n\nA')).toBe(
-      '<blockquote>\n  <p>a\n+</p>\n  <p>text</p>\n</blockquote>\n<p><abbr title="b">A</abbr></p>',
+      '<blockquote><p>a\n+\ntext</p></blockquote>\n<p><abbr title="b">A</abbr></p>',
     )
   })
 

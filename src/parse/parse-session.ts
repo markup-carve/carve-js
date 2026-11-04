@@ -169,7 +169,7 @@ import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
-import { authoredAbbreviations, directCommentNodes, dropTransparentScaffoldText, restoreTransparentAbbreviations, restoreTransparentComments, splitTransparentQuoteParagraphs, transparentLineStream } from './block/transparent-lines.js'
+import { authoredAbbreviations, directCommentNodes, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -606,14 +606,9 @@ export class ParseSession extends InlineParseSession {
       lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
       if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
       const erased = new Set(transparentLines.erased)
-      const scaffolds = new Map<number, string>()
-      transparentLines.sourceLines.forEach((index, at) => {
-        if (erased.has(index)) scaffolds.set(index, transparentLines.lines[at]!)
-      })
       let previousVisible = ''
       lexer.rootLines = transparentLines.original.map((line, index) => {
-        // A retained quote prefix is that quote's blank line (PART 0 S1).
-        if (erased.has(index)) return scaffolds.get(index) ?? previousVisible
+        if (erased.has(index)) return previousVisible
         previousVisible = line
         return line
       })
@@ -643,13 +638,16 @@ export class ParseSession extends InlineParseSession {
     const ownership = precomputedOwnership ?? ownLines(lexer.lines as string[], lexer.pos)
     lexer.applyOwnership(ownership)
     if (transparentLines && lexer.rootLines) {
-      // A code opener uses the ownership walk's column after transparent
-      // lines have gone. Keep the authored root lines for other lookups.
+      // Without the erased lines the root has no `rootLines` and containers read the
+      // walk's lines, so read those here too (carve#5129).
+      lexer.authoredRootLines = lexer.rootLines
       const visibleRoot = lexer.rootLines.slice()
+      const erased = new Set(transparentLines.erased)
       for (let index = 0; index < transparentLines.sourceLines.length; index++) {
         const originalIndex = transparentLines.sourceLines[index]!
-        if (/^[ \t]*`{3,}/.test(transparentLines.original[originalIndex]!)) {
-          visibleRoot[originalIndex] = lexer.lines[index]!
+        visibleRoot[originalIndex] = lexer.lines[index] ?? visibleRoot[originalIndex]!
+        for (let next = originalIndex + 1; erased.has(next); next++) {
+          visibleRoot[next] = visibleRoot[originalIndex]!
         }
       }
       lexer.rootLines = visibleRoot
@@ -737,8 +735,6 @@ export class ParseSession extends InlineParseSession {
       }
       restoreTransparentComments(doc, authored, transparentLines, directComments ?? undefined)
       restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
-      dropTransparentScaffoldText(doc, transparentLines)
-      splitTransparentQuoteParagraphs(doc, transparentLines)
     }
     if (dropRequested) {
       return this.skipPositionDrop ? doc : dropPositions(doc)
@@ -1147,7 +1143,7 @@ export class ParseSession extends InlineParseSession {
       if (l.trimStart() === '%%' && this.consumedMarkerLines.has(lexer.lineNumber(lexer.pos - 1))) {
         const standIn: Comment = { type: 'comment', block: false, content: '' }
         const root = lexer.documentRoot ?? lexer
-        const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+        const authoredLine = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
         if (authoredLine?.trimEnd().endsWith('+') && !authoredLine.includes('%%')) {
           standIn.transparentSource = authoredLine
           standIn.transparentOriginalValue = ''
@@ -1168,7 +1164,7 @@ export class ParseSession extends InlineParseSession {
       // the clause calls content, replaced by one the author did not write.
       const comment: Comment = { type: 'comment', block: false, content: commentLineContent(l) }
       const root = lexer.documentRoot ?? lexer
-      const authoredLine = (root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
+      const authoredLine = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos - 1) - 1]
       // A refused or consumed `+` is represented internally by a `%%` line.
       // After #5012, writing that stand-in changes layout, so retain its
       // authored spelling for the source writer.

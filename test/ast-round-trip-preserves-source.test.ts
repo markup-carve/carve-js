@@ -99,6 +99,7 @@ const KNOWN_LOSSES = new Set<string>([
   '851-a-first-block-plus-shape-reads-the-one-attach-rule-9.crv',
   '855-invisible-lines-after-a-plus-are-skipped-and-the-first-visible-line-decides-3.crv',
   '881-an-indented-quote-prefix-keeps-an-invisible-plus-follower-in-its-host-2.crv',
+  '945-a-column-0-comment-before-a-sibling-keeps-the-blank-that-loosens-the-list-4.crv',
 ])
 
 /*

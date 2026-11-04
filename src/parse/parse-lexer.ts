@@ -245,6 +245,8 @@ export class Lexer {
    * anchored.
    */
   rootLines?: readonly string[]
+  /** The authored root lines where `rootLines` holds the ownership walk's view of a transparent parse. */
+  authoredRootLines?: readonly string[]
   /** Root lexer for a document offset after a nested block's last payload line. */
   documentRoot?: Lexer
   /**

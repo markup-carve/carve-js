@@ -52,19 +52,11 @@ export function transparentLineStream(source: string): TransparentLineStream | n
   const erasedSet = new Set(erased)
   const lines: string[] = []
   const sourceLines: number[] = []
+  // An erased line goes with its quote prefixes (carve#5129).
   for (let index = 0; index < original.length; index++) {
-    if (!erasedSet.has(index)) {
-      lines.push(original[index]!)
-      sourceLines.push(index)
-      continue
-    }
-    // Keep an empty quote scaffold so nested note and quote ownership remains
-    // available to the layout reader without exposing the erased payload.
-    const quotePrefix = /^(?:[ \t]*>[ ]?)+/.exec(original[index]!)?.[0]
-    if (quotePrefix) {
-      lines.push(quotePrefix)
-      sourceLines.push(index)
-    }
+    if (erasedSet.has(index)) continue
+    lines.push(original[index]!)
+    sourceLines.push(index)
   }
   return { lines, original, sourceLines, erased, authoredTrace: trace, authoredOwnership,
     originalOffsets: lexer.lineOffsets }
@@ -197,18 +189,19 @@ function candidateGaps(items: readonly ListItem[], offset: number): number[] {
   return [first - 1, first].filter((index) => index < items.length - 1)
 }
 
-function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[] } | null {
+/** `quotes` counts the quotes between `blocks` and the paragraph. */
+function containingParagraph(blocks: BlockNode[], offset: number): { paragraph: Paragraph; siblings: BlockNode[]; quotes: number } | null {
   for (const block of blocks) {
     const span = spanOf(block)
     if (span && span.startOffset <= offset && offset < span.endOffset) {
-      if (block.type === 'paragraph') return { paragraph: block, siblings: blocks }
+      if (block.type === 'paragraph') return { paragraph: block, siblings: blocks, quotes: 0 }
       const children = block.type === 'list' ? candidateItems(block.items, offset).map((index) => block.items[index]!.children) :
         block.type === 'definition_list' ? block.items.flatMap((item) => item.definitions) :
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
           [block.children as BlockNode[]] : []
       for (const child of children) {
         const match = containingParagraph(child, offset)
-        if (match) return match
+        if (match) return block.type === 'block_quote' ? { ...match, quotes: match.quotes + 1 } : match
       }
     }
   }
@@ -340,6 +333,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           `*[${block.abbr}]: ${block.expansion}`)
   }
   const visit = (blocks: BlockNode[], quoteDepth: number, markerLine?: number): void => {
+    const rootDepth = quoteDepth
     const pending: Array<{ block: BlockNode; quoteDepth: number; markerLine: number | undefined }> =
       blocks.map((block) => ({ block, quoteDepth, markerLine }))
     for (let at = 0; at < pending.length; at++) {
@@ -353,9 +347,10 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
           !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
-        const source = authoredSource(block, quoteDepth)
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset)
+        // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
+        const source = authoredSource(block, match ? rootDepth + match.quotes : quoteDepth)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -575,88 +570,3 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
   }
 }
 
-/** A retained quote scaffold can appear as literal text on a marker-line lead. */
-export function dropTransparentScaffoldText(document: Document, stream: TransparentLineStream): void {
-  const erased = new Set(stream.erased.map((index) => index + 1))
-  const visit = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const child of value) visit(child)
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    const node = value as Record<string, unknown>
-    if (node.type === 'paragraph') {
-      const paragraph = value as Paragraph
-      const tail = paragraph.children.at(-1)
-      if (tail?.type === 'text' && /^>+$/.test(tail.value) && tail.pos && erased.has(tail.pos.startLine)) {
-        paragraph.children.pop()
-        if (paragraph.children.at(-1)?.type === 'soft_break') paragraph.children.pop()
-        const last = paragraph.children.at(-1)?.pos
-        if (last && paragraph.pos) {
-          paragraph.pos.endLine = last.endLine
-          if (last.endColumn !== undefined) paragraph.pos.endColumn = last.endColumn
-          if (last.endOffset !== undefined) paragraph.pos.endOffset = last.endOffset
-        }
-      }
-    }
-    for (const [key, child] of Object.entries(node)) {
-      if (key !== 'pos' && key !== 'attrs') visit(child)
-    }
-  }
-  visit(document.children)
-  visit(document.footnoteDefs)
-}
-
-/** Split a quoted paragraph where an erased quote line supplies a blank scaffold. */
-export function splitTransparentQuoteParagraphs(document: Document, stream: TransparentLineStream): void {
-  const erased = new Set(stream.erased.map((index) => index + 1))
-  const visit = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      const blocks = value as BlockNode[]
-      for (let i = 0; i < blocks.length; i++) {
-        const paragraph = blocks[i]
-        if (paragraph?.type === 'paragraph') {
-          const at = paragraph.children.findIndex((child, index) => index > 0 &&
-            child.type === 'text' && /^>+$/.test(child.value) && child.pos && erased.has(child.pos.startLine))
-          if (at > 0 && at + 2 < paragraph.children.length &&
-              paragraph.children[at - 1]?.type === 'soft_break' && paragraph.children[at + 1]?.type === 'soft_break') {
-            const line = paragraph.children[at]!.pos!.startLine
-            const after = paragraph.children.slice(at + 2)
-            paragraph.children = paragraph.children.slice(0, at - 1)
-            const firstEnd = paragraph.children.at(-1)?.pos
-            const afterStart = after[0]?.pos
-            const afterEnd = after.at(-1)?.pos
-            if (paragraph.pos && firstEnd) {
-              paragraph.pos.endLine = firstEnd.endLine
-              if (firstEnd.endColumn !== undefined) paragraph.pos.endColumn = firstEnd.endColumn
-              if (firstEnd.endOffset !== undefined) paragraph.pos.endOffset = firstEnd.endOffset
-            }
-            if (paragraph.transparentVisibleLines) {
-              paragraph.transparentVisibleLines = paragraph.transparentVisibleLines.filter((visible) => visible < line)
-            }
-            paragraph.transparentFollowingLines = []
-            const following: Paragraph = { type: 'paragraph', children: after }
-            if (afterStart && afterEnd) following.pos = {
-              startLine: afterStart.startLine, endLine: afterEnd.endLine,
-              ...(afterStart.startColumn !== undefined ? { startColumn: afterStart.startColumn } : {}),
-              ...(afterEnd.endColumn !== undefined ? { endColumn: afterEnd.endColumn } : {}),
-              ...(afterStart.startOffset !== undefined ? { startOffset: afterStart.startOffset } : {}),
-              ...(afterEnd.endOffset !== undefined ? { endOffset: afterEnd.endOffset } : {}),
-            }
-            let insert = i + 1
-            while (blocks[insert]?.type === 'comment' && blocks[insert]?.pos?.startLine === line) insert++
-            blocks.splice(insert, 0, following)
-          }
-        }
-        visit(blocks[i])
-      }
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (key !== 'pos' && key !== 'attrs') visit(child)
-    }
-  }
-  visit(document.children)
-  visit(document.footnoteDefs)
-}

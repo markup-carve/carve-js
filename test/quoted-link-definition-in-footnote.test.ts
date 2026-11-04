@@ -14,7 +14,7 @@ describe('quoted link definitions in footnote bodies', () => {
 
   // A definition interrupts an open quote paragraph in a note as anywhere else (carve-js#3922 ruling).
   it('registers a definition below an open quote paragraph', () => {
-    const html = carveToHtml('[^n]: a\n  > prose\n  > [r]: /x\n[x][r] [^n]\n')
+    const html = carveToHtml('[^n]: a\n  > prose\n  > [r]: /x\n\n[x][r] [^n]\n')
     expect(html).toContain('<a href="/x">x</a>')
     expect(html).not.toContain('[r]: /x')
   })

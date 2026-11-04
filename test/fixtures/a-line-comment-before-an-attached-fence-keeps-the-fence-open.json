@@ -32,7 +32,7 @@
   {
     "id": "quoted-host",
     "source": "> - +\n> %% c\n> ```\n> a\n> - x\n",
-    "html": "<blockquote>\n  <ul>\n    <li></li>\n  </ul>\n  <pre><code>a\n- x\n</code></pre>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li>\n      <pre><code>a\n- x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>"
   },
   {
     "id": "blank-ends-the-fence",
