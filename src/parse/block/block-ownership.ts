@@ -341,7 +341,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -369,6 +369,7 @@ export function ownLines(
   const refusedPlus: RefusedPlus[] = []
   // Lines whose consumed `+` now reads as a `%%` stand-in: container markup, not a comment.
   const consumedMarkers = new Set<number>()
+  const quoteSiblingSeparators = new Set<number>()
   // A later marker cannot take the block offered by an earlier marker.
   const claimedMarkers = new Set<number>()
   const skippedAbbreviations = new Map<number, [string, string]>()
@@ -562,6 +563,7 @@ export function ownLines(
         refuse(plusReason, host.kind)
         if (host.kind === 'quote') host.para = false
         consumedMarkers.add(at)
+        if (plusReason === 'sibling' && attachedHost?.some((frame) => frame.kind === 'quote')) quoteSiblingSeparators.add(at)
         src = ' '.repeat(plusReason === 'claimed' || crossedDescendant ? 0 : Math.max(0, host.canon - host.markerCanon!)) + '%%'
         rewritten = true
         finish()
@@ -1046,7 +1048,7 @@ export function ownLines(
       return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
