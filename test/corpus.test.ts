@@ -1513,14 +1513,8 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_5016_HTML,
   ...RULED_HTML_AHEAD_OF_PIN_5012,
 ])
-// carve-js#3105 is separate from empty destinations. The spec pin includes
-// these three newer corpus rows; keep their measured lag explicit until that
-// parser change lands.
-const behindSpec = new Map<string, string>([
-  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open-3", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>b\n      <ul>\n        <li>\n          <pre><code>x\n</code></pre>\n        </li>\n      </ul>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
-  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open-4", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>\n      <pre><code class=\"language-js\"></code></pre>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
-  ["947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open", "<blockquote>\n  <p>a</p>\n  <ul>\n    <li>\n      <pre><code class=\"language-js\">x\n</code></pre>\n    </li>\n    <li>y</li>\n  </ul>\n</blockquote>"],
-])
+// The quote sibling list fix on main retired the three #947 parser lag declarations.
+const behindSpec = new Map<string, string>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
