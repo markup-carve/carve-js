@@ -2859,8 +2859,11 @@ export class ParseSession extends InlineParseSession {
       const addLiteralText = (from: number, to: number): void => {
         if (from === to) return
         const startPosition = positionAt(from), endPosition = positionAt(to)
-        paragraphNode.children.push({ type: 'text', value: text.slice(from, to),
-          ...(lexer.hasDocumentOffsets ? { pos: {
+        const value = text.slice(from, to)
+        // A run joined across a stripped indent or quote prefix is not a source slice (CARVE-P12-022).
+        const contiguous = endPosition.offset - startPosition.offset === [...value].length
+        paragraphNode.children.push({ type: 'text', value,
+          ...(lexer.hasDocumentOffsets && contiguous ? { pos: {
             startLine: startPosition.line, startColumn: startPosition.column, startOffset: startPosition.offset,
             endLine: endPosition.line, endColumn: endPosition.column, endOffset: endPosition.offset,
           } } : {}),
