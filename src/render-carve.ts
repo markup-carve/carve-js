@@ -5907,6 +5907,7 @@ class CarveRenderSession {
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
     const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad = codeSpanNeedsPad(content)
+      || /\n\[[^\]\n]+\]:[ \t]+[^\n]+$/.test(content)
       || (this.verbatimSpelling(nodeType, content) >= 4 && !/^[\r\n]|[\r\n]$/.test(content))
     // NO SOURCE REPRODUCES A VALUE THE BLOCK LAYER WOULD TAKE APART, so the
     // writer refuses it instead of emitting the nearest form (carve-js#1344).

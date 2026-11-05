@@ -71,6 +71,13 @@ it.each(Object.keys(HOSTS))('pads a last definition-shaped line so the closer en
   expect(carveToHtml(written)).toBe(renderHtml(withCode(host, '', 'a\n[d]: u')))
 })
 
+it('pads a definition-shaped final line in a footnote body', () => {
+  const source = 'r[^n]\n\n[^n]: p `a\n  [x]: y` q\n'
+  const written = carveToCarve(source)
+  expect(written).toBe('r[^n]\n\n[^n]: p ` a\n   [x]: y ` q\n')
+  expect(carveToHtml(written)).toBe(carveToHtml(source))
+})
+
 it.each(['quote', 'bullet', 'quotedItem', 'div'])('spells a last colon-run line with the closer on it: %s', host => {
   const document = withCode(host, '', 'a\n:::')
   const written = renderCarve(document)
