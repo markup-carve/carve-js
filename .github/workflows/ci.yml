@@ -178,7 +178,7 @@ jobs:
       # rather than as a project devDependency (keeps the main matrix light).
       - name: Install Playwright chromium
         run: |
-          npm i --no-save playwright
+          npm i --no-save playwright@1.64.0
           npx playwright install --with-deps chromium
 
       - name: Browser mutation-XSS check
