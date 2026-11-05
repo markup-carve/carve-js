@@ -7,6 +7,7 @@ describe('a container-owned comment run is one writer block', () => {
     [':: t\n: a\n\n  %% c\n  %% d\n\n  b\n', ':: t\n: a\n\n  %% c\n  %% d\n\n  b\n'],
     ['- a\n\n  %% y\n  %% z\n- c\n', '- a\n\n  %% y\n  %% z\n\n- c\n'],
     ['- a\n  %% y\n  %% z\n- c\n', '- a\n  %% y\n  %% z\n- c\n'],
+    ['- a\n\n  %% y\n\n  %% z\n- c\n', '- a\n\n  %% y\n  %% z\n\n- c\n'],
     ['> a\n>\n> %% c\n> %% d\n', '> a\n>\n> %% c\n> %% d\n'],
   ])('writes the run and reads it back: %j', (source, expected) => {
     const written = carveToCarve(source)

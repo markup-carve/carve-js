@@ -4205,9 +4205,7 @@ class CarveRenderSession {
           else {
             const continuesRun = previousGap !== undefined && previousGap.after === gap.after &&
               isLineComment(previousGap.node as BlockNode) && isLineComment(gap.node as BlockNode) &&
-              !isRegionMarker(previousGap.node as BlockNode) && !isRegionMarker(gap.node as BlockNode) &&
-              previousGap.node.pos?.endLine !== undefined &&
-              gap.node.pos?.startLine === previousGap.node.pos.endLine + 1
+              !isRegionMarker(previousGap.node as BlockNode) && !isRegionMarker(gap.node as BlockNode)
             out += `${this.canonicalTransparentLines && !node.tight && !continuesRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
           }
           previousGap = gap
