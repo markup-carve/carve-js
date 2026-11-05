@@ -49,7 +49,8 @@ describe('a continuation marker attaches every block in its run', () => {
     // row read `+` before the break while the marker still attached the whole
     // run; carve-rs `b6ff319c` writes exactly what is asserted here, and renders
     // the `<hr>` outside the list for the same reason.
-    expect(carveToCarve(src)).toBe(src)
+    // carve#4973: the document's break is written `***`.
+    expect(carveToCarve(src)).toBe('- x\n+\n---yaml\nk: v\n\n***\n')
     expect(roundTrips(src)).toBe(true)
     expect(carveToHtml(carveToCarve(src))).toContain('<hr>')
   })
@@ -95,7 +96,7 @@ describe('a continuation marker attaches every block in its run', () => {
     expect(carveToCarve('- x\n+\n```\nc\n```\n')).toBe('- x\n  ```\n  c\n  ```\n')
     expect(carveToCarve('- x\n+\n> q\n')).toBe('- x\n  > q\n')
     expect(carveToCarve('- x\n+\n# h\n')).toBe('- x\n  # h\n')
-    expect(carveToCarve('- x\n+\n---\n')).toBe('- x\n+\n---\n')
+    expect(carveToCarve('- x\n+\n---\n')).toBe('- x\n  ***\n')
   })
 
   it('CONTROL: an already-indented image with no marker is left alone', () => {
