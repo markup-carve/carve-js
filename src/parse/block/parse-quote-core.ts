@@ -60,9 +60,42 @@ export function fenceCloseRe(marker: string): RegExp {
   return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
+/** Whether a line from the one being tracked on, before a blank, matches `close`; set by the tracker's caller. */
+let keptFenceCloserAhead: ((close: RegExp) => boolean) | undefined
+
+// Per pattern, the last scanned window: every start inside it shares its answer, so scans stay linear.
+const keptFenceScans = new WeakMap<Lexer, Map<string, { from: number; to: number; found: boolean }>>()
+
+export function withKeptFenceLookahead<T>(lexer: Lexer, lineIndex: number, track: () => T): T {
+  const outer = keptFenceCloserAhead
+  keptFenceCloserAhead = close => {
+    let scans = keptFenceScans.get(lexer)
+    if (scans === undefined) keptFenceScans.set(lexer, scans = new Map())
+    const known = scans.get(close.source)
+    if (known !== undefined && lineIndex >= known.from && lineIndex < known.to) return known.found
+    let i = lineIndex + 1
+    let found = false
+    for (; i < lexer.lineCount; i++) {
+      const text = (lexer.lineAt(i) ?? '').replace(/^(?:[ \t]*>)*[ \t]*/, '')
+      if (text === '') break
+      if (close.test(text)) {
+        found = true
+        break
+      }
+    }
+    scans.set(close.source, { from: lineIndex, to: i, found })
+    return found
+  }
+  try {
+    return track()
+  } finally {
+    keptFenceCloserAhead = outer
+  }
+}
+
 /**
  * The line after a refused brace run continues its paragraph whatever it opens,
- * and a fence opener there keeps its closer in it too (CARVE-P2-035).
+ * and a fence opener there keeps its lines through its closer too (CARVE-P2-035).
  * `refusedRunKept` is null while the follower is due and the closer's pattern after a fence opener.
  */
 export function keepsRefusedRunLine(state: { refusedRunKept?: RegExp | null | undefined }, content: string, paragraphOpen: boolean): boolean {
@@ -74,12 +107,13 @@ export function keepsRefusedRunLine(state: { refusedRunKept?: RegExp | null | un
   }
   const text = content.trimStart()
   if (kept !== null) {
-    if (!kept.test(text)) return false
-    state.refusedRunKept = undefined
+    if (kept.test(text)) state.refusedRunKept = undefined
     return true
   }
   const marker = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
-  state.refusedRunKept = marker === undefined ? undefined : fenceCloseRe(marker)
+  const close = marker === undefined ? undefined : fenceCloseRe(marker)
+  // Without a closer before the paragraph ends the opener is kept alone.
+  state.refusedRunKept = close !== undefined && keptFenceCloserAhead?.(close) !== false ? close : undefined
   return true
 }
 
