@@ -813,6 +813,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
   // Hoisted comments are placed in one merge per sibling list, so later lookups do not walk them
   // (carve-js#4392). The lookups never match a comment; only insertAfterParagraph reads placed ones.
   const hoisted = new Map<BlockNode[], Comment[]>()
+  const splitFootnotes = new Set<string>()
   const placeHoisted = (only?: BlockNode[]): void => {
     for (const [siblings, pending] of hoisted) {
       if (only && siblings !== only) continue
@@ -838,7 +839,13 @@ export function restoreTransparentComments(document: Document, authored: Documen
     comment.transparentOriginalValue = comment.content
     const owner = ownersByLine.get(index + 1)
     const footnote = Object.entries(document.footnoteDefPos ?? {}).find(([_label, pos]) =>
-      pos.startLine <= index + 1 && (index + 1 <= pos.endLine || owner?.endsWith(`/footnote:${pos.startLine}`)))?.[0]
+      owner === undefined
+        ? pos.startLine <= index + 1 && index + 1 <= pos.endLine
+        : owner.split('/').includes(`footnote:${pos.startLine}`))?.[0]
+    if (owner !== undefined) for (const [label, pos] of Object.entries(document.footnoteDefPos ?? {})) {
+      if (pos.startLine < index + 1 && index + 1 < pos.endLine &&
+          !owner.split('/').includes(`footnote:${pos.startLine}`)) splitFootnotes.add(label)
+    }
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
     const match = containingParagraph(blocks, comment.pos!.startOffset!)
     if (match) {
@@ -911,6 +918,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
     }
   }
   placeHoisted()
+  for (const label of splitFootnotes) delete document.footnoteDefPos?.[label]
 }
 
 export function restoreTransparentAbbreviations(document: Document, definitions: AbbreviationDef[], stream: TransparentLineStream): void {
