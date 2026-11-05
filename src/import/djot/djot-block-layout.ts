@@ -1009,13 +1009,18 @@ function placeAttributeLine(I: LayoutInput, s: LayoutState, L: LayoutLine, attrs
   }
   if (attributeLine && !s.paragraph && holdItemAttributes) {
     let owner: typeof s.lists[number] | undefined
+    let ownerIndex = -1
     for (let index = s.lists.length - 1; index >= 0; index--) {
       const candidate = s.lists[index]!
-      if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; break }
+      if (candidate.depth === quoteDepth && indent > candidate.column) { owner = candidate; ownerIndex = index; break }
     }
     if (owner && attrs!.source !== '{}') {
       const heldLoose = /\x00DJOTITEMATTR\x00(?:\d+\x00)?B\d+\x00$/.test(s.out[owner.start - 2] ?? '')
-      if (s.blank && !heldLoose && !s.out[owner.start]!.includes('{loose}\n')) {
+      // djot.js charges a blank read while a sub-list is open to the sub-list (carve#5197).
+      const subListOpen = s.lists.slice(ownerIndex + 1).some(list => list.depth === quoteDepth)
+      // The attribute line closes those sub-lists, so a later blank is the owner's own.
+      if (subListOpen && s.lists.slice(ownerIndex + 1).every(list => list.depth === quoteDepth)) s.lists.splice(ownerIndex + 1)
+      if (s.blank && !heldLoose && !subListOpen && !s.out[owner.start]!.includes('{loose}\n')) {
         const start = s.out[owner.start]!, noteItem = s.noteOwner ? /^(\[\^[^\]\n]+\]:[ \t]*)(.*)$/.exec(start) : null
         s.out[owner.start] = noteItem ? `${noteItem[1]}{loose}\n  ${noteItem[2]}` : quoteForCarve(I, s, L) + ' '.repeat(owner.target) + '{loose}\n' + start
         owner.loose = true

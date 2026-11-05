@@ -1,10 +1,6 @@
 const QUOTE_PREFIX = /^(?:[ \t]*>[ \t]?)*/
-const MARKER = /^( *)([-*+]|\d+[.)]) /
+const MARKER = /^( *)([-*+]|\(?(?:\d+|[a-zA-Z]|[ivxlcdmIVXLCDM]+)[.)]) /
 const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/
-// A list marker, including one with its attributes glued on (`-{.a} x`).
-const ANY_MARKER = /^ *(?:[-*+]|\d+[.)])(?: |\{)/
-// A block that ends a nested item without a blank line before it.
-const INTERRUPTS = /^ *(?:>|#{1,6}(?: |$)|`{3,}|~{3,}|:::|\||\{|%%|(?:\* *){3,}$|(?:- *){3,}$)/
 
 const indent = (body: string): number => body.length - body.replace(/^ +/, '').length
 const blank = (body: string): boolean => body.trim() === ''
@@ -15,7 +11,7 @@ const blank = (body: string): boolean => body.trim() === ''
  * A blank between sibling items, or below a later block, stays.
  */
 export function glueSubListsToTheirItems(carve: string): string {
-  return glueBlocksAfterSubLists(glueSubListsToTheirLeads(carve))
+  return glueSubListsToTheirLeads(carve)
 }
 
 function layout(carve: string): { lines: string[], parts: [number, string][], inFence: boolean[] } {
@@ -112,86 +108,6 @@ function separatedFromASibling(parts: [number, string][], inFence: boolean[], bl
   return false
 }
 
-/**
- * djot.js charges a blank line read while a nested list is open to that list,
- * so a later block of the outer item keeps the item tight; Carve reads the
- * blank as loosening it (carve#5197). The blank goes, and a paragraph that
- * would then fold into the nested item is attached with a `+` instead.
- */
-function glueBlocksAfterSubLists(carve: string): string {
-  const { lines, parts, inFence } = layout(carve)
-  const replace = new Map<number, string | null>()
-  for (let index = 1; index < parts.length - 1; index++) {
-    const [depth, body] = parts[index]!
-    if (inFence[index] || !blank(body) || replace.has(index)) continue
-    const [aboveDepth, above] = parts[index - 1]!
-    if (aboveDepth !== depth || blank(above) || inFence[index - 1]) continue
-    let last = index
-    while (last + 1 < parts.length && parts[last + 1]![0] === depth && blank(parts[last + 1]![1])) last++
-    if (last + 1 >= parts.length) continue
-    const belowDepth = parts[last + 1]![0]
-    // An indented quote marker reads as a deeper prefix here; it is the block that follows.
-    const below = belowDepth > depth ? bodyAtDepth(lines[last + 1]!, depth) : parts[last + 1]![1]
-    const column = indent(below)
-    if (belowDepth < depth || inFence[last + 1] || column === 0 || ANY_MARKER.test(below)) continue
-    if (belowDepth > depth && !below.trimStart().startsWith('>')) continue
-    const owner = outerItemOf(parts, inFence, index, column)
-    if (owner === null) continue
-    const ownerIndent = indent(parts[owner]![1])
-    if (looseBefore(parts, owner, ownerIndent) || separatedFromASibling(parts, inFence, last, ownerIndent) ||
-        looseAfter(parts, inFence, last + 1, column)) continue
-    for (let at = index; at <= last; at++) replace.set(at, null)
-    if (INTERRUPTS.test(below)) continue
-    const prefix = lines[last + 1]!.slice(0, lines[last + 1]!.length - below.length)
-    replace.set(last, prefix + ' '.repeat(ownerIndent) + '+')
-    replace.set(last + 1, prefix + ' '.repeat(ownerIndent) + below.slice(column))
-  }
-  if (replace.size === 0) return carve
-  return lines.flatMap((line, at) => {
-    if (!replace.has(at)) return [line]
-    const value = replace.get(at)!
-    return value === null ? [] : [value]
-  }).join('\n')
-}
-
-function bodyAtDepth(line: string, depth: number): string {
-  for (let level = 0; level < depth; level++) line = line.replace(/^[ \t]*>[ \t]?/, '')
-  return line
-}
-
-// The item whose content column is `column`, when the blank at `blankLine` falls inside its
-// nested list: the last line at or left of that column is a nested marker, and nothing but
-// the nested list and the item's unbroken lead stands between the item and the blank.
-function outerItemOf(parts: [number, string][], inFence: boolean[], blankLine: number, column: number): number | null {
-  const depth = parts[blankLine]![0]
-  let nested = false
-  let blankSeen = false
-  for (let at = blankLine - 1; at >= 0; at--) {
-    const [lineDepth, line] = parts[at]!
-    if (lineDepth < depth) return null
-    if (lineDepth > depth || inFence[at]) continue
-    if (blank(line)) {
-      blankSeen = true
-      continue
-    }
-    const lineIndent = indent(line)
-    if (lineIndent > column) continue
-    if (lineIndent === column) {
-      if (MARKER.test(line)) {
-        nested = true
-        blankSeen = false
-        continue
-      }
-      // A block of the item itself: the blank below it would belong to the item.
-      if (!nested || blankSeen) return null
-      continue
-    }
-    const content = MARKER.exec(line)?.[0].length
-    return nested && !blankSeen && content === column ? at : null
-  }
-  return null
-}
-
 // A blank line just above the item that a sibling item stands above loosens the list anyway.
 function looseBefore(parts: [number, string][], owner: number, ownerIndent: number): boolean {
   const depth = parts[owner]![0]
@@ -205,20 +121,154 @@ function looseBefore(parts: [number, string][], owner: number, ownerIndent: numb
   return false
 }
 
-// A later blank inside the item is left alone, and so is the item.
-function looseAfter(parts: [number, string][], inFence: boolean[], from: number, column: number): boolean {
-  const depth = parts[from]![0]
-  for (let at = from; at < parts.length; at++) {
-    const [lineDepth, line] = parts[at]!
-    if (lineDepth < depth) return false
-    if (lineDepth > depth || inFence[at]) continue
-    if (!blank(line)) {
-      if (indent(line) < column) return false
+const QUOTE_LEVEL = /^[ \t]*>[ \t]?/
+
+function stripQuotes(line: string, depth: number): [string, string] | null {
+  let rest = line
+  for (let level = 0; level < depth; level++) {
+    const quote = QUOTE_LEVEL.exec(rest)
+    if (!quote) return null
+    rest = rest.slice(quote[0].length)
+  }
+  return [line.slice(0, line.length - rest.length), rest]
+}
+
+const markerKind = (marker: string): string => marker.replace(/\d+/, '1').replace(/[a-z]+/, 'a').replace(/[A-Z]+/, 'A')
+const DIV_FENCE = /^ *(:{3,})[ \t]*(\S?)/
+
+interface SubListBlank { first: number; last: number; below: number; end: number }
+
+/**
+ * djot.js charges a blank read while an item's sub-list is open to the sub-list,
+ * so a block after it keeps the outer item tight (carve#5197). Carve would read
+ * the blank as loosening the item, so it goes; a block that would then fold into
+ * the sub-list's paragraph comes back behind a `+` at the marker column.
+ */
+export function dropBlanksAfterSubLists(carve: string, probe: (source: string) => number | null): string {
+  const { lines, parts, inFence } = layout(carve)
+  const depths = parts.map(([depth]) => depth)
+  const replaced = new Map<number, string | null>()
+  const probes = new Map<string, number | null>()
+  const cached = (source: string): number | null => {
+    if (!probes.has(source)) probes.set(source, probe(source))
+    return probes.get(source)!
+  }
+  for (let owner = 0; owner < lines.length; owner++) {
+    if (inFence[owner]) continue
+    const depth = depths[owner]!
+    const ownerBody = stripQuotes(lines[owner]!, depth)![1]
+    const ownerMarker = MARKER.exec(ownerBody)
+    if (!ownerMarker) continue
+    const blanks = subListBlanks(lines, inFence, owner, depth, ownerMarker[0].length)
+    if (!blanks?.length || looseBefore(parts, owner, ownerMarker[1]!.length) ||
+      separatedFromASibling(parts, inFence, blanks.at(-1)!.last, ownerMarker[1]!.length)) continue
+    for (const run of blanks) {
+      if ([...Array(run.end - run.first).keys()].some(offset => replaced.has(run.first + offset))) continue
+      edit(lines, run, depth, ownerMarker[1]!.length, ownerMarker[0].length, cached, replaced)
+    }
+  }
+  if (replaced.size === 0) return carve
+  return lines.flatMap((line, index) => {
+    const value = replaced.has(index) ? replaced.get(index)! : line
+    return value === null ? [] : [value]
+  }).join('\n')
+}
+
+// The item's blank runs that djot.js charges to an open sub-list, or null when
+// another blank at the item's level loosens it anyway.
+function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth: number, column: number): SubListBlank[] | null {
+  const runs: SubListBlank[] = []
+  let nested: { content: number; kind: string } | null = null
+  let pending: number | null = null
+  let previousBlank = false
+  // djot.js emits a blank line for a div's closing fence, so a line directly after one can loosen the list.
+  let openDivs = 0
+  let divClosed = false
+  for (let at = owner + 1; at < lines.length; at++) {
+    const split = stripQuotes(lines[at]!, depth)
+    if (split === null) break
+    const body = split[1]
+    if (inFence[at]) {
+      pending = null
+      previousBlank = false
       continue
     }
-    let next = at + 1
-    while (next < parts.length && (parts[next]![0] !== depth || blank(parts[next]![1]))) next++
-    if (next < parts.length && indent(parts[next]![1]) >= column) return true
+    if (blank(body)) {
+      pending ??= at
+      previousBlank = true
+      divClosed = false
+      continue
+    }
+    const wasBlank = previousBlank
+    previousBlank = false
+    const lineIndent = indent(body)
+    const marker = MARKER.exec(body)
+    if (lineIndent < column) {
+      if (divClosed || !marker && !wasBlank) return null
+      break
+    }
+    // A new list takes the div's blank line; any other line is loosened by it.
+    if (divClosed && !marker) return null
+    divClosed = false
+    const div = DIV_FENCE.exec(body)
+    if (div && lineIndent === column) {
+      if (div[2] === '' && openDivs > 0) divClosed = --openDivs === 0
+      else openDivs++
+    }
+    if (body.trim() === '+') return null
+    if (nested && lineIndent >= nested.content) {
+      pending = null
+      continue
+    }
+    if (marker) {
+      const kind = markerKind(marker[2]!)
+      if (pending !== null) {
+        if (!nested) return null
+        if (kind !== nested.kind) runs.push({ first: pending, last: at - 1, below: at, end: at })
+      }
+      nested = { content: marker[0].length, kind }
+      pending = null
+      continue
+    }
+    if (lineIndent !== column) return null
+    if (pending !== null) {
+      if (!nested) return null
+      // A comment stands where the importer hoisted a definition and its blanks; keep the blank.
+      if (!body.trimStart().startsWith('%%')) runs.push({ first: pending, last: at - 1, below: at, end: at })
+    }
+    nested = null
+    pending = null
   }
-  return false
+  for (const run of runs) {
+    let end = run.below + 1
+    for (; end < lines.length; end++) {
+      if (inFence[end]) continue
+      const split = stripQuotes(lines[end]!, depth)
+      if (split === null || blank(split[1]) || indent(split[1]) < column) break
+    }
+    run.end = end
+  }
+  return runs
+}
+
+// The probe returns the child count of the single item `- x` holds, or null when
+// the source is not that one item, so Carve's own rules decide the fold.
+function edit(lines: string[], run: SubListBlank, depth: number, markerColumn: number, column: number,
+  probe: (source: string) => number | null, replaced: Map<number, string | null>): void {
+  const block = lines.slice(run.below, run.end).map(line => stripQuotes(line, depth)!)
+  const shifted = block.map(([, body]) => '  ' + body.slice(Math.min(column, indent(body)))).join('\n')
+  const blocks = probe(`- x\n\n${shifted}\n`)
+  if (blocks === null) return
+  const children = 1 + blocks
+  if (probe(`- x\n  - y\n${shifted}\n`) === children) {
+    for (let at = run.first; at <= run.last; at++) replaced.set(at, null)
+    return
+  }
+  // Only the first line moves to the marker column; the rest stay where they are.
+  const [first, ...rest] = shifted.split('\n')
+  if (probe(`- x\n  - y\n+\n${[first!.slice(2), ...rest].join('\n')}\n`) !== children) return
+  const [quote, body] = block[0]!
+  replaced.set(run.first, `${quote}${' '.repeat(markerColumn)}+`)
+  for (let at = run.first + 1; at <= run.last; at++) replaced.set(at, null)
+  replaced.set(run.below, quote + ' '.repeat(markerColumn) + body.slice(Math.min(column, indent(body))))
 }
