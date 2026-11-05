@@ -1,6 +1,6 @@
 import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
-import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
+import { commentOnlyParagraphEnd, isRefusedBraceRun } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import { endsAtConsumedMarker } from '../ast/definition-list-wire.js'
 import type { Comment, LinkReferenceDefinition } from '../ast.js'
@@ -2446,6 +2446,7 @@ export class ParseSession extends InlineParseSession {
     endAtFoldedDefinition = true,
     acceptFirstNonList = false,
     viewSlice = 0,
+    itemHost = false,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // The block is measured where its caller reads it, which a first-block `+` slices further.
@@ -2514,7 +2515,10 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList) break
+        // The line after a refused brace run continues its paragraph whatever it opens (CARVE-P2-035);
+        // a sibling item, description or note still ends its host first.
+        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList &&
+          (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition)
@@ -2541,7 +2545,7 @@ export class ParseSession extends InlineParseSession {
     viewSlice = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
-      viewSlice)
+      viewSlice, true)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
     const isLineComment = (line: string | undefined) => line !== undefined && line.startsWith('%%') && !RE_COMMENT_BLOCK_ANY.test(line)
