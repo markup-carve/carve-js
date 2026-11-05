@@ -776,7 +776,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       if (wrapSections && roundtripExport(opts)) {
         // Count only slots that emit an attribute on the heading.
         const headingAttrs = node.attrs ? withTextAlignDeclaration(node.attrs, `h${node.level}`) : undefined
-        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => renderAttrSlot(headingAttrs!, entry) !== '').indexOf('#id')
+        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => attrSlotEntry(headingAttrs!, entry) !== undefined).indexOf('#id')
         if (slot > 0) {
           wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
         } else if (explicitId === '' && node.attrs?.id !== undefined) {
@@ -1273,48 +1273,44 @@ function foldAttrNames(attrs: Attrs): FoldedAttrs {
   return out
 }
 
-function renderAttrSlot(attrs: FoldedAttrs, slot: string): string {
+function attrSlotEntry(attrs: FoldedAttrs, slot: string): [string, string] | undefined {
   if (slot === '.class') {
-    return attrs.classes?.length ? `${attrs.classSpelling ?? 'class'}="${renderedClasses(attrs.classes).map(escapeAttr).join(' ')}"` : ''
+    return attrs.classes?.length ? [attrs.classSpelling ?? 'class', renderedClasses(attrs.classes).join(' ')] : undefined
   }
-  if (slot === '#id') return attrs.id !== undefined ? `${attrs.idSpelling ?? 'id'}="${escapeAttr(attrs.id)}"` : ''
-  if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return ''
-  if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return ''
+  if (slot === '#id') return attrs.id !== undefined ? [attrs.idSpelling ?? 'id', attrs.id] : undefined
+  if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return undefined
+  if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return undefined
   const value = attrs.keyValues?.[slot]
-  return value !== undefined ? `${slot}="${escapeAttr(sanitizeAttrValue(slot, value))}"` : ''
+  return value !== undefined ? [slot, sanitizeAttrValue(slot, value)] : undefined
 }
 
-function renderAttrs(raw?: Attrs, tag?: string): string {
-  if (!raw) return ''
+/**
+ * The `name`/`value` pairs this renderer writes for `raw`, in output order and
+ * before escaping. The Markdown target's inline HTML uses the same pairs
+ * (CARVE-P11-045), so the two targets cannot drift on order or folding.
+ */
+export function htmlAttrEntries(raw: Attrs, tag?: string): Array<[string, string]> {
   const attrs = foldAttrNames(withTextAlignDeclaration(raw, tag))
-  const parts: string[] = []
+  const entries: Array<[string, string]> = []
+  const push = (slot: string) => {
+    const entry = attrSlotEntry(attrs, slot)
+    if (entry) entries.push(entry)
+  }
   // Emit the recorded source order first (matches djot + carve-php),
   // then append any populated slot not covered by `order` -- so an attr
   // added programmatically after parse() (with stale/no `order`) still
   // renders rather than being silently dropped.
   const seen = new Set(attrs.order ?? [])
-  if (attrs.order) {
-    for (const slot of attrs.order) {
-      const p = renderAttrSlot(attrs, slot)
-      if (p) parts.push(p)
-    }
-  }
-  if (!seen.has('.class')) {
-    const c = renderAttrSlot(attrs, '.class')
-    if (c) parts.push(c)
-  }
-  if (!seen.has('#id')) {
-    const i = renderAttrSlot(attrs, '#id')
-    if (i) parts.push(i)
-  }
-  if (attrs.keyValues) {
-    for (const k of Object.keys(attrs.keyValues)) {
-      if (!seen.has(k)) {
-        const p = renderAttrSlot(attrs, k)
-        if (p) parts.push(p)
-      }
-    }
-  }
+  for (const slot of attrs.order ?? []) push(slot)
+  if (!seen.has('.class')) push('.class')
+  if (!seen.has('#id')) push('#id')
+  for (const k of Object.keys(attrs.keyValues ?? {})) if (!seen.has(k)) push(k)
+  return entries
+}
+
+function renderAttrs(raw?: Attrs, tag?: string): string {
+  if (!raw) return ''
+  const parts = htmlAttrEntries(raw, tag).map(([name, value]) => `${name}="${escapeAttr(value)}"`)
   return parts.length ? ' ' + parts.join(' ') : ''
 }
 

@@ -36,7 +36,7 @@ import { destinationDenied, listDelimiterChanged, listStyleDropped, markdownLoss
 import { footnoteDefsInSourceOrder } from './heading/footnote-numbering.js'
 import { resolveTableSpans } from './table/table-spans.js'
 import { inlineText } from './heading/heading-ids.js'
-import { isDangerousAttrName, renderedAttrValue, renderedClasses } from './render-html.js'
+import { htmlAttrEntries } from './render-html.js'
 import { orderedMarker, renderCarve, renderCarrierAttributeBlock, withoutKey } from './render-carve.js'
 import { carrierLine, spellCarrierMarkers } from './import/markdown/carrier-markers.js'
 
@@ -64,14 +64,7 @@ export interface MarkdownRenderOptions extends RenderLossSinkOptions {
 
 function renderHtmlAttrs(attrs: Attrs | undefined): string {
   if (!attrs) return ''
-  const entries: Array<[string, string]> = []
-  if (attrs.id !== undefined) entries.push(['id', attrs.id])
-  if (attrs.classes?.length) entries.push(['class', renderedClasses(attrs.classes).join(' ')])
-  for (const [name, value] of Object.entries(attrs.keyValues ?? {})) {
-    if (isDangerousAttrName(name) || !/^[A-Za-z_:][A-Za-z0-9_.:-]*$/.test(name)) continue
-    entries.push([name, renderedAttrValue(name, value)])
-  }
-  return entries.map(([name, value]) => ` ${name}="${escapeMdHtml(stripControls(value)).replace(/"/g, '&quot;')}"`).join('')
+  return htmlAttrEntries(attrs).map(([name, value]) => ` ${name}="${escapeMdHtml(stripControls(value)).replace(/"/g, '&quot;')}"`).join('')
 }
 
 /**
