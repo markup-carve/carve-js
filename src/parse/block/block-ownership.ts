@@ -1234,7 +1234,7 @@ export function ownLines(
         continue
       }
       // A paragraph of only braced comments is skipped as a `%%` line is (carve#4799); in an item a marker ends it (carve#4890).
-      const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k, host === 'item')
+      const paragraphEnd = commentOnlyParagraphEnd((index) => restInQuotes(index, quotes), k, host === 'item', (index) => columnInQuotes(index, quotes))
       if (paragraphEnd !== -1) {
         k = paragraphEnd - 1
         continue
@@ -1342,6 +1342,12 @@ export function ownLines(
   }
 
   // A line's text inside `quotes` quote prefixes, or undefined where one is missing.
+  function columnInQuotes(index: number, quotes: number): number {
+    let n = indentCols(lines[index]!)
+    for (let q = 0; q < quotes && isQuoteLine(n.rest); q++) n = indentCols(quoteRest(n.rest))
+    return n.col
+  }
+
   function restInQuotes(index: number, quotes: number): string | undefined {
     if (lines[index] === undefined) return undefined
     let n = indentCols(lines[index])

@@ -40,6 +40,9 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-below-item-marker-continues-the-list-in-a-description',
+  'a-comment-between-a-term-and-its-description-is-the-description-s-first-block',
+  'an-indented-quoted-item-keeps-a-lazy-line-at-its-base',
   'a-blank-before-only-invisible-lines-loosens-the-list',
   'a-follower-at-a-body-hosted-item-s-marker-column-attaches-to-the-item',
   'a-below-column-term-stays-in-the-footnote-paragraph',

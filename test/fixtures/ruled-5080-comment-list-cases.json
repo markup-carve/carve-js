@@ -1,7 +1,7 @@
 [
   {
     "source": "- {% c\n  d %}\n\n  Body.\n",
-    "html": "<ul><li>{% c\nd %}\n    Body.</li></ul>"
+    "html": "<ul><li><p>{% c\nd %}</p><p>Body.</p></li></ul>"
   },
   {
     "source": "- a\n\n  {% c\n  d %}\n\n  text\n",
@@ -13,11 +13,11 @@
   },
   {
     "source": "- +\n{% c\nd %}\n\n# H\n",
-    "html": "<ul><li></li></ul><p>{% c\nd %}</p><section id=\"H\"><h1>H</h1></section>"
+    "html": "<ul><li>{% c\nd %}</li></ul><section id=\"H\"><h1>H</h1></section>"
   },
   {
     "source": "> +\n{% c\nd %}\n\nx\n",
-    "html": "<blockquote></blockquote><p>{% c\nd %}</p><p>x</p>"
+    "html": "<blockquote><p>{% c\nd %}</p></blockquote><p>x</p>"
   },
   {
     "source": "- +\n{% c\nd %}\n# H\n",
@@ -25,7 +25,7 @@
   },
   {
     "source": "- {% a\n  b\n  c %}\n\n  Body.\n",
-    "html": "<ul><li>{% a\nb\nc %}\n    Body.</li></ul>"
+    "html": "<ul><li><p>{% a\nb\nc %}</p><p>Body.</p></li></ul>"
   },
   {
     "source": "- a\n\n  {% a\n  b\n  c %}\n\n  text\n",
@@ -37,11 +37,11 @@
   },
   {
     "source": "- +\n{% a\nb\nc %}\n\n# H\n",
-    "html": "<ul><li></li></ul><p>{% a\nb\nc %}</p><section id=\"H\"><h1>H</h1></section>"
+    "html": "<ul><li>{% a\nb\nc %}</li></ul><section id=\"H\"><h1>H</h1></section>"
   },
   {
     "source": "> +\n{% a\nb\nc %}\n\nx\n",
-    "html": "<blockquote></blockquote><p>{% a\nb\nc %}</p><p>x</p>"
+    "html": "<blockquote><p>{% a\nb\nc %}</p></blockquote><p>x</p>"
   },
   {
     "source": "- +\n{% a\nb\nc %}\n# H\n",
@@ -62,5 +62,45 @@
   {
     "source": "- a\n\n  {% a\n  b\n  c %}\n# H\n",
     "html": "<ul><li><p>a</p><p>{% a\nb\nc %}</p></li></ul><section id=\"H\"><h1>H</h1></section>"
+  },
+  {
+    "source": "- a\n\n{% c\nd %}\n\n- b\n",
+    "html": "<ul><li>a</li></ul><p>{% c\nd %}</p><ul><li>b</li></ul>"
+  },
+  {
+    "source": "1. a\n\n{% c\nd %}\n\n2. b\n",
+    "html": "<ol><li>a</li></ol><p>{% c\nd %}</p><ol start=\"2\"><li>b</li></ol>"
+  },
+  {
+    "source": "- a\n  - b\n\n  {% c\n  d %}\n\n  - c\n",
+    "html": "<ul><li><p>a</p><ul><li>b</li></ul><p>{% c\nd %}</p><ul><li>c</li></ul></li></ul>"
+  },
+  {
+    "source": ":: t\n: a\n\n{% c\nd %}\n\n:: u\n: b\n",
+    "html": "<dl><dt>t</dt><dd>a</dd></dl><p>{% c\nd %}</p><dl><dt>u</dt><dd>b</dd></dl>"
+  },
+  {
+    "source": ":: t\n: a\n\n{% c\nd %}\n\n: b\n",
+    "html": "<dl><dt>t</dt><dd>a</dd></dl><p>{% c\nd %}</p><p>: b</p>"
+  },
+  {
+    "source": "- a\n\n{% a\nb\nc %}\n\n- b\n",
+    "html": "<ul><li>a</li></ul><p>{% a\nb\nc %}</p><ul><li>b</li></ul>"
+  },
+  {
+    "source": "1. a\n\n{% a\nb\nc %}\n\n2. b\n",
+    "html": "<ol><li>a</li></ol><p>{% a\nb\nc %}</p><ol start=\"2\"><li>b</li></ol>"
+  },
+  {
+    "source": "- a\n  - b\n\n  {% a\n  b\n  c %}\n\n  - c\n",
+    "html": "<ul><li><p>a</p><ul><li>b</li></ul><p>{% a\nb\nc %}</p><ul><li>c</li></ul></li></ul>"
+  },
+  {
+    "source": ":: t\n: a\n\n{% a\nb\nc %}\n\n:: u\n: b\n",
+    "html": "<dl><dt>t</dt><dd>a</dd></dl><p>{% a\nb\nc %}</p><dl><dt>u</dt><dd>b</dd></dl>"
+  },
+  {
+    "source": ":: t\n: a\n\n{% a\nb\nc %}\n\n: b\n",
+    "html": "<dl><dt>t</dt><dd>a</dd></dl><p>{% a\nb\nc %}</p><p>: b</p>"
   }
 ]
