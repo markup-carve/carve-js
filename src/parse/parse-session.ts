@@ -165,6 +165,7 @@ import {
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
+import { withKeptFenceLookahead } from './block/parse-quote-core.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
@@ -1846,7 +1847,7 @@ export class ParseSession extends InlineParseSession {
   private trackQuoteLine(q: QuoteCollect, content: string, lineIndex: number): void {
     const { lexer, state, descent } = q
     q.paragraphOpen = undefined
-    trackBlockQuoteLazyState(
+    withKeptFenceLookahead(lexer, lineIndex, () => trackBlockQuoteLazyState(
       content,
       state,
       (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
@@ -1856,7 +1857,7 @@ export class ParseSession extends InlineParseSession {
       !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
       (fence, depth, floor) => literalCommentHasCloser(lexer, fence, lineIndex, depth, floor),
       marker => this.quotePayloadCloser(q, marker, lineIndex),
-    )
+    ))
     // Reuse the handed-down state only while lazy text leaves it unchanged.
     if (!descent.preserved && q.handDown && state.mode.kind === 'quote' && state.mode.inner === q.handDown.state) q.handDown = null
   }

@@ -137,7 +137,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     const { content, state, run, runColumns, wasQuote } = line
     if (!line.atContentColumn || state.opaque !== null || line.authoredQuoteParagraphOpen) return false
     // The descendant's refused brace run keeps this line (CARVE-P2-035).
-    if (state.deepest?.refusedRunKept === null) return false
+    if (state.deepest?.refusedRunKept !== undefined) return false
     if (wasQuote !== null && blockQuoteParagraphOpen(wasQuote)) return false
     if (run === undefined || runColumns === undefined || runColumns <= 0 || !isTableRow(content.slice(run))) return false
     state.inTable = true

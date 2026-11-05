@@ -28,6 +28,11 @@ describe("a refused brace run's kept line", () => {
     expect(out).toContain('<code>\nb\n</code>\nmore')
   })
 
+  it.each(['- ', '> '])('keeps block-shaped fence payload behind %s', (prefix) => {
+    const out = html([prefix + 'a', ...['{x', 'y}', '```', '# h', '```'].map(l => (prefix === '- ' ? '  ' : prefix) + l), 'more'])
+    expect(out).toContain('<code>\n# h\n</code>\nmore')
+  })
+
   it('still ends the paragraph at a block after an unclosed fence opener', () => {
     expect(html(['> a', '> {x', '> y}', '> ```', '> b', '> # h', 'more'])).toBe(
       '<blockquote>\n  <p>a\n{x\ny}\n<code>\nb</code></p>\n  <h1 id="h">h</h1>\n</blockquote>\n<p>more</p>')
