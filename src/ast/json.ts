@@ -33,6 +33,7 @@ import { checkAstVersion } from './envelope.js'
 import { MAX_NESTING_DEPTH } from '../parse.js'
 import { crossrefAutoText, numberCaptionsIn, resolveIngestedCrossrefs } from '../heading/heading-ids.js'
 import {
+  carryAbsentDescriptionPosition,
   entriesFromWire,
   entriesToWire,
   isRuntimeEntry,
@@ -318,7 +319,9 @@ function definitionListsToWire<T>(node: T): T {
 /** The inverse: wire entries back to the runtime `{terms, definitions}` form. */
 function definitionListsFromWire<T>(node: T): T {
   if (Array.isArray(node)) {
-    return node.map((child) => definitionListsFromWire(child)) as unknown as T
+    const mapped = node.map((child) => definitionListsFromWire(child))
+    carryAbsentDescriptionPosition(node, mapped)
+    return mapped as unknown as T
   }
   if (typeof node !== 'object' || node === null) return node
 
@@ -408,7 +411,7 @@ function orderCollectedDefinitions(children: AstJsonBlock[]): void {
 
 /** Keep block image promotion on the paragraph in the exchange tree. */
 function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
-  return blocks.map((block): BlockNode => {
+  const mapped = blocks.map((block): BlockNode => {
     if (block.type === 'image') return imageBlockToWire(block)
     switch (block.type) {
       case 'block_quote':
@@ -438,6 +441,8 @@ function imageParagraphsToWire(blocks: BlockNode[]): BlockNode[] {
         return block
     }
   })
+  carryAbsentDescriptionPosition(blocks, mapped)
+  return mapped
 }
 
 /**
