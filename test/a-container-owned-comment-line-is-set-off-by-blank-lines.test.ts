@@ -32,4 +32,10 @@ describe('a container-owned comment line is set off by blank lines', () => {
   it('keeps the author layout beside a region marker in a quote', () => {
     expect(carveToCarve('> a\n> %% #region r\n> b\n')).toBe('> a\n> %% #region r\n> b\n')
   })
+
+  it('keeps an authored blank before a region marker in a loose item', () => {
+    const source = '- a\n\n  %% #region r\n\n  b\n'
+    expect(carveToCarve(source)).toBe(source)
+    expect(carveToCarve(carveToCarve(source))).toBe(source)
+  })
 })

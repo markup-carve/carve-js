@@ -3665,7 +3665,7 @@ class CarveRenderSession {
               : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
-                (block.type === 'comment' && ((!this.canonicalTransparentLines ||
+                (block.type === 'comment' && (!isRegionMarker(block) || regionMarkerAdjacent(previousBlock, block, text)) && ((!this.canonicalTransparentLines ||
                   (block.transparentInParagraph || block.transparentInList || block.transparentInDefinitionList) &&
                   !this.canonicalTrailingComments.has(block)) && indentedTransparentLine(block.transparentSource, ctx.listDepth > 0) ||
                   !this.canonicalTransparentLines && !block.block && ctx.quoteDepth > 0 &&
