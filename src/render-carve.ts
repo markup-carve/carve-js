@@ -294,10 +294,10 @@ function reportRubyLosses(ast: Document, opts: CarveRenderOptions): void {
 }
 
 /**
- * How many documents' worth of source one narrowing search may re-parse beyond
- * its probe count. Windowed probes are cheap, so this lets a large document
- * with many independent failing units finish the search, while the total stays
- * linear in the document.
+ * How many documents' worth of source one narrowing search may re-parse.
+ * Windowed probes are cheap, so this lets a large document with many
+ * independent failing units finish the search, while the total stays linear in
+ * the document.
  */
 const ESCAPE_SEARCH_PARSE_FACTOR = 16
 
@@ -312,8 +312,8 @@ interface EscapeProbe {
   keeps(local: boolean, units: Iterable<object>, apply: () => void, undo: () => void): boolean
   /**
    * A fresh allowance for one search whose probe count is `count`: true once
-   * that count is spent and either its probes have re-parsed the allowance or
-   * the search has probed ESCAPE_SEARCH_PROBE_FACTOR times the count.
+   * its probes have re-parsed the allowance, or once the search has probed
+   * ESCAPE_SEARCH_PROBE_FACTOR times the count.
    */
   allowance(count: number): (budget: number) => boolean
   /** `treeOf`, answered from the sources this search parsed most recently. */
@@ -3264,7 +3264,9 @@ class CarveRenderSession {
       allowance(count) {
         const start = charged
         const floor = -(ESCAPE_SEARCH_PROBE_FACTOR - 1) * count
-        return (budget) => budget <= 0 && (charged - start >= limit || budget <= floor)
+        // The parse allowance binds within the count too: whole-document probes
+        // would otherwise cost the count times the document.
+        return (budget) => charged - start >= limit || budget <= floor
       },
       keeps(local, units, apply, undo) {
         if (local && windows === undefined) windows = new EscapeWindows(ast)
