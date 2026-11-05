@@ -89,7 +89,7 @@ export function canonicalCarveWrite(
   // preserve the authored spelling when no canonical candidate does.
   if (!transformed && !opts.extensions?.length &&
       (source.includes('%%') || source.includes(']:') || source.includes('+')) &&
-      !renderedReadsBack(document, written)) {
+      !renderedReadsBack(document, written, (reread) => withPromotedImages(parseDocument(reread, opts)))) {
     const normalized = source.replace(/\r\n?/g, '\n')
     return normalized.endsWith('\n') ? normalized : `${normalized}\n`
   }

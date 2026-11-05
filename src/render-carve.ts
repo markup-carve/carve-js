@@ -413,17 +413,20 @@ function missingVerbatimPayloads(ast: Document, out: string, written: ReadonlyMa
   return [...written.keys()].filter(key => (reread.get(key) ?? 0) < (held.get(key) ?? 0))
 }
 
-function treeOf(src: string): string | null {
+function treeOf(src: string, reparse: (src: string) => Document = parse): string | null {
   try {
-    return stableJson(parse(src))
+    return stableJson(reparse(src))
   } catch {
     return null
   }
 }
 
-/** Check the parsed tree after a source writer has crossed an invisible line. */
-export function renderedReadsBack(ast: Document, source: string): boolean {
-  return treeOf(source) === stableJson(ast)
+/**
+ * Check the parsed tree after a source writer has crossed an invisible line.
+ * `reparse` must run the same passes that produced `ast`.
+ */
+export function renderedReadsBack(ast: Document, source: string, reparse?: (src: string) => Document): boolean {
+  return treeOf(source, reparse) === stableJson(ast)
 }
 
 /** Whether `written` parses to the tree `source` parses to. */
