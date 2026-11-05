@@ -778,7 +778,8 @@ function authoredContainerBlocks(document: Document, owners: Map<number, string>
   visit(document.children, 'doc')
   for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {})) {
     const line = document.footnoteDefPos?.[label]?.startLine
-    const key = `doc/footnote:${line}`
+    const authoredOwner = owners.get(line ?? -1)
+    const key = authoredOwner?.endsWith(`/footnote:${line}`) ? authoredOwner : `doc/footnote:${line}`
     if (line !== undefined) blocksByOwner.set(key, { blocks, containers: [] })
     visit(blocks, line === undefined ? 'doc' : key)
   }
@@ -835,8 +836,15 @@ export function restoreTransparentComments(document: Document, authored: Documen
     if (!comment?.pos || comment.pos.startOffset === undefined) continue
     comment.transparentSource = original
     comment.transparentOriginalValue = comment.content
+    const owner = ownersByLine.get(index + 1)
     const footnote = Object.entries(document.footnoteDefPos ?? {}).find(([_label, pos]) =>
-      pos.startLine <= index + 1 && index + 1 <= pos.endLine)?.[0]
+      pos.startLine <= index + 1 && (index + 1 <= pos.endLine || owner?.endsWith(`/footnote:${pos.startLine}`)))?.[0]
+    const notePos = footnote === undefined ? undefined : document.footnoteDefPos?.[footnote]
+    if (notePos && comment.pos.endLine > notePos.endLine) {
+      notePos.endLine = comment.pos.endLine
+      if (comment.pos.endColumn !== undefined) notePos.endColumn = comment.pos.endColumn
+      if (comment.pos.endOffset !== undefined) notePos.endOffset = comment.pos.endOffset
+    }
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
     const match = containingParagraph(blocks, comment.pos!.startOffset!)
     if (match) {
@@ -856,7 +864,6 @@ export function restoreTransparentComments(document: Document, authored: Documen
     } else {
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
       if (descriptionGap && placeInDescription(descriptionGap, comment)) continue
-      const owner = ownersByLine.get(index + 1)
       const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
       // A comment its owner holds is written there in tree order: inside one of the list's
       // descriptions, or after the list's last entry (carve#5178).
