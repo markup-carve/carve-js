@@ -33,6 +33,12 @@ describe("a refused brace run's kept line", () => {
     expect(out).toContain('<code>\n# h\n</code>\nmore')
   })
 
+  it("looks for the fence closer only inside the opener's container", () => {
+    const out = html(['> a', '> {x', '> y}', '> ```', '> # h', '- x', '  ```', 'more'])
+    expect(out).toContain('<h1 id="h">h</h1>\n</blockquote>\n<ul>')
+    expect(out).toContain('<p>more</p>')
+  })
+
   it('still ends the paragraph at a block after an unclosed fence opener', () => {
     expect(html(['> a', '> {x', '> y}', '> ```', '> b', '> # h', 'more'])).toBe(
       '<blockquote>\n  <p>a\n{x\ny}\n<code>\nb</code></p>\n  <h1 id="h">h</h1>\n</blockquote>\n<p>more</p>')

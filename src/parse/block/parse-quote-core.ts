@@ -66,6 +66,17 @@ let keptFenceCloserAhead: ((close: RegExp) => boolean) | undefined
 // Per pattern, the last scanned window: every start inside it shares its answer, so scans stay linear.
 const keptFenceScans = new WeakMap<Lexer, Map<string, { from: number; to: number; found: boolean }>>()
 
+function keptFenceFrame(line: string): { depth: number; indent: number; text: string } {
+  let depth = 0
+  let rest = line
+  for (let quote = /^[ \t]*> ?/.exec(rest); quote !== null; quote = /^[ \t]*> ?/.exec(rest)) {
+    depth++
+    rest = rest.slice(quote[0].length)
+  }
+  const text = rest.trimStart()
+  return { depth, indent: indentColumns(rest), text }
+}
+
 export function withKeptFenceLookahead<T>(lexer: Lexer, lineIndex: number, track: () => T): T {
   const outer = keptFenceCloserAhead
   keptFenceCloserAhead = close => {
@@ -73,12 +84,14 @@ export function withKeptFenceLookahead<T>(lexer: Lexer, lineIndex: number, track
     if (scans === undefined) keptFenceScans.set(lexer, scans = new Map())
     const known = scans.get(close.source)
     if (known !== undefined && lineIndex >= known.from && lineIndex < known.to) return known.found
+    // The closer must stay inside the opener's container: as many quote markers, at least its indent.
+    const opener = keptFenceFrame(lexer.lineAt(lineIndex) ?? '')
     let i = lineIndex + 1
     let found = false
     for (; i < lexer.lineCount; i++) {
-      const text = (lexer.lineAt(i) ?? '').replace(/^(?:[ \t]*>)*[ \t]*/, '')
-      if (text === '') break
-      if (close.test(text)) {
+      const line = keptFenceFrame(lexer.lineAt(i) ?? '')
+      if (line.text === '' || line.depth !== opener.depth || line.indent < opener.indent) break
+      if (close.test(line.text)) {
         found = true
         break
       }
