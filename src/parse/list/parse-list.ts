@@ -1287,6 +1287,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
+    // A line a refused brace run's paragraph keeps opens no fence (CARVE-P2-035).
+    const keptByRefusedRun = (text: string): boolean => {
+      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
+        if (frame.refusedRunKept === null || frame.refusedRunKept?.test(text) === true) return true
+      return false
+    }
+    const lastLineKept = (): boolean => {
+      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
+        if (frame.keptRunLine === true) return true
+      return false
+    }
     const trackDescendantOpaque = (
       line: string,
       opener: string,
@@ -1356,7 +1367,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         return
       }
       const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-      if (fence === null) return
+      if (fence === null || keptByRefusedRun(opener.trimStart())) return
       if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
@@ -2115,7 +2126,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A run past an open quote's column is quoted text, not an item-ending break.
       if (!isBlankLine(l) && lw <= baseIndent && lazyState.literalColon === undefined &&
           !insideOpenFence(lazyState) &&
-          RE_HR.test((nested.at(-1) ?? '').trimStart()) &&
+          RE_HR.test((nested.at(-1) ?? '').trimStart()) && !lastLineKept() &&
           !(insideOpenQuoteParagraph(lazyState) &&
             indentColumns(nestedSourceLines.at(-1) ?? '') > contentCol)) return 'stop'
       if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked && noteClaimEnds()) return 'stop'

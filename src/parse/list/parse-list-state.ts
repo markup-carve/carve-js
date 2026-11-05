@@ -36,6 +36,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     isBlockAttributeLine,
     isLinkDefLine,
     isTableRow,
+    keepsRefusedRunLine,
     lineOpensBlock,
     leadingWhitespace,
     markerLineQuoteState,
@@ -71,6 +72,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     authoredQuoteParagraphOpen: boolean,
   ): LazyLine {
     delete state.retainedMarker
+    delete state.keptRunLine
     const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
     const wasClosedColon = state.closedColonBody === true
     const wasClosedLiteralComment = state.closedLiteralComment === true
@@ -465,12 +467,20 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
       state.refusedBraceFollower = true
+      state.refusedRunKept = null
       state.lazyFoldable = true
       return true
     }
     if (line.atContentColumn && state.divDepth > 0 && (content[0] === ' ' || content[0] === '\t') &&
         isBlockAttributeLine(content.trimStart())) return endsOnBlock(state)
     return false
+  }
+
+  function refusedRunKeptLine(line: LazyLine): boolean {
+    if (!keepsRefusedRunLine(line.state, line.content, line.state.lazyFoldable)) return false
+    line.state.lazyFoldable = true
+    line.state.keptRunLine = true
+    return true
   }
 
   function blankLine(line: LazyLine): boolean {
@@ -863,6 +873,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     openCommentSpan,
     openCodeFence,
     termComment,
+    refusedRunKeptLine,
     attributeRun,
     blankLine,
     definitionMarker,

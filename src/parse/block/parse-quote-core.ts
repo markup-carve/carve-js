@@ -60,6 +60,29 @@ export function fenceCloseRe(marker: string): RegExp {
   return new RegExp(`^${marker[0]}{${marker.length},}${FENCE_TRAILING_WS}`)
 }
 
+/**
+ * The line after a refused brace run continues its paragraph whatever it opens,
+ * and a fence opener there keeps its closer in it too (CARVE-P2-035).
+ * `refusedRunKept` is null while the follower is due and the closer's pattern after a fence opener.
+ */
+export function keepsRefusedRunLine(state: { refusedRunKept?: RegExp | null | undefined }, content: string, paragraphOpen: boolean): boolean {
+  const kept = state.refusedRunKept
+  if (kept === undefined) return false
+  if (!paragraphOpen || isBlankLine(content)) {
+    state.refusedRunKept = undefined
+    return false
+  }
+  const text = content.trimStart()
+  if (kept !== null) {
+    if (!kept.test(text)) return false
+    state.refusedRunKept = undefined
+    return true
+  }
+  const marker = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
+  state.refusedRunKept = marker === undefined ? undefined : fenceCloseRe(marker)
+  return true
+}
+
 export type PayloadMisses = Map<string, { from: number; stop: number; maxRun: number }>
 
 /**
@@ -668,6 +691,7 @@ export function trackQuoteHostFence(
     const closed = trackWrappedAttributeRun(state, b.inner, b.at)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
+      state.refusedRunKept = null
       state.mode = { kind: 'paragraph' }
       return true
     }
@@ -713,6 +737,7 @@ export interface BlockQuoteLazyState {
   attrColumn?: number
   attrShallow?: boolean
   refusedBraceRun?: boolean
+  refusedRunKept?: RegExp | null | undefined
   /**
    * Widths of the colon fences open in this quote, innermost last, so a bare
    * `:::` run reads as the innermost container's closer only on an EXACT width
@@ -931,6 +956,10 @@ export function classifyQuotedLine(
     if (state.mode.close.test(content)) state.mode = { kind: 'closed' }
     return null
   }
+  if (keepsRefusedRunLine(state, content, state.mode.kind === 'paragraph')) {
+    state.mode = { kind: 'paragraph' }
+    return null
+  }
   if (atColumn && trackQuoteHostFence(content, state, fenceOpens, terminatorFree, hasLiteralCommentCloser, wasInTable, payloadCloser)) return null
   const wasTerm = state.mode.kind === 'paragraph' && state.mode.term && !RE_DEFLIST_DEF.test(content)
   const wasItemParagraph = state.mode.kind === 'paragraph' && state.mode.itemParagraph === true
@@ -942,6 +971,7 @@ export function classifyQuotedLine(
     const closed = trackWrappedAttributeRun(state, content)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
+      state.refusedRunKept = null
       state.mode = { kind: 'paragraph' }
       return null
     }
