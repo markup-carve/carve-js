@@ -973,9 +973,27 @@ function needsLooseKey(
     // without a parse.
     if (!/\n[ \t]*\n/.test(body)) return true
     // Restore writer guards before testing whether the emitted fences close.
-    return !reparsed(normalize(body)).looseListFirst
+    const source = normalize(body)
+    // A probe that already reads loose settles it without parsing the levels
+    // below; reparsing every nested body made a loose ladder cubic (carve#5193).
+    const probe = throughTheLineAfterTheFirstBlank(source)
+    if (probe !== source && reparsed(probe).looseListFirst) return false
+    return !reparsed(source).looseListFirst
   }
   return node.loose === true
+}
+
+/** `source` cut after the first non-blank line that follows its first blank line. */
+function throughTheLineAfterTheFirstBlank(source: string): string {
+  const blank = /\n[ \t]*\n/.exec(source)
+  if (blank === null) return source
+  let at = blank.index + blank[0].length
+  for (;;) {
+    const end = source.indexOf('\n', at)
+    if (end === -1) return source
+    if (!/^[ \t]*$/.test(source.slice(at, end))) return source.slice(0, end + 1)
+    at = end + 1
+  }
 }
 
 /**
