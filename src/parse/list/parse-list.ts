@@ -2314,7 +2314,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
-      if (belowDefinitionEntry && !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
+      if (belowDefinitionEntry && !(lazyState.deepest?.literalColon !== undefined && lazyState.deepest.lazyFoldable) &&
+          !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
           definitionHostColumn === sourceMarkerColumn)
@@ -2788,6 +2789,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
     }
     const settleContentLine = (l: string): void => {
+      const description = RE_DEFLIST_DEF.exec(trackedContent)
+      if (description && lazyState.opaque === null) {
+        const lead = description[2]!
+        const bottom = markerLineBottomBlock(lead)
+        const markerColumn = markerContentColumn(lead)
+        if (markerColumn > 0 && RE_LINE_BLOCK_OPEN.test(bottom)) {
+          const frame = verbatimOnlyLazyState()
+          frame.divDepth = 1
+          frame.literalColon = { width: colonFenceOpenerLen(bottom)!, column: 0 }
+          frame.literalLayout = true
+          lazyState.deepest = frame
+          lazyState.ownedColumn = 1 + description[1]!.length + markerColumn
+          lazyState.literalLayout = true
+          lazyState.lazyFoldable = false
+        }
+      }
       if (captionParagraphClaim && (RE_COMMENT_LINE.test(unindented) ||
           (atItemColumn && !RE_CAPTION.test(trackedContent) && !isListMarkerLine(l) &&
             (lineOpensBlock(unindented) || isBlockAttributeLine(unindented))))) captionParagraphClaim = false
