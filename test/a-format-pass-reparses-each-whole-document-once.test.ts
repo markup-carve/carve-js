@@ -16,6 +16,8 @@ vi.mock('../src/parse.js', async (importOriginal) => {
 })
 
 const { carveToCarve } = await import('../src/index.js')
+const { parse } = await import('../src/parse.js')
+const { renderedReadsBack, withReadbackMemo } = await import('../src/render-carve.js')
 
 /** Corpus 934: a one-item loose list whose body the writer rechecks on every render. */
 const nested = '- o\n  - p\n    :: t\n    : x\n\n\n\n    : d\n'
@@ -31,6 +33,13 @@ describe('a format pass', () => {
     expect(whole.length).toBe(new Set(whole).size)
     // The readback checks and the loose-list recheck used to re-parse the same sources: 31 documents here.
     expect(parsed.sources.reduce((sum, source) => sum + source.length, 0) / nested.length).toBeLessThan(10)
+  })
+
+  it('keeps a readback whose verbatim payload count cannot be taken', () => {
+    // Counting payloads spreads the top-level blocks onto a stack, which overflows here.
+    const source = Array.from({ length: 130_000 }, (_, i) => `%% c${i}`).join('\n\n') + '\n'
+    const document = parse(source)
+    expect(withReadbackMemo(source, () => renderedReadsBack(document, source))).toBe(true)
   })
 
   perfIt('formats a page of nested lists and escapes in linear time', () => {

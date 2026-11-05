@@ -444,23 +444,31 @@ function reparsed(src: string): Reparsed {
     memo!.set(src, known)
     return known
   }
-  let fresh: Reparsed
-  try {
-    const document = parse(src)
+  let fresh: Reparsed = { tree: null, counts: null, looseListFirst: false }
+  const document = attempt(() => parse(src))
+  if (document !== null) {
+    // Each part fails on its own, as the separate parses this replaces did.
+    const tree = attempt(() => stableJson(document))
     const first = document.children[0]
     fresh = {
-      tree: stableJson(document),
-      counts: verbatimPayloadCounts(document),
-      looseListFirst: first?.type === 'list' && !first.tight,
+      tree,
+      counts: attempt(() => verbatimPayloadCounts(document)),
+      looseListFirst: tree !== null && first?.type === 'list' && !first.tight,
     }
-  } catch {
-    fresh = { tree: null, counts: null, looseListFirst: false }
   }
   if (memo) {
     memo.set(src, fresh)
     if (memo.size > READBACK_MEMO_ENTRIES) memo.delete(memo.keys().next().value!)
   }
   return fresh
+}
+
+function attempt<T>(read: () => T): T | null {
+  try {
+    return read()
+  } catch {
+    return null
+  }
 }
 
 function treeOf(src: string, reparse?: (src: string) => Document): string | null {
