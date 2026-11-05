@@ -2999,6 +2999,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
+      if (indentColumns(l, contentCol) < contentCol && RE_DEFLIST_DEF.test(l.trimStart()) &&
+          lazyState.inDefList === false && !lazyState.deepest?.inDefList)
+        return LAZY_FRAME + l.trimStart()
       if (captionLeafOpen(l)) return LAZY_FRAME + l.trimStart()
       if ((enclosingLazy || ancestorTermBand) && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term'))
         return LAZY_FRAME + l.trimStart()
