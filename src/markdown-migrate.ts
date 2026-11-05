@@ -15,7 +15,7 @@ import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markd
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { opensCodeFence } from './parse/block/parse-quote-core.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
-import { GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
+import { decodeQuotedAlertEscapes, GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
 import { rewriteSameFileHeadingLinks, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
@@ -7379,12 +7379,10 @@ function convertMarkdownSource(
       onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
     }, document => {
       const alerts = importGithubAlerts(document, written)
-      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts
+      const escapes = decodeQuotedAlertEscapes(document, written)
+      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts || escapes
     },
     value)
-    // Keep the Markdown escape through alert detection, then remove it from a
-    // leftover quote label. Carve quotes do not turn that label into an alert.
-    value = value.replace(/^(> )+\\(\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])(?=\n|$)/gm, match => match.replace('\\[!', '[!'))
     if (!trailingNewline) value = value.replace(/\n$/, '')
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')

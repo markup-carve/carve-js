@@ -49,3 +49,24 @@ export function importGithubAlerts(document: Document, source: string): boolean 
   })
   return changed
 }
+
+/** Decode a Markdown escape only for a leftover label in quote paragraph text. */
+export function decodeQuotedAlertEscapes(document: Document, source: string): boolean {
+  let changed = false
+  const visit = (node: BlockNode, inQuote: boolean): void => {
+    if (node.type === 'paragraph' && inQuote) {
+      for (let i = 0; i + 1 < node.children.length; i++) {
+        const open = node.children[i]!, tail = node.children[i + 1]!
+        if (open.type !== 'escaped_text' || open.value !== '[' || tail.type !== 'text' || !/^!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/.test(tail.value)) continue
+        const offset = open.pos?.startOffset
+        if (offset === undefined || !/^(?:[ \t]*>[ \t]*)+$/.test(source.slice(source.lastIndexOf('\n', offset - 1) + 1, offset))) continue
+        node.children[i] = { type: 'text', value: '[', ...(open.pos ? { pos: open.pos } : {}) }
+        changed = true
+      }
+    } else if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) visit(child as BlockNode, inQuote || node.type === 'block_quote')
+    }
+  }
+  for (const node of document.children) visit(node, false)
+  return changed
+}

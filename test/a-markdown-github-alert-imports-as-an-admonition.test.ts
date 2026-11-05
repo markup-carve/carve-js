@@ -46,6 +46,11 @@ describe('a GitHub alert blockquote', () => {
     expect(imported(`> \\[!${label}]\n> x`)).toBe(`> [!${label}]\n> x`)
   })
 
+  it('keeps an escape inside a quoted code fence', () => {
+    expect(imported('> ```\n> \\[!NOTE]\n> ```')).toBe('> ```\n> \\[!NOTE]\n> ```')
+    expect(imported('```\n> \\[!NOTE]\n```')).toBe('```\n> \\[!NOTE]\n```')
+  })
+
   it('keeps an alert-shaped shortcut reference collapsed in a quote', () => {
     expect(imported('[!NOTE]: /u\n\n>\n> [!NOTE]\n> x')).toBe('> [!NOTE][]\n> x\n\n[!NOTE]: /u')
   })
