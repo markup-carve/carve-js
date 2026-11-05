@@ -3668,7 +3668,7 @@ class CarveRenderSession {
                 (block.type === 'comment' && ((!this.canonicalTransparentLines ||
                   (block.transparentInParagraph || block.transparentInList || block.transparentInDefinitionList) &&
                   !this.canonicalTrailingComments.has(block)) && indentedTransparentLine(block.transparentSource, ctx.listDepth > 0) ||
-                  !block.block && ctx.quoteDepth > 0 &&
+                  !this.canonicalTransparentLines && !block.block && ctx.quoteDepth > 0 &&
                   previousBlock.pos?.endLine !== undefined && block.pos?.startLine === previousBlock.pos.endLine + 1)))
           ) {
             parts[parts.length - 1] += `\n${text}`
@@ -4198,7 +4198,8 @@ class CarveRenderSession {
           if (gap.after !== idx) continue
           // After the last item the comment is a block of its own (PART 11 §2).
           if (this.canonicalTransparentLines && idx === node.items.length - 1) this.canonicalTrailingComments.add(gap.node)
-          else out += `\0${transparentNodeSource(gap)}\n`
+          // CARVE-P11-079 (b): in a loose list the comment is a block of its own, set off by blank lines.
+          else out += `${this.canonicalTransparentLines && !node.tight && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
         }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
