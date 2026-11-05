@@ -2267,6 +2267,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return undefined
     }
+    const descendantLineBlockTakes = (line: string): boolean => {
+      const deepest = lazyState.deepest
+      if (deepest?.literalColon === undefined || !deepest.lazyFoldable) return false
+      const text = line.trimStart()
+      return !RE_DEFLIST_DEF.test(text) && !RE_DEFLIST_TERM.test(text)
+    }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
@@ -2314,8 +2320,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
-      if (belowDefinitionEntry && !(lazyState.deepest?.literalColon !== undefined && lazyState.deepest.lazyFoldable &&
-          !RE_DEFLIST_DEF.test(l.trimStart()) && !RE_DEFLIST_TERM.test(l.trimStart())) &&
+      if (belowDefinitionEntry && !descendantLineBlockTakes(l) &&
           !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
