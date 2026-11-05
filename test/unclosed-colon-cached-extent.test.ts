@@ -20,3 +20,17 @@ for (const opener of ['::: note', '::: tip', '::: box', ':::: note', ':::: box']
   }
 }
 
+it('reports an indented apparent closer in a nested admonition', () => {
+  const source = '::: outer\n::: note\nbody\n\n    :::\n::: \n'
+  expect(lintCarve(source).filter(warning => warning.rule === 'unclosed-container-fence')).toMatchObject([
+    { line: 2, column: 1 },
+  ])
+})
+
+it('reports an indented apparent closer for a figure group', () => {
+  const source = '::: figure\nbody\n\n    :::\n'
+  expect(lintCarve(source).filter(warning => warning.rule === 'unclosed-container-fence')).toMatchObject([
+    { line: 1, column: 1 },
+  ])
+})
+

@@ -964,27 +964,44 @@ export function lintCarve(
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
-  // A top-level line indented four columns is code, even if ownership has
-  // stripped those spaces from the parser's colon-fence line view. The AST can
-  // still carry that line as a claimed closer, so validate it in the source
-  // before accepting the parser's closed-fence status for lint.
+  // An indented code line can look like a closer after ownership strips its
+  // margin. Validate the claimed closer against the authored source. List and
+  // definition bodies have their own column rules, so leave those to their
+  // parser diagnostics.
   const authoredLines = source.split(/\r\n|\n|\r/)
-  for (const node of doc.children) {
-    if (node.type !== 'admonition' && node.type !== 'directive' && node.type !== 'div' &&
-        node.type !== 'line_block' && node.type !== 'block_quote') continue
-    const pos = node.pos
-    if (!pos?.startLine || !pos.startColumn || !pos.endLine || pos.startOffset === undefined) continue
-    const opener = /^(:{3,})/.exec((authoredLines[pos.startLine - 1] ?? '').slice(pos.startColumn - 1))
-    const closer = /^(?: {4,}|\t+)(:{3,})[ \t]*$/.exec(authoredLines[pos.endLine - 1] ?? '')
-    if (!opener || !closer || opener[1]!.length !== closer[1]!.length) continue
-    if (unclosedContainers.some(site => site.line === pos.startLine && site.column === pos.startColumn)) continue
-    const kind: UnclosedContainer['kind'] = node.type === 'line_block' ? 'line block'
-      : node.type === 'block_quote' ? 'block quote' : node.type === 'div' ? 'div'
-        : node.type
-    unclosedContainers.push({ kind, line: pos.startLine, column: pos.startColumn,
-      startOffset: pos.startOffset, endOffset: pos.startOffset + opener[1]!.length,
-      fenceWidth: opener[1]!.length })
+  const sourceColumn = (prefix: string): number => {
+    let column = 0
+    for (const char of prefix) column += char === '\t' ? 4 - column % 4 : 1
+    return column
   }
+  const inspectAuthoredCloser = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const child of value) inspectAuthoredCloser(child); return }
+    if (!value || typeof value !== 'object') return
+    const node = value as { type?: string; pos?: Positioned['pos']; children?: unknown }
+    if (node.type === 'list' || node.type === 'definition_list') return
+    if (node.type === 'admonition' || node.type === 'directive' || node.type === 'div' ||
+        node.type === 'line_block' || node.type === 'block_quote' || node.type === 'figure_group') {
+      const pos = node.pos
+      if (pos?.startLine && pos.startColumn && pos.endLine && pos.startOffset !== undefined) {
+        const opener = /^(:{3,})/.exec((authoredLines[pos.startLine - 1] ?? '').slice(pos.startColumn - 1))
+        const lastLine = authoredLines[pos.endLine - 1] ?? ''
+        const closer = /^(?:[ \t]*>[ \t]*)*[ \t]*(:{3,})[ \t]*$/.exec(lastLine)
+        const closerStart = closer ? lastLine.indexOf(closer[1]!) : -1
+        if (opener && closer && opener[1]!.length === closer[1]!.length &&
+            sourceColumn(lastLine.slice(0, closerStart)) - (pos.startColumn - 1) >= 4 &&
+            !unclosedContainers.some(site => site.line === pos.startLine && site.column === pos.startColumn)) {
+          const kind: UnclosedContainer['kind'] = node.type === 'line_block' ? 'line block'
+            : node.type === 'block_quote' ? 'block quote'
+              : node.type === 'div' ? 'div' : node.type === 'directive' ? 'directive' : 'admonition'
+          unclosedContainers.push({ kind, line: pos.startLine, column: pos.startColumn,
+            startOffset: pos.startOffset, endOffset: pos.startOffset + opener[1]!.length,
+            fenceWidth: opener[1]!.length })
+        }
+      }
+    }
+    inspectAuthoredCloser(node.children)
+  }
+  inspectAuthoredCloser(doc.children)
   // The AST carries codepoint positions over line-ending-normalized text; a
   // LintWarning reports UTF-16 into the source the caller passed, so a JS
   // consumer can slice it. Identity only when neither differs.
