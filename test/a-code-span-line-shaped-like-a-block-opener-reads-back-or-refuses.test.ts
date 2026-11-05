@@ -78,6 +78,11 @@ it('pads a definition-shaped final line in a footnote body', () => {
   expect(carveToHtml(written)).toBe(carveToHtml(source))
 })
 
+it('keeps a leading newline when the final line already has a safe closer', () => {
+  const source = 'r[^n]\n\n[^n]: p `\n   [x]: y` q\n'
+  expect(carveToCarve(source)).toBe(source)
+})
+
 it.each(['quote', 'bullet', 'quotedItem', 'div'])('spells a last colon-run line with the closer on it: %s', host => {
   const document = withCode(host, '', 'a\n:::')
   const written = renderCarve(document)
