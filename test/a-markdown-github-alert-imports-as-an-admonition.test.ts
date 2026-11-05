@@ -51,6 +51,10 @@ describe('a GitHub alert blockquote', () => {
     expect(imported('```\n> \\[!NOTE]\n```')).toBe('```\n> \\[!NOTE]\n```')
   })
 
+  it('decodes a leftover label in a quote inside a list item', () => {
+    expect(imported('- > \\[!NOTE]\n  > x')).toBe('- > [!NOTE]\n  > x')
+  })
+
   it('keeps an alert-shaped shortcut reference collapsed in a quote', () => {
     expect(imported('[!NOTE]: /u\n\n>\n> [!NOTE]\n> x')).toBe('> [!NOTE][]\n> x\n\n[!NOTE]: /u')
   })
