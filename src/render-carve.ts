@@ -5051,6 +5051,43 @@ class CarveRenderSession {
     }
   }
 
+  /**
+   * A refused wrapped attribute is already literal paragraph text, split at its
+   * line endings into `text` and `soft_break`. Its shallow closer keeps the brace
+   * from opening an attribute on reparse, so its pieces are written verbatim.
+   * Braced comments need the usual escape probe because they can vanish.
+   */
+  private refusedBraceOverrides(nodes: InlineNode[], overrides: Map<number, { text: string; ranges: LiteralRange[] }>, captionCanOpen: boolean): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const first = nodes[i]!
+      if (first.type !== 'text' || !first.value.startsWith('{') || first.value.startsWith('{%')) continue
+      if (i > 0 && nodes[i - 1]!.type !== 'soft_break') continue
+      let last = i
+      let joined = first.value
+      while (nodes[last + 1]?.type === 'soft_break' && nodes[last + 2]?.type === 'text') {
+        last += 2
+        joined += '\n' + (nodes[last] as Text).value
+      }
+      const end = refusedBraceTextEnd(joined)
+      let directive = false
+      for (let k = i; k <= last; k += 2) directive ||= overrides.has(k)
+      if (end === 0 || directive) continue
+      let offset = 0
+      for (let k = i; k <= last; k += 2) {
+        const node = nodes[k] as Text
+        const cut = end - offset
+        if (cut >= node.value.length) overrides.set(k, { text: node.value, ranges: [] })
+        else {
+          const rest = cleanEscapedText(node).slice(cut)
+          overrides.set(k, { text: node.value.slice(0, cut) + (rest === '' ? '' : this.escapeText(rest, captionCanOpen, opensBacktickRun(nodes[k + 1]))), ranges: [] })
+        }
+        offset += node.value.length + 1
+        if (offset > end) break
+      }
+      i = last
+    }
+  }
+
   private directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
     const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
     let i = 0
@@ -5160,6 +5197,7 @@ class CarveRenderSession {
           ? { text: out, offset: 0 }
           : { text: outTail, offset: out.length - outTail.length }
       const overrides = this.directiveOverrides(nodes)
+      this.refusedBraceOverrides(nodes, overrides, captionCanOpen)
       // `%%%` pairs after a stanza's last line leave its last break the last one.
       let stanzaEnd = nodes.length
       while (isStanza && stanzaEnd > 0 && nodes[stanzaEnd - 1]!.type === 'comment' && (nodes[stanzaEnd - 1] as Comment).block) stanzaEnd--
@@ -5429,9 +5467,7 @@ class CarveRenderSession {
     function renderInlineDispatch(): string {
     switch (node.type) {
       case 'text':
-        // A refused wrapped attribute is already literal paragraph text. Its
-        // shallow closer keeps the brace from opening an attribute on reparse.
-        // Braced comments need the usual escape probe because they can vanish.
+        // A joined refused run from a tree built elsewhere; parsed ones are split (refusedBraceOverrides).
         if (node.value.startsWith('{') && !node.value.startsWith('{%')) {
           const end = refusedBraceTextEnd(node.value)
           if (end > 0) {
