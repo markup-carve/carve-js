@@ -2,7 +2,7 @@ import type { Document } from '../ast.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
-import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
+import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
 
@@ -61,6 +61,15 @@ export function canonicalCarveWrite(
   /** Must return true whenever it changes the parsed tree. */
   transform?: (document: Document) => boolean,
   parsedSourceHint?: string,
+): string {
+  return withReadbackMemo(source, () => writeCanonically(source, opts, transform, parsedSourceHint))
+}
+
+function writeCanonically(
+  source: string,
+  opts: ParseOptions & CarveRenderOptions,
+  transform: ((document: Document) => boolean) | undefined,
+  parsedSourceHint: string | undefined,
 ): string {
   const document = parseDocument(source, opts)
   const transformed = transform?.(document) === true
