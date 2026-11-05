@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carveToCarve, carveToHtml, parse } from '../src/index.js'
-import type { BlockNode, List } from '../src/ast.js'
+import type { BlockNode } from '../src/ast.js'
 
 // carve#4862: expected output read from the spec model.
 describe('a comment or one-line definition closes no indentation container', () => {
@@ -28,8 +28,8 @@ describe('a comment or one-line definition closes no indentation container', () 
 
   it('maps a moved line back to its source', () => {
     const source = '- a\n%% note\n  café\n'
-    const item = (parse(source).children[0] as List).items[0]!
-    const comment = item.children.find((node: BlockNode) => node.type === 'comment')!
+    // Its column reaches no container, so the document holds it (carve#5178).
+    const comment = parse(source).children.find((node: BlockNode) => node.type === 'comment')!
     expect(comment.pos?.startLine).toBe(2)
     expect(source.slice(comment.pos!.startOffset, comment.pos!.endOffset)).toContain('%% note')
   })

@@ -12,10 +12,8 @@ describe('carve#5012 transparent single-line blocks', () => {
   })
 
   it('keeps the comment node at its authored source extent', () => {
-    const item = parse(source).children[0]
-    expect(item?.type).toBe('list')
-    if (item?.type !== 'list') return
-    const comment = item.items[0]?.children.find((node) => node.type === 'comment')
+    // Its column reaches no container, so the document holds it (carve#5178).
+    const comment = parse(source).children.find((node) => node.type === 'comment')
     expect(comment).toMatchObject({
       type: 'comment', block: false, content: 'c',
       pos: { startLine: 2, endLine: 2, startColumn: 1, endColumn: 5, startOffset: 4, endOffset: 8 },

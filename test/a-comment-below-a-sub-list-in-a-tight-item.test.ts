@@ -54,9 +54,9 @@ const drifted: Array<[string, string]> = [
 describe('a comment below a sub-list in a tight item', () => {
   it('is written where a re-parse reads it back into the OUTER item', () => {
     const source = '- - d\n\n  %% q\na\n'
-    // A comment closes no indentation container (markup-carve/carve#4884): it sits at
-    // document level and is written there, as corpus 191's canonical form does.
-    expect(carveToCarve(source)).toBe('- - d\n\n%% q\n\na\n')
+    // A comment closes no indentation container (markup-carve/carve#4884), and at the outer
+    // item's column it is that item's (carve#5178).
+    expect(carveToCarve(source)).toBe('- - d\n  %% q\n\na\n')
   })
 
   it('reaches a fixpoint on the reported document rather than walking right', () => {
