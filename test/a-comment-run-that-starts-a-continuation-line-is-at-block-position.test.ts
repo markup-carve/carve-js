@@ -12,6 +12,7 @@ describe('a comment run that starts a continuation line', () => {
     ['pre\n{% a\n  b %}\n', '<p>pre\n</p>'],
     ['- pre\n  {% a\n    b %}\n', '<ul>\n  <li>pre\n</li>\n</ul>'],
     ['pre {% a\nb %} c\n', '<p>pre  c</p>'],
+    ['{{ a.csv @code @foo }}\n{% a\nb %}\n', '<p>{{ a.csv @code @foo }}</p>\n<p>{% a\nb %}</p>'],
   ])('renders %j', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })
@@ -22,6 +23,8 @@ describe('a comment run that starts a continuation line', () => {
     ['> pre\n> {% a\n>   b %}\n', '> pre\n> {% a\n>  b %}\n'],
     ['{% a\n  b %} tail\n', '{% a\n b %} tail\n'],
     ['pre {% a\nb %} c\n', 'pre {% a\nb %} c\n'],
+    ['[a\n{% x\n  y %}](https://e.test)\n', '[a\n{% x\n y %}](https://e.test)\n'],
+    ['x *y {% a\nb %}*\n', 'x *y {% a\nb %}*\n'],
   ])('writes %j so the run stays a comment', (source, written) => {
     expect(carveToCarve(source)).toBe(written)
     expect(carveToHtml(written)).toBe(carveToHtml(source))
