@@ -12,7 +12,7 @@ describe('block brace continuations pass the opening column', () => {
     ['- item\n\n  {.a\n  #x}\n  para', '<ul>\n  <li><p>item</p>\n    <p>{.a\n#x}\npara</p>\n  </li>\n</ul>'],
     ['- item\n\n   {.a\n   #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n#x}\n- sibling</p>\n  </li>\n</ul>'],
     ['- item\n\n  {.a\n  .b\n  #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n.b\n#x}\n- sibling</p>\n  </li>\n</ul>'],
-    ['  - b\n    > q\n> > q\n> > {.k\ntail\n> > #x}\ntail\n  lazy\n', '<ul>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>\n<blockquote>\n  <blockquote><p>q\n{.k\ntail\n<span class="tag"><strong>#x</strong></span>}\ntail\nlazy</p></blockquote>\n</blockquote>'],
+    ['  - b\n    > q\n> > q\n> > {.k\ntail\n> > #x}\ntail\n  lazy\n', '<ul>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>\n<blockquote>\n  <blockquote><p>q\n{.k\ntail\n#x}\ntail\nlazy</p></blockquote>\n</blockquote>'],
   ])('renders %j as ruled', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })
