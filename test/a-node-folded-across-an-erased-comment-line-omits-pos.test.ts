@@ -30,25 +30,27 @@ describe('a node folded across an erased comment line omits pos', () => {
     expect(`${comment!.type} ${span(comment!)}`).toBe('comment 2..6')
   })
 
-  it('omits only the paragraph inside a list item that holds the comment (corpus 183)', () => {
+  it('omits the list and item a comment below their column sits inside (corpus 183, carve#5178)', () => {
     const doc = wire('- a\n %% c\nb\n')
-    const list = (doc.children as Node[])[0]!
-    const item = (list.items as Node[])[0]!
-    const [paragraph, comment] = item.children as Node[]
-    expect(span(list)).not.toBe('none')
-    expect(span(item)).not.toBe('none')
+    const [list, comment] = doc.children as Node[]
+    const item = (list!.items as Node[])[0]!
+    const [paragraph] = item.children as Node[]
+    expect(span(list!)).toBe('none')
+    expect(span(item)).toBe('none')
     expect(span(paragraph!)).toBe('none')
-    expect(comment!.type).toBe('comment')
+    expect(`${comment!.type} ${span(comment!)}`).toBe('comment 5..9')
   })
 
-  it('ends an item before a trailing erased line and omits the list it sits inside (corpus 937)', () => {
+  it('puts a comment at the description column in the description, so the list keeps pos (corpus 937, carve#5178)', () => {
     const doc = wire('- :: term\n  : payload\n\n    %% c\n- sub\n')
-    const [list, comment] = doc.children as Node[]
+    const [list] = doc.children as Node[]
     const [first, second] = list!.items as Node[]
-    expect(span(first!)).toBe('0..21')
+    const description = ((first!.children as Node[])[0]!.items as Node[])[1]!
+    const comment = (description.children as Node[])[1]!
+    expect(span(first!)).toBe('0..31')
     expect(span(second!)).toBe('32..37')
-    expect(span(list!)).toBe('none')
-    expect(`${comment!.type} ${span(comment!)}`).toBe('comment 27..31')
+    expect(span(list!)).toBe('0..37')
+    expect(`${comment.type} ${span(comment)}`).toBe('comment 27..31')
   })
 
   it('does not stretch an item emptied by a marker-line note onto the erased line (corpus 585)', () => {

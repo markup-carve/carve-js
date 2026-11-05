@@ -10,7 +10,7 @@ describe('an erased line takes its canonical spelling', () => {
     ['a block image above an erased definition (corpus 411-2)', ' ![Apollo][moon]\n\n[moon]: a.jpg\n', '![Apollo][moon]\n\n[moon]: a.jpg\n'],
     ['a comment whose content starts with a no-break space (corpus 498-3)', '%% x\n\ntext\n', '%%  x\n\ntext\n'],
     ['a comment whose content is a vertical tab (corpus 498-5)', '%%\u000b\n\ntext\u000b\n', '%% \u000b\n\ntext\u000b\n'],
-    ['a comment after the last description', ':: a\n: b\n  :: c\n  %% note\n  more\n', ':: a\n: b\n\n  :: c\n\n  more\n\n%% note\n'],
+    ['a comment after the last description', ':: a\n: b\n  :: c\n  %% note\n  more\n', ':: a\n: b\n\n  :: c\n\n  %% note\n\n  more\n'],
   ])('%s', (_name, source, expected) => {
     const written = carveToCarve(source)
     expect(written).toBe(expected)

@@ -22,6 +22,7 @@ export function decisionTrace(source: string): TraceRecord[] {
   if (!stream || stream.sourceLines[0] === 0) lexer.consumeFrontmatter()
   const trace: TraceRecord[] = []
   ownLines(lexer.lines as string[], lexer.pos, trace)
+  for (const record of trace) delete record.reach
   if (stream) {
     const sourceLine = (line: number): number => (stream.sourceLines[line - 1] ?? line - 1) + 1
     const path = (value: string): string => value.replace(/:(\d+)/g, (_whole, line: string) => `:${sourceLine(Number(line))}`)

@@ -43,6 +43,8 @@ export interface TraceRecord {
   closed?: number
   reached?: string
   plus?: number
+  /** Internal: the frames an invisible line's own column reaches (carve#5178); not part of the trace format. */
+  reach?: string
 }
 
 const BODY_FRAME = new Set(['item', 'dd', 'note'])
@@ -1366,10 +1368,13 @@ export function ownLines(
   }
 
   function emit(index: number, step: TraceRecord['step'], owner: string, rule: string | null, form: string,
-    extra: { [K in 'cell' | 'closed' | 'reached' | 'plus']?: TraceRecord[K] | undefined } = {}): void {
+    extra: { [K in 'cell' | 'closed' | 'reached' | 'plus' | 'reach']?: TraceRecord[K] | undefined } = {}): void {
     if (traceAlias !== null) {
       if (owner === traceAlias.from || owner.startsWith(`${traceAlias.from}/`)) {
         owner = traceAlias.to + owner.slice(traceAlias.from.length)
+        if (extra.reach?.startsWith(`${traceAlias.from}/`) || extra.reach === traceAlias.from) {
+          extra = { ...extra, reach: traceAlias.to + extra.reach.slice(traceAlias.from.length) }
+        }
       } else traceAlias = null
     }
     const record: TraceRecord = { line: index + 1, step, owner, rule, form }
@@ -1382,9 +1387,24 @@ export function ownLines(
     const kind = TRACE_FORM[form.kind] ?? form.family ?? form.kind
     const cell = form.kind === 'colon-close' ? 'B-div-end' : TRACE_OPENS.has(form.kind) ? `B-${form.family ?? kind}-start` : undefined
     emit(at, 'S5', route.path, TRACE_RULE[form.kind] ?? 'CARVE-P0-024', kind,
-      { cell, closed: route.closed > 0 ? route.closed : undefined, reached: route.reached, plus: plusFollower ? at : undefined })
+      { cell, closed: route.closed > 0 ? route.closed : undefined, reached: route.reached, plus: plusFollower ? at : undefined,
+        reach: form.kind === 'leaf' && !plusFollower ? ownerPath(reachedDepth(lines[at]!)) : undefined })
   }
 
+  // The deepest open frame whose content column `line` reaches, as S2 walks a visible line.
+  function reachedDepth(line: string): number {
+    let n = indentCols(line)
+    let from = 0
+    for (let k = 1; k < frames.length; k++) {
+      const f = frames[k]!
+      if (f.kind === 'quote') {
+        if (!isQuoteLine(n.rest)) break
+        n = indentCols(quoteRest(n.rest))
+      } else if (n.col < f.col) break
+      from = k
+    }
+    return from
+  }
   // A container path keyed by opening line, `depth` cutting it at a frame: `doc/item:1/quote:2`.
   function ownerPath(depth = frames.length - 1): string {
     let path = 'doc'

@@ -2,7 +2,7 @@ import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
 import { commentLineContent } from './parse-block-scan-core.js'
-import type { AbbreviationDef, BlockNode, BlockQuote, Comment, DefinitionItem, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, Comment, DefinitionItem, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -523,30 +523,52 @@ function visibleParagraphLines(paragraph: Paragraph, stream: TransparentLineStre
   return visible
 }
 
-/** A visible container can end before its last erased line; source ownership still names it. */
+/**
+ * A visible container can end before its last erased line; source ownership still names it.
+ * Keys follow the trace's `doc/item:1/dd:2` paths, built from the tree so an outer container
+ * that opens a nested one on its first line keeps its own key (carve#5178).
+ */
 function authoredContainerBlocks(document: Document, owners: Map<number, string>):
-  Map<string, { blocks: BlockNode[]; containers: Array<BlockQuote | List | ListItem> }> {
-  const blocksByOwner = new Map<string, { blocks: BlockNode[]; containers: Array<BlockQuote | List | ListItem> }>()
-  const visit = (blocks: BlockNode[]): void => {
+  Map<string, { blocks: BlockNode[]; containers: Array<{ pos?: Position }> }> {
+  const blocksByOwner = new Map<string, { blocks: BlockNode[]; containers: Array<{ pos?: Position }> }>()
+  const visit = (blocks: BlockNode[], path: string): void => {
     for (const block of blocks) {
+      const line = block.pos?.startLine
       if (block.type === 'block_quote') {
-        const owner = owners.get(block.pos?.startLine ?? -1)?.match(/^.*\/quote:\d+/)?.[0]
-        if (owner) blocksByOwner.set(owner, { blocks: block.children, containers: [block] })
-      }
-      if (block.type === 'list') {
+        const key = `${path}/quote:${line}`
+        blocksByOwner.set(key, { blocks: block.children, containers: [block] })
+        visit(block.children, key)
+      } else if (block.type === 'list') {
         for (const item of block.items) {
-          const owner = owners.get(item.pos?.startLine ?? -1)?.match(/^.*\/item:\d+/)?.[0]
-          if (owner) blocksByOwner.set(owner, { blocks: item.children, containers: [item, block] })
-          visit(item.children)
+          const key = `${path}/item:${item.pos?.startLine}`
+          blocksByOwner.set(key, { blocks: item.children, containers: [item, block] })
+          visit(item.children, key)
         }
       } else if (block.type === 'definition_list') {
-        for (const item of block.items) for (const definition of item.definitions) visit(definition)
+        for (const item of block.items) {
+          item.definitions.forEach((definition, index) => {
+            const marker = item.definitionLines?.[index]
+            const key = `${path}/dd:${marker}`
+            if (marker !== undefined) blocksByOwner.set(key, { blocks: definition, containers: [block] })
+            visit(definition, marker === undefined ? path : key)
+          })
+        }
       } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
-        visit(block.children as BlockNode[])
+        const key = `${path}/div:${line}`
+        const opened = owners.get(line ?? -1)
+        const fenced = opened !== undefined && (opened === key || opened.startsWith(`${key}/`))
+        if (fenced) blocksByOwner.set(key, { blocks: block.children as BlockNode[], containers: [block] })
+        visit(block.children as BlockNode[], fenced ? key : path)
       }
     }
   }
-  visit(document.children)
+  visit(document.children, 'doc')
+  for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {})) {
+    const line = document.footnoteDefPos?.[label]?.startLine
+    const key = `doc/footnote:${line}`
+    if (line !== undefined) blocksByOwner.set(key, { blocks, containers: [] })
+    visit(blocks, line === undefined ? 'doc' : key)
+  }
   return blocksByOwner
 }
 
@@ -571,8 +593,9 @@ export function restoreTransparentComments(document: Document, authored: Documen
   derivedSpans = new WeakMap()
   blockIndexes = new WeakMap()
   const comments = direct ?? (authored ? authoredComments(authored) : new Map<number, Comment>())
-  const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.owner]))
+  const ownersByLine = new Map(stream.authoredTrace.map((record) => [record.line, record.reach ?? record.owner]))
   const ownedBlocks = authoredContainerBlocks(document, ownersByLine)
+  const ownerOf = new Map<BlockNode[], string>([...ownedBlocks].map(([key, entry]) => [entry.blocks, key]))
   // Hoisted comments are placed in one merge per sibling list, so later lookups do not walk them
   // (carve-js#4392). The lookups never match a comment; only insertAfterParagraph reads placed ones.
   const hoisted = new Map<BlockNode[], Comment[]>()
@@ -610,21 +633,37 @@ export function restoreTransparentComments(document: Document, authored: Documen
       recordFollowingLines(match.paragraph, index + 1, (child) => stream.original[child.pos!.startLine - 1]!)
       comment.transparentInParagraph = true
       placeHoisted()
-      insertAfterParagraph(match.siblings, match.paragraph, comment)
+      // A line below the paragraph's container column is not its container's, even where
+      // the paragraph folds across it (carve#5178).
+      const owner = ownersByLine.get(index + 1)
+      const paragraphOwner = ownerOf.get(match.siblings)
+      const reached = owner === undefined ? undefined : owner === 'doc' ? footnote ? undefined : document.children : ownedBlocks.get(owner)?.blocks
+      if (reached && paragraphOwner?.startsWith(`${owner}/`)) hoisted.set(reached, [...hoisted.get(reached) ?? [], comment])
+      else insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
       if (descriptionGap && placeInDescription(descriptionGap, comment)) continue
-      if (descriptionGap) recordDescriptionGap(descriptionGap, original, comment, comment.content)
+      const owner = ownersByLine.get(index + 1)
+      const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
+      // A comment its owner holds is written there in tree order: inside one of the list's
+      // descriptions, or after the list's last entry (carve#5178).
+      const inOwner = descriptionGap !== null && owned !== undefined && (!owned.blocks.includes(descriptionGap.list) ||
+        !descriptionGap.list.items.some((item) => [...item.termSpans?.map((span) => span?.startLine) ?? [],
+          ...item.definitionLines ?? []].some((start) => start !== undefined && start > index + 1)))
+      if (descriptionGap && !inOwner) recordDescriptionGap(descriptionGap, original, comment, comment.content)
+      if (inOwner) {
+        delete comment.transparentSource
+        delete comment.transparentOriginalValue
+      }
       const gap = betweenListItems(blocks, comment.pos.startOffset, placeHoisted)
       if (gap) {
         gap.list.transparentBetweenItems ??= []
         gap.list.transparentBetweenItems.push({ after: gap.after, source: original, node: comment, originalValue: comment.content })
         comment.transparentInList = true
       }
-      const owner = ownersByLine.get(index + 1)
-      const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
       const trailing = stream.authoredTrace.length === 0 ? trailingListOwner(blocks, comment.pos.startColumn ?? 1) : null
-      const siblings = owned?.blocks ?? trailing?.blocks ?? containingBlocks(blocks, comment.pos.startOffset)
+      // A line whose column reaches no container is the document's (carve#5178).
+      const siblings = owned?.blocks ?? trailing?.blocks ?? (owner === 'doc' && !footnote ? document.children : containingBlocks(blocks, comment.pos.startOffset))
       const pending = hoisted.get(siblings)
       if (pending && pending.at(-1)!.pos!.startOffset! > comment.pos.startOffset) placeHoisted()
       if (hoisted.has(siblings)) hoisted.get(siblings)!.push(comment)
