@@ -77,6 +77,17 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
         if (derived.endColumn !== undefined) pos.endColumn = derived.endColumn
         if (derived.endOffset !== undefined) pos.endOffset = derived.endOffset
       }
+      // A comment above the marker line is the description's first child (CARVE-P12-027).
+      if (pos && recorded && derived && derived.startLine < pos.startLine) {
+        // A term between them leaves no contiguous span (CARVE-P12-022).
+        if ((out.at(-1)?.pos?.endLine ?? 0) >= derived.startLine) {
+          out.push(node)
+          return
+        }
+        pos.startLine = derived.startLine
+        if (derived.startColumn !== undefined) pos.startColumn = derived.startColumn
+        if (derived.startOffset !== undefined) pos.startOffset = derived.startOffset
+      }
       if (pos !== undefined) node.pos = pos
       out.push(node)
     })
