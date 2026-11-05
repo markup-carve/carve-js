@@ -2705,7 +2705,9 @@ export class ParseSession extends InlineParseSession {
       if (isBlankLine(ln)) break
       let openedRefusedFence = false
       if (afterRefusal && refusedFence === null) {
-        const opener = /^[ \t]*(`{3,}|~{3,})[ \t]*$/.exec(ln)?.[1]
+        // Any fence opener keeps its closer, whatever info string it carries (CARVE-P2-035).
+        const text = ln.trimStart()
+        const opener = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
         if (opener) {
           const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length},}[ \\t]*$`)
           for (let n = 1; lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!); n++) {
