@@ -2670,7 +2670,7 @@ export class ParseSession extends InlineParseSession {
    */
   private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     const lines: string[] = []
-    const literalLines: Array<[number, number, boolean]> = []
+    const literalLines: Array<[number, number]> = []
     let afterRefusal = false
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
@@ -2723,7 +2723,7 @@ export class ParseSession extends InlineParseSession {
       if (refusedLines > 0) {
         const start = lines.length
         for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
-        literalLines.push([start, lines.length, ln.trimStart().startsWith('{%')])
+        literalLines.push([start, lines.length])
         afterRefusal = true
         continue
       }
@@ -2835,7 +2835,7 @@ export class ParseSession extends InlineParseSession {
           column: lexer.lineStartColumn(startLineIndex + line) + (line === 0 ? firstLead : 0),
           line: lexer.lineNumber(startLineIndex + line),
         }
-        const delta = [...text.slice(offsets[line]!, offset)].length
+        const delta = offset - offsets[line]!
         return { line: point.line, column: point.column + delta, offset: point.offset + delta }
       }
       const parseSegment = (from: number, to: number): Paragraph['children'] => {
@@ -2875,25 +2875,24 @@ export class ParseSession extends InlineParseSession {
           } } : {}),
         })
       }
-      for (const [start, end, comment] of literalLines) {
+      for (const [start, end] of literalLines) {
         const from = offsets[start]!
         const to = offsets[end]! - 1
         if (from > at) paragraphNode.children.push(...parseSegment(at, from))
-        if (comment) {
-          let lineStart = from
-          for (let i = from; i < to; i++) if (text[i] === '\n') {
-            addLiteralText(lineStart, i)
-            const before = positionAt(i), after = positionAt(i + 1)
-            paragraphNode.children.push({ type: 'soft_break',
-              ...(lexer.hasDocumentOffsets ? { pos: {
-                startLine: before.line, startColumn: before.column, startOffset: before.offset,
-                endLine: after.line, endColumn: after.column, endOffset: after.offset,
-              } } : {}),
-            })
-            lineStart = i + 1
-          }
-          addLiteralText(lineStart, to)
-        } else addLiteralText(from, to)
+        // Every line ending in a refused run is a soft_break, attribute runs too (carve-js#4430).
+        let lineStart = from
+        for (let i = from; i < to; i++) if (text[i] === '\n') {
+          addLiteralText(lineStart, i)
+          const before = positionAt(i), after = positionAt(i + 1)
+          paragraphNode.children.push({ type: 'soft_break',
+            ...(lexer.hasDocumentOffsets ? { pos: {
+              startLine: before.line, startColumn: before.column, startOffset: before.offset,
+              endLine: after.line, endColumn: after.column, endOffset: after.offset,
+            } } : {}),
+          })
+          lineStart = i + 1
+        }
+        addLiteralText(lineStart, to)
         at = to
       }
       if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
