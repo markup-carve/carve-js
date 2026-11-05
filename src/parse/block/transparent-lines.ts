@@ -215,15 +215,18 @@ export function erasedLineNodes(stream: TransparentLineStream, parseLine: (text:
  * paragraph may have been that paragraph's text, or an open inline comment's, in the authored parse.
  */
 export function erasedLinesStandAlone(document: Document, stream: TransparentLineStream, nodes: ErasedLineNodes): boolean {
-  const spans: Array<{ start: number; end: number; comment: boolean }> = []
+  // Per line inside a paragraph: 1, or 2 where that paragraph holds a comment.
+  const inside = new Uint8Array(stream.original.length + 2)
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const part of value) visit(part)
     } else if (value !== null && typeof value === 'object') {
       const node = value as { type?: string; pos?: Position; children?: InlineNode[] }
-      if (node.type === 'paragraph' && node.pos && node.pos.endLine > node.pos.startLine) {
-        spans.push({ start: node.pos.startLine, end: node.pos.endLine,
-          comment: (node.children ?? []).some((child) => child.type === 'comment') })
+      if (node.type === 'paragraph' && node.pos) {
+        const mark = (node.children ?? []).some((child) => child.type === 'comment') ? 2 : 1
+        for (let line = node.pos.startLine + 1; line < node.pos.endLine && line < inside.length; line++) {
+          inside[line] = Math.max(inside[line]!, mark)
+        }
         return
       }
       for (const [key, part] of Object.entries(node)) if (key !== 'pos' && key !== 'attrs') visit(part)
@@ -231,11 +234,9 @@ export function erasedLinesStandAlone(document: Document, stream: TransparentLin
   }
   visit(document.children)
   visit(document.footnoteDefs)
-  if (!spans.length) return true
   for (const index of stream.erased) {
     const line = index + 1
-    const comment = nodes.comments.has(line)
-    if (spans.some((span) => span.start < line && line < span.end && (!comment || span.comment))) return false
+    if (inside[line]! > (nodes.comments.has(line) ? 1 : 0)) return false
   }
   return true
 }
