@@ -31,4 +31,12 @@ describe('a refused attribute run spanning lines', () => {
     expect(renderHtml(parse(source))).toBe('<p>{.a\n.b}</p>\n<p>paragraph</p>')
     expect(renderCarve(parse(source))).toBe(source)
   })
+
+  it.each([
+    ['{k=""}{c\n}\n', '{k=""}{c\n}\n'],
+    ['x\n{k=""}{c\n}\n', 'x\n{k=""}{c\n}\n'],
+    ['- pre\n {.a\n .b}\n', '- pre\n  {.a\n  .b}\n'],
+  ])('writes the split run without inventing an escape: %j', (input, written) => {
+    expect(renderCarve(parse(input))).toBe(written)
+  })
 })
