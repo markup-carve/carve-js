@@ -5,6 +5,7 @@ import type { ParseOptions } from '../parse.js'
 import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
+import { isBlockAttributeLine } from '../parse/parse-prepass-core.js'
 
 const COLON_OPENER = /^(?:[ \t]*(?:>|[-*+]|\d{1,9}[.)])(?=[ \t]|$))*[ \t]*:{3,}/
 const COLON_CLOSER = /^(?:[ \t]*>)*[ \t]*:{3,}[ \t]*$/
@@ -91,6 +92,23 @@ function writeCanonically(
     if (writtenReadsBackAs(source, candidate) && !hasUnrepresentedAuthoredLine(document, source, candidate, stream ?? undefined) &&
         renderCarve(withPromotedImages(parseDocument(candidate, opts)), canonicalOpts) === candidate)
       return candidate
+
+    // A floating block attribute has no AST node (PART 9 §15 A4). The AST
+    // writer can reorder later transparent definitions, which makes its
+    // candidate fail the readback even though dropping the attribute alone is
+    // canonical. Keep the authored order and prove the reduced source instead.
+    const lines = source.replace(/\r\n?/g, '\n').split('\n')
+    let removed = false
+    const reduced = lines.map((line) => {
+      if (!isBlockAttributeLine(line.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, ''))) return line
+      removed = true
+      return ''
+    }).join('\n')
+    if (removed && reduced !== source && writtenReadsBackAs(source, reduced)) {
+      const settled = canonicalCarveWrite(reduced, opts)
+      if (writtenReadsBackAs(source, settled) && canonicalCarveWrite(settled, opts) === settled)
+        return settled
+    }
   }
   const written = render(opts)
   // The parser used to leave `%%` stand-ins from `+` as layout boundaries.
