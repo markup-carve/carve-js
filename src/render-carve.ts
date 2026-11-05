@@ -952,6 +952,11 @@ function foldsIntoAnOpenParagraph(block: BlockNode, previous: BlockNode, next: B
   return next === undefined && !holdsLineBreak(block.caption) && deepestTail(previous).type !== 'figure'
 }
 
+/** `captionRow` writes no line for a blank caption. */
+function writesACaptionLine(caption: InlineNode[]): boolean {
+  return caption.some((node) => node.type === 'text' ? trimNonNbsp(node.value) !== '' : node.type !== 'soft_break' && node.type !== 'hard_break')
+}
+
 function deepestTail(node: BlockNode): BlockNode {
   let tail = node
   for (let inner = theLastBlockInside(tail); inner !== undefined; inner = theLastBlockInside(tail)) tail = inner
@@ -980,7 +985,7 @@ function opensWithAnAttributeLine(rendered: string): boolean {
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
   // A caption line closes its table, so the next table row opens a new one.
-  if (left.type === 'table' && left.caption !== undefined) return false
+  if (left.type === 'table' && left.caption !== undefined && writesACaptionLine(left.caption)) return false
   if (left.type === 'list' && right.type === 'list') {
     if (left.ordered !== right.ordered) return false
     if (isTaskList(left) !== isTaskList(right)) return false

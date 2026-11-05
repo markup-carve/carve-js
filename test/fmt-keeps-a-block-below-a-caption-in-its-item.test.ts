@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carveToCarve, carveToHtml } from '../src/index.js'
+import { carveToCarve, carveToHtml, htmlToCarve } from '../src/index.js'
 
 /*
  * carve#5177: a captioned fence, quote or table opens with a line that ends
@@ -44,5 +44,10 @@ describe('a block below a caption in a list item', () => {
       '- outer\n\n  - one\n    | a | b |\n    ^ cap\n    | t |\n',
       '- outer\n\n  - one\n    | a | b |\n    ^ cap\n    | t |\n',
     )
+  })
+
+  it('keeps two tables apart when the first caption is blank', () => {
+    const out = htmlToCarve('<ul><li>one<table><caption></caption><tr><td>a</td></tr></table><table><tr><td>b</td></tr></table></li></ul>').value
+    expect((carveToHtml(out).match(/<table>/g) ?? []).length).toBe(2)
   })
 })
