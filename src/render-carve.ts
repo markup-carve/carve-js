@@ -1683,6 +1683,8 @@ function bareScanText(children: readonly InlineNode[]): string {
     switch (child.type) {
       case 'text': return child.value
       case 'comment': return ''
+      case 'soft_break':
+      case 'hard_break': return '\n'
       case 'abbreviation': return child.abbr
       case 'mention': return child.user
       case 'tag': return child.name
