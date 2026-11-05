@@ -10,6 +10,7 @@ describe('a Djot blank before a sub-list', () => {
     ['1. one\n\n\n   - two\n', '1. one\n   - two\n'],
     ['> - one\n>\n>   - two\n', '> - one\n>   - two\n'],
     ['- a\n\n  - b\n- c\n', '- a\n  - b\n- c\n'],
+    ['> ```\n> code\n\n- a\n\n  - b\n', '> ```\n> code\n\n- a\n  - b\n'],
   ])('is dropped in %j', (djot, carve) => {
     expect(djotToCarve(djot)).toBe(carve)
   })

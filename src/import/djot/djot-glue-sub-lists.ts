@@ -17,15 +17,17 @@ export function glueSubListsToTheirItems(carve: string): string {
     return [prefix.split('>').length - 1, line.slice(prefix.length)]
   })
   const inFence = new Array<boolean>(lines.length).fill(false)
-  let fence: [string, number] | null = null
-  parts.forEach(([, body], index) => {
+  let fence: [string, number, number] | null = null
+  parts.forEach(([depth, body], index) => {
     const run = FENCE_LINE.exec(body)
+    // A fence ends with the quote that holds it.
+    if (fence && depth < fence[2]) fence = null
     if (fence) {
       inFence[index] = true
       if (run && run[1]![0] === fence[0] && run[1]!.length >= fence[1] && blank(run[2]!)) fence = null
       return
     }
-    fence = run ? [run[1]![0]!, run[1]!.length] : null
+    fence = run ? [run[1]![0]!, run[1]!.length, depth] : null
   })
   const drop = new Array<boolean>(lines.length).fill(false)
   for (let index = 1; index < lines.length - 1; index++) {
