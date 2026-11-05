@@ -9,7 +9,7 @@ describe('transparent comment lines in long lists', () => {
     const doc = parse(source)
     expect(doc.children.map((block) => block.type === 'comment' ? block.content : block.type)).toEqual(['list', 'c1', 'c2', 'c3'])
     const written = carveToCarve(source)
-    expect(written).toBe('- a\n%% c1\n\n- b\n%% c2\n\n- c\n\n%% c3\n')
+    expect(written).toBe('- a\n\n%% c1\n\n- b\n\n%% c2\n\n- c\n\n%% c3\n')
     expect(carveToCarve(written)).toBe(written)
     expect(carveToHtml(source)).toBe('<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n  <li><p>c</p></li>\n</ul>')
   })
