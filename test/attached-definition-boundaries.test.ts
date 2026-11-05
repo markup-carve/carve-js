@@ -22,6 +22,7 @@ const htmlTree = (html: string): unknown => {
 }
 
 // Native HTML comes from layout.mjs and html.mjs at spec 57b6622788efcace06fea2fbcb6e01b8cde04288.
+// The own-line `+` rows with a `%%%` span follow carve#5170, which the model has not taken yet.
 it.each(controls)('preserves attached definition ownership across render and format paths: $source', ({ source, html }) => {
   const expected = htmlTree(html)
   expect(htmlTree(carveToHtml(source))).toEqual(expected)
