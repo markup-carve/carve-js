@@ -37,16 +37,17 @@ function offsets(pos: Position | undefined): pos is Position & { startOffset: nu
  */
 export function omitSpansAcrossErasedLines(root: WireNode): void {
   const visits: Visit[] = []
-  const comments: Array<{ start: number; end: number; order: number; footnote: number }> = []
+  const comments: Array<{ start: number; end: number; order: number; footnote: number; documentChild: boolean }> = []
   let counter = 0
-  const walk = (node: WireNode, footnote: number): Visit => {
+  const walk = (node: WireNode, footnote: number, parentType?: unknown): Visit => {
     const visit: Visit = { node, order: counter++, last: 0, footnote, placedStart: -1, placedEnd: undefined }
     if (node.type === 'footnote') visit.footnote = visit.order
     if (node.type === 'comment' && node.block === false && node.form === 'line' && offsets(node.pos)) {
-      comments.push({ start: node.pos.startOffset, end: node.pos.endOffset, order: visit.order, footnote })
+      comments.push({ start: node.pos.startOffset, end: node.pos.endOffset, order: visit.order, footnote,
+        documentChild: parentType === 'document' })
     }
     for (const child of typedChildren(node)) {
-      const inner = walk(child, visit.footnote)
+      const inner = walk(child, visit.footnote, node.type)
       const own = offsets(child.pos) ? child.pos : undefined
       const start = Math.max(own?.startOffset ?? -1, inner.placedStart)
       if (start > visit.placedStart) visit.placedStart = start
@@ -77,6 +78,7 @@ export function omitSpansAcrossErasedLines(root: WireNode): void {
     for (let at = lo; at < comments.length && comments[at]!.start < endOffset; at++) {
       const comment = comments[at]!
       if (comment.order >= visit.order && comment.order <= visit.last) continue
+      if (node.type === 'footnote' && !comment.documentChild) continue
       if (comment.end > endOffset || comment.footnote !== -1 && comment.footnote !== visit.footnote) continue
       if (visit.last === visit.order || visit.placedStart >= comment.end) {
         middle = true
