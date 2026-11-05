@@ -99,7 +99,7 @@ describe('a link reference definition folds into a setext heading at any indent'
     // over a definition with nothing above it. carve-php writes the same two
     // blocks. The control that keeps the relaxation tied to an OPEN paragraph.
     expect(markdownToCarve('[a]: /u\n---\n')).toBe('***\n\n[a]: /u\n')
-    expect(markdownToCarve('foo\n\n[a]: /u\n---\n')).toBe('foo\n\n---\n\n[a]: /u\n')
+    expect(markdownToCarve('foo\n\n[a]: /u\n---\n')).toBe('foo\n\n***\n\n[a]: /u\n')
   })
 
   it('does not resolve a reference to a definition it folded', () => {

@@ -50,10 +50,11 @@ describe('a paragraph attached by a continuation marker', () => {
     }
   })
 
-  it('keeps the marker before a thematic break when readback needs it', () => {
+  it('writes an attached thematic break at the item column', () => {
     const src = '- a\n+\n---\n\nx\n'
     expect(roundTrips(src)).toBe(true)
-    expect(carveToCarve(src)).toContain('\n+\n')
+    // carve#4973: the break is written `***`, which reads back without the marker.
+    expect(carveToCarve(src)).toBe('- a\n  ***\n\nx\n')
   })
 
   it('leaves an ordinary two-paragraph loose item alone', () => {
