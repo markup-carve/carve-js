@@ -5313,6 +5313,8 @@ class CarveRenderSession {
         }
 
         if (node.type === 'comment' && atLineStart && piece.startsWith(' %%')) piece = piece.slice(1)
+        // A `{%` run that starts a line continues only past its `{` (CARVE-P2-035, carve#5189).
+        if (node.type === 'comment' && node.delimited && atLineStart && ctx.inlineDepth === 1) piece = piece.replace(/\n/g, '\n ')
         // A closed `%%%` pair in verse stands on lines of its own (CARVE-P9-047).
         if (ctx.lineBlockDepth > 0 && node.type === 'comment' && node.block) {
           const next = nodes[idx + 1]
