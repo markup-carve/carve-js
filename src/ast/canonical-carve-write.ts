@@ -6,6 +6,9 @@ import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, writtenRea
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
 
+const COLON_OPENER = /^(?:[ \t]*(?:>|[-*+]|\d{1,9}[.)])(?=[ \t]|$))*[ \t]*:{3,}/
+const COLON_CLOSER = /^(?:[ \t]*>)*[ \t]*:{3,}[ \t]*$/
+
 /** A removed layout boundary can change ownership of later source lines. */
 function hasUnrepresentedAuthoredLine(document: Document, source: string, written: string,
   stream = transparentLineStream(source)): boolean {
@@ -24,6 +27,10 @@ function hasUnrepresentedAuthoredLine(document: Document, source: string, writte
       const pos = node.pos as { startLine: number; endLine: number } | undefined
       if (pos && leaves.has(String(node.type))) {
         for (let line = pos.startLine; line <= pos.endLine; line++) represented.add(line)
+      } else if (pos) {
+        // A colon fence's opener and closer are its container's, however the writer respells them.
+        if (COLON_OPENER.test(stream.original[pos.startLine - 1] ?? '')) represented.add(pos.startLine)
+        if (COLON_CLOSER.test(stream.original[pos.endLine - 1] ?? '')) represented.add(pos.endLine)
       }
       for (const [key, part] of Object.entries(node)) {
         if (key !== 'pos' && key !== 'attrs') visit(part)
