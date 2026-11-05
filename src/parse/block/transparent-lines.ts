@@ -778,7 +778,8 @@ function authoredContainerBlocks(document: Document, owners: Map<number, string>
   visit(document.children, 'doc')
   for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {})) {
     const line = document.footnoteDefPos?.[label]?.startLine
-    const key = `doc/footnote:${line}`
+    const authoredOwner = owners.get(line ?? -1)
+    const key = authoredOwner?.endsWith(`/footnote:${line}`) ? authoredOwner : `doc/footnote:${line}`
     if (line !== undefined) blocksByOwner.set(key, { blocks, containers: [] })
     visit(blocks, line === undefined ? 'doc' : key)
   }
@@ -835,8 +836,9 @@ export function restoreTransparentComments(document: Document, authored: Documen
     if (!comment?.pos || comment.pos.startOffset === undefined) continue
     comment.transparentSource = original
     comment.transparentOriginalValue = comment.content
+    const owner = ownersByLine.get(index + 1)
     const footnote = Object.entries(document.footnoteDefPos ?? {}).find(([_label, pos]) =>
-      pos.startLine <= index + 1 && index + 1 <= pos.endLine)?.[0]
+      pos.startLine <= index + 1 && (index + 1 <= pos.endLine || owner?.endsWith(`/footnote:${pos.startLine}`)))?.[0]
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
     const match = containingParagraph(blocks, comment.pos!.startOffset!)
     if (match) {
@@ -856,7 +858,6 @@ export function restoreTransparentComments(document: Document, authored: Documen
     } else {
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
       if (descriptionGap && placeInDescription(descriptionGap, comment)) continue
-      const owner = ownersByLine.get(index + 1)
       const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
       // A comment its owner holds is written there in tree order: inside one of the list's
       // descriptions, or after the list's last entry (carve#5178).
@@ -894,7 +895,10 @@ export function restoreTransparentComments(document: Document, authored: Documen
       // hoisted out of keeps its own end (CARVE-P12-014, carve#5136).
       if (owned && owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
-        for (let depth = 2; depth <= parts.length; depth++) {
+        // A collected footnote is hoisted out of its source host. Its owned
+        // comment extends the note, not the list item or quote that held it.
+        const notePart = parts.findIndex((part) => part.startsWith('footnote:'))
+        for (let depth = notePart < 0 ? 2 : notePart + 1; depth <= parts.length; depth++) {
           for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
             if (container.pos?.endOffset !== undefined && container.pos.endOffset < comment.pos.endOffset) {
               container.pos.endLine = comment.pos.endLine
