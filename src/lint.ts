@@ -1020,7 +1020,7 @@ export function lintCarve(
     })
   })
 
-  for (const mismatch of inspectColonFences(source).mismatches) {
+  for (const mismatch of inspectColonFences(source, { document: doc, unclosed: unclosedContainers }).mismatches) {
     out.push({
       line: mismatch.line,
       column: mismatch.column,

@@ -1,4 +1,5 @@
 import { parse, type UnclosedContainer } from '../../parse.js'
+import type { Document } from '../../ast.js'
 
 export interface ColonFenceSite {
   kind: 'div' | 'admonition' | 'directive' | 'line block' | 'hard-break block'
@@ -12,12 +13,15 @@ export interface ColonFenceMismatch {
 }
 
 /** Inspect exact pairs and likely near closers from the parser's container tree. */
-export function inspectColonFences(source: string): {
+export function inspectColonFences(source: string, parsed?: {
+  document: Document
+  unclosed: readonly UnclosedContainer[]
+}): {
   pairs: Array<{ opener: ColonFenceSite; closer: ColonFenceSite }>
   mismatches: ColonFenceMismatch[]
 } {
-  const unclosed: UnclosedContainer[] = []
-  const document = parse(source, { positions: true, onUnclosedContainer: (site) => unclosed.push(site) })
+  const unclosed: UnclosedContainer[] = parsed ? [...parsed.unclosed] : []
+  const document = parsed?.document ?? parse(source, { positions: true, onUnclosedContainer: (site) => unclosed.push(site) })
   const lines = source.split(/\r?\n/)
   const starts: number[] = [0]
   for (let i = 0; i < source.length; i++) if (source[i] === '\n') starts.push(i + 1)
