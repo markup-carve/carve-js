@@ -15,3 +15,13 @@ it('formats the continuation with a code span instead of refusing it', () => {
   expect(() => carveToCarve(source)).not.toThrow()
   expect(carveToHtml(carveToCarve(source))).toBe(carveToHtml(source))
 })
+
+it('lets a new description marker end the nested line-block claim', () => {
+  const source = '- x\n  :: t\n  : - ::: |\n      a\n: z\n'
+  expect(carveToHtml(source)).toContain('</ul>\n<p>: z</p>')
+})
+
+it.each(['- - ::: |', '- > ::: |'])('does not claim a line block behind another marker: %s', (lead) => {
+  const source = `- x\n  :: t\n  : ${lead}\n      # h\nb\n`
+  expect(carveToHtml(source)).toContain('</ul>\n<p>b</p>')
+})

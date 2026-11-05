@@ -2314,7 +2314,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
-      if (belowDefinitionEntry && !(lazyState.deepest?.literalColon !== undefined && lazyState.deepest.lazyFoldable) &&
+      if (belowDefinitionEntry && !(lazyState.deepest?.literalColon !== undefined && lazyState.deepest.lazyFoldable &&
+          !RE_DEFLIST_DEF.test(l.trimStart()) && !RE_DEFLIST_TERM.test(l.trimStart())) &&
           !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
@@ -2792,12 +2793,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const description = RE_DEFLIST_DEF.exec(trackedContent)
       if (description && lazyState.opaque === null) {
         const lead = description[2]!
-        const bottom = markerLineBottomBlock(lead)
         const markerColumn = markerContentColumn(lead)
-        if (markerColumn > 0 && RE_LINE_BLOCK_OPEN.test(bottom)) {
+        const direct = markerColumn > 0 ? lead.slice(markerColumn) : ''
+        if (RE_LINE_BLOCK_OPEN.test(direct)) {
           const frame = verbatimOnlyLazyState()
           frame.divDepth = 1
-          frame.literalColon = { width: colonFenceOpenerLen(bottom)!, column: 0 }
+          frame.literalColon = { width: colonFenceOpenerLen(direct)!, column: 0 }
           frame.literalLayout = true
           lazyState.deepest = frame
           lazyState.ownedColumn = 1 + description[1]!.length + markerColumn
