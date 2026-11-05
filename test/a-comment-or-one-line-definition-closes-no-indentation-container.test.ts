@@ -14,7 +14,7 @@ describe('a comment or one-line definition closes no indentation container', () 
     ['a quote still needs its marker', '> a\n%% c\n> b\n', "<blockquote><p>a\nb</p></blockquote>"],
     ['a region marker closes every item', '- a\n%% #endregion\n  b\n', '<ul>\n  <li>a</li>\n</ul>\n<p>b</p>'],
     ['a footnote definition keeps its frame', ':: t\n:  x\n[^f]: n\n:: t2\n: d\n', '<dl>\n  <dt>t</dt>\n  <dd>x</dd>\n</dl>\n<dl>\n  <dt>t2</dt>\n  <dd>d</dd>\n</dl>'],
-    ['a span after a refused plus moves whole', '- a\n+\n%%%\n[r]: /opaque\n%%%\n  b\n', "<ul>\n  <li>a</li>\n</ul>\n<p>b</p>"],
+    ['a span after a refused plus moves whole', '- a\n+\n%%%\n[r]: /opaque\n%%%\n  b\n', '<ul>\n  <li>a\n    b\n  </li>\n</ul>'],
     ['a definition below a paragraph a second plus attached', '- +\nfirst\n+\ntext\n[r]: /u\n  y\n', "<ul>\n  <li>first\n    text\ny\n  </li>\n</ul>"],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source).trim()).toBe(html)

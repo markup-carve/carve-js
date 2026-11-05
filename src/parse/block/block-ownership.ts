@@ -396,12 +396,40 @@ export function ownLines(
     function recordInvisible(line: string): void {
       const skipped = skippedNoteMarker(line, skippedNotes.has(at), top().docMarker,
         (text) => docColumn(lines[at]!, text), () => standIn('+'))
+      if (refusedInvisibleFollowers.has(at) && skippedComments.has(at)) skipped.line = standRefusedInvisible(skipped.line)
       result.push(skipped.line)
       if (skipped.column !== null) consumedMarkers.add(at)
       if (skipped.column !== null) refusedPlus.push({ index: at, column: skipped.column,
         host: LINT_HOST[top().kind] ?? 'document', reason: 'claimed', firstBlock: false })
       if (skipped.line !== line) rewritten = true
       if (trace) emit(at, 'S5', ownerPath(), 'CARVE-P0-024', 'leaf', { plus: at })
+    }
+    // A refused `+` changes no owner, so a line it skipped stands where the next
+    // visible line puts it, as any invisible line does (CARVE-P9-013, carve#5170).
+    function standRefusedInvisible(line: string): string {
+      let prefix = 0
+      let n = indentCols(line)
+      let from = 0
+      for (let k = 1; k < frames.length; k++) {
+        const f = frames[k]!
+        if (f.kind === 'quote') {
+          if (!isQuoteLine(n.rest)) break
+          const body = quoteRest(n.rest)
+          prefix = line.length - body.length
+          n = indentCols(body)
+        } else if (n.col < f.col) break
+        from = k
+      }
+      const deeper = nextVisibleReach(at, from)
+      if (deeper === from) return line
+      const col = frames[deeper]!.col
+      const removed = line.length - prefix - n.rest.length - col
+      const lineCuts = cuts.get(at) ?? []
+      const last = lineCuts.at(-1)
+      if (last?.at === prefix) last.removed += removed
+      else lineCuts.push({ at: prefix, removed })
+      cuts.set(at, lineCuts)
+      return line.slice(0, prefix) + ' '.repeat(col) + n.rest
     }
     if (releasedFollowers.has(at)) frames.length = 1
     const startingLine = releasedFollowers.has(at) ? lines[at]!.trimStart() : lines[at]!
