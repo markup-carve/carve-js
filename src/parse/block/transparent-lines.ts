@@ -637,7 +637,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       // the paragraph folds across it (carve#5178).
       const owner = ownersByLine.get(index + 1)
       const paragraphOwner = ownerOf.get(match.siblings)
-      const reached = owner === undefined ? undefined : owner === 'doc' ? document.children : ownedBlocks.get(owner)?.blocks
+      const reached = owner === undefined ? undefined : owner === 'doc' ? footnote ? undefined : document.children : ownedBlocks.get(owner)?.blocks
       if (reached && paragraphOwner?.startsWith(`${owner}/`)) hoisted.set(reached, [...hoisted.get(reached) ?? [], comment])
       else insertAfterParagraph(match.siblings, match.paragraph, comment)
     } else {
@@ -663,7 +663,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       }
       const trailing = stream.authoredTrace.length === 0 ? trailingListOwner(blocks, comment.pos.startColumn ?? 1) : null
       // A line whose column reaches no container is the document's (carve#5178).
-      const siblings = owned?.blocks ?? trailing?.blocks ?? (owner === 'doc' ? document.children : containingBlocks(blocks, comment.pos.startOffset))
+      const siblings = owned?.blocks ?? trailing?.blocks ?? (owner === 'doc' && !footnote ? document.children : containingBlocks(blocks, comment.pos.startOffset))
       const pending = hoisted.get(siblings)
       if (pending && pending.at(-1)!.pos!.startOffset! > comment.pos.startOffset) placeHoisted()
       if (hoisted.has(siblings)) hoisted.get(siblings)!.push(comment)
