@@ -936,10 +936,36 @@ function needsLooseKey(
  * opening a block of their own.
  *
  * Derived by sweeping twenty block constructs rather than by reasoning about
- * them: a `figure` is an image line plus a caption line and an `image` is the
- * image line alone, which is why both read as paragraph text one column in.
+ * them: an `image` is the image line alone, which reads as paragraph text
+ * one column in. A `figure` answers through its target, below.
  */
-const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image', 'figure'])
+const FOLDS_INTO_AN_OPEN_PARAGRAPH = new Set(['paragraph', 'image'])
+
+/**
+ * A figure folds when its target does. Otherwise it is written behind a `+`
+ * only below a paragraph, and only when its one-line caption ends the item: no
+ * line below a caption at the marker column stays in the item (carve#5177).
+ */
+function foldsIntoAnOpenParagraph(block: BlockNode, previous: BlockNode, next: BlockNode | undefined): boolean {
+  if (block.type !== 'figure') return FOLDS_INTO_AN_OPEN_PARAGRAPH.has(block.type)
+  if (FOLDS_INTO_AN_OPEN_PARAGRAPH.has(block.target.type)) return true
+  return next === undefined && !holdsLineBreak(block.caption) && deepestTail(previous).type !== 'figure'
+}
+
+function deepestTail(node: BlockNode): BlockNode {
+  let tail = node
+  for (let inner = theLastBlockInside(tail); inner !== undefined; inner = theLastBlockInside(tail)) tail = inner
+  return tail
+}
+
+function holdsLineBreak(nodes: readonly unknown[]): boolean {
+  return nodes.some((node) => {
+    if (node === null || typeof node !== 'object') return false
+    const type = (node as { type?: unknown }).type
+    if (type === 'soft_break' || type === 'hard_break') return true
+    return Object.values(node).some((value) => Array.isArray(value) && holdsLineBreak(value))
+  })
+}
 
 /** A written block-attributes line: `{` … `}` alone on its line (PART 2). */
 const A_BLOCK_ATTRIBUTES_LINE = /^\{.*\}$/
@@ -953,6 +979,8 @@ function opensWithAnAttributeLine(rendered: string): boolean {
 
 function adjacentBlocksMerge(left: BlockNode, right: BlockNode): boolean {
   if (left.type !== right.type) return false
+  // A caption line closes its table, so the next table row opens a new one.
+  if (left.type === 'table' && left.caption !== undefined) return false
   if (left.type === 'list' && right.type === 'list') {
     if (left.ordered !== right.ordered) return false
     if (isTaskList(left) !== isTaskList(right)) return false
@@ -4406,7 +4434,7 @@ class CarveRenderSession {
             (anOpenParagraphReachesDown(previousEmitted) ||
               previousEmitted.type === 'list' && nestedFenceTail(previousEmitted) === undefined &&
               b.type === 'paragraph' && rendered === '\\+') &&
-            FOLDS_INTO_AN_OPEN_PARAGRAPH.has(b.type) &&
+            foldsIntoAnOpenParagraph(b, previousEmitted, next) &&
             !opensWithAnAttributeLine(rendered))
         ) {
           if (this.itemNeedsIndentedBlocks(ctx)) {
