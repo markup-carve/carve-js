@@ -839,12 +839,6 @@ export function restoreTransparentComments(document: Document, authored: Documen
     const owner = ownersByLine.get(index + 1)
     const footnote = Object.entries(document.footnoteDefPos ?? {}).find(([_label, pos]) =>
       pos.startLine <= index + 1 && (index + 1 <= pos.endLine || owner?.endsWith(`/footnote:${pos.startLine}`)))?.[0]
-    const notePos = footnote === undefined ? undefined : document.footnoteDefPos?.[footnote]
-    if (notePos && comment.pos.endLine > notePos.endLine) {
-      notePos.endLine = comment.pos.endLine
-      if (comment.pos.endColumn !== undefined) notePos.endColumn = comment.pos.endColumn
-      if (comment.pos.endOffset !== undefined) notePos.endOffset = comment.pos.endOffset
-    }
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
     const match = containingParagraph(blocks, comment.pos!.startOffset!)
     if (match) {
@@ -901,7 +895,10 @@ export function restoreTransparentComments(document: Document, authored: Documen
       // hoisted out of keeps its own end (CARVE-P12-014, carve#5136).
       if (owned && owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
-        for (let depth = 2; depth <= parts.length; depth++) {
+        // A collected footnote is hoisted out of its source host. Its owned
+        // comment extends the note, not the list item or quote that held it.
+        const notePart = parts.findIndex((part) => part.startsWith('footnote:'))
+        for (let depth = notePart < 0 ? 2 : notePart + 1; depth <= parts.length; depth++) {
           for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
             if (container.pos?.endOffset !== undefined && container.pos.endOffset < comment.pos.endOffset) {
               container.pos.endLine = comment.pos.endLine
