@@ -15,7 +15,7 @@ import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markd
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { opensCodeFence } from './parse/block/parse-quote-core.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
-import { GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
+import { decodeQuotedAlertEscapes, GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
 import { rewriteSameFileHeadingLinks, type FragmentFixup } from './import/markdown/markdown-heading-fragments.js'
@@ -2456,7 +2456,7 @@ function convertInline(
         referenceUrls[at]!.end = Math.min(referenceUrls[at]!.end, end)
       }
     }
-    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
+    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s!-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
   if (line.includes(':') || line.includes('www.')) {
@@ -7379,7 +7379,8 @@ function convertMarkdownSource(
       onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
     }, document => {
       const alerts = importGithubAlerts(document, written)
-      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts
+      const escapes = decodeQuotedAlertEscapes(document)
+      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts || escapes
     },
     value)
     if (!trailingNewline) value = value.replace(/\n$/, '')

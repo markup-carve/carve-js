@@ -42,6 +42,29 @@ describe('a GitHub alert blockquote', () => {
     expect(imported('> [!NOTE]\n> outer\n>\n> > [!TIP]\n> > inner')).toBe('::: note\nouter\n\n> [!TIP]\n> inner\n:::')
   })
 
+  it.each(['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'])('decodes an escaped %s label left in a quote', label => {
+    expect(imported(`> \\[!${label}]\n> x`)).toBe(`> [!${label}]\n> x`)
+  })
+
+  it('keeps an escape inside a quoted code fence', () => {
+    expect(imported('> ```\n> \\[!NOTE]\n> ```')).toBe('> ```\n> \\[!NOTE]\n> ```')
+    expect(imported('```\n> \\[!NOTE]\n```')).toBe('```\n> \\[!NOTE]\n```')
+  })
+
+  it('decodes a leftover label in a quote inside a list item', () => {
+    expect(imported('- > \\[!NOTE]\n  > x')).toBe('- > [!NOTE]\n  > x')
+    expect(imported('> - > \\[!NOTE]\n>   > x')).toBe('> - > [!NOTE]\n>   > x')
+  })
+
+  it('decodes a leftover label in a footnote quote and a definition quote', () => {
+    expect(imported('[^a]:\n    > \\[!NOTE]\n    > x')).toBe('[^a]: > [!NOTE]\n  > x')
+    expect(imported(':: Term\n:  > \\[!NOTE]\n   > x')).toContain(': > [!NOTE]')
+  })
+
+  it('keeps an alert-shaped shortcut reference collapsed in a quote', () => {
+    expect(imported('[!NOTE]: /u\n\n>\n> [!NOTE]\n> x')).toBe('> [!NOTE][]\n> x\n\n[!NOTE]: /u')
+  })
+
   it('takes a lazy continuation line into the body', () => {
     expect(imported('> [!NOTE]\nlazy')).toBe('::: note\nlazy\n:::')
   })

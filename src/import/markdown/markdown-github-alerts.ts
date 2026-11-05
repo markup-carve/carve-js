@@ -1,4 +1,4 @@
-import type { Admonition, BlockNode, Document, InlineNode } from '../../ast.js'
+import type { Admonition, BlockNode, Document, InlineNode, ListItem } from '../../ast.js'
 
 /** GitHub alert label -> the Carve admonition kind it imports as. */
 export const GITHUB_ALERT_KINDS: Readonly<Record<string, string>> = {
@@ -47,5 +47,30 @@ export function importGithubAlerts(document: Document, source: string): boolean 
     changed = true
     return admonition
   })
+  return changed
+}
+
+/** Decode a Markdown escape only for a leftover label in quote paragraph text. */
+export function decodeQuotedAlertEscapes(document: Document): boolean {
+  let changed = false
+  const visit = (node: BlockNode | ListItem, inQuote: boolean): void => {
+    if (node.type === 'paragraph' && inQuote) {
+      for (let i = 0; i + 1 < node.children.length; i++) {
+        const open = node.children[i]!, tail = node.children[i + 1]!
+        if (open.type !== 'escaped_text' || open.value !== '[' || tail.type !== 'text' || !/^!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/.test(tail.value)) continue
+        if (i > 0 && node.children[i - 1]?.type !== 'soft_break') continue
+        node.children[i] = { type: 'text', value: '[', ...(open.pos ? { pos: open.pos } : {}) }
+        changed = true
+      }
+    } else if (node.type === 'list') {
+      for (const item of node.items) visit(item, inQuote)
+    } else if (node.type === 'definition_list') {
+      for (const item of node.items) for (const definition of item.definitions) for (const block of definition) visit(block, inQuote)
+    } else if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) visit(child as BlockNode, inQuote || node.type === 'block_quote')
+    }
+  }
+  for (const node of document.children) visit(node, false)
+  for (const body of Object.values(document.footnoteDefs ?? {})) for (const node of body) visit(node, false)
   return changed
 }
