@@ -271,10 +271,15 @@ function commentBetweenListSiblings(lexer: Lexer): boolean {
   return before !== undefined && (indentColumns(before) > column || isListMarkerLine(before.trimStart()))
 }
 
-/** A block brace run refused only because a continuation is too shallow. */
-function refusedBraceLines(lexer: Lexer): number {
+/**
+ * A block brace run refused only because a continuation is too shallow.
+ * `memo.closerless` is the lexer index a `{%` scan reached without a `%}`; no later
+ * line before it can close a run either, so the scan is not repeated per line.
+ */
+function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): number {
   const first = lexer.peek()
   if (!first?.trimStart().startsWith('{')) return 0
+  if (memo.closerless !== undefined && lexer.pos < memo.closerless && first.trimStart().startsWith('{%')) return 0
   // Between a container's siblings a comment-only paragraph stays an invisible line (CARVE-P9-013).
   // A comment-only paragraph between two items of one list is an invisible line (CARVE-P9-013).
   if (first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
@@ -286,8 +291,14 @@ function refusedBraceLines(lexer: Lexer): number {
   let depth = 0
   for (let n = 0; ; n++) {
     const line = lexer.peek(n)
-    if (line === undefined || isBlankLine(line)) return 0
-    if (n > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) return 0
+    if (line === undefined || isBlankLine(line)) {
+      if (comment) memo.closerless = lexer.pos + n
+      return 0
+    }
+    if (n > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) {
+      if (comment) memo.closerless = lexer.pos + n
+      return 0
+    }
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
     if (n > 0 && (indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)))) shallow = true
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
@@ -2690,6 +2701,7 @@ export class ParseSession extends InlineParseSession {
     const lines: string[] = []
     const literalLines: Array<[number, number]> = []
     let afterRefusal = false
+    const braceScan: { closerless?: number } = {}
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
     const scanInlineCode = (line: string): void => {
@@ -2733,13 +2745,8 @@ export class ParseSession extends InlineParseSession {
           }
         }
       }
-      // A braced comment inside an already-open paragraph is inline content.
-      // Only one starting a block-position paragraph can be a refused block run.
-      const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      const inlineCommentContext = lexer.hostBody === 'list' ||
-        lexer.hostBody === null && !/^[ \t]*>/.test(sourceLine)
-      const refusedLines = flattened || openInlineCode !== 0 || lines.length > 0 && ln.trimStart().startsWith('{%') && inlineCommentContext
-        ? 0 : refusedBraceLines(lexer)
+      // Every line start is block position, a continuation line included (carve#5189).
+      const refusedLines = flattened || openInlineCode !== 0 ? 0 : refusedBraceLines(lexer, braceScan)
       if (refusedLines > 0) {
         const start = lines.length
         for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
