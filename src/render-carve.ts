@@ -5268,6 +5268,7 @@ class CarveRenderSession {
       // growing accumulator per node is the quadratic shape this engine's scaling
       // guards exist to keep out. Two counters answer both questions in O(piece).
       let lineLength = 0
+      let brokeLine = false
       let lineOnlyIndentation = true
       /** The last up-to-two characters of the current output line. */
       let lineTail = ''
@@ -5321,7 +5322,7 @@ class CarveRenderSession {
         // A `{%` run that starts a line continues only past its `{` (CARVE-P2-035, carve#5189).
         // A nested run's first line follows its parent's opener, so it starts a line only after a break.
         if (node.type === 'comment' && node.delimited && atLineStart && piece.includes('\n') &&
-            (ctx.inlineDepth === 1 || out.includes('\n'))) piece = piece.replace(/\n/g, '\n ')
+            (ctx.inlineDepth === 1 || brokeLine)) piece = piece.replace(/\n/g, '\n ')
         // A closed `%%%` pair in verse stands on lines of its own (CARVE-P9-047).
         if (ctx.lineBlockDepth > 0 && node.type === 'comment' && node.block) {
           const next = nodes[idx + 1]
@@ -5394,6 +5395,7 @@ class CarveRenderSession {
           if (piece !== '' && !(node.type === 'non_breaking_space' && this.inlineAttrs(node.attrs, node) === '')) lineOnlyIndentation = false
           lineTail = (lineTail + piece).slice(-2)
         } else {
+          brokeLine = true
           lineLength = piece.length - lastNewline - 1
           lineOnlyIndentation = lineLength === 0
           lineTail = piece.slice(lastNewline + 1).slice(-2)
