@@ -92,6 +92,16 @@ function trackedFootnoteContent(content: string): string {
     ? trimmed : content
 }
 
+function rebasedFootnoteContent(
+  lexer: Lexer, content: string, sourceColumnValue: number, authoredBodyColumn: number | undefined,
+): string {
+  if (!lexer.inFootnoteBody || authoredBodyColumn === undefined || !Number.isFinite(sourceColumnValue)) return content
+  // The parent note has already removed its own margin. Remove the rest of
+  // the nested note's authored margin, retaining any indentation beyond it.
+  const retained = Math.max(0, sourceColumnValue - authoredBodyColumn)
+  return sliceColumns(content, Math.max(0, indentColumns(content) - retained), true)
+}
+
 function trackedLiteralLine(content: string, framed: boolean): string {
   return framed ? 'text' : content
 }
@@ -447,7 +457,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         nestedNoteSpan = undefined
       }
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
-      bodyLines.push(framedBelow ? LAZY_FRAME + content.trimStart() : content)
+      bodyLines.push(framedBelow ? LAZY_FRAME + content.trimStart() : rebasedFootnoteContent(lexer, content, admission.sourceColumn, authoredBodyColumn))
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
