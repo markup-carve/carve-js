@@ -776,7 +776,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       if (wrapSections && roundtripExport(opts)) {
         // Count only slots that emit an attribute on the heading.
         const headingAttrs = node.attrs ? withTextAlignDeclaration(node.attrs, `h${node.level}`) : undefined
-        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => attrSlotEntry(headingAttrs!, entry) !== undefined).indexOf('#id')
+        const slot = explicitId === '' ? -1 : headingAttrs!.order!.filter((entry) => attrSlotEntry(headingAttrs!, entry, roundtripExport(activeRenderOptions)) !== undefined).indexOf('#id')
         if (slot > 0) {
           wrapperCarriers = ` ${carrier('id-slot')}="${slot}"`
         } else if (explicitId === '' && node.attrs?.id !== undefined) {
@@ -1273,13 +1273,13 @@ function foldAttrNames(attrs: Attrs): FoldedAttrs {
   return out
 }
 
-function attrSlotEntry(attrs: FoldedAttrs, slot: string): [string, string] | undefined {
+function attrSlotEntry(attrs: FoldedAttrs, slot: string, roundtrip: boolean): [string, string] | undefined {
   if (slot === '.class') {
     return attrs.classes?.length ? [attrs.classSpelling ?? 'class', renderedClasses(attrs.classes).join(' ')] : undefined
   }
   if (slot === '#id') return attrs.id !== undefined ? [attrs.idSpelling ?? 'id', attrs.id] : undefined
   if (isDangerousAttrName(slot) || !HTML_ATTR_NAME_RE.test(slot)) return undefined
-  if (roundtripExport(activeRenderOptions) && isReservedExportName(slot)) return undefined
+  if (roundtrip && isReservedExportName(slot)) return undefined
   const value = attrs.keyValues?.[slot]
   return value !== undefined ? [slot, sanitizeAttrValue(slot, value)] : undefined
 }
@@ -1289,11 +1289,11 @@ function attrSlotEntry(attrs: FoldedAttrs, slot: string): [string, string] | und
  * before escaping. The Markdown target's inline HTML uses the same pairs
  * (CARVE-P11-045), so the two targets cannot drift on order or folding.
  */
-export function htmlAttrEntries(raw: Attrs, tag?: string): Array<[string, string]> {
+export function htmlAttrEntries(raw: Attrs, tag?: string, roundtrip = false): Array<[string, string]> {
   const attrs = foldAttrNames(withTextAlignDeclaration(raw, tag))
   const entries: Array<[string, string]> = []
   const push = (slot: string) => {
-    const entry = attrSlotEntry(attrs, slot)
+    const entry = attrSlotEntry(attrs, slot, roundtrip)
     if (entry) entries.push(entry)
   }
   // Emit the recorded source order first (matches djot + carve-php),
@@ -1310,7 +1310,7 @@ export function htmlAttrEntries(raw: Attrs, tag?: string): Array<[string, string
 
 function renderAttrs(raw?: Attrs, tag?: string): string {
   if (!raw) return ''
-  const parts = htmlAttrEntries(raw, tag).map(([name, value]) => `${name}="${escapeAttr(value)}"`)
+  const parts = htmlAttrEntries(raw, tag, roundtripExport(activeRenderOptions)).map(([name, value]) => `${name}="${escapeAttr(value)}"`)
   return parts.length ? ' ' + parts.join(' ') : ''
 }
 
