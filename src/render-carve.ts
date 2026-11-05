@@ -4195,12 +4195,21 @@ class CarveRenderSession {
           if (readsBack(looseItemSource)) itemSource = looseItemSource
         }
         out += itemSource
+        let previousGap: NonNullable<typeof node.transparentBetweenItems>[number] | undefined
         for (const gap of node.transparentBetweenItems ?? []) {
           if (gap.after !== idx) continue
           // After the last item the comment is a block of its own (PART 11 §2).
           if (this.canonicalTransparentLines && idx === node.items.length - 1) this.canonicalTrailingComments.add(gap.node)
-          // CARVE-P11-079 (b): in a loose list the comment is a block of its own, set off by blank lines.
-          else out += `${this.canonicalTransparentLines && !node.tight && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
+          // A consecutive run is one block, even when its lines have different
+          // owners. Each line keeps its authored column (carve#5207).
+          else {
+            const joinsRun = previousGap !== undefined &&
+              gap.node.pos !== undefined && previousGap.node.pos?.endLine === gap.node.pos.startLine - 1 &&
+              isLineComment(previousGap.node) && isLineComment(gap.node) &&
+              !isRegionMarker(previousGap.node) && !isRegionMarker(gap.node)
+            out += `${this.canonicalTransparentLines && !node.tight && !joinsRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
+          }
+          previousGap = gap
         }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
