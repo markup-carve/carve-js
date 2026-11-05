@@ -145,6 +145,7 @@ import {
   sourceColumn,
   sourceColumnAt,
   sourceQuoteBody,
+  sourceQuoteLocalColumn,
   sourceQuoteRest,
   startsInterruptingBlock,
   stripLazyFrame,
@@ -277,30 +278,47 @@ function commentBetweenListSiblings(lexer: Lexer): boolean {
  * line before it can close a run either, so the scan is not repeated per line.
  */
 function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): number {
-  const first = lexer.peek()
+  const firstRaw = lexer.peek()
+  const first = firstRaw === undefined ? undefined : stripLazyFrame(firstRaw)
   if (!first?.trimStart().startsWith('{')) return 0
   if (memo.closerless !== undefined && lexer.pos < memo.closerless && first.trimStart().startsWith('{%')) return 0
   // Between a container's siblings a comment-only paragraph stays an invisible line (CARVE-P9-013).
   // A comment-only paragraph between two items of one list is an invisible line (CARVE-P9-013).
-  if (first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
+  if (!firstRaw?.startsWith(LAZY_FRAME) && first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
   const openerColumn = indentColumns(first)
   const comment = first.trimStart().startsWith('{%')
+  const lazyComment = comment && (firstRaw?.startsWith(LAZY_FRAME) ||
+    lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
+    lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+  // A lazy paragraph line has already been folded into its owner here. Its
+  // authored column, after quote prefixes, is the P2-035 comparison frame.
+  const authoredColumn = (offset: number): number => {
+    const index = lexer.pos + offset
+    const root = lexer.documentRoot ?? lexer
+    const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
+    if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
+    return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+  }
+  const commentColumn = lazyComment ? authoredColumn(0) : openerColumn
   const lines: string[] = []
   let shallow = false
   let quoted: string | null = null
   let depth = 0
   for (let n = 0; ; n++) {
-    const line = lexer.peek(n)
+    const raw = lexer.peek(n)
+    const line = raw === undefined ? undefined : stripLazyFrame(raw)
     if (line === undefined || isBlankLine(line)) {
       if (comment) memo.closerless = lexer.pos + n
       return 0
     }
-    if (n > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) {
+    if (n > 0 && !lazyComment && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) {
       if (comment) memo.closerless = lexer.pos + n
       return 0
     }
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
-    if (n > 0 && (indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)))) shallow = true
+    if (n > 0 && (lazyComment
+      ? authoredColumn(n) <= commentColumn
+      : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)))) shallow = true
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
     if (comment) {
       if (line.includes('%}')) return shallow ? n + 1 : 0
