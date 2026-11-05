@@ -42,6 +42,14 @@ describe('a GitHub alert blockquote', () => {
     expect(imported('> [!NOTE]\n> outer\n>\n> > [!TIP]\n> > inner')).toBe('::: note\nouter\n\n> [!TIP]\n> inner\n:::')
   })
 
+  it.each(['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'])('decodes an escaped %s label left in a quote', label => {
+    expect(imported(`> \\[!${label}]\n> x`)).toBe(`> [!${label}]\n> x`)
+  })
+
+  it('keeps an alert-shaped shortcut reference collapsed in a quote', () => {
+    expect(imported('[!NOTE]: /u\n\n>\n> [!NOTE]\n> x')).toBe('> [!NOTE][]\n> x\n\n[!NOTE]: /u')
+  })
+
   it('takes a lazy continuation line into the body', () => {
     expect(imported('> [!NOTE]\nlazy')).toBe('::: note\nlazy\n:::')
   })

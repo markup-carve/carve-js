@@ -2456,7 +2456,7 @@ function convertInline(
         referenceUrls[at]!.end = Math.min(referenceUrls[at]!.end, end)
       }
     }
-    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
+    return `${match}${referenceTail(destinationLabel, label === destinationLabel && /^[\w\s!-]+$/u.test(label) ? '[]' : `[${destinationLabel}]`)}`
   })
 
   if (line.includes(':') || line.includes('www.')) {
@@ -7382,6 +7382,9 @@ function convertMarkdownSource(
       return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts
     },
     value)
+    // Keep the Markdown escape through alert detection, then remove it from a
+    // leftover quote label. Carve quotes do not turn that label into an alert.
+    value = value.replace(/^(> )+\\(\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])(?=\n|$)/gm, match => match.replace('\\[!', '[!'))
     if (!trailingNewline) value = value.replace(/\n$/, '')
     if (usedBoundaryKey !== undefined && value.includes('`<!--' + usedBoundaryKey + '-->`{=html}')) {
       throw new Error('Markdown import could not remove its internal empty-destination boundary')
