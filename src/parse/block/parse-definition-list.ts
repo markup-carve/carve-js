@@ -1212,15 +1212,13 @@ export function createDefinitionListParser(
       return entryColumn() === reachColumn
     }
     // A comment after a term is the first block of the next description (CARVE-P12-027).
-    let held: Comment[] = []
-    let heldTerm: InlineNode[] | undefined
+    let held: Array<[InlineNode[] | undefined, Comment]> = []
     const keep = (definitions: BlockNode[][], terms: InlineNode[][]) => (comment: Comment): void => {
       if (definitions.length) {
         definitions.at(-1)!.push(comment)
         return
       }
-      if (!held.length) heldTerm = terms.at(-1)
-      held.push(comment)
+      held.push([terms.at(-1), comment])
     }
     while (!lexer.eof() && RE_DEFLIST_TERM.test(peekEntry()) && entryReachesList()) {
       const terms: InlineNode[][] = []
@@ -1278,7 +1276,7 @@ export function createDefinitionListParser(
         lexer.consume()
         definitionLines.push(lexer.lineNumber(defLineIndex))
         const body = parseDefBody(descriptionLead(d[2]!), defLineIndex, deflistContentCol(d[1]!))
-        body.unshift(...held)
+        body.unshift(...held.map(([, comment]) => comment))
         held = []
         definitions.push(body)
         // The description's own extent anchors to its MARKER LINE. The wire
@@ -1300,7 +1298,7 @@ export function createDefinitionListParser(
         parseSession, keep(definitions, terms))) break
     }
     // No description followed: the comments stay with the term they came after.
-    heldTerm?.push(...held)
+    for (const [term, comment] of held) term?.push(comment)
     return { type: 'definition_list', items }
   }
 

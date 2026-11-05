@@ -106,4 +106,13 @@ describe('a comment between a term and its description', () => {
     expect(t!.children!.map((child) => child.type)).toEqual(['text', 'comment'])
     expect(u!.children!.map((child) => child.type)).toEqual(['text'])
   })
+
+  it('leaves each comment with its own term when no description follows', () => {
+    const source = ':: a\n%%%\nx\n%%%\n:: b\n%%%\ny\n%%%\n:: c\n'
+    const [a, b, c] = ast(source).children![0]!.items!
+    expect(a!.children!.map((child) => child.content ?? child.type)).toEqual(['text', 'x'])
+    expect(b!.children!.map((child) => child.content ?? child.type)).toEqual(['text', 'y'])
+    expect(c!.children!.map((child) => child.type)).toEqual(['text'])
+    expect(carveToCarve(source)).toBe(source)
+  })
 })
