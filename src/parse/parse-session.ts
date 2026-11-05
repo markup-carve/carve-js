@@ -2746,6 +2746,7 @@ export class ParseSession extends InlineParseSession {
         }
       }
       // Every line start is block position, a continuation line included (carve#5189).
+      if (codeInclude && lines.length > 0) break
       const refusedLines = flattened || openInlineCode !== 0 ? 0 : refusedBraceLines(lexer, braceScan)
       if (refusedLines > 0) {
         const start = lines.length
@@ -2754,7 +2755,6 @@ export class ParseSession extends InlineParseSession {
         afterRefusal = true
         continue
       }
-      if (codeInclude && lines.length > 0) break
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
