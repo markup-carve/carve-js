@@ -1392,6 +1392,25 @@ export function lineOpensBlock(line: string): boolean {
   }
 }
 
+/** Whether lines `0..end` are one block brace run that CARVE-P2-035 refuses, so the next line continues its paragraph. */
+export function isRefusedBraceRun(lineAt: (index: number) => string | undefined, end: number): boolean {
+  const first = lineAt(0)
+  if (end < 2 || !first?.trimStart().startsWith('{')) return false
+  const opener = indentColumns(first)
+  const run: string[] = []
+  let shallow = false
+  for (let k = 0; k < end; k++) {
+    const line = lineAt(k)
+    if (line === undefined || isBlankLine(line)) return false
+    if (k > 0 && indentColumns(line) <= opener) shallow = true
+    run.push(trimEndSpaceTab(line.trimStart()))
+  }
+  const text = run.join('\n')
+  if (!shallow) return false
+  if (text.startsWith('{%')) return text.indexOf('%}') === text.length - 2
+  return parseBlockAttributeRun(text) !== null
+}
+
 // A paragraph of only braced comments renders nothing, so a list reads it as it
 // reads a `%%` line (carve#4799). Returns the index past its last line, or -1.
 // A list marker interrupts only in an item body (`markerEnds`), so elsewhere it keeps the paragraph visible.
