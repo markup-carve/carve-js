@@ -403,17 +403,68 @@ function verbatimPayloadCounts(root: unknown): Map<string, number> {
 
 /** The multi-line verbatim payloads `out` does not read back as often as `ast` holds them. */
 function missingVerbatimPayloads(ast: Document, out: string, written: ReadonlyMap<string, InlineNode>): string[] {
-  let reread: Map<string, number>
-  try {
-    reread = verbatimPayloadCounts(parse(out))
-  } catch {
-    return [...written.keys()]
-  }
+  const reread = reparsed(out).counts
+  if (reread === null) return [...written.keys()]
   const held = verbatimPayloadCounts(ast)
   return [...written.keys()].filter(key => (reread.get(key) ?? 0) < (held.get(key) ?? 0))
 }
 
-function treeOf(src: string, reparse: (src: string) => Document = parse): string | null {
+interface Reparsed {
+  tree: string | null
+  counts: Map<string, number> | null
+  /** Whether the first block is a loose list, for `needsLooseKey`. */
+  looseListFirst: boolean
+}
+
+/** Default-parse readbacks of whole-document sources, shared by one write's passes. */
+let readbacks: { entries: Map<string, Reparsed>; minLength: number } | null = null
+
+const READBACK_MEMO_ENTRIES = 8
+
+/**
+ * Run `write` with whole-document readbacks memoized by source. A write
+ * re-parses the same output from several checks and from each verbatim
+ * respelling pass; the default parse is deterministic, so a repeat reuses it.
+ */
+export function withReadbackMemo<T>(source: string, write: () => T): T {
+  if (readbacks !== null) return write()
+  readbacks = { entries: new Map(), minLength: source.length >> 1 }
+  try {
+    return write()
+  } finally {
+    readbacks = null
+  }
+}
+
+function reparsed(src: string): Reparsed {
+  const memo = readbacks !== null && src.length >= readbacks.minLength ? readbacks.entries : null
+  const known = memo?.get(src)
+  if (known !== undefined) {
+    memo!.delete(src)
+    memo!.set(src, known)
+    return known
+  }
+  let fresh: Reparsed
+  try {
+    const document = parse(src)
+    const first = document.children[0]
+    fresh = {
+      tree: stableJson(document),
+      counts: verbatimPayloadCounts(document),
+      looseListFirst: first?.type === 'list' && !first.tight,
+    }
+  } catch {
+    fresh = { tree: null, counts: null, looseListFirst: false }
+  }
+  if (memo) {
+    memo.set(src, fresh)
+    if (memo.size > READBACK_MEMO_ENTRIES) memo.delete(memo.keys().next().value!)
+  }
+  return fresh
+}
+
+function treeOf(src: string, reparse?: (src: string) => Document): string | null {
+  if (reparse === undefined) return reparsed(src).tree
   try {
     return stableJson(reparse(src))
   } catch {
@@ -914,9 +965,7 @@ function needsLooseKey(
     // without a parse.
     if (!/\n[ \t]*\n/.test(body)) return true
     // Restore writer guards before testing whether the emitted fences close.
-    const source = normalize(body)
-    const reparsed = treeOf(source) === null ? undefined : parse(source).children[0]
-    return reparsed === undefined || reparsed.type !== 'list' || reparsed.tight
+    return !reparsed(normalize(body)).looseListFirst
   }
   return node.loose === true
 }
