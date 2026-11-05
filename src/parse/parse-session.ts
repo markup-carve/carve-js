@@ -287,9 +287,9 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
   if (!firstRaw?.startsWith(LAZY_FRAME) && first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
   const openerColumn = indentColumns(first)
   const comment = first.trimStart().startsWith('{%')
-  const lazyComment = comment && (firstRaw?.startsWith(LAZY_FRAME) ||
+  const lazyBrace = firstRaw?.startsWith(LAZY_FRAME) ||
     lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
-    lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)))
+    lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
   // A lazy paragraph line has already been folded into its owner here. Its
   // authored column, after quote prefixes, is the P2-035 comparison frame.
   const authoredColumn = (offset: number): number => {
@@ -299,7 +299,7 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
     if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
     return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
   }
-  const commentColumn = lazyComment ? authoredColumn(0) : openerColumn
+  const sourceOpenerColumn = lazyBrace ? authoredColumn(0) : openerColumn
   const lines: string[] = []
   let shallow = false
   let quoted: string | null = null
@@ -311,14 +311,20 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
       if (comment) memo.closerless = lexer.pos + n
       return 0
     }
-    if (n > 0 && !lazyComment && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))) {
-      if (comment) memo.closerless = lexer.pos + n
+    const quoteLazyContinuation = lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))
+    if (n > 0 && comment && !lazyBrace && quoteLazyContinuation) {
+      memo.closerless = lexer.pos + n
       return 0
     }
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
-    if (n > 0 && (lazyComment
-      ? authoredColumn(n) <= commentColumn
-      : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)))) shallow = true
+    if (n > 0) {
+      // A quote's lazy line retains its source column even when the opener was
+      // a marked line. Ordinary list lines still use their local content column.
+      const sourceColumns = lazyBrace || quoteLazyContinuation && !comment
+      if (sourceColumns
+        ? authoredColumn(n) <= (lazyBrace ? sourceOpenerColumn : authoredColumn(0))
+        : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n))) shallow = true
+    }
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
     if (comment) {
       if (line.includes('%}')) return shallow ? n + 1 : 0
