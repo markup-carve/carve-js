@@ -918,6 +918,17 @@ export function restoreTransparentComments(document: Document, authored: Documen
     }
   }
   placeHoisted()
+  // Writers fall back to map order when any definition has no position. Restore
+  // authored order before omitting a split span; nested notes finish first.
+  if (splitFootnotes.size && document.footnoteDefs && document.footnoteDefPos) {
+    const positions = document.footnoteDefPos
+    const entries = Object.entries(document.footnoteDefs)
+    if (entries.every(([label]) => positions[label]?.startLine !== undefined)) {
+      entries.sort(([a], [b]) => positions[a]!.startLine - positions[b]!.startLine ||
+        (positions[a]!.startColumn ?? 0) - (positions[b]!.startColumn ?? 0))
+      document.footnoteDefs = Object.fromEntries(entries)
+    }
+  }
   for (const label of splitFootnotes) delete document.footnoteDefPos?.[label]
 }
 

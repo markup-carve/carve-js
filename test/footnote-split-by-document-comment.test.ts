@@ -9,4 +9,11 @@ describe('footnote split by a document-owned comment', () => {
     expect(doc.footnoteDefPos?.a).toBeUndefined()
     expect(doc.footnoteDefs?.a).toBeDefined()
   })
+
+  it('keeps nested definitions in source order when the outer span is omitted', () => {
+    const source = '[^outer]: intro\n%% c\n more\n\n     [^inner]: note\n\n     see[^inner]\n\nsee[^outer]\n'
+    const doc = parse(source, { positions: true })
+    expect(Object.keys(doc.footnoteDefs ?? {})).toEqual(['outer', 'inner'])
+    expect(doc.footnoteDefPos?.outer).toBeUndefined()
+  })
 })
