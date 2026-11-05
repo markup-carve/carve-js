@@ -270,6 +270,16 @@ describe('definition lists on the wire (PART 12)', () => {
     expect(toAstJson(doc as never)).toEqual(json)
   })
 
+  it('preserves an absent description position on ingest', () => {
+    const source = ':: t\n%% c\n:: u\n: body\n'
+    const json = carveToAstJson(source)
+    const list = json.children[0] as { items: { type: string; pos?: unknown }[] }
+    const description = list.items.find((item) => item.type === 'definition_description')
+    expect(description).toBeDefined()
+    expect(description).not.toHaveProperty('pos')
+    expect(toAstJson(fromAstJson(json))).toEqual(json)
+  })
+
   it('rewrites a definition list wherever it sits, not only at the top level', () => {
     const nested = carveToAstJson('> :: T\n> :  D\n\n- item\n  :: A\n  :  B\n')
     const wire = JSON.stringify(nested)

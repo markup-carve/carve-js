@@ -22,6 +22,11 @@ export type DefinitionEntryNode = DefinitionTermNode | DefinitionDescriptionNode
 
 /** Recorded description spans that end at a consumed `+` the tree no longer holds (CARVE-P12-020). */
 export const endsAtConsumedMarker = new WeakSet<object>()
+/** An ingested description whose wire node deliberately omitted its position. */
+const absentDescriptionPosition = new WeakSet<object>()
+export function carryAbsentDescriptionPosition(before: object, after: object): void {
+  if (absentDescriptionPosition.has(before)) absentDescriptionPosition.add(after)
+}
 
 /** The span covering a run of nodes, when every one of them carries one. */
 function span(nodes: { pos?: Position }[]): Position | undefined {
@@ -70,7 +75,7 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
         children: definition,
       }
       const recorded = item.definitionSpans?.[index]
-      const derived = span(definition)
+      const derived = absentDescriptionPosition.has(definition) ? undefined : span(definition)
       const pos = recorded ? { ...recorded } : derived
       if (pos && recorded && derived && !endsAtConsumedMarker.has(recorded)) {
         pos.endLine = derived.endLine
@@ -153,6 +158,7 @@ export function entriesFromWire(nodes: unknown[]): DefinitionItem[] {
       // carry a position keeps the rest of them lined up. Pushed unconditionally
       // for that reason - a skipped `undefined` would shift every later index.
       const pos = readPos(entry.pos)
+      if (pos === undefined) absentDescriptionPosition.add(entry.children)
       // A wire span ending past its content ends at a consumed `+`; keep it.
       const content = span(entry.children as { pos?: Position }[])
       if (pos?.endOffset !== undefined && content?.endOffset !== undefined && pos.endOffset > content.endOffset) {
