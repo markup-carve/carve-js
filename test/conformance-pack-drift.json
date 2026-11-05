@@ -3,7 +3,9 @@
   "entries": [
     {
       "ticket": "markup-carve/carve#5223",
-      "cases": ["lazy-10bd0503f93b"]
+      "cases": [
+        "lazy-10bd0503f93b"
+      ]
     }
   ]
 }
