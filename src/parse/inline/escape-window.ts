@@ -108,7 +108,7 @@ export class EscapeWindows {
           slot.owner[slot.key] = slot.array
         })
       }
-      if (top.slot.key === 'children') {
+      if (top.slot.owner === (this.ast as unknown as Record<string, unknown>)) {
         return render({ type: 'document', children: top.slot.array.slice(top.lo, top.hi + 1) as BlockNode[] })
       }
       // A footnote body keeps its first block, which is written on the label line.

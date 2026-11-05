@@ -15,7 +15,7 @@ vi.mock('../src/parse.js', async (importOriginal) => {
   }
 })
 
-const { renderCarve } = await import('../src/index.js')
+const { parse, renderCarve } = await import('../src/index.js')
 
 const text = (value: string) => ({ type: 'text' as const, value })
 
@@ -27,12 +27,12 @@ const needsEscape = (label: string): BlockNode => ({
 })
 
 /** One failing paragraph every 40, and a footnote body that needs its escape too. */
-const sparse = (paragraphs: number): Document => ({
+const sparse = (paragraphs: number, label = 'n'): Document => ({
   type: 'document',
   children: Array.from({ length: paragraphs }, (_, i): BlockNode => i % 40 === 0
     ? needsEscape(String(i))
-    : { type: 'paragraph', children: [text(`plain *text* here ${i}`), { type: 'footnote_ref', label: 'n' }, text('.')] }),
-  footnoteDefs: { n: [needsEscape('n'), { type: 'paragraph', children: [text('plain *text* note.')] }] },
+    : { type: 'paragraph', children: [text(`plain *text* here ${i}`), { type: 'footnote_ref', label }, text('.')] }),
+  footnoteDefs: { [label]: [needsEscape('n'), { type: 'paragraph', children: [text('plain *text* note.')] }] },
 })
 
 describe('the escape narrowing search on far apart units', () => {
@@ -46,5 +46,11 @@ describe('the escape narrowing search on far apart units', () => {
     // allowance runs out, so they keep only the escape they need.
     expect(carve).toContain('{.n}\n\\* item 760 and 1. two\n\nplain \\*text* here 761[^n].\n')
     expect(carve.endsWith('plain \\*text* here 799[^n].\n\n[^n]: {.n}\n  \\* item n and 1. two\n\n  plain \\*text* note.\n')).toBe(true)
+  })
+
+  it('writes a footnote labeled like a document field as a footnote', () => {
+    const named = renderCarve(sparse(81, 'children'))
+    expect(named.endsWith('[^children]: {.n}\n  \\* item n and 1. two\n\n  plain \\*text* note.\n')).toBe(true)
+    expect(parse(named).footnoteDefs?.['children']?.map((block) => block.type)).toEqual(['paragraph', 'paragraph'])
   })
 })
