@@ -67,32 +67,29 @@ export class EscapeWindows {
     }
   }
 
-  /** The window around `units`, or null when a unit sits outside the document body. */
-  windowFor(units: Iterable<object>): EscapeWindow | null {
-    const ranges = new Map<unknown[], { slot: Slot; lo: number; hi: number }>()
-    let root: unknown[] | undefined
+  /**
+   * The windows around `units`: one per cluster of units whose padded ranges
+   * touch, split again inside a block every unit of a cluster passes through,
+   * and kept apart per footnote body. Null when a unit sits outside both.
+   * Blocks between two clusters render the same before and after a probe, so
+   * a far apart group costs its clusters rather than everything between them.
+   */
+  windowsFor(units: Iterable<object>): EscapeWindow[] | null {
+    const roots = new Map<unknown[], Step[][]>()
     for (const unit of units) {
       const path = this.pathOf(unit)
-      if (path === null || path.length === 0) return null
-      if (root === undefined) root = path[0]!.slot.array
-      if (path[0]!.slot.array !== root) return null
-      for (let depth = 0; depth < path.length; depth++) {
-        const { slot, index } = path[depth]!
-        // Only the innermost slot keeps a neighbor on each side; an ancestor keeps just the spine.
-        const pad = depth === path.length - 1 ? 1 : 0
-        const lo = Math.max(0, index - pad)
-        const hi = Math.min(slot.array.length - 1, index + pad)
-        const range = ranges.get(slot.array)
-        if (range === undefined) {
-          ranges.set(slot.array, { slot, lo, hi })
-        } else {
-          if (lo < range.lo) range.lo = lo
-          if (hi > range.hi) range.hi = hi
-        }
-      }
+      if (path === null || path.length === 0 || !this.isRoot(path[0]!.slot)) return null
+      const root = path[0]!.slot.array
+      let paths = roots.get(root)
+      if (paths === undefined) roots.set(root, paths = [])
+      paths.push(path)
     }
-    if (root === undefined) return null
-    return [...ranges.values()]
+    if (roots.size === 0) return null
+    const windows: EscapeWindow[] = []
+    for (const paths of roots.values()) {
+      for (const cluster of clusters(paths, 0)) windows.push(windowOf(cluster))
+    }
+    return windows
   }
 
   /**
@@ -101,7 +98,7 @@ export class EscapeWindows {
    */
   renderPruned(window: EscapeWindow, render: (doc: Document) => string): string | null {
     const top = window[0]!
-    if (top.slot.owner !== (this.ast as unknown as Record<string, unknown>) || top.slot.key !== 'children') return null
+    if (!this.isRoot(top.slot)) return null
     const restore: Array<() => void> = []
     try {
       for (let i = 1; i < window.length; i++) {
@@ -111,12 +108,23 @@ export class EscapeWindows {
           slot.owner[slot.key] = slot.array
         })
       }
-      return render({ type: 'document', children: top.slot.array.slice(top.lo, top.hi + 1) as BlockNode[] })
+      if (top.slot.key === 'children') {
+        return render({ type: 'document', children: top.slot.array.slice(top.lo, top.hi + 1) as BlockNode[] })
+      }
+      // A footnote body keeps its first block, which is written on the label line.
+      const body = top.slot.array.slice(0, top.hi + 1) as BlockNode[]
+      return render({ type: 'document', children: [], footnoteDefs: { [top.slot.key]: body } })
     } catch {
       return null
     } finally {
       for (const undo of restore) undo()
     }
+  }
+
+  /** The document body, or one footnote's body. */
+  private isRoot(slot: Slot): boolean {
+    return (slot.owner === (this.ast as unknown as Record<string, unknown>) && slot.key === 'children') ||
+      (slot.owner === (this.ast.footnoteDefs as Record<string, unknown> | undefined) && typeof slot.key === 'string')
   }
 
   private pathOf(unit: object): Step[] | null {
@@ -130,6 +138,58 @@ export class EscapeWindows {
     }
     return path.reverse()
   }
+}
+
+/**
+ * `paths`, which share their slot at `depth`, grouped by padded ranges that
+ * touch there. A group inside one block whose paths all continue into the same
+ * slot is split again one level down.
+ */
+function clusters(paths: Step[][], depth: number): Step[][][] {
+  const sorted = paths.slice().sort((a, b) => a[depth]!.index - b[depth]!.index)
+  const groups: Step[][][] = []
+  let group: Step[][] = []
+  let reach = -Infinity
+  for (const path of sorted) {
+    const pad = depth === path.length - 1 ? 1 : 0
+    const index = path[depth]!.index
+    if (group.length > 0 && index - pad > reach + 1) {
+      groups.push(group)
+      group = []
+    }
+    group.push(path)
+    reach = Math.max(reach, index + pad)
+  }
+  groups.push(group)
+  return groups.flatMap((members) => {
+    const first = members[0]!
+    const inner = first[depth + 1]?.slot.array
+    const nested = inner !== undefined && members.every((path) =>
+      path[depth]!.index === first[depth]!.index && path[depth + 1]?.slot.array === inner)
+    return nested ? clusters(members, depth + 1) : [members]
+  })
+}
+
+/** Every slot on `paths`, each cut to the range the paths use. */
+function windowOf(paths: Step[][]): EscapeWindow {
+  const ranges = new Map<unknown[], { slot: Slot; lo: number; hi: number }>()
+  for (const path of paths) {
+    for (let depth = 0; depth < path.length; depth++) {
+      const { slot, index } = path[depth]!
+      // Only the innermost slot keeps a neighbor on each side; an ancestor keeps just the spine.
+      const pad = depth === path.length - 1 ? 1 : 0
+      const lo = Math.max(0, index - pad)
+      const hi = Math.min(slot.array.length - 1, index + pad)
+      const range = ranges.get(slot.array)
+      if (range === undefined) {
+        ranges.set(slot.array, { slot, lo, hi })
+      } else {
+        if (lo < range.lo) range.lo = lo
+        if (hi > range.hi) range.hi = hi
+      }
+    }
+  }
+  return [...ranges.values()]
 }
 
 /** Block lists, and a definition list's items: arrays a window may cut. */

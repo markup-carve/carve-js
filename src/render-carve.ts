@@ -3345,18 +3345,23 @@ class CarveRenderSession {
       },
       keeps(local, units, apply, undo) {
         if (local && windows === undefined) windows = new EscapeWindows(ast)
-        const window = local && windows ? windows.windowFor(units) : null
-        const before = window === null ? null : renderWindow(window)
-        // A window near the document's size saves nothing over the whole-document probe.
-        const beforeTree = before === null || before.length * 2 > conservative.length ? null : tree(before)
+        const clusters = local && windows ? windows.windowsFor(units) : null
+        const befores = clusters?.map(renderWindow) ?? null
+        const size = befores?.every((before) => before !== null) ? befores.reduce((sum, before) => sum + before!.length, 0) : null
+        // Windows near the document's size save nothing over the whole-document probe.
+        const beforeTrees = size === null || size * 2 > conservative.length ? null : befores!.map((before) => tree(before!))
         apply()
-        if (beforeTree !== null) {
-          const after = renderWindow(window!)
-          if (after !== null) {
-            charged += utf8ByteLength(before!) + utf8ByteLength(after)
-            if (tree(after) === beforeTree) return true
-            undo()
-            return false
+        if (beforeTrees !== null) {
+          const afters = clusters!.map(renderWindow)
+          if (afters.every((after) => after !== null)) {
+            for (let i = 0; i < afters.length; i++) {
+              charged += utf8ByteLength(befores![i]!) + utf8ByteLength(afters[i]!)
+              if (tree(afters[i]!) !== beforeTrees[i]) {
+                undo()
+                return false
+              }
+            }
+            return true
           }
         }
         const candidate = renderAll()
