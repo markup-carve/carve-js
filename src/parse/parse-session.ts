@@ -3,7 +3,7 @@ import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import { endsAtConsumedMarker } from '../ast/definition-list-wire.js'
-import type { Comment } from '../ast.js'
+import type { Comment, LinkReferenceDefinition } from '../ast.js'
 import type {
   Admonition,
   Attrs,
@@ -170,7 +170,7 @@ import { scanDirectiveShape } from '../include-directive.js'
 import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
-import { authoredAbbreviations, directCommentNodes, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
+import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -533,6 +533,7 @@ export class ParseSession extends InlineParseSession {
   // which lines a block consumes, so the probe leaves them unscanned.
   private skipParagraphInlines = false
   private skipPositionDrop = false
+  private lineLocalRestore = true
   private skippedAbbreviationLines = new Set<number>()
   private skippedCommentFences = new Map<number, { closer: number; content: string }>()
   /** Document lines whose consumed `+` the ownership walk wrote as a `%%` stand-in. */
@@ -543,8 +544,18 @@ export class ParseSession extends InlineParseSession {
     return this.quoteSiblingSeparators.has(line)
   }
 
+  private parseWithAuthoredRestore(source: string, opts: ParseOptions, transparent: boolean,
+    precomputedOwnership?: ReturnType<typeof ownLines>): Document {
+    const session = new ParseSession()
+    session.lineLocalRestore = false
+    session.skipPositionDrop = this.skipPositionDrop
+    return session.parse(source, opts, transparent, precomputedOwnership)
+  }
+
   parse(source: string, opts: ParseOptions = {}, transparent = true,
     precomputedOwnership?: ReturnType<typeof ownLines>): Document {
+    const callerSource = source
+    const callerOpts = opts
     const sourceByteLength = utf8ByteLength(source)
     const dropRequested = opts.positions === false
     this.recordPositions = opts.positions !== false
@@ -592,9 +603,18 @@ export class ParseSession extends InlineParseSession {
     delete authoredOptions.extensions
     const directComments = transparentLines && authoredSource === source && !source.includes('\r')
       ? directCommentNodes(transparentLines) : null
-    const authored = transparentLines && !directComments ? new ParseSession().parse(authoredSource, authoredOptions, false,
+    // Confirming the line-local reading may need a second visible parse, which would call the caller's hooks twice.
+    // Replacing a NUL or a lone surrogate keeps every offset; only a BOM moves them.
+    const hooked = !!opts.extensions?.length || Object.values(opts).some((value) => typeof value === 'function')
+    const lineNodes = transparentLines && !directComments && !strippedBom && !hooked && this.lineLocalRestore
+      ? erasedLineNodes(transparentLines, (text) => new ParseSession().parse(text, authoredOptions, false)) : null
+    const authored = transparentLines && !directComments && !lineNodes ? new ParseSession().parse(authoredSource, authoredOptions, false,
       authoredSource === source ? transparentLines.authoredOwnership : undefined) : null
-    const erasedAbbreviations = transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : []
+    const erasedAbbreviations = lineNodes?.abbreviations ??
+      (transparentLines && authored ? authoredAbbreviations(authored, transparentLines.erased) : [])
+    const erasedLines = new Set(transparentLines?.erased)
+    const erasedDefinitions = lineNodes?.linkDefinitions ?? (authored?.children ?? []).filter((node): node is LinkReferenceDefinition =>
+      node.type === 'link_reference_definition' && !!node.pos && erasedLines.has(node.pos.startLine - 1))
     const originalLexer = transparentLines ? new Lexer(source, opts) : null
     const lexer = new Lexer(
       transparentLines?.lines ?? source,
@@ -681,13 +701,12 @@ export class ParseSession extends InlineParseSession {
       }
     }
     if (transparentLines) {
-      for (const node of authored?.children ?? []) {
-        if (node.type !== 'link_reference_definition' || !node.pos ||
-            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
+      for (const node of erasedDefinitions) {
         const key = normalizeRefLabel(node.label)
+        if (lineNodes?.contested.has(key)) continue
         const current = lexer.linkDefs.get(key)
         const currentLine = current?.line === undefined ? -1 : transparentLines.sourceLines[current.line]!
-        if (currentLine >= node.pos.startLine - 1) continue
+        if (currentLine >= node.pos!.startLine - 1) continue
         lexer.linkDefs.set(key, {
           rawLabel: node.label, href: node.href,
           ...(node.title === undefined ? {} : { title: node.title }),
@@ -722,20 +741,14 @@ export class ParseSession extends InlineParseSession {
     }
     toCodepointPositions(doc, strippedBom ? '\ufeff' + source : source)
     anchorListsAtOwnerColumns(doc, strippedBom ? '\ufeff' + source : source)
+    if (lineNodes && !erasedLinesStandAlone(doc, transparentLines!, lineNodes)) {
+      return this.parseWithAuthoredRestore(callerSource, callerOpts, transparent, precomputedOwnership)
+    }
     if (transparentLines) {
-      for (const node of authored?.children ?? []) {
-        if (node.type !== 'link_reference_definition' || !node.pos ||
-            !transparentLines.erased.includes(node.pos.startLine - 1)) continue
-        const key = normalizeRefLabel(node.label)
-        const winner = lexer.linkDefs.get(key)
-        if (winner?.rawLabel !== node.label || winner.href !== node.href) continue
-        for (let i = doc.children.length - 1; i >= 0; i--) {
-          const existing = doc.children[i]!
-          if (existing.type === 'link_reference_definition' && normalizeRefLabel(existing.label) === key) doc.children.splice(i, 1)
-        }
-        doc.children.push(node)
+      if (!restoreErasedDefinitions(doc, erasedDefinitions, lexer.linkDefs, lineNodes, sourceLines)) {
+        return this.parseWithAuthoredRestore(callerSource, callerOpts, transparent, precomputedOwnership)
       }
-      restoreTransparentComments(doc, authored, transparentLines, directComments ?? undefined)
+      restoreTransparentComments(doc, authored, transparentLines, directComments ?? lineNodes?.comments)
       restoreTransparentAbbreviations(doc, erasedAbbreviations, transparentLines)
     }
     if (dropRequested) {

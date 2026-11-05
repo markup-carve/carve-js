@@ -2,7 +2,8 @@ import { Lexer } from '../parse-lexer.js'
 import { ownLines, type TraceRecord } from './block-ownership.js'
 import { isLinkDefLine, RE_FOOTNOTE_DEF } from '../parse-prepass-core.js'
 import { commentLineContent } from './parse-block-scan-core.js'
-import type { AbbreviationDef, BlockNode, Comment, DefinitionItem, DefinitionList, Document, InlineNode, List, ListItem, Paragraph, Position } from '../../ast.js'
+import type { AbbreviationDef, BlockNode, Comment, DefinitionItem, DefinitionList, Document, InlineNode, LinkReferenceDefinition, List, ListItem, Paragraph, Position } from '../../ast.js'
+import { normalizeRefLabel } from '../../label-key.js'
 
 export interface TransparentLineStream {
   lines: string[]
@@ -17,6 +18,7 @@ export interface TransparentLineStream {
 const REGION_MARKER = /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/
 const COMMENT_FENCE = /^%%%/
 const COMMENT_LINE = /^%%/
+const MARKED_FENCE = /^[ \t>:*+-]*(?:\d+[.)][ \t]*)?%%%/
 
 /** PART 0 S1: select whole, ordinary block lines before any layout reader runs. */
 export function transparentLineStream(source: string): TransparentLineStream | null {
@@ -78,6 +80,204 @@ export function directCommentNodes(stream: TransparentLineStream): Map<number, C
         startOffset, endOffset: stream.originalOffsets[index]! + line.length } })
   }
   return found
+}
+
+export interface ErasedLineNodes {
+  comments: Map<number, Comment>
+  abbreviations: AbbreviationDef[]
+  linkDefinitions: LinkReferenceDefinition[]
+  /** Labels a visible line below may define again; the caller checks the visible parse holds that definition. */
+  contested: Set<string>
+}
+
+function shiftPositions(value: unknown, line: number, column: number, offset: number): void {
+  if (Array.isArray(value)) {
+    for (const part of value) shiftPositions(part, line, column, offset)
+  } else if (value !== null && typeof value === 'object') {
+    for (const [key, part] of Object.entries(value)) {
+      if (key !== 'pos') {
+        shiftPositions(part, line, column, offset)
+        continue
+      }
+      const pos = part as Position
+      pos.startLine += line
+      pos.endLine += line
+      if (pos.startColumn !== undefined) pos.startColumn += column
+      if (pos.endColumn !== undefined) pos.endColumn += column
+      if (pos.startOffset !== undefined) pos.startOffset += offset
+      if (pos.endOffset !== undefined) pos.endOffset += offset
+    }
+  }
+}
+
+/**
+ * The nodes the authored parse would give the erased lines, read from those lines alone, so the
+ * whole document is not parsed a second time (carve#5184). Null where a line's reading may depend
+ * on its container; the caller then falls back to the authored parse.
+ */
+export function erasedLineNodes(stream: TransparentLineStream, parseLine: (text: string) => Document): ErasedLineNodes | null {
+  const comments = new Map<number, Comment>()
+  const abbreviations: AbbreviationDef[] = []
+  const definitions = new Map<string, LinkReferenceDefinition>()
+  const batches: Array<{ lines: Array<{ index: number; column: number; startOffset: number; rest: string }>; labels: Set<string> }> = []
+  // Offsets count codepoints, so each surrogate pair above a line moves it back by one.
+  let pairs = 0
+  let counted = 0
+  const reach = new Map<number, boolean>()
+  const forms = new Map<number, string>()
+  const nested = new Set<number>()
+  const last = stream.erased.at(-1)! + 1
+  for (const record of stream.authoredTrace) {
+    // A `%%%` behind a marker, in comment payload or in text the walk read, may open or close a fence in the parser.
+    if ((record.step === 'S1' ? record.cell === 'B-comment-keep' : record.step === 'S5' && record.form === 'text') &&
+        record.line <= last && MARKED_FENCE.test(stream.original[record.line - 1]!)) return null
+    if (record.step !== 'S5') continue
+    reach.set(record.line, record.reach === record.owner)
+    forms.set(record.line, record.form)
+    if (record.owner !== 'doc') nested.add(record.line)
+  }
+  for (const index of stream.erased) {
+    for (; counted < index; counted++) pairs += stream.original[counted]!.match(/[\ud800-\udbff][\udc00-\udfff]/g)?.length ?? 0
+    const line = stream.original[index]!
+    const prefix = /^ */.exec(line)![0]
+    const rest = line.slice(prefix.length)
+    // A quote, a tab, a lazy line or a `+` above makes the reading depend on the container.
+    if (/^[\t>]/.test(rest) || reach.get(index + 1) !== true || /^[ \t>]*\+[ \t]*$/.test(stream.original[index - 1] ?? '')) return null
+    // Below paragraph text, whether a definition starts depends on the container.
+    if (forms.get(index) === 'text' && (rest.startsWith('[') || nested.has(index + 1))) return null
+    const startOffset = stream.originalOffsets[index]! - pairs + prefix.length
+    if (COMMENT_LINE.test(rest)) {
+      const length = [...rest].length
+      comments.set(index + 1, { type: 'comment', block: false, content: commentLineContent(rest),
+        pos: { startLine: index + 1, endLine: index + 1, startColumn: prefix.length + 1, endColumn: prefix.length + length + 1,
+          startOffset, endOffset: startOffset + length } })
+      continue
+    }
+    // A document keeps one definition per label, so a repeated label starts the next batch.
+    const label = rest.slice(0, rest.indexOf(']:') + 1)
+    if (batches.at(-1)?.labels.has(label) !== false) batches.push({ lines: [], labels: new Set() })
+    batches.at(-1)!.labels.add(label)
+    batches.at(-1)!.lines.push({ index, column: prefix.length, startOffset, rest })
+  }
+  // The definition lines are read in one parse per batch, each standing alone between blank lines.
+  for (const batch of batches) {
+    const document = parseLine(batch.lines.map((entry) => entry.rest).join('\n\n'))
+    if (document.children.length !== batch.lines.length || document.footnoteDefs || document.frontmatter) return null
+    const batchOffsets: number[] = []
+    let offset = 0
+    for (const entry of batch.lines) {
+      batchOffsets.push(offset)
+      offset += [...entry.rest].length + 2
+    }
+    const seen = new Set<number>()
+    for (const node of document.children) {
+      const at = node.pos ? (node.pos.startLine - 1) / 2 : -1
+      const entry = batch.lines[at]
+      if (!entry || seen.has(at) || node.pos!.endLine !== node.pos!.startLine) return null
+      seen.add(at)
+      shiftPositions(node, entry.index - 2 * at, entry.column, entry.startOffset - batchOffsets[at]!)
+      if (node.type === 'abbreviation_def') abbreviations.push(node)
+      // The last definition of a label is the one the document keeps.
+      else if (node.type === 'link_reference_definition') definitions.set(normalizeRefLabel(node.label), node)
+      else return null
+    }
+  }
+  abbreviations.sort((a, b) => a.pos!.startLine - b.pos!.startLine)
+  // A visible line below that may define the label again decides it, if it is a definition.
+  const contested = new Set<string>()
+  if (definitions.size) {
+    const erased = new Set(stream.erased)
+    let first = Infinity
+    for (const node of definitions.values()) first = Math.min(first, node.pos!.startLine)
+    for (let index = first; index < stream.original.length; index++) {
+      const line = stream.original[index]!
+      if (erased.has(index) || !line.includes(']:')) continue
+      // Every `[` before a `]:` may open the label, so each slice between them is a candidate.
+      const opens: number[] = []
+      for (let at = 0; at < line.length; at++) {
+        if (line[at] === '[') {
+          if (opens.push(at) > 64) return null
+        } else if (line[at] === ']' && line[at + 1] === ':') {
+          for (const open of opens) {
+            const key = normalizeRefLabel(line.slice(open + 1, at))
+            if ((definitions.get(key)?.pos!.startLine ?? Infinity) <= index) contested.add(key)
+          }
+        }
+      }
+    }
+  }
+  return { comments, abbreviations, contested,
+    linkDefinitions: [...definitions.values()].sort((a, b) => a.pos!.startLine - b.pos!.startLine) }
+}
+
+/**
+ * Whether the visible parse confirms the line-local reading: an erased line inside a visible
+ * paragraph may have been that paragraph's text, or an open inline comment's, in the authored parse.
+ */
+export function erasedLinesStandAlone(document: Document, stream: TransparentLineStream, nodes: ErasedLineNodes): boolean {
+  const spans: Array<{ start: number; end: number; comment: boolean }> = []
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const part of value) visit(part)
+    } else if (value !== null && typeof value === 'object') {
+      const node = value as { type?: string; pos?: Position; children?: InlineNode[] }
+      if (node.type === 'paragraph' && node.pos && node.pos.endLine > node.pos.startLine) {
+        spans.push({ start: node.pos.startLine, end: node.pos.endLine,
+          comment: (node.children ?? []).some((child) => child.type === 'comment') })
+        return
+      }
+      for (const [key, part] of Object.entries(node)) if (key !== 'pos' && key !== 'attrs') visit(part)
+    }
+  }
+  visit(document.children)
+  visit(document.footnoteDefs)
+  if (!spans.length) return true
+  for (const index of stream.erased) {
+    const line = index + 1
+    const comment = nodes.comments.has(line)
+    if (spans.some((span) => span.start < line && line < span.end && (!comment || span.comment))) return false
+  }
+  return true
+}
+
+/**
+ * Put each erased definition the document keeps back in place of the visible ones of its label.
+ * False when a contested label needs the authored parse to decide.
+ */
+export function restoreErasedDefinitions(document: Document, erased: LinkReferenceDefinition[],
+  visible: ReadonlyMap<string, { rawLabel?: string; href: string }>, nodes: ErasedLineNodes | null,
+  sourceLines: readonly string[]): boolean {
+  const hoisted = new Map<string, LinkReferenceDefinition[]>()
+  for (const child of document.children) {
+    if (child.type !== 'link_reference_definition') continue
+    const key = normalizeRefLabel(child.label)
+    const found = hoisted.get(key)
+    if (found) found.push(child)
+    else hoisted.set(key, [child])
+  }
+  // Labels are unique among the erased definitions, so each replaces only visible ones.
+  const replaced = new Set<string>()
+  const restored: LinkReferenceDefinition[] = []
+  for (const node of erased) {
+    const key = normalizeRefLabel(node.label)
+    // A later visible definition of the label is the one the document keeps. Below a blank line
+    // it reads the same without the erased lines; elsewhere only the authored parse can tell.
+    const later = nodes && (hoisted.get(key) ?? []).some((existing) => existing.pos!.startLine > node.pos!.startLine &&
+      /^[ \t>]*$/.test(sourceLines[existing.pos!.startLine - 2] ?? ''))
+    if (nodes?.contested.has(key) && !later) return false
+    if (later) continue
+    const winner = visible.get(key)
+    if (!winner || winner.rawLabel !== node.label || winner.href !== node.href) continue
+    replaced.add(key)
+    restored.push(node)
+  }
+  if (restored.length) {
+    const kept = document.children.filter((child) => child.type !== 'link_reference_definition' || !replaced.has(normalizeRefLabel(child.label)))
+    document.children.length = 0
+    for (const child of kept) document.children.push(child)
+    for (const node of restored) document.children.push(node)
+  }
+  return true
 }
 
 function authoredComments(document: Document): Map<number, Comment> {
@@ -189,52 +389,64 @@ function candidateGaps(items: readonly ListItem[], offset: number): number[] {
   return [first - 1, first].filter((index) => index < items.length - 1)
 }
 
-type BlockIndex = { length: number; starts: number[]; ends: number[]; reach: number[] } | { length: number; unsorted: true }
+type BlockRun = { from: number; starts: number[]; ends: number[]; reach: number[] }
+type BlockIndex = { length: number; runs: BlockRun[] } | { length: number; unsorted: true }
 let blockIndexes = new WeakMap<readonly object[], BlockIndex>()
 
 // Sibling blocks stand in source order, so only those starting at or before an offset and reaching
 // past it can hold it (carve-js#4392). `reach` is the furthest end so far, which finds overlapping
-// siblings too. An array with a block that has no usable offsets is scanned in full.
+// siblings too. Definitions hoisted to the end start a second sorted run, and each run is searched
+// on its own (carve#5184). An array with a block that has no usable offsets is scanned in full.
 function candidateBlocks<T extends object>(blocks: readonly T[], offset: number): readonly T[] {
   if (blocks.length < 16) return blocks
   let index = blockIndexes.get(blocks)
   if (index === undefined || index.length !== blocks.length) {
-    const starts: number[] = []
-    const ends: number[] = []
-    const reach: number[] = []
-    let sorted = true
-    for (const block of blocks) {
-      const span = spanOf(block)
+    const runs: BlockRun[] = []
+    let run: BlockRun | undefined
+    let usable = true
+    for (let i = 0; i < blocks.length; i++) {
+      const span = spanOf(blocks[i]!)
       const start = span?.startOffset
       const end = span?.endOffset
-      if (start === undefined || end === undefined || Number.isNaN(start) || Number.isNaN(end) ||
-          start < (starts.at(-1) ?? -Infinity)) {
-        sorted = false
+      if (start === undefined || end === undefined || Number.isNaN(start) || Number.isNaN(end)) {
+        usable = false
         break
       }
-      starts.push(start)
-      ends.push(end)
-      reach.push(Math.max(reach.at(-1) ?? -Infinity, end))
+      if (!run || start < run.starts.at(-1)!) {
+        if (runs.length === 8) {
+          usable = false
+          break
+        }
+        run = { from: i, starts: [], ends: [], reach: [] }
+        runs.push(run)
+      }
+      run.starts.push(start)
+      run.ends.push(end)
+      run.reach.push(Math.max(run.reach.at(-1) ?? -Infinity, end))
     }
-    index = sorted ? { length: blocks.length, starts, ends, reach } : { length: blocks.length, unsorted: true }
+    index = usable ? { length: blocks.length, runs } : { length: blocks.length, unsorted: true }
     blockIndexes.set(blocks, index)
   }
   if ('unsorted' in index) return blocks
-  let lo = 0
-  let hi = blocks.length - 1
-  let found = -1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    if (index.starts[mid]! <= offset) {
-      found = mid
-      lo = mid + 1
-    } else {
-      hi = mid - 1
-    }
-  }
   const out: T[] = []
-  for (let i = found; i >= 0 && index.reach[i]! > offset; i--) if (index.ends[i]! > offset) out.push(blocks[i]!)
-  return out.reverse()
+  for (const run of index.runs) {
+    let lo = 0
+    let hi = run.starts.length - 1
+    let found = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (run.starts[mid]! <= offset) {
+        found = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    const held: T[] = []
+    for (let i = found; i >= 0 && run.reach[i]! > offset; i--) if (run.ends[i]! > offset) held.push(blocks[run.from + i]!)
+    for (let i = held.length - 1; i >= 0; i--) out.push(held[i]!)
+  }
+  return out
 }
 
 /** The content column of a list item, where a quote it holds puts its marker. */
