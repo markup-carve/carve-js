@@ -152,6 +152,31 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
       case 'block_quote':
         walk(node['children'], node['fenced'] === true ? openerColumn(node.pos) : owner)
         return
+      case 'section':
+      case 'line_block':
+      case 'figure_group':
+      case 'directive':
+        walk(node['children'], owner)
+        return
+      case 'figure':
+        walk(node['target'], owner)
+        return
+      case 'table':
+        for (const row of (node['rows'] as Array<{ cells: Array<{ blocks?: unknown }> }>)) {
+          for (const cell of row.cells) if (cell.blocks) walk(cell.blocks, owner)
+        }
+        return
+      case 'heading':
+      case 'paragraph':
+      case 'code_block':
+      case 'thematic_break':
+      case 'image':
+      case 'abbreviation_def':
+      case 'link_reference_definition':
+      case 'citation_definition':
+      case 'raw_block':
+      case 'comment':
+        return
     }
     for (const [key, child] of Object.entries(node)) {
       if (key !== 'pos' && child && typeof child === 'object') walk(child, owner)
