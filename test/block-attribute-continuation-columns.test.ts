@@ -42,7 +42,7 @@ describe('a refused brace run in a container', () => {
     [':: term\n: def\n  {.a\n }\npara\n', '<dl>\n  <dt>term</dt>\n  <dd>def\n{.a\n}\npara</dd>\n</dl>'],
     ['- item\n  {.a\n  #x}\n# h\n', '<ul>\n  <li>item\n{.a\n#x}</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>'],
     ['{% x\ny %}\n\npara\n', '<p>{% x\ny %}</p>\n<p>para</p>'],
-    ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>'],
+    ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li>a</li>\n</ul>\n<p>{% c\nd %}</p>\n<ul>\n  <li>b</li>\n</ul>'],
     ['[][d]\n{.a\n .b}\n- [d]: u\n', '<p><a href="u"></a></p>\n<ul class="a b">\n  <li></li>\n</ul>'],
     ['- {% x\n   y %}\n\n  para\n\n  para2\n- next\n', '<ul>\n  <li><p>para</p>\n    <p>para2</p>\n  </li>\n  <li><p>next</p></li>\n</ul>'],
     ['- {% x\n  y %}\n\n  para\n\n  para2\n- next\n', '<ul>\n  <li><p>{% x\ny %}</p>\n    <p>para</p>\n    <p>para2</p>\n  </li>\n  <li><p>next</p></li>\n</ul>'],

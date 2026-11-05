@@ -1397,7 +1397,9 @@ export function lineOpensBlock(line: string): boolean {
 // A list marker interrupts only in an item body (`markerEnds`), so elsewhere it keeps the paragraph visible.
 // A `%%` tail ends at its line, so text on the next line stays visible.
 const RE_COMMENT_ONLY_PARAGRAPH = new RegExp(String.raw`^(?:\{%(?![\p{Mn}\p{Mc}\p{Me}\u{FE00}-\u{FE0F}\u{200D}])(?:(?!%\})[\s\S])*%\}|[ \t\n\r]|(?<= )%%[^\n\r]*)*$`, 'u')
-export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number, markerEnds = false): number {
+// `columnAt` measures a line whose indentation `lineAt` strips (CARVE-P2-035).
+export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number, markerEnds = false,
+  columnAt = (index: number): number => indentColumns(lineAt(index)!)): number {
   if (!(lineAt(k) ?? '').trimStart().startsWith('{%')) return -1
   let end = k + 1
   for (let line = lineAt(end); line !== undefined && !isBlankLine(line); line = lineAt(++end)) {
@@ -1409,7 +1411,32 @@ export function commentOnlyParagraphEnd(lineAt: (index: number) => string | unde
     if (lineOpensBlock(rest) || RE_COMMENT_LINE.test(rest)) break
   }
   const para: string[] = []
-  for (let j = k; j < end; j++) para.push(lineAt(j)!)
+  // An open run's `{` column when it starts a line, null when it opened mid-line.
+  let open: number | null | undefined = undefined
+  for (let j = k; j < end; j++) {
+    const line = lineAt(j)!
+    // A block run whose continuation is not indented past its `{` is paragraph text (CARVE-P2-035).
+    if (typeof open === 'number' && columnAt(j) <= open) return -1
+    let at = 0
+    if (open === undefined && line.trimStart().startsWith('{%')) {
+      open = columnAt(j)
+      at = line.indexOf('{%') + 2
+    }
+    for (;;) {
+      if (open !== undefined) {
+        const close = line.indexOf('%}', at)
+        if (close === -1) break
+        open = undefined
+        at = close + 2
+      } else {
+        const next = line.indexOf('{%', at)
+        if (next === -1) break
+        open = null
+        at = next + 2
+      }
+    }
+    para.push(line)
+  }
   return RE_COMMENT_ONLY_PARAGRAPH.test(para.join('\n')) ? end : -1
 }
 
