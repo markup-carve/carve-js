@@ -2947,6 +2947,48 @@ function collectTableAttributeWarnings(
 /** Source spellings that reached paragraph or table nodes with a different meaning. */
 // A cell a `+` line appended starts with that line's cell_wrap (T6); the row
 // is reported on that line, with or without a header.
+// The matches of /\[[^\]]+\]\s+\(\s*[^)\s][^)]*\)/g in linear time: a masked link tail leaves
+// labels without their `]`, and the regex then rescans the rest of the line from every `[`.
+function linkGapMatches(text: string): [number, number][] {
+  const matches: [number, number][] = []
+  if (!text.includes('[')) return matches
+  const nextOf = (target: string): Int32Array => {
+    const next = new Int32Array(text.length + 1).fill(-1)
+    for (let index = text.length - 1; index >= 0; index--) next[index] = text[index] === target ? index : next[index + 1]!
+    return next
+  }
+  const nextClose = nextOf(']')
+  const nextParen = nextOf(')')
+  const space = (index: number): boolean => index < text.length && /\s/.test(text[index]!)
+  const endAfter = new Map<number, number>()
+  const destinationEnd = (close: number): number => {
+    let at = close + 1
+    while (space(at)) at++
+    if (at === close + 1 || text[at] !== '(') return -1
+    at++
+    while (space(at)) at++
+    if (at >= text.length || text[at] === ')') return -1
+    const paren = nextParen[at + 1]!
+    return paren < 0 ? -1 : paren + 1
+  }
+  for (let open = text.indexOf('['); open >= 0;) {
+    const close = nextClose[open + 1]!
+    if (close < 0) break
+    let end = -1
+    if (close > open + 1) {
+      end = endAfter.get(close) ?? destinationEnd(close)
+      endAfter.set(close, end)
+    }
+    if (end < 0) {
+      open = text.indexOf('[', open + 1)
+      continue
+    }
+    matches.push([open, end - open])
+    open = text.indexOf('[', end)
+  }
+  return matches
+}
+
 function appendingContinuationLine(row: TableRow): number | undefined {
   const first = row.cells.find((cell) => !cell.span && cell.children?.[0]?.type === 'cell_wrap')?.children?.[0]
   return first?.type === 'cell_wrap' ? first.line : undefined
@@ -3122,9 +3164,8 @@ function collectAuthoringWarnings(
       }
     }
     if (!paragraphAt.has(at) && !row && !headingLines.has(at)) continue
-    const gap = /\[[^\]]+\]\s+\(\s*[^)\s][^)]*\)/g
-    for (const match of text.matchAll(gap)) {
-      push(at, prefix + match.index! + 1, match[0].length, 'link-gap-before-destination',
+    for (const [index, length] of linkGapMatches(text)) {
+      push(at, prefix + index + 1, length, 'link-gap-before-destination',
         'The gap after this link label keeps the link as text; write ]( with no space.')
     }
     const underline = /(^|[^\p{L}\p{N}])_([\p{L}][\p{L}\p{N}_ -]*?)_(?![\p{L}\p{N}])/gu
