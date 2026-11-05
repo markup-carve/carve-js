@@ -4,7 +4,7 @@ const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})(.*)$/
 // A list marker, including one with its attributes glued on (`-{.a} x`).
 const ANY_MARKER = /^ *(?:[-*+]|\d+[.)])(?: |\{)/
 // A block that ends a nested item without a blank line before it.
-const INTERRUPTS = /^ *(?:>|#{1,6}(?: |$)|`{3,}|~{3,}|:::|\||\{|%%|(?:\* *){3,}$|(?:- *){3,}$)/
+const INTERRUPTS = /^ *(?:>|#{1,6}(?: |$)|`{3,}|~{3,}|:::|\|.*\| *$|\{.*\} *$|%%|(?:\* *){3,}$|(?:- *){3,}$)/
 
 const indent = (body: string): number => body.length - body.replace(/^ +/, '').length
 const blank = (body: string): boolean => body.trim() === ''

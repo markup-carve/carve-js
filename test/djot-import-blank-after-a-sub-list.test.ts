@@ -16,6 +16,13 @@ it('attaches a paragraph after the nested list with a +', () => {
   expect(djotToCarve('- a\n- one\n\n  - two\n\n  para\n  more\n')).toBe('- a\n- one\n  - two\n+\npara\n  more\n')
 })
 
+it('reads a pipe-led or brace-led paragraph as a paragraph', () => {
+  for (const line of ['| not a table', '{not attributes']) {
+    const djot = `- one\n\n  - two\n\n  ${line}\n`
+    expect(carveToHtml(djotToCarve(djot)).replace(/\s+/g, '')).toMatch(/<\/ul><p>|<\/ul>[^<]/)
+  }
+})
+
 it('keeps a blank the item owns', () => {
   expect(djotToCarve('- one\n\n  > q\n')).toBe('- one\n\n  > q\n')
   expect(djotToCarve('- one\n\n  - two\n\n  para\n\n  more\n')).toBe('- one\n  - two\n\n  para\n\n  more\n')
