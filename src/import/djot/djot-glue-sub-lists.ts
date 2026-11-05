@@ -153,14 +153,20 @@ export function dropBlanksAfterSubLists(carve: string, probe: (source: string) =
     if (!probes.has(source)) probes.set(source, probe(source))
     return probes.get(source)!
   }
-  for (let owner = 0; owner < lines.length; owner++) {
+  // Items are read bottom-up so an outer item can step over each sub-item it holds.
+  const ends = new Array<number>(lines.length).fill(-1)
+  const found: [number, RegExpExecArray, SubListBlank[]][] = []
+  for (let owner = lines.length - 1; owner >= 0; owner--) {
     if (inFence[owner]) continue
     const depth = depths[owner]!
-    const ownerBody = stripQuotes(lines[owner]!, depth)![1]
-    const ownerMarker = MARKER.exec(ownerBody)
+    const ownerMarker = MARKER.exec(stripQuotes(lines[owner]!, depth)![1])
     if (!ownerMarker) continue
-    const blanks = subListBlanks(lines, inFence, owner, depth, ownerMarker[0].length)
-    if (!blanks?.length || looseBefore(parts, owner, ownerMarker[1]!.length) ||
+    const blanks = subListBlanks(lines, inFence, depths, ends, owner, depth, ownerMarker[0].length)
+    if (blanks?.length) found.push([owner, ownerMarker, blanks])
+  }
+  for (const [owner, ownerMarker, blanks] of found.reverse()) {
+    const depth = depths[owner]!
+    if (looseBefore(parts, owner, ownerMarker[1]!.length) ||
       separatedFromASibling(parts, inFence, blanks.at(-1)!.last, ownerMarker[1]!.length)) continue
     for (const run of blanks) {
       if ([...Array(run.end - run.first).keys()].some(offset => replaced.has(run.first + offset))) continue
@@ -175,8 +181,10 @@ export function dropBlanksAfterSubLists(carve: string, probe: (source: string) =
 }
 
 // The item's blank runs that djot.js charges to an open sub-list, or null when
-// another blank at the item's level loosens it anyway.
-function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth: number, column: number): SubListBlank[] | null {
+// another blank at the item's level loosens it anyway. Records in `ends` the line
+// after the item's last non-blank line.
+function subListBlanks(lines: string[], inFence: boolean[], depths: number[], ends: number[], owner: number, depth: number,
+  column: number): SubListBlank[] | null {
   const runs: SubListBlank[] = []
   let nested: { content: number; kind: string } | null = null
   let pending: number | null = null
@@ -184,6 +192,7 @@ function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth
   // djot.js emits a blank line for a div's closing fence, so a line directly after one can loosen the list.
   let openDivs = 0
   let divClosed = false
+  let last = owner
   for (let at = owner + 1; at < lines.length; at++) {
     const split = stripQuotes(lines[at]!, depth)
     if (split === null) break
@@ -191,6 +200,7 @@ function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth
     if (inFence[at]) {
       pending = null
       previousBlank = false
+      last = at
       continue
     }
     if (blank(body)) {
@@ -202,6 +212,7 @@ function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth
     const wasBlank = previousBlank
     previousBlank = false
     const lineIndent = indent(body)
+    if (lineIndent >= column) last = at
     const marker = MARKER.exec(body)
     if (lineIndent < column) {
       if (divClosed || !marker && !wasBlank) return null
@@ -228,6 +239,7 @@ function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth
       }
       nested = { content: marker[0].length, kind }
       pending = null
+      if (depths[at] === depth && ends[at]! > at) at = last = ends[at]! - 1
       continue
     }
     if (lineIndent !== column) return null
@@ -239,6 +251,7 @@ function subListBlanks(lines: string[], inFence: boolean[], owner: number, depth
     nested = null
     pending = null
   }
+  ends[owner] = last + 1
   for (const run of runs) {
     let end = run.below + 1
     for (; end < lines.length; end++) {
