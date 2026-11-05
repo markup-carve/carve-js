@@ -7,7 +7,7 @@ describe('a container-owned comment line is set off by blank lines', () => {
     ['- a\n\n  %% just a note\n- b\n', '- a\n\n  %% just a note\n\n- b\n'],
     ['- - a\n\n  %% just a note\n- b\n', '- - a\n\n  %% just a note\n\n- b\n'],
     ['> a\n> %% b\n', '> a\n>\n> %% b\n'],
-    ['> a\n>\n> %% c\n> %% d\n', '> a\n>\n> %% c\n>\n> %% d\n'],
+    ['> a\n>\n> %% c\n> %% d\n', '> a\n>\n> %% c\n> %% d\n'],
     ['- > a\n  > %% b\n', '- > a\n  >\n  > %% b\n'],
     ['::: note\n> para\n> %% c\n:::\n', '::: note\n> para\n>\n> %% c\n:::\n'],
   ])('%j', (source, written) => {

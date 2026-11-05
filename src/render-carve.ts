@@ -752,12 +752,12 @@ function taskMarker(item: ListItem): string {
   return `[${item.taskState ?? (item.checked ? 'x' : ' ')}]`
 }
 
-/** Whether two adjacent blocks were written on consecutive source lines, with
- *  no blank line between them - true only for the bibliography definition,
- *  whose line-per-node shape is the one the parser splits out of a paragraph. */
-function writtenAsOneRun(previous: BlockNode, block: BlockNode, descriptionBody = false): boolean {
-  // In a description, a blank between line comments counts toward the list's blank budget.
-  const lineComments = descriptionBody && isLineComment(previous) && isLineComment(block)
+/** Whether adjacent nodes form one writer run in this host. */
+function writtenAsOneRun(previous: BlockNode, block: BlockNode, containerOwned = false): boolean {
+  // Adjacent lines owned by one container are one comment block (CARVE-P11-079 b).
+  // Document-owned lines and region markers keep their separate layout.
+  const lineComments = containerOwned && isLineComment(previous) && isLineComment(block) &&
+    !isRegionMarker(previous) && !isRegionMarker(block)
   if (!lineComments && (previous.type !== 'citation_definition' || block.type !== 'citation_definition')) return false
   const before = previous.pos
   const after = block.pos
@@ -3663,7 +3663,7 @@ class CarveRenderSession {
             parts.length > 0 &&
             (heldNoteEnd !== undefined
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
-              : writtenAsOneRun(previousBlock, block, descriptionBody) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
+              : writtenAsOneRun(previousBlock, block, item !== undefined || descriptionBody || ctx.blockDepth > 1) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
                 (block.type === 'comment' && (!isRegionMarker(block) || regionMarkerAdjacent(previousBlock, block, text)) && ((!this.canonicalTransparentLines ||
@@ -4195,12 +4195,22 @@ class CarveRenderSession {
           if (readsBack(looseItemSource)) itemSource = looseItemSource
         }
         out += itemSource
+        let previousGap: NonNullable<List['transparentBetweenItems']>[number] | undefined
         for (const gap of node.transparentBetweenItems ?? []) {
           if (gap.after !== idx) continue
           // After the last item the comment is a block of its own (PART 11 §2).
           if (this.canonicalTransparentLines && idx === node.items.length - 1) this.canonicalTrailingComments.add(gap.node)
-          // CARVE-P11-079 (b): in a loose list the comment is a block of its own, set off by blank lines.
-          else out += `${this.canonicalTransparentLines && !node.tight && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
+          // One blank boundary starts a loose host's run; adjacent lines within
+          // that run are consecutive, or the readback can split the list in two.
+          else {
+            const continuesRun = previousGap !== undefined && previousGap.after === gap.after &&
+              isLineComment(previousGap.node as BlockNode) && isLineComment(gap.node as BlockNode) &&
+              !isRegionMarker(previousGap.node as BlockNode) && !isRegionMarker(gap.node as BlockNode) &&
+              previousGap.node.pos?.endLine !== undefined &&
+              gap.node.pos?.startLine === previousGap.node.pos.endLine + 1
+            out += `${this.canonicalTransparentLines && !node.tight && !continuesRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
+          }
+          previousGap = gap
         }
         if (!node.tight && idx < node.items.length - 1) out += '\n'
       })
