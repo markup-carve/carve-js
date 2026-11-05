@@ -2267,6 +2267,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return undefined
     }
+    const descendantLineBlockTakes = (line: string): boolean => {
+      const deepest = lazyState.deepest
+      if (deepest?.literalColon === undefined || !deepest.lazyFoldable) return false
+      const text = line.trimStart()
+      return !RE_DEFLIST_DEF.test(text) && !RE_DEFLIST_TERM.test(text)
+    }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
@@ -2314,7 +2320,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
-      if (belowDefinitionEntry && !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
+      if (belowDefinitionEntry && !descendantLineBlockTakes(l) &&
+          !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
           definitionHostColumn === sourceMarkerColumn)
@@ -2788,6 +2795,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
     }
     const settleContentLine = (l: string): void => {
+      const description = RE_DEFLIST_DEF.exec(trackedContent)
+      if (description && lazyState.opaque === null) {
+        const lead = description[2]!
+        const markerColumn = markerContentColumn(lead)
+        const direct = markerColumn > 0 ? lead.slice(markerColumn) : ''
+        if (RE_LINE_BLOCK_OPEN.test(direct)) {
+          const frame = verbatimOnlyLazyState()
+          frame.divDepth = 1
+          frame.literalColon = { width: colonFenceOpenerLen(direct)!, column: 0 }
+          frame.literalLayout = true
+          lazyState.deepest = frame
+          lazyState.ownedColumn = 1 + description[1]!.length + markerColumn
+          lazyState.literalLayout = true
+          lazyState.lazyFoldable = false
+        }
+      }
       if (captionParagraphClaim && (RE_COMMENT_LINE.test(unindented) ||
           (atItemColumn && !RE_CAPTION.test(trackedContent) && !isListMarkerLine(l) &&
             (lineOpensBlock(unindented) || isBlockAttributeLine(unindented))))) captionParagraphClaim = false
