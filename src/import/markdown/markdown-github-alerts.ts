@@ -51,15 +51,14 @@ export function importGithubAlerts(document: Document, source: string): boolean 
 }
 
 /** Decode a Markdown escape only for a leftover label in quote paragraph text. */
-export function decodeQuotedAlertEscapes(document: Document, source: string): boolean {
+export function decodeQuotedAlertEscapes(document: Document): boolean {
   let changed = false
   const visit = (node: BlockNode | ListItem, inQuote: boolean): void => {
     if (node.type === 'paragraph' && inQuote) {
       for (let i = 0; i + 1 < node.children.length; i++) {
         const open = node.children[i]!, tail = node.children[i + 1]!
         if (open.type !== 'escaped_text' || open.value !== '[' || tail.type !== 'text' || !/^!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/.test(tail.value)) continue
-        const offset = open.pos?.startOffset
-        if (offset === undefined || !/^(?:[ \t]*(?:[-*+] |\d+[.)] ))?(?:[ \t]*>[ \t]*)+$/.test(source.slice(source.lastIndexOf('\n', offset - 1) + 1, offset))) continue
+        if (i > 0 && node.children[i - 1]?.type !== 'soft_break') continue
         node.children[i] = { type: 'text', value: '[', ...(open.pos ? { pos: open.pos } : {}) }
         changed = true
       }

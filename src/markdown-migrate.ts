@@ -7379,7 +7379,7 @@ function convertMarkdownSource(
       onRenderLoss: loss => losses.push({ code: 'structure-unspellable', message: loss.message }),
     }, document => {
       const alerts = importGithubAlerts(document, written)
-      const escapes = decodeQuotedAlertEscapes(document, written)
+      const escapes = decodeQuotedAlertEscapes(document)
       return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts || escapes
     },
     value)
