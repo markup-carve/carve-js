@@ -87,22 +87,29 @@ export function unescapeAttrValue(v: string): string {
 }
 
 export function parseAttrs(src: string): Attrs {
+  return parseAttrsPass(src, false)
+}
+
+function parseAttrsPass(src: string, captureWrites: boolean): Attrs {
   const attrs: Attrs = {}
   const order: string[] = []
   const seen = new Set<string>()
   const note = (slot: string) => {
     if (!seen.has(slot)) { seen.add(slot); order.push(slot) }
   }
-  // Only a case-variant id/class key needs write ordering. Ordinary payloads
-  // can have thousands of classes, so avoid a second tuple and array per class.
-  const captureWrites = /\b(?:id|class)\b/i.test(src)
+  // Only a parsed case-variant id/class key needs write ordering. If one is
+  // found, repeat the pass with a log; ordinary class lists avoid its arrays.
+  let caseVariantSlotKey = false
   let writes: Array<[string, string | string[]]> | undefined
   const write = (slot: string, value: string | string[]) => {
     if (captureWrites) (writes ??= []).push([slot, value])
   }
   const writeKey = (key: string, value: string) => {
     const fold = key.toLowerCase()
-    if (fold === 'id' || fold === 'class') write(key, value)
+    if (fold === 'id' || fold === 'class') {
+      caseVariantSlotKey = true
+      write(key, value)
+    }
   }
   const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^}|"'\\ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
@@ -178,6 +185,7 @@ export function parseAttrs(src: string): Attrs {
       }
     }
   }
+  if (caseVariantSlotKey && !captureWrites) return parseAttrsPass(src, true)
   if (order.length) attrs.order = order
   recordSlotWrites(attrs, writes)
   return attrs
