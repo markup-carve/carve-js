@@ -964,6 +964,27 @@ export function lintCarve(
     onInvalidContainerMetadata: (container) => invalidContainerMetadata.push(container),
     onDanglingBlockAttributes: (run) => danglingBlockAttributes.push(run),
   })
+  // A top-level line indented four columns is code, even if ownership has
+  // stripped those spaces from the parser's colon-fence line view. The AST can
+  // still carry that line as a claimed closer, so validate it in the source
+  // before accepting the parser's closed-fence status for lint.
+  const authoredLines = source.split(/\r\n|\n|\r/)
+  for (const node of doc.children) {
+    if (node.type !== 'admonition' && node.type !== 'directive' && node.type !== 'div' &&
+        node.type !== 'line_block' && node.type !== 'block_quote') continue
+    const pos = node.pos
+    if (!pos?.startLine || !pos.startColumn || !pos.endLine || pos.startOffset === undefined) continue
+    const opener = /^(:{3,})/.exec((authoredLines[pos.startLine - 1] ?? '').slice(pos.startColumn - 1))
+    const closer = /^(?: {4,}|\t+)(:{3,})[ \t]*$/.exec(authoredLines[pos.endLine - 1] ?? '')
+    if (!opener || !closer || opener[1]!.length !== closer[1]!.length) continue
+    if (unclosedContainers.some(site => site.line === pos.startLine && site.column === pos.startColumn)) continue
+    const kind: UnclosedContainer['kind'] = node.type === 'line_block' ? 'line block'
+      : node.type === 'block_quote' ? 'block quote' : node.type === 'div' ? 'div'
+        : node.type
+    unclosedContainers.push({ kind, line: pos.startLine, column: pos.startColumn,
+      startOffset: pos.startOffset, endOffset: pos.startOffset + opener[1]!.length,
+      fenceWidth: opener[1]!.length })
+  }
   // The AST carries codepoint positions over line-ending-normalized text; a
   // LintWarning reports UTF-16 into the source the caller passed, so a JS
   // consumer can slice it. Identity only when neither differs.
