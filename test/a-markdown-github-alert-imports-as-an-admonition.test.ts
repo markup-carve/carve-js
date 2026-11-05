@@ -56,6 +56,11 @@ describe('a GitHub alert blockquote', () => {
     expect(imported('> - > \\[!NOTE]\n>   > x')).toBe('> - > [!NOTE]\n>   > x')
   })
 
+  it('decodes a leftover label in a footnote quote and a definition quote', () => {
+    expect(imported('[^a]:\n    > \\[!NOTE]\n    > x')).toBe('[^a]: > [!NOTE]\n  > x')
+    expect(imported(':: Term\n:  > \\[!NOTE]\n   > x')).toContain(': > [!NOTE]')
+  })
+
   it('keeps an alert-shaped shortcut reference collapsed in a quote', () => {
     expect(imported('[!NOTE]: /u\n\n>\n> [!NOTE]\n> x')).toBe('> [!NOTE][]\n> x\n\n[!NOTE]: /u')
   })

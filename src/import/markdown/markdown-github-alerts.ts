@@ -64,10 +64,13 @@ export function decodeQuotedAlertEscapes(document: Document): boolean {
       }
     } else if (node.type === 'list') {
       for (const item of node.items) visit(item, inQuote)
+    } else if (node.type === 'definition_list') {
+      for (const item of node.items) for (const definition of item.definitions) for (const block of definition) visit(block, inQuote)
     } else if ('children' in node && Array.isArray(node.children)) {
       for (const child of node.children) visit(child as BlockNode, inQuote || node.type === 'block_quote')
     }
   }
   for (const node of document.children) visit(node, false)
+  for (const body of Object.values(document.footnoteDefs ?? {})) for (const node of body) visit(node, false)
   return changed
 }
