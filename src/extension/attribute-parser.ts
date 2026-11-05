@@ -87,17 +87,29 @@ export function unescapeAttrValue(v: string): string {
 }
 
 export function parseAttrs(src: string): Attrs {
+  return parseAttrsPass(src, false)
+}
+
+function parseAttrsPass(src: string, captureWrites: boolean): Attrs {
   const attrs: Attrs = {}
   const order: string[] = []
   const seen = new Set<string>()
   const note = (slot: string) => {
     if (!seen.has(slot)) { seen.add(slot); order.push(slot) }
   }
+  // Only a parsed case-variant id/class key needs write ordering. If one is
+  // found, repeat the pass with a log; ordinary class lists avoid its arrays.
+  let caseVariantSlotKey = false
   let writes: Array<[string, string | string[]]> | undefined
-  const write = (slot: string, value: string | string[]) => (writes ??= []).push([slot, value])
+  const write = (slot: string, value: string | string[]) => {
+    if (captureWrites) (writes ??= []).push([slot, value])
+  }
   const writeKey = (key: string, value: string) => {
     const fold = key.toLowerCase()
-    if (fold === 'id' || fold === 'class') write(key, value)
+    if (fold === 'id' || fold === 'class') {
+      caseVariantSlotKey = true
+      write(key, value)
+    }
   }
   const re = /(?:#([a-zA-Z0-9_][\w-]*))|(?:\.([a-zA-Z0-9_][\w-]*))|(?:([a-zA-Z_][\w-]*)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^}|"'\\ \t\n\r]+)))|(?:(?<=^|[ \t\n\r]):((?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)(?=[ \t\n\r]|$))|(?:([a-zA-Z][\w-]*))/g
   let m: RegExpExecArray | null
@@ -109,7 +121,7 @@ export function parseAttrs(src: string): Attrs {
     } else if (m[2]) {
       ;(attrs.classes ??= []).push(m[2])
       note('.class')
-      write('.class', [m[2]])
+      if (captureWrites) write('.class', [m[2]])
     } else if (m[3]) {
       const val =
         m[4] !== undefined ? unescapeAttrValue(m[4])
@@ -134,7 +146,7 @@ export function parseAttrs(src: string): Attrs {
         const tokens = val.split(/[\t\n\f\r ]+/).filter(t => t !== '')
         ;(attrs.classes ??= []).push(...(tokens.length ? tokens : [val]))
         note('.class')
-        write('.class', tokens.length ? tokens : [val])
+        if (captureWrites) write('.class', tokens.length ? tokens : [val])
       } else {
         writeKeyValue((attrs.keyValues ??= {}), m[3], val)
         note(m[3])
@@ -164,7 +176,7 @@ export function parseAttrs(src: string): Attrs {
         // duplicate `class` attribute would survive.
         ;(attrs.classes ??= []).push('')
         note('.class')
-        write('.class', [''])
+        if (captureWrites) write('.class', [''])
       } else {
         // Boolean attribute: a bare word with no value.
         writeKeyValue((attrs.keyValues ??= {}), m[8], '')
@@ -173,6 +185,7 @@ export function parseAttrs(src: string): Attrs {
       }
     }
   }
+  if (caseVariantSlotKey && !captureWrites) return parseAttrsPass(src, true)
   if (order.length) attrs.order = order
   recordSlotWrites(attrs, writes)
   return attrs
