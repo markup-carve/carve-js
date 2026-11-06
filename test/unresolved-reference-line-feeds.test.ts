@@ -10,7 +10,7 @@ const cases = [
   { source: '![a\\\nb][missing]\n', expected: '![a\\\nb][missing]\n' },
   { source: '![a `x\ny`][missing]\n', expected: '![a `x\ny`][missing]\n' },
   { source: '::: |\n![a\nb][missing]\n:::\n', expected: '![a\nb][missing]\n' },
-  { source: '::: \\\n![a\nb][missing]\n:::\n', expected: '![a\nb][missing]\n' },
+  { source: '{.hardbreaks}\n::: box\n![a\nb][missing]\n:::\n', expected: '![a b][missing]\n' },
   { source: '[a\r\nb\r\nb\\\r\nc][missing]\r\n', expected: '[a b b\\\nc][missing]\n' },
   { source: '[é\\\nb][missing]\n', expected: '[é\\\nb][missing]\n' },
   { source: '[x][`ab\ncd`]\n', expected: '[x][`ab cd`]\n' },

@@ -244,14 +244,6 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
         ctx.lineBlockDepth--
       }
     case 'div': {
-      if (node.attrs?.classes?.includes('hardbreaks')) {
-        const body = node.children.map((child) => {
-          if (child.type !== 'paragraph') return renderBlocks([child], ctx)
-          ctx.lineBlockDepth++
-          try { return renderBlocks([child], ctx) } finally { ctx.lineBlockDepth-- }
-        }).join('')
-        return node.label ? `${style(stripControls(node.label), BOLD)}\n\n${body}` : body
-      }
       if (!node.label) return renderBlocks(node.children, ctx)
       // Caption floor: a bold label line. The blockquote bar, when there is
       // one, is added by the `block_quote` case (markup-carve/carve#1689).

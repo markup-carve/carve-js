@@ -172,14 +172,6 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
       return `${labelLine}${body}`
     }
     case 'div':
-      if (node.attrs?.classes?.includes('hardbreaks')) {
-        const body = node.children.map((child) => {
-          if (child.type !== 'paragraph') return renderBlocks([child], ctx)
-          ctx.lineBlockDepth++
-          try { return renderBlocks([child], ctx) } finally { ctx.lineBlockDepth-- }
-        }).join('')
-        return node.label ? `${stripControls(node.label)}\n\n${body}` : body
-      }
       return node.label
         ? `${stripControls(node.label)}\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
