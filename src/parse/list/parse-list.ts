@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
-import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, parseBlockAttributeRun } from '../parse-prepass-core.js'
+import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
@@ -3182,25 +3182,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         frame = frame.deepest) holderColumn += frame.ownedColumn
       return indentColumns(l) >= holderColumn
     }
-    const followsRefusedRun = (l: string): boolean => {
-      const last = nestedSourceLines.at(-1)
-      if (!last?.includes('}')) return false
-      const previous = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
-      if (previous === undefined || isBlankLine(previous) || !insideRefusedHolder(l)) return false
-      const run: string[] = []
-      for (let at = nestedSourceLines.length - 1; at >= 0; at--) {
-        const line = nestedSourceLines[at]!
-        if (isBlankLine(line)) return false
-        run.unshift(line)
-        if (!line.trimStart().startsWith('{')) continue
-        if (run.length < 2) return false
-        const column = indentColumns(line)
-        if (!run.slice(1).some(next => indentColumns(next, column + 1) <= column)) return false
-        return line.trimStart().startsWith('{%') && last.includes('%}') ||
-          parseBlockAttributeRun(run.map((part, index) => index === 0 ? part.trimStart() : ' ' + part.trimStart()).join('\n')) !== null
-      }
-      return false
-    }
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       if (admission.kind === 'blank') lazyState.refusedBraceFollower = false
@@ -3211,8 +3192,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) && !/^(`{3,}|~{3,})/.test(l.trimStart()) &&
-          insideRefusedHolder(l) || isListMarkerLine(l.trimStart()) && followsRefusedRun(l)) && !isBlankLine(l)) {
+      if (lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) &&
+          !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) && !isBlankLine(l)) {
         lazyState.refusedBraceFollower = false
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)
