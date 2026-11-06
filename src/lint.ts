@@ -2997,11 +2997,12 @@ function collectTableAttributeWarnings(
     }
     const aligns = kv.aligns?.split(',') ?? []
     const valigns = kv.valigns?.split(',') ?? []
-    const headerRows = table.rows.filter((row, index) =>
-      index < (table.rowGroups?.headRows ?? 0) || row.cells.some((cell) => cell.header))
+    // Promotion by header-rows changes rendering, not the authored marker run.
+    // Only a cell with its own header marker can supply a column default.
+    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
     for (let column = 0; column < widest; column++) {
-      const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
-      const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
+      const markerAlign = headerRows.some((row) => row.cells[column]?.header && row.cells[column]?.align !== undefined)
+      const markerValign = headerRows.some((row) => row.cells[column]?.header && row.cells[column]?.valign !== undefined)
       if ((markerAlign && aligns[column]?.trim()) || (markerValign && valigns[column]?.trim())) {
         addTableWarning(
           'table-column-overlap',
