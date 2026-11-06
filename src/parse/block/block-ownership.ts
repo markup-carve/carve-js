@@ -1035,7 +1035,10 @@ export function ownLines(
     // The item whose `+` attached the fence goes on at its content column after the blank (§17 L4).
     function handsBackAttachedHost(): boolean {
       const host = attachedHost
-      if (m.rest !== '' || !top().endsAtBlank || host?.at(-1)?.kind !== 'item' || !nextLineReaches(host.at(-1)!, at, quotes)) return false
+      if (m.rest !== '' || !top().endsAtBlank) return false
+      // Only the first blank decides, so a run of blanks is scanned once.
+      top().endsAtBlank = false
+      if (host?.at(-1)?.kind !== 'item' || !nextLineReaches(host.at(-1)!, at, quotes)) return false
       frames.length = 0
       frames.push(...host)
       top().last = 'block'
