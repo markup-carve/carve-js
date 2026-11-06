@@ -135,6 +135,32 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     walkMarkerOwnerPrefix,
   } = helpers
 
+  // Whether a `: ` line at `column` (the last of `nested`) is a description: the nearest line at or left
+  // of it, read behind its markers, is a term or a description there. A term holds no body, so a deeper
+  // line after it ended the entry (carve#5289).
+  const descriptionEntryAbove = (lead: string, nested: readonly string[], column: number): boolean => {
+    let deeper = false
+    for (let k = nested.length - 2; k >= -1; k--) {
+      const raw = stripLazyFrame(k < 0 ? lead : nested[k]!)
+      let rest = raw.replace(/^[ \t]+/, '')
+      // A line comment is invisible: it neither ends the entry nor holds a body.
+      if (rest === '' || (rest.startsWith('%%') && commentFenceRun(rest) === undefined)) continue
+      let at = indentColumns(raw)
+      if (at > column) {
+        deeper = true
+        continue
+      }
+      while (at < column && isListMarkerLine(rest)) {
+        const width = markerContentColumn(rest)
+        if (width <= 0) break
+        const after = rest.slice(width)
+        at += width + indentColumns(after)
+        rest = after.replace(/^[ \t]+/, '')
+      }
+      return at === column && /^::? /.test(rest) && !(deeper && /^:: /.test(rest))
+    }
+    return false
+  }
   const attachesQuote = (lines: readonly string[]): boolean =>
     /^>/.test(lines.find(line => !isBlankLine(line) && !isBlockAttributeLine(line.trimStart())) ?? '')
   // The `<dd>` body column a column-0 line of a `+`-attached block leaves open: 0 after a term, -1 outside a description list.
@@ -722,6 +748,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // `quoteInner` answers.
       ownedColumn,
       ownedAuthored: false,
+      ...(ownedColumn > 0 && RE_DEFLIST_TERM.test(content.slice(ownedColumn)) ? { ownedTerm: true } : {}),
       ownedQuote: () => ownedColumn > 0 ? markerLineQuoteState(content.slice(ownedColumn), memo) : null,
     }
     return { leadState, lazyState }
@@ -2625,7 +2652,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       } else {
         const trimmed = dedented.trimStart()
         unindented = trimmed
-        const descriptionLead = RE_DEFLIST_DEF.exec(trimmed)
+        const descriptionLead = RE_DEFLIST_DEF.test(trimmed) &&
+          descriptionEntryAbove(content, nested, indentColumns(dedented)) ? RE_DEFLIST_DEF.exec(trimmed) : null
         const bottom = descendantOpaque === null && lazyState.deepest?.opaque?.kind !== 'code' &&
           (trimmed.includes('`') || trimmed.includes('~')) &&
           (isListMarkerLine(trimmed) || RE_DEFLIST_DEF.test(trimmed))

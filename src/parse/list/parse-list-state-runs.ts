@@ -277,7 +277,10 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
       frameColumn: line.runColumns!,
       // The marker line's quote is the sub-item's first block, so its next line continues it.
       quoteInner: RE_BLOCKQUOTE.test(dedented) ? state.ownedQuote?.() ?? null : null,
+      // A term behind the marker is the sub-item's entry, so a `: ` line below it is its description.
+      ...(state.ownedTerm === true ? { inDefList: 'term' as const } : {}),
     })
+    delete state.ownedTerm
     trackItemLazyState(
       dedented,
       inner,
