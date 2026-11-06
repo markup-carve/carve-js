@@ -593,8 +593,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             isSiblingMarker(shape, next)) break
         for (let index = 0; index < gap; index++) lexer.consume()
         const reached = session.collectAttachedListBlock(lexer, isItemAttachBoundary,
-          shape.baseIndent, false, ownContentColumn)
+          shape.baseIndent, false, ownContentColumn, ownContentColumn)
         if (reached.lines.length === 0) break
+        // This is a later block of the outer item, not the block the inner
+        // marker attached. An unclosed fence keeps its blanks until a line
+        // leaves this item; a closer below the item column cannot close it.
+        const opener = reached.lines[0] === undefined ? '' : sliceColumns(reached.lines[0], ownContentColumn, true)
+        const run = opensCodeFence(opener) ? /^(`{3,}|~{3,})/.exec(opener)?.[1] : undefined
+        if (run !== undefined && !reached.lines.slice(1).some(line => fenceCloseRe(run).test(sliceColumns(line, ownContentColumn, true)))) {
+          for (let line = lexer.peek(); line !== undefined &&
+            (isBlankLine(line) || indentColumns(line) >= ownContentColumn); line = lexer.peek()) {
+            reached.lines.push(line)
+            reached.lineNumbers.push(lexer.lineNumber(lexer.pos))
+            lexer.consume()
+          }
+        }
         const body = reached.lines.map(line => sliceColumns(line, ownContentColumn, true))
         const bodyLexer = nestedSubLexer(lexer, body, reached.startLineIndex, reached.lineNumbers)
         const laterBlocks = session.parseBlocks(bodyLexer, 0)
