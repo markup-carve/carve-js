@@ -77,7 +77,7 @@ export function entriesToWire(items: DefinitionItem[]): DefinitionEntryNode[] {
       const recorded = item.definitionSpans?.[index]
       const derived = absentDescriptionPosition.has(definition) ? undefined : span(definition)
       const pos = recorded ? { ...recorded } : derived
-      if (pos && recorded && derived && !endsAtConsumedMarker.has(recorded)) {
+      if (pos && recorded && derived && (!endsAtConsumedMarker.has(recorded) || definition.length > 0)) {
         pos.endLine = derived.endLine
         if (derived.endColumn !== undefined) pos.endColumn = derived.endColumn
         if (derived.endOffset !== undefined) pos.endOffset = derived.endOffset

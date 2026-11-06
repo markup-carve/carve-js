@@ -15,20 +15,20 @@ function* walk(node: Node, path = '$'): Generator<[Node, string]> {
 
 // carve#5013 writes a consumed `+` as a `%%` stand-in, one column wider than the `+`; carve#5157 leaves no node for it.
 // Spans must come from the source: no stand-in span, no sibling overlap, every node inside its parent.
-describe('a consumed plus keeps its host span to the authored marker', () => {
-  it('ends the first item after its plus and leaves no stand-in (carve-js#4367, carve#5157)', () => {
+describe('a consumed plus keeps an empty host span; a refused tail stops at the last child', () => {
+  it('ends a nonempty first item after its child and leaves no stand-in (carve#5246)', () => {
     const list = wire('- a\n+\n- x\n').children![0]!
-    expect(list.items!.map((item) => [item.pos?.startOffset, item.pos?.endOffset])).toEqual([[0, 5], [6, 9]])
+    expect(list.items!.map((item) => [item.pos?.startOffset, item.pos?.endOffset])).toEqual([[0, 3], [6, 9]])
     expect(list.items![0]!.children!.map((child) => child.type)).toEqual(['paragraph'])
   })
 
   it.each([
-    ['- a\n+\n', [0, 5]],
+    ['- a\n+\n', [0, 3]],
     ['> +\n', [0, 3]],
-    [':: t\n: q\n+\n+\n', [5, 10]],
+    [':: t\n: q\n+\n+\n', [5, 8]],
     [':: t\n: +\n    flush\n', [5, 18]],
-    ['﻿- a\n+\n- x\n', [1, 6]],
-    ['- a\r\n+\r\n- x\r\n', [0, 6]],
+    ['﻿- a\n+\n- x\n', [1, 4]],
+    ['- a\r\n+\r\n- x\r\n', [0, 3]],
   ])('places the host of %j from the source', (source, [start, end]) => {
     const doc = wire(source)
     expect([...walk(doc)].some(([node]) => node.type === 'comment')).toBe(false)
