@@ -20,6 +20,7 @@ import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList } from './parse-footnote-session.js'
 import { taskBoxColumns } from './task-box-frame.js'
+import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import {
   continueWrappedAttributeBlock,
   markerLineBottomBlock,
@@ -452,6 +453,12 @@ export function createDefinitionListParser(
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
         const firstBlock = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
+        const blockCut = pulledParagraphBlockCut(firstBlock.lines, contentCol)
+        if (blockCut > 0) {
+          lexer.pos -= firstBlock.lines.length - blockCut
+          firstBlock.lines.length = blockCut
+          firstBlock.lineNumbers.length = blockCut
+        }
         attachedOpenCodeFence = keepsOpenCodeFence(firstBlock.lines)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)

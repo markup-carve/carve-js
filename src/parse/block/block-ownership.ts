@@ -758,10 +758,7 @@ export function ownLines(
     // An attribute run after it leads the `+`'s one block, so the item stays open for the line
     // after the run (CARVE-P0-008, corpus 325). A description-hosted list's readers refuse that `+`.
     if (lonePlus && attrRunLeads(lonePlus, form)) {
-      if (form.attrLines) attrRest = { left: form.attrLines, cut: m.col - lonePlus.markerCanon!, floor: lonePlus.markerCanon! }
-      lead(lonePlus.markerCanon!)
-      finish()
-      afterPlus = true
+      leadAttrRun(lonePlus, form)
       continue
     }
     // Any other block it attaches there meets the `+` where the walk moved it (§17 L3, carve#4367).
@@ -880,9 +877,23 @@ export function ownLines(
     }
 
     function attrRunLeads(host: Frame, form: Form): boolean {
-      return host.kind === 'item' && reached === frames.length - 2 && m.col === host.markerCol &&
-        frames[reached]!.kind !== 'dd' && (form.attrLines !== undefined || isAttrLine(trimEndSpaceTab(m.rest))) &&
-        lineAfterRun(at + 1 + (form.attrLines ?? 0), reached) >= host.col
+      const pulledDescription = host.kind === 'dd' && host.plus === at - 1
+      if ((host.kind !== 'item' || frames[reached]!.kind === 'dd') && !pulledDescription) return false
+      if (reached !== frames.length - 2 || m.col !== host.markerCol ||
+        (form.attrLines === undefined && !isAttrLine(trimEndSpaceTab(m.rest)))) return false
+      // The block it leads stands at the item's content column, or at the marker column the `+` pulls it to.
+      const after = lineAfterRun(at + 1 + (form.attrLines ?? 0), reached)
+      return after >= host.col || after === host.markerCol
+    }
+
+    function leadAttrRun(host: Frame, form: Form): void {
+      if (form.attrLines) attrRest = { left: form.attrLines, cut: m.col - host.markerCanon!, floor: host.markerCanon! }
+      // A description's pulled block is the one after the run.
+      if (host.kind === 'dd') host.plus = at + (form.attrLines ?? 0)
+      lead(host.markerCanon!)
+      finish()
+      afterPlus = true
+      if (trace) emit(at, 'S5', ownerPath(), 'CARVE-P0-024', 'leaf', { plus: at })
     }
 
     function landsAtMarker(host: Frame, form: Form): boolean {

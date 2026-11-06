@@ -46,24 +46,25 @@ describe('a definition interrupts a paragraph a plus attached', () => {
       "<ul>\n  <li>n</li>\n</ul>",
     ],
     [
-      'a heading at the content column still folds',
+      // carve#5349 applies the carve#5331 ruling: a block at the content column ends the pulled paragraph.
+      'a heading at the content column ends the paragraph',
       '- +\nn\n  # h\n',
-      "<ul>\n  <li>n\n# h</li>\n</ul>",
+      "<ul>\n  <li>n\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>",
     ],
     [
       'a definition inside a folded fence stays its payload',
       '- +\nn\n  ```\n  [r]: /u\n  ```\n',
-      "<ul>\n  <li>n\n<code>\n[r]: /u\n</code></li>\n</ul>",
+      "<ul>\n  <li>n\n    <pre><code>[r]: /u\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'a shorter closer leaves the next definition in the folded fence',
       '- +\nn\n  ~~~~\n  [r]: /u\n  ~~~\n  [^f]: x\n',
-      "<ul>\n  <li>n\n~~~~\n[r]: /u\n~~~\n[^f]: x</li>\n</ul>",
+      "<ul>\n  <li>n\n    <pre><code>[r]: /u\n~~~\n[^f]: x\n</code></pre>\n  </li>\n</ul>",
     ],
     [
       'a definition after a colon fence line interrupts',
       '- +\nn\n  ::: note\n  [r]: /u\n  :::\n',
-      "<ul>\n  <li>n\n::: note\n:::</li>\n</ul>",
+      "<ul>\n  <li>n\n    <aside class=\"admonition note\" aria-label=\"Note\">\n\n    </aside>\n  </li>\n</ul>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
