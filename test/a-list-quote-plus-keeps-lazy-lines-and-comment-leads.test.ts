@@ -84,6 +84,20 @@ it('ends an unclosed span at a column-0 line after a list quote (carve#5335)', (
 <p>after</p>`)
 })
 
+it('ends the item at a marker-column colon after a comment-led description list (#4595)', () => {
+  expect(carveToHtml('- > +\n  %%%\n  %%%\n  :: t\n  : d\n: d\n').trim()).toBe(`<ul>
+  <li>
+    <blockquote>
+      <dl>
+        <dt>t</dt>
+        <dd>d</dd>
+      </dl>
+    </blockquote>
+  </li>
+</ul>
+<p>: d</p>`)
+})
+
 it('keeps a nested list under a stacked item\'s quote', () => {
   expect(carveToHtml('- - > +\n    - a\n').trim()).toBe(`<ul>
   <li>
