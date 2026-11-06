@@ -3568,7 +3568,19 @@ function collectFootnoteDefinitionWarnings(
     if (col < 1) continue
     const start = (lineStart[line - 1] ?? 0) + col - 1
     firstSites.set(label, { line, col, start, end: start + label.length + 3 })
-    firstByWhitespaceKey.set(whitespaceKey(label), label)
+  }
+  for (const [label, site] of [...firstSites].sort((a, b) => a[1].start - b[1].start)) {
+    const key = whitespaceKey(label)
+    const twin = firstByWhitespaceKey.get(key)
+    if (twin === undefined) firstByWhitespaceKey.set(key, label)
+    else if (twin !== label) out.push({
+      line: site.line,
+      column: site.col,
+      rule: 'footnote-labels-differ-only-in-whitespace',
+      message: `Footnote definition [^${label}] normalizes to the same key as [^${twin}]; the first definition wins. Normalized key: ${JSON.stringify(key)}.`,
+      start: site.start,
+      end: site.end,
+    })
   }
 
   // THE PREVIOUS NON-BLANK LINE, the same gate the parser reads (carve-js#1589).
