@@ -3004,20 +3004,33 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Its pre-span stanza then answers S4 for the containing item.
     let verseOwnerScanEnd = 0
     let verseOwnerValid = false
+    let verseStanzaSeen = false
     let termlessDescriptionSpan = false
     const validDescendantVerseOwner = (): boolean => {
       if (nested.length < verseOwnerScanEnd) {
         verseOwnerScanEnd = 0
         verseOwnerValid = false
+        verseStanzaSeen = false
         termlessDescriptionSpan = false
       }
       for (let at = verseOwnerScanEnd; at < nested.length; at++) {
         let candidate = nested[at]!.trimStart()
         for (let width = walkMarkerOwnerPrefix(candidate); width > 0;
             width = walkMarkerOwnerPrefix(candidate)) candidate = candidate.slice(width).trimStart()
-        if (RE_LINE_BLOCK_OPEN.test(candidate) &&
-            !bodyHoldsOpenCommentSpan(nested.slice(0, at),
-              { ...newCommentSpanScan(), markerOwners: true }, degradedOpeners)) verseOwnerValid = true
+        if (verseOwnerValid && candidate === ':::') {
+          verseOwnerValid = false
+          verseStanzaSeen = false
+        } else if (RE_LINE_BLOCK_OPEN.test(candidate) ||
+            verseOwnerValid && !verseStanzaSeen && candidate !== '' && !candidate.startsWith('%%')) {
+          const prior = { ...newCommentSpanScan(), markerOwners: true }
+          bodyHoldsOpenCommentSpan(nested.slice(0, at), prior, degradedOpeners)
+          if (prior.opaque === null) {
+            if (RE_LINE_BLOCK_OPEN.test(candidate)) {
+              verseOwnerValid = true
+              verseStanzaSeen = false
+            } else verseStanzaSeen = true
+          }
+        }
         if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) {
           verseOwnerValid = false
           termlessDescriptionSpan = true
@@ -3032,7 +3045,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= authoredItemMarkerColumn &&
           (RE_DEFLIST_DEF.test(text) || RE_DEFLIST_TERM.test(text)) &&
           !validDescendantVerseOwner()) return false
-      if (validDescendantVerseOwner() &&
+      if (validDescendantVerseOwner() && verseStanzaSeen &&
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)) return true
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true &&
