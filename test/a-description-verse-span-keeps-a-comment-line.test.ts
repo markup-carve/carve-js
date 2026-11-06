@@ -6,4 +6,3 @@ it('keeps a comment-shaped line in the verse span and folds the later lazy line 
     '<dl>\n  <dt>t</dt>\n  <dd>\n    <div class="line-block">\n      <p>x<br>\nmore</p>\n    </div>\n  </dd>\n</dl>',
   )
 })
-
