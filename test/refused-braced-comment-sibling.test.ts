@@ -12,3 +12,9 @@ it('keeps a marker inside the refused comment holder as paragraph text', () => {
     '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n- z</li>\n    </ul>\n  </li>\n</ul>',
   )
 })
+
+it('keeps the paragraph open when a refused comment closer has trailing text', () => {
+  expect(carveToHtml('- a\n  {% c\n  d %} tail\n  - z\n')).toBe(
+    '<ul>\n  <li>a\n{% c\nd %} tail\n- z</li>\n</ul>',
+  )
+})
