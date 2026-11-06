@@ -99,6 +99,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     markerContentColumn,
     markerDecision,
     markerFreeContent,
+    stackedItemContentColumn,
     markerLineBottomBlock,
     markerLineQuoteState,
     markerLineState,
@@ -2544,7 +2545,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const markerContent = markerFreeContent(dedented)
         const run = commentFenceRun(markerContent)
         if (run !== undefined) {
-          const hostColumn = contentCol + markerContentColumn(dedented)
+          // The span's owner is the bottom item of a marker stack, not the first marker.
+          const hostColumn = contentCol + stackedItemContentColumn(dedented)
           let at = lexer.pos + 1
           for (; at < lexer.lineCount; at++) {
             const line = lexer.lineAt(at)!

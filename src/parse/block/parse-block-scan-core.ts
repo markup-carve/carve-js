@@ -27,7 +27,9 @@ import {
   colonFenceOpenerLen,
   commentFenceRun,
   fenceCloseRe,
+  markerPrefixLength,
   payloadFenceHasCloser,
+  prefixWalkBound,
   RE_COMMENT_BLOCK_ANY,
   RE_FENCE_CLOSER,
 } from './parse-quote-core.js'
@@ -739,13 +741,15 @@ export function markerFreeContent(line: string): string {
  */
 export interface CommentSpanScan {
   index: number
-  /** `owner`: the body column of a span opened on a description or note lead; a line below it ends the span (PART 0 S1). */
+  /** `owner`: the body column of a span opened on a description or note lead (or a list marker, with `markerOwners`); a line below it ends the span (PART 0 S1). */
   opaque: { comment: boolean; char: string; run: number; owner?: number } | null
   atBlockStart: boolean
   /** The last body line of each delimiter width, for `bodyHoldsClosableCommentSpan`. */
   runs?: { indexed: number; last: Map<number, number> }
   /** Columns of the lines read so far, nearest last, each with whether it is a `::`/`:` entry line. */
   entries?: Array<[number, boolean]>
+  /** Whether a span opened behind list markers is owned by the bottom item, so a line below its column ends it. */
+  markerOwners?: boolean
 }
 
 const RE_NOTE_LEAD = /^\[\^[^\]]+\]: +(?=[^ \t])/
@@ -816,6 +820,8 @@ export function bodyHoldsOpenCommentSpan(
     if (comment !== undefined && !isDegraded(scan.index, comment)) {
       scan.opaque = { comment: true, char: '%', run: comment }
       if (lead !== null) scan.opaque.owner = column + (lead[0][0] === '[' ? FOOTNOTE_BODY_COLUMN : lead[0].length)
+      // Behind list markers the span is the bottom item's (PART 0 S1).
+      else if (scan.markerOwners === true && opener !== line) scan.opaque.owner = stackedItemContentColumn(raw)
     }
   }
 
@@ -1160,6 +1166,22 @@ export function taskMatch(line: string, terminatorFree = false): RegExpExecArray
 // captures the item content as its LAST group, so the content column is the
 // column width of everything before that content. Used to relate a parsed
 // child list to the authored paragraph column (carve#322).
+/** The content column of the bottom item of a line's marker stack, or -1 when the line has no marker. */
+export function stackedItemContentColumn(line: string): number {
+  const bound = prefixWalkBound(line)
+  let bottom = -1
+  let at = 0
+  for (let width = markerPrefixLength(line, at, bound); width > 0; width = markerPrefixLength(line, at, bound)) {
+    bottom = at
+    at += width
+  }
+  if (bottom < 0) return -1
+  const segment = line.slice(bottom, at)
+  const lead = segment.length - segment.replace(/^[ \t]+/, '').length
+  return indentColumns(line.slice(0, bottom + lead).replace(/[^ \t]/g, ' ') + 'x') +
+    markerContentColumn(segment.slice(lead) + 'x')
+}
+
 export function markerContentColumn(line: string, terminatorFree = false, knownColumn?: number): number {
   // Mirror parseList's own content-column computation so the parsed-child check
   // uses the SAME threshold the recursive sub-list parse uses -- including the

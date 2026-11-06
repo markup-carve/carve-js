@@ -389,7 +389,7 @@ export function createDefinitionListParser(
       // definition registers, an attribute attaches - and the fold §10 I5 asks for
       // has not happened (markup-carve/carve-js#1550).
       const bodyBaseEligible = new Set<number>()
-      const bodySpanScan = newCommentSpanScan()
+      const bodySpanScan = { ...newCommentSpanScan(), markerOwners: true }
       // Has any line of this body been a block QUOTE?
       //
       // Once one has, the body's paragraph is no longer necessarily the innermost
