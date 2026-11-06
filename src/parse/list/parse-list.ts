@@ -1709,17 +1709,36 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let belowOpenDescription = false
     let scannedNestedTerms = 0
     let hasNestedTerm = markerLineTerm
+    let completedDescription = false
+    let descriptionOpen = false
+    let blankAfterDescription = false
     const termScan = verbatimOnlyLazyState()
     const bodyHasTerm = (): boolean => {
       while (scannedNestedTerms < nested.length) {
         const line = nested[scannedNestedTerms]!
-        if (termScan.opaque === null && termScan.literalColon === undefined &&
-            RE_DEFLIST_TERM.test(line.trimStart())) hasNestedTerm = true
+        const markerAvailable = termScan.opaque === null && termScan.literalColon === undefined
+        if (markerAvailable &&
+            RE_DEFLIST_TERM.test(line.trimStart())) {
+          hasNestedTerm = true
+          completedDescription = false
+          descriptionOpen = false
+        } else if (markerAvailable &&
+            hasNestedTerm && RE_DEFLIST_DEF.test(line.trimStart()) &&
+            (termScan.inDefList === 'term' || termScan.inDefList === 'description')) {
+          completedDescription = true
+          descriptionOpen = true
+        } else if (descriptionOpen && markerAvailable && line.trim() !== '' &&
+            indentColumns(line) === 0 &&
+            (blankAfterDescription || lineOpensItemBlock(line.trimStart()))) {
+          descriptionOpen = false
+        }
+        if (descriptionOpen) blankAfterDescription = line.trim() === ''
         trackItemLazyState(line, termScan, true, () => false)
         scannedNestedTerms++
       }
-      return hasNestedTerm
+      return hasNestedTerm && (!completedDescription || descriptionOpen)
     }
+    const hasLiveDefinitionHost = (): boolean => definitionHostColumn !== undefined && bodyHasTerm()
     // ...and about one taken at the content column.
     let strippedPrefix: number | undefined
     let placed = ''
@@ -2207,7 +2226,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (RE_DEFLIST_DEF.test(l.trimStart()) &&
           lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(l) === authoredItemMarkerColumn &&
           !insideOpenQuoteParagraph(lazyState) &&
-          (definitionHostColumn !== undefined || lazyState.deepest?.inDefList === 'description' || bodyHasTerm())) return 'stop'
+          (bodyHasTerm() || lazyState.deepest?.inDefList === 'description')) return 'stop'
       // A definition marker at this item's authored marker column cannot be
       // claimed by a description inside a descendant item. The descendant
       // verse's stanza is behind that definition boundary.
@@ -2456,7 +2475,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // marker column. Leave that line in the surviving item's body.
       belowDefinitionEntry = !atDescendantDescriptionMarker() &&
         lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
-        !missesNestedTerm && definitionHostColumn !== undefined &&
+        !missesNestedTerm && hasLiveDefinitionHost() &&
         (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
         ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
           (markerLineTerm && lazyState.inDefList === 'description' &&
