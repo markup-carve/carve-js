@@ -781,8 +781,11 @@ export function fencedBlockEnd(scan: AttachedScan): number {
   const run = colonBlockOpenerRun(first)
   if (run !== null) {
     let end = scan.end
+    // A boundary past the opener's own closer cannot end it, so the scan stops there.
+    const ownClose = scan.boundary === undefined ? -1 : findColonCloser(scan, 0, run)
+    const limit = ownClose === -1 ? scan.end : scan.base + ownClose
     if (scan.boundary !== undefined) {
-      for (let offset = 1; scan.base + offset < scan.end; offset++) {
+      for (let offset = 1; scan.base + offset < limit; offset++) {
         const line = scan.at(offset)
         if (line === undefined) break
         const opaque = opaqueSpanEnd(scan, offset)
