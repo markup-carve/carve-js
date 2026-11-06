@@ -2289,6 +2289,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return column !== undefined && definitionHostColumn !== undefined && definitionBodyColumn !== undefined &&
         column >= definitionHostColumn && column < definitionBodyColumn
     }
+    const verseSpanDefinitionBelowBody = (line: string): boolean => {
+      const column = verseSpanDefinitionColumn(line)
+      return column !== undefined && definitionBodyColumn !== undefined &&
+        column > physicalItemMarkerColumn && column < definitionBodyColumn
+    }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
@@ -2336,10 +2341,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
-      const verseDefinitionColumn = verseSpanDefinitionColumn(l)
       if (belowDefinitionEntry && !descendantLineBlockTakes(l) &&
-          !(verseDefinitionColumn !== undefined && definitionBodyColumn !== undefined &&
-            verseDefinitionColumn < definitionBodyColumn) &&
+          !verseSpanDefinitionBelowBody(l) &&
           !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
@@ -2993,6 +2996,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const descendantVerseClaimAfterMiss = (line: string): boolean => {
       const text = line.trimStart()
       if (RE_COMMENT_LINE.test(text)) return false
+      if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= physicalItemMarkerColumn) return false
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true) return true
       return false
@@ -3061,10 +3065,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)) ||
         (((lazyState.literalColon !== undefined && lazyState.literalColon.opaque === undefined) || (lazyState.authoredColon !== undefined && lazyState.opaque === null)) &&
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
+    const termlessDefinitionNeedsLazyFrame = (line: string): boolean =>
+      indentColumns(line, contentCol) < contentCol && RE_DEFLIST_DEF.test(line.trimStart()) &&
+      !descendantVerseClaimAfterMiss(line) &&
+      lazyState.inDefList === false && !lazyState.deepest?.inDefList
     const lazyLineFor = (l: string): string => {
-      if (indentColumns(l, contentCol) < contentCol && RE_DEFLIST_DEF.test(l.trimStart()) &&
-          !descendantVerseClaimAfterMiss(l) &&
-          lazyState.inDefList === false && !lazyState.deepest?.inDefList)
+      if (termlessDefinitionNeedsLazyFrame(l))
         return LAZY_FRAME + l.trimStart()
       if (captionLeafOpen(l)) return LAZY_FRAME + l.trimStart()
       if ((enclosingLazy || ancestorTermBand) && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term'))

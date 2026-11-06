@@ -38,3 +38,9 @@ it('does not promote a marker at the description body column', () => {
     '<ul>\n  <li>b\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <div class="line-block">\n          <p>v</p>\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ul>',
   )
 })
+
+it('leaves a definition-shaped line at the item marker column outside the list', () => {
+  expect(carveToHtml('- a\n  :: t\n  : ::: |\n    v\n    %%%\n  %% c\n: d\n')).toBe(
+    '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <div class="line-block">\n          <p>v</p>\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>: d</p>',
+  )
+})
