@@ -1004,8 +1004,8 @@ export function ownLines(
       const rest = restInQuotes(at, attachedHost!.filter((f) => f.kind === 'quote').length)
       const follower = lines[at + 1]
       const atMarker = CONT_MARKER.test(m.rest) && docColumn(lines[at]!, m.rest) === host.docMarker &&
-        follower !== undefined && follower.trim() !== '' &&
-        docColumn(follower, follower.trimStart()) === host.docMarker
+        (follower === undefined || follower.trim() === '' ||
+          docColumn(follower, follower.trimStart()) === host.docMarker)
       if (!atMarker && (rest === undefined || !CONT_MARKER.test(trimEndSpaceTab(rest).trimStart()))) return
       frames.length = 0
       frames.push(...attachedHost!)

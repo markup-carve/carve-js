@@ -14,4 +14,11 @@ describe('a quote reclaims its next marker after an attached block', () => {
       '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
     )
   })
+
+  it('restores the quote before refusing a marker with a blank follower', () => {
+    const source = '>\n+\n- a\n+\n\n  ```\n  c\n  ```\n'
+    expect(carveToHtml(source)).toBe(
+      '<blockquote>\n  <ul>\n    <li>a</li>\n  </ul>\n</blockquote>\n<pre><code>c\n</code></pre>',
+    )
+  })
 })
