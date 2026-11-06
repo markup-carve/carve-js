@@ -19,4 +19,10 @@ describe('definition marker boundary after a description closes', () => {
       '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <h1 id="H">H</h1>\n    w\n  </li>\n</ul>\n<p>: z</p>',
     )
   })
+
+  it('lets a nested item paragraph take the line after the description closes', () => {
+    expect(carveToHtml('- a\n  :: t\n  : u\n\n  - x\n: c\n')).toBe(
+      '<ul>\n  <li><p>a</p>\n    <dl>\n      <dt>t</dt>\n      <dd>u</dd>\n    </dl>\n    <ul>\n      <li>x\n: c</li>\n    </ul>\n  </li>\n</ul>',
+    )
+  })
 })
