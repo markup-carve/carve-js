@@ -28,4 +28,10 @@ describe('a comment block in a line block', () => {
   it('four spaces stay verse', () => {
     expect(compact('::: |\n    %%%\n:::\n')).toContain('%%%')
   })
+
+  it('keeps a stanza open after overindented percent runs in a description', () => {
+    expect(compact(':: u\n: ::: |\n      %%%\n      %%%\nz\n')).toBe(
+      '<dl><dt>u</dt><dd><div class="line-block"><p>&nbsp;&nbsp;&nbsp;&nbsp;%%%<br>\n&nbsp;&nbsp;&nbsp;&nbsp;%%%<br>\nz</p></div></dd></dl>',
+    )
+  })
 })

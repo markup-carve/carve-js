@@ -250,7 +250,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       state.inDefList = false
       return true
     }
-    const group = opaqueGroupCloser(text)
+    // A percent run beyond the verse comment margin is payload, not a span.
+    const group = indentColumns(content) <= open.column + 3 || !text.startsWith('%%%')
+      ? opaqueGroupCloser(text) : null
     const codeAtBase = opensCodeFence(text) && (column === 0 || column === open.column)
     const spanFoldable = state.lazyFoldable
     if (group && (group.belowBaseCloses ? (line.hasLiteralCommentCloser ?? hasCommentCloser)(group.run) :
