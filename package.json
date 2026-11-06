@@ -1,6 +1,6 @@
 {
   "name": "@markup-carve/carve",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "description": "Reference TypeScript implementation of the Carve markup language",
   "license": "MIT",
