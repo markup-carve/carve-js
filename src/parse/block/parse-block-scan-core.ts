@@ -1017,6 +1017,10 @@ export function consumeOpaqueColonFenceBodySpan(
       const innerText = lexer.peek()!
       const commentClose = RE_COMMENT_BLOCK_ANY.exec(innerText)
       const closes = commentClose !== null && commentClose[1]!.length === fence
+      // A visible line short of this span's owner ends the span under S1.
+      // The colon container then classifies that same line as its own closer.
+      if (!closes && literalOwnerLine === undefined && !isBlankLine(innerText) &&
+          !innerText.trimStart().startsWith('%%') && indentColumns(innerText) < indentColumns(text)) break
       // Any other lazy line misses the span's owner and ends the span (PART 0 S1); an
       // item's comment-shaped lazy line stays payload (carve#4994).
       const number = lexer.lineNumber(innerLineIndex)
