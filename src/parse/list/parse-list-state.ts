@@ -196,8 +196,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
 
   function noteFrameParagraphOpen(frame: ItemLazyState): boolean {
     // A line block takes a lazy line while its stanza is open (PART 9 §23).
-    if (frame.literalColon !== undefined && frame.divDepth === 1) return frame.opaque === null && verseStanzaOpen(frame)
-    return frame.lazyFoldable && frame.opaque === null && frame.divDepth === 0 &&
+    if (frame.literalColon !== undefined) return frame.opaque === null && verseStanzaOpen(frame)
+    // A div's open paragraph takes one too (PART 0 S4).
+    return frame.lazyFoldable && frame.opaque === null &&
       frame.deepest?.lazyFoldable !== false && frame.deepest?.opaque == null
   }
 
