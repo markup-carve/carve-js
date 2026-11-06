@@ -7,4 +7,11 @@ describe('a quote reclaims its next marker after an attached block', () => {
       `<blockquote>\n  ${first.startsWith('*') ? '<ul>' : '<ol>'}\n    <li>e</li>\n  ${first.startsWith('*') ? '</ul>' : '</ol>'}\n  <ul>\n    <li>y</li>\n  </ul>\n</blockquote>`,
     )
   })
+
+  it('lets an indented follower continue the attached item', () => {
+    const source = '>\n+\n- a\n+\n  ```\n  code\n  ```\n'
+    expect(carveToHtml(source)).toBe(
+      '<blockquote>\n  <ul>\n    <li>a\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n</blockquote>',
+    )
+  })
 })
