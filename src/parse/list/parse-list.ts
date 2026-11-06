@@ -2106,7 +2106,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // divergence from djot, which attaches at any indent past the marker.
       // An ancestor's folded text needs an open paragraph in this item.
       // A comment can retain the ancestor's frame after closing this leaf.
-      if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker && !insideOpenFence(lazyState)) return 'stop'
+      if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker &&
+          !insideOpenFence(lazyState) && !descendantVerseClaimAfterMiss(l)) return 'stop'
       lw = indentColumns(l, contentCol)
       // The note may have ended while this item's paragraph still owns a
       // follower. Check the authored columns: rebasing the note can make the
@@ -3003,18 +3004,33 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Its pre-span stanza then answers S4 for the containing item.
     let verseOwnerScanEnd = 0
     let verseOwnerValid = false
+    let verseStanzaSeen = false
     let termlessDescriptionSpan = false
     const validDescendantVerseOwner = (): boolean => {
       if (nested.length < verseOwnerScanEnd) {
         verseOwnerScanEnd = 0
         verseOwnerValid = false
+        verseStanzaSeen = false
         termlessDescriptionSpan = false
       }
       for (let at = verseOwnerScanEnd; at < nested.length; at++) {
         let candidate = nested[at]!.trimStart()
         for (let width = walkMarkerOwnerPrefix(candidate); width > 0;
             width = walkMarkerOwnerPrefix(candidate)) candidate = candidate.slice(width).trimStart()
-        if (RE_LINE_BLOCK_OPEN.test(candidate)) verseOwnerValid = true
+        if (verseOwnerValid && candidate === ':::') {
+          verseOwnerValid = false
+          verseStanzaSeen = false
+        } else if (RE_LINE_BLOCK_OPEN.test(candidate) ||
+            verseOwnerValid && !verseStanzaSeen && candidate !== '' && !candidate.startsWith('%%')) {
+          const prior = { ...newCommentSpanScan(), markerOwners: true }
+          bodyHoldsOpenCommentSpan(nested.slice(0, at), prior, degradedOpeners)
+          if (prior.opaque === null) {
+            if (RE_LINE_BLOCK_OPEN.test(candidate)) {
+              verseOwnerValid = true
+              verseStanzaSeen = false
+            } else verseStanzaSeen = true
+          }
+        }
         if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) {
           verseOwnerValid = false
           termlessDescriptionSpan = true
@@ -3027,7 +3043,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const text = line.trimStart()
       if (RE_COMMENT_LINE.test(text)) return false
       if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= authoredItemMarkerColumn &&
-          (RE_DEFLIST_DEF.test(text) || RE_DEFLIST_TERM.test(text))) return false
+          (RE_DEFLIST_DEF.test(text) || RE_DEFLIST_TERM.test(text)) &&
+          !validDescendantVerseOwner()) return false
+      if (validDescendantVerseOwner() && verseStanzaSeen &&
+          bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)) return true
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true &&
             (frame.descriptionHasTerm === true || validDescendantVerseOwner())) return true
