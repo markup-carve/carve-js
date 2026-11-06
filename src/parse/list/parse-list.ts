@@ -491,7 +491,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       offset += m[0].length
     }
     const contentStart = head.line.lastIndexOf(head.content)
-    const closerFloor = contentStart >= 0 && sourceColumnAt(head.line, contentStart + innermostMarker) === followerColumn ? followerColumn : 0
+    // A task checkbox is content, not an added ownership column. The walk has
+    // already removed its four source columns from the follower's view.
+    const markerColumn = contentStart >= 0
+      ? sourceColumnAt(head.line, contentStart + innermostMarker) - (head.checked === undefined ? 0 : 4)
+      : -1
+    const closerFloor = markerColumn === followerColumn ? followerColumn : 0
     // A line the ownership walk folded lazily stays in the block's open paragraph.
     const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) || (followerOpensBlock &&
       indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
@@ -588,7 +593,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             isSiblingMarker(shape, next)) break
         for (let index = 0; index < gap; index++) lexer.consume()
         const reached = session.collectAttachedListBlock(lexer, isItemAttachBoundary,
-          shape.baseIndent, false)
+          shape.baseIndent, false, ownContentColumn)
         if (reached.lines.length === 0) break
         const body = reached.lines.map(line => sliceColumns(line, ownContentColumn, true))
         const bodyLexer = nestedSubLexer(lexer, body, reached.startLineIndex, reached.lineNumbers)
