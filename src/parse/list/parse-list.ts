@@ -3410,9 +3410,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (hiddenByComment[boundary.openerIndex + 1] === true) continue
         for (const lineNumber of boundary.lines) opaqueBlankLines.add(lineNumber)
       }
+      // A note's body lines at its body column are as invisible as its definition line.
+      const noteDefinitionOf = new Map<number, number>()
+      for (let j = 0; j < nested.length; j++) {
+        if (!invisibleNested(j) || !RE_FOOTNOTE_DEF.test(nested[j]!)) continue
+        for (let m = j + 1; m < nested.length; m++) {
+          if (isBlankLine(nested[m]!)) continue
+          if (indentColumns(nested[m]!, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+          noteDefinitionOf.set(m, j)
+        }
+      }
       for (let k = nested.length - 1; k >= 0; k--) {
         const ln = nested[k]!
         if (hiddenByComment[k + 1] === true || degradedOpeners.has(k)) continue
+        const definition = noteDefinitionOf.get(k)
+        if (definition !== undefined) {
+          k = definition
+          continue
+        }
         if (isBlankLine(ln)) {
           // A `+`-injected separator is not a blank line the author wrote, and
           // never loosens. Without this the item went loose through the back door:
