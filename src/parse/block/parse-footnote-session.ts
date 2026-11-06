@@ -1,5 +1,5 @@
 import type { BlockNode, Position } from '../parse-core.js'
-import { bodyEndsInOpenCodeFence } from './parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
@@ -279,7 +279,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     nestedOpenMemo = { index: nestedDefBodyIndex, length: bodyLines.length, open: nestedNoteParagraphOpen(bodyLines, nestedDefBodyIndex) }
     return nestedOpenMemo.open
   }
-  const noteSpanScan = newCommentSpanScan()
+  const noteSpanScan = { ...newCommentSpanScan(), markerOwners: true }
   let nestedNoteSpan: { run: number, column: number, state: object } | undefined
   const lazyState = verbatimOnlyLazyState()
   // A fence an attached block left open still holds its payload.
@@ -532,6 +532,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       return 'stop'
     } else if ((lazyState.opaque === null || lazyState.opaque.kind === 'code') && RE_COMMENT_LINE.test(ln.trimStart())) {
       // A comment below the body's column closes the body (carve#3885), and the code fence it holds.
+      return 'stop'
+    } else if (!verseStanzaOpen(lazyState) &&
+        bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))) {
+      // A line below the body's column ends the span the body holds and leaves no paragraph to continue (PART 0 S1).
       return 'stop'
     } else if (
       pendingBlankRun.count === 0 && !RE_FOOTNOTE_DEF.test(ln) &&

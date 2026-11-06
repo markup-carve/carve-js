@@ -362,11 +362,11 @@ function trackHeldHostFence(q: QuoteHostLine): QuoteHostVerdict {
   if (!open) return undefined
   if (open.comment) {
     // A comment closer at any column ends the span; any other line below its host ends it too (PART 0 S1, §28).
-    // A span in a line block leaves nothing, so the stanza it interrupted stays open (CARVE-P9-047).
+    // Comment lines are column-exempt payload. A span in a line block leaves nothing, so the stanza it interrupted stays open (CARVE-P9-047).
     const closes = commentFenceRun(text) === open.marker.length
     if (open.resume) q.state.mode = { kind: 'paragraph' }
     else closeBlockQuoteParagraph(q.state)
-    if (closes || text === '' || column >= open.floor) {
+    if (closes || text === '' || column >= open.floor || RE_COMMENT_LINE.test(text)) {
       if (closes) host.fence = null
       return true
     }
