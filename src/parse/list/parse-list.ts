@@ -143,8 +143,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     for (let k = nested.length - 2; k >= -1; k--) {
       const raw = stripLazyFrame(k < 0 ? lead : nested[k]!)
       let rest = raw.replace(/^[ \t]+/, '')
-      // A line comment is invisible: it neither ends the entry nor holds a body.
-      if (rest === '' || (rest.startsWith('%%') && commentFenceRun(rest) === undefined)) continue
+      // A comment is invisible: it neither ends the entry nor holds a body. A span is skipped to its opener.
+      if (rest === '' || rest.startsWith('%%')) {
+        const run = commentFenceRun(rest)
+        if (run !== undefined) while (k > -1 && commentFenceRun(stripLazyFrame(--k < 0 ? lead : nested[k]!).trimStart()) !== run) { /* payload */ }
+        continue
+      }
       let at = indentColumns(raw)
       if (at > column) {
         deeper = true

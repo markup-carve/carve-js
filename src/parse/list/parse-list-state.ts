@@ -588,7 +588,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     if (descendantCodeHolds(line.content, state) || descendantSpanHolds(state)) return false
     const column = line.atContentColumn ? indentColumns(line.content) : 0
     state.opaque = { kind: 'comment', length: commentRun, paragraphBefore: state.lazyFoldable, atColumn: line.atContentColumn,
-      description: state.inDefList === 'description', ...(column > 0 ? { column } : {}) }
+      description: state.inDefList === 'description', ...(column > 0 ? { column } : {}),
+      // A span is invisible, so the term's entry is still open after it (carve#5289).
+      ...(state.inDefList === 'term' ? { term: true } : {}) }
     state.deepest = null
     return endsOnBlock(state)
   }
@@ -946,8 +948,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const line = beginLine(content, state, atContentColumn, hasCommentCloser, facts,
       hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
     const trimmed = content.trimStart()
-    // A line comment is invisible, so it leaves the term's entry open.
-    const termOpen = state.inDefList === 'term' && trimmed !== '' && !(trimmed.startsWith('%%') && commentFenceRun(trimmed) === undefined)
+    // A comment line or span is invisible, so it leaves the term's entry open.
+    const termOpen = state.inDefList === 'term' && trimmed !== '' && !trimmed.startsWith('%%') && state.opaque?.kind !== 'comment'
     for (const phase of phases) {
       if (!phase(line)) continue
       if (termOpen && state.inDefList === 'term' && phase !== definitionMarker && phase !== termComment) state.termEnded = true

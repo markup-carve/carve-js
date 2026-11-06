@@ -31,3 +31,11 @@ it.each([
   expect(html(source)).toBe('<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>\n' +
     '            <pre><code></code></pre>\n          </dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>: z</p>')
 })
+
+// A comment span between the term and its description is invisible and keeps the entry open.
+it.each([
+  ['- :: t\n  %%%\n  comment\n  %%%\n  : # h\nz\n',
+    '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <h1 id="h">h</h1>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>z</p>'],
+])('keeps the description after a comment span: %j', (source, expected) => {
+  expect(html(source)).toBe(expected)
+})
