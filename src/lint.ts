@@ -1116,6 +1116,29 @@ export function lintCarve(
   }
   const sourceOffset = (line: number, column: number): number =>
     lineOffsets[line - 1]! + [...sourceLines[line - 1]!].slice(0, column - 1).join('').length
+  const reportedColonStarts = new Set(unclosedContainers.map(container => container.startOffset))
+  const colonContainerTypes = new Set(['admonition', 'div', 'directive', 'block_quote', 'line_block', 'figure_group'])
+  walkDocument(doc, (node) => {
+    if (typeof node.type !== 'string' || !colonContainerTypes.has(node.type)) return
+    const pos = (node as Positioned).pos
+    if (!pos?.startLine || !pos.startColumn || !pos.endLine) return
+    const opener = (sourceLines[pos.startLine - 1] ?? '').slice(pos.startColumn - 1)
+    const marker = /^(:{3,})(?:\s|$)/.exec(opener)?.[1]
+    if (!marker) return
+    const start = sourceOffset(pos.startLine, pos.startColumn)
+    if (reportedColonStarts.has(start)) return
+    const ending = stripContainerPrefixesKeepIndent(sourceLines[pos.endLine - 1] ?? '').trim()
+    if (ending === marker) return
+    reportedColonStarts.add(start)
+    out.push({
+      line: pos.startLine,
+      column: pos.startColumn,
+      rule: 'unclosed-container-fence',
+      message: `This ${marker.length}-colon container has no closer; add a bare fence of ${marker.length} colons to close it.`,
+      start,
+      end: start + marker.length,
+    })
+  })
   pushUnclosedCodeFences(unclosedCodeFences, sourceLines, lineOffsets, sourceOffset, out)
   const commentBlocks: Comment[] = [...droppedComments]
   walkDocument(doc, (node) => { if (node.type === 'comment') commentBlocks.push(node as unknown as Comment) })
