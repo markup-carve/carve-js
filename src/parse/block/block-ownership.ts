@@ -82,6 +82,8 @@ interface Frame {
   plusBody?: boolean
   // The marker line a `+` on it was accepted on.
   plus?: number
+  // A `+` attached code fence with no closer ahead ends at its first blank (§17 L3).
+  endsAtBlank?: boolean
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
   listShift?: number
@@ -629,6 +631,7 @@ export function ownLines(
     if (plusFollower && m.rest !== '' && reached < frames.length - 1 && m.col >= top().markerCol!) {
       frames[reached]!.cut = Math.max(frames[reached]!.cut, top().markerCol! - top().markerCanon!)
     }
+    if (handsBackAttachedHost()) reached = frames.length - 1
     const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
@@ -756,6 +759,7 @@ export function ownLines(
       apply(owner, m.col, form, owner.canon, !leftLineBlockSpan)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
+    if (plusFollower) markUnclosedAttachedFence(form)
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
     if (trace) {
@@ -1022,6 +1026,20 @@ export function ownLines(
       if (!atMarker && (rest === undefined || !CONT_MARKER.test(trimEndSpaceTab(rest).trimStart()))) return
       frames.length = 0
       frames.push(...attachedHost!)
+    }
+
+    function markUnclosedAttachedFence(form: Form): void {
+      if (form.family === 'code' && top().opened === at && !codeCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+    }
+
+    // The item whose `+` attached the fence goes on at its content column after the blank (§17 L4).
+    function handsBackAttachedHost(): boolean {
+      const host = attachedHost
+      if (m.rest !== '' || !top().endsAtBlank || host?.at(-1)?.kind !== 'item' || !nextLineReaches(host.at(-1)!, at, quotes)) return false
+      frames.length = 0
+      frames.push(...host)
+      top().last = 'block'
+      return true
     }
 
     function reopenAttachedHost(host: Frame[]): Frame | null {
@@ -1563,6 +1581,35 @@ export function ownLines(
 
   // Span pairing in one pass: the widest pure fence run of each character
   // at or after every line, and the last line of each comment run length.
+  function quotedMeasure(k: number, quotes: number): { col: number; rest: string } | null {
+    let n = indentCols(lines[k]!)
+    for (let q = 0; q < quotes; q++) {
+      if (!isQuoteLine(n.rest)) return null
+      n = indentCols(quoteRest(n.rest))
+    }
+    return n
+  }
+
+  function nextLineReaches(item: Frame, at: number, quotes: number): boolean {
+    for (let k = at + 1; k < lines.length; k++) {
+      const n = quotedMeasure(k, quotes)
+      if (n === null) return false
+      if (n.rest !== '') return n.col >= item.col
+    }
+    return false
+  }
+
+  function codeCloserAhead(fence: Frame, at: number, quotes: number): boolean {
+    const run = /^(`{3,}|~{3,})/.exec(indentCols(restInQuotes(at, quotes) ?? '').rest)?.[1]
+    if (run === undefined || (closerRuns().widest[run[0] as '`' | '~']![at + 1] ?? 0) < run.length) return false
+    for (let k = at + 1; k < lines.length; k++) {
+      const n = quotedMeasure(k, quotes)
+      if (n === null) return false
+      if (n.rest !== '' && fence.closes!(n.rest, n.col)) return true
+    }
+    return false
+  }
+
   function closerRuns(): NonNullable<typeof runs> {
     if (runs) return runs
     const widest = { '`': new Array<number>(lines.length + 1).fill(0), '~': new Array<number>(lines.length + 1).fill(0) }
