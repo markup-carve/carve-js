@@ -416,10 +416,17 @@ interface Reparsed {
   looseListFirst: boolean
 }
 
-/** Default-parse readbacks of whole-document sources, shared by one write's passes. */
-let readbacks: { entries: Map<string, Reparsed>; minLength: number } | null = null
+/**
+ * Default-parse readbacks shared by one write's passes: whole-document sources
+ * in `entries`, and the escape search's window sources in `windows`, which the
+ * fixpoint check's second search re-parses byte for byte.
+ */
+let readbacks: { entries: Map<string, Reparsed>; minLength: number; windows: Map<string, Reparsed>; windowBytes: number } | null = null
 
 const READBACK_MEMO_ENTRIES = 8
+
+/** How many documents' worth of window source one write may hold memoized. */
+const WINDOW_MEMO_FACTOR = 64
 
 /**
  * Run `write` with whole-document readbacks memoized by source. A write
@@ -428,7 +435,7 @@ const READBACK_MEMO_ENTRIES = 8
  */
 export function withReadbackMemo<T>(source: string, write: () => T): T {
   if (readbacks !== null) return write()
-  readbacks = { entries: new Map(), minLength: source.length >> 1 }
+  readbacks = { entries: new Map(), minLength: source.length >> 1, windows: new Map(), windowBytes: WINDOW_MEMO_FACTOR * source.length }
   try {
     return write()
   } finally {
@@ -438,10 +445,12 @@ export function withReadbackMemo<T>(source: string, write: () => T): T {
 
 function reparsed(src: string): Reparsed {
   const memo = readbacks !== null && src.length >= readbacks.minLength ? readbacks.entries : null
-  const known = memo?.get(src)
+  const known = memo?.get(src) ?? readbacks?.windows.get(src)
   if (known !== undefined) {
-    memo!.delete(src)
-    memo!.set(src, known)
+    if (memo) {
+      memo.delete(src)
+      memo.set(src, known)
+    }
     return known
   }
   let fresh: Reparsed = { tree: null, counts: null, looseListFirst: false }
@@ -459,6 +468,9 @@ function reparsed(src: string): Reparsed {
   if (memo) {
     memo.set(src, fresh)
     if (memo.size > READBACK_MEMO_ENTRIES) memo.delete(memo.keys().next().value!)
+  } else if (readbacks !== null && readbacks.windowBytes >= src.length) {
+    readbacks.windowBytes -= src.length
+    readbacks.windows.set(src, fresh)
   }
   return fresh
 }

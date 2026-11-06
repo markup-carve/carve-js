@@ -22,6 +22,10 @@ const { renderedReadsBack, withReadbackMemo } = await import('../src/render-carv
 /** Corpus 934: a one-item loose list whose body the writer rechecks on every render. */
 const nested = '- o\n  - p\n    :: t\n    : x\n\n\n\n    : d\n'
 
+// With `isolate: false` another file may have loaded the parser unmocked first.
+parse('x')
+const counting = parsed.sources.length > 0
+
 const page = (blocks: number): string =>
   Array.from({ length: blocks }, (_, i) => `${nested}\nText \\*${i} and *s* /x.\n\n%% c${i}\n\n`).join('')
 
@@ -33,6 +37,15 @@ describe('a format pass', () => {
     expect(whole.length).toBe(new Set(whole).size)
     // The readback checks and the loose-list recheck used to re-parse the same sources: 31 documents here.
     expect(parsed.sources.reduce((sum, source) => sum + source.length, 0) / nested.length).toBeLessThan(10)
+  })
+
+  it.skipIf(!counting)('parses each escape-search window once, the fixpoint check included', () => {
+    const source = page(12)
+    parsed.sources = []
+    carveToCarve(source)
+    const windows = parsed.sources.filter((reread) => reread.length * 2 < source.length)
+    expect(windows.length).toBeGreaterThan(0)
+    expect(windows.length).toBe(new Set(windows).size)
   })
 
   it('keeps a readback whose verbatim payload count cannot be taken', () => {
