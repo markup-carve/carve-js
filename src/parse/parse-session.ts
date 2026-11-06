@@ -271,7 +271,7 @@ function leadingNoteEnd(at: (offset: number) => string | undefined, offset: numb
 // A skipped note takes its body along: lines at its body column and lazy text (CARVE-P9-067, carve#5034).
 function skippedNoteBodyLine(line: string, floor: number): boolean {
   const lead = line.trimStart()
-  if (isBlankLine(line) || isBlockAttributeLine(lead)) return false
+  if (isBlankLine(line) || (indentColumns(line) < floor && isBlockAttributeLine(lead))) return false
   return indentColumns(line) >= floor || (!/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead))
 }
 

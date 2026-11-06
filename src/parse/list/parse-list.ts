@@ -172,7 +172,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // Its body goes along: lines at its body column and lazy text (CARVE-P9-067).
         const body = (line: string): boolean => {
           const lead = line.trimStart()
-          if (isBlankLine(line) || isBlockAttributeLine(lead)) return false
+          if (isBlankLine(line) || (indentColumns(line) < floor && isBlockAttributeLine(lead))) return false
           return indentColumns(line) >= floor || (!/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead))
         }
         for (k++; k < lines.length && body(lines[k]!); k++) { /* body */ }

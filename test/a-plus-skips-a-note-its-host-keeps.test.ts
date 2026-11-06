@@ -9,6 +9,7 @@ it.each([
   ['- +\n  [^n]: x\n```\n\n```\n', '<ul>\n  <li>\n    <pre><code>\n</code></pre>\n  </li>\n</ul>'],
   ['- +\n  {x}\n  [^n]: x\n```\n\n```\n', '<ul>\n  <li>\n    <pre x=""><code>\n</code></pre>\n  </li>\n</ul>'],
   ['- a\n+\n  [^n]: x\n```\n\n\nz\n', '<ul>\n  <li>a\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>z</p>'],
+  ['- +\n  [^n]: x\n    {x}\n    p\n> q', '<ul>\n  <li>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>'],
   [':: t\n: +\n  [^n]: x\n> q\n\nz\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>q</p></blockquote>\n  </dd>\n</dl>\n<p>z</p>'],
 ])('attaches the block after a kept note: %j', (source, expected) => {
   expect(html(source)).toBe(expected)
