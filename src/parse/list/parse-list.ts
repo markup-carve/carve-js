@@ -1680,10 +1680,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let belowOpenDescription = false
     let scannedNestedTerms = 0
     let hasNestedTerm = markerLineTerm
+    const termScan = verbatimOnlyLazyState()
     const bodyHasTerm = (): boolean => {
-      if (nested.length < scannedNestedTerms) scannedNestedTerms = 0
       while (scannedNestedTerms < nested.length) {
-        if (RE_DEFLIST_TERM.test(nested[scannedNestedTerms]!.trimStart())) hasNestedTerm = true
+        const line = nested[scannedNestedTerms]!
+        if (termScan.opaque === null && termScan.literalColon === undefined &&
+            RE_DEFLIST_TERM.test(line.trimStart())) hasNestedTerm = true
+        trackItemLazyState(line, termScan, true, () => false)
         scannedNestedTerms++
       }
       return hasNestedTerm

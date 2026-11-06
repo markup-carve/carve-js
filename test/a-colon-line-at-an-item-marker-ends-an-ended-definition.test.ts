@@ -39,3 +39,14 @@ it('ends each nested item at its own marker column', () => {
 </ul>
 <p>: c</p>`)
 })
+
+it('does not count a literal term in a code fence as an open definition', () => {
+  expect(carveToHtml('- a\n  ```\n  :: t\n  ```\n  b\n: x\n').trim()).toBe(`<ul>
+  <li>a
+    <pre><code>:: t
+</code></pre>
+    b
+: x
+  </li>
+</ul>`)
+})
