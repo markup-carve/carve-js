@@ -66,53 +66,49 @@ export function referenceSourceText(rawRef: string | undefined): string {
 export function referenceDisplayText(
   rawRef: string | undefined,
   children: InlineNode[] = [],
-  startOffset?: number,
+  startLine?: number,
+  lineBlock = false,
 ): string {
   if (rawRef === undefined) return ''
   const retained: Array<{ start: number; end: number }> = []
   const visit = (nodes: InlineNode[]): void => {
     for (const node of nodes) {
-      if ((node.type === 'hard_break' || node.type === 'code' || node.type === 'raw_inline' || node.type === 'math') && node.pos?.startOffset !== undefined && node.pos.endOffset !== undefined) {
-        retained.push({ start: node.pos.startOffset, end: node.pos.endOffset })
+      if ((node.type === 'hard_break' || node.type === 'code' || node.type === 'raw_inline' || node.type === 'math') && node.pos?.startLine !== undefined && node.pos.endLine !== undefined) {
+        retained.push({ start: node.pos.startLine, end: node.pos.endLine })
       }
       if ('children' in node && Array.isArray(node.children)) visit(node.children)
     }
   }
   visit(children)
 
-  // Images store only scalar alt text, so their parsed inline break nodes are
-  // unavailable here. The source still identifies authored hard breaks and
-  // verbatim code spans. Link children above additionally identify line-block
-  // breaks promoted after parsing.
+  // Images store only scalar alt text, and position recording can be disabled.
+  // The source still identifies authored hard breaks and verbatim code spans.
+  // Link children above additionally identify breaks promoted after parsing.
   const codeSpans: Array<{ start: number; end: number }> = []
-  if (children.length === 0) {
-    let opener: RegExpExecArray | undefined
-    for (const run of rawRef.matchAll(/(?<!\\)`+/g)) {
-      if (!opener) opener = run
-      else if (opener[0].length === run[0].length) {
-        codeSpans.push({ start: opener.index, end: run.index + run[0].length })
-        opener = undefined
-      }
+  let opener: RegExpExecArray | undefined
+  for (const run of rawRef.matchAll(/(?<!\\)`+/g)) {
+    if (!opener) opener = run
+    else if (opener[0].length === run[0].length) {
+      codeSpans.push({ start: opener.index, end: run.index + run[0].length })
+      opener = undefined
     }
   }
   const authoredBreak = (line: string, at: number): boolean => {
     const slashRun = line.match(/\\+$/)?.[0].length ?? 0
-    return slashRun % 2 === 1 || / {2,}$/.test(line)
+    return lineBlock || slashRun % 2 === 1
       || codeSpans.some(({ start, end }) => start <= at && at < end)
   }
 
   let result = ''
   let cursor = 0
-  let sourceOffset = startOffset ?? -1
+  let lineNumber = startLine
   for (const match of rawRef.matchAll(/\r?\n/g)) {
     const line = rawRef.slice(cursor, match.index)
     result += RE_COMMENT_ONLY_LINE.test(line) ? '' : line
-    if (sourceOffset >= 0) {
-      sourceOffset += match.index + match[0].length - cursor
-    }
-    const newlineOffset = sourceOffset - match[0].length
-    result += retained.some(({ start, end }) => start <= newlineOffset && newlineOffset < end)
-      || (children.length === 0 && authoredBreak(line, match.index)) ? match[0] : ' '
+    const currentLine = lineNumber
+    result += (currentLine !== undefined && retained.some(({ start, end }) => start <= currentLine && currentLine < end))
+      || authoredBreak(line, match.index) ? match[0] : ' '
+    if (lineNumber !== undefined) lineNumber++
     cursor = match.index + match[0].length
   }
   const tail = rawRef.slice(cursor)

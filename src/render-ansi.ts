@@ -88,6 +88,7 @@ function renderPass(
     ordered: [],
     blockDepth: 0,
     inlineDepth: 0,
+    lineBlockDepth: 0,
     abbrBudget: budgetForDocument(ast),
     definedFootnotes: new Set(Object.keys(ast.footnoteDefs ?? {})),
     referencedLinks: referencedLinkLabels(ast),
@@ -110,6 +111,7 @@ interface AnsiContext {
   ordered: number[]
   blockDepth: number
   inlineDepth: number
+  lineBlockDepth: number
   /** Per-render abbreviation-expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
   /**
@@ -235,8 +237,21 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
       return `${labelLine}${body}`
     }
     case 'line_block':
-      return renderBlocks(node.children, ctx)
+      ctx.lineBlockDepth++
+      try {
+        return renderBlocks(node.children, ctx)
+      } finally {
+        ctx.lineBlockDepth--
+      }
     case 'div': {
+      if (node.attrs?.classes?.includes('hardbreaks')) {
+        const body = node.children.map((child) => {
+          if (child.type !== 'paragraph') return renderBlocks([child], ctx)
+          ctx.lineBlockDepth++
+          try { return renderBlocks([child], ctx) } finally { ctx.lineBlockDepth-- }
+        }).join('')
+        return node.label ? `${style(stripControls(node.label), BOLD)}\n\n${body}` : body
+      }
       if (!node.label) return renderBlocks(node.children, ctx)
       // Caption floor: a bold label line. The blockquote bar, when there is
       // one, is added by the `block_quote` case (markup-carve/carve#1689).
@@ -262,7 +277,7 @@ function renderBlock(node: BlockNode, ctx: AnsiContext): string {
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
-      return `${renderImage(node)}\n\n`
+      return `${renderImage(node, ctx)}\n\n`
     case 'raw_block':
       return `${style(`[raw:${node.format}] ${stripControls(rawSource(node.content))}`, DIM)}\n\n`
     case 'abbreviation_def':
@@ -487,7 +502,7 @@ function renderPanelFigure(node: Figure, ctx: AnsiContext): string {
 
 function renderFigureTarget(node: Figure, ctx: AnsiContext): string {
   return node.target.type === 'image'
-    ? renderImage(node.target)
+    ? renderImage(node.target, ctx)
     : node.target.type === 'table'
       ? trimEndNonNbsp(renderTable(node.target, ctx))
       : trimEndNonNbsp(renderBlock(node.target, ctx))
@@ -579,7 +594,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef, node.children, node.pos?.startOffset))
+      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef, node.children, node.pos?.startLine, ctx.lineBlockDepth > 0))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination gets ANSI link styling.
@@ -602,7 +617,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       return out
     }
     case 'image':
-      return renderImage(node)
+      return renderImage(node, ctx)
     case 'ruby':
       rubyFlattened(ctx.options, node, 'ansi')
       return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')
@@ -762,7 +777,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
   }
 }
 
-function renderImage(node: Image): string {
+function renderImage(node: Image, ctx: AnsiContext): string {
   // An unresolved reference image writes back as its source, like the link
   // arm above; `[img: alt]` would announce an image the document never had.
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
@@ -771,7 +786,7 @@ function renderImage(node: Image): string {
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef, [], node.pos?.startOffset))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef, [], node.pos?.startLine, ctx.lineBlockDepth > 0))
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

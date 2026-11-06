@@ -9,6 +9,9 @@ const cases = [
   { source: '[a\\\nb `x\ny`\nz][missing]\n', expected: '[a\\\nb `x\ny` z][missing]\n' },
   { source: '![a\\\nb][missing]\n', expected: '![a\\\nb][missing]\n' },
   { source: '![a `x\ny`][missing]\n', expected: '![a `x\ny`][missing]\n' },
+  { source: '::: |\n![a\nb][missing]\n:::\n', expected: '![a\nb][missing]\n' },
+  { source: '::: \\\n![a\nb][missing]\n:::\n', expected: '![a\nb][missing]\n' },
+  { source: '[a\r\nb\r\nb\\\r\nc][missing]\r\n', expected: '[a b b\\\nc][missing]\n' },
   { source: '[é\\\nb][missing]\n', expected: '[é\\\nb][missing]\n' },
 ] as const
 
@@ -19,6 +22,12 @@ describe('unresolved reference line feeds', () => {
       expect(carveToAnsi(source)).toBe(expected)
     })
   }
+
+  it('keeps authored breaks when source positions are disabled', () => {
+    const source = '[a\\\nb `x\ny`][missing]\n'
+    expect(carveToPlainText(source, { positions: false })).toBe(source)
+    expect(carveToAnsi(source, { positions: false })).toBe(source)
+  })
 
   it('keeps hard and verbatim breaks across 1,000 reference variants', () => {
     const bodies = [
