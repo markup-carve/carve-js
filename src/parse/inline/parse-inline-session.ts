@@ -1494,10 +1494,20 @@ export class InlineParseSession {
       const range = anchorRangeAt(source.anchoredRanges, cellOffset)
       if (!range) return undefined
       const within = cellOffset - range.from
+      const escapes = range.omittedEscapes
+      let omitted = 0
+      if (escapes) {
+        let hi = escapes.length
+        while (omitted < hi) {
+          const mid = (omitted + hi) >>> 1
+          if (escapes[mid]! < within) omitted = mid + 1
+          else hi = mid
+        }
+      }
       return {
         line: range.line,
-        column: range.column + within,
-        offset: range.offset + within,
+        column: range.column + within + omitted,
+        offset: range.offset + within + omitted,
         range,
       }
     }
