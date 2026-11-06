@@ -92,6 +92,8 @@ interface Frame {
   closedList?: { col: number; shift: number } | undefined
   termShift?: number
   ddShift?: number
+  // A term anywhere in this item's body makes a later colon line at its marker a boundary.
+  hasDefinition?: boolean
 }
 
 interface Form {
@@ -111,6 +113,20 @@ interface Form {
   attrLines?: number
 }
 
+function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): boolean {
+  return /^: [^\n]/.test(rest) && frames.some((frame) =>
+    frame.kind === 'item' && frame.hasDefinition === true && frame.markerCol === column)
+}
+
+function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean): number {
+  if (lazyMissed) return /^: /.test(rest) ? column : 0
+  return Math.max(column - inner.cut, inner.canon)
+}
+
+function recordDefinitionTerm(frames: Frame[], owner: Frame, column: number): void {
+  owner.termShift = column - owner.canon
+  for (const frame of frames) if (frame.kind === 'item') frame.hasDefinition = true
+}
 
 const CONT_MARKER = /^\+[ \t]*$/
 const LINT_HOST: Partial<Record<Frame['kind'], RefusedPlus['host']>> = { item: 'list item', dd: 'definition description', note: 'footnote', quote: 'block quote' }
@@ -635,6 +651,7 @@ export function ownLines(
     const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
+    const colonEndsItem = colonAtDefinitionItem(m.rest, m.col, frames)
     // A comment closer below its host's column still closes the span (PART 9 §28).
     const closesBelowColumn = (): boolean => {
       if (inner.kind !== 'fence' || inner.family !== 'comment' || !missed || inner.span || m.rest === '' || !inner.closes!(m.rest, m.col)) return false
@@ -773,7 +790,7 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      lead(lazyMissed ? 0 : Math.max(m.col - inner.cut, inner.canon))
+      lead(payloadColumn(m.rest, m.col, inner, lazyMissed))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
@@ -797,7 +814,7 @@ export function ownLines(
     }
 
     function keepsMissedLineBlock(inner: Frame, missed: boolean, reached: number): boolean {
-      if (inner.kind !== 'fence' || !inner.lineBlock || !missed || !inner.para || m.rest === '' ||
+      if (inner.kind !== 'fence' || !inner.lineBlock || !missed || !inner.para || m.rest === '' || colonEndsItem ||
           classify(m.rest, frames[reached]!, at, m.col).interrupts) return false
       // An open payload span cannot carry the stanza past a quote the line missed (carve#5062).
       if (inner.span && inner.span[0] !== '%' && frames.slice(reached + 1).some(f => f.kind === 'quote')) return false
@@ -830,7 +847,7 @@ export function ownLines(
     }
 
     function foldsLazily(form: Form, owner: Frame): boolean {
-      return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' &&
+      return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' && !colonEndsItem &&
         // A marker that a marker body owns, or that misses one, opens a list (PART 0 S3, carve#4860).
         !(form.kind === 'item' && (BODY_FRAME.has(owner.kind) || frames.slice(reached + 1).some((f) => BODY_FRAME.has(f.kind) || f.firstBlockQuote)))
     }
@@ -887,7 +904,7 @@ export function ownLines(
       if (!invisibleLeaf && !spanInEntry) owner.last = form.kind
       owner.tableLine = form.table ? at : undefined
       if (form.attrLines) attrRest = { left: form.attrLines, cut: col - canon }
-      if (form.kind === 'term') owner.termShift = col - owner.canon
+      if (form.kind === 'term') recordDefinitionTerm(frames, owner, col)
       if (form.kind === 'dd') owner.ddShift = col - owner.canon
       if (form.kind === 'fence' || form.kind === 'colon') {
         // A comment payload is host-relative; the opener's indentation sets no base (CARVE-P9-060).
