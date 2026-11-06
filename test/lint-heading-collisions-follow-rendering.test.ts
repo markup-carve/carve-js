@@ -10,3 +10,10 @@ it.each([
   expect(warnings).toHaveLength(1)
   expect(warnings[0]!.line).toBe(line)
 })
+
+it.each([
+  ['x[^n]{#i}\n\n## {#i}\n', ['unresolved-footnote', 'heading-trailing-attribute']],
+  ['x[^n]{#i}\n\n## i\n', ['unresolved-footnote']],
+])('does not reserve an id on an unresolved footnote: %j', (source, expected) => {
+  expect(lintCarve(source).map((warning) => warning.rule)).toEqual(expected)
+})

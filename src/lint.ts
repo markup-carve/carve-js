@@ -67,6 +67,8 @@ import {
   type AsciiHeadingIdMode,
 } from './heading/heading-ids.js'
 import { numberFootnotes, reachableFootnoteLabels } from './heading/footnote-numbering.js'
+import { visitDocumentIds } from './ast/document-ids.js'
+import { headingIndexResolves } from './heading/heading-ids.js'
 import { adoptBlockFootnoteDefs } from './ast/legacy-nodes.js'
 import { applyTransforms } from './extension/extension-transforms.js'
 import { parseDocument } from './parse/parse-document.js'
@@ -1260,15 +1262,13 @@ export function lintCarve(
   const indexedDoc = { ...doc, footnoteDefs: Object.fromEntries(
     Object.entries(doc.footnoteDefs ?? {}).filter(([label]) => reachableNotes.has(label)),
   ) }
-  walkDocument(indexedDoc, (node) => {
-    const id = (node as { attrs?: Attrs }).attrs?.id
-    if (id === undefined) return
+  visitDocumentIds(indexedDoc, (id, node) => {
     allocated.add(id)
     if (typeof node.type !== 'string') return
     const kind = { id, kind: node.type.replace(/_/g, ' ') }
     if (!explicitIdKinds.has(crossrefKey(id))) explicitIdKinds.set(crossrefKey(id), kind)
     if (!explicitIdKindsByFold.has(foldId(crossrefKey(id)))) explicitIdKindsByFold.set(foldId(crossrefKey(id)), kind)
-  })
+  }, headingIndexResolves(indexedDoc))
   const headingRefs = new Map<string, string>()
   const headingTexts: string[] = []
   // Mirror resolveHeadingIds: a heading inside a list/blockquote/div/etc. also

@@ -147,7 +147,7 @@ export const RECORD_CHILD_FIELDS: readonly string[] = ['terms', 'definitions', '
  */
 export function visitDocumentIds(
   doc: Document,
-  visit: (id: string) => void,
+  visit: (id: string, node: Record<string, unknown>) => void,
   resolvesLater?: (node: UnresolvedReference) => boolean,
 ): void {
   const stack: unknown[] = [doc]
@@ -198,7 +198,7 @@ export function visitDocumentIds(
     const reference = value as InlineNode
     if (isUnresolvedReference(reference) && !resolvesLater?.(reference)) continue
     const id = authoredIdOf(node['attrs'] as Attrs | undefined)
-    if (typeof id === 'string') visit(id)
+    if (typeof id === 'string') visit(id, node)
     for (const field of fields) {
       const child = node[field]
       if (Array.isArray(child)) stack.push(child)
@@ -214,8 +214,8 @@ export function visitDocumentIds(
         bodies?: unknown[]; headAttrs?: { id?: string }; footAttrs?: { id?: string }
       } | undefined
       if (groups?.bodies) pushChild(groups.bodies)
-      if (typeof groups?.headAttrs?.id === 'string') visit(groups.headAttrs.id)
-      if (typeof groups?.footAttrs?.id === 'string') visit(groups.footAttrs.id)
+      if (typeof groups?.headAttrs?.id === 'string') visit(groups.headAttrs.id, node)
+      if (typeof groups?.footAttrs?.id === 'string') visit(groups.footAttrs.id, node)
     }
   }
 }
