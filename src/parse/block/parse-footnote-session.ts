@@ -332,7 +332,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   if (!firstBlockAttached) {
     // A fence behind an item marker on the note's line is no paragraph (CARVE-P0-013, PART 0 S4).
     const trackLead = (lead: string): void => {
-      trackItemLazyState(lead, lazyState, true, run => commentCloserAhead(lexer, run, defLineIndex))
+      trackItemLazyState(lead, lazyState, true, run => commentCloserAhead(lexer, run, defLineIndex),
+        isListMarkerLine(lead.trimStart())
+          ? { whitespace: leadingWhitespace(lead), descendantFrames: true, terminatorFree: false }
+          : undefined)
       const behindMarker = markerFreeContent(lead)
       if (behindMarker !== lead.trimStart() && opensCodeFence(behindMarker)) trackItemLazyState(behindMarker, lazyState)
     }
