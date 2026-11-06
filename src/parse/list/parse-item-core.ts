@@ -647,6 +647,8 @@ export interface AttachedScan {
   contentColumn: number
   indexBase: number
   boundary?: (line: string) => boolean
+  // A line below this column ends the fence's container, so no closer at or after it reaches the fence.
+  belowFloor?: ((offset: number) => boolean) | undefined
 }
 
 /**
@@ -758,7 +760,10 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
  */
 export function fencedBlockEnd(scan: AttachedScan): number {
   const opaque = opaqueSpanEnd(scan, 0)
-  if (opaque !== -1) return opaque
+  if (opaque !== -1) {
+    for (let offset = 1; scan.belowFloor !== undefined && offset <= opaque; offset++) if (scan.belowFloor(offset)) return -1
+    return opaque
+  }
   const first = scan.at(0)
   if (first === undefined) return -1
   const run = colonBlockOpenerRun(first)
