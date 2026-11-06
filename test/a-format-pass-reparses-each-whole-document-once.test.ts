@@ -22,8 +22,8 @@ const { renderedReadsBack, withReadbackMemo } = await import('../src/render-carv
 /** Corpus 934: a one-item loose list whose body the writer rechecks on every render. */
 const nested = '- o\n  - p\n    :: t\n    : x\n\n\n\n    : d\n'
 
-// With `isolate: false` another file may have loaded the parser unmocked first.
-parse('x')
+// With `isolate: false` another file may have loaded the engine unmocked first.
+carveToCarve('x\n')
 const counting = parsed.sources.length > 0
 
 const page = (blocks: number): string =>
