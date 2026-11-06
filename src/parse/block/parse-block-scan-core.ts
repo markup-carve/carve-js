@@ -742,7 +742,7 @@ export function markerFreeContent(line: string): string {
 export interface CommentSpanScan {
   index: number
   /** `owner`: the body column of a span opened on a description or note lead (or a list marker, with `markerOwners`); a line below it ends the span (PART 0 S1). */
-  opaque: { comment: boolean; char: string; run: number; owner?: number } | null
+  opaque: { comment: boolean; char: string; run: number; owner?: number; start?: number } | null
   atBlockStart: boolean
   /** The last body line of each delimiter width, for `bodyHoldsClosableCommentSpan`. */
   runs?: { indexed: number; last: Map<number, number> }
@@ -818,7 +818,7 @@ export function bodyHoldsOpenCommentSpan(
     }
     const comment = commentFenceRun(opener)
     if (comment !== undefined && !isDegraded(scan.index, comment)) {
-      scan.opaque = { comment: true, char: '%', run: comment }
+      scan.opaque = { comment: true, char: '%', run: comment, start: scan.index }
       if (lead !== null) scan.opaque.owner = column + (lead[0][0] === '[' ? FOOTNOTE_BODY_COLUMN : lead[0].length)
       // Behind list markers the span is the bottom item's (PART 0 S1).
       else if (scan.markerOwners === true && opener !== line) scan.opaque.owner = stackedItemContentColumn(raw)

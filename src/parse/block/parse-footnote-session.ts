@@ -490,6 +490,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       RE_COMMENT_LINE.test(ln) &&
       bodyHoldsClosableCommentSpan(bodyLines, noteSpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))
     ) {
+      const spanRun = noteSpanScan.opaque?.run
+      const openerIndex = noteSpanScan.opaque?.start
+      const markerLineSpan = openerIndex !== undefined &&
+        isListMarkerLine((bodyLines[openerIndex] ?? '').trimStart()) &&
+        commentFenceRun(markerFreeContent(bodyLines[openerIndex]!)) === spanRun
       for (let k = 0; k < pendingBlankRun.count; k++) {
         bufferedBlanks.add(bodyLines.length)
         bodyLines.push('')
@@ -505,6 +510,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodyLines.push(flush === ln ? ln : ' ' + flush)
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
+      // Payload in a marker-line span is invisible. It cannot revive the note's
+      // paragraph after the marker ended it, even when the exact closer is below
+      // this note's body column (carve#5314).
+      if (markerLineSpan) {
+        lazyState.lazyFoldable = false
+        if (lazyState.deepest) lazyState.deepest.lazyFoldable = false
+      }
       lexer.consume()
     } else if (isListMarkerLine(ln.trimStart())) {
       // A list marker that misses a marker body closes it (PART 0 S3, carve#4860), ending a span the body holds (S1).
