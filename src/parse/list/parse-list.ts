@@ -1937,8 +1937,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const base = contentCol + indentColumns(opener)
       for (let k = 1, ahead = lexer.peek(k); ahead !== undefined; ahead = lexer.peek(++k)) {
         if (isBlankLine(ahead)) continue
-        if (indentColumns(ahead) < contentCol) break
-        if (indentColumns(ahead) === base && close.test(ahead.trimStart())) return false
+        // Any other line at or left of the fence's column ends the descendant item, and the search with it.
+        if (indentColumns(ahead) <= base) {
+          if (indentColumns(ahead) === base && close.test(ahead.trimStart())) return false
+          break
+        }
       }
       if (holder) {
         holder.opaque = null
