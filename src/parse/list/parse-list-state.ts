@@ -653,7 +653,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     }
     // A note's first block answers like any container's (carve#3885).
     const frame = verbatimOnlyLazyState()
-    trackItemLazyState(note[2]!, frame, true, () => false)
+    // A list item that leads the note opens its own frame, as one on a later note line does.
+    trackItemLazyState(note[2]!, frame, true, () => false,
+      facts?.descendantFrames === true && isListMarkerLine(note[2]!)
+        ? { terminatorFree: facts.terminatorFree, whitespace: 0, descendantFrames: true }
+        : undefined)
     state.noteFrame = frame
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false
