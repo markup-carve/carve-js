@@ -319,8 +319,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
       followerSource !== undefined && quotePrefixDepth(followerSource) >= noteQuoteDepth &&
       sourceColumn(followerSource, noteQuoteDepth) === authoredMarkerColumn &&
-      !RE_FOOTNOTE_DEF.test(follower.trimStart()) &&
-      !RE_ADMONITION_CLOSE.test(follower.trimStart())
+      !RE_FOOTNOTE_DEF.test(follower.trimStart())
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
       const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
