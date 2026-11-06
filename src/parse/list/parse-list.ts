@@ -2352,7 +2352,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const placeContentLine = (l: string): void => {
       strippedPrefix = undefined
       if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
-      placed = sliceColumns(l, attachedDescriptionBody > 0 ? 0 : contentCol, true, prefix => { strippedPrefix = prefix })
+      const cut = attachedDescriptionBody > 0 ? 0 : contentCol
+      placed = sliceColumns(l, cut, true, prefix => { strippedPrefix = prefix })
+      // A leading tab left after the cut is still measured from the authored
+      // list frame. Re-express its remaining columns before a child parses it
+      // from column zero. A verbatim payload keeps its source tab unchanged.
+      if (placed.slice(0, leadingWhitespace(placed)).includes('\t') &&
+          lazyState.opaque === null && descendantOpaque === null &&
+          !opensCodeFence(placed.trimStart()) &&
+          (lineOpensItemBlock(placed.trimStart()) || isListMarkerLine(placed.trimStart()))) {
+        placed = ' '.repeat(Math.max(0, indentColumns(l) - cut)) + l.trimStart()
+      }
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
           isListMarkerLine(placed.trimStart())) blockedNoteClaimFloor = undefined
       if (lazyState.opaque === null && descendantOpaque === null &&
