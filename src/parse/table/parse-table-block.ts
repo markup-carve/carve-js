@@ -5,10 +5,10 @@ import type { Attrs, Figure, InlineNode, Position, Table, TableCell, TableRow } 
 
 // Table splitting consumes its pipe escape before the inline pass, except in
 // a backtick run whose content is verbatim.
-function cellInlineValue(raw: string): { value: string; omittedEscapes: number[] } {
+function cellInlineValue(raw: string): { value: string; removedEscapes: number[] } {
   let run = 0
   let value = ''
-  const omittedEscapes: number[] = []
+  const removedEscapes: number[] = []
   for (let at = 0; at < raw.length; at++) {
     if (raw[at] === '\\' && run === 0 && raw[at + 1] === '`') {
       value += raw.slice(at, at + 2)
@@ -25,14 +25,14 @@ function cellInlineValue(raw: string): { value: string; omittedEscapes: number[]
       continue
     }
     if (run === 0 && raw[at] === '\\' && raw[at + 1] === '|') {
-      omittedEscapes.push(value.length)
+      removedEscapes.push(at)
       value += '|'
       at++
       continue
     }
     value += raw[at]
   }
-  return { value, omittedEscapes }
+  return { value, removedEscapes }
 }
 
 type RawCell = Parameters<typeof import('../../parse.js').tableBlockHelpers.joinFragment>[0]
@@ -279,13 +279,18 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         type: 'table_row',
         ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
-          const { value, omittedEscapes } = cellInlineValue(c.raw)
-          // A joined cell can cross distinct source columns or lines. Its
-          // existing range rule cannot place an escape-shortened fragment.
-          if (omittedEscapes.length && (c.anchors?.length !== 1 || c.anchors[0]!.to !== c.raw.length)) delete c.anchors
-          if (omittedEscapes.length && c.anchors?.length === 1) {
-            c.anchors[0]!.to = value.length
-            c.anchors[0]!.omittedEscapes = omittedEscapes
+          const { value, removedEscapes } = cellInlineValue(c.raw)
+          // Each joined fragment keeps its own source range. Removing a pipe
+          // escape shortens local inline text in that and every later range,
+          // without making a span across the fragment boundary placeable.
+          if (removedEscapes.length) for (const range of c.anchors ?? []) {
+            const from = range.from
+            const to = range.to
+            const before = removedEscapes.filter(at => at < from).length
+            const inside = removedEscapes.filter(at => at >= from && at < to)
+            range.from = from - before
+            range.to = to - before - inside.length
+            if (inside.length) range.omittedEscapes = inside.map((at, index) => at - from - index)
           }
           const cellWraps = c.wraps?.length
             ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))

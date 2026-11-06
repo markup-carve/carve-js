@@ -16,4 +16,13 @@ describe('inline positions after escaped table pipes', () => {
     expect(lintCarve(source).filter(warning => warning.rule === 'unresolved-reference-link')
       .map(warning => [warning.line, warning.column])).toEqual([[1, 3]])
   })
+
+  it.each([
+    ['| [a][missing] |\n+ b\\|c |\n', [[1, 3]]],
+    ['| a\\|b |\n+ [c][missing] |\n', [[2, 3]]],
+    ['| [a\\|b][missing] |\n+ [c][missing] |\n', [[1, 3], [2, 3]]],
+  ])('keeps positions in separate continuation fragments: %j', (source, positions) => {
+    expect(lintCarve(source).filter(warning => warning.rule === 'unresolved-reference-link')
+      .map(warning => [warning.line, warning.column])).toEqual(positions)
+  })
 })
