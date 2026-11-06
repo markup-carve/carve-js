@@ -2997,7 +2997,8 @@ function collectTableAttributeWarnings(
     }
     const aligns = kv.aligns?.split(',') ?? []
     const valigns = kv.valigns?.split(',') ?? []
-    const headerRows = table.rows.filter((row) => row.cells.some((cell) => cell.header))
+    const headerRows = table.rows.filter((row, index) =>
+      index < (table.rowGroups?.headRows ?? 0) || row.cells.some((cell) => cell.header))
     for (let column = 0; column < widest; column++) {
       const markerAlign = headerRows.some((row) => row.cells[column]?.align !== undefined)
       const markerValign = headerRows.some((row) => row.cells[column]?.valign !== undefined)
