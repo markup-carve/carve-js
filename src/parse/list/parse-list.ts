@@ -160,6 +160,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return at === column && /^::? /.test(rest) && !(deeper && /^:: /.test(rest))
     }
     return false
+  // How many lines before an attached block are attribute lines and notes the host keeps (§17 L3, carve#5288).
+  const invisibleLead = (lines: readonly string[]): number => {
+    let k = 0
+    while (k < lines.length - 1) {
+      const text = lines[k]!.trimStart()
+      if (isBlockAttributeLine(text)) k++
+      else if (RE_FOOTNOTE_DEF.test(text)) {
+        const floor = indentColumns(lines[k]!) + FOOTNOTE_BODY_COLUMN
+        // Its body goes along: lines at its body column and lazy text (CARVE-P9-067).
+        const body = (line: string): boolean => {
+          const lead = line.trimStart()
+          if (isBlankLine(line) || isBlockAttributeLine(lead)) return false
+          return indentColumns(line) >= floor || (!/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead))
+        }
+        for (k++; k < lines.length && body(lines[k]!); k++) { /* body */ }
+      } else break
+    }
+    return k
   }
   const attachesQuote = (lines: readonly string[]): boolean =>
     /^>/.test(lines.find(line => !isBlankLine(line) && !isBlockAttributeLine(line.trimStart())) ?? '')
@@ -573,7 +591,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   ): FirstBlockOutcome {
     const { baseIndent } = shape
     // The follower stands at the marker column; this lexer's lines start at the item's frame.
-    const localBlockColumn = indentColumns(lexer.peek() ?? '')
+    // A leading attribute run floats onto the block after it, so that block's column is the one read (carve#5288).
+    let blockLine = 0
+    while (isBlockAttributeLine((lexer.peek(blockLine) ?? '').trimStart()) && !isBlankLine(lexer.peek(blockLine + 1))) blockLine++
+    const localBlockColumn = indentColumns(lexer.peek(blockLine) ?? '')
     const {
       lines: attached,
       lineNumbers: attachedLineNumbers,
@@ -584,7 +605,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
     // and a definition there interrupts it as it does any paragraph (PART 0 S4), unless a folded fence holds it.
     const cutAtItemColumn = (lines: string[], lineNumbers: number[], blockColumn: number): void => {
-      if (lines.length <= 1 || lineOpensBlock(sliceColumns(lines[0]!, blockColumn, true))) return
+      // A leading attribute run floats onto the block after it, which is the one asked (carve#5288).
+      let first = 0
+      while (first < lines.length - 1 && isBlockAttributeLine(sliceColumns(lines[first]!, blockColumn, true).trimStart())) first++
+      const block = sliceColumns(lines[first]!, blockColumn, true)
+      if (lines.length <= 1 || lineOpensBlock(first > 0 ? block.trimStart() : block)) return
       let fenceRun: string | undefined
       const cut = lines.findIndex((line, index) => {
         const text = line.trimStart()
@@ -2008,6 +2033,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // The body column of the attached description list's open `<dd>`: a line there is the `<dd>`'s (PART 0 S2).
       let attachedBodyColumn = -1
       const quoteAttached = attachesQuote(attachedLines)
+      // A line in the attached block's invisible lead is never the item's own opener.
+      const ownFrom = Math.max(1, invisibleLead(attachedLines))
       for (let k = 0; k < attachedLines.length; k++) {
         attachedBodyColumn = attachedBodyColumnAfter(attachedLines[k]!, attachedBodyColumn)
         if (k > 0 && quoteAttached && !ownBlock && endsAttachedQuote(attachedLines[k]!, contentCol)) {
@@ -2029,7 +2056,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           break
         }
         // An opener at the item's content column is the item's own, past the attached paragraph or attribute run.
-        const ownOpener = k > 0 && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
+        const ownOpener = k >= ownFrom && lazyState.opaque === null && indentColumns(attachedLines[k]!) === contentCol &&
           !(attachedBodyColumn > 0 && contentCol >= attachedBodyColumn) &&
           (lineOpensItemBlock(attachedLines[k]!.trimStart()) || isListMarkerLine(attachedLines[k]!.trimStart()) || isLinkDefLine(attachedLines[k]!.trimStart()))
         // The lines of that block are measured from the same column.

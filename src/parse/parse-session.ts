@@ -112,6 +112,7 @@ import {
   lazyProbeFrame,
   leadingWhitespace,
   lineOpensBlock,
+  lineOpensItemBlock,
   linkDestinationValue,
   literalCommentHasCloser,
   markAboveContentColumn,
@@ -255,6 +256,36 @@ function leadingAttributeRun(at: (offset: number) => string | undefined, options
     count += run.count
   }
   return count
+}
+
+// The line after a footnote definition at `offset` and its unbroken body, or -1.
+function leadingNoteEnd(at: (offset: number) => string | undefined, offset: number): number {
+  const line = at(offset)
+  if (line === undefined || !RE_FOOTNOTE_DEF.test(line.replace(/^[ \t]+/, ''))) return -1
+  const floor = indentColumns(line) + FOOTNOTE_BODY_COLUMN
+  let k = offset + 1
+  for (let next = at(k); next !== undefined && skippedNoteBodyLine(next, floor); next = at(++k)) { /* body */ }
+  return k
+}
+
+// A skipped note takes its body along: lines at its body column and lazy text (CARVE-P9-067, carve#5034).
+function skippedNoteBodyLine(line: string, floor: number): boolean {
+  const lead = line.trimStart()
+  if (isBlankLine(line) || isBlockAttributeLine(lead)) return false
+  return indentColumns(line) >= floor || (!/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead))
+}
+
+/** Attribute runs and footnote definitions before a `+`-attached block: the host keeps them (§17 L3, carve#5288). */
+function leadingInvisibleRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
+  let count = 0
+  for (;;) {
+    // After a note the attribute line may stand at the note's column.
+    const attrs = leadingAttributeRun(offset => count > 0 ? at(count + offset)?.trimStart() : at(count + offset), options)
+    if (attrs > 0) count += attrs
+    const note = leadingNoteEnd(at, count)
+    if (note !== -1) count = note
+    else if (attrs === 0) return count
+  }
 }
 
 /** Whether the comment-only paragraph at the cursor sits on blank lines between two items of a list. */
@@ -2450,11 +2481,14 @@ export class ParseSession extends InlineParseSession {
     limit: number,
     transform?: (line: string) => string,
     endAtFoldedDefinition = true,
+    // Invisible lines the host keeps before the block; the probe measures from the line after them.
+    lead = 0,
   ): number {
     if (limit <= 1) return limit
+    if (lead >= limit) lead = 0
     const lines: string[] = []
-    for (let k = 0; k < limit; k++) {
-      const line = lexer.peek(k)!
+    for (let k = 0; k < limit - lead; k++) {
+      const line = lexer.peek(lead + k)!
       lines.push(transform ? transform(line) : line)
     }
     const probe = subLexer(lines, lexer.parseOptions, 0)
@@ -2495,8 +2529,8 @@ export class ParseSession extends InlineParseSession {
           node === null || node.type === 'abbreviation_def' || node.type === 'comment'
         if (!invisible || probe.eof()) break
       }
-      const end = Math.min(Math.max(probe.pos, 1), limit)
-      return endAtFoldedDefinition ? Math.max(1, this.foldedAttachedDefinitionEnd(lines, end, probe)) : end
+      const end = Math.min(Math.max(probe.pos, 1), limit - lead)
+      return lead + (endAtFoldedDefinition ? Math.max(1, this.foldedAttachedDefinitionEnd(lines, end, probe)) : end)
     } finally {
       this.activeMatchers = matchers
       this.measuringAttachedBlock = wasMeasuring
@@ -2542,7 +2576,7 @@ export class ParseSession extends InlineParseSession {
     }
     // A leading attribute run belongs to the block after it, so a fence there
     // still makes its body opaque to the container's boundaries.
-    const attributeLines = leadingAttributeRun(at, lexer.parseOptions)
+    const attributeLines = leadingInvisibleRun(at, lexer.parseOptions)
     const fencedFromAttributes = fencedBlockEnd({
       at: (offset) => at(offset + attributeLines),
       index: closerIndex(lexer),
@@ -2573,10 +2607,12 @@ export class ParseSession extends InlineParseSession {
         const candidate = lexer.peek(take)!
         // A first-block marker can attach a flush-left block even when its
         // list marker is indented. Dedent ends the block only after it starts.
-        const firstFlushLeft = take === 0 && contentColumn > 0 &&
+        // Invisible lines the host keeps before the block are skipped; the gates apply to the line after them (§17 L3).
+        const first = take <= attributeLines
+        const firstFlushLeft = first && contentColumn > 0 &&
           indentColumns(candidate) === 0 && !isBlankLine(candidate) && !isContinuationMarker(candidate) &&
           !lineOpensBlock(candidate)
-        const firstNonList = acceptFirstNonList && take === 0 && !isBlankLine(candidate) &&
+        const firstNonList = acceptFirstNonList && first && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
         // The line after a refused brace run continues its paragraph whatever it opens (CARVE-P2-035);
@@ -2585,7 +2621,7 @@ export class ParseSession extends InlineParseSession {
           (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
         take++
       }
-      const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition)
+      const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition, attributeLines)
       if (measured < take) take = measured
     }
     const startLineIndex = lexer.pos
@@ -2616,8 +2652,10 @@ export class ParseSession extends InlineParseSession {
     let leadLines = 0
     for (let from = -1; from !== leadLines;) {
       from = leadLines
-      leadLines += leadingAttributeRun(offset => view(attached.lines[leadLines + offset]), lexer.parseOptions)
+      leadLines += leadingAttributeRun(offset => leadLines > 0 ? view(attached.lines[leadLines + offset])?.trimStart() : view(attached.lines[leadLines + offset]), lexer.parseOptions)
       while (isLineComment(view(attached.lines[leadLines]))) leadLines++
+      const note = leadingNoteEnd(offset => view(attached.lines[offset]), leadLines)
+      if (note !== -1) leadLines = note
     }
     const first = view(attached.lines[leadLines])
     const last = view(attached.lines.at(-1))
