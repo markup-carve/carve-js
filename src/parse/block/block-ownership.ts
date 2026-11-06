@@ -380,7 +380,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; lazyLines: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -409,6 +409,7 @@ export function ownLines(
   // Lines whose consumed `+` now reads as a `%%` stand-in: container markup, not a comment.
   const consumedMarkers = new Set<number>()
   const quoteSiblingSeparators = new Set<number>()
+  const lazyLines = new Set<number>()
   // A later marker cannot take the block offered by an earlier marker.
   const claimedMarkers = new Set<number>()
   const skippedAbbreviations = new Map<number, [string, string]>()
@@ -417,6 +418,8 @@ export function ownLines(
   const releasedFollowers = new Set<number>()
   const skippedComments = new Map<number, string>()
   const skippedFences = new Map<number, { closer: number; content: string }>()
+  // A skipped `%%%` span's lines, which stand where the block after them does.
+  const skippedSpanLines = new Set<number>()
   const skippedNotes = new Set<number>()
   const refusedInvisibleFollowers = new Set<number>()
   const tabQuoteFollower: { value: PendingTabQuoteFollower | null } = { value: null }
@@ -435,7 +438,7 @@ export function ownLines(
     function recordInvisible(line: string): void {
       const skipped = skippedNoteMarker(line, skippedNotes.has(at), top().docMarker,
         (text) => docColumn(lines[at]!, text), () => standIn('+'))
-      if (refusedInvisibleFollowers.has(at) && skippedComments.has(at)) skipped.line = standRefusedInvisible(skipped.line)
+      if ((refusedInvisibleFollowers.has(at) || skippedSpanLines.has(at)) && skippedComments.has(at)) skipped.line = standRefusedInvisible(skipped.line)
       result.push(skipped.line)
       if (skipped.column !== null) consumedMarkers.add(at)
       if (skipped.column !== null) refusedPlus.push({ index: at, column: skipped.column,
@@ -737,6 +740,7 @@ export function ownLines(
       if (TRAILING_PLUS.test(m.rest) && !lazyMarkerLineAttaches(form)) spellTrailingPlusAsLetter()
       leadLazy(owner)
       finish()
+      lazyLines.add(at)
       if (trace) emit(at, 'S4', ownerPath(), 'CARVE-P0-006', 'lazy', { reached: ownerPath(reached) })
       continue
     }
@@ -1167,7 +1171,7 @@ export function ownLines(
       return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, lazyLines, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
@@ -1265,6 +1269,7 @@ export function ownLines(
           skippedFences.set(index, { closer, content: body.join('\n') })
         }
         skippedComments.set(index, prefix + (!fenced.has(index) ? rest : closers.has(index) ? '%% '.padEnd(rest.length, 'x') : '%%'))
+        if (fenced.has(index)) skippedSpanLines.add(index)
       }
       for (const index of notes) skippedNotes.add(index)
       return reason
@@ -1337,8 +1342,9 @@ export function ownLines(
             closer = indentCols(quoteRest(closer.rest))
           }
           if (COMMENT_FENCE.exec(trimEndSpaceTab(closer.rest))?.[1]?.length === comment[1]!.length) break
-          // A span kept at the content column ends at a nonblank line below it (CARVE-P0-005).
-          if (kept && closer.rest.trim() !== '' && docColumn(lines[k]!, closer.rest) < content) { missed = true; break }
+          // A nonblank line that misses the span's owner ends the span (CARVE-P0-005): below the content
+          // column for a kept span, below the marker column the attached block stands at otherwise.
+          if (closer.rest.trim() !== '' && docColumn(lines[k]!, closer.rest) < (kept ? content : marker)) { missed = true; break }
         }
         if (missed) {
           for (let line = opener; line < k; line++) { comments.push(line); fenced.add(line) }
@@ -1402,7 +1408,8 @@ export function ownLines(
   function nextVisibleReach(at: number, from: number): number {
     const unquoted = (line: string): string => indentCols(line.replace(/^[ \t>]*(?=>)>? ?/, '')).rest
     if (nextVisible <= at) {
-      const own = commentSpanEnd(trimEndSpaceTab(unquoted(lines[at]!)), at)
+      // A skipped span that a missed line ended stops at its recorded last line (CARVE-P0-005).
+      const own = skippedFences.get(at)?.closer ?? commentSpanEnd(trimEndSpaceTab(unquoted(lines[at]!)), at)
       nextVisible = (own === -1 ? at : own) + 1
       for (; nextVisible < lines.length; nextVisible++) {
         const text = trimEndSpaceTab(unquoted(lines[nextVisible]!))

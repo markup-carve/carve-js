@@ -486,8 +486,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     const contentStart = head.line.lastIndexOf(head.content)
     const closerFloor = contentStart >= 0 && sourceColumnAt(head.line, contentStart + innermostMarker) === followerColumn ? followerColumn : 0
-    const attached = session.collectAttachedListBlock(lexer, (line) => isItemAttachBoundary(line) || (followerOpensBlock &&
-      indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart()))),
+    // A line the ownership walk folded lazily stays in the block's open paragraph.
+    const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) || (followerOpensBlock &&
+      indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
+      (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))),
     shape.baseIndent, false, followerColumn, closerFloor)
     // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
     // A task item's content column is its box's column.
@@ -495,8 +497,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const nestedContentOffset = head.checked !== undefined && contentOffset >= 4 &&
       /^\[[ xX_>\/!?-]\] $/.test(head.line.slice(contentOffset - 4, contentOffset)) ? contentOffset - 4 : contentOffset
     const ownContentColumn = nestedContentOffset < 0 ? -1 : sourceColumnAt(head.line, nestedContentOffset)
-    // The follower stands at the innermost opener's marker column, which is column 0 of the nested line.
-    const followerSlice = indentColumns(attached.lines[0] ?? '')
+    // Lines are sliced at the content's column, so the inner markers of `- - > +` keep the follower under the quote.
+    const followerSlice = Math.min(indentColumns(attached.lines[0] ?? ''),
+      contentStart >= 0 ? sourceColumnAt(head.line, contentStart) : Infinity)
     const lines = [head.content, ...attached.lines.map(line => sliceColumns(line, Math.min(followerSlice, indentColumns(line)), true))]
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
     // A quoted line right after the block, at the stacked quote's owner column, is still that quote's (§17 L3).

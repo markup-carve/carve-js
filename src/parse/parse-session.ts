@@ -636,9 +636,15 @@ export class ParseSession extends InlineParseSession {
   /** Document lines whose consumed `+` the ownership walk wrote as a `%%` stand-in. */
   private consumedMarkerLines = new Set<number>()
   private quoteSiblingSeparators = new Set<number>()
+  private walkLazyLines = new Set<number>()
 
   isQuoteSiblingSeparator(line: number): boolean {
     return this.quoteSiblingSeparators.has(line)
+  }
+
+  /** Whether the ownership walk folded this document line lazily (PART 0 S4). */
+  isWalkLazyLine(line: number): boolean {
+    return this.walkLazyLines.has(line)
   }
 
   private parseWithAuthoredRestore(source: string, opts: ParseOptions, transparent: boolean,
@@ -776,6 +782,7 @@ export class ParseSession extends InlineParseSession {
       [lexer.lineNumber(index), { closer: lexer.lineNumber(closer), content }]))
     this.consumedMarkerLines = new Set([...ownership.consumedMarkers].map((index) => lexer.lineNumber(index)))
     this.quoteSiblingSeparators = new Set([...ownership.quoteSiblingSeparators].map((index) => lexer.lineNumber(index)))
+    this.walkLazyLines = new Set([...ownership.lazyLines].map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
     // no matcher, but it now asks whether one is registered: an extension's
@@ -926,6 +933,7 @@ export class ParseSession extends InlineParseSession {
     sub.applyOwnership(ownership)
     for (const index of ownership.consumedMarkers) this.consumedMarkerLines.add(sub.lineNumber(index))
     for (const index of ownership.quoteSiblingSeparators) this.quoteSiblingSeparators.add(sub.lineNumber(index))
+    for (const index of ownership.lazyLines) this.walkLazyLines.add(sub.lineNumber(index))
     this.collectLinkDefs(sub)
     if (!this.activeMatchers.length) return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
     const prevCtx = this.activeMatcherCtx
@@ -2542,7 +2550,7 @@ export class ParseSession extends InlineParseSession {
 
   private collectAttachedBlock(
     lexer: Lexer,
-    isBoundary: (line: string) => boolean,
+    isBoundary: (line: string, offset?: number) => boolean,
     contentColumn = 0,
     endAtFoldedDefinition = true,
     acceptFirstNonList = false,
@@ -2625,7 +2633,7 @@ export class ParseSession extends InlineParseSession {
           !deflistMarkerLine(candidate)
         // The line after a refused brace run continues its paragraph whatever it opens (CARVE-P2-035);
         // a sibling item, description or note still ends its host first.
-        if (isBoundary(candidate) && !firstFlushLeft && !firstNonList &&
+        if (isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
           (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
         take++
       }
@@ -2662,7 +2670,7 @@ export class ParseSession extends InlineParseSession {
 
   collectAttachedListBlock(
     lexer: Lexer,
-    isBoundary: (line: string) => boolean,
+    isBoundary: (line: string, offset?: number) => boolean,
     baseIndent: number,
     endAtFoldedDefinition = true,
     viewSlice = 0,
