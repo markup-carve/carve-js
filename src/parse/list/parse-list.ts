@@ -537,7 +537,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         let gap = 0
         while (isBlankLine(lexer.peek(gap))) gap++
         const next = lexer.peek(gap)
-        if (gap === 0 || next === undefined || isSiblingMarker(shape, next)) break
+        // An adjacent block opener can belong to the middle item too; it does
+        // not need a blank after the first attached block.
+        if (next === undefined || isSiblingMarker(shape, next) ||
+            (gap === 0 && !lineOpensBlock(next.trimStart()))) break
         // A marker at or past the inner item's own marker column still continues the inner list.
         if (indentColumns(next) < innerColumn && !(isListMarkerLine(next.trimStart()) && indentColumns(next) >= ownContentColumn)) break
         for (let index = 0; index < gap; index++) {
@@ -2405,6 +2408,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return column !== undefined && definitionBodyColumn !== undefined &&
         column > physicalItemMarkerColumn && column < definitionBodyColumn
     }
+    const atDescendantDescriptionMarker = (): boolean =>
+      sourceDescription !== null && lazyState.deepest?.inDefList === 'description' &&
+      !lazyState.ownedAuthored && sourceMarkerColumn === physicalItemMarkerColumn + lazyState.ownedColumn
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
@@ -2431,7 +2437,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A separator after a nested item's term misses that term and is read in this item (carve#4861).
       const missesNestedTerm = sourceDescription !== null && lazyState.inDefList === false &&
         lazyState.deepest?.inDefList === 'term'
-      belowDefinitionEntry = lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
+      // The descendant description cannot claim a marker at its item's own
+      // marker column. Leave that line in the surviving item's body.
+      belowDefinitionEntry = !atDescendantDescriptionMarker() &&
+        lazyState.opaque === null && !lazyState.inFootnoteBody && !atMarkerNoteBody &&
         !missesNestedTerm && definitionHostColumn !== undefined &&
         (sourceDescription !== null || RE_DEFLIST_TERM.test(sourceEntry)) &&
         ((!markerLineTerm && sourceMarkerColumn < contentCol) ||
