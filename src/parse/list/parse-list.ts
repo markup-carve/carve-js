@@ -2970,12 +2970,22 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
         lazyState.opaque.close.test((nested.at(-2) ?? '').trimStart()))
 
+    // S1 ends a descendant verse's span when this line misses its owner.
+    // Its pre-span stanza then answers S4 for the containing item.
+    const descendantVerseClaimAfterMiss = (line: string): boolean => {
+      if (RE_COMMENT_LINE.test(line.trimStart())) return false
+      for (let frame = lazyState.deepest; frame; frame = frame.deepest)
+        if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true) return true
+      return false
+    }
+
+
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-      (sourceAfterNestedNote || (((((lazyState.lazyFoldable || captionParagraphClaim || captionLeafOpen(l) ||
+      (sourceAfterNestedNote || (((((lazyState.lazyFoldable || descendantVerseClaimAfterMiss(l) || captionParagraphClaim || captionLeafOpen(l) ||
         (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
         (lazyState.deepest?.inDefList === 'description' &&
           (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
