@@ -1678,6 +1678,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let descriptionBodyColumn = -1
     let descriptionFollowerColumn = -1
     let belowOpenDescription = false
+    let scannedNestedTerms = 0
+    let hasNestedTerm = markerLineTerm
+    const termScan = verbatimOnlyLazyState()
+    const bodyHasTerm = (): boolean => {
+      while (scannedNestedTerms < nested.length) {
+        const line = nested[scannedNestedTerms]!
+        if (termScan.opaque === null && termScan.literalColon === undefined &&
+            RE_DEFLIST_TERM.test(line.trimStart())) hasNestedTerm = true
+        trackItemLazyState(line, termScan, true, () => false)
+        scannedNestedTerms++
+      }
+      return hasNestedTerm
+    }
     // ...and about one taken at the content column.
     let strippedPrefix: number | undefined
     let placed = ''
@@ -2162,6 +2175,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
     }
     const stopsBeforeBody = (l: string): Decision | undefined => {
+      if (RE_DEFLIST_DEF.test(l.trimStart()) &&
+          lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(l) === authoredItemMarkerColumn &&
+          (definitionHostColumn !== undefined || lazyState.deepest?.inDefList === 'description' || bodyHasTerm())) return 'stop'
       // A definition marker at this item's authored marker column cannot be
       // claimed by a description inside a descendant item. The descendant
       // verse's stanza is behind that definition boundary.
