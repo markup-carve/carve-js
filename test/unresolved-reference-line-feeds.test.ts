@@ -26,7 +26,13 @@ describe('unresolved reference line feeds', () => {
   }
 
   it('keeps authored breaks when source positions are disabled', () => {
-    for (const source of ['[a\\\nb `x\ny`][missing]\n', '[a \\\\`x\ny`][missing]\n', '![a \\\\`x\ny`][missing]\n']) {
+    for (const source of [
+      '[a\\\nb `x\ny`][missing]\n',
+      '[a \\\\`x\ny`][missing]\n',
+      '![a \\\\`x\ny`][missing]\n',
+      '[a `x\ny\\`][missing]\n',
+      '![a `x\ny\\`][missing]\n',
+    ]) {
       expect(carveToPlainText(source, { positions: false })).toBe(source)
       expect(carveToAnsi(source, { positions: false })).toBe(source)
     }

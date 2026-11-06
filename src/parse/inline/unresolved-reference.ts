@@ -84,11 +84,11 @@ export function referenceDisplayText(
   const pairedCodeRuns = new Map<number, number>()
   let codeOpener: RegExpExecArray | undefined
   for (const run of rawRef.matchAll(/`+/g)) {
-    let slashes = 0
-    for (let at = run.index - 1; at >= 0 && rawRef[at] === '\\'; at--) slashes++
-    if (slashes % 2 === 1) continue
-    if (!codeOpener) codeOpener = run
-    else if (codeOpener[0].length === run[0].length) {
+    if (!codeOpener) {
+      let slashes = 0
+      for (let at = run.index - 1; at >= 0 && rawRef[at] === '\\'; at--) slashes++
+      if (slashes % 2 === 0) codeOpener = run
+    } else if (codeOpener[0].length === run[0].length) {
       pairedCodeRuns.set(codeOpener.index, run.index + run[0].length)
       codeOpener = undefined
     }
