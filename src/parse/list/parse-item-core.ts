@@ -800,6 +800,7 @@ export function fencedBlockEnd(scan: AttachedScan): number {
       }
     }
     const close = findColonCloser(end === scan.end ? scan : { ...scan, end, cache: {} }, 0, run)
+    for (let offset = 1; close !== -1 && scan.belowFloor !== undefined && offset <= close; offset++) if (scan.belowFloor(offset)) return -1
     if (close !== -1) return close
   }
 
