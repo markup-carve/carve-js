@@ -156,7 +156,10 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         // Anchor the cell's inline content, but only after checking the content is
         // where we think it is. `\|` unescapes to one character, so a cell holding
         // an escaped pipe is not a verbatim slice and gets no anchor.
-        const within = content === '' || !canPosition ? -1 : src.indexOf(content)
+        // Marker attributes precede the content and may contain the same text.
+        // The trimmed content is the cell's suffix, so its final occurrence is
+        // the authored inline range rather than an earlier attribute value.
+        const within = content === '' || !canPosition ? -1 : src.lastIndexOf(content)
         if (!content.includes('\\|') && within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
           c.anchors = [
             {
