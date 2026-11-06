@@ -619,6 +619,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         pos.endLine = lastOwned.endLine
         if (lastOwned.endColumn !== undefined) pos.endColumn = lastOwned.endColumn
         if (lastOwned.endOffset !== undefined) pos.endOffset = lastOwned.endOffset
+      } else if (body.length === 0) {
+        // Collected definitions can consume continuation lines while leaving
+        // this note empty. Those lines belong to the hoisted sibling, so an
+        // empty note ends with the source on its own opening line.
+        pos.endLine = pos.startLine
+        pos.endColumn = lexer.lineStartColumn(defLineIndex) + defLine.length
+        pos.endOffset = lexer.lineOffset(defLineIndex) + defLine.length
       }
       lexer.footnoteDefPos.set(label, pos)
     }
