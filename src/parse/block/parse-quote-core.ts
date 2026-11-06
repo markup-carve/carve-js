@@ -464,6 +464,12 @@ function trackHostCommentLine(q: QuoteHostLine): boolean {
     host.commentBoundary = true
     host.commentBoundaryBelow = commentFenceRun(text) !== undefined && column < host.columns.at(-1)!
   }
+  const run = commentFenceRun(text)
+  if (run !== undefined && host.markers.length > 0 && column >= host.columns.at(-1)!) {
+    host.fence = { marker: '%'.repeat(run), column, floor: host.columns.at(-1)!, comment: true }
+    closeBlockQuoteParagraph(state)
+    return true
+  }
   return false
 }
 

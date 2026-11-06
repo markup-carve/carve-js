@@ -3204,7 +3204,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         run.unshift(line)
         if (!line.trimStart().startsWith('{')) continue
         if (run.length < 2) return false
-        const column = indentColumns(line)
         let nestedContentColumn: number | undefined
         for (let earlier = at - 1; earlier >= 0; earlier--) {
           const marker = nestedSourceLines[earlier]!
@@ -3214,7 +3213,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           break
         }
         if (nestedContentColumn !== undefined && indentColumns(l) < nestedContentColumn) return false
-        if (!run.slice(1).some(next => indentColumns(next, column + 1) <= column)) return false
+        // A nested reparse may rebase the brace run, erasing the authored
+        // difference between its opener and continuation. Refusal is decided
+        // at the source columns, before any item body has been rebased.
+        const root = lexer.rootLines
+        const sourceRunColumn = (index: number): number => root && nestedLineNumbers[index] !== undefined
+          ? sourceColumn(root[nestedLineNumbers[index]! - 1] ?? nestedSourceLines[index]!)
+          : indentColumns(nestedSourceLines[index]!)
+        const sourceOpen = sourceRunColumn(at)
+        if (!run.slice(1).some((_next, offset) => sourceRunColumn(at + offset + 1) <= sourceOpen)) return false
         if (line.trimStart().startsWith('{%')) return last.includes('%}') &&
           (indentColumns(last) >= indentColumns(l) || indentColumns(l) >= (nestedContentColumn ?? contentCol))
         return parseBlockAttributeRun(run.map((part, index) => index === 0 ? part.trimStart() : ' ' + part.trimStart()).join('\n')) !== null
