@@ -1127,7 +1127,9 @@ export function lintCarve(
     if (!marker) return
     const start = sourceOffset(pos.startLine, pos.startColumn)
     if (reportedColonStarts.has(start)) return
-    const ending = stripContainerPrefixesKeepIndent(sourceLines[pos.endLine - 1] ?? '').trim()
+    const endLine = node.type === 'figure_group' && /^\^ /.test(sourceLines[pos.endLine - 1] ?? '')
+      ? pos.endLine - 1 : pos.endLine
+    const ending = stripContainerPrefixesKeepIndent(sourceLines[endLine - 1] ?? '').trim()
     if (ending === marker) return
     reportedColonStarts.add(start)
     out.push({

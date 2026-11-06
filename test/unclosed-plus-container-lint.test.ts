@@ -9,3 +9,8 @@ it.each([
   expect(lintCarve(source).filter(w => w.rule === 'unclosed-container-fence'))
     .toMatchObject([{ line: 1, column }])
 })
+
+it('does not treat a caption after a closed figure group as its closer', () => {
+  expect(lintCarve('::: figure\ntext\n:::\n^ Caption\n')
+    .filter(w => w.rule === 'unclosed-container-fence')).toEqual([])
+})
