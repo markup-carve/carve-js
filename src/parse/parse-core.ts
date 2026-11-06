@@ -715,6 +715,7 @@ export {
   markerDecision,
   markerRunListIsQuoteHeld,
   matchListMarker,
+  leadingCommentEnd,
   matchedCommentFenceEnd,
   nestedItemHoldsOpenParagraph,
   olKindMatches,

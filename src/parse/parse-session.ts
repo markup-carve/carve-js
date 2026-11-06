@@ -110,6 +110,7 @@ import {
   layoutWork,
   lazyProbeCost,
   lazyProbeFrame,
+  leadingCommentEnd,
   leadingWhitespace,
   lineOpensBlock,
   lineOpensItemBlock,
@@ -275,7 +276,7 @@ function skippedNoteBodyLine(line: string, floor: number): boolean {
   return indentColumns(line) >= floor || (!/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead))
 }
 
-/** Attribute runs and footnote definitions before a `+`-attached block: the host keeps them (§17 L3, carve#5288). */
+/** Attribute runs, notes and comments before a `+`-attached block: the host keeps them (§17 L3, carve#5288, carve#5324). */
 function leadingInvisibleRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
   let count = 0
   for (;;) {
@@ -283,7 +284,9 @@ function leadingInvisibleRun(at: (offset: number) => string | undefined, options
     const attrs = leadingAttributeRun(offset => count > 0 ? at(count + offset)?.trimStart() : at(count + offset), options)
     if (attrs > 0) count += attrs
     const note = leadingNoteEnd(at, count)
+    const comment = note === -1 ? leadingCommentEnd(at, count) : -1
     if (note !== -1) count = note
+    else if (comment !== -1 && at(comment) !== undefined) count = comment
     else if (attrs === 0) return count
   }
 }
@@ -2654,12 +2657,13 @@ export class ParseSession extends InlineParseSession {
       viewSlice, true, closerFloor)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
-    const isLineComment = (line: string | undefined) => line !== undefined && line.startsWith('%%') && !RE_COMMENT_BLOCK_ANY.test(line)
     let leadLines = 0
     for (let from = -1; from !== leadLines;) {
       from = leadLines
       leadLines += leadingAttributeRun(offset => leadLines > 0 ? view(attached.lines[leadLines + offset])?.trimStart() : view(attached.lines[leadLines + offset]), lexer.parseOptions)
-      while (isLineComment(view(attached.lines[leadLines]))) leadLines++
+      for (let comment = leadingCommentEnd(offset => view(attached.lines[offset]), leadLines);
+        comment !== -1 && comment < attached.lines.length;
+        comment = leadingCommentEnd(offset => view(attached.lines[offset]), leadLines)) leadLines = comment
       const note = leadingNoteEnd(offset => view(attached.lines[offset]), leadLines)
       if (note !== -1) leadLines = note
     }
