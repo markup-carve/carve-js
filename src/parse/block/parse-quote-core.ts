@@ -394,7 +394,8 @@ function trackHeldColonComment(q: QuoteHostLine): QuoteHostVerdict {
     closeBlockQuoteParagraph(state)
     return true
   }
-  if (heldColon?.literal && column < heldColon.floor) {
+  // A blank line is stanza structure, not a line below the line block's column (PART 9 §23).
+  if (heldColon?.literal && column < heldColon.floor && text !== '') {
     // A text line folds into an open stanza and closes nothing, so the item stays for the next marker (PART 0 S4).
     if (blockQuoteParagraphOpen(state) && text !== '' && commentRun === undefined && !RE_COMMENT_LINE.test(text) &&
         !lineOpensBlock(text) && !isBlockAttributeLine(text) && !opensWrappedAttributeBlock(text) &&
