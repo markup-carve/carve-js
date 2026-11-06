@@ -74,6 +74,7 @@ function renderPass(
     indentBase: 0,
     blockDepth: 0,
     inlineDepth: 0,
+    lineBlockDepth: 0,
     // This target expands a crossref label exactly as the other three do, so it
     // needs the same bound. It shares that bound with the abbreviation, which
     // expands here as of PART 11 §10f; before that clause an abbreviation
@@ -100,6 +101,7 @@ interface PlainContext {
   indentBase: number
   blockDepth: number
   inlineDepth: number
+  lineBlockDepth: number
   /** Per-render derived-text expansion budget (DoS guard). */
   abbrBudget: AbbrBudget
   /**
@@ -174,7 +176,12 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
         ? `${stripControls(node.label)}\n\n${renderBlocks(node.children, ctx)}`
         : renderBlocks(node.children, ctx)
     case 'line_block':
-      return renderBlocks(node.children, ctx)
+      ctx.lineBlockDepth++
+      try {
+        return renderBlocks(node.children, ctx)
+      } finally {
+        ctx.lineBlockDepth--
+      }
     case 'definition_list':
       return renderDefinitionList(node.items, ctx, true)
     case 'figure':
@@ -195,7 +202,7 @@ function renderBlock(node: BlockNode, ctx: PlainContext): string {
     case 'image':
       // Block-level (standalone) image: emit the trailing block separator so a
       // following block is not glued to it, matching carve-php / carve-rs.
-      return `${renderImageText(node)}\n\n`
+      return `${renderImageText(node, ctx)}\n\n`
     case 'abbreviation_def':
       // PART 11 §10f: this target DROPS a definition whose own expansion it
       // emits, because the words would otherwise appear twice - once as this
@@ -350,14 +357,14 @@ function renderFootnoteDefs(ast: Document, ctx: PlainContext): string {
 // An image contributes its alt text, EXCEPT when it is an unresolved reference
 // (PART 12 §3a): there the document has no image, only the source the author
 // wrote, and `alt` is the label out of its brackets.
-function renderImageText(node: Image): string {
+function renderImageText(node: Image, ctx: PlainContext): string {
   // UNRESOLVED means no destination, not "carries a ref": PART 12 §3a keeps
   // `ref` and `rawRef` on a RESOLVED reference too, so the presence of a ref
   // no longer answers this question (carve#596).
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef, ctx.lineBlockDepth > 0))
 
   return stripControls(node.alt)
 }
@@ -456,14 +463,14 @@ function renderInline(node: InlineNode, ctx: PlainContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef))
+      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef, ctx.lineBlockDepth > 0))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost link context applies while its label renders.
       if (insideLink) return renderInlines(node.children, ctx)
       return withinLink(() => renderInlines(node.children, ctx))
     case 'image':
-      return renderImageText(node)
+      return renderImageText(node, ctx)
     case 'ruby':
       rubyFlattened(ctx.options, node, 'plain')
       return node.pairs.map((pair) => `${renderInlines(pair.base, ctx)}(${renderInlines(pair.annotation, ctx)})`).join('')

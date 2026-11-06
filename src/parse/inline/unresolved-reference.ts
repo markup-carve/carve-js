@@ -25,6 +25,7 @@
 import type { InlineNode } from '../../ast.js'
 import type { UnresolvedReference } from './reference-state.js'
 import { isResolvedEmptyReference } from './reference-state.js'
+import { buildBracketMap, verbatimSpanEnd } from './parse-brackets.js'
 
 /**
  * True when `node` is a reference link/image that matched no definition.
@@ -63,8 +64,64 @@ export function referenceSourceText(rawRef: string | undefined): string {
 }
 
 /** Plain and terminal targets spell a literal label's soft break as a space. */
-export function referenceDisplayText(rawRef: string | undefined): string {
-  return referenceSourceText(rawRef).replace(/\r?\n/g, ' ')
+export function referenceDisplayText(
+  rawRef: string | undefined,
+  lineBlock = false,
+): string {
+  if (rawRef === undefined) return ''
+
+  // Only the first bracketed run is parsed as visible link text or image alt.
+  // The following reference identifier is a label, even if it contains ticks.
+  const bracketOpen = rawRef.startsWith('![') ? 1 : 0
+  const bracketClose = buildBracketMap(rawRef)
+  const visibleEnd = bracketClose(bracketOpen) ?? rawRef.length
+  const nestedIdentifiers: Array<[number, number]> = []
+  for (let at = bracketOpen + 1; at < visibleEnd; at++) {
+    if (rawRef[at] !== '[') continue
+    const close = bracketClose(at)
+    if (close === undefined || close + 1 >= visibleEnd || rawRef[close + 1] !== '[') continue
+    const tailClose = bracketClose(close + 1)
+    if (tailClose !== undefined && tailClose < visibleEnd) nestedIdentifiers.push([close + 1, tailClose + 1])
+  }
+
+  // Images store only scalar alt text, and source positions may be absent or
+  // skip comment lines. The parser's verbatim rules classify the source itself.
+  const codeSpans: Array<[number, number]> = []
+  const visibleSource = rawRef.slice(0, visibleEnd)
+  let identifierIndex = 0
+  for (let at = bracketOpen + 1; at < visibleEnd; at++) {
+    while (nestedIdentifiers[identifierIndex] && nestedIdentifiers[identifierIndex]![1] <= at) identifierIndex++
+    const identifier = nestedIdentifiers[identifierIndex]
+    if (identifier && identifier[0] <= at) { at = identifier[1] - 1; continue }
+    if (visibleSource[at] === '\\') { at++; continue }
+    if (visibleSource[at] !== '`') continue
+    const span = verbatimSpanEnd(visibleSource, at)
+    if (span.closed) codeSpans.push([at, span.end])
+    at = span.end - 1
+  }
+  let spanIndex = 0
+  let breakIdentifierIndex = 0
+  const authoredBreak = (line: string, at: number): boolean => {
+    if (at >= visibleEnd) return false
+    while (nestedIdentifiers[breakIdentifierIndex] && nestedIdentifiers[breakIdentifierIndex]![1] <= at) breakIdentifierIndex++
+    const identifier = nestedIdentifiers[breakIdentifierIndex]
+    if (identifier && identifier[0] <= at) return false
+    while (codeSpans[spanIndex] && codeSpans[spanIndex]![1] <= at) spanIndex++
+    const slashRun = line.match(/\\+$/)?.[0].length ?? 0
+    return lineBlock || slashRun % 2 === 1
+      || (codeSpans[spanIndex] !== undefined && codeSpans[spanIndex]![0] <= at)
+  }
+
+  let result = ''
+  let cursor = 0
+  for (const match of rawRef.matchAll(/\r?\n/g)) {
+    const line = rawRef.slice(cursor, match.index)
+    result += RE_COMMENT_ONLY_LINE.test(line) ? '' : line
+    result += authoredBreak(line, match.index) ? match[0] : ' '
+    cursor = match.index + match[0].length
+  }
+  const tail = rawRef.slice(cursor)
+  return result + (RE_COMMENT_ONLY_LINE.test(tail) ? '' : tail)
 }
 
 /**
