@@ -2655,6 +2655,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           for (; at < lexer.lineCount; at++) {
             const line = lexer.lineAt(at)!
             if (commentFenceRun(line) === run) break
+            // Comment lines are column-exempt span payload (PART 0 S1, carve#5318).
+            if (RE_COMMENT_LINE.test(line)) continue
             if (!isBlankLine(line) && indentColumns(line, hostColumn) < hostColumn) {
               // This line ends the span (PART 0 S1) and is no lazy text of the item (carve#4770).
               spanEndingMisses.add(at)
