@@ -2359,6 +2359,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // from column zero. A verbatim payload keeps its source tab unchanged.
       if (placed.slice(0, leadingWhitespace(placed)).includes('\t') &&
           lazyState.opaque === null && descendantOpaque === null &&
+          !opensCodeFence(placed.trimStart()) &&
           (lineOpensItemBlock(placed.trimStart()) || isListMarkerLine(placed.trimStart()))) {
         placed = ' '.repeat(Math.max(0, indentColumns(l) - cut)) + l.trimStart()
       }

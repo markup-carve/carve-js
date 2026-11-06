@@ -157,7 +157,7 @@ function indentCols(line: string): { col: number; rest: string } {
 }
 
 // A leading run's column as nested frames strip it (PART 9 §24 C5): tab stops restart at every frame column the run reaches.
-function strippedColumn(line: string, origins: readonly number[], sameLineChild: boolean): number {
+function strippedColumn(line: string, origins: readonly number[], canonicalChild: boolean): number {
   let col = 0
   let origin = 0
   let o = 0
@@ -167,7 +167,7 @@ function strippedColumn(line: string, origins: readonly number[], sameLineChild:
     else break
     // A tab beginning exactly at a frame boundary still belongs to the
     // frame it just reached. Reset the stop only after advancing past it.
-    while (o < origins.length && (sameLineChild ? origins[o]! <= col : origins[o]! < col)) origin = origins[o++]!
+    while (o < origins.length && (canonicalChild ? origins[o]! <= col : origins[o]! < col)) origin = origins[o++]!
   }
   return col
 }
@@ -565,9 +565,9 @@ export function ownLines(
         if (stripped === null && src.slice(0, src.length - m.rest.length).includes('\t')) {
           const origins: number[] = []
           for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
-          const sameLineChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
-            frames[index - 1]?.kind === 'item' && f.line === frames[index - 1]?.line)
-          stripped = strippedColumn(src, origins, sameLineChild)
+          const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
+            frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
+          stripped = strippedColumn(src, origins, canonicalChild)
         }
         if (stripped === null || stripped < f.col) break
         frameReach = true
