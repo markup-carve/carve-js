@@ -399,6 +399,11 @@ function trackHeldColonComment(q: QuoteHostLine): QuoteHostVerdict {
     if (blockQuoteParagraphOpen(state) && text !== '' && commentRun === undefined && !RE_COMMENT_LINE.test(text) &&
         !lineOpensBlock(text) && !isBlockAttributeLine(text) && !opensWrappedAttributeBlock(text) &&
         markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 && bottomBlockLeavesParagraphOpen(text)) return true
+    // A blank ends the stanza, not the line block, so a later stanza still takes a lazy line (CARVE-P9-047).
+    if (text === '') {
+      closeBlockQuoteParagraph(state)
+      return undefined
+    }
     host.colons!.pop()
     closeBlockQuoteParagraph(state)
     if (commentRun !== undefined && q.hasCommentCloser(commentRun, column)) return false
