@@ -114,8 +114,16 @@ interface Form {
 }
 
 function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): boolean {
-  return /^: [^\n]/.test(rest) && frames.some((frame) =>
-    frame.kind === 'item' && frame.hasDefinition === true && frame.markerCol === column)
+  if (!/^: [^\n]/.test(rest)) return false
+  for (let i = frames.length - 1; i >= 0; i--) {
+    const frame = frames[i]!
+    if (frame.kind !== 'item' || frame.hasDefinition !== true || frame.markerCol !== column) continue
+    // A quote after the term keeps an unmarked line while its paragraph is open.
+    for (let k = i + 1; k < frames.length; k++)
+      if (frames[k]!.kind === 'quote' && frames[k]!.para) return false
+    return true
+  }
+  return false
 }
 
 function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean, inCommentSpan: boolean, frames: Frame[]): number {
