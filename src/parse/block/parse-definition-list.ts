@@ -15,6 +15,7 @@ import {
   sliceColumns,
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
+import { sourceQuoteBody } from '../parse-core.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList } from './parse-footnote-session.js'
@@ -812,7 +813,11 @@ export function createDefinitionListParser(
             track(closer)
           }
           attachedOpenCodeFence = false
-          endListAfterAttachedBlank = true
+          const entry = after === undefined ? '' : sourceQuoteBody(after).trimStart()
+          const siblingColumn = bodySourceColumn - contentCol
+          endListAfterAttachedBlank = after === undefined ||
+            !(sourceColumn(after, quotePrefixDepth(markerSource)) === siblingColumn &&
+              (RE_DEFLIST_DEF.test(entry) || RE_DEFLIST_TERM.test(entry)))
         }
         // The SECOND spelling of the same rule, and it has its own job: this one
         // decides whether the body survives the blank at all, the Form A branch
