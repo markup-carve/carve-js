@@ -1497,6 +1497,12 @@ const IMPLEMENTED = new Set([
   'a-plus-skips-every-invisible-line-its-host-keeps',
   'a-quote-plus-after-a-quote-attached-paragraph-is-a-letter',
   'native-head-rows-with-span-placeholders',
+  // Categories added between carve ea206543 and the 0.1.14 cut; every new
+  // corpus pair is checked against its HTML golden below.
+  'a-braced-comment-that-starts-a-continuation-line-is-at-block-position',
+  'a-container-owned-comment-run-is-one-writer-block',
+  'a-document-owned-comment-run-stays-between-list-items',
+  'a-lazy-braced-comment-uses-source-columns-in-every-host',
 ])
 
 /**
