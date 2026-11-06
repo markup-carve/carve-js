@@ -31,3 +31,9 @@ it('floats a wrapped attribute run after the kept note', () => {
 it('ends a note before plain text left of a wrapped attribute run', () => {
   expect(carveToHtml('[^m]: +\n  [^n]: x\n  {.x\n   .y}\nplain\n').trim()).toBe('<p>plain</p>')
 })
+
+it('keeps a lazy line with the paragraph a wrapped attribute labels', () => {
+  const html = carveToHtml('[^n]: x\n  {.x\n   .y}\n  paragraph\nbelow\n\nsee[^n]\n')
+  expect(html).toContain('<p class="x y">paragraph\nbelow<a href="#fnref1"')
+  expect(html).not.toContain('<p>below</p>')
+})

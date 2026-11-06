@@ -8,29 +8,34 @@ import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentCo
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
-function wrappedAttributeRunAt(lexer: Lexer): boolean {
+function wrappedAttributeRunAt(lexer: Lexer): number {
   const opener = lexer.peek()
-  if (opener === undefined || !opensWrappedAttributeBlock(opener.trimStart())) return false
+  if (opener === undefined || !opensWrappedAttributeBlock(opener.trimStart())) return 0
   const column = indentColumns(opener)
   const lines: string[] = []
   for (let offset = 0; ; offset++) {
     const line = lexer.peek(offset)
-    if (line === undefined || isBlankLine(line) || offset > 0 && indentColumns(line) <= column) return false
+    if (line === undefined || isBlankLine(line) || offset > 0 && indentColumns(line) <= column) return 0
     lines.push(sliceColumns(line, column, true))
     if (line.includes('}')) break
   }
-  return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length
+  return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length ? lines.length : 0
 }
 
 function wrappedAttributeLeavesNote(
   lexer: Lexer, admission: ContainerAdmission, sourceLine: string | undefined,
-  authoredBodyColumn: number | undefined, state: ReturnType<typeof verbatimOnlyLazyState>, seen: { value: boolean },
+  authoredBodyColumn: number | undefined, state: ReturnType<typeof verbatimOnlyLazyState>, seen: { value: boolean; until: number },
 ): boolean {
   if (admission.kind === 'below' && sourceLine !== undefined && authoredBodyColumn !== undefined &&
-      sourceColumn(sourceLine) < authoredBodyColumn && (seen.value || wrappedAttributeRunAt(lexer))) return true
-  if (admission.kind === 'content' && state.opaque === null && wrappedAttributeRunAt(lexer)) {
+      sourceColumn(sourceLine) < authoredBodyColumn && (seen.value || wrappedAttributeRunAt(lexer) > 0)) return true
+  const run = admission.kind === 'content' && state.opaque === null ? wrappedAttributeRunAt(lexer) : 0
+  if (run > 0) {
     seen.value = true
+    seen.until = lexer.pos + run - 1
     state.lazyFoldable = false
+  } else if (admission.kind === 'content' && lexer.pos > seen.until && state.attrRun === null &&
+      !isBlockAttributeLine(admission.line.trimStart()) && !lineOpensItemBlock(admission.line.trimStart())) {
+    seen.value = false
   }
   return false
 }
@@ -396,7 +401,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
-  const wrappedAttributeAtBody = { value: false }
+  const wrappedAttributeAtBody = { value: false, until: -1 }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   runIndentationContainer(
