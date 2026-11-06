@@ -2995,13 +2995,38 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // S1 ends a descendant verse's span when this line misses its owner.
     // Its pre-span stanza then answers S4 for the containing item.
+    const validDescendantVerseOwner = (): boolean => {
+      for (let at = nested.length - 1; at >= 0; at--) {
+        let candidate = nested[at]!.trimStart()
+        for (let width = walkMarkerOwnerPrefix(candidate); width > 0;
+            width = walkMarkerOwnerPrefix(candidate)) candidate = candidate.slice(width).trimStart()
+        if (RE_LINE_BLOCK_OPEN.test(candidate)) return true
+        if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) return false
+      }
+      return false
+    }
     const descendantVerseClaimAfterMiss = (line: string): boolean => {
       const text = line.trimStart()
       if (RE_COMMENT_LINE.test(text)) return false
-      if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= authoredItemMarkerColumn) return false
+      if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= authoredItemMarkerColumn &&
+          (RE_DEFLIST_DEF.test(text) || RE_DEFLIST_TERM.test(text))) return false
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
-        if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true) return true
+        if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true &&
+            (frame.descriptionHasTerm === true || validDescendantVerseOwner())) return true
       return false
+    }
+    const descendantDefinitionReachesContent = (line: string): boolean =>
+      RE_DEFLIST_DEF.test(line.trimStart()) && descendantVerseClaimAfterMiss(line) &&
+      lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) >= authoredItemMarkerColumn + contentCol
+    const lazyFoldableOwner = (): boolean => {
+      if (!lazyState.lazyFoldable) return false
+      const termlessDescriptionSpan = !validDescendantVerseOwner() &&
+        nested.some(entry => RE_DEFLIST_DEF.test(entry.trimStart()) && /:{3,}/.test(entry))
+      if (!termlessDescriptionSpan) return true
+      for (let frame: typeof lazyState | null | undefined = lazyState; frame; frame = frame.deepest)
+        if (frame.literalColon?.opaque?.belowBaseCloses === true &&
+            frame.literalColon.spanFoldable === true && frame.descriptionHasTerm !== true) return false
+      return true
     }
 
     // A line below the content column that the item keeps as lazy text.
@@ -3009,7 +3034,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       pendingBlankRun.count === 0 &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
-      (sourceAfterNestedNote || (((((lazyState.lazyFoldable || descendantVerseClaimAfterMiss(l) || captionParagraphClaim || captionLeafOpen(l) ||
+      (sourceAfterNestedNote || (((((lazyFoldableOwner() || descendantVerseClaimAfterMiss(l) || captionParagraphClaim || captionLeafOpen(l) ||
         (lazyState.inDefList === 'description' && isBlockAttributeLine(l.trimStart())) ||
         (lazyState.deepest?.inDefList === 'description' &&
           (lazyState.deepest.lazyFoldable || isBlockAttributeLine(l.trimStart()))) ||
@@ -3069,7 +3094,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const termlessDefinitionNeedsLazyFrame = (line: string): boolean =>
       indentColumns(line, contentCol) < contentCol && RE_DEFLIST_DEF.test(line.trimStart()) &&
-      !descendantVerseClaimAfterMiss(line) &&
+      !descendantDefinitionReachesContent(line) &&
       lazyState.inDefList === false && !lazyState.deepest?.inDefList
     const lazyLineFor = (l: string): string => {
       if (termlessDefinitionNeedsLazyFrame(l))
@@ -3193,7 +3218,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // The item's own reparse cannot see this from the column alone - the
       // clamp above rewrote it - so record the FACT for the arm below.
       if ((indentColumns(l, contentCol) < contentCol || ancestorTermBand) &&
-          !(descendantVerseClaimAfterMiss(l) && RE_DEFLIST_DEF.test(l.trimStart()))) {
+          !descendantDefinitionReachesContent(l)) {
         lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
       }
       // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
