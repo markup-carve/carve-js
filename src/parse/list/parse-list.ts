@@ -16,6 +16,8 @@ import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, 
 
 /** One marker of a stacked marker chain, with its trailing space. */
 const STACKED_MARKER = /^(?:[-*] |\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ) */
+// How the ownership walk leaves the lines of a skipped `%%%` span.
+const STAND_IN_COMMENT = /^[ \t]*%%(?!%)/
 
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
 function noteFenceOpen(state: ItemLazyState): boolean {
@@ -473,8 +475,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const itemStartLineIndex = head.startLineIndex
     // The follower is read at the innermost opener's marker column, so a block it opens is not paragraph text
     // here, and a line below that column misses the block: it folds only into an open paragraph (PART 0 S4).
-    const followerColumn = indentColumns(lexer.peek()!)
-    const followerText = lexer.peek()!.trimStart()
+    // A skipped comment before the block is invisible, so the line after it is the follower (CARVE-P0-004).
+    let followerAt = 0
+    while (STAND_IN_COMMENT.test(lexer.peek(followerAt) ?? '')) followerAt++
+    const follower = lexer.peek(followerAt) ?? lexer.peek()!
+    const followerColumn = indentColumns(follower)
+    const followerText = follower.trimStart()
     const followerIsQuote = RE_BLOCKQUOTE.test(followerText)
     const followerOpensBlock = lineOpensBlock(followerText)
     // A block at the innermost marker's column is attached below the item holding that marker: a line
