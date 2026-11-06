@@ -586,7 +586,7 @@ function renderInline(node: InlineNode, ctx: AnsiContext): string {
       // An unresolved reference is literal source, not a link (PART 12 §3a):
       // the node survives serialization so the reference is not lost from the
       // tree, and every render target writes it back out as written.
-      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef, node.children, node.pos?.startLine, ctx.lineBlockDepth > 0))
+      if (isUnresolvedReference(node)) return stripControls(referenceDisplayText(node.rawRef, ctx.lineBlockDepth > 0))
       // Links never nest at the render seam (PART 12 §3a,
       // markup-carve/carve#817). The node stays in the tree as written, but
       // only the outermost destination gets ANSI link styling.
@@ -778,7 +778,7 @@ function renderImage(node: Image, ctx: AnsiContext): string {
   // Spelled out rather than shared: this arm takes the STRUCTURAL shape an
   // image writes back from, which carries no `type` for the shared predicate
   // to key on.
-  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef, [], node.pos?.startLine, ctx.lineBlockDepth > 0))
+  if (node.ref !== undefined && !node.src && !isResolvedEmptyReference(node)) return stripControls(referenceDisplayText(node.rawRef, ctx.lineBlockDepth > 0))
   const alt = stripControls(node.alt)
   return `${style('[img:', FG_MAGENTA)}${alt ? ` ${alt}` : ''}${style(']', FG_MAGENTA)}`
 }

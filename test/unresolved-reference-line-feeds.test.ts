@@ -15,6 +15,7 @@ const cases = [
   { source: '[é\\\nb][missing]\n', expected: '[é\\\nb][missing]\n' },
   { source: '[x][`ab\ncd`]\n', expected: '[x][`ab cd`]\n' },
   { source: '[a `x]y\nz`][missing]\n', expected: '[a `x]y\nz`][missing]\n' },
+  { source: '[a\n%% comment\nb `x\ny`\nz][missing]\n', expected: '[a b `x\ny` z][missing]\n' },
 ] as const
 
 describe('unresolved reference line feeds', () => {

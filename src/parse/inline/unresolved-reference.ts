@@ -25,6 +25,7 @@
 import type { InlineNode } from '../../ast.js'
 import type { UnresolvedReference } from './reference-state.js'
 import { isResolvedEmptyReference } from './reference-state.js'
+import { buildBracketMap, verbatimSpanEnd } from './parse-brackets.js'
 
 /**
  * True when `node` is a reference link/image that matched no definition.
@@ -65,56 +66,26 @@ export function referenceSourceText(rawRef: string | undefined): string {
 /** Plain and terminal targets spell a literal label's soft break as a space. */
 export function referenceDisplayText(
   rawRef: string | undefined,
-  children: InlineNode[] = [],
-  startLine?: number,
   lineBlock = false,
 ): string {
   if (rawRef === undefined) return ''
-  const retained: Array<{ start: number; end: number }> = []
-  const visit = (nodes: InlineNode[]): void => {
-    for (const node of nodes) {
-      if ((node.type === 'hard_break' || node.type === 'code' || node.type === 'raw_inline' || node.type === 'math') && node.pos?.startLine !== undefined && node.pos.endLine !== undefined) {
-        retained.push({ start: node.pos.startLine, end: node.pos.endLine })
-      }
-      if ('children' in node && Array.isArray(node.children)) visit(node.children)
-    }
-  }
-  visit(children)
-
-  const pairedCodeRuns = new Map<number, number>()
-  let codeOpener: RegExpExecArray | undefined
-  for (const run of rawRef.matchAll(/`+/g)) {
-    if (!codeOpener) {
-      let slashes = 0
-      for (let at = run.index - 1; at >= 0 && rawRef[at] === '\\'; at--) slashes++
-      if (slashes % 2 === 0) codeOpener = run
-    } else if (codeOpener[0].length === run[0].length) {
-      pairedCodeRuns.set(codeOpener.index, run.index + run[0].length)
-      codeOpener = undefined
-    }
-  }
 
   // Only the first bracketed run is parsed as visible link text or image alt.
   // The following reference identifier is a label, even if it contains ticks.
-  let visibleEnd = rawRef.length
-  let bracketDepth = 0
-  for (let i = rawRef.startsWith('![') ? 1 : 0; i < rawRef.length; i++) {
-    if (rawRef[i] === '\\') { i++; continue }
-    if (rawRef[i] === '`') {
-      const end = pairedCodeRuns.get(i)
-      if (end !== undefined) { i = end - 1; continue }
-    }
-    if (rawRef[i] === '[') bracketDepth++
-    else if (rawRef[i] === ']' && --bracketDepth === 0) {
-      visibleEnd = i
-      break
-    }
-  }
+  const bracketOpen = rawRef.startsWith('![') ? 1 : 0
+  const visibleEnd = buildBracketMap(rawRef)(bracketOpen) ?? rawRef.length
 
-  // Images store only scalar alt text, and position recording can be disabled.
-  // The source still identifies authored hard breaks and verbatim code spans.
-  // Link children above additionally identify breaks promoted after parsing.
-  const codeSpans = [...pairedCodeRuns].filter(([, end]) => end <= visibleEnd)
+  // Images store only scalar alt text, and source positions may be absent or
+  // skip comment lines. The parser's verbatim rules classify the source itself.
+  const codeSpans: Array<[number, number]> = []
+  const visibleSource = rawRef.slice(0, visibleEnd)
+  for (let at = bracketOpen + 1; at < visibleEnd; at++) {
+    if (visibleSource[at] === '\\') { at++; continue }
+    if (visibleSource[at] !== '`') continue
+    const span = verbatimSpanEnd(visibleSource, at)
+    if (span.closed) codeSpans.push([at, span.end])
+    at = span.end - 1
+  }
   const authoredBreak = (line: string, at: number): boolean => {
     if (at >= visibleEnd) return false
     const slashRun = line.match(/\\+$/)?.[0].length ?? 0
@@ -124,14 +95,10 @@ export function referenceDisplayText(
 
   let result = ''
   let cursor = 0
-  let lineNumber = startLine
   for (const match of rawRef.matchAll(/\r?\n/g)) {
     const line = rawRef.slice(cursor, match.index)
     result += RE_COMMENT_ONLY_LINE.test(line) ? '' : line
-    const currentLine = lineNumber
-    result += (currentLine !== undefined && retained.some(({ start, end }) => start <= currentLine && currentLine < end))
-      || authoredBreak(line, match.index) ? match[0] : ' '
-    if (lineNumber !== undefined) lineNumber++
+    result += authoredBreak(line, match.index) ? match[0] : ' '
     cursor = match.index + match[0].length
   }
   const tail = rawRef.slice(cursor)
