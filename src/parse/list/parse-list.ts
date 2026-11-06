@@ -2951,6 +2951,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const quotePayloadMisses: PayloadMisses = new Map()
     const endsItem = (line: string): boolean => isListMarkerLine(line) && indentColumns(line) <= baseIndent
     const admitContentLine = (l: string): void => {
+      const closerRun = lazyState.opaque === null ? commentFenceRun(l.trimStart()) : undefined
+      const quoteSpanScan = closerRun === undefined ? null : newCommentSpanScan()
+      const priorComment = quoteSpanScan !== null && bodyHoldsOpenCommentSpan(nested.map(sourceQuoteBody), quoteSpanScan, degradedOpeners)
+        ? quoteSpanScan.opaque : null
+      const closesDescendantComment = priorComment?.comment === true &&
+        closerRun === priorComment.run
       if (childSpan !== undefined && lazyState.opaque === childSpan.state && !isBlankLine(l) &&
           indentColumns(l, childSpan.column) < childSpan.column && commentFenceRun(l.trimStart()) !== childSpan.run) {
         bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
@@ -2959,6 +2965,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lazyState.opaque = null
       }
       placeContentLine(l)
+      if (closesDescendantComment) {
+        itemSpanScan.opaque = null
+        itemSpanScan.atBlockStart = true
+        itemSpanScan.index = nested.length
+        closedDescendantFence = true
+      }
       dedentContentLine(l)
       trackNoteBody(l)
       trackFenceOwnership(l)
