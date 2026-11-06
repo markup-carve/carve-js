@@ -14,6 +14,9 @@ import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-b
 import { quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
+/** One marker of a stacked marker chain, with its trailing space. */
+const STACKED_MARKER = /^(?:[-*] |\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ) */
+
 /** Whether a note body this item tracks holds an open fence: its lines are payload, not openers. */
 function noteFenceOpen(state: ItemLazyState): boolean {
   for (let frame = state.noteFrame; frame !== undefined; frame = frame.noteFrame) if (frame.opaque !== null) return true
@@ -472,9 +475,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const followerText = lexer.peek()!.trimStart()
     const followerIsQuote = RE_BLOCKQUOTE.test(followerText)
     const followerOpensBlock = lineOpensBlock(followerText)
+    // A block at the innermost marker's column is attached below the item holding that marker: a line
+    // below that column ends the item, so a closer past it closes nothing (§17 L3, carve#5304).
+    let innermostMarker = 0
+    for (let offset = 0, m = STACKED_MARKER.exec(head.content); m !== null; m = STACKED_MARKER.exec(head.content.slice(offset))) {
+      innermostMarker = offset
+      offset += m[0].length
+    }
+    const contentStart = head.line.lastIndexOf(head.content)
+    const closerFloor = contentStart >= 0 && sourceColumnAt(head.line, contentStart + innermostMarker) === followerColumn ? followerColumn : 0
     const attached = session.collectAttachedListBlock(lexer, (line) => isItemAttachBoundary(line) || (followerOpensBlock &&
       indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart()))),
-    shape.baseIndent, false, followerColumn)
+    shape.baseIndent, false, followerColumn, closerFloor)
     // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
     // A task item's content column is its box's column.
     const contentOffset = head.line.lastIndexOf(head.content)
@@ -506,7 +518,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
     }
     // A block after a blank at a nested stacked item's content column is that inner item's (PART 0 S4).
-    const innerOffset = /^(?:[-*] |\. |(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] ) */.exec(head.content)?.[0].length
+    const innerOffset = STACKED_MARKER.exec(head.content)?.[0].length
     if (innerOffset !== undefined && contentOffset >= 0 && attached.lines.length > 0) {
       const markerColumn = sourceColumnAt(head.line, contentOffset)
       const innerColumn = markerColumn + innerOffset
@@ -522,7 +534,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           numbers.push(lexer.lineNumber(lexer.pos))
           lexer.consume()
         }
-        const reached = session.collectAttachedListBlock(lexer, isItemAttachBoundary, shape.baseIndent, false)
+        // A block opener below the inner item's column ends that item, so it is no part of the block (PART 0 S3).
+        const reached = session.collectAttachedListBlock(lexer, line => isItemAttachBoundary(line) ||
+          (indentColumns(line, innerColumn) < innerColumn && lineOpensBlock(line.trimStart()) &&
+            !(isListMarkerLine(line.trimStart()) && indentColumns(line) >= ownContentColumn)), shape.baseIndent, false)
         lines.push(...reached.lines.map(line => sliceColumns(line, markerColumn, true)))
         numbers.push(...reached.lineNumbers)
         if (reached.lines.length === 0) break

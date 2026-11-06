@@ -2545,6 +2545,7 @@ export class ParseSession extends InlineParseSession {
     acceptFirstNonList = false,
     viewSlice = 0,
     itemHost = false,
+    closerFloor = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // The block is measured where its caller reads it, which a first-block `+` slices further.
@@ -2597,6 +2598,10 @@ export class ParseSession extends InlineParseSession {
       indexBase,
       base: lexer.pos + attributeLines,
       boundary: isBoundary,
+      belowFloor: closerFloor === 0 ? undefined : (offset) => {
+        const line = lexer.peek(offset + attributeLines)
+        return line !== undefined && !isBlankLine(line) && indentColumns(line, closerFloor) < closerFloor
+      },
     })
     const fenced = fencedFromAttributes === -1 ? -1 : fencedFromAttributes + attributeLines
     let take = 0
@@ -2643,9 +2648,10 @@ export class ParseSession extends InlineParseSession {
     baseIndent: number,
     endAtFoldedDefinition = true,
     viewSlice = 0,
+    closerFloor = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
-      viewSlice, true)
+      viewSlice, true, closerFloor)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
     const isLineComment = (line: string | undefined) => line !== undefined && line.startsWith('%%') && !RE_COMMENT_BLOCK_ANY.test(line)
