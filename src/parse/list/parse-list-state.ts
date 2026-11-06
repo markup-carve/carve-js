@@ -1,7 +1,7 @@
 import type { BlockQuoteLazyState, ItemLazyState, ItemLineFacts } from '../../parse.js'
 import { indentColumns, isBlankLine, sliceColumns } from '../parse-lexer.js'
 import { isListMarkerLine } from '../parse-prepass-core.js'
-import { holdsLineBlock } from '../block/parse-block-boundaries.js'
+import { holdsLineBlock, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import type { listStateHelpers } from '../../parse.js'
 import { createRunPhases, endsOnBlock, type CommentCloser, type LazyLine, type LazyPhase, type LiteralCommentCloser } from './parse-list-state-runs.js'
 
@@ -195,6 +195,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   }
 
   function noteFrameParagraphOpen(frame: ItemLazyState): boolean {
+    // A line block takes a lazy line while its stanza is open (PART 9 §23).
+    if (frame.literalColon !== undefined && frame.divDepth === 1) return frame.opaque === null && verseStanzaOpen(frame)
     return frame.lazyFoldable && frame.opaque === null && frame.divDepth === 0 &&
       frame.deepest?.lazyFoldable !== false && frame.deepest?.opaque == null
   }
