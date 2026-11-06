@@ -3182,7 +3182,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         frame = frame.deepest) holderColumn += frame.ownedColumn
       return indentColumns(l) >= holderColumn
     }
-    const followsRefusedRun = (l: string): boolean => {
+    const followsRefusedAttributeRun = (l: string): boolean => {
       const last = nestedSourceLines.at(-1)
       if (!last?.includes('}')) return false
       const previous = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
@@ -3196,7 +3196,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (run.length < 2) return false
         const column = indentColumns(line)
         if (!run.slice(1).some(next => indentColumns(next, column + 1) <= column)) return false
-        return line.trimStart().startsWith('{%') && last.includes('%}') ||
+        return !line.trimStart().startsWith('{%') &&
           parseBlockAttributeRun(run.map((part, index) => index === 0 ? part.trimStart() : ' ' + part.trimStart()).join('\n')) !== null
       }
       return false
@@ -3211,8 +3211,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) && !/^(`{3,}|~{3,})/.test(l.trimStart()) &&
-          insideRefusedHolder(l) || isListMarkerLine(l.trimStart()) && followsRefusedRun(l)) && !isBlankLine(l)) {
+      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) &&
+          !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
+          isListMarkerLine(l.trimStart()) && followsRefusedAttributeRun(l)) && !isBlankLine(l)) {
         lazyState.refusedBraceFollower = false
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)
