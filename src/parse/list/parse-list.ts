@@ -2949,8 +2949,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return false
     }
     const quotePayloadMisses: PayloadMisses = new Map()
+    const quoteSpanLines: string[] = []
+    const quoteSpanScan = newCommentSpanScan()
     const endsItem = (line: string): boolean => isListMarkerLine(line) && indentColumns(line) <= baseIndent
     const admitContentLine = (l: string): void => {
+      // A literal line block or fence consumes its own delimiter-shaped lines.
+      const closerRun = lazyState.opaque === null && lazyState.literalColon === undefined && !insideOpenFence(lazyState)
+        ? commentFenceRun(l.trimStart()) : undefined
+      if (closerRun !== undefined) {
+        for (let i = quoteSpanLines.length; i < nested.length; i++) quoteSpanLines.push(sourceQuoteBody(nested[i]!))
+      }
+      const priorComment = closerRun !== undefined && bodyHoldsOpenCommentSpan(quoteSpanLines, quoteSpanScan, degradedOpeners)
+        ? quoteSpanScan.opaque : null
+      const openerLine = priorComment?.start === undefined ? undefined : nested[priorComment.start]
+      const closesDescendantComment = priorComment?.comment === true && closerRun === priorComment.run &&
+        openerLine !== undefined && RE_BLOCKQUOTE.test(openerLine.trimStart()) && !RE_BLOCKQUOTE.test(l.trimStart())
       if (childSpan !== undefined && lazyState.opaque === childSpan.state && !isBlankLine(l) &&
           indentColumns(l, childSpan.column) < childSpan.column && commentFenceRun(l.trimStart()) !== childSpan.run) {
         bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
@@ -2959,6 +2972,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lazyState.opaque = null
       }
       placeContentLine(l)
+      if (closesDescendantComment) {
+        itemSpanScan.opaque = null
+        itemSpanScan.atBlockStart = true
+        itemSpanScan.index = nested.length
+        closedDescendantFence = true
+      }
       dedentContentLine(l)
       trackNoteBody(l)
       trackFenceOwnership(l)
