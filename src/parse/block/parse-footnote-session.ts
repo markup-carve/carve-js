@@ -306,6 +306,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const atMarker = sourceAt === authoredMarkerColumn || sourceAt >= authoredMarkerColumn + FOOTNOTE_BODY_COLUMN
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()) ||
           RE_FOOTNOTE_DEF.test(follower.trimStart()))) ||
+          isBlockAttributeLine(follower.trimStart()) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
       // A skipped note definition takes its body along: lines up to a blank or a block opener (CARVE-P9-067, carve#5034).
       if (lexer.atDocumentLevel && RE_FOOTNOTE_DEF.test(follower.trimStart())) {
