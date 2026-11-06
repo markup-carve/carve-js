@@ -904,8 +904,9 @@ export function createDefinitionListParser(
           // column 0 keeps it (markup-carve/carve-js#1623).
           // A run that does not close the line block's span misses its owner, so no later line folds through it (PART 0 S1).
           const verse = lazyState.literalColon
-          if (verse?.opaque?.belowBaseCloses && !RE_COMMENT_LINE.test(below) &&
-              commentFenceRun(below) !== verse.opaque.run) verse.spanFoldable = false
+          const run = commentFenceRun(below)
+          if (verse?.opaque?.belowBaseCloses && run !== undefined && run !== verse.opaque.run)
+            verse.spanFoldable = false
           bodyLines.push(atDocumentColumn ? ln : ' ' + below)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lineIndex))
