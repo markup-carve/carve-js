@@ -3205,8 +3205,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (!line.trimStart().startsWith('{')) continue
         if (run.length < 2) return false
         const column = indentColumns(line)
+        let nestedContentColumn: number | undefined
+        for (let earlier = at - 1; earlier >= 0; earlier--) {
+          const marker = nestedSourceLines[earlier]!
+          if (!isListMarkerLine(marker.trimStart())) continue
+          const markerBody = markerContentColumn(marker.trimStart())
+          if (markerBody >= 0) nestedContentColumn = indentColumns(marker) + markerBody
+          break
+        }
+        if (nestedContentColumn !== undefined && indentColumns(l) < nestedContentColumn) return false
         if (!run.slice(1).some(next => indentColumns(next, column + 1) <= column)) return false
-        if (line.trimStart().startsWith('{%')) return last.includes('%}') && indentColumns(last) >= indentColumns(l)
+        if (line.trimStart().startsWith('{%')) return last.includes('%}') &&
+          (indentColumns(last) >= indentColumns(l) || indentColumns(l) >= (nestedContentColumn ?? contentCol))
         return parseBlockAttributeRun(run.map((part, index) => index === 0 ? part.trimStart() : ' ' + part.trimStart()).join('\n')) !== null
       }
       return false
