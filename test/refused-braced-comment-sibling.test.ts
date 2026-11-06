@@ -6,3 +6,9 @@ it('opens a sibling after a refused multiline comment in a nested item', () => {
     '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}</li>\n      <li>z</li>\n    </ul>\n  </li>\n</ul>',
   )
 })
+
+it('keeps a marker inside the refused comment holder as paragraph text', () => {
+  expect(carveToHtml('- a\n  - b\n    {% c\n    d %}\n    - z\n')).toBe(
+    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n- z</li>\n    </ul>\n  </li>\n</ul>',
+  )
+})
