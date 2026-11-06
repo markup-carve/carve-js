@@ -487,7 +487,7 @@ export function createDefinitionListParser(
         // base column (markup-carve/carve#1974).
         lazyState.inFootnoteBody = false
         // The note's own frame answers the lazy question (carve#3885).
-        if (RE_FOOTNOTE_DEF.test(first)) trackItemLazyState(first, lazyState)
+        if (RE_FOOTNOTE_DEF.test(first)) trackItemLazyState(first, lazyState, true, () => true, { terminatorFree: true, whitespace: 0, descendantFrames: true })
         if (firstIsColonContainer) {
           lazyState.divDepth = 1
           // Its width decides which bare run closes it, as for one opened in the body.
