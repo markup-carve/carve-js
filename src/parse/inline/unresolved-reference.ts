@@ -86,11 +86,13 @@ export function referenceDisplayText(
     if (span.closed) codeSpans.push([at, span.end])
     at = span.end - 1
   }
+  let spanIndex = 0
   const authoredBreak = (line: string, at: number): boolean => {
     if (at >= visibleEnd) return false
+    while (codeSpans[spanIndex] && codeSpans[spanIndex]![1] <= at) spanIndex++
     const slashRun = line.match(/\\+$/)?.[0].length ?? 0
     return lineBlock || slashRun % 2 === 1
-      || codeSpans.some(([start, end]) => start <= at && at < end)
+      || (codeSpans[spanIndex] !== undefined && codeSpans[spanIndex]![0] <= at)
   }
 
   let result = ''
