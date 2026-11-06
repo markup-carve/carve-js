@@ -35,6 +35,15 @@ function cellInlineValue(raw: string): { value: string; removedEscapes: number[]
   return { value, removedEscapes }
 }
 
+/** A text value shortened by table splitting is not a verbatim source slice. */
+function omitChangedTextPositions(nodes: InlineNode[], escapedOffsets: readonly number[]): void {
+  for (const node of nodes) {
+    if (node.type === 'text' && node.pos && escapedOffsets.some(offset =>
+      node.pos!.startOffset! <= offset && offset < node.pos!.endOffset!)) delete node.pos
+    if ('children' in node && Array.isArray(node.children)) omitChangedTextPositions(node.children, escapedOffsets)
+  }
+}
+
 type RawCell = Parameters<typeof import('../../parse.js').tableBlockHelpers.joinFragment>[0]
 
 export interface TableBlockHost {
@@ -306,6 +315,11 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
             : host.parseInline(value, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 ...(cellWraps ? { cellWraps } : {}),
               }))
+          if (removedEscapes.length && c.anchors?.length) {
+            const escapedOffsets = c.anchors.flatMap(range =>
+              range.omittedEscapes?.map((at, index) => range.offset + at + index) ?? [])
+            omitChangedTextPositions(children, escapedOffsets)
+          }
           // Empty earlier continuation lines have no fragment to join. The
           // first text fragment still names its own continuation line.
           if (c.appended) {
