@@ -1,4 +1,4 @@
-import { bodyEndsInOpenCodeFence, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
@@ -1066,7 +1066,9 @@ export function createDefinitionListParser(
         const belowLeadColon = colonFenceShapeEndsLazyContinuation(first) &&
           indentColumns(ln, contentCol) < contentCol && lazyState.divDepth > 0 &&
           lazyState.opaque === null
-        const commentVerdict = admitBelowColumnComment(ln, below, atDocumentColumn, belowLeadColon)
+        // An opener below the column ends the body under any open div, not only one its lead opened.
+        const belowOpenDiv = indentColumns(ln, contentCol) < contentCol && lazyState.opaque === null && holdsOpenDiv(lazyState)
+        const commentVerdict = admitBelowColumnComment(ln, below, atDocumentColumn, belowLeadColon || belowOpenDiv)
         if (commentVerdict !== undefined) return commentVerdict
         const quoteFootnoteBelowBody = RE_BLOCKQUOTE.test(first) && !atDocumentColumn &&
           RE_FOOTNOTE_DEF.test(below) && indentColumns(ln, contentCol) < contentCol

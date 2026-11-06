@@ -284,6 +284,13 @@ export function insideOpenFence(state: ItemLazyState): boolean {
   return state.opaque !== null || state.divDepth > 0
 }
 
+/** Whether a div is open on this frame or a descendant frame. */
+export function holdsOpenDiv(state: ItemLazyState | null | undefined): boolean {
+  for (let frame = state; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
+    if (frame.divDepth > 0) return true
+  return false
+}
+
 /** Whether a line block is open on this frame or a descendant frame. */
 export function holdsLineBlock(state: ItemLazyState | null | undefined): boolean {
   for (let frame = state; frame; frame = frame.ownedColumn >= 0 && !frame.ownedAuthored ? frame.deepest : null)
