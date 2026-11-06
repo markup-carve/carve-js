@@ -160,6 +160,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return at === column && /^::? /.test(rest) && !(deeper && /^:: /.test(rest))
     }
     return false
+  }
   // How many lines before an attached block are attribute lines and notes the host keeps (§17 L3, carve#5288).
   const invisibleLead = (lines: readonly string[]): number => {
     let k = 0
