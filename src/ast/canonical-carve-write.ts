@@ -2,7 +2,7 @@ import type { Document } from '../ast.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
 import { parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
-import { renderCarve, renderCarveFromParsedSource, renderedReadsBack, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
+import { readbackTree, renderCarve, renderCarveCandidate, renderCarveFromParsedSource, renderedReadsBack, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
 import { isBlockAttributeLine } from '../parse/parse-prepass-core.js'
@@ -87,9 +87,9 @@ function writeCanonically(
   const stream = !transformed && !opts.extensions?.length ? transparentLineStream(source) : null
   if (stream) {
     const canonicalOpts = { ...opts, canonicalTransparentLines: true }
-    const candidate = render(canonicalOpts)
+    const candidate = renderCarveCandidate(document, canonicalOpts, readbackTree(source), canReuseSource ? source : undefined)
     // A canonical form is a fixpoint; an authored line it cannot settle keeps the authored spelling.
-    if (writtenReadsBackAs(source, candidate) && !hasUnrepresentedAuthoredLine(document, source, candidate, stream ?? undefined) &&
+    if (candidate !== null && writtenReadsBackAs(source, candidate) && !hasUnrepresentedAuthoredLine(document, source, candidate, stream ?? undefined) &&
         renderCarve(withPromotedImages(parseDocument(candidate, opts)), canonicalOpts) === candidate)
       return candidate
 

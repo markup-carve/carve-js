@@ -259,6 +259,25 @@ export function renderCarveFromParsedSource(ast: Document, source: string, opts:
   return new CarveRenderSession().renderCarve(ast, opts, source)
 }
 
+/**
+ * The canonical writer's candidate, or null when no narrowing of it can parse
+ * to `target`, the tree its source must read back as.
+ */
+export function renderCarveCandidate(ast: Document, opts: CarveRenderOptions, target: string | null, parsedSource?: string): string | null {
+  hydrateResolvedEmptyReferences(ast)
+  hydrateTransparentDefinitionGaps(ast)
+  const session = new CarveRenderSession()
+  session.readbackTarget = target
+  try {
+    return session.renderCarve(ast, opts, parsedSource)
+  } catch (error) {
+    if (error === UNREACHABLE_TARGET) return null
+    throw error
+  }
+}
+
+const UNREACHABLE_TARGET = new Error('the candidate cannot read back as its target')
+
 /** Collect span refusals for the HTML importer's next repair pass. */
 export function renderCarveForHtmlImport(ast: Document): string {
   hydrateResolvedEmptyReferences(ast)
@@ -498,6 +517,11 @@ function treeOf(src: string, reparse?: (src: string) => Document): string | null
  */
 export function renderedReadsBack(ast: Document, source: string, reparse?: (src: string) => Document): boolean {
   return treeOf(source, reparse) === stableJson(ast)
+}
+
+/** The tree `writtenReadsBackAs` compares against. */
+export function readbackTree(source: string): string | null {
+  return treeOf(source)
 }
 
 /** Whether `written` parses to the tree `source` parses to. */
@@ -3164,7 +3188,25 @@ class CarveRenderSession {
     // decision here with the conservative form of the whole document. PART 11 §2b
     // says how far that fallback actually reaches: the smallest unit whose minimal
     // form fails, and §2's own test everywhere else.
+    if (this.targetIsUnreachable(parsedAst, conservative, conservativeTree)) throw UNREACHABLE_TARGET
     return this.narrowEscalation(ast, conservative, conservativeTree, minimal, minimalTree)
+  }
+
+  /** Set by `renderCarveCandidate`; undefined for every other render. */
+  readbackTarget: string | null | undefined = undefined
+
+  /**
+   * Every state the narrowing returns parses to `conservativeTree`, so when
+   * `renderCarve` hands that state back unchanged, a different target cannot
+   * be met and the search is skipped (carve-js#4427).
+   */
+  private targetIsUnreachable(ast: Document, conservative: string, conservativeTree: string | null): boolean {
+    if (this.readbackTarget === undefined || conservativeTree === this.readbackTarget) return false
+    if (conservative.includes('\0')) return false
+    // Without verbatim spans the output still passes `relaxPlusEscapes`; with
+    // them it is returned as is once every payload reads back.
+    if (this.multiLineVerbatim.size === 0) return !conservative.includes('\\+')
+    return missingVerbatimPayloads(ast, conservative, this.multiLineVerbatim).length === 0
   }
 
   /**
