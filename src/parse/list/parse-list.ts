@@ -1082,6 +1082,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const { startLineIndex: itemStartLineIndex, line, terminatorFree, checked, taskState, leadOrigin } = head
     const itemAttrs = head.attr ? head.attr.attrs : undefined
     const { contentCol, itemSource, itemMarkerColumn, physicalItemMarkerColumn, itemQuoteDepth } = placement
+    const authoredItemMarkerColumn = Math.max(physicalItemMarkerColumn, lexer.lineStartColumn(itemStartLineIndex) - 1)
     const taskLeadShift = isTask ? taskBoxLeadShift(head, content, terminatorFree, contentCol - baseIndent) : 0
     const nested: string[] = []
     let commentPayloadCandidates: Map<number, string> | undefined
@@ -2278,10 +2279,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (!RE_DEFLIST_DEF.test(line.trimStart()) || definitionHostColumn === undefined ||
           definitionBodyColumn === undefined) return undefined
       // The item view may already have cut its leading spaces. Use the
-      // authored column to distinguish a new description from verse text.
+      // authored column, rebased to the same frame as the definition host.
       for (let frame: typeof lazyState | null | undefined = lazyState; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true)
-          return lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line)
+          return lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) -
+            (authoredItemMarkerColumn - physicalItemMarkerColumn)
       return undefined
     }
     const verseSpanDefinitionFollower = (line: string): boolean => {
@@ -2996,7 +2998,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const descendantVerseClaimAfterMiss = (line: string): boolean => {
       const text = line.trimStart()
       if (RE_COMMENT_LINE.test(text)) return false
-      if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= physicalItemMarkerColumn) return false
+      if (lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) <= authoredItemMarkerColumn) return false
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true) return true
       return false

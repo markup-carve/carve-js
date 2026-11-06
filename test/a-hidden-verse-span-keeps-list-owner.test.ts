@@ -44,3 +44,10 @@ it('leaves a definition-shaped line at the item marker column outside the list',
     '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <div class="line-block">\n          <p>v</p>\n        </div>\n      </dd>\n    </dl>\n  </li>\n</ul>\n<p>: d</p>',
   )
 })
+
+it('uses authored columns for a verse in an indented list', () => {
+  const head = ' - a\n   :: t\n   : ::: |\n     v\n     %%%\n   %% c\n'
+  expect(carveToHtml(head + ' : d\n')).toContain('</ul>\n<p>: d</p>')
+  expect(carveToHtml(head + '  : d\n')).toContain('<p>v<br>\n: d</p>')
+  expect(carveToHtml(head + '    : d\n')).toContain('<dd>d</dd>')
+})
