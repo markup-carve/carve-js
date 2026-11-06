@@ -81,22 +81,42 @@ export function referenceDisplayText(
   }
   visit(children)
 
+  const pairedCodeRuns = new Map<number, number>()
+  let codeOpener: RegExpExecArray | undefined
+  for (const run of rawRef.matchAll(/(?<!\\)`+/g)) {
+    if (!codeOpener) codeOpener = run
+    else if (codeOpener[0].length === run[0].length) {
+      pairedCodeRuns.set(codeOpener.index, run.index + run[0].length)
+      codeOpener = undefined
+    }
+  }
+
+  // Only the first bracketed run is parsed as visible link text or image alt.
+  // The following reference identifier is a label, even if it contains ticks.
+  let visibleEnd = rawRef.length
+  let bracketDepth = 0
+  for (let i = rawRef.startsWith('![') ? 1 : 0; i < rawRef.length; i++) {
+    if (rawRef[i] === '\\') { i++; continue }
+    if (rawRef[i] === '`') {
+      const end = pairedCodeRuns.get(i)
+      if (end !== undefined) { i = end - 1; continue }
+    }
+    if (rawRef[i] === '[') bracketDepth++
+    else if (rawRef[i] === ']' && --bracketDepth === 0) {
+      visibleEnd = i
+      break
+    }
+  }
+
   // Images store only scalar alt text, and position recording can be disabled.
   // The source still identifies authored hard breaks and verbatim code spans.
   // Link children above additionally identify breaks promoted after parsing.
-  const codeSpans: Array<{ start: number; end: number }> = []
-  let opener: RegExpExecArray | undefined
-  for (const run of rawRef.matchAll(/(?<!\\)`+/g)) {
-    if (!opener) opener = run
-    else if (opener[0].length === run[0].length) {
-      codeSpans.push({ start: opener.index, end: run.index + run[0].length })
-      opener = undefined
-    }
-  }
+  const codeSpans = [...pairedCodeRuns].filter(([, end]) => end <= visibleEnd)
   const authoredBreak = (line: string, at: number): boolean => {
+    if (at >= visibleEnd) return false
     const slashRun = line.match(/\\+$/)?.[0].length ?? 0
     return lineBlock || slashRun % 2 === 1
-      || codeSpans.some(({ start, end }) => start <= at && at < end)
+      || codeSpans.some(([start, end]) => start <= at && at < end)
   }
 
   let result = ''
