@@ -804,6 +804,8 @@ export function createDefinitionListParser(
           after !== undefined &&
           !isBlankLine(after) &&
           (indentColumns(after, contentCol) >= contentCol ||
+            // A blank hidden by a verse span cannot end the stanza that preceded it.
+            (lazyState.literalColon?.opaque?.belowBaseCloses === true && verseStanzaOpen(lazyState)) ||
             // A blank inside a live span is payload; a comment line below the column still closes it (§28).
             (RE_COMMENT_LINE.test(after.trimStart()) &&
               bodyHoldsClosableCommentSpan(bodyLines, bodySpanScan, run => commentCloserAhead(lexer, run, lexer.pos - 1))))
