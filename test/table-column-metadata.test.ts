@@ -72,6 +72,13 @@ describe('table column metadata', () => {
     expect(rules(source)).toContain('table-column-overlap')
   })
 
+  it('reports alignment overlap in a header row declared by table attributes', () => {
+    const source = '{header-rows=1 aligns=right,left}\n|{>} First|{<} Second|\n|a|b|\n'
+    expect(lintCarve(source).filter((warning) => warning.rule === 'table-column-overlap'))
+      .toMatchObject([{ line: 1, column: 16, rule: 'table-column-overlap' },
+        { line: 1, column: 16, rule: 'table-column-overlap' }])
+  })
+
   it('publishes percentages as fractional AST widths', () => {
     const table = parse('{widths="25,75"}\n| a | b |\n').children[0]
     expect(table).toMatchObject({
