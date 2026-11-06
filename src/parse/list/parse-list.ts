@@ -2179,6 +2179,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const stopsBeforeBody = (l: string): Decision | undefined => {
       if (RE_DEFLIST_DEF.test(l.trimStart()) &&
           lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(l) === authoredItemMarkerColumn &&
+          !insideOpenQuoteParagraph(lazyState) &&
           (definitionHostColumn !== undefined || lazyState.deepest?.inDefList === 'description' || bodyHasTerm())) return 'stop'
       // A definition marker at this item's authored marker column cannot be
       // claimed by a description inside a descendant item. The descendant
