@@ -107,8 +107,6 @@ interface Form {
   table?: boolean
   // The continuation lines of a wrapped attribute block.
   attrLines?: number
-  // A marker-shaped line under a paragraph that renders as a spaced thematic break.
-  breakLine?: boolean
 }
 
 
@@ -193,6 +191,8 @@ function orderedTokenValid(token: string): boolean {
 }
 
 function matchMarker(rest: string): { width: number; head: number; axes: string } | null {
+  // The thematic break is tested before a list marker, wherever the line stands (PART 2).
+  if (RE_HR.test(rest)) return null
   const line = trimEndSpaceTab(rest)
   let m = BULLET.exec(line)
   if (m && gluedAttrsValid(m[2])) {
@@ -1393,9 +1393,6 @@ export function ownLines(
       case 'colon': return 'colon fence'
       case 'fence': return form.lineBlock ? 'line block' : COMMENT_FENCE.test(rest) ? undefined : 'code fence'
       case 'term': return 'definition term'
-      // A spaced break reads as a marker here, but renders as a thematic break (carve#5003).
-      case 'item': return RE_HR.test(rest) ? 'thematic break' : undefined
-      case 'text': return form.breakLine ? 'thematic break' : undefined
       case 'leaf': return HEADING.test(rest) ? 'heading' : RE_HR.test(rest) ? 'thematic break'
         : isTableRow(rest) ? 'table row' : undefined
       default: return undefined
@@ -1500,7 +1497,7 @@ export function ownLines(
     }
     const marker = matchMarker(rest)
     // §10 I2: under an open paragraph a marker opens only in a marker body (carve#4860).
-    if (marker && owner.para && !BODY_FRAME.has(owner.kind)) return { kind: 'text', interrupts: false, breakLine: RE_HR.test(rest) }
+    if (marker && owner.para && !BODY_FRAME.has(owner.kind)) return { kind: 'text', interrupts: false }
     if (marker) return { kind: 'item', width: marker.width, head: marker.head, interrupts: false, axes: marker.axes }
     if (DEFLIST_TERM.test(rest)) return { kind: 'term', interrupts: true }
     const dd = DD.exec(rest)
