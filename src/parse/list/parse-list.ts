@@ -528,7 +528,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
       }
     }
-    // A block after a blank at a nested stacked item's content column is that inner item's (PART 0 S4).
+    // A block at a nested stacked item's content column is that inner item's, after a blank or not (CARVE-P0-020).
     const innerOffset = STACKED_MARKER.exec(head.content)?.[0].length
     if (innerOffset !== undefined && contentOffset >= 0 && attached.lines.length > 0) {
       const markerColumn = sourceColumnAt(head.line, contentOffset)
@@ -537,10 +537,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         let gap = 0
         while (isBlankLine(lexer.peek(gap))) gap++
         const next = lexer.peek(gap)
-        // An adjacent block opener can belong to the middle item too; it does
-        // not need a blank after the first attached block.
-        if (next === undefined || isSiblingMarker(shape, next) ||
-            (gap === 0 && !lineOpensBlock(next.trimStart()))) break
+        if (next === undefined || isSiblingMarker(shape, next)) break
         // A marker at or past the inner item's own marker column still continues the inner list.
         if (indentColumns(next) < innerColumn && !(isListMarkerLine(next.trimStart()) && indentColumns(next) >= ownContentColumn)) break
         for (let index = 0; index < gap; index++) {
