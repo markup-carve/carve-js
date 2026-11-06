@@ -663,6 +663,9 @@ export function ownLines(
     }
     const readsMissedLine = (): boolean => {
       if (!keepsMissedLineBlock(inner, missed, reached)) return keepsBelowColumnComment()
+      // S1 ends a verse comment span at the first non-comment line that
+      // misses its owner. The open stanza may still take that line under S4.
+      if (holdsCommentSpan(inner) && !m.rest.startsWith('%%')) inner.span = null
       readPayload(inner, true)
       return true
     }
