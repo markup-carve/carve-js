@@ -3015,7 +3015,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         let candidate = nested[at]!.trimStart()
         for (let width = walkMarkerOwnerPrefix(candidate); width > 0;
             width = walkMarkerOwnerPrefix(candidate)) candidate = candidate.slice(width).trimStart()
-        if (RE_LINE_BLOCK_OPEN.test(candidate)) verseOwnerValid = true
+        if (RE_LINE_BLOCK_OPEN.test(candidate) &&
+            !bodyHoldsOpenCommentSpan(nested.slice(0, at),
+              { ...newCommentSpanScan(), markerOwners: true }, degradedOpeners)) verseOwnerValid = true
         if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) {
           verseOwnerValid = false
           termlessDescriptionSpan = true

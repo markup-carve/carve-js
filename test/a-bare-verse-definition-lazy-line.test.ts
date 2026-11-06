@@ -12,3 +12,9 @@ it('passes the same lazy claim through three item levels', () => {
     '<p>&nbsp;&nbsp;v<br>\n: d</p>',
   )
 })
+
+it('does not treat a verse-shaped comment payload as an open verse', () => {
+  expect(carveToHtml('- a\n  - b\n    %%%\n      ::: |\n: d\n    %%%\n')).toBe(
+    '<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul>\n<p>: d</p>',
+  )
+})
