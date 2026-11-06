@@ -573,7 +573,7 @@ function trackHostDefinitions(q: QuoteHostLine, b: QuoteHostBody): QuoteHostVerd
   const { host, column } = q
   const { inner, at } = b
   if (RE_DEFLIST_TERM.test(inner)) host.definitionList = at
-  else if (host.definitionList !== undefined && column <= host.definitionList &&
+  else if (host.definitionList !== undefined && column !== host.definitionList &&
     host.kinds.at(-1) !== 'description') host.definitionList = undefined
   return undefined
 }
