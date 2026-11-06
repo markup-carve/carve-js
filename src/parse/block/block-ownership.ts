@@ -118,8 +118,8 @@ function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): b
     frame.kind === 'item' && frame.hasDefinition === true && frame.markerCol === column)
 }
 
-function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean): number {
-  if (lazyMissed) return /^: /.test(rest) ? column : 0
+function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean, inCommentSpan: boolean): number {
+  if (lazyMissed) return !inCommentSpan && /^: /.test(rest) ? column : 0
   return Math.max(column - inner.cut, inner.canon)
 }
 
@@ -652,6 +652,7 @@ export function ownLines(
     reach = reached
     const inner = top()
     const colonEndsItem = colonAtDefinitionItem(m.rest, m.col, frames)
+    const inCommentSpan = holdsCommentSpan(inner)
     // A comment closer below its host's column still closes the span (PART 9 §28).
     const closesBelowColumn = (): boolean => {
       if (inner.kind !== 'fence' || inner.family !== 'comment' || !missed || inner.span || m.rest === '' || !inner.closes!(m.rest, m.col)) return false
@@ -790,7 +791,7 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      lead(payloadColumn(m.rest, m.col, inner, lazyMissed))
+      lead(payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
