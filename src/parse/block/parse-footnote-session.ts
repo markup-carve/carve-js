@@ -301,7 +301,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
     while (follower !== undefined && !isBlankLine(follower)) {
       const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
-      const atMarker = sourceColumn(source, noteQuoteDepth) === authoredMarkerColumn
+      const sourceAt = sourceColumn(source, noteQuoteDepth)
+      // The note keeps an invisible line at its marker column or in its body, so either is skipped (§17 L3, carve#5288).
+      const atMarker = sourceAt === authoredMarkerColumn || sourceAt >= authoredMarkerColumn + FOOTNOTE_BODY_COLUMN
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()) ||
           RE_FOOTNOTE_DEF.test(follower.trimStart()))) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
