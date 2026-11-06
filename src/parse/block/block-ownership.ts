@@ -118,8 +118,17 @@ function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): b
     frame.kind === 'item' && frame.hasDefinition === true && frame.markerCol === column)
 }
 
-function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean, inCommentSpan: boolean): number {
-  if (lazyMissed) return !inCommentSpan && /^: /.test(rest) ? column : 0
+function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: boolean, inCommentSpan: boolean, frames: Frame[]): number {
+  if (lazyMissed) {
+    if (inCommentSpan || !/^: /.test(rest)) return 0
+    // The stanza keeps the colon line's position within the surviving item,
+    // not the indentation before that item's marker (carve-js#4594).
+    for (let k = frames.length - 1; k >= 0; k--) {
+      const frame = frames[k]!
+      if (frame.kind === 'item' && frame.markerCol !== undefined && frame.markerCol <= column) return column - frame.markerCol
+    }
+    return column
+  }
   return Math.max(column - inner.cut, inner.canon)
 }
 
@@ -791,7 +800,7 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      lead(payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan))
+      lead(payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
