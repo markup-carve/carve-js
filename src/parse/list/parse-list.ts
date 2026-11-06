@@ -10,7 +10,7 @@ import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, ty
 import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
-import { bodyEndsInOpenCodeFence } from '../block/parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
@@ -3253,7 +3253,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // after it is the open span's, its own or a line block's (carve#4889, carve#4994).
       const spanOpen = lazyState.opaque?.kind === 'comment' ? lazyState.opaque !== childSpan?.state
         : lazyState.opaque === null && lazyState.literalColon?.opaque?.belowBaseCloses === true
-      if (lw < contentCol && pendingBlankRun.count > 0 && (!childMarkerSpan && spanOpen && RE_COMMENT_LINE.test(l) ||
+      if (lw < contentCol && pendingBlankRun.count > 0 && (!childMarkerSpan && spanOpen &&
+        (RE_COMMENT_LINE.test(l) || itemQuoteDepth > 0 && lazyState.literalColon !== undefined && verseStanzaOpen(lazyState)) ||
         // So does a span a descendant or a description or note lead holds, which the tracker cannot see (carve#4996).
         (lazyState.opaque === null || lazyState.opaque.kind === 'comment') && commentFenceRun(l.trimStart()) !== undefined &&
           bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners) &&
