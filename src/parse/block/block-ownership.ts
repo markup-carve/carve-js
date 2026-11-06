@@ -1181,6 +1181,7 @@ export function ownLines(
     const comments: number[] = []
     const fenced = new Set<number>()
     const fences = new Map<number, number>()
+    const missedSpans = new Set<number>()
     const closers = new Set<number>()
     const notes: number[] = []
     const chained: number[] = []
@@ -1229,7 +1230,7 @@ export function ownLines(
           const body: string[] = []
           const tail = trimNonNbsp(COMMENT_FENCE.exec(trimEndSpaceTab(opener.rest))![2]!)
           if (tail !== '') body.push(tail)
-          for (let line = index + 1; line < closer; line++) {
+          for (let line = index + 1; line < (missedSpans.has(index) ? closer + 1 : closer); line++) {
             let text = lines[line]!
             for (let q = 0; q < quotes && isQuoteLine(indentCols(text).rest); q++) text = quoteRest(indentCols(text).rest)
             if (Number.isFinite(content)) {
@@ -1324,7 +1325,9 @@ export function ownLines(
         }
         if (missed) {
           for (let line = opener; line < k; line++) { comments.push(line); fenced.add(line) }
-          fences.set(opener, k)
+          // The missed line is no closer: the span's last line is, so the line after it stays visible.
+          fences.set(opener, k - 1)
+          missedSpans.add(opener)
           k--
           continue
         }
