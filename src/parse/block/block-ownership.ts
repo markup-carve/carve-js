@@ -995,12 +995,15 @@ export function ownLines(
       attachedHost = null
     }
 
-    // Behind a quote host's own `>` a `+` right after the attached block continues that quote (carve#5132).
+    // A `+` at the saved quote's marker column continues that quote after
+    // its previously attached block, even if that block left an item open.
+    // A prefixed `+` behind the quote's own `>` does the same (carve#5132).
     function restoreAttachedQuote(): void {
       const host = attachedHost?.at(-1)
       if (host?.kind !== 'quote' || frames.includes(host)) return
       const rest = restInQuotes(at, attachedHost!.filter((f) => f.kind === 'quote').length)
-      if (rest === undefined || !CONT_MARKER.test(trimEndSpaceTab(rest).trimStart())) return
+      const atMarker = CONT_MARKER.test(m.rest) && docColumn(lines[at]!, m.rest) === host.docMarker
+      if (!atMarker && (rest === undefined || !CONT_MARKER.test(trimEndSpaceTab(rest).trimStart()))) return
       frames.length = 0
       frames.push(...attachedHost!)
     }
