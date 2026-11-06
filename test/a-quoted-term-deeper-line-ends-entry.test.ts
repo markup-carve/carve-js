@@ -10,3 +10,7 @@ it.each([': :::', ': # h'])('keeps a lazy line after definition-shaped paragraph
 it('keeps the lazy line after a comment-shaped paragraph line', () => {
   expect(renderHtml(parse('> :: t\n>  a\n> : %%%\nz\n'))).toContain('<p>a\n:\nz</p>')
 })
+
+it('ends a term when same-column prose starts a paragraph', () => {
+  expect(renderHtml(parse('> :: t\n> p\n> : :::\nz\n'))).toContain('<p>p\n: :::\nz</p>')
+})
