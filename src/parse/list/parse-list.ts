@@ -2088,6 +2088,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
     }
     const stopsBeforeBody = (l: string): Decision | undefined => {
+      // A definition marker at this item's authored marker column cannot be
+      // claimed by a description inside a descendant item. The descendant
+      // verse's stanza is behind that definition boundary.
+      if (RE_DEFLIST_DEF.test(l.trimStart()) &&
+          lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(l) <= authoredItemMarkerColumn &&
+          lazyState.deepest?.inDefList === 'description') return 'stop'
       // Content-column model (carve#295): a continuation belongs to the item
       // only if it reaches the item's content column - the SAME rule the
       // no-blank case uses; the blank line only decides tight vs loose. There is
@@ -2995,15 +3001,27 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
     // S1 ends a descendant verse's span when this line misses its owner.
     // Its pre-span stanza then answers S4 for the containing item.
+    let verseOwnerScanEnd = 0
+    let verseOwnerValid = false
+    let termlessDescriptionSpan = false
     const validDescendantVerseOwner = (): boolean => {
-      for (let at = nested.length - 1; at >= 0; at--) {
+      if (nested.length < verseOwnerScanEnd) {
+        verseOwnerScanEnd = 0
+        verseOwnerValid = false
+        termlessDescriptionSpan = false
+      }
+      for (let at = verseOwnerScanEnd; at < nested.length; at++) {
         let candidate = nested[at]!.trimStart()
         for (let width = walkMarkerOwnerPrefix(candidate); width > 0;
             width = walkMarkerOwnerPrefix(candidate)) candidate = candidate.slice(width).trimStart()
-        if (RE_LINE_BLOCK_OPEN.test(candidate)) return true
-        if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) return false
+        if (RE_LINE_BLOCK_OPEN.test(candidate)) verseOwnerValid = true
+        if (RE_DEFLIST_DEF.test(candidate) && /:{3,}/.test(candidate)) {
+          verseOwnerValid = false
+          termlessDescriptionSpan = true
+        }
       }
-      return false
+      verseOwnerScanEnd = nested.length
+      return verseOwnerValid
     }
     const descendantVerseClaimAfterMiss = (line: string): boolean => {
       const text = line.trimStart()
@@ -3020,9 +3038,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line) >= authoredItemMarkerColumn + contentCol
     const lazyFoldableOwner = (): boolean => {
       if (!lazyState.lazyFoldable) return false
-      const termlessDescriptionSpan = !validDescendantVerseOwner() &&
-        nested.some(entry => RE_DEFLIST_DEF.test(entry.trimStart()) && /:{3,}/.test(entry))
-      if (!termlessDescriptionSpan) return true
+      if (validDescendantVerseOwner() || !termlessDescriptionSpan) return true
       for (let frame: typeof lazyState | null | undefined = lazyState; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses === true &&
             frame.literalColon.spanFoldable === true && frame.descriptionHasTerm !== true) return false
