@@ -478,6 +478,8 @@ export interface AnchorRange {
   offset: number
   line: number
   column: number
+  /** Local offsets whose preceding escape was removed before inline scanning. */
+  omittedEscapes?: readonly number[]
 }
 
 export function inlineSource(overrides: Partial<InlineSource> = {}): InlineSource {

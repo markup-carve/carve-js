@@ -5,9 +5,10 @@ import type { Attrs, Figure, InlineNode, Position, Table, TableCell, TableRow } 
 
 // Table splitting consumes its pipe escape before the inline pass, except in
 // a backtick run whose content is verbatim.
-function cellInlineValue(raw: string): string {
+function cellInlineValue(raw: string): { value: string; removedEscapes: number[] } {
   let run = 0
   let value = ''
+  const removedEscapes: number[] = []
   for (let at = 0; at < raw.length; at++) {
     if (raw[at] === '\\' && run === 0 && raw[at + 1] === '`') {
       value += raw.slice(at, at + 2)
@@ -24,13 +25,23 @@ function cellInlineValue(raw: string): string {
       continue
     }
     if (run === 0 && raw[at] === '\\' && raw[at + 1] === '|') {
+      removedEscapes.push(at)
       value += '|'
       at++
       continue
     }
     value += raw[at]
   }
-  return value
+  return { value, removedEscapes }
+}
+
+/** A text value shortened by table splitting is not a verbatim source slice. */
+function omitChangedTextPositions(nodes: InlineNode[], escapedOffsets: readonly number[]): void {
+  for (const node of nodes) {
+    if (node.type === 'text' && node.pos && escapedOffsets.some(offset =>
+      node.pos!.startOffset! <= offset && offset < node.pos!.endOffset!)) delete node.pos
+    if ('children' in node && Array.isArray(node.children)) omitChangedTextPositions(node.children, escapedOffsets)
+  }
 }
 
 type RawCell = Parameters<typeof import('../../parse.js').tableBlockHelpers.joinFragment>[0]
@@ -153,14 +164,14 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
             endOffset: lineOffset + start + src.length,
           }
         }
-        // Anchor the cell's inline content, but only after checking the content is
-        // where we think it is. `\|` unescapes to one character, so a cell holding
-        // an escaped pipe is not a verbatim slice and gets no anchor.
+        // Anchor the cell's inline content after checking its authored slice.
+        // An escaped pipe shortens the inline value; its missing source character
+        // is recorded when the complete cell is parsed below.
         // Marker attributes precede the content and may contain the same text.
         // The trimmed content is the cell's suffix, so its final occurrence is
         // the authored inline range rather than an earlier attribute value.
         const within = content === '' || !canPosition ? -1 : src.lastIndexOf(content)
-        if (!content.includes('\\|') && within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
+        if (within >= 0 && rowBody.slice(start + within, start + within + content.length) === content) {
           c.anchors = [
             {
               from: 0,
@@ -277,7 +288,19 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
         type: 'table_row',
         ...(continuationCounts[idx] ? { continuationLines: continuationCounts[idx] } : {}),
         cells: rc.map((c) => {
-          const value = cellInlineValue(c.raw)
+          const { value, removedEscapes } = cellInlineValue(c.raw)
+          // Each joined fragment keeps its own source range. Removing a pipe
+          // escape shortens local inline text in that and every later range,
+          // without making a span across the fragment boundary placeable.
+          if (removedEscapes.length) for (const range of c.anchors ?? []) {
+            const from = range.from
+            const to = range.to
+            const before = removedEscapes.filter(at => at < from).length
+            const inside = removedEscapes.filter(at => at >= from && at < to)
+            range.from = from - before
+            range.to = to - before - inside.length
+            if (inside.length) range.omittedEscapes = inside.map((at, index) => at - from - index)
+          }
           const cellWraps = c.wraps?.length
             ? new Map(c.wraps.map(wrap => [wrap.offset, { line: wrap.line, ...(wrap.row ? { row: wrap.row } : {}), ...(wrap.col ? { col: wrap.col } : {}), ...(wrap.pos ? { pos: wrap.pos } : {}) }]))
             : undefined
@@ -292,6 +315,11 @@ export function createTableBlockParser(helpers: typeof import('../../parse.js').
             : host.parseInline(value, lexer.abbrDefs, lexer.linkDefs, inlineSource({
                 ...(cellWraps ? { cellWraps } : {}),
               }))
+          if (removedEscapes.length && c.anchors?.length) {
+            const escapedOffsets = c.anchors.flatMap(range =>
+              range.omittedEscapes?.map((at, index) => range.offset + at + index) ?? [])
+            omitChangedTextPositions(children, escapedOffsets)
+          }
           // Empty earlier continuation lines have no fragment to join. The
           // first text fragment still names its own continuation line.
           if (c.appended) {
