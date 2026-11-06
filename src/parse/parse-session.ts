@@ -2646,7 +2646,15 @@ export class ParseSession extends InlineParseSession {
     let afterNote = false
     for (let index = 0; index < Math.min(attributeLines, lines.length); index++) {
       if (RE_FOOTNOTE_DEF.test(lines[index]!.trimStart())) afterNote = true
-      else if (afterNote && isBlockAttributeLine(lines[index]!.trimStart())) lines[index] = lines[index]!.trimStart()
+      else if (afterNote && lines[index]!.trimStart().startsWith('{')) {
+        const column = indentColumns(lines[index]!)
+        const run = leadingAttributeRun((offset) => {
+          const line = lines[index + offset]
+          return line === undefined ? undefined : sliceColumns(line, column, true)
+        }, lexer.parseOptions)
+        for (let offset = 0; offset < run; offset++) lines[index + offset] = sliceColumns(lines[index + offset]!, column, true)
+        index += Math.max(0, run - 1)
+      }
     }
 
     return { lines, lineNumbers, startLineIndex }

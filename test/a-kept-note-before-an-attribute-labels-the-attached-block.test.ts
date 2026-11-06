@@ -23,3 +23,11 @@ it('floats the attribute through a kept note in a description', () => {
   </dd>
 </dl>`)
 })
+
+it('floats a wrapped attribute run after the kept note', () => {
+  expect(carveToHtml('- a\n+\n  [^n]: x\n  {.x\n   .y}\n```\n\n```\n').trim()).toContain('<pre class="x y"><code>')
+})
+
+it('ends a note before plain text left of a wrapped attribute run', () => {
+  expect(carveToHtml('[^m]: +\n  [^n]: x\n  {.x\n   .y}\nplain\n').trim()).toBe('<p>plain</p>')
+})

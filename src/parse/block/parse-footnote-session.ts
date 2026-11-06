@@ -3,10 +3,38 @@ import { bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundari
 import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
+import { probeBlockAttributes, subLexer } from '../parse-core.js'
 import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
+function wrappedAttributeRunAt(lexer: Lexer): boolean {
+  const opener = lexer.peek()
+  if (opener === undefined || !opensWrappedAttributeBlock(opener.trimStart())) return false
+  const column = indentColumns(opener)
+  const lines: string[] = []
+  for (let offset = 0; ; offset++) {
+    const line = lexer.peek(offset)
+    if (line === undefined || isBlankLine(line) || offset > 0 && indentColumns(line) <= column) return false
+    lines.push(sliceColumns(line, column, true))
+    if (line.includes('}')) break
+  }
+  return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length
+}
+
+function wrappedAttributeLeavesNote(
+  lexer: Lexer, admission: ContainerAdmission, sourceLine: string | undefined,
+  authoredBodyColumn: number | undefined, state: ReturnType<typeof verbatimOnlyLazyState>, seen: { value: boolean },
+): boolean {
+  if (admission.kind === 'below' && sourceLine !== undefined && authoredBodyColumn !== undefined &&
+      sourceColumn(sourceLine) < authoredBodyColumn && (seen.value || wrappedAttributeRunAt(lexer))) return true
+  if (admission.kind === 'content' && state.opaque === null && wrappedAttributeRunAt(lexer)) {
+    seen.value = true
+    state.lazyFoldable = false
+  }
+  return false
+}
+
 const payloadMisses = new WeakMap<Lexer, Map<string, { from: number; maxRun: number }>>()
 const quotePayloadMisses = new WeakMap<Lexer, PayloadMisses>()
 // Whether the first visible line a `+` attaches, past attribute, definition and comment lines, is a list marker.
@@ -368,6 +396,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
+  const wrappedAttributeAtBody = { value: false }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   runIndentationContainer(
@@ -378,6 +407,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (lexer.atDocumentLevel && lazyState.opaque === null && sourceLine !== undefined && authoredBodyColumn !== undefined &&
         sourceColumn(sourceLine) < authoredBodyColumn && RE_ABBR_DEF.test(ln.trimStart())) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
+    if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'
     // A line leaving a nested note's body is still that note's lazy line (carve#3885),
     // and a line inside a fence this body opened is its payload.
     if (admission.kind !== 'content' && lazyState.opaque === null &&
