@@ -2,8 +2,8 @@ import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd, isRefusedBraceRun } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
-import { endsAtConsumedMarker } from '../ast/definition-list-wire.js'
-import type { Comment, LinkReferenceDefinition } from '../ast.js'
+import { endsAtConsumedMarker, entriesToWire } from '../ast/definition-list-wire.js'
+import type { Comment, DefinitionItem, LinkReferenceDefinition } from '../ast.js'
 import type {
   Admonition,
   Attrs,
@@ -71,6 +71,7 @@ import {
   insertSkippedAbbreviationDefinitions,
   hoistContainerAbbreviations,
   attachBlockPos,
+  ENDS_AT_LAST_PLACED_CHILD,
   unplacedBlocks,
   blockQuoteParagraphClaimOpen,
   closeBlockQuoteParagraph,
@@ -395,9 +396,10 @@ const STAND_IN_FREE = new Set(['paragraph', 'heading', 'code_block', 'raw_block'
 // A consumed `+`'s `%%` stand-in is wider than the `+`. Its span is dropped, since the source
 // holds no comment there (CARVE-P12-022), and every span that ended where the stand-in ended,
 // its own containers and their side tables alike, ends at the authored `+` (CARVE-P12-020).
-function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset: number; column: number }): void {
+function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset: number; column: number }): WeakSet<object> {
   const ends = new Map<string, { line: number; offset: number; column: number }>()
   const spans: Span[] = []
+  const remapped = new WeakSet<object>()
   const endOf = (node: { pos?: Span }): Span | undefined => {
     const pos = node.pos
     if (pos === undefined || !unplacedBlocks.has(node)) return pos
@@ -438,7 +440,33 @@ function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset
     if (end === undefined) continue
     span.endColumn = end.column
     span.endOffset = end.offset
+    remapped.add(span)
   }
+  return remapped
+}
+
+/** A refused final `+` is not the markup closing a nonempty host (CARVE-P12-014, carve#5246). */
+function stopRemappedHostsAtChildren(doc: Document, remapped: WeakSet<object>): void {
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child)
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
+    const node = value as { type?: string; pos?: Span; children?: Array<{ pos?: Span }>; items?: Array<{ pos?: Span }> }
+    if (!node.type || !ENDS_AT_LAST_PLACED_CHILD.has(node.type) || explicitlyClosedQuotes.has(value) ||
+        !node.pos || !remapped.has(node.pos)) return
+    const children = node.type === 'definition_list'
+      ? entriesToWire((node.items ?? []) as DefinitionItem[])
+      : node.type === 'list' ? node.items : node.children
+    const last = children?.at(-1)?.pos
+    if (last?.endOffset === undefined || node.pos.endOffset === undefined || node.pos.endOffset <= last.endOffset) return
+    node.pos.endLine = last.endLine
+    if (last.endColumn !== undefined) node.pos.endColumn = last.endColumn
+    node.pos.endOffset = last.endOffset
+  }
+  visit(doc)
 }
 
 function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockNode[] {
@@ -761,12 +789,13 @@ export class ParseSession extends InlineParseSession {
     if (ownership.letters !== null) restoreLetters(doc, ownership.letters)
     if (this.consumedMarkerLines.size > 0) {
       const bom = strippedBom ? 1 : 0
-      dropStandInPositions(doc, (line) => {
+      const remapped = dropStandInPositions(doc, (line) => {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
         // `line` numbers the source, not the stream with erased lines removed.
         return { offset: (originalLexer ?? lexer).lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
       })
       dropStandIns(doc)
+      stopRemappedHostsAtChildren(doc, remapped)
     }
     // Record the source byte length so renderers can size the
     // abbreviation-expansion budget (DoS guard); see render-html/markdown/ansi.
