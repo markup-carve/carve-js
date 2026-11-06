@@ -230,6 +230,7 @@ export function createDefinitionListParser(
   }
   return function parseDefinitionList(parseSession: DefinitionListSession, lexer: Lexer): DefinitionList {
     const items: DefinitionItem[] = []
+    let endListAfterAttachedBlank = false
     endMarkerLineLeadAtIndentedTerm(lexer)
     /**
      * Collect and parse one body.
@@ -429,6 +430,9 @@ export function createDefinitionListParser(
        * (markup-carve/carve#1930).
        */
       let authoredBase: number | null = null
+      let attachedOpenCodeFence = false
+      const keepsOpenCodeFence = (lines: string[]): boolean =>
+        lines.some((line) => opensCodeFence(line.trimStart())) && bodyEndsInOpenCodeFence(lines)
       // The boundary set for a `+`-attached block in a definition body: a blank,
       // a further `+`, or the next term / description marker. Whether a line in
       // that set actually ENDS the block is `insideOpenFence`'s answer, layered
@@ -447,6 +451,7 @@ export function createDefinitionListParser(
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
         const firstBlock = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
+        attachedOpenCodeFence = keepsOpenCodeFence(firstBlock.lines)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
@@ -512,6 +517,7 @@ export function createDefinitionListParser(
       }
       if (firstBlockOpenerContent(first) && !isContinuationMarker(first)) {
         const attached = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
+        attachedOpenCodeFence = keepsOpenCodeFence(attached.lines)
         // An intervening line still reaches the description after this pull
         // fails, but cannot open a block in the nested item's column.
         nestedItemRefusedAttachment = nestedItemColumn > 0 && attached.lines.length === 0
@@ -541,6 +547,7 @@ export function createDefinitionListParser(
             0,
             true,
           )
+          attachedOpenCodeFence = keepsOpenCodeFence(attached)
           if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
             for (const closer of bodyFenceClosers(bodyLines)) {
               bodyLines.push(closer)
@@ -796,6 +803,17 @@ export function createDefinitionListParser(
       // outer block stream see it unchanged.
       const admitBlankLine = (): 'continue' | 'stop' => {
         const { offset: look, line: after } = nextContainerContent(lexer)
+        if (attachedOpenCodeFence && bodyEndsInOpenCodeFence(bodyLines) &&
+            (after === undefined || indentColumns(after, contentCol) < contentCol)) {
+          for (const closer of bodyFenceClosers(bodyLines)) {
+            bodyLines.push(closer)
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+            track(closer)
+          }
+          attachedOpenCodeFence = false
+          endListAfterAttachedBlank = true
+        }
         // The SECOND spelling of the same rule, and it has its own job: this one
         // decides whether the body survives the blank at all, the Form A branch
         // above decides whether a line folds. Both read columns, or a lone tab
@@ -1298,8 +1316,10 @@ export function createDefinitionListParser(
         definitionSpans.push(
           lexer.hasDocumentOffsets ? markerRange(lexer, defLineIndex, defLineIndex) : undefined,
         )
+        if (endListAfterAttachedBlank) break
       }
       items.push({ terms, definitions, termSpans, definitionLines, definitionSpans })
+      if (endListAfterAttachedBlank) break
       if (!RE_DEFLIST_TERM.test(peekEntry()) && !advanceToEntry(lexer, RE_DEFLIST_TERM, helpers,
         parseSession, keep(definitions, terms))) break
     }
