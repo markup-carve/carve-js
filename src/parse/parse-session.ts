@@ -2638,6 +2638,13 @@ export class ParseSession extends InlineParseSession {
       lineNumbers.push(lexer.lineNumber(lexer.pos))
       lexer.consume()
     }
+    // An attribute after a kept note labels the offered block at the host's
+    // marker column, even when it was written at the note's column.
+    let afterNote = false
+    for (let index = 0; index < Math.min(attributeLines, lines.length); index++) {
+      if (RE_FOOTNOTE_DEF.test(lines[index]!.trimStart())) afterNote = true
+      else if (afterNote && isBlockAttributeLine(lines[index]!.trimStart())) lines[index] = lines[index]!.trimStart()
+    }
 
     return { lines, lineNumbers, startLineIndex }
   }
