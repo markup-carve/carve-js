@@ -1174,6 +1174,16 @@ export function ownLines(
           for (let line = index + 1; line < closer; line++) {
             let text = lines[line]!
             for (let q = 0; q < quotes && isQuoteLine(indentCols(text).rest); q++) text = quoteRest(indentCols(text).rest)
+            if (Number.isFinite(content)) {
+              const start = docColumn(lines[line]!, text)
+              let column = start
+              let cut = 0
+              while (cut < text.length && column < content && (text[cut] === ' ' || text[cut] === '\t')) {
+                column = text[cut] === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
+                cut++
+              }
+              text = (column > content ? ' '.repeat(column - content) : '') + text.slice(cut)
+            }
             body.push(text)
           }
           skippedFences.set(index, { closer, content: body.join('\n') })
