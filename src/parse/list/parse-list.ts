@@ -1920,6 +1920,33 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (resumesMarkerDescriptionParagraph) lazyState.lazyFoldable = true
       if (markerDescriptionCodeClosedAtFloor && !isBlankLine(l)) markerDescriptionCodeClosedAtFloor = false
     }
+    // An unclosed fence a descendant's marker-line `+` attaches ends at its first blank (§17 L3, carve#5304),
+    // so the paragraph after it can take a lazy line (carve#5339).
+    const endsAttachedDescendantFence = (): boolean => {
+      let holder: ItemLazyState | null | undefined = lazyState
+      while (holder && holder.opaque?.kind !== 'code') holder = holder.deepest
+      const close = holder?.opaque?.kind === 'code' ? holder.opaque.close : descendantOpaque?.close
+      if (close === undefined) return false
+      let at = nested.length - 1
+      while (at > 0 && !opensCodeFence(nested[at]!.trimStart())) at--
+      const opener = nested[at]
+      const marker = nested[at - 1]
+      if (opener === undefined || marker === undefined || !opensCodeFence(opener.trimStart()) ||
+          !isListMarkerLine(marker.trimStart()) || !/\+[ \t]*$/.test(marker) ||
+          indentColumns(opener) !== indentColumns(marker) || nested.slice(at + 1).some(isBlankLine)) return false
+      const base = contentCol + indentColumns(opener)
+      for (let k = 1, ahead = lexer.peek(k); ahead !== undefined; ahead = lexer.peek(++k)) {
+        if (isBlankLine(ahead)) continue
+        if (indentColumns(ahead) < contentCol) break
+        if (indentColumns(ahead) === base && close.test(ahead.trimStart())) return false
+      }
+      if (holder) {
+        holder.opaque = null
+        holder.lazyFoldable = false
+      }
+      descendantOpaque = null
+      return true
+    }
     const admitBlank = (l: string): Decision => {
       const { offset: afterBlanks, line: afterBlankLine } = nextContainerContent(lexer, refusedPlus)
       // A line that misses the span's owner ends the span, so the blank before it separates blocks (PART 0 S1).
@@ -1967,6 +1994,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (nextSource !== undefined && inlineFenceColumn >= 0 && !foldedRunBelowBase && followingAdmittedBlock)
           opaqueBlankLines.add(lexer.lineNumber(lexer.pos))
       }
+      endsAttachedDescendantFence()
       const rootLines = lexer.rootLines ?? lexer.lines
       const markerLineNumber = lexer.lineNumber(lexer.pos + afterBlanks)
       const sourceMarker = rootLines[markerLineNumber - 1]
