@@ -194,6 +194,10 @@ export interface ItemLazyState {
   descriptionColumn?: number
   /** Whether the stored description column came from a term. */
   descriptionHasTerm?: boolean
+  /** A line after the open term ended its entry: a term holds no body (carve#5289). */
+  termEnded?: boolean
+  /** The marker line's descendant item holds a term, which seeds the first descendant frame. */
+  ownedTerm?: boolean
   closedBelowComment?: boolean
   unrebasedColonBody?: { width: number }
   // Only a marker-line container admits a named opener past its body column.

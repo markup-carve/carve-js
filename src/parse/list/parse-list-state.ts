@@ -512,10 +512,19 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       state.ownedColumn = -1
       state.deepest = null
     }
-    const hasTerm = isTerm || state.inDefList === 'term' ||
+    const hasTerm = isTerm || (state.inDefList === 'term' && state.termEnded !== true) ||
       (state.inDefList === 'description' && state.descriptionHasTerm === true)
     state.descriptionHasTerm = hasTerm
     state.inDefList = isTerm ? 'term' : 'description'
+    delete state.termEnded
+    delete state.termAfterComment
+    // A `: ` line with no term above is paragraph text, whatever its body holds (carve#5290).
+    // A descendant item's term is not this frame's, so a line that item owns is left to it.
+    if (!hasTerm && (state.ownedColumn < 0 || indentColumns(content) < state.ownedColumn)) {
+      state.inDefList = false
+      state.lazyFoldable = true
+      return true
+    }
     const description = RE_DEFLIST_DEF.exec(content)
     if (description) {
       state.descriptionColumn = 1 + description[1]!.length
@@ -792,6 +801,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     state.ownedColumn = run !== undefined && nestedWidth > 0 ? run + nestedWidth : -1
     state.ownedMarker = run ?? -1
     state.ownedAuthored = false
+    delete state.ownedTerm
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
     const nested = markerLineState(content, facts?.prefixMemo)
@@ -935,8 +945,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       inDescriptionBody(state, indentColumns(content))
     const line = beginLine(content, state, atContentColumn, hasCommentCloser, facts,
       hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
+    const trimmed = content.trimStart()
+    // A line comment is invisible, so it leaves the term's entry open.
+    const termOpen = state.inDefList === 'term' && trimmed !== '' && !(trimmed.startsWith('%%') && commentFenceRun(trimmed) === undefined)
     for (const phase of phases) {
       if (!phase(line)) continue
+      if (termOpen && state.inDefList === 'term' && phase !== definitionMarker && phase !== termComment) state.termEnded = true
       // A block at or past the open description's body column is that body's (PART 0 S3, carve#4860).
       if (describing && state.inDefList === false) state.inDefList = 'description'
       return
