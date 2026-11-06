@@ -637,7 +637,13 @@ export function ownLines(
       if (inner.kind !== 'fence' || inner.family !== 'comment' || !missed || inner.span || m.rest === '' || !inner.closes!(m.rest, m.col)) return false
       frames.pop()
       top().last = 'block'
-      lead(frames[reached]!.col)
+      // The closer remains in the span's host; S1 only selects its next owner.
+      // Restore the quote markers skipped while reaching below that host.
+      for (let k = reached + 1; k < frames.length; k++) {
+        if (frames[k]!.kind === 'quote') out += ' '.repeat(frames[k - 1]!.canon) + '> '
+      }
+      out += ' '.repeat(top().kind === 'quote' ? 0 : top().canon)
+      src = m.rest
       finish()
       if (trace) emit(at, 'S1', ownerPath(), 'CARVE-P0-005', 'closer', { cell: 'B-comment-end' })
       return true
