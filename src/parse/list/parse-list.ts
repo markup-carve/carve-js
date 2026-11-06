@@ -487,10 +487,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A block at the innermost marker's column is attached below the item holding that marker: a line
     // below that column ends the item, so a closer past it closes nothing (§17 L3, carve#5304).
     let innermostMarker = 0
+    let markersEnd = 0
     for (let offset = 0, m = STACKED_MARKER.exec(head.content); m !== null; m = STACKED_MARKER.exec(head.content.slice(offset))) {
       innermostMarker = offset
       offset += m[0].length
+      markersEnd = offset
     }
+    // A quote marker behind the list markers is the innermost opener (carve-js#4613).
+    if (head.content[markersEnd] === '>') innermostMarker = markersEnd
     const contentStart = head.line.lastIndexOf(head.content)
     // A task checkbox is content, not an added ownership column. The walk has
     // already removed its four source columns from the follower's view.

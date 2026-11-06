@@ -713,7 +713,9 @@ export function ownLines(
       // S1 ends a verse comment span at the first non-comment line that
       // misses its owner. The open stanza may still take that line under S4.
       if (holdsCommentSpan(inner) && !m.rest.startsWith('%%')) inner.span = null
-      readPayload(inner, true)
+      // The stanza takes it as a lazy line (PART 0 S4), so a reader's boundary keeps it (carve-js#4614).
+      lazyLines.add(at)
+      readPayload(inner, true, reached)
       return true
     }
     if (readsMissedLine()) continue
@@ -805,7 +807,7 @@ export function ownLines(
     }
 
     // S1: an open payload tests its closer first.
-    function readPayload(inner: Frame, lazyMissed = false): void {
+    function readPayload(inner: Frame, lazyMissed = false, lazyReached = -1): void {
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
@@ -829,7 +831,9 @@ export function ownLines(
       // A `%%%` span leaves nothing, so the stanza it interrupted stays as it was (carve#4956).
       if (inner.lineBlock && !inComment && inner.span?.[0] !== '%') inner.para = m.rest !== ''
       finish()
-      if (trace) emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
+      if (!trace) return
+      if (lazyReached >= 0) emit(at, 'S4', payloadPath, 'CARVE-P0-006', 'lazy', { reached: ownerPath(lazyReached) })
+      else emit(at, 'S1', payloadPath, 'CARVE-P0-005', payloadForm, { cell: `B-${inner.family}-${payloadForm === 'closer' ? 'end' : 'keep'}` })
     }
 
     function keepsMissedLineBlock(inner: Frame, missed: boolean, reached: number): boolean {
