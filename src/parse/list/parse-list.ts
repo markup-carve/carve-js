@@ -4,7 +4,7 @@ import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
 import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, parseBlockAttributeRun } from '../parse-prepass-core.js'
-import { sourceColumnAt } from './parse-item-core.js'
+import { leadingCommentEnd, sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
@@ -168,12 +168,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     return false
   }
-  // How many lines before an attached block are attribute lines and notes the host keeps (§17 L3, carve#5288).
+  // How many lines before an attached block are attribute lines, comments and notes the host keeps (§17 L3, carve#5288).
   const invisibleLead = (lines: readonly string[]): number => {
     let k = 0
     while (k < lines.length - 1) {
       const text = lines[k]!.trimStart()
+      const comment = leadingCommentEnd(offset => lines[offset], k)
       if (isBlockAttributeLine(text)) k++
+      else if (comment !== -1 && comment < lines.length) k = comment
       else if (RE_FOOTNOTE_DEF.test(text)) {
         const floor = indentColumns(lines[k]!) + FOOTNOTE_BODY_COLUMN
         // Its body goes along: lines at its body column and lazy text (CARVE-P9-067).

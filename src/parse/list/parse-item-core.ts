@@ -558,6 +558,18 @@ export function isRetainableLineComment(lexer: Lexer, content: string): boolean 
   return run === undefined || !commentBlockHasCloser(lexer, run)
 }
 
+/** The line after a `%%` line or a matched `%%%` span at `offset`, or -1 (CARVE-P9-053). */
+export function leadingCommentEnd(at: (offset: number) => string | undefined, offset: number): number {
+  const line = at(offset)?.replace(/^[ \t]+/, '')
+  if (line === undefined || !RE_COMMENT_LINE.test(line)) return -1
+  const run = commentFenceRun(line)
+  if (run === undefined) return offset + 1
+  for (let k = offset + 1, next = at(k); next !== undefined; next = at(++k)) {
+    if (commentFenceRun(next.replace(/^[ \t]+/, '')) === run) return k + 1
+  }
+  return -1
+}
+
 /**
  * The index past the closer of a matched `%%%` fence opening at `at`, or
  * undefined. The first bare run of the same width closes it at any column.
