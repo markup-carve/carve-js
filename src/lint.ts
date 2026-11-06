@@ -3557,6 +3557,32 @@ function collectFootnoteDefinitionWarnings(
 
   const defs = doc.footnoteDefs ?? {}
 
+  // The parser knows the winning site's host, including list and quote
+  // nesting that a physical-line scan cannot reconstruct. Seed those sites
+  // before looking for later spellings on the source lines.
+  for (const label of Object.keys(defs)) {
+    const recorded = ownValue(doc.footnoteDefPos, label)
+    if (!recorded) continue
+    const line = recorded.startLine
+    const col = (lines[line - 1] ?? '').indexOf(`[^${label}]:`) + 1
+    if (col < 1) continue
+    const start = (lineStart[line - 1] ?? 0) + col - 1
+    firstSites.set(label, { line, col, start, end: start + label.length + 3 })
+  }
+  for (const [label, site] of [...firstSites].sort((a, b) => a[1].start - b[1].start)) {
+    const key = whitespaceKey(label)
+    const twin = firstByWhitespaceKey.get(key)
+    if (twin === undefined) firstByWhitespaceKey.set(key, label)
+    else if (twin !== label) out.push({
+      line: site.line,
+      column: site.col,
+      rule: 'footnote-labels-differ-only-in-whitespace',
+      message: `Footnote definition [^${label}] normalizes to the same key as [^${twin}]; the first definition wins. Normalized key: ${JSON.stringify(key)}.`,
+      start: site.start,
+      end: site.end,
+    })
+  }
+
   // THE PREVIOUS NON-BLANK LINE, the same gate the parser reads (carve-js#1589).
   // A blank between description entries does not end a definition list, so a
   // `: ` marker below one is still a description marker. Reading the line
@@ -3596,6 +3622,7 @@ function collectFootnoteDefinitionWarnings(
     const col = line.indexOf('[^') + 1
     const start = (lineStart[i] ?? 0) + (col - 1)
     const site = { line: i + 1, col, start, end: start + m[0].length }
+    if (firstSites.has(label) && firstSites.get(label)!.line === site.line) continue
     if (firstSites.has(label)) {
       out.push({
         line: site.line,
