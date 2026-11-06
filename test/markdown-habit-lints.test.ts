@@ -24,6 +24,10 @@ describe('Markdown habit lints', () => {
     expect(findings('- ## h ##\n')).toEqual([['heading-closing-hashes', 1, 8]])
   })
 
+  it('reports a dash underline under a footnote paragraph', () => {
+    expect(findings('[^n]: x\n  ---\n\n[^n]\n')).toEqual([['setext-heading-underline', 2, 3]])
+  })
+
   it('read CRLF lines like LF lines', () => {
     expect(findings('Title\r\n---\r\n')).toEqual([['setext-heading-underline', 2, 1]])
     expect(findings('## h ##\r\n')).toEqual([['heading-closing-hashes', 1, 6]])

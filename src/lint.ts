@@ -3472,6 +3472,7 @@ function collectSilentFailures(
     }
   }
   visitSiblings(doc.children)
+  visitSiblings(Object.values(doc.footnoteDefs ?? {}))
   const top = doc.children as Positioned[]
   // A paragraph written flush under a list, with no blank line, still reads as that list's text.
   const followsList = (i: number): boolean => {
