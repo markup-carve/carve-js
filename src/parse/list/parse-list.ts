@@ -2274,6 +2274,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const text = line.trimStart()
       return !RE_DEFLIST_DEF.test(text) && !RE_DEFLIST_TERM.test(text)
     }
+    const verseSpanDefinitionColumn = (line: string): number | undefined => {
+      if (!RE_DEFLIST_DEF.test(line.trimStart()) || definitionHostColumn === undefined ||
+          definitionBodyColumn === undefined) return undefined
+      // The item view may already have cut its leading spaces. Use the
+      // authored column to distinguish a new description from verse text.
+      for (let frame: typeof lazyState | null | undefined = lazyState; frame; frame = frame.deepest)
+        if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true)
+          return lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(line)
+      return undefined
+    }
+    const verseSpanDefinitionFollower = (line: string): boolean => {
+      const column = verseSpanDefinitionColumn(line)
+      return column !== undefined && definitionHostColumn !== undefined && definitionBodyColumn !== undefined &&
+        column >= definitionHostColumn && column < definitionBodyColumn
+    }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
@@ -2321,7 +2336,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           returnedTermOwnerColumn = owner
         }
       }
+      const verseDefinitionColumn = verseSpanDefinitionColumn(l)
       if (belowDefinitionEntry && !descendantLineBlockTakes(l) &&
+          !(verseDefinitionColumn !== undefined && definitionBodyColumn !== undefined &&
+            verseDefinitionColumn < definitionBodyColumn) &&
           !enclosingLazy && !ancestorTermBand && lw <= baseIndent && !insideOpenQuoteParagraph(lazyState) &&
           !authoredQuoteParagraphOpen) return 'stop'
       if (!quoteLazyFramed && lazyState.opaque === null && sourceDescription &&
@@ -2973,12 +2991,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // S1 ends a descendant verse's span when this line misses its owner.
     // Its pre-span stanza then answers S4 for the containing item.
     const descendantVerseClaimAfterMiss = (line: string): boolean => {
-      if (RE_COMMENT_LINE.test(line.trimStart())) return false
+      const text = line.trimStart()
+      if (RE_COMMENT_LINE.test(text)) return false
       for (let frame = lazyState.deepest; frame; frame = frame.deepest)
         if (frame.literalColon?.opaque?.belowBaseCloses && frame.literalColon.spanFoldable === true) return true
       return false
     }
-
 
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
@@ -3045,6 +3063,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           indentColumns(l, contentCol) > 0 && RE_COMMENT_LINE.test(l.trimStart()))))
     const lazyLineFor = (l: string): string => {
       if (indentColumns(l, contentCol) < contentCol && RE_DEFLIST_DEF.test(l.trimStart()) &&
+          !descendantVerseClaimAfterMiss(l) &&
           lazyState.inDefList === false && !lazyState.deepest?.inDefList)
         return LAZY_FRAME + l.trimStart()
       if (captionLeafOpen(l)) return LAZY_FRAME + l.trimStart()
@@ -3165,7 +3184,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
       // The item's own reparse cannot see this from the column alone - the
       // clamp above rewrote it - so record the FACT for the arm below.
-      if (indentColumns(l, contentCol) < contentCol || ancestorTermBand) {
+      if ((indentColumns(l, contentCol) < contentCol || ancestorTermBand) &&
+          !(descendantVerseClaimAfterMiss(l) && RE_DEFLIST_DEF.test(l.trimStart()))) {
         lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
       }
       // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
@@ -3287,7 +3307,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         pendingBlankRun.clear()
         pendingNoteComments = new Set()
       }
-      if (lw >= contentCol && !captionLeafOpen(l) && !ancestorTermBand &&
+      if (verseSpanDefinitionFollower(l)) {
+        // Reparse the marker at this item's content column, even when an
+        // enclosing item has already stripped its authored indentation.
+        admitContentLine(' '.repeat(contentCol) + l.trimStart())
+      } else if (lw >= contentCol && !captionLeafOpen(l) && !ancestorTermBand &&
         !(enclosingLazy && (lazyState.inDefList === 'term' || lazyState.deepest?.inDefList === 'term')) &&
         !belowOpenDescription && !belowDefinitionEntry && !quoteLazyFramed &&
         // markup-carve/carve#1904's exclusion, unchanged and unconditional: a
