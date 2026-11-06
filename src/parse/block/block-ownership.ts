@@ -1099,9 +1099,9 @@ export function ownLines(
       if (at > 0 && isAttrLine(trimEndSpaceTab(lines[at - 1]!.replace(/^(?:[ \t]*>[ \t]?)*[ \t]*/, '')))) return false
       // A blank after an item's attached block still lets a `+` reach that item (§17 L3, carve#4629).
       if (m.rest === '') return top().kind !== 'fence' && attachedHost?.at(-1)?.kind !== 'item'
-      // A later block in an ancestor ends the old descendant's attachment.
-      // Otherwise a `+` in that block's payload can reopen the old host.
-      if (attachedHost && depth < attachedHost.length - 1 && form.interrupts) return true
+      // A later ancestor fence ends the old descendant's attachment.
+      // Otherwise a `+` in its payload can reopen the old host.
+      if (attachedHost && depth < attachedHost.length - 1 && form.kind === 'fence') return true
       return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item' && !isAttrLine(trimEndSpaceTab(m.rest))
     }
 
