@@ -9,6 +9,7 @@ import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
 import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
+import { pulledParagraphBlockCut } from '../block/pulled-paragraph.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
@@ -659,6 +660,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       while (first < lines.length - 1 && isBlockAttributeLine(sliceColumns(lines[first]!, blockColumn, true).trimStart())) first++
       const block = sliceColumns(lines[first]!, blockColumn, true)
       if (lines.length <= 1 || lineOpensBlock(first > 0 ? block.trimStart() : block)) return
+      const blockCut = pulledParagraphBlockCut(lines, placement.contentCol)
       let fenceRun: string | undefined
       const cut = lines.findIndex((line, index) => {
         const text = line.trimStart()
@@ -668,8 +670,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         } else if (opensCodeFence(text)) {
           fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
         }
-        return index > 0 && indentColumns(line) === placement.contentCol && (isListMarkerLine(text) ||
-          !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text)))
+        return index > 0 && (index === blockCut || indentColumns(line) === placement.contentCol && (isListMarkerLine(text) ||
+          !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text))))
       })
       if (cut > 0) {
         lexer.pos -= lines.length - cut
@@ -2095,6 +2097,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // The body column of the attached description list's open `<dd>`: a line there is the `<dd>`'s (PART 0 S2).
       let attachedBodyColumn = -1
       const quoteAttached = attachesQuote(attachedLines)
+      // An open fence or colon block there takes no payload below that column either (PART 0 S1).
+      const leavesOwnBlock = (line: string): boolean => indentColumns(line, contentCol) < contentCol &&
+        !lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== true &&
+        (lazyState.opaque === null || lazyState.opaque.kind === 'code') &&
+        !lazyState.inFootnoteBody && !insideOpenQuoteParagraph(lazyState)
       // A line in the attached block's invisible lead is never the item's own opener.
       const ownFrom = Math.max(1, invisibleLead(attachedLines))
       for (let k = 0; k < attachedLines.length; k++) {
@@ -2108,10 +2115,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // A later block at the item's content column is the item's own. Once
         // that block leaves no paragraph open, a line below the item column
         // must return to the ordinary ownership walk (PART 0 S4).
-        if (ownBlock && indentColumns(attachedLines[k]!, contentCol) < contentCol &&
-            !lazyState.lazyFoldable && lazyState.deepest?.lazyFoldable !== true &&
-            lazyState.opaque === null && lazyState.divDepth === 0 &&
-            !lazyState.inFootnoteBody && !insideOpenQuoteParagraph(lazyState)) {
+        if (ownBlock && leavesOwnBlock(attachedLines[k]!)) {
           lexer.pos -= attachedLines.length - k
           attachedLines.length = k
           attachedLineNumbers.length = k
@@ -2140,7 +2144,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       attachedDescriptionBody = attachedBodyColumn
       // The `+` takes one block: the blank after an unclosed fence is the host's separator, not payload (carve#4048).
-      if (lazyState.opaque?.kind === 'code' && (lexer.peek() === undefined || isBlankLine(lexer.peek()!))) {
+      // A fence the item opened itself at its content column is no part of that block.
+      if (!ownBlock && lazyState.opaque?.kind === 'code' && (lexer.peek() === undefined || isBlankLine(lexer.peek()!))) {
         const opener = attachedLines.map(line => line.trimStart()).find(line => opensCodeFence(line))
         const run = opener === undefined ? undefined : /^(`{3,}|~{3,})/.exec(opener)?.[1]
         if (run !== undefined) {
