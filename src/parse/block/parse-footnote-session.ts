@@ -1,7 +1,7 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { attachedBlankClosers, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
-import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
+import { commentOnlyParagraphEnd, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
 import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
@@ -376,7 +376,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodyLineNumbers.push(...attachedLineNumbers)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn)) {
+      for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn,
+        attached.some(line => RE_LINE_BLOCK_OPEN.test(line.trimStart())))) {
         bodyLines.push(closer)
         bodyLineNumbers.push(attachedLineNumbers.at(-1)!)
         bodySourceLines.push(undefined)

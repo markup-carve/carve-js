@@ -672,8 +672,9 @@ export interface AttachedScan {
  * and opens nothing (the reason `findColonCloser` skips these spans whole).
  */
 export function opaqueSpanEnd(scan: AttachedScan, i: number): number {
-  const line = scan.at(i)
-  if (line === undefined) return -1
+  const authored = scan.at(i)
+  if (authored === undefined) return -1
+  const line = authored.trimStart()
   const fence = RE_FENCE.exec(line)
   const rawFence = fence ? null : RE_RAW_FENCE.exec(line)
   const marker = fence ? fence[2]! : rawFence ? rawFence[1]! : null
@@ -697,6 +698,7 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
   // ahead carrying it refutes the whole scan before it starts.
   const memo = scan.cache.colon ??= new Map()
   const opener = scan.base + openIdx
+  const rootLineBlock = RE_LINE_BLOCK_OPEN.test(scan.at(openIdx) ?? '')
   const cached = memo.get(opener)
   if (cached !== undefined) return cached < 0 ? -1 : cached - scan.base
   if (!exactCloserPossible(scan.index.colon, len, opener)) {
@@ -735,7 +737,7 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
     else frame.ranges.push({ start: position, end: next + 1 })
     if (event === undefined || next > frame.lastClose) return fail(stack)
     j = next - scan.base
-    const line = scan.at(j)!
+    const line = scan.at(j)!.trimStart()
     if (layoutWork.on) layoutWork.attachmentColonLines++
     // Skipped from the line AFTER its opener: an opener with no info string is
     // closer-shaped itself and would otherwise end the span where it began.
@@ -746,6 +748,8 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
     }
     const close = RE_ADMONITION_CLOSE.exec(line)
     const closeLen = close?.[1]?.length
+    // Colon-shaped lines in a line block are verse; only its exact closer is structural.
+    if (rootLineBlock && stack.length === 1 && closeLen !== len) continue
     if (closeLen === stack[stack.length - 1]!.width) {
       const frame = stack.pop()!
       memo.set(frame.opener, scan.base + j)

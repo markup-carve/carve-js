@@ -2558,6 +2558,7 @@ export class ParseSession extends InlineParseSession {
     viewSlice = 0,
     itemHost = false,
     closerFloor = 0,
+    hostCloserColumn = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // The block is measured where its caller reads it, which a first-block `+` slices further.
@@ -2609,7 +2610,7 @@ export class ParseSession extends InlineParseSession {
         return origin.attachmentFenceClosers
       },
       end: lexer.lineCount,
-      contentColumn: contentColumn + viewSlice,
+      contentColumn: Math.max(contentColumn + viewSlice, hostCloserColumn),
       indexBase,
       base: lexer.pos + attributeLines,
       boundary: isBoundary,
@@ -2686,9 +2687,10 @@ export class ParseSession extends InlineParseSession {
     endAtFoldedDefinition = true,
     viewSlice = 0,
     closerFloor = 0,
+    hostCloserColumn = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
-      viewSlice, true, closerFloor)
+      viewSlice, true, closerFloor, hostCloserColumn)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
     let leadLines = 0

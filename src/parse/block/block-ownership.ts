@@ -2,7 +2,7 @@ import { isValidAttrPayload } from '../../extension/attribute-parser.js'
 import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
-import { CAPTION_COMMENT_ONLY } from './parse-quote-core.js'
+import { CAPTION_COMMENT_ONLY, fenceCloseRe } from './parse-quote-core.js'
 import {
   commentOnlyParagraphEnd,
   isColonFenceOpener,
@@ -1136,7 +1136,7 @@ export function ownLines(
     function markUnclosedAttachedFence(form: Form): void {
       if (top().opened !== at) return
       if (form.family === 'code' && !codeCloserAhead(top(), at, quotes) ||
-          form.kind === 'colon' && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+          (form.kind === 'colon' || form.lineBlock) && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
     // The host whose `+` attached the fence goes on at its content column after the blank (§17 L4).
@@ -1790,12 +1790,33 @@ export function ownLines(
   function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
     const host = attachedHost?.at(-1)
     let pastBlank = false
+    const nested: number[] = []
+    let payload: { run: string; column: number } | null = null
     for (let k = at + 1; k < lines.length; k++) {
       const n = quotedMeasure(k, quotes)
       if (n === null) return false
       if (n.rest === '') { pastBlank = true; continue }
+      if (payload !== null) {
+        if (n.col === payload.column && fenceCloseRe(payload.run).test(n.rest)) payload = null
+        continue
+      }
+      const code = /^(`{3,}|~{3,})/.exec(n.rest)?.[1]
+      if (code !== undefined) {
+        payload = { run: code, column: n.col }
+        continue
+      }
       const closer = COLON_CLOSER.exec(n.rest)
-      if (closer && closer[1]!.length === container.run && n.col <= container.col) return true
+      const maxColumn = host === undefined ? container.col : Infinity
+      if (closer && n.col <= maxColumn) {
+        const width = closer[1]!.length
+        if (nested.at(-1) === width) { nested.pop(); continue }
+        if (nested.length === 0 && width === container.run) return true
+      }
+      // A line block reads colon-shaped openers as verse. Divs nest them.
+      if (!container.lineBlock && isColonFenceOpener(n.rest) && n.col <= maxColumn) {
+        const width = /^(:{3,})/.exec(n.rest)![1]!.length
+        nested.push(width)
+      }
       if (pastBlank && host && n.col <= host.col &&
           (matchMarker(n.rest) !== null || isColonFenceOpener(n.rest))) return false
     }
