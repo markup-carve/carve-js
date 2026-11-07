@@ -1825,7 +1825,7 @@ export function openFenceScanner(): (lines: readonly string[]) => string[] {
   let at = 0
   let code: string | undefined
   let comment: number | undefined
-  let colons: number[] = []
+  let colons: { width: number; lineBlock: boolean }[] = []
   return (lines) => {
     if (lines.length < at) {
       at = 0
@@ -1854,14 +1854,20 @@ export function openFenceScanner(): (lines: readonly string[]) => string[] {
         continue
       }
       const close = RE_ADMONITION_CLOSE.exec(text)
-      const open = close ? colons.lastIndexOf(close[1]!.length) : -1
+      const top = colons.at(-1)
+      // A line block reads every colon-shaped body line as verse except its exact closer.
+      if (top?.lineBlock) {
+        if (close?.[1]?.length === top.width) colons.pop()
+        continue
+      }
+      const open = close ? colons.map(frame => frame.width).lastIndexOf(close[1]!.length) : -1
       if (open >= 0) colons.length = open
       else {
         const run = colonBlockOpenerRun(text)
-        if (run !== null) colons.push(run)
+        if (run !== null) colons.push({ width: run, lineBlock: RE_LINE_BLOCK_OPEN.test(text) })
       }
     }
-    return [...(code === undefined ? [] : [code]), ...colons.map(run => ':'.repeat(run)).reverse()]
+    return [...(code === undefined ? [] : [code]), ...colons.map(frame => ':'.repeat(frame.width)).reverse()]
   }
 }
 

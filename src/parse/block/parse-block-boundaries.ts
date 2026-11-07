@@ -371,22 +371,23 @@ export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], b
   const codeOpen = closers[0]![0] !== ':'
   // A colon run inside a later fence is that fence's payload, not a closer.
   let payload: RegExp | undefined
-  const nested: number[] = []
+  const nested: { width: number; lineBlock: boolean }[] = []
   for (let k = 1, line = lexer.peek(k); line !== undefined; line = lexer.peek(++k)) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
     if (payload === undefined && column <= bodyColumn) {
       const closeWidth = RE_ADMONITION_CLOSE.exec(text)?.[1]?.length
-      if (closeWidth !== undefined && nested.at(-1) === closeWidth) {
+      if (closeWidth !== undefined && nested.at(-1)?.width === closeWidth) {
         nested.pop()
         continue
       }
+      if (nested.at(-1)?.lineBlock && column >= bodyColumn) continue
       if (nested.length === 0 && closers.some(run => run[0] === ':'
         ? closeWidth === run.length : fenceCloseRe(run).test(text))) return []
       if (!lineBlock && !codeOpen && closeWidth === undefined) {
         const open = colonBlockOpenerRun(text)
-        if (open !== null) nested.push(open)
+        if (open !== null) nested.push({ width: open, lineBlock: RE_LINE_BLOCK_OPEN.test(text) })
       }
     }
     if (column < bodyColumn) break
