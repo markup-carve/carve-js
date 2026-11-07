@@ -59,3 +59,12 @@ it('keeps the blank in a description fence whose closer stands at the marker col
   </dd>
 </dl>`)
 })
+
+it('reads a colon run inside a later fence as payload, not as the closer', () => {
+  expect(carveToHtml('[^1]: +\n::: note\n\n  ```\n  :::\n  ```\n  tail\n\n[^1]\n')).toContain(`<aside class="admonition note" aria-label="Note">
+
+      </aside>
+      <pre><code>:::
+</code></pre>
+      <p>tail${backlink}</p>`)
+})
