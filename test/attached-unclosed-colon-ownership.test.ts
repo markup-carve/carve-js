@@ -17,22 +17,22 @@ describe('an unclosed colon block attached by a marker-line plus', () => {
 </ul>`)
   })
 
-  it('opens a later list after the note at the outer item (carve#5359)', () => {
+  it('opens a later list after the note in the attached item (carve#5396)', () => {
     const source = '- a\n  * +\n  ::: note\n\n    - q\n'
     const trace = decisionTrace(source)
-    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1')
-    expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:5')
+    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1/item:2')
+    expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:2/item:5')
     expect(carveToHtml(source)).toBe(`<ul>
-  <li><p>a</p>
+  <li>a
     <ul>
       <li>
-        <aside class="admonition note" aria-label="Note">
+        <aside class=\"admonition note\" aria-label=\"Note\">
 
         </aside>
+        <ul>
+          <li>q</li>
+        </ul>
       </li>
-    </ul>
-    <ul>
-      <li>q</li>
     </ul>
   </li>
 </ul>`)
@@ -60,8 +60,18 @@ describe('an unclosed colon block attached by a marker-line plus', () => {
 
   it('does not pair a closer after a separate list block with the attached note', () => {
     const trace = decisionTrace('- a\n  * +\n  ::: note\n\n    - q\n  :::\n')
-    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1')
-    expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:5')
+    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1/item:2')
+    expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:2/item:5')
+  })
+
+  it('keeps a block opener at the host content column after the blank (carve#5396)', () => {
+    for (const opener of ['- q', '> q', '# q']) {
+      const source = `- +\n::: note\n\n  ${opener}\n`
+      const html = carveToHtml(source)
+      expect(html).toContain('<aside class="admonition note"')
+      expect(html).toMatch(/<\/aside>\n    (?:<ul>|<blockquote>|<h1)/)
+      expect(html).toContain('</li>\n</ul>')
+    }
   })
 
   it('keeps a closer paired after a heading in the note', () => {
