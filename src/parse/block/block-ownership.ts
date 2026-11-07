@@ -252,7 +252,19 @@ function holdsCommentSpan(frame: Frame): boolean {
 }
 
 // Frames inside a quote a marker-line `+` took leave the body's column to its host (CARVE-P9-067, carve#4385).
-function closesAColumn(closed: Frame[]): boolean {
+const NO_FRAMES: readonly Frame[] = []
+
+// The walk asks this once per line, and on most lines nothing was missed.
+function framesPast(frames: Frame[], depth: number): readonly Frame[] {
+  return depth < frames.length - 1 ? frames.slice(depth + 1) : NO_FRAMES
+}
+
+// Assigning an unchanged length still takes V8's slow length setter.
+function truncateFrames(frames: Frame[], length: number): void {
+  if (frames.length !== length) frames.length = length
+}
+
+function closesAColumn(closed: readonly Frame[]): boolean {
   const quote = closed.findIndex((f) => f.firstBlockQuote === true)
   return (quote < 0 ? closed : closed.slice(0, quote)).some((f) => f.kind !== 'quote')
 }
@@ -743,10 +755,10 @@ export function ownLines(
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
-    const missedNote = missed && frames.slice(reached + 1).some((f) => f.kind === 'note')
+    const missedFrames = framesPast(frames, reached)
+    const missedNote = missed && missedFrames.some((f) => f.kind === 'note')
     // A `: ` line is a description sibling at any column where its list's owner reads it (CARVE-P0-024 S3).
     // A caption at its owner's block column attaches to the quote it follows and is never its lazy line (CARVE-P2-008, carve#4312).
-    const missedFrames = frames.slice(reached + 1)
     const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
       !missedFrames.some((f) => f.kind === 'note')
     if (missed && !captionsQuote && foldsLazily(form, owner)) {
@@ -783,11 +795,12 @@ export function ownLines(
     // S5: apply the line where it reached, closing every frame it missed (T, CARVE-P0-003).
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
-    const closedColumn = closesAColumn(frames.slice(reached + 1))
-    const closedDescription = frames.slice(reached + 1).some((f) => f.plusBody)
+    const closedFrames = framesPast(frames, reached)
+    const closedColumn = closesAColumn(closedFrames)
+    const closedDescription = closedFrames.some((f) => f.plusBody)
     const sibling = frames[reached + 1]
     const traceParent = trace ? ownerPath(reached) : ''
-    frames.length = reached + 1
+    truncateFrames(frames, reached + 1)
     owner = top()
     if (m.rest !== '') keepClosedShift(owner, sibling)
     let appliedPath: string | null = null
@@ -1144,6 +1157,8 @@ export function ownLines(
     }
 
     function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
+      // Only a held attachment can end; the checks below read the line again.
+      if (!attachedHost) return false
       // An attribute line leads the attached block, so the line after it still opens that block.
       if (at > 0 && isAttrLine(trimEndSpaceTab(lines[at - 1]!.replace(/^(?:[ \t]*>[ \t]?)*[ \t]*/, '')))) return false
       // A blank after an item's attached block still lets a `+` reach that item (§17 L3, carve#4629).
