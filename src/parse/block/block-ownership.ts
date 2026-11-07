@@ -1272,7 +1272,11 @@ export function ownLines(
         return true
       }
       const nextOwner = nextLineOwner(host, at, quotes)
-      if (nextOwner === 0) return false
+      if (nextOwner === 0) {
+        frames.length = 1
+        top().last = 'block'
+        return true
+      }
       if (nextOwner < host.length - 1) {
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
