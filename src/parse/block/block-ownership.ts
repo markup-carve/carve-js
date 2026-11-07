@@ -447,8 +447,31 @@ export function ownLines(
   const overindented: OverindentedOpener[] = []
   // A line the walk rewrote without removing anything, so it records no cut.
   let rewritten = false
+  // A blank or text line under the document alone, with no `+`, follower or moved
+  // span pending, takes the S5 path unchanged. Skipping it in the loop header keeps
+  // the body's per-line closures off that path.
+  const passesThrough = (at: number): boolean => {
+    if (trace || frames.length !== 1 || attachedHost || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
+        releasedFollowers.has(at) || noteTextFollower.value?.at === at - 1 || tabQuoteFollower.value?.at === at - 1) return false
+    const doc = frames[0]!
+    if (doc.cut !== 0 || doc.endsAtBlank || doc.closedList || doc.termShift !== undefined) return false
+    const line = lines[at]!
+    const { rest } = indentCols(line)
+    if (CONT_MARKER.test(rest) || TRAILING_PLUS.test(rest)) return false
+    reach = 0
+    if (rest !== '' && classify(rest, doc, at, 0).kind !== 'text') return false
+    if (invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, separatingLinks, skippedComments, skippedNotes) !== null) return false
+    doc.para = rest !== ''
+    if (rest !== '') doc.last = 'para'
+    result.push(line)
+    return true
+  }
+  const nextWalkedLine = (from: number): number => {
+    while (from < lines.length && passesThrough(from)) from++
+    return from
+  }
 
-  for (let at = start; at < lines.length; at++) {
+  for (let at = nextWalkedLine(start); at < lines.length; at = nextWalkedLine(at + 1)) {
     const invisible = invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, separatingLinks, skippedComments, skippedNotes)
     if (invisible !== null) {
       recordInvisible(invisible)
