@@ -108,6 +108,92 @@ interface FootnoteHooks {
   isConsumedMarker: (line: number) => boolean
 }
 
+interface PassedNote {
+  label: string
+  column: number
+  lines: string[]
+  numbers: number[]
+}
+
+function passedNotesInAttachment(lexer: Lexer, attached: string[], lineNumbers: number[], label: string): PassedNote[] {
+  const passed: PassedNote[] = []
+  for (let index = 0; index < attached.length; index++) {
+    const lead = attached[index]!.trimStart()
+    if (!RE_FOOTNOTE_DEF.test(lead) && !RE_COMMENT_LINE.test(lead)) break
+    const source = (lexer.documentRoot ?? lexer).authoredLines?.[lineNumbers[index]! - 1] ??
+      (lexer.rootLines ?? lexer.lines)[lineNumbers[index]! - 1] ?? attached[index]!
+    const note = RE_FOOTNOTE_DEF.exec(sourceQuoteBody(source).trimStart())
+    if (note !== null && note[1] !== label && /^\+[ \t]*$/.test(note[2]!)) {
+      passed.push({ label: note[1]!, column: sourceColumn(source) + FOOTNOTE_BODY_COLUMN, lines: [], numbers: [] })
+    }
+  }
+  return passed
+}
+
+function collectPassedNoteLine(
+  lexer: Lexer, admission: ContainerAdmission, notes: PassedNote[], state: { body: PassedNote | undefined; blanks: number[] }, bodyColumn: number,
+): boolean {
+  if (notes.length === 0) return false
+  const ln = admission.line
+  const authored = (lexer.documentRoot ?? lexer).authoredLines
+  const passedColumn = sourceColumn(authored?.[lexer.lineNumber(lexer.pos) - 1] ?? admission.sourceLine)
+  if (admission.kind === 'blank') {
+    let offset = 1
+    while (isBlankLine(lexer.peek(offset) ?? '') && lexer.peek(offset) !== undefined) offset++
+    const next = lexer.peek(offset)
+    const owner = state.body ?? notes.at(-1)!
+    const source = next === undefined ? undefined : authored?.[lexer.lineNumber(lexer.pos + offset) - 1] ??
+      (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos + offset) - 1] ?? next
+    if (source !== undefined && sourceColumn(source) >= owner.column) {
+      state.body = owner
+      state.blanks.push(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+      return true
+    }
+    state.body = undefined
+    state.blanks.length = 0
+    return false
+  }
+  if (state.body !== undefined && (passedColumn >= state.body.column ||
+      state.blanks.length === 0 && state.body.lines.length > 0 &&
+      !startsInterruptingBlock(lexer, ln.trimStart(), false))) {
+    if (state.body.lines.length > 0) for (const number of state.blanks) {
+      state.body.lines.push('')
+      state.body.numbers.push(number)
+    }
+    state.blanks.length = 0
+    state.body.lines.push(passedColumn >= state.body.column
+      ? sliceColumns(ln, bodyColumn, true) : LAZY_FRAME + ln.trimStart())
+    state.body.numbers.push(lexer.lineNumber(lexer.pos))
+    lexer.consume()
+    return true
+  }
+  state.body = undefined
+  state.blanks.length = 0
+  return false
+}
+
+function registerPassedNoteBodies(lexer: Lexer, notes: PassedNote[], defLineIndex: number, hooks: FootnoteHooks): void {
+  for (const passed of notes) {
+    const existing = lexer.footnoteDefs.get(passed.label)
+    if (passed.lines.length === 0 || existing === undefined || existing.some(node => node.type !== 'comment')) continue
+    const sub = nestedSubLexer(lexer, passed.lines, defLineIndex, passed.numbers)
+    sub.inFootnoteBody = true
+    sub.hostBody = 'footnote'
+    sub.hostBodyRoot = 'footnote'
+    const parsed = hooks.parseBlocks(sub, 0)
+    lexer.footnoteDefs.set(passed.label, parsed)
+    lexer.footnoteDefLines.set(passed.label, [...(lexer.footnoteDefLines.get(passed.label) ?? []), ...passed.numbers])
+    const pos = lexer.footnoteDefPos.get(passed.label)
+    const end = parsed.at(-1)?.pos
+    if (pos !== undefined && end !== undefined) {
+      pos.endLine = end.endLine
+      if (end.endColumn !== undefined) pos.endColumn = end.endColumn
+      if (end.endOffset !== undefined) pos.endOffset = end.endOffset
+    }
+  }
+}
+
 function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): boolean {
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
     state.deepest?.opaque == null && (!state.deepest?.divDepth || state.deepest.literalLayout === true)
@@ -380,6 +466,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // definitions and comments may be skipped when finding the next block.
   let firstBlockAttached = false
   let follower: string | undefined
+  let passedNotes: PassedNote[] = []
+  const passedNoteState: { body: PassedNote | undefined; blanks: number[] } = { body: undefined, blanks: [] }
   if (/^\+[ \t]*$/.test(m[2]!)) {
     let followerIndex = lexer.pos
     follower = lexer.lineAt(followerIndex)
@@ -452,6 +540,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(a)
       }
       bodyLineNumbers.push(...attachedLineNumbers)
+      // A definition in the invisible lead keeps its own continuation even
+      // when this note reaches past it to attach the following block.
+      passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
       for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn,
@@ -492,6 +583,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   runIndentationContainer(
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
+    if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'
     if (refusedMarker && admission.kind === 'below') return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
@@ -738,6 +830,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
     lexer.footnoteDefLines.set(label, ownLines)
     lexer.footnoteDefs.set(label, body)
+    registerPassedNoteBodies(lexer, passedNotes, defLineIndex, hooks)
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of
     // any of them, so a span derived from the body would start inside the
