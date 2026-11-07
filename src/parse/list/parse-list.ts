@@ -2598,11 +2598,25 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // ordinary description without a quote keeps its own children.
       let afterPulledQuoteDefinition = false
       if (pendingBlankRun.count > 0 && lazyState.inDefList === 'description' && lineOpensItemBlock(l.trimStart())) {
-        for (let index = nested.length - 1; index >= 0; index--) {
+        let plusIndex = -1
+        for (let index = 0; index < nested.length; index++) {
           const prior = nested[index]!.trimStart()
-          if (RE_DEFLIST_TERM.test(prior) || RE_DEFLIST_DEF.test(prior) || isBlankLine(prior) || RE_COMMENT_LINE.test(prior)) continue
-          afterPulledQuoteDefinition = RE_BLOCKQUOTE.test(prior) && isContinuationMarker(sourceQuoteBody(prior))
-          break
+          if (RE_BLOCKQUOTE.test(prior) && isContinuationMarker(sourceQuoteBody(prior))) plusIndex = index
+        }
+        if (plusIndex >= 0) {
+          const afterPlus = nested.slice(plusIndex + 1)
+          const first = plusIndex + 1 + invisibleLead(afterPlus)
+          afterPulledQuoteDefinition = RE_DEFLIST_TERM.test((nested[first] ?? '').trimStart())
+          if (afterPulledQuoteDefinition) for (let index = first + 1; index < nested.length; index++) {
+            const prior = nested[index]!.trimStart()
+            if (RE_DEFLIST_TERM.test(prior) || RE_DEFLIST_DEF.test(prior)) continue
+            const commentEnd = leadingCommentEnd(offset => nested[offset], index)
+            if (commentEnd > index) { index = commentEnd - 1; continue }
+            if (indentColumns(nested[index]!) === 0 && lineOpensItemBlock(prior)) {
+              afterPulledQuoteDefinition = false
+              break
+            }
+          }
         }
       }
       if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
