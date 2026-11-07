@@ -2590,6 +2590,9 @@ export class ParseSession extends InlineParseSession {
     // A leading attribute run belongs to the block after it, so a fence there
     // still makes its body opaque to the container's boundaries.
     const attributeLines = leadingInvisibleRun(at, lexer.parseOptions)
+    // An invisible note may stand deeper than the block it precedes. The
+    // block's own column, never the prelude's, bounds an open fence.
+    const blockFloor = Math.min(closerFloor, indentColumns(lexer.peek(attributeLines) ?? ''))
     const fencedFromAttributes = fencedBlockEnd({
       at: (offset) => at(offset + attributeLines),
       index: closerIndex(lexer),
@@ -2610,9 +2613,9 @@ export class ParseSession extends InlineParseSession {
       indexBase,
       base: lexer.pos + attributeLines,
       boundary: isBoundary,
-      belowFloor: closerFloor === 0 ? undefined : (offset) => {
+      belowFloor: blockFloor === 0 ? undefined : (offset) => {
         const line = lexer.peek(offset + attributeLines)
-        return line !== undefined && !isBlankLine(line) && indentColumns(line, closerFloor) < closerFloor
+        return line !== undefined && !isBlankLine(line) && indentColumns(line, blockFloor) < blockFloor
       },
     })
     const fenced = fencedFromAttributes === -1 ? -1 : fencedFromAttributes + attributeLines
@@ -2627,8 +2630,8 @@ export class ParseSession extends InlineParseSession {
         // The first block may start at a nested item's marker column. Once a
         // code fence has opened there, a line below that column is outside its
         // host even when the attachment boundary accepts it as lazy text.
-        if (attachedCode && itemHost && closerFloor > 0 && take > attributeLines &&
-            !isBlankLine(candidate) && indentColumns(candidate) < closerFloor) break
+        if (attachedCode && itemHost && blockFloor > 0 && take > attributeLines &&
+            !isBlankLine(candidate) && indentColumns(candidate) < blockFloor) break
         // A first-block marker can attach a flush-left block even when its
         // list marker is indented. Dedent ends the block only after it starts.
         // Invisible lines the host keeps before the block are skipped; the gates apply to the line after them (§17 L3).
