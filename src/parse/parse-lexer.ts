@@ -192,6 +192,8 @@ export class Lexer {
 
   /** The lines before the ownership walk rewrote them; a block matcher reads these. */
   authoredLines?: readonly string[]
+  /** Original line starts, before transparent lines or ownership remap them. */
+  authoredLineOffsets?: readonly number[]
 
   useLineView(lexer: Lexer, start: number, length: number): void {
     this.lineView = { lexer, start, length }

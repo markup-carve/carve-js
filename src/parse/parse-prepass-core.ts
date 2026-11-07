@@ -1359,7 +1359,7 @@ export function attachBlockPos(
   const authored = root.authoredRootLines ?? root.authoredLines ?? root.lines
   const sourceLine = authored[node.pos.endLine - 1]
   if (type === 'comment' && sourceLine !== undefined) {
-    const lineEnd = root.lineOffset(node.pos.endLine - 1) + sourceLine.length
+    const lineEnd = (root.authoredLineOffsets ?? root.lineOffsets)[node.pos.endLine - 1]! + sourceLine.length
     if (node.pos.endOffset !== undefined && node.pos.endOffset > lineEnd) {
       node.pos.endOffset = lineEnd
       node.pos.endColumn = sourceLine.length + 1
