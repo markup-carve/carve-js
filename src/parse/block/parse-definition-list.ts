@@ -469,7 +469,7 @@ export function createDefinitionListParser(
         for (const a of firstBlock.lines) track(a)
         // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
         for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), contentCol,
-          attachedStartsWithLineBlock(firstBlock.lines))) {
+          attachedStartsWithLineBlock(firstBlock.lines), indentColumns(firstBlock.lines.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
           bodyLines.push(closer)
           bodySourceLines.push(undefined)
           bodyLineNumbers.push(firstBlock.lineNumbers.at(-1)!)
