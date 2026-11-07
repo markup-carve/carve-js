@@ -1106,7 +1106,16 @@ export function ownLines(
       if (m.rest !== '' || !top().endsAtBlank) return false
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
-      if (host?.at(-1)?.kind !== 'item' || !nextLineReaches(host.at(-1)!, at, quotes)) return false
+      if (host?.at(-1)?.kind !== 'item') return false
+      const nextOwner = nextLineOwner(host, at, quotes)
+      if (nextOwner === 0) return false
+      if (nextOwner < host.length - 1) {
+        frames.length = 0
+        frames.push(...host.slice(0, nextOwner + 1))
+        attachedHost = null
+        top().last = 'block'
+        return true
+      }
       frames.length = 0
       frames.push(...host)
       top().last = 'block'
@@ -1694,13 +1703,20 @@ export function ownLines(
     return n
   }
 
-  function nextLineReaches(item: Frame, at: number, quotes: number): boolean {
+  function nextLineOwner(host: Frame[], at: number, quotes: number): number {
     for (let k = at + 1; k < lines.length; k++) {
       const n = quotedMeasure(k, quotes)
-      if (n === null) return false
-      if (n.rest !== '') return n.col >= item.col
+      if (n === null) return 0
+      if (n.rest !== '') {
+        let owner = 0
+        for (let depth = 1; depth < host.length; depth++) {
+          if (n.col < host[depth]!.col) break
+          owner = depth
+        }
+        return owner
+      }
     }
-    return false
+    return 0
   }
 
   function codeCloserAhead(fence: Frame, at: number, quotes: number): boolean {
