@@ -516,7 +516,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // Lines are sliced at the content's column, so the inner markers of `- - > +` keep the follower under the quote.
     const followerSlice = Math.min(indentColumns(attached.lines[0] ?? ''),
       contentStart >= 0 ? sourceColumnAt(head.line, contentStart) : Infinity)
-    const lines = [head.content, ...attached.lines.map(line => sliceColumns(line, Math.min(followerSlice, indentColumns(line)), true))]
+    // A line the walk folded lazily below the follower's column stays lazy text in the block (PART 0 S4).
+    const lines = [head.content, ...attached.lines.map((line, index) =>
+      indentColumns(line) < followerSlice && !isBlankLine(line) && session.isWalkLazyLine(attached.lineNumbers[index]!)
+        ? LAZY_FRAME + line.trimStart()
+        : sliceColumns(line, Math.min(followerSlice, indentColumns(line)), true))]
     const numbers = [lexer.lineNumber(itemStartLineIndex), ...attached.lineNumbers]
     // A quoted line right after the block, at the stacked quote's owner column, is still that quote's (§17 L3).
     // A task item owns its lines from its box's column, so the quote is measured from the box.
@@ -2482,9 +2486,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return column !== undefined && definitionBodyColumn !== undefined &&
         column > physicalItemMarkerColumn && column < definitionBodyColumn
     }
-    const atDescendantDescriptionMarker = (): boolean =>
-      sourceDescription !== null && lazyState.deepest?.inDefList === 'description' &&
-      !lazyState.ownedAuthored && sourceMarkerColumn === physicalItemMarkerColumn + lazyState.ownedColumn
+    // The descendant's marker sits `ownedMarker` columns past this item's content column; a
+    // descendant opened on the marker line has none recorded and sits at that column.
+    const atDescendantDescriptionMarker = (): boolean => {
+      if (sourceDescription === null || lazyState.deepest?.inDefList !== 'description' || lazyState.ownedAuthored) return false
+      const marker = lazyState.ownedMarker ?? (isListMarkerLine(content) ? 0 : -1)
+      return marker >= 0 && sourceMarkerColumn === physicalItemMarkerColumn + contentCol - baseIndent + marker
+    }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
           leadBottomIsTerm && lazyState.inDefList === false && pendingBlankRun.count === 0)
