@@ -130,14 +130,17 @@ function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatim
     (state.opaque === null || fenceClosed)
 }
 
+const attachedCaptionStates = new WeakMap<string[], { length: number; open: boolean }>()
 function hasOpenAttachedCaption(lines: string[]): boolean {
-  for (let i = lines.length - 1; i >= 0; i--) {
+  const state = attachedCaptionStates.get(lines) ?? { length: 0, open: false }
+  for (let i = state.length; i < lines.length; i++) {
     const line = lines[i]!.trimStart()
-    if (line === '') return false
-    if (RE_CAPTION.test(line)) return true
-    if (lineOpensItemBlock(line)) return false
+    if (line === '' || lineOpensItemBlock(line)) state.open = false
+    if (RE_CAPTION.test(line)) state.open = true
   }
-  return false
+  state.length = lines.length
+  attachedCaptionStates.set(lines, state)
+  return state.open
 }
 
 function attachedCaptionKeepsIndent(lexer: Lexer, lines: string[], firstBlockAttached: boolean, line: string): boolean {

@@ -198,14 +198,17 @@ export function createDefinitionListParser(
     trackItemLazyState,
     trimEndSpaceTab,
   } = helpers
+  const captionStates = new WeakMap<string[], { length: number; open: boolean }>()
   function hasOpenCaption(lines: string[]): boolean {
-    for (let i = lines.length - 1; i >= 0; i--) {
+    const state = captionStates.get(lines) ?? { length: 0, open: false }
+    for (let i = state.length; i < lines.length; i++) {
       const line = stripLazyFrame(lines[i]!).trimStart()
-      if (line === '') return false
-      if (RE_CAPTION.test(line)) return true
-      if (lineOpensItemBlock(line)) return false
+      if (line === '' || lineOpensItemBlock(line)) state.open = false
+      if (RE_CAPTION.test(line)) state.open = true
     }
-    return false
+    state.length = lines.length
+    captionStates.set(lines, state)
+    return state.open
   }
   const entryColumnAt = (line: string, offset: number): number => {
     const column = sourceEntryColumnAt(line, offset)
