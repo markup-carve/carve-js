@@ -1753,7 +1753,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           descriptionOpen = false
         } else if (markerAvailable &&
             hasNestedTerm && RE_DEFLIST_DEF.test(line.trimStart()) &&
-            (termScan.inDefList === 'term' && termScan.termEnded !== true || descriptionOpen)) {
+            (markerLineTerm && scannedNestedTerms === 0 ||
+              termScan.inDefList === 'term' && termScan.termEnded !== true || descriptionOpen)) {
           completedDescription = true
           descriptionOpen = true
         } else if (markerAvailable && hasNestedTerm && !completedDescription &&
