@@ -739,6 +739,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const bodyLine = lexer.peek(gap)
     if (bodyLine !== undefined && indentColumns(bodyLine) >= placement.contentCol && !isSiblingMarker(shape, bodyLine)) {
       const rest = collectItem(lexer, session, shape, head, placement, '', isItemAttachBoundary, flags)
+      // An authored blank between the attached block and a later visible block loosens the list (§17 L1).
+      if (gap > 0 && fbChildren.length > 0 && rest.children.some(block =>
+        block.type !== 'comment' && block.type !== 'abbreviation_def' && block.type !== 'link_reference_definition')) flags.loose = true
       fbChildren.push(...rest.children)
       attachBlockPos(lexer, fbItem, head.startLineIndex, lexer.pos)
       markItem(fbItem, head)
@@ -1991,7 +1994,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const lastBody = lastNonBlankPhysicalSource === undefined ? '' : sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()
         const lastInvisible = RE_COMMENT_LINE.test(lastBody) || RE_ABBR_DEF.test(lastBody) || isLinkDefLine(lastBody) ||
           RE_FOOTNOTE_DEF.test(lastBody) || commentOnlyParagraphEnd(index => index === 0 ? lastBody : undefined, 0) === 1
-        const followingAdmittedBlock = lazyState.inDefList !== 'description' &&
+        // A fence the item has closed admits nothing: its closer only looks like an opener.
+        const closedFence = RE_FENCE.test(lastBody) && lazyState.opaque === null && !lazyState.deepest?.opaque
+        const followingAdmittedBlock = lazyState.inDefList !== 'description' && !closedFence &&
           lastNonBlankPhysicalSource !== undefined && !lastInvisible &&
           !(markerLineTerm && /^#{1,6}(?:[ \t]|$)/.test(sourceQuoteBody(lastNonBlankPhysicalSource))) &&
           (lineOpensBlock(sourceQuoteBody(lastNonBlankPhysicalSource).trimStart()) ||
