@@ -562,7 +562,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // A block opener below the inner item's column ends that item, so it is no part of the block (PART 0 S3).
         const reached = session.collectAttachedListBlock(lexer, line => isItemAttachBoundary(line) ||
           (indentColumns(line, innerColumn) < innerColumn && lineOpensBlock(line.trimStart()) &&
-            !(isListMarkerLine(line.trimStart()) && indentColumns(line) >= ownContentColumn)), shape.baseIndent, false)
+            !(isListMarkerLine(line.trimStart()) && indentColumns(line) >= ownContentColumn)), shape.baseIndent, false,
+          innerColumn, innerColumn)
         lines.push(...reached.lines.map(line => sliceColumns(line, markerColumn, true)))
         numbers.push(...reached.lineNumbers)
         if (reached.lines.length === 0) break
@@ -657,7 +658,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lines: attached,
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
-    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn)
+    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn, localBlockColumn)
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
