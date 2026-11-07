@@ -381,7 +381,7 @@ function skippedNoteMarker(
     const plusAt = line.lastIndexOf('+')
     const quotes = (line.slice(0, line.indexOf('[^')).match(/>/g) ?? []).length
     const prefix = '> '.repeat(quotes) + ' '.repeat(markerCanon ?? 0)
-    return { line: prefix + '%%', column: columnOfPlus(line.slice(plusAt)) + 1 }
+    return { line: prefix + line.slice(line.indexOf('[^'), plusAt) + '%%', column: columnOfPlus(line.slice(plusAt)) + 1 }
   }
   if (!noteLine || !CONT_MARKER.test(line.trimStart().replace(/^(?:>[ \t]*)*/, ''))) return { line, column: null }
   const plusAt = line.lastIndexOf('+')
