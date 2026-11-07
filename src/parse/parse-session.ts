@@ -2062,7 +2062,8 @@ export class ParseSession extends InlineParseSession {
       inner.push(attachedLine.startsWith(LAZY_FRAME) && hostColumn > 0 && lexer.hostQuoteDepth === 0 &&
         source !== undefined && indentColumns(source) >= hostColumn
         ? sliceColumns(source, hostColumn, true)
-        : stripLazyFrame(attachedLine))
+        // A later line the item framed as lazy is no follower the `+` decides (PART 0 S4).
+        : index > 0 ? attachedLine : stripLazyFrame(attachedLine))
     })
     innerLineNumbers.push(...attachedLineNumbers)
     if (attached.length > 0) this.endQuoteAttachment(q)
