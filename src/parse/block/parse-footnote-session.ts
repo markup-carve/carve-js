@@ -71,6 +71,12 @@ function skippedNoteBodyLine(line: string): boolean {
   return !isBlankLine(line) && !/^::? /.test(lead) && !RE_COMMENT_LINE.test(lead) && !lineOpensItemBlock(lead)
 }
 
+function authoredPayloadAt(lexer: Lexer, index: number, fallback: string): { line: string; column: number } {
+  const line = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(index) - 1] ?? fallback
+  const payload = sourceQuoteBody(line).trimStart()
+  return { line, column: sourceColumnAt(line, Math.max(0, line.lastIndexOf(payload))) }
+}
+
 function payloadCloserInBody(lexer: Lexer, marker: string, bodyColumn: number): boolean {
   let misses = payloadMisses.get(lexer)
   if (misses === undefined) payloadMisses.set(lexer, misses = new Map())
@@ -99,6 +105,7 @@ function quoteMissesOf(lexer: Lexer): PayloadMisses {
 interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
+  isConsumedMarker: (line: number) => boolean
 }
 
 function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): boolean {
@@ -324,6 +331,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const authoredBodyColumn = authoredLine === undefined ? undefined
     : sourceColumnAt(authoredLine, Math.max(0, authoredLine.lastIndexOf(defLineRaw.trimStart()))) + FOOTNOTE_BODY_COLUMN
   const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
+  const refusedMarker = m[2]!.trim() === '%%' && hooks.isConsumedMarker(lexer.lineNumber(defLineIndex))
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
@@ -367,11 +375,16 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   if (/^\+[ \t]*$/.test(m[2]!)) {
     let followerIndex = lexer.pos
     follower = lexer.lineAt(followerIndex)
+    let skippedClaimedNote = false
     const noteQuoteDepth = quotePrefixDepth(authoredLine ?? defLineRaw)
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
     while (follower !== undefined && !isBlankLine(follower)) {
+      const skippedNote = RE_FOOTNOTE_DEF.exec(follower.trimStart())
+      const claimedNote = skippedNote !== null && skippedNote[1] !== label &&
+        hooks.isConsumedMarker(lexer.lineNumber(followerIndex))
       const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
-      const sourceAt = sourceColumn(source, noteQuoteDepth)
+      const sourceAt = skippedClaimedNote || claimedNote
+        ? authoredPayloadAt(lexer, followerIndex, follower).column : sourceColumn(source, noteQuoteDepth)
       // The note keeps an invisible line at its marker column or in its body, so either is skipped (§17 L3, carve#5288).
       const atMarker = sourceAt === authoredMarkerColumn || sourceAt >= authoredMarkerColumn + FOOTNOTE_BODY_COLUMN
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
@@ -379,16 +392,18 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           isBlockAttributeLine(follower.trimStart()) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
       // A skipped note definition takes its body along: lines up to a blank or a block opener (CARVE-P9-067, carve#5034).
-      if (RE_FOOTNOTE_DEF.test(follower.trimStart())) {
+      if (skippedNote !== null && !claimedNote) {
         for (let body = lexer.lineAt(followerIndex + 1); body !== undefined && skippedNoteBodyLine(body); body = lexer.lineAt(++followerIndex + 1));
       }
+      if (claimedNote) skippedClaimedNote = true
       follower = lexer.lineAt(++followerIndex)
     }
     const followerSource = follower === undefined ? undefined
       : (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
+    const followerAuthored = follower === undefined ? undefined : authoredPayloadAt(lexer, followerIndex, follower)
     const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
-      followerSource !== undefined && quotePrefixDepth(followerSource) >= noteQuoteDepth &&
-      sourceColumn(followerSource, noteQuoteDepth) === authoredMarkerColumn &&
+      followerSource !== undefined && quotePrefixDepth(skippedClaimedNote ? followerAuthored!.line : followerSource) >= noteQuoteDepth &&
+      (skippedClaimedNote ? followerAuthored!.column : sourceColumn(followerSource, noteQuoteDepth)) === authoredMarkerColumn &&
       !RE_FOOTNOTE_DEF.test(follower.trimStart())
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
@@ -405,7 +420,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)
-      const cut = quoteEnd < attached.length ? quoteEnd : pulledParagraphBlockCut(attached, noteBodyColumn)
+      let cut = quoteEnd < attached.length ? quoteEnd : pulledParagraphBlockCut(attached, noteBodyColumn)
+      if (skippedClaimedNote && attachedParagraph) {
+        const firstVisible = attachedLineNumbers.indexOf(lexer.lineNumber(followerIndex))
+        for (let index = firstVisible + 1; firstVisible >= 0 && index < attached.length; index++) {
+          const line = attached[index]!.trimStart()
+          if (startsInterruptingBlock(lexer, line, false) || isListMarkerLine(line) || RE_COMMENT_LINE.test(line)) {
+            cut = cut < 0 ? index : Math.min(cut, index)
+            break
+          }
+        }
+      }
       if (cut > 0) {
         lexer.pos -= attached.length - cut
         attached.length = cut
@@ -459,6 +484,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   runIndentationContainer(
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
+    if (refusedMarker && admission.kind === 'below') return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'

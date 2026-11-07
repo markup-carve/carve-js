@@ -1,4 +1,6 @@
 import type { Lexer } from '../parse-lexer.js'
+import { indentColumns } from '../parse-lexer.js'
+import { sourceColumnAt } from '../list/parse-item-core.js'
 import type { InlineSource } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
 import type { BlockNode, Comment, InlineNode, LineBlock, Paragraph, Position } from '../../ast.js'
@@ -132,8 +134,26 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         leading = []
         continue
       }
-      const sourceOffsets: Array<number | undefined> | undefined = ln.includes('\t') ? [] : undefined
-      const expanded = expandLineBlockWhitespace(ln, sourceOffsets)
+      // A quote or item view may remove authored verse spaces. The source columns
+      // still name them, so restore only the gap missing from this view.
+      const root = lexer.documentRoot ?? lexer
+      const authored = root.authoredLines ?? root.rootLines ?? root.lines
+      const openerSource = authored[lexer.lineNumber(openLineIndex) - 1] ?? open
+      const verseSource = authored[lexer.lineNumber(lineIndex) - 1] ?? ln
+      const openerAt = Math.max(0, openerSource.lastIndexOf(open.trimStart()))
+      const verseAt = Math.max(0, verseSource.lastIndexOf(ln.trimStart()))
+      const sourceGap = /^[ \t]*>/.test(openerSource)
+        ? sourceColumnAt(verseSource, verseAt) - sourceColumnAt(openerSource, openerAt) : 0
+      const missingIndent = Math.max(0, sourceGap - indentColumns(ln))
+      const verse = ' '.repeat(missingIndent) + ln
+      const sourceOffsets: Array<number | undefined> | undefined = verse.includes('\t') || missingIndent > 0 ? [] : undefined
+      const expanded = expandLineBlockWhitespace(verse, sourceOffsets)
+      if (sourceOffsets !== undefined && missingIndent > 0) {
+        for (let index = 0; index < sourceOffsets.length; index++) {
+          const offset = sourceOffsets[index]
+          sourceOffsets[index] = offset === undefined || offset < missingIndent ? undefined : offset - missingIndent
+        }
+      }
       stanza.push({
         text: dropTrailingSpaces(expanded),
         lineIndex,
