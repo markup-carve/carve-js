@@ -343,22 +343,52 @@ export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFenc
   return fence !== null
 }
 
+/** Whether the first visible block offered by a marker-line `+` is a line block. */
+export function attachedStartsWithLineBlock(lines: readonly string[]): boolean {
+  let comment: number | undefined
+  for (const line of lines) {
+    const text = line.trimStart()
+    if (comment !== undefined) {
+      if (commentFenceRun(text) === comment) comment = undefined
+      continue
+    }
+    if (isBlankLine(line)) continue
+    const run = commentFenceRun(text)
+    if (run !== undefined) { comment = run; continue }
+    if (RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text) || RE_ABBR_DEF.test(text) ||
+        RE_FOOTNOTE_DEF.test(text) || isLinkDefLine(text)) continue
+    return RE_LINE_BLOCK_OPEN.test(text)
+  }
+  return false
+}
+
 /**
  * The closers a host writes at the first blank after its marker-line `+` block, or none when a closer
  * for those blocks stands at or left of the body column before a line leaves the body (PART 0 S1, carve#5404).
  */
-export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number): string[] {
+export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number, lineBlock = false): string[] {
   if (closers.length === 0 || !isBlankLine(lexer.peek() ?? '')) return []
   const codeOpen = closers[0]![0] !== ':'
   // A colon run inside a later fence is that fence's payload, not a closer.
   let payload: RegExp | undefined
+  const nested: number[] = []
   for (let k = 1, line = lexer.peek(k); line !== undefined; line = lexer.peek(++k)) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
-    if (payload === undefined && column <= bodyColumn && closers.some(run => run[0] === ':'
-      ? RE_ADMONITION_CLOSE.exec(text)?.[1]?.length === run.length
-      : fenceCloseRe(run).test(text))) return []
+    if (payload === undefined && column <= bodyColumn) {
+      const closeWidth = RE_ADMONITION_CLOSE.exec(text)?.[1]?.length
+      if (closeWidth !== undefined && nested.at(-1) === closeWidth) {
+        nested.pop()
+        continue
+      }
+      if (nested.length === 0 && closers.some(run => run[0] === ':'
+        ? closeWidth === run.length : fenceCloseRe(run).test(text))) return []
+      if (!lineBlock && !codeOpen && closeWidth === undefined) {
+        const open = colonBlockOpenerRun(text)
+        if (open !== null) nested.push(open)
+      }
+    }
     if (column < bodyColumn) break
     if (payload !== undefined) {
       if (payload.test(text)) payload = undefined

@@ -658,7 +658,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lines: attached,
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
-    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn, localBlockColumn)
+    } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn, localBlockColumn, Infinity)
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
@@ -691,6 +691,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn)
     for (let index = 0; index < attached.length; index++) {
       attached[index] = sliceColumns(attached[index]!, localBlockColumn, true)
+    }
+    // A closed line block keeps the host's body lines, whose indentation is
+    // measured from the item's content column even when its opener was flush left.
+    if (RE_LINE_BLOCK_OPEN.test(attached[blockLine] ?? '')) {
+      for (let index = blockLine + 1; index < attached.length; index++) {
+        if (indentColumns(attached[index]!) >= placement.contentCol)
+          attached[index] = sliceColumns(attached[index]!, placement.contentCol, true)
+      }
     }
     // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
     // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
