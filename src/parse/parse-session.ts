@@ -2620,8 +2620,15 @@ export class ParseSession extends InlineParseSession {
     if (fenced !== -1) {
       take = fenced + 1
     } else {
+      const firstBlock = at(attributeLines)
+      const attachedCode = firstBlock !== undefined && (RE_FENCE.test(firstBlock) || RE_RAW_FENCE.test(firstBlock))
       while (lexer.peek(take) !== undefined) {
         const candidate = lexer.peek(take)!
+        // The first block may start at a nested item's marker column. Once a
+        // code fence has opened there, a line below that column is outside its
+        // host even when the attachment boundary accepts it as lazy text.
+        if (attachedCode && itemHost && closerFloor > 0 && take > attributeLines &&
+            !isBlankLine(candidate) && indentColumns(candidate) < closerFloor) break
         // A first-block marker can attach a flush-left block even when its
         // list marker is indented. Dedent ends the block only after it starts.
         // Invisible lines the host keeps before the block are skipped; the gates apply to the line after them (§17 L3).
