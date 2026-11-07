@@ -85,7 +85,7 @@ const cases = [
   [
     "over-indented runs pair",
     "> - a\n>     ~~~\n>     x\n>     ~~~\n>\n>   ~~~\n>   x\nflush\n",
-    "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>x\n</code></pre>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
+    "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>x\n</code></pre>\n      <pre><code>x\n</code></pre>\n    </li>\n  </ul>\n</blockquote>\n<p>flush</p>"
   ],
   [
     "an over-indented opener consumes its closer",

@@ -167,7 +167,7 @@
   {
     "id": "heading-resume-312",
     "source": "- a\n  ```\n  first\n  ```\n\n  # h\n\n  ~~~\n  code\n  ~~~\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>first\n</code></pre>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>first\n</code></pre>\n    <h1 id=\"h\">h</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-resume-332",
@@ -182,7 +182,7 @@
   {
     "id": "heading-resume-372",
     "source": "- a\n  ```\n  first\n  ```\n\n  # h\n  # second\n  ```\n  code\n  ```\nafter\n",
-    "html": "<ul>\n  <li>a\n    <pre><code>first\n</code></pre>\n    <h1 id=\"h\">h</h1>\n    <h1 id=\"second\">second</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
+    "html": "<ul>\n  <li><p>a</p>\n    <pre><code>first\n</code></pre>\n    <h1 id=\"h\">h</h1>\n    <h1 id=\"second\">second</h1>\n    <pre><code>code\n</code></pre>\n  </li>\n</ul>\n<p>after</p>"
   },
   {
     "id": "heading-resume-394",
@@ -267,7 +267,7 @@
   {
     "id": "heading-resume-724",
     "source": "> - a\n>   ```\n>   first\n>   ```\n> \n>   ## h\n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>first\n</code></pre>\n      <h2 id=\"h\">h</h2>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>first\n</code></pre>\n      <h2 id=\"h\">h</h2>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "heading-resume-744",
@@ -277,7 +277,7 @@
   {
     "id": "heading-resume-764",
     "source": "> - a\n>   ```\n>   first\n>   ```\n> \n>   # h\n>   # second\n> \n>   ```\n>   code\n>   ```\n> after\n",
-    "html": "<blockquote>\n  <ul>\n    <li>a\n      <pre><code>first\n</code></pre>\n      <h1 id=\"h\">h</h1>\n      <h1 id=\"second\">second</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
+    "html": "<blockquote>\n  <ul>\n    <li><p>a</p>\n      <pre><code>first\n</code></pre>\n      <h1 id=\"h\">h</h1>\n      <h1 id=\"second\">second</h1>\n      <pre><code>code\n</code></pre>\n    </li>\n  </ul>\n  <p>after</p>\n</blockquote>"
   },
   {
     "id": "heading-resume-787",
@@ -352,7 +352,7 @@
   {
     "id": "heading-resume-1076",
     "source": "> > - a\n> >   ```\n> >   first\n> >   ```\n> > \n> >   # h\n> >   ```\n> >   code\n> >   ```\n> > after\n",
-    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>a\n        <pre><code>first\n</code></pre>\n        <h1 id=\"h\">h</h1>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
+    "html": "<blockquote>\n  <blockquote>\n    <ul>\n      <li><p>a</p>\n        <pre><code>first\n</code></pre>\n        <h1 id=\"h\">h</h1>\n        <pre><code>code\n</code></pre>\n      </li>\n    </ul>\n    <p>after</p>\n  </blockquote>\n</blockquote>"
   },
   {
     "id": "heading-resume-1096",
