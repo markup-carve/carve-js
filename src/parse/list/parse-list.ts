@@ -1684,8 +1684,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let lw = 0
     let sourceAfterNestedNote = false
     // A quote's lone `+` attaches the unmarked block after it, so its markers are the quote's (§17 L3).
-    const quotePlus = { scanned: 0, held: false, afterQuote: false }
-    const followsQuotePlus = (): boolean => {
+    // The block it attaches is one block: a list only through its own markers.
+    const quotePlus = { scanned: 0, held: false, afterQuote: false, list: null as string | null }
+    const listKey = (line: string): string | null => {
+      const t = line.trimStart()
+      if (!isListMarkerLine(t)) return null
+      return orderedMatch(t) !== null ? /^[^.)]*([.)])/.exec(t)?.[1] ?? '.' : unorderedMarkerChar(t)
+    }
+    const followsQuotePlus = (next: string): boolean => {
       if (quotePlus.scanned === 0) {
         quotePlus.afterQuote = /^[ \t]*>/.test(content)
         quotePlus.held = /^[ \t]*(?:>[ \t]*)+\+[ \t]*$/.test(content)
@@ -1693,11 +1699,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       for (; quotePlus.scanned < nested.length; quotePlus.scanned++) {
         const line = stripLazyFrame(nested[quotePlus.scanned]!)
         const quoted = /^[ \t]*>/.test(line)
+        const lone = isContinuationMarker(line.trim())
         if (isBlankLine(line)) quotePlus.held = false
         else if (quoted) quotePlus.held = /^[ \t]*(?:>[ \t]*)+\+[ \t]*$/.test(line)
-        else if (quotePlus.afterQuote && isContinuationMarker(line.trim())) quotePlus.held = true
+        else if (quotePlus.afterQuote && lone) quotePlus.held = true
+        else if (quotePlus.held && !lone && indentColumns(line) === 0 && !isBlockAttributeLine(line.trimStart())) {
+          const key = listKey(line)
+          if (quotePlus.list === null && key === null) quotePlus.held = !lineOpensItemBlock(line.trimStart())
+          else if (quotePlus.list !== null && key !== null && key !== quotePlus.list) quotePlus.held = false
+          if (key !== null) quotePlus.list ??= key
+        }
+        if (quoted || !quotePlus.held) quotePlus.list = null
         quotePlus.afterQuote = quoted
       }
+      // A marker of another list type starts a new list, which is the item's.
+      if (quotePlus.list !== null && indentColumns(next) === 0 && (listKey(next) ?? quotePlus.list) !== quotePlus.list) return false
       return quotePlus.held
     }
     let captionParagraphMarker = false
@@ -2666,7 +2682,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         !insideOpenFence(lazyState) &&
         // A marker in the item opens a list under a quote's paragraph too (PART 0 S3, carve#4860).
         !(insideOpenQuoteParagraph(lazyState) && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) &&
-        !followsQuotePlus() &&
+        !followsQuotePlus(placed) &&
         // A marker at an open description's body column is the description's block.
         !(lazyState.inDefList === 'description' && lazyState.descriptionColumn !== undefined &&
           indentColumns(placed, lazyState.descriptionColumn) >= lazyState.descriptionColumn) &&
