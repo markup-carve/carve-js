@@ -1,6 +1,7 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
+import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
@@ -366,11 +367,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
         0, true, true,
       )
+      // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)
-      if (quoteEnd < attached.length) {
-        lexer.pos -= attached.length - quoteEnd
-        attached.length = quoteEnd
-        attachedLineNumbers.length = quoteEnd
+      const cut = quoteEnd < attached.length ? quoteEnd : pulledParagraphBlockCut(attached, noteBodyColumn)
+      if (cut > 0) {
+        lexer.pos -= attached.length - cut
+        attached.length = cut
+        attachedLineNumbers.length = cut
       }
       firstBlockAttached = true
       bodyLines[0] = ''
