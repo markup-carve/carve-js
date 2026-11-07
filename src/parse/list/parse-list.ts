@@ -2592,9 +2592,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line at the content column, in the order the item reads it.
     const placeContentLine = (l: string): void => {
       strippedPrefix = undefined
+      // A quote's `+` takes one block. After a blank ends the definition list
+      // it pulled, a later visible block belongs to the item even at the old
+      // description-body column. Rebase that opener to the item's body; the
+      // ordinary description without a quote keeps its own children.
+      const afterPulledQuoteDefinition = pendingBlankRun.count > 0 &&
+        lazyState.inDefList === 'description' && lineOpensItemBlock(l.trimStart()) &&
+        nested.some(line => RE_BLOCKQUOTE.test(line) && isContinuationMarker(sourceQuoteBody(line)))
       if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
       const cut = attachedDescriptionBody > 0 ? 0 : contentCol
       placed = sliceColumns(l, cut, true, prefix => { strippedPrefix = prefix })
+      if (afterPulledQuoteDefinition) placed = l.trimStart()
       // A leading tab left after the cut is still measured from the authored
       // list frame. Re-express its remaining columns before a child parses it
       // from column zero. A verbatim payload keeps its source tab unchanged.
