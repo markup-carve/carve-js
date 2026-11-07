@@ -608,7 +608,9 @@ export function ownLines(
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
-      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f)) {
+      const quotedLazyPlus = f.kind === 'quote' && quotes > 0 && f.para &&
+        quotes < frames.slice(1, k + 1).filter((frame) => frame.kind === 'quote').length
+      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f) && !quotedLazyPlus) {
         plus = f
         plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out, contentColumn(f))
         break
