@@ -1106,7 +1106,23 @@ export function ownLines(
       if (m.rest !== '' || !top().endsAtBlank) return false
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
-      if (host?.at(-1)?.kind !== 'item' || !nextLineReaches(host.at(-1)!, at, quotes)) return false
+      if (host?.at(-1)?.kind !== 'item') return false
+      // Quote prefixes have their own coordinates; keep the existing reach rule there.
+      if (host.some(frame => frame.kind === 'quote')) {
+        if (!nextLineReaches(host.at(-1)!, at, quotes)) return false
+        frames.length = 0
+        frames.push(...host)
+        top().last = 'block'
+        return true
+      }
+      const nextOwner = nextLineOwner(host, at, quotes)
+      if (nextOwner === 0) return false
+      if (nextOwner < host.length - 1) {
+        frames.length = 0
+        frames.push(...host.slice(0, nextOwner + 1))
+        top().last = 'block'
+        return true
+      }
       frames.length = 0
       frames.push(...host)
       top().last = 'block'
@@ -1692,6 +1708,22 @@ export function ownLines(
       n = indentCols(quoteRest(n.rest))
     }
     return n
+  }
+
+  function nextLineOwner(host: Frame[], at: number, quotes: number): number {
+    for (let k = at + 1; k < lines.length; k++) {
+      const n = quotedMeasure(k, quotes)
+      if (n === null) return 0
+      if (n.rest !== '') {
+        let owner = 0
+        for (let depth = 1; depth < host.length; depth++) {
+          if (n.col < host[depth]!.col) break
+          owner = depth
+        }
+        return owner
+      }
+    }
+    return 0
   }
 
   function nextLineReaches(item: Frame, at: number, quotes: number): boolean {
