@@ -343,6 +343,24 @@ export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFenc
   return fence !== null
 }
 
+/**
+ * The closers a host writes at the first blank after its marker-line `+` block, or none when a closer
+ * for those blocks stands at or left of the body column before a line leaves the body (PART 0 S1, carve#5404).
+ */
+export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number): string[] {
+  if (closers.length === 0 || !isBlankLine(lexer.peek() ?? '')) return []
+  for (let k = 1, line = lexer.peek(k); line !== undefined; line = lexer.peek(++k)) {
+    if (isBlankLine(line)) continue
+    const column = indentColumns(line)
+    const text = line.trimStart()
+    if (column <= bodyColumn && closers.some(run => run[0] === ':'
+      ? RE_ADMONITION_CLOSE.exec(text)?.[1]?.length === run.length
+      : fenceCloseRe(run).test(text))) return []
+    if (column < bodyColumn) break
+  }
+  return [...closers]
+}
+
 /** An `ItemLazyState` that has seen nothing, for a collector that only reads fences. */
 export function verbatimOnlyLazyState(): ItemLazyState {
   return {

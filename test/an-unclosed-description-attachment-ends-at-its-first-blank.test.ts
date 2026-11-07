@@ -11,13 +11,13 @@ it('ends an unclosed attached fence at the first blank', () => {
 <p>z</p>`)
 })
 
-it('keeps the blank as payload when the next line reaches the description body', () => {
+// The blank ends the fence even when the next line reaches the description body (carve#5404).
+it('resumes the description at the line after the blank', () => {
   expect(carveToHtml(':: t\n: +\n~~~\n\n  p\n').trim()).toBe(`<dl>
   <dt>t</dt>
   <dd>
-    <pre><code>
-p
-</code></pre>
+    <pre><code></code></pre>
+    <p>p</p>
   </dd>
 </dl>`)
 })

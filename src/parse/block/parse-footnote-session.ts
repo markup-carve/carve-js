@@ -1,5 +1,5 @@
 import type { BlockNode, Position } from '../parse-core.js'
-import { bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
@@ -375,6 +375,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       }
       bodyLineNumbers.push(...attachedLineNumbers)
       trackAttached(attached)
+      // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
+      for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn)) {
+        bodyLines.push(closer)
+        bodyLineNumbers.push(attachedLineNumbers.at(-1)!)
+        bodySourceLines.push(undefined)
+        trackItemLazyState(closer, lazyState)
+      }
       // A separating blank after this attached block belongs outside its fence.
       attachmentEnd = bodyLines.length
     }
