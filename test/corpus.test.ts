@@ -22,6 +22,7 @@ import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
 import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 import { RULED_HTML_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
 import { RULED_5080_HTML } from './ruled-5080-ahead-of-pin.js'
+import { RULED_5407_HTML } from './ruled-5407-ahead-of-pin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -1529,6 +1530,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5012,
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
+  ...RULED_5407_HTML,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
 const behindSpec = new Map<string, string>()
