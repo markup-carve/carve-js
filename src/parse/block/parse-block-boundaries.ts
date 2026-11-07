@@ -349,14 +349,20 @@ export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFenc
  */
 export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number): string[] {
   if (closers.length === 0 || !isBlankLine(lexer.peek() ?? '')) return []
+  const codeOpen = closers[0]![0] !== ':'
+  // A colon run inside a later fence is that fence's payload, not a closer.
+  let payload: RegExp | undefined
   for (let k = 1, line = lexer.peek(k); line !== undefined; line = lexer.peek(++k)) {
     if (isBlankLine(line)) continue
     const column = indentColumns(line)
     const text = line.trimStart()
-    if (column <= bodyColumn && closers.some(run => run[0] === ':'
+    if (payload === undefined && column <= bodyColumn && closers.some(run => run[0] === ':'
       ? RE_ADMONITION_CLOSE.exec(text)?.[1]?.length === run.length
       : fenceCloseRe(run).test(text))) return []
     if (column < bodyColumn) break
+    if (payload !== undefined) {
+      if (payload.test(text)) payload = undefined
+    } else if (!codeOpen && opensCodeFence(text)) payload = fenceCloseRe(/^(`{3,}|~{3,})/.exec(text)![1]!)
   }
   return [...closers]
 }
