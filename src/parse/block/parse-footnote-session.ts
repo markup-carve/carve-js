@@ -130,6 +130,10 @@ function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatim
     (state.opaque === null || fenceClosed)
 }
 
+function isAttachedCaptionFollower(firstBlockAttached: boolean, lines: string[]): boolean {
+  return firstBlockAttached && RE_CAPTION.test((lines.at(-1) ?? '').trimStart())
+}
+
 function isLiteralLineBlockListMarker(state: ReturnType<typeof verbatimOnlyLazyState>, line: string): boolean {
   return state.deepest?.literalLayout === true && isListMarkerLine(line.trimStart())
 }
@@ -529,7 +533,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         nestedNoteSpan = undefined
       }
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
-      const captionFollower = firstBlockAttached && RE_CAPTION.test((bodyLines.at(-1) ?? '').trimStart())
+      const captionFollower = isAttachedCaptionFollower(firstBlockAttached, bodyLines)
       bodyLines.push(captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
         : rebasedFootnoteContent(lexer, content, admission.sourceColumn, authoredBodyColumn))
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.

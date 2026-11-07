@@ -62,7 +62,7 @@
   {
     "id": "carve-4230-1",
     "source": "> :: t\n> : +\npara\n",
-    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n  <p>para</p>\n</blockquote>"
+    "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd></dd>\n  </dl>\n</blockquote>\n<p>para</p>"
   },
   {
     "id": "carve-4230-2",
