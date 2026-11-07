@@ -608,7 +608,7 @@ export function ownLines(
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
-      const quotedLazyPlus = f.kind === 'quote' && quotes > 0 && f.para &&
+      const quotedLazyPlus = f.kind === 'quote' && frames.slice(1, k).some((frame) => frame.kind === 'quote' && frame.plus !== undefined) && quotes > 0 && f.para &&
         quotes < frames.slice(1, k + 1).filter((frame) => frame.kind === 'quote').length
       if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f) && !quotedLazyPlus) {
         plus = f
