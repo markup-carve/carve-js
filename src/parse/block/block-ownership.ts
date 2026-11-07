@@ -84,7 +84,7 @@ interface Frame {
   plus?: number
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
-  releasedFenceColumn?: number
+  releasedFence?: { column: number; character: string }
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
   listShift?: number
@@ -175,6 +175,17 @@ const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\
 // A line that cannot start any opener: no leading punctuation an opener uses and no ordered marker.
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
 const TEXT: Form = { kind: 'text', interrupts: false }
+
+function foldReleasedFence(form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>): Form {
+  const released = owner.releasedFence
+  if (form.family === 'code' && PURE_FENCE.test(rest) && owner.para &&
+      released !== undefined && released.character === rest[0] && column > released.column) {
+    lazyLines.add(at)
+    return TEXT
+  }
+  if (form.kind !== 'text' && form.kind !== 'blank') delete owner.releasedFence
+  return form
+}
 const RESUMING_HOSTS = new Set<Frame['kind']>(['item', 'note', 'dd'])
 // Trace vocabulary of the spec model's walk (scripts/spec/layout.mjs).
 const TRACE_FRAME: Partial<Record<Frame['kind'], string>> = { quote: 'quote', item: 'item', note: 'footnote', dd: 'dd', colon: 'div' }
@@ -796,12 +807,7 @@ export function ownLines(
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
-    let form = classify(m.rest, owner, at, m.col)
-    if (form.family === 'code' && PURE_FENCE.test(m.rest) && owner.para &&
-        owner.releasedFenceColumn !== undefined && m.col > owner.releasedFenceColumn) {
-      form = TEXT
-      lazyLines.add(at)
-    } else if (form.kind !== 'text' && form.kind !== 'blank') delete owner.releasedFenceColumn
+    let form = foldReleasedFence(classify(m.rest, owner, at, m.col), owner, m.rest, m.col, at, lazyLines)
     if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
     trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
@@ -1240,7 +1246,10 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
-        top().releasedFenceColumn = indentCols(lines[topFence.opened!]!).col
+        if (topFence.kind === 'fence' && topFence.family === 'code') {
+          const released = quotedMeasure(topFence.opened!, quotes)
+          if (released !== null) top().releasedFence = { column: released.col, character: released.rest[0]! }
+        }
         return true
       }
       frames.length = 0

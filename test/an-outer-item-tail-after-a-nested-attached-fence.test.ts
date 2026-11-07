@@ -12,3 +12,9 @@ it('opens a sibling list after the outer tail', () => {
     '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n    <ul>\n      <li>z\n        <pre><code></code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>',
   )
 })
+
+it('opens a fence with a different delimiter after the released fence', () => {
+  expect(carveToHtml('- - +\n  ```\n\n  tail\n    ~~~\n    x\n    ~~~\n')).toBe(
+    '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>',
+  )
+})
