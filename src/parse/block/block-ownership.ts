@@ -429,6 +429,9 @@ export function ownLines(
   // The frames of the host a `+` last attached through. The attached block stands outside
   // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
   let attachedHost: Frame[] | null = null
+  // The host a marker-line `+` gave its block to, and the frame that block opened (null for a leaf).
+  // The host resumes at its content column once that block has ended (CARVE-P0-024, carve#5407).
+  let resumable: { host: Frame[]; block: Frame | null; table: boolean; last: number } | null = null
   // The block a quote's `+` attached outside the quote, by the depth it stands at.
   // The blank that ends the quote ends that block too (§17 L3, carve#5383).
   let quoteBlock: { depth: number; opener: 'item' | 'term' | 'table' | 'attr' | 'other'; axes?: string | undefined } | null = null
@@ -785,7 +788,7 @@ export function ownLines(
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
-    const form = classify(m.rest, owner, at, m.col)
+    let form = classify(m.rest, owner, at, m.col)
     if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
     trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
@@ -828,6 +831,10 @@ export function ownLines(
     }
     // Any other block it attaches there meets the `+` where the walk moved it (§17 L3, carve#4367).
     const plusLanding = lonePlus && landsAtMarker(lonePlus, form) ? lonePlus.markerCanon! : null
+    if (resumeAttachedHost()) {
+      owner = top()
+      form = classify(m.rest, owner, at, m.col)
+    }
     // S5: apply the line where it reached, closing every frame it missed (T, CARVE-P0-003).
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
@@ -861,13 +868,56 @@ export function ownLines(
       apply(owner, m.col, form, owner.canon, !leftLineBlockSpan)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
-    if (plusFollower) markUnclosedAttachedFence(form)
+    if (plusFollower) {
+      markUnclosedAttachedFence(form)
+      holdResumableHost(sibling, form)
+    }
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
     if (trace) {
       const route = firstBlockTraceRoute(traceParent, sibling, plusFollower, at, form,
         appliedPath ?? ownerPath(), frames.length > reached + 1, closed, reachedPath)
       traceApply(at, form, route, plusFollower)
+    }
+
+    function holdResumableHost(host: Frame | undefined, form: Form): void {
+      if (!host || !RESUMING_HOSTS.has(host.kind) || host.plus !== at - 1 || m.rest === '' || m.col !== host.markerCol ||
+          !form.interrupts || form.kind === 'item' || form.kind === 'colon-close') return
+      const block = frames[reached + 1] ?? null
+      // An unclosed block ends at its first blank, where `handsBackAttachedHost` picks the owner (carve#5404).
+      if (block?.endsAtBlank) return
+      const hostFrames = frames.slice(0, reached + 1)
+      hostFrames.push(host)
+      resumable = { host: hostFrames, block, table: form.table === true, last: at }
+    }
+
+    // The block a marker-line `+` took has ended when its frame is closed or missed, or past a leaf's line.
+    function resumeAttachedHost(): boolean {
+      const held = resumable
+      if (!held || held.last === at) return false
+      const host = held.host.at(-1)!
+      if (frames.includes(host)) {
+        resumable = null
+        return false
+      }
+      const parent = held.host.length - 2
+      if (reached !== parent || frames[parent] !== held.host[parent]) return false
+      if (held.block ? frames.includes(held.block) && frames.indexOf(held.block) <= reached
+        : held.table && form.table === true && m.rest !== '' && m.col === host.markerCol && held.last === at - 1) {
+        held.last = at
+        return false
+      }
+      resumable = null
+      // A line right after an attached quote's open paragraph is carve#5427, which this does not decide.
+      const openQuote = held.block?.kind === 'quote' && frames.includes(held.block) && m.rest !== '' &&
+        frames.slice(frames.indexOf(held.block)).some((f) => f.para)
+      if (openQuote || m.rest !== '' && m.col < host.col) return false
+      truncateFrames(frames, parent + 1)
+      frames.push(host)
+      host.para = false
+      host.last = 'block'
+      reached = parent + 1
+      return true
     }
 
     // S1: an open payload tests its closer first.

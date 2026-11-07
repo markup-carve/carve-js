@@ -52,9 +52,10 @@ describe('a line at a body column after a plus-taken quote stays in the body', (
       "<ul>\n  <li>a\n    <blockquote>\n      <div>\n\n      </div>\n    </blockquote>\n  </li>\n</ul>\n<p>x</p>",
     ],
     [
-      'a footnote plus keeps its reading',
+      // The note resumes at its body column after the quote (carve#5407 ruling A, carve#5426).
+      'a footnote plus keeps the line in its body',
       '[^n]: +\n> :::\n  x\n\nr[^n]\n',
-      "<p>x</p>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote>\n        <div>\n\n        </div>\n      </blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+      "<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <blockquote>\n        <div>\n\n        </div>\n      </blockquote>\n      <p>x<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
     ],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)

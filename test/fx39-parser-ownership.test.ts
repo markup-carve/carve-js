@@ -40,8 +40,8 @@ describe('nested blocks keep the owner selected by authored columns', () => {
   it('keeps a heading at the hosted note body floor', () => {
     const html = render('- see[^n]\n  [^n]: +\n  # h\n    # z\n\nsee[^n]\n')
     expect(html).toContain('</ul>\n<p>see')
-    expect(html).toContain('<li id="fn1">\n      <h1 id="h">h</h1>\n      <p>')
-    expect(html).toContain('</a>\n    <h1 id="z">z</h1>\n  </li>')
+    // The note resumes at its body column after its attached heading (carve#5407 ruling A, carve#5426).
+    expect(html).toContain('<li id="fn1">\n      <h1 id="h">h</h1>\n      <h1 id="z">z</h1>\n      <p>')
   })
 
   it('ends a div-hosted note paragraph at a below-column term', () => {
