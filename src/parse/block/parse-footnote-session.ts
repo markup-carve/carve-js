@@ -331,10 +331,18 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const authoredBodyColumn = authoredLine === undefined ? undefined
     : sourceColumnAt(authoredLine, Math.max(0, authoredLine.lastIndexOf(defLineRaw.trimStart()))) + FOOTNOTE_BODY_COLUMN
   const m = RE_FOOTNOTE_DEF.exec(defLineRaw.replace(/^[ \t]+/, ''))!
-  const refusedMarker = m[2]!.trim() === '%%' && hooks.isConsumedMarker(lexer.lineNumber(defLineIndex))
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
+  const authoredLines = (lexer.documentRoot ?? lexer).authoredLines
+  let earlierClaim = false
+  if (authoredLines !== undefined) {
+    for (let line = lexer.lineNumber(defLineIndex) - 2; line >= 0 && !isBlankLine(authoredLines[line]!); line--) {
+      const prior = /\[\^([^\]]+)\]:[ \t]+\+[ \t]*$/.exec(authoredLines[line]!)
+      if (prior !== null && prior[1] !== label) { earlierClaim = true; break }
+    }
+  }
+  const refusedMarker = earlierClaim && m[2]!.trim() === '%%' && hooks.isConsumedMarker(lexer.lineNumber(defLineIndex))
   const bodyLines = [m[2]!]
   const bodyFenceClosers = openFenceScanner()
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]

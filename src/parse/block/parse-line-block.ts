@@ -142,7 +142,12 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const verseSource = authored[lexer.lineNumber(lineIndex) - 1] ?? ln
       const openerAt = Math.max(0, openerSource.lastIndexOf(open.trimStart()))
       const verseAt = Math.max(0, verseSource.lastIndexOf(ln.trimStart()))
-      const sourceGap = /^[ \t]*>/.test(openerSource)
+      const openerQuoteAt = openerSource.indexOf('>')
+      const verseQuoteAt = verseSource.indexOf('>')
+      const sameQuoteColumn = openerQuoteAt >= 0 && verseQuoteAt >= 0 &&
+        sourceColumnAt(openerSource, openerQuoteAt) === sourceColumnAt(verseSource, verseQuoteAt)
+      const sourceGap = !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
+        !verseSource.includes('\t') && sameQuoteColumn
         ? sourceColumnAt(verseSource, verseAt) - sourceColumnAt(openerSource, openerAt) : 0
       const missingIndent = Math.max(0, sourceGap - indentColumns(ln))
       const verse = ' '.repeat(missingIndent) + ln
