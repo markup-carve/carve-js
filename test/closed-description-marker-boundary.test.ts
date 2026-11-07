@@ -14,9 +14,9 @@ describe('definition marker boundary after a description closes', () => {
     )
   })
 
-  it('keeps the boundary for a term without a description', () => {
+  it('releases a term boundary at the heading (carve#5352)', () => {
     expect(carveToHtml('- a\n  :: t\n  # H\n  w\n: z\n')).toBe(
-      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <h1 id="H">H</h1>\n    w\n  </li>\n</ul>\n<p>: z</p>',
+      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n    </dl>\n    <h1 id="H">H</h1>\n    w\n: z\n  </li>\n</ul>',
     )
   })
 

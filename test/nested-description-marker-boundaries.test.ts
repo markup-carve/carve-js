@@ -19,7 +19,7 @@ describe('description markers at nested item boundaries', () => {
     )
   })
 
-  it('ends every item at a column-zero marker after a nested description list', () => {
-    expect(carveToHtml('- a\n  - b\n    :: t\n    : u\n      - x\n: b\n')).toContain('</ul>\n<p>: b</p>')
+  it('lets the deepest paragraph take a column-zero line after a nested description (carve#5379)', () => {
+    expect(carveToHtml('- a\n  - b\n    :: t\n    : u\n      - x\n: b\n')).toContain('<li>x\n: b</li>')
   })
 })

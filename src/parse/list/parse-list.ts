@@ -1753,19 +1753,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           descriptionOpen = false
         } else if (markerAvailable &&
             hasNestedTerm && RE_DEFLIST_DEF.test(line.trimStart()) &&
-            (termScan.inDefList === 'term' || termScan.inDefList === 'description')) {
+            (termScan.inDefList === 'term' && termScan.termEnded !== true || descriptionOpen)) {
           completedDescription = true
           descriptionOpen = true
+        } else if (markerAvailable && hasNestedTerm && !completedDescription &&
+            line.trim() !== '' && !isRetainableLineComment(lexer, line) && !isLinkDefLine(line.trimStart())) {
+          // A term has no body. The first visible block after it ends the list,
+          // including a paragraph that the tracker still calls a term continuation.
+          hasNestedTerm = false
         } else if (descriptionOpen && markerAvailable && line.trim() !== '' &&
-            indentColumns(line) === 0 &&
-            (blankAfterDescription || lineOpensItemBlock(line.trimStart()))) {
+            ((indentColumns(line) === 0 && (blankAfterDescription || lineOpensItemBlock(line.trimStart()))) ||
+              blankAfterDescription && indentColumns(line) <= (termScan.descriptionColumn ?? -1))) {
           descriptionOpen = false
         }
         if (descriptionOpen) blankAfterDescription = line.trim() === ''
         trackItemLazyState(line, termScan, true, () => false)
         scannedNestedTerms++
       }
-      return hasNestedTerm && (!completedDescription || descriptionOpen)
+      return hasNestedTerm && (termScan.inDefList === 'term' && termScan.termEnded !== true || descriptionOpen)
     }
     const hasLiveDefinitionHost = (): boolean => definitionHostColumn !== undefined && bodyHasTerm()
     // ...and about one taken at the content column.
@@ -2430,7 +2435,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             !lineOpensItemBlock(nested.at(-1)!.trimStart()) && !isBlankLine(nested.at(-1)!)))
         lexer.nonAuthoredDefinitionStarts.add(lexer.lineNumber(lexer.pos))
       if (definitionHostColumn !== undefined && !RE_DEFLIST_TERM.test(sourceEntry) &&
-          !RE_DEFLIST_DEF.test(sourceEntry) && lineOpensItemBlock(sourceEntry) &&
+          !RE_DEFLIST_DEF.test(sourceEntry) &&
+          (lineOpensItemBlock(sourceEntry) || lazyState.inDefList === 'term' &&
+            !isRetainableLineComment(lexer, l) && !isLinkDefLine(sourceEntry) ||
+            pendingBlankRun.count > 0 && definitionBodyColumn !== undefined &&
+              sourceMarkerColumn <= definitionBodyColumn) &&
           sourceMarkerColumn >= contentCol &&
           // A block in the open description's body leaves the list and its host column open.
           !((lazyState.inDefList === 'description' || markerDescriptionCodeTracked) && definitionBodyColumn !== undefined &&

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-it('ends an item at a colon line after its marker-line term has ended', () => {
+it('folds a colon line after its marker-line term has ended (carve#5368)', () => {
   expect(carveToHtml('- :: t\n   a\n  : x\n: z\n').trim()).toBe(`<ul>
   <li>
     <dl>
@@ -9,16 +9,16 @@ it('ends an item at a colon line after its marker-line term has ended', () => {
     </dl>
     a
 : x
+: z
   </li>
-</ul>
-<p>: z</p>`)
+</ul>`)
 })
 
 it('keeps a colon line one column right of a task marker in the stanza', () => {
   expect(carveToHtml('* [ ] a\n      :: t\n      : u\n        ::: |\n          x\n : b\n').trim()).toContain('<p>&nbsp;&nbsp;x<br>\n: b</p>')
 })
 
-it('ends each nested item at its own marker column', () => {
+it('folds through a released outer paragraph after the nested item (carve#5373)', () => {
   expect(carveToHtml('- - a\n    :: t\n    : u\n      ::: |\n        x\n  : b\n: c\n').trim()).toBe(`<ul>
   <li>
     <ul>
@@ -35,9 +35,9 @@ it('ends each nested item at its own marker column', () => {
       </li>
     </ul>
     : b
+: c
   </li>
-</ul>
-<p>: c</p>`)
+</ul>`)
 })
 
 it('does not count a literal term in a code fence as an open definition', () => {
