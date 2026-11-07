@@ -22,7 +22,6 @@ import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
 import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 import { RULED_HTML_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
 import { RULED_5080_HTML } from './ruled-5080-ahead-of-pin.js'
-import { RULED_5407_HTML } from './ruled-5407-ahead-of-pin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -1543,7 +1542,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5012,
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
-  ...RULED_5407_HTML,
   ['868-a-paragraph-after-a-note-attached-fence-closed-past-a-blank-takes-a-lazy-line', {
     reason: 'carve#5410: an indented fence line cannot close a fence opened at the marker column',
     html: `<p>see</p>
@@ -1563,9 +1561,8 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   }] as const,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
-// These rows changed at the new spec pin and have separate parser causes.
+// Row 967 changed at the new spec pin and has a separate parser cause.
 const behindSpec = new Map<string, string>([
-  ["758-a-hosted-footnote-keeps-a-heading-at-its-body-floor", "<ul>\n  <li>a\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>\n<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <h1 id=\"h-2\">h</h1>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
   ["967-an-outer-item-s-paragraph-after-a-nested-attached-fence-loosens-it", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
