@@ -831,10 +831,7 @@ export function ownLines(
     }
     // Any other block it attaches there meets the `+` where the walk moved it (§17 L3, carve#4367).
     const plusLanding = lonePlus && landsAtMarker(lonePlus, form) ? lonePlus.markerCanon! : null
-    if (resumeAttachedHost()) {
-      owner = top()
-      form = classify(m.rest, owner, at, m.col)
-    }
+    resumeAttachedHost()
     // S5: apply the line where it reached, closing every frame it missed (T, CARVE-P0-003).
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
@@ -892,32 +889,33 @@ export function ownLines(
     }
 
     // The block a marker-line `+` took has ended when its frame is closed or missed, or past a leaf's line.
-    function resumeAttachedHost(): boolean {
+    function resumeAttachedHost(): void {
       const held = resumable
-      if (!held || held.last === at) return false
+      if (!held || held.last === at) return
       const host = held.host.at(-1)!
       if (frames.includes(host)) {
         resumable = null
-        return false
+        return
       }
       const parent = held.host.length - 2
-      if (reached !== parent || frames[parent] !== held.host[parent]) return false
+      if (reached !== parent || frames[parent] !== held.host[parent]) return
       if (held.block ? frames.includes(held.block) && frames.indexOf(held.block) <= reached
         : held.table && form.table === true && m.rest !== '' && m.col === host.markerCol && held.last === at - 1) {
         held.last = at
-        return false
+        return
       }
       resumable = null
       // A line right after an attached quote's open paragraph is carve#5427, which this does not decide.
       const openQuote = held.block?.kind === 'quote' && frames.includes(held.block) && m.rest !== '' &&
         frames.slice(frames.indexOf(held.block)).some((f) => f.para)
-      if (openQuote || m.rest !== '' && m.col < host.col) return false
+      if (openQuote || m.rest !== '' && m.col < host.col) return
       truncateFrames(frames, parent + 1)
       frames.push(host)
       host.para = false
       host.last = 'block'
       reached = parent + 1
-      return true
+      owner = host
+      form = classify(m.rest, owner, at, m.col)
     }
 
     // S1: an open payload tests its closer first.
