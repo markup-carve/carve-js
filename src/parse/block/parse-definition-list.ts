@@ -198,6 +198,15 @@ export function createDefinitionListParser(
     trackItemLazyState,
     trimEndSpaceTab,
   } = helpers
+  function hasOpenCaption(lines: string[]): boolean {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = stripLazyFrame(lines[i]!).trimStart()
+      if (line === '') return false
+      if (RE_CAPTION.test(line)) return true
+      if (lineOpensItemBlock(line)) return false
+    }
+    return false
+  }
   const entryColumnAt = (line: string, offset: number): number => {
     const column = sourceEntryColumnAt(line, offset)
     return column - taskBoxColumns(line, column)
@@ -722,7 +731,7 @@ export function createDefinitionListParser(
           else if (dedented === localLine && (RE_DEFLIST_TERM.test(localLine) || isListMarkerLine(localLine))) nestedDescriptionOpened = false
         }
         if (!lazyUnderNestedItem) bodyBaseEligible.add(bodyLines.length)
-        const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
+        const captionFollower = hasOpenCaption(bodyLines) &&
           (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
             lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
         bodyLines.push(captionFollower && nestedItemColumn <= 0 && !ln.trimStart().startsWith('>') &&

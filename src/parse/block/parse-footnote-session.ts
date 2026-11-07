@@ -130,8 +130,18 @@ function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatim
     (state.opaque === null || fenceClosed)
 }
 
+function hasOpenAttachedCaption(lines: string[]): boolean {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!.trimStart()
+    if (line === '') return false
+    if (RE_CAPTION.test(line)) return true
+    if (lineOpensItemBlock(line)) return false
+  }
+  return false
+}
+
 function attachedCaptionKeepsIndent(lexer: Lexer, lines: string[], firstBlockAttached: boolean, line: string): boolean {
-  return firstBlockAttached && RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+  return firstBlockAttached && hasOpenAttachedCaption(lines) &&
     !startsInterruptingBlock(lexer, line.trimStart()) && !isListMarkerLine(line.trimStart())
 }
 
@@ -140,7 +150,7 @@ function attachedCaptionTakesHostBlock(
   authoredBodyColumn: number | undefined,
 ): boolean {
   return firstBlockAttached && admission.kind === 'below' && authoredBodyColumn !== undefined &&
-    RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+    hasOpenAttachedCaption(lines) &&
     lexer.lineStartColumn(lexer.pos) - 1 >= authoredBodyColumn &&
     (lineOpensItemBlock(admission.line.trimStart()) || isListMarkerLine(admission.line.trimStart()))
 }
