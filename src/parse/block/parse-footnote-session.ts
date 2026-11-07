@@ -130,8 +130,21 @@ function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatim
     (state.opaque === null || fenceClosed)
 }
 
+const attachedCaptionStates = new WeakMap<string[], { length: number; open: boolean }>()
+function hasOpenAttachedCaption(lines: string[]): boolean {
+  const state = attachedCaptionStates.get(lines) ?? { length: 0, open: false }
+  for (let i = state.length; i < lines.length; i++) {
+    const line = lines[i]!.trimStart()
+    if (line === '' || lineOpensItemBlock(line)) state.open = false
+    if (RE_CAPTION.test(line)) state.open = true
+  }
+  state.length = lines.length
+  attachedCaptionStates.set(lines, state)
+  return state.open
+}
+
 function attachedCaptionKeepsIndent(lexer: Lexer, lines: string[], firstBlockAttached: boolean, line: string): boolean {
-  return firstBlockAttached && RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+  return firstBlockAttached && hasOpenAttachedCaption(lines) &&
     !startsInterruptingBlock(lexer, line.trimStart()) && !isListMarkerLine(line.trimStart())
 }
 
@@ -140,7 +153,7 @@ function attachedCaptionTakesHostBlock(
   authoredBodyColumn: number | undefined,
 ): boolean {
   return firstBlockAttached && admission.kind === 'below' && authoredBodyColumn !== undefined &&
-    RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+    hasOpenAttachedCaption(lines) &&
     lexer.lineStartColumn(lexer.pos) - 1 >= authoredBodyColumn &&
     (lineOpensItemBlock(admission.line.trimStart()) || isListMarkerLine(admission.line.trimStart()))
 }

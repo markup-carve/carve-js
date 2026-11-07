@@ -41,6 +41,8 @@ it.each([
   ['- +\n> q\n  ^ cap\n  more\n', '<figcaption>cap\n  more</figcaption>'],
   ['[^1]: +\n> q\n  ^ cap\n  more\n\n[^1]\n', '<figcaption>cap\n  more</figcaption>'],
   [':: t\n: +\n> q\n  ^ cap\n  more\n', '<figcaption>cap\n  more</figcaption>'],
+  ['[^1]: +\n> q\n  ^ cap\n  more\n  next\n\n[^1]\n', '<figcaption>cap\n  more\n  next</figcaption>'],
+  [':: t\n: +\n> q\n  ^ cap\n  more\n  next\n', '<figcaption>cap\n  more\n  next</figcaption>'],
 ])('keeps the authored indent in an attached quote caption', (source, expected) => {
   expect(carveToHtml(source)).toContain(expected)
 })
