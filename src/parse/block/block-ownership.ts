@@ -84,6 +84,7 @@ interface Frame {
   plus?: number
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
+  releasedFenceColumn?: number
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
   listShift?: number
@@ -796,6 +797,11 @@ export function ownLines(
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
     let form = classify(m.rest, owner, at, m.col)
+    if (form.family === 'code' && PURE_FENCE.test(m.rest) && owner.para &&
+        owner.releasedFenceColumn !== undefined && m.col > owner.releasedFenceColumn) {
+      form = TEXT
+      lazyLines.add(at)
+    } else if (form.kind !== 'text' && form.kind !== 'blank') delete owner.releasedFenceColumn
     if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
     trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
@@ -1215,6 +1221,7 @@ export function ownLines(
     function handsBackAttachedHost(): boolean {
       const host = attachedHost
       if (m.rest !== '' || !top().endsAtBlank) return false
+      const topFence = top()
       const colon = top().kind === 'colon'
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
@@ -1233,6 +1240,7 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
+        top().releasedFenceColumn = indentCols(lines[topFence.opened!]!).col
         return true
       }
       frames.length = 0
