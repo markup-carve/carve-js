@@ -12,7 +12,7 @@ import { isDirectiveLine } from '../block/paragraph-indent.js'
 import { pulledParagraphBlockCut } from '../block/pulled-paragraph.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-boundaries.js'
-import { quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
+import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
 /** One marker of a stacked marker chain, with its trailing space. */
@@ -668,6 +668,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       let first = 0
       while (first < lines.length - 1 && isBlockAttributeLine(sliceColumns(lines[first]!, blockColumn, true).trimStart())) first++
       const block = sliceColumns(lines[first]!, blockColumn, true)
+      const quoteEnd = attachedQuoteEnd(lines)
+      if (quoteEnd < lines.length) {
+        lexer.pos -= lines.length - quoteEnd
+        lines.length = quoteEnd
+        lineNumbers.length = quoteEnd
+        return
+      }
       if (lines.length <= 1 || lineOpensBlock(first > 0 ? block.trimStart() : block)) return
       const blockCut = pulledParagraphBlockCut(lines, placement.contentCol)
       let fenceRun: string | undefined

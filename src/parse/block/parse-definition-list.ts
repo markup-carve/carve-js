@@ -22,6 +22,7 @@ import { attachedLeadIsList } from './parse-footnote-session.js'
 import { taskBoxColumns } from './task-box-frame.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import {
+  attachedQuoteEnd,
   continueWrappedAttributeBlock,
   markerLineBottomBlock,
   markerPrefixLength,
@@ -453,7 +454,8 @@ export function createDefinitionListParser(
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
       if (/^\+[ \t]*$/.test(first)) {
         const firstBlock = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
-        const blockCut = pulledParagraphBlockCut(firstBlock.lines, contentCol)
+        const quoteEnd = attachedQuoteEnd(firstBlock.lines)
+        const blockCut = quoteEnd < firstBlock.lines.length ? quoteEnd : pulledParagraphBlockCut(firstBlock.lines, contentCol)
         if (blockCut > 0) {
           lexer.pos -= firstBlock.lines.length - blockCut
           firstBlock.lines.length = blockCut
