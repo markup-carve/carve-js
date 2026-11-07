@@ -1619,7 +1619,8 @@ export function ownLines(
     const colon = COLON_FENCE.exec(rest)
     if (colon && COLON_CLOSER.test(rest)) {
       // A closer is read in its owner: only a colon body at the reached depth, or holding it directly, can take it.
-      for (let k = reach; k > 0 && frames[k]!.kind === 'colon'; k--) {
+      // A lookahead classifies before its line sets `reach`, and the line before may have popped frames.
+      for (let k = Math.min(reach, frames.length - 1); k > 0 && frames[k]!.kind === 'colon'; k--) {
         if (frames[k]!.run === colon[1]!.length) return { kind: 'colon-close', frame: k, interrupts: true }
       }
     }
