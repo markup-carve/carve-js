@@ -124,3 +124,20 @@ it.each(['- +\n::: |\n\n   :::: \n', ':: t\n: +\n::: |\n\n   :::: \n', '[^1]: +\
     expect(carveToHtml(source)).toMatch(/<div class="line-block">\n\s*<\/div>\n\s*<div>\n\s*<\/div>/)
   },
 )
+
+it('releases an attached line block to a document opener left of its host (carve#5450)', () => {
+  expect(carveToHtml('[^1]: +\n::: |\n\n :::: \n\n[^1]\n')).toBe(`<div>
+  <p><a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+</div>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <div class="line-block">
+
+      </div>
+      <p>${backlink}</p>
+    </li>
+  </ol>
+</section>`)
+})
