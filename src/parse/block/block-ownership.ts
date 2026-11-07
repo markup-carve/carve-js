@@ -1107,12 +1107,19 @@ export function ownLines(
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
       if (host?.at(-1)?.kind !== 'item') return false
+      // Quote prefixes have their own coordinates; keep the existing reach rule there.
+      if (host.some(frame => frame.kind === 'quote')) {
+        if (!nextLineReaches(host.at(-1)!, at, quotes)) return false
+        frames.length = 0
+        frames.push(...host)
+        top().last = 'block'
+        return true
+      }
       const nextOwner = nextLineOwner(host, at, quotes)
       if (nextOwner === 0) return false
       if (nextOwner < host.length - 1) {
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
-        attachedHost = null
         top().last = 'block'
         return true
       }
@@ -1717,6 +1724,15 @@ export function ownLines(
       }
     }
     return 0
+  }
+
+  function nextLineReaches(item: Frame, at: number, quotes: number): boolean {
+    for (let k = at + 1; k < lines.length; k++) {
+      const n = quotedMeasure(k, quotes)
+      if (n === null) return false
+      if (n.rest !== '') return n.col >= item.col
+    }
+    return false
   }
 
   function codeCloserAhead(fence: Frame, at: number, quotes: number): boolean {
