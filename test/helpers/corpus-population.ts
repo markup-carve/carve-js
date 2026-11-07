@@ -73,7 +73,7 @@ export function expectedCorpusSize(specRoot: string): number {
         continue
       }
       if (compare === null) {
-        const opener = trimmed.match(/^(:{3,})\s+compare(?:\s+(.+))?$/)
+        const opener: RegExpMatchArray | null = trimmed.match(/^(:{3,})\s+compare(?:\s+(.+))?$/)
         if (opener) {
           compare = opener[1]
           modifiers = new Set(opener[2]?.split(/\s+/) ?? [])
