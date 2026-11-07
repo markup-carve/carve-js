@@ -1035,7 +1035,7 @@ export function ownLines(
 
     // `col` is where the opener starts in the source, `canon` where it lands.
     function markFirstBlockQuote(host: Frame | undefined): void {
-      if ((host?.kind !== 'item' && host?.kind !== 'dd') || host.plus !== at - 1) return
+      if ((host?.kind !== 'item' && host?.kind !== 'dd' && host?.kind !== 'note') || host.plus !== at - 1) return
       const quote = frames.find((f) => f.kind === 'quote' && f.line === at)
       if (quote) quote.firstBlockQuote = true
     }

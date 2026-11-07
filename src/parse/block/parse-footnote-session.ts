@@ -386,7 +386,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
       for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn,
-        attachedStartsWithLineBlock(attached))) {
+        attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
         bodyLines.push(closer)
         bodyLineNumbers.push(attachedLineNumbers.at(-1)!)
         bodySourceLines.push(undefined)

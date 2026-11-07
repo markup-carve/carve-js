@@ -42,9 +42,10 @@ it('ends an unclosed colon a description marker-line `+` takes at its first blan
 </dl>`)
 })
 
-it('keeps the blank in a footnote fence whose closer stands at the body column', () => {
+it('ends a footnote fence at the first blank when the later fence line is indented', () => {
   expect(carveToHtml('[^1]: +\n```\na\n\n  ```\n\n[^1]\n')).toContain(`<pre><code>a
-
+</code></pre>
+      <pre><code>
 </code></pre>`)
 })
 

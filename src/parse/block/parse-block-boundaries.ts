@@ -364,9 +364,9 @@ export function attachedStartsWithLineBlock(lines: readonly string[]): boolean {
 
 /**
  * The closers a host writes at the first blank after its marker-line `+` block, or none when a closer
- * for those blocks stands at or left of the body column before a line leaves the body (PART 0 S1, carve#5404).
+ * for those blocks stands at its readable column before a line leaves the body (PART 0 S1, carve#5410).
  */
-export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number, lineBlock = false): string[] {
+export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], bodyColumn: number, lineBlock: boolean, fenceColumn: number): string[] {
   if (closers.length === 0 || !isBlankLine(lexer.peek() ?? '')) return []
   const codeOpen = closers[0]![0] !== ':'
   // A colon run inside a later fence is that fence's payload, not a closer.
@@ -384,7 +384,7 @@ export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], b
       }
       if (nested.at(-1)?.lineBlock && column >= bodyColumn) continue
       if (nested.length === 0 && closers.some(run => run[0] === ':'
-        ? closeWidth === run.length : fenceCloseRe(run).test(text))) return []
+        ? closeWidth === run.length : column === fenceColumn && fenceCloseRe(run).test(text))) return []
       if (!lineBlock && !codeOpen && closeWidth === undefined) {
         const open = colonBlockOpenerRun(text)
         if (open !== null) nested.push({ width: open, lineBlock: RE_LINE_BLOCK_OPEN.test(text) })

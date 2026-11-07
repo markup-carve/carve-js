@@ -1531,6 +1531,23 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
   ...RULED_5407_HTML,
+  ['868-a-paragraph-after-a-note-attached-fence-closed-past-a-blank-takes-a-lazy-line', {
+    reason: 'carve#5410: an indented fence line cannot close a fence opened at the marker column',
+    html: `<p>see</p>
+<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <pre><code>a
+</code></pre>
+      <pre><code>c
+</code></pre>
+      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>`,
+  }] as const,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
 const behindSpec = new Map<string, string>()
