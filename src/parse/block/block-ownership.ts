@@ -174,6 +174,7 @@ const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\
 // A line that cannot start any opener: no leading punctuation an opener uses and no ordered marker.
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
 const TEXT: Form = { kind: 'text', interrupts: false }
+const RESUMING_HOSTS = new Set<Frame['kind']>(['item', 'note', 'dd'])
 // Trace vocabulary of the spec model's walk (scripts/spec/layout.mjs).
 const TRACE_FRAME: Partial<Record<Frame['kind'], string>> = { quote: 'quote', item: 'item', note: 'footnote', dd: 'dd', colon: 'div' }
 const TRACE_FORM: Partial<Record<Form['kind'], string>> = { 'colon-close': 'closer', colon: 'div', note: 'footnote' }
@@ -1102,14 +1103,15 @@ export function ownLines(
           form.kind === 'colon' && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
-    // The item whose `+` attached the fence goes on at its content column after the blank (§17 L4).
+    // The host whose `+` attached the fence goes on at its content column after the blank (§17 L4).
     function handsBackAttachedHost(): boolean {
       const host = attachedHost
       if (m.rest !== '' || !top().endsAtBlank) return false
       const colon = top().kind === 'colon'
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
-      if (host?.at(-1)?.kind !== 'item') return false
+      // Every host that takes a marker-line `+` resumes here, not only an item (§17 L4, carve#5404).
+      if (!host || !RESUMING_HOSTS.has(host.at(-1)!.kind)) return false
       if (colon) {
         const owner = nextLineOwner(host, at, quotes)
         frames.length = 0
