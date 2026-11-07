@@ -839,6 +839,7 @@ export function ownLines(
     // Any other block it attaches there meets the `+` where the walk moved it (§17 L3, carve#4367).
     const plusLanding = lonePlus && landsAtMarker(lonePlus, form) ? lonePlus.markerCanon! : null
     resumeAttachedHost()
+    const formColumn = m.col
     // S5: apply the line where it reached, closing every frame it missed (T, CARVE-P0-003).
     const closed = frames.length - 1 - reached
     const reachedPath = trace && closed > 0 ? ownerPath(reached) : undefined
@@ -874,7 +875,7 @@ export function ownLines(
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
     if (plusFollower) {
       markUnclosedAttachedFence(form)
-      holdResumableHost(sibling, form)
+      holdResumableHost(sibling, form, formColumn)
     }
     if (plusFollower && closedDescription) owner.last = 'dd'
     finish()
@@ -884,8 +885,8 @@ export function ownLines(
       traceApply(at, form, route, plusFollower)
     }
 
-    function holdResumableHost(host: Frame | undefined, form: Form): void {
-      if (!host || !RESUMING_HOSTS.has(host.kind) || host.plus !== at - 1 || m.rest === '' || m.col !== host.markerCol ||
+    function holdResumableHost(host: Frame | undefined, form: Form, formColumn: number): void {
+      if (!host || !RESUMING_HOSTS.has(host.kind) || host.plus !== at - 1 || formColumn !== host.markerCol ||
           !form.interrupts || form.kind === 'item' || form.kind === 'colon-close') return
       const block = frames[reached + 1] ?? null
       // An unclosed block ends at its first blank, where `handsBackAttachedHost` picks the owner (carve#5404).
