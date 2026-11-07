@@ -2,7 +2,7 @@ import { isValidAttrPayload } from '../../extension/attribute-parser.js'
 import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
-import { CAPTION_COMMENT_ONLY, fenceCloseRe } from './parse-quote-core.js'
+import { CAPTION_COMMENT_ONLY, fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
 import {
   commentOnlyParagraphEnd,
   isColonFenceOpener,
@@ -1790,7 +1790,7 @@ export function ownLines(
   function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
     const host = attachedHost?.at(-1)
     let pastBlank = false
-    const nested: number[] = []
+    const nested: { width: number; lineBlock: boolean }[] = []
     let payload: { run: string; column: number } | null = null
     for (let k = at + 1; k < lines.length; k++) {
       const n = quotedMeasure(k, quotes)
@@ -1800,7 +1800,7 @@ export function ownLines(
         if (n.col === payload.column && fenceCloseRe(payload.run).test(n.rest)) payload = null
         continue
       }
-      const code = /^(`{3,}|~{3,})/.exec(n.rest)?.[1]
+      const code = opensCodeFence(n.rest) ? /^(`{3,}|~{3,})/.exec(n.rest)?.[1] : undefined
       if (code !== undefined) {
         payload = { run: code, column: n.col }
         continue
@@ -1809,13 +1809,13 @@ export function ownLines(
       const maxColumn = host === undefined ? container.col : Infinity
       if (closer && n.col <= maxColumn) {
         const width = closer[1]!.length
-        if (nested.at(-1) === width) { nested.pop(); continue }
+        if (nested.at(-1)?.width === width) { nested.pop(); continue }
         if (nested.length === 0 && width === container.run) return true
       }
       // A line block reads colon-shaped openers as verse. Divs nest them.
-      if (!container.lineBlock && isColonFenceOpener(n.rest) && n.col <= maxColumn) {
+      if (!container.lineBlock && !nested.at(-1)?.lineBlock && isColonFenceOpener(n.rest) && n.col <= maxColumn) {
         const width = /^(:{3,})/.exec(n.rest)![1]!.length
-        nested.push(width)
+        nested.push({ width, lineBlock: RE_LINE_BLOCK_OPEN.test(n.rest) })
       }
       if (pastBlank && host && n.col <= host.col &&
           (matchMarker(n.rest) !== null || isColonFenceOpener(n.rest))) return false

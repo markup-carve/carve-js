@@ -698,7 +698,6 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
   // ahead carrying it refutes the whole scan before it starts.
   const memo = scan.cache.colon ??= new Map()
   const opener = scan.base + openIdx
-  const rootLineBlock = RE_LINE_BLOCK_OPEN.test(scan.at(openIdx) ?? '')
   const cached = memo.get(opener)
   if (cached !== undefined) return cached < 0 ? -1 : cached - scan.base
   if (!exactCloserPossible(scan.index.colon, len, opener)) {
@@ -725,7 +724,7 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
   }
   const rootLastClose = lastClose(len, opener + 1)
   if (rootLastClose < 0) return fail([{ opener }])
-  const stack = [{ width: len, opener, lastClose: rootLastClose, ranges: [] as { start: number; end: number }[] }]
+  const stack = [{ width: len, opener, lastClose: rootLastClose, lineBlock: RE_LINE_BLOCK_OPEN.test(scan.at(openIdx) ?? ''), ranges: [] as { start: number; end: number }[] }]
   for (let j = openIdx + 1; ; j++) {
     const frame = stack[stack.length - 1]!
     const position = scan.base + j
@@ -749,7 +748,7 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
     const close = RE_ADMONITION_CLOSE.exec(line)
     const closeLen = close?.[1]?.length
     // Colon-shaped lines in a line block are verse; only its exact closer is structural.
-    if (rootLineBlock && stack.length === 1 && closeLen !== len) continue
+    if (stack.at(-1)!.lineBlock && closeLen !== stack.at(-1)!.width) continue
     if (closeLen === stack[stack.length - 1]!.width) {
       const frame = stack.pop()!
       memo.set(frame.opener, scan.base + j)
@@ -762,7 +761,7 @@ export function findColonCloser(scan: AttachedScan, openIdx: number, len: number
     if (known !== undefined) {
       if (known < 0) return fail(stack)
       j = known - scan.base
-    } else stack.push({ width: open, opener: scan.base + j, lastClose: lastClose(open, scan.base + j + 1), ranges: [] })
+    } else stack.push({ width: open, opener: scan.base + j, lastClose: lastClose(open, scan.base + j + 1), lineBlock: RE_LINE_BLOCK_OPEN.test(line), ranges: [] })
   }
 }
 

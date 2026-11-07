@@ -71,6 +71,54 @@ it('uses the outer attached opener when a div contains a closed line block (carv
 </dl>`)
 })
 
+it('does not treat inline code as an opaque fence when pairing an attached div (carve#5405)', () => {
+  expect(carveToHtml('- +\n::: x\n```foo```\n\n  a\n  :::')).toBe(`<ul>
+  <li>
+    <div class="x">
+      <p><code>foo</code></p>
+      <p>a</p>
+    </div>
+  </li>
+</ul>`)
+})
+
+it('treats a nested line block colon opener as verse when pairing its parent div (carve#5405)', () => {
+  expect(carveToHtml('- +\n::: x\n::: |\n::: y\n:::\n\n  a\n  :::')).toBe(`<ul>
+  <li>
+    <div class="x">
+      <div class="line-block">
+        <p>::: y</p>
+      </div>
+      <p>a</p>
+    </div>
+  </li>
+</ul>`)
+})
+
+it('pairs an outer attached div past verse in a nested line block in every host (carve#5405)', () => {
+  const body = '::: x\n::: |\n::: y\n:::\n\n  a\n  :::'
+  expect(carveToHtml(`[^1]: +\n${body}\n\n[^1]\n`)).toContain(`<li id="fn1">
+      <div class="x">
+        <div class="line-block">
+          <p>::: y</p>
+        </div>
+        <p>a</p>
+      </div>
+      <p>${backlink}</p>
+    </li>`)
+  expect(carveToHtml(`:: t\n: +\n${body}\n`)).toBe(`<dl>
+  <dt>t</dt>
+  <dd>
+    <div class="x">
+      <div class="line-block">
+        <p>::: y</p>
+      </div>
+      <p>a</p>
+    </div>
+  </dd>
+</dl>`)
+})
+
 it.each(['- +\n::: |\n\n   :::: \n', ':: t\n: +\n::: |\n\n   :::: \n', '[^1]: +\n::: |\n\n   :::: \n\n[^1]\n'])(
   'reads a wider colon run in the resumed host at an offset column (carve#5414): %s', source => {
     expect(carveToHtml(source)).toMatch(/<div class="line-block">\n\s*<\/div>\n\s*<div>\n\s*<\/div>/)
