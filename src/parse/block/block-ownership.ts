@@ -1098,10 +1098,8 @@ export function ownLines(
 
     function markUnclosedAttachedFence(form: Form): void {
       if (top().opened !== at) return
-      // The HTML reader already releases an unclosed colon here. Match that
-      // boundary in the trace without changing the reader's rewritten lines.
       if (form.family === 'code' && !codeCloserAhead(top(), at, quotes) ||
-          trace !== null && form.kind === 'colon' && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+          form.kind === 'colon' && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
     // The item whose `+` attached the fence goes on at its content column after the blank (§17 L4).
@@ -1113,14 +1111,7 @@ export function ownLines(
       top().endsAtBlank = false
       if (host?.at(-1)?.kind !== 'item') return false
       if (colon) {
-        const parentItem = host.slice(0, -1).some((frame) => frame.kind === 'item')
-        let nextIsMarker = false
-        for (let k = at + 1; k < lines.length; k++) {
-          const next = quotedMeasure(k, quotes)
-          if (next === null) break
-          if (next.rest !== '') { nextIsMarker = matchMarker(next.rest) !== null; break }
-        }
-        const owner = Math.min(nextLineOwner(host, at, quotes), host.length - 1 - Number(parentItem && nextIsMarker))
+        const owner = nextLineOwner(host, at, quotes)
         frames.length = 0
         frames.push(...host.slice(0, owner + 1))
         top().last = 'block'
