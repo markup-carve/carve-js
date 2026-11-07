@@ -29,3 +29,11 @@ it('opens a document-level quote after the attached list', () => {
 it('keeps a closed attached fence open across its blank', () => {
   expect(carveToHtml('> +\n```\na\n\n  b\n```\n')).toContain('<pre><code>a\n\n  b\n</code></pre>')
 })
+
+it('keeps a list after an attached heading open across its blank', () => {
+  expect(carveToHtml('> +\n# h\n- a\n\n  > r\n')).toBe(carveToHtml('> # h\n- a\n\n  > r\n'))
+})
+
+it('ends a list after an attribute line the quote attached', () => {
+  expect(carveToHtml('> +\n{.c}\n- t\n\n  > r\n')).toBe(carveToHtml('> {.c}\n> - t\n\n  > r\n'))
+})
