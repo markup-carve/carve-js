@@ -1353,6 +1353,18 @@ export function attachBlockPos(
       }
     }
   }
+  // A stripped or synthetic container line can map its end past the source
+  // line. No block owns that line's terminator (CARVE-P12-014).
+  const root = lexer.documentRoot ?? lexer
+  const authored = root.authoredRootLines ?? root.authoredLines ?? root.lines
+  const sourceLine = authored[node.pos.endLine - 1]
+  if (type === 'comment' && sourceLine !== undefined) {
+    const lineEnd = (root.authoredLineOffsets ?? root.lineOffsets)[node.pos.endLine - 1]! + sourceLine.length
+    if (node.pos.endOffset !== undefined && node.pos.endOffset > lineEnd) {
+      node.pos.endOffset = lineEnd
+      node.pos.endColumn = sourceLine.length + 1
+    }
+  }
 }
 
 // Recognition is separate from interruption: a list marker recognized here

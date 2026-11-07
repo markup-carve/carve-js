@@ -726,6 +726,7 @@ export class ParseSession extends InlineParseSession {
       opts.onUnclosedContainer || opts.onDanglingBlockAttributes || opts.onInvalidContainerMetadata ? new Set<string>() : undefined,
     )
     if (transparentLines && originalLexer) {
+      lexer.authoredLineOffsets = originalLexer.lineOffsets
       lexer.sourceLineMap = transparentLines.sourceLines.map((index) => index + 1)
       lexer.sourceOffsetMap = transparentLines.sourceLines.map((index) => originalLexer.lineOffsets[index]! + (strippedBom ? 1 : 0))
       if (strippedBom) lexer.linePrefixWidths = transparentLines.sourceLines.map((index) => index === 0 ? 1 : 0)
