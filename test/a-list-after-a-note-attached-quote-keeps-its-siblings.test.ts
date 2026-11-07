@@ -21,6 +21,14 @@ it.each([
   expect(norm(carveToHtml(source))).toContain(html)
 })
 
+// An attribute run before the quote leads the block the `+` pulls, so the quote is still the attached one.
+it.each([
+  ['an item', '- +\n{.c}\n> q\n- y\n - z\n', '<ul><li><blockquote class="c"><p>q</p></blockquote></li><li>y</li><li>z</li></ul>'],
+  ['an item, in the host', '- +\n{.c}\n> q\n  # g\n', '<ul><li><blockquote class="c"><p>q</p></blockquote><h1 id="g">g</h1></li></ul>'],
+])('ends an attribute-led attached quote in %s', (_name, source, html) => {
+  expect(norm(carveToHtml(source))).toBe(html)
+})
+
 it('still folds plain text into the quote', () => {
   expect(norm(carveToHtml('[^1]: +\n> q\n tail\n\n[^1]\n'))).toContain('<blockquote><p>q tail</p></blockquote>')
 })

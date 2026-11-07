@@ -1008,8 +1008,8 @@ export function ownLines(
 
     function leadAttrRun(host: Frame, form: Form): void {
       if (form.attrLines) attrRest = { left: form.attrLines, cut: m.col - host.markerCanon!, floor: host.markerCanon! }
-      // A description's or note's pulled block is the one after the run.
-      if (host.kind === 'dd' || host.kind === 'note') host.plus = at + (form.attrLines ?? 0)
+      // The pulled block is the one after the run.
+      host.plus = at + (form.attrLines ?? 0)
       lead(host.markerCanon!)
       finish()
       afterPlus = true
