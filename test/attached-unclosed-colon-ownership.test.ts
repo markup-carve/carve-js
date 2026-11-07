@@ -63,4 +63,20 @@ describe('an unclosed colon block attached by a marker-line plus', () => {
     expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1')
     expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:5')
   })
+
+  it('keeps a closer paired after a heading in the note', () => {
+    const source = '- +\n::: note\n\n# heading\n:::\n'
+    const trace = decisionTrace(source)
+    expect(trace.find((record) => record.line === 3)?.owner).toBe('doc/item:1/div:2')
+    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1/div:2')
+    expect(carveToHtml(source)).toContain('<h1 id="heading">heading</h1>')
+  })
+
+  it('keeps text in the inner item when its column reaches that item', () => {
+    const source = '- a\n  * +\n  ::: note\n\n      tail\n'
+    const trace = decisionTrace(source)
+    expect(trace.find((record) => record.line === 4)?.owner).toBe('doc/item:1/item:2')
+    expect(trace.find((record) => record.line === 5)?.owner).toBe('doc/item:1/item:2')
+    expect(carveToHtml(source)).toContain('        <p>tail</p>')
+  })
 })

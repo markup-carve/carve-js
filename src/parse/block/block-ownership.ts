@@ -1114,7 +1114,13 @@ export function ownLines(
       if (host?.at(-1)?.kind !== 'item') return false
       if (colon) {
         const parentItem = host.slice(0, -1).some((frame) => frame.kind === 'item')
-        const owner = Math.min(nextLineOwner(host, at, quotes), host.length - 1 - Number(parentItem))
+        let nextIsMarker = false
+        for (let k = at + 1; k < lines.length; k++) {
+          const next = quotedMeasure(k, quotes)
+          if (next === null) break
+          if (next.rest !== '') { nextIsMarker = matchMarker(next.rest) !== null; break }
+        }
+        const owner = Math.min(nextLineOwner(host, at, quotes), host.length - 1 - Number(parentItem && nextIsMarker))
         frames.length = 0
         frames.push(...host.slice(0, owner + 1))
         top().last = 'block'
@@ -1769,8 +1775,7 @@ export function ownLines(
       const closer = COLON_CLOSER.exec(n.rest)
       if (closer && closer[1]!.length === container.run && n.col <= container.col) return true
       if (pastBlank && host && n.col <= host.col &&
-          (matchMarker(n.rest) !== null || isQuoteLine(n.rest) || HEADING.test(n.rest) ||
-            RE_HR.test(n.rest) || isColonFenceOpener(n.rest))) return false
+          (matchMarker(n.rest) !== null || isColonFenceOpener(n.rest))) return false
     }
     return false
   }
