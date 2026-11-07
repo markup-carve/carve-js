@@ -37,3 +37,7 @@ it('keeps a list after an attached heading open across its blank', () => {
 it('ends a list after an attribute line the quote attached', () => {
   expect(carveToHtml('> +\n{.c}\n- t\n\n  > r\n')).toBe(carveToHtml('> {.c}\n> - t\n\n  > r\n'))
 })
+
+it('keeps a list of another marker type after the attached list open across its blank', () => {
+  expect(carveToHtml('> +\n- a\n* b\n\n  > r\n')).toBe(carveToHtml('> - a\n* b\n\n  > r\n'))
+})

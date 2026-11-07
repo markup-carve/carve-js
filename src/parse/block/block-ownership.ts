@@ -405,7 +405,7 @@ export function ownLines(
   let attachedHost: Frame[] | null = null
   // The block a quote's `+` attached outside the quote, by the depth it stands at.
   // The blank that ends the quote ends that block too (§17 L3, carve#5383).
-  let quoteBlock: { depth: number; opener: 'item' | 'term' | 'table' | 'attr' | 'other' } | null = null
+  let quoteBlock: { depth: number; opener: 'item' | 'term' | 'table' | 'attr' | 'other'; axes?: string | undefined } | null = null
   // A marker-line note can own a short text follower. Give the note reader the
   // same body column after ownership has decided that the + attaches nothing.
   const noteTextFollower: { value: PendingNoteFollower | null } = { value: null }
@@ -1140,18 +1140,19 @@ export function ownLines(
         : isTableRow(m.rest) ? 'table' : form.kind === 'item' || form.kind === 'term' ? form.kind : 'other'
       if (plusFollower) {
         quoteBlock = host?.at(-1)?.kind === 'quote' && reached < host.length - 1 && m.rest !== ''
-          ? { depth: reached, opener: opener() } : null
+          ? { depth: reached, opener: opener(), axes: form.axes } : null
         return
       }
       if (!quoteBlock || m.rest === '' || reached > quoteBlock.depth) return
       // An attribute line leads the attached block, so the line after it opens that block.
       if (quoteBlock.opener === 'attr') {
         quoteBlock.opener = opener()
+        quoteBlock.axes = form.axes
         return
       }
       // The attached list, definition list or table goes on through its own siblings, a paragraph through its text.
       const continues = owner.para && form.kind === 'text' ||
-        quoteBlock.opener === 'item' && form.kind === 'item' ||
+        quoteBlock.opener === 'item' && form.kind === 'item' && form.axes === quoteBlock.axes ||
         quoteBlock.opener === 'term' && (form.kind === 'term' || form.kind === 'dd') ||
         quoteBlock.opener === 'table' && isTableRow(m.rest)
       if (!continues) quoteBlock = null
