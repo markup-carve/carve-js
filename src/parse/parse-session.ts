@@ -2288,9 +2288,13 @@ export class ParseSession extends InlineParseSession {
     const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
       indentColumns(rootLine) < q.quoteMarkerColumn && !rootLine.trimStart().startsWith('>')
     if (this.takesUnmarkedCommentCloser(q, ln)) return true
+    // A caption or the follower of a refused description marker cannot extend the quote
+    // when the ownership walk assigned that line to the host outside it.
+    const preceding = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2] ?? ''
+    if (!this.isWalkLazyLine(lexer.lineNumber(lexer.pos)) &&
+        (RE_CAPTION.test(ln.trimStart()) || /^:[ \t]+%%$/.test(sourceQuoteBody(preceding).trimEnd()))) return false
     if (this.interruptsQuoteLazily(q, ln, lazyFootnote)) return false
     // A list marker interrupts the one-line paragraph a refused quoted note `+` forms (§10 I2).
-    const preceding = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2] ?? ''
     if (isListMarkerLine(ln) && quotedNoteFirstBlockMarker(preceding) && sourceQuoteBody(preceding).startsWith('[^')) return false
     // A non-`>` line inside an open fence/comment, or after a block that left no
     // open paragraph (heading/table/fence/thematic/div), terminates the quote

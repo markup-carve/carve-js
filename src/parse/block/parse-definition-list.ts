@@ -725,7 +725,8 @@ export function createDefinitionListParser(
         const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
           (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
             lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
-        bodyLines.push(captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn &&
+        bodyLines.push(captionFollower && nestedItemColumn <= 0 && !ln.trimStart().startsWith('>') ? ln :
+          captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn &&
           !lineOpensItemBlock(dedented.trimStart()) && !isListMarkerLine(dedented.trimStart())
           ? LAZY_FRAME + dedented.trimStart() : dedented)
         bodySourceLines.push(ln)
@@ -1023,8 +1024,9 @@ export function createDefinitionListParser(
           (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
             lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
         const folded =
-          (RE_CAPTION.test(below) && lazyState.opaque === null || captionFollower)
+          RE_CAPTION.test(below) && lazyState.opaque === null
             ? LAZY_FRAME + below
+            : captionFollower && !ln.trimStart().startsWith('>') ? LAZY_FRAME + ln
             : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
                 (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
               ? LAZY_FRAME + below

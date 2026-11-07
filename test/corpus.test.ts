@@ -1536,6 +1536,16 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
+  ['851-a-first-block-plus-shape-reads-the-one-attach-rule-6', {
+    reason: 'carve#5415: a refused quoted description plus leaves no paragraph for a lazy line',
+    html: `<blockquote>
+  <dl>
+    <dt>t</dt>
+    <dd></dd>
+  </dl>
+</blockquote>
+<p>para</p>`,
+  }] as const,
   ...RULED_HTML_AHEAD_OF_PIN,
   ...RULED_5013_HTML,
   ...RULED_5016_HTML,

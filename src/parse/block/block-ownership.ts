@@ -438,7 +438,7 @@ export function ownLines(
   let attachedHost: Frame[] | null = null
   // The host a marker-line `+` gave its block to, and the frame that block opened (null for a leaf).
   // The host resumes at its content column once that block has ended (CARVE-P0-024, carve#5407).
-  let resumable: { host: Frame[]; block: Frame | null; table: boolean; last: number } | null = null
+  const resumable: { host: Frame[]; block: Frame | null; table: boolean; last: number }[] = []
   // The block a quote's `+` attached outside the quote, by the depth it stands at.
   // The blank that ends the quote ends that block too (§17 L3, carve#5383).
   let quoteBlock: { depth: number; opener: 'item' | 'term' | 'table' | 'attr' | 'other'; axes?: string | undefined } | null = null
@@ -474,7 +474,7 @@ export function ownLines(
   // span pending, takes the S5 path unchanged. Skipping it in the loop header keeps
   // the body's per-line closures off that path.
   const passesThrough = (at: number): boolean => {
-    if (trace || frames.length !== 1 || attachedHost || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
+    if (trace || frames.length !== 1 || attachedHost || resumable.length > 0 || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
         releasedFollowers.has(at) || noteTextFollower.value?.at === at - 1 || tabQuoteFollower.value?.at === at - 1) return false
     const doc = frames[0]!
     if (doc.cut !== 0 || doc.endsAtBlank || doc.closedList || doc.termShift !== undefined) return false
@@ -893,34 +893,38 @@ export function ownLines(
       if (block?.endsAtBlank) return
       const hostFrames = frames.slice(0, reached + 1)
       hostFrames.push(host)
-      resumable = { host: hostFrames, block, table: form.table === true, last: at }
+      resumable.push({ host: hostFrames, block, table: form.table === true, last: at })
     }
 
     // The block a marker-line `+` took has ended when its frame is closed or missed, or past a leaf's line.
     function resumeAttachedHost(): void {
-      const held = resumable
-      if (!held || held.last === at) return
-      const host = held.host.at(-1)!
-      if (frames.includes(host)) {
-        resumable = null
+      for (let index = resumable.length - 1; index >= 0; index--) {
+        const held = resumable[index]!
+        if (held.last === at) continue
+        const host = held.host.at(-1)!
+        if (frames.includes(host)) {
+          resumable.splice(index, 1)
+          continue
+        }
+        const parent = held.host.length - 2
+        if (reached !== parent || frames[parent] !== held.host[parent]) continue
+        if (held.block ? frames.includes(held.block) && frames.indexOf(held.block) <= reached
+          : held.table && form.table === true && m.rest !== '' && m.col === host.markerCol && held.last === at - 1) {
+          held.last = at
+          continue
+        }
+        // Resuming an outer host also retires claims made inside its ended block.
+        resumable.splice(index)
+        if (m.rest !== '' && m.col < host.col) continue
+        truncateFrames(frames, parent + 1)
+        frames.push(host)
+        host.para = false
+        host.last = 'block'
+        reached = parent + 1
+        owner = host
+        form = classify(m.rest, owner, at, m.col)
         return
       }
-      const parent = held.host.length - 2
-      if (reached !== parent || frames[parent] !== held.host[parent]) return
-      if (held.block ? frames.includes(held.block) && frames.indexOf(held.block) <= reached
-        : held.table && form.table === true && m.rest !== '' && m.col === host.markerCol && held.last === at - 1) {
-        held.last = at
-        return
-      }
-      resumable = null
-      if (m.rest !== '' && m.col < host.col) return
-      truncateFrames(frames, parent + 1)
-      frames.push(host)
-      host.para = false
-      host.last = 'block'
-      reached = parent + 1
-      owner = host
-      form = classify(m.rest, owner, at, m.col)
     }
 
     // S1: an open payload tests its closer first.
@@ -987,6 +991,8 @@ export function ownLines(
     }
 
     function foldsLazily(form: Form, owner: Frame): boolean {
+      const held = resumable.at(-1)
+      if (form.caption && held?.block?.kind === 'quote' && m.col >= held.host.at(-1)!.col) return false
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' && !colonEndsItem &&
         // A marker that a marker body owns, or that misses one, opens a list (PART 0 S3, carve#4860).
         !(form.kind === 'item' && (BODY_FRAME.has(owner.kind) || frames.slice(reached + 1).some((f) => BODY_FRAME.has(f.kind) || f.firstBlockQuote)))

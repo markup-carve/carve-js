@@ -659,6 +659,20 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lineNumbers: attachedLineNumbers,
       startLineIndex: attachedStartLineIndex,
     } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, false, localBlockColumn, localBlockColumn, Infinity)
+    // The quote collector stops at the quote's end. A caption at this item's content
+    // column still belongs to the attached figure, so pass it to the same block parse.
+    const caption = lexer.peek()
+    if (RE_BLOCKQUOTE.test(attached[blockLine]?.trimStart() ?? '') && caption !== undefined &&
+        indentColumns(caption) === placement.contentCol && RE_CAPTION.test(caption.trimStart())) {
+      do {
+        attached.push(lexer.peek()!)
+        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+        const next = lexer.peek()
+        if (next === undefined || isBlankLine(next) || indentColumns(next) !== placement.contentCol ||
+            lineOpensBlock(next.trimStart()) || isListMarkerLine(next.trimStart())) break
+      } while (true)
+    }
     // The selected block starts at its own column inside the item. Keep later
     // blocks pulled by a separate + at their own source columns.
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
@@ -697,7 +711,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn)
     for (let index = 0; index < attached.length; index++) {
-      attached[index] = sliceColumns(attached[index]!, localBlockColumn, true)
+      const line = attached[index]!
+      const captionAtHostColumn = index > 0 && RE_BLOCKQUOTE.test(attached[blockLine]?.trimStart() ?? '') &&
+        indentColumns(line) === placement.contentCol && RE_CAPTION.test(line.trimStart())
+      attached[index] = sliceColumns(line, captionAtHostColumn ? placement.contentCol : localBlockColumn, true)
     }
     // A closed line block keeps the host's body lines, whose indentation is
     // measured from the item's content column even when its opener was flush left.
