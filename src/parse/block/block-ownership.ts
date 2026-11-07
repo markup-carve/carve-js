@@ -1246,7 +1246,7 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
-        if (topFence.kind === 'fence' && topFence.family === 'code') {
+        if (nextOwner === host.length - 2 && topFence.kind === 'fence' && topFence.family === 'code') {
           const released = quotedMeasure(topFence.opened!, quotes)
           if (released !== null) top().releasedFence = { column: released.col, character: released.rest[0]! }
         }

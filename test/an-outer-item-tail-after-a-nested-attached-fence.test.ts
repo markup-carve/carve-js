@@ -18,3 +18,9 @@ it('opens a fence with a different delimiter after the released fence', () => {
     '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>tail</p>\n    <pre><code>x\n</code></pre>\n  </li>\n</ul>',
   )
 })
+
+it('opens a later run when the released fence was two items deeper', () => {
+  expect(carveToHtml('- - - +\n    ```\n\n  tail\n     ```\n')).toBe(
+    '<ul>\n  <li>\n    <ul>\n      <li>\n        <ul>\n          <li>\n            <pre><code></code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n    <p>tail</p>\n    <pre><code></code></pre>\n  </li>\n</ul>',
+  )
+})
