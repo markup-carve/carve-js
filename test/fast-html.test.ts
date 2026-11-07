@@ -215,7 +215,8 @@ describe('borrowed HTML layout', () => {
     // Corpus 617 adds an unmarked CSV fence that stays on the code path.
     // The Unicode headings in corpus 15-5 and 119 take the borrowed route.
     // Spaced thematic breaks (carve#4814) add corpus 132 and 132-5.
-    expect(accepted).toBe(78)
+    // The spec pin through carve#5425 adds one accepted fixture.
+    expect(accepted).toBe(79)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',
