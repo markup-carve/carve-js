@@ -131,19 +131,21 @@ function passedNotesInAttachment(lexer: Lexer, attached: string[], lineNumbers: 
 }
 
 function collectPassedNoteLine(
-  lexer: Lexer, admission: ContainerAdmission, notes: PassedNote[], state: { body: PassedNote | undefined; blanks: number[] }, bodyColumn: number,
+  lexer: Lexer, admission: ContainerAdmission, notes: PassedNote[],
+  state: { body: PassedNote | undefined; blanks: number[]; nextNonblank: number }, bodyColumn: number,
 ): boolean {
   if (notes.length === 0) return false
   const ln = admission.line
   const authored = (lexer.documentRoot ?? lexer).authoredLines
   const passedColumn = sourceColumn(authored?.[lexer.lineNumber(lexer.pos) - 1] ?? admission.sourceLine)
   if (admission.kind === 'blank') {
-    let offset = 1
-    while (isBlankLine(lexer.peek(offset) ?? '') && lexer.peek(offset) !== undefined) offset++
-    const next = lexer.peek(offset)
+    let nextIndex = state.nextNonblank > lexer.pos ? state.nextNonblank : lexer.pos + 1
+    while (lexer.lineAt(nextIndex) !== undefined && isBlankLine(lexer.lineAt(nextIndex)!)) nextIndex++
+    state.nextNonblank = nextIndex
+    const next = lexer.lineAt(nextIndex)
     const owner = state.body ?? notes.at(-1)!
-    const source = next === undefined ? undefined : authored?.[lexer.lineNumber(lexer.pos + offset) - 1] ??
-      (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos + offset) - 1] ?? next
+    const source = next === undefined ? undefined : authored?.[lexer.lineNumber(nextIndex) - 1] ??
+      (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(nextIndex) - 1] ?? next
     if (source !== undefined && sourceColumn(source) >= owner.column) {
       state.body = owner
       state.blanks.push(lexer.lineNumber(lexer.pos))
@@ -154,6 +156,7 @@ function collectPassedNoteLine(
     state.blanks.length = 0
     return false
   }
+  state.nextNonblank = -1
   if (state.body !== undefined && (passedColumn >= state.body.column ||
       state.blanks.length === 0 && state.body.lines.length > 0 &&
       !startsInterruptingBlock(lexer, ln.trimStart(), false))) {
@@ -467,7 +470,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   let firstBlockAttached = false
   let follower: string | undefined
   let passedNotes: PassedNote[] = []
-  const passedNoteState: { body: PassedNote | undefined; blanks: number[] } = { body: undefined, blanks: [] }
+  const passedNoteState: { body: PassedNote | undefined; blanks: number[]; nextNonblank: number } =
+    { body: undefined, blanks: [], nextNonblank: -1 }
   if (/^\+[ \t]*$/.test(m[2]!)) {
     let followerIndex = lexer.pos
     follower = lexer.lineAt(followerIndex)
