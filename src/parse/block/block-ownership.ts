@@ -186,6 +186,30 @@ function foldReleasedFence(form: Form, owner: Frame, rest: string, column: numbe
   if (form.kind !== 'text' && form.kind !== 'blank') delete owner.releasedFence
   return form
 }
+
+function attachedCodeCloserAhead(
+  fence: Frame, at: number, quotes: number, length: number, widest: Record<string, number[]>,
+  measure: (line: number, quotes: number) => { col: number; rest: string } | null,
+): { exists: boolean; paired: number | null } {
+  const opener = measure(at, quotes)
+  const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
+  if (run === undefined || (widest[run[0]!]?.[at + 1] ?? 0) < run.length) return { exists: false, paired: null }
+  let pastBlank = false
+  let deeperRunColumn: number | null = null
+  let deeperRunLine = -1
+  for (let line = at + 1; line < length; line++) {
+    const measured = measure(line, quotes)
+    if (measured === null) return { exists: false, paired: null }
+    if (measured.rest === '') { pastBlank = true; continue }
+    if (fence.closes!(measured.rest, measured.col)) return { exists: true, paired: null }
+    const pure = PURE_FENCE.exec(measured.rest)?.[1]
+    if (!pastBlank || pure === undefined || pure[0] !== run[0] || pure.length < run.length || measured.col <= opener!.col) continue
+    if (deeperRunColumn !== null && measured.col <= deeperRunColumn) return { exists: true, paired: deeperRunLine }
+    deeperRunColumn = measured.col
+    deeperRunLine = line
+  }
+  return { exists: false, paired: null }
+}
 const RESUMING_HOSTS = new Set<Frame['kind']>(['item', 'note', 'dd'])
 // Trace vocabulary of the spec model's walk (scripts/spec/layout.mjs).
 const TRACE_FRAME: Partial<Record<Frame['kind'], string>> = { quote: 'quote', item: 'item', note: 'footnote', dd: 'dd', colon: 'div' }
@@ -464,6 +488,7 @@ export function ownLines(
   const consumedMarkers = new Set<number>()
   const quoteSiblingSeparators = new Set<number>()
   const lazyLines = new Set<number>()
+  const pairedCodeClosers = new Set<number>()
   // A later marker cannot take the block offered by an earlier marker.
   const claimedMarkers = new Set<number>()
   const skippedAbbreviations = new Map<number, [string, string]>()
@@ -944,13 +969,14 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      lead(payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
+      const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at)
+      lead(pairedCloser ? inner.canon : payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
         if (c && c[1]![0] === inner.span[0] &&
             (inner.span[0] === '%' ? c[1]!.length === inner.span.length : c[1]!.length >= inner.span.length)) inner.span = null
-      } else if (m.rest !== '' && inner.closes!(m.rest, m.col)) {
+      } else if (pairedCloser || m.rest !== '' && inner.closes!(m.rest, m.col)) {
         frames.pop()
         top().last = inner.entryLast ?? 'block'
         payloadForm = 'closer'
@@ -1219,8 +1245,11 @@ export function ownLines(
 
     function markUnclosedAttachedFence(form: Form): void {
       if (top().opened !== at) return
-      if (form.family === 'code' && !codeCloserAhead(top(), at, quotes) ||
-          (form.kind === 'colon' || form.lineBlock) && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+      if (form.family === 'code') {
+        const closer = codeCloserAhead(top(), at, quotes)
+        if (!closer.exists) top().endsAtBlank = true
+        if (closer.paired !== null) pairedCodeClosers.add(closer.paired)
+      } else if ((form.kind === 'colon' || form.lineBlock) && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
     // The host whose `+` attached the fence goes on at its content column after the blank (§17 L4).
@@ -1865,15 +1894,8 @@ export function ownLines(
     return 0
   }
 
-  function codeCloserAhead(fence: Frame, at: number, quotes: number): boolean {
-    const run = /^(`{3,}|~{3,})/.exec(indentCols(restInQuotes(at, quotes) ?? '').rest)?.[1]
-    if (run === undefined || (closerRuns().widest[run[0] as '`' | '~']![at + 1] ?? 0) < run.length) return false
-    for (let k = at + 1; k < lines.length; k++) {
-      const n = quotedMeasure(k, quotes)
-      if (n === null) return false
-      if (n.rest !== '' && fence.closes!(n.rest, n.col)) return true
-    }
-    return false
+  function codeCloserAhead(fence: Frame, at: number, quotes: number): { exists: boolean; paired: number | null } {
+    return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest, quotedMeasure)
   }
 
   function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
