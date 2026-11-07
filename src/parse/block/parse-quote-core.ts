@@ -758,6 +758,12 @@ export function trackQuoteHostFence(
     return true
   }
   const b = openQuoteHosts(q, paragraph)
+  // A host marker may carry an erased line comment as its entire first block.
+  // The outer classifier would otherwise read the marker spelling as prose.
+  if (b.blockStart && RE_COMMENT_LINE.test(b.inner) && commentFenceRun(b.inner) === undefined) {
+    closeBlockQuoteParagraph(state)
+    return true
+  }
   if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
     const closed = trackWrappedAttributeRun(state, b.inner, b.at)
     if (state.refusedBraceRun) {
