@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
-import { quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
+import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
@@ -366,6 +366,12 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
         0, true, true,
       )
+      const quoteEnd = attachedQuoteEnd(attached)
+      if (quoteEnd < attached.length) {
+        lexer.pos -= attached.length - quoteEnd
+        attached.length = quoteEnd
+        attachedLineNumbers.length = quoteEnd
+      }
       firstBlockAttached = true
       bodyLines[0] = ''
       bodySourceLines[0] = undefined

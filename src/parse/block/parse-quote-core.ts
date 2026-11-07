@@ -190,6 +190,24 @@ export const RE_DEFLIST_DEF = /^:( +)(?=.*[^ \t])([^ ].*)$/
 export const CAPTION_COMMENT_ONLY = String.raw`(?:\{%(?![\p{Mn}\p{Mc}\p{Me}\u{FE00}-\u{FE0F}\u{200D}])(?:(?!%\})[^\n\r])*%\}|[ \t])*(?:(?<= )%%.*)?$`
 export const RE_CAPTION = new RegExp(String.raw`^\^ (?!${CAPTION_COMMENT_ONLY}) *(.*[^ \t\n\r].*)$`, 'u')
 
+/**
+ * The end of a quote a marker-line `+` attached. The quote is reached only through its `>`, so a later
+ * line without one that cannot fold into its paragraph ends it (CARVE-P0-024, PART 0 S4, carve#5427).
+ * A caption still captions the quote, and a blank leaves the end to the caller.
+ */
+export function attachedQuoteEnd(lines: readonly string[]): number {
+  let opener = 0
+  while (opener < lines.length - 1 && (isBlockAttributeLine(lines[opener]!.trimStart()) || RE_COMMENT_LINE.test(lines[opener]!))) opener++
+  if (!RE_BLOCKQUOTE.test(lines[opener]?.trimStart() ?? '')) return lines.length
+  for (let k = opener + 1; k < lines.length; k++) {
+    const text = lines[k]!.trimStart()
+    if (isBlankLine(text)) return lines.length
+    if (RE_BLOCKQUOTE.test(text) || RE_DEFLIST_DEF.test(text) || RE_CAPTION.test(text)) continue
+    if (lineOpensBlock(text) || isListMarkerLine(text) || isBlockAttributeLine(text) || RE_COMMENT_LINE.test(text)) return k
+  }
+  return lines.length
+}
+
 export const RE_BARE_IMAGE = /^ {0,3}!\[([^\]]*)\]\(([^)\s]*)(?: "((?:[^"\\]|\\[\s\S])*)"| '((?:[^'\\]|\\[\s\S])*)')? *\)(?:\{((?:[^}"'\n]|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')+)\})?[ \t]*$/
 
 // The same fence seen from a position that CONSUMES it. A comment is recognized

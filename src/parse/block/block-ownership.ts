@@ -905,10 +905,7 @@ export function ownLines(
         return
       }
       resumable = null
-      // A line right after an attached quote's open paragraph is carve#5427, which this does not decide.
-      const openQuote = held.block?.kind === 'quote' && frames.includes(held.block) && m.rest !== '' &&
-        frames.slice(frames.indexOf(held.block)).some((f) => f.para)
-      if (openQuote || m.rest !== '' && m.col < host.col) return
+      if (m.rest !== '' && m.col < host.col) return
       truncateFrames(frames, parent + 1)
       frames.push(host)
       host.para = false
