@@ -2496,7 +2496,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const atDescendantDescriptionMarker = (): boolean => {
       if (sourceDescription === null || lazyState.deepest?.inDefList !== 'description' || lazyState.ownedAuthored) return false
       const marker = lazyState.ownedMarker ?? (isListMarkerLine(content) ? 0 : -1)
-      return marker >= 0 && sourceMarkerColumn === physicalItemMarkerColumn + contentCol - baseIndent + marker
+      if (marker >= 0 && sourceMarkerColumn === physicalItemMarkerColumn + contentCol - baseIndent + marker) return true
+      // A third or deeper nested item can sit past the tracker's immediate
+      // owner. Find the nearest prior line at this authored column: a list
+      // marker there is the description's item boundary, at any depth.
+      const root = lexer.rootLines ?? lexer.lines
+      for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
+        const prior = root[nestedLineNumbers[index]! - 1]
+        if (prior === undefined || isBlankLine(prior)) continue
+        const column = sourceColumn(prior, itemQuoteDepth)
+        if (column > sourceMarkerColumn) continue
+        return column === sourceMarkerColumn && isListMarkerLine(sourceQuoteBody(prior).trimStart())
+      }
+      return false
     }
     const readDefinitionBand = (l: string): Decision | undefined => {
       if (sourceDescription !== null && lw === contentCol && leadHasDeeperItem &&
