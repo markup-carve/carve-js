@@ -602,8 +602,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (next === undefined || indentColumns(next) < ownContentColumn ||
             isSiblingMarker(shape, next)) break
         for (let index = 0; index < gap; index++) lexer.consume()
+        const laterStartsList = isListMarkerLine(lexer.peek()!.trimStart())
         const reached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) ||
-          offset !== undefined && offset > 0 && isListMarkerLine(line.trimStart()) && indentColumns(line) >= ownContentColumn,
+          !laterStartsList && offset !== undefined && offset > 0 && isListMarkerLine(line.trimStart()) && indentColumns(line) >= ownContentColumn,
           shape.baseIndent, false, ownContentColumn, ownContentColumn)
         if (reached.lines.length === 0) break
         // This is a later block of the outer item, not the block the inner
