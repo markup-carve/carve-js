@@ -992,7 +992,7 @@ export function ownLines(
 
     function foldsLazily(form: Form, owner: Frame): boolean {
       const held = resumable.at(-1)
-      if (form.caption && held?.block?.kind === 'quote' && m.col >= held.host.at(-1)!.col) return false
+      if (form.caption && held?.block?.kind === 'quote' && m.col === held.host.at(-1)!.col) return false
       return m.rest !== '' && top().para && !form.interrupts && form.kind !== 'dd' && !colonEndsItem &&
         // A marker that a marker body owns, or that misses one, opens a list (PART 0 S3, carve#4860).
         !(form.kind === 'item' && (BODY_FRAME.has(owner.kind) || frames.slice(reached + 1).some((f) => BODY_FRAME.has(f.kind) || f.firstBlockQuote)))

@@ -725,7 +725,8 @@ export function createDefinitionListParser(
         const captionFollower = RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
           (lazyState.opaque === null || lazyState.opaque?.kind === 'code' &&
             lazyState.opaque.close.test((bodyLines.at(-2) ?? '').trimStart()))
-        bodyLines.push(captionFollower && nestedItemColumn <= 0 && !ln.trimStart().startsWith('>') ? ln :
+        bodyLines.push(captionFollower && nestedItemColumn <= 0 && !ln.trimStart().startsWith('>') &&
+          !lineOpensItemBlock(dedented.trimStart()) && !isListMarkerLine(dedented.trimStart()) ? ln :
           captionFollower && nestedItemColumn > 0 && indentColumns(dedented) < nestedItemColumn &&
           !lineOpensItemBlock(dedented.trimStart()) && !isListMarkerLine(dedented.trimStart())
           ? LAZY_FRAME + dedented.trimStart() : dedented)
@@ -1026,7 +1027,8 @@ export function createDefinitionListParser(
         const folded =
           RE_CAPTION.test(below) && lazyState.opaque === null
             ? LAZY_FRAME + below
-            : captionFollower && !ln.trimStart().startsWith('>') ? LAZY_FRAME + ln
+            : captionFollower && !ln.trimStart().startsWith('>') &&
+              !lineOpensItemBlock(below) && !isListMarkerLine(below) ? LAZY_FRAME + ln
             : indentColumns(ln, contentCol) < contentCol && !RE_COMMENT_LINE.test(below) &&
                 (lazyState.divDepth > 0 || lazyState.inDefList === 'term')
               ? LAZY_FRAME + below
@@ -1139,6 +1141,9 @@ export function createDefinitionListParser(
         if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
         const early = admitPlusContinuation(ln)
         if (early !== undefined) return early
+        if (admission.kind === 'below' && RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
+            lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(ln) >= bodySourceColumn &&
+            lineOpensItemBlock(ln.trimStart())) return admitContentLine(' '.repeat(contentCol) + ln, true)
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
         const left = leavesBeforeSourceBody(ln, sourceFollower, reachesSourceBody)

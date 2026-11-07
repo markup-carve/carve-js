@@ -2292,7 +2292,9 @@ export class ParseSession extends InlineParseSession {
     // when the ownership walk assigned that line to the host outside it.
     const preceding = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2] ?? ''
     if (!this.isWalkLazyLine(lexer.lineNumber(lexer.pos)) &&
-        (RE_CAPTION.test(ln.trimStart()) || /^:[ \t]+%%$/.test(sourceQuoteBody(preceding).trimEnd()))) return false
+        (RE_CAPTION.test(ln.trimStart()) &&
+          (indentColumns(rootLine) === q.quoteMarkerColumn || indentColumns(rootLine) === q.quoteMarkerColumn + 2) ||
+          /^:[ \t]+%%$/.test(sourceQuoteBody(preceding).trimEnd()))) return false
     if (this.interruptsQuoteLazily(q, ln, lazyFootnote)) return false
     // A list marker interrupts the one-line paragraph a refused quoted note `+` forms (§10 I2).
     if (isListMarkerLine(ln) && quotedNoteFirstBlockMarker(preceding) && sourceQuoteBody(preceding).startsWith('[^')) return false

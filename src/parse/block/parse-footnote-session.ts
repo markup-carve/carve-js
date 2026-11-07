@@ -130,8 +130,27 @@ function captionParagraphOpen(lines: string[], state: ReturnType<typeof verbatim
     (state.opaque === null || fenceClosed)
 }
 
-function isAttachedCaptionFollower(firstBlockAttached: boolean, lines: string[]): boolean {
-  return firstBlockAttached && RE_CAPTION.test((lines.at(-1) ?? '').trimStart())
+function attachedCaptionKeepsIndent(lexer: Lexer, lines: string[], firstBlockAttached: boolean, line: string): boolean {
+  return firstBlockAttached && RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+    !startsInterruptingBlock(lexer, line.trimStart()) && !isListMarkerLine(line.trimStart())
+}
+
+function attachedCaptionTakesHostBlock(
+  lexer: Lexer, lines: string[], firstBlockAttached: boolean, admission: ContainerAdmission,
+  authoredBodyColumn: number | undefined,
+): boolean {
+  return firstBlockAttached && admission.kind === 'below' && authoredBodyColumn !== undefined &&
+    RE_CAPTION.test((lines.at(-1) ?? '').trimStart()) &&
+    lexer.lineStartColumn(lexer.pos) - 1 >= authoredBodyColumn &&
+    (lineOpensItemBlock(admission.line.trimStart()) || isListMarkerLine(admission.line.trimStart()))
+}
+
+function abbreviationLeavesNote(
+  lexer: Lexer, state: ReturnType<typeof verbatimOnlyLazyState>, sourceLine: string | undefined,
+  authoredBodyColumn: number | undefined, line: string,
+): boolean {
+  return lexer.atDocumentLevel && state.opaque === null && sourceLine !== undefined && authoredBodyColumn !== undefined &&
+    sourceColumn(sourceLine) < authoredBodyColumn && RE_ABBR_DEF.test(line.trimStart())
 }
 
 function isLiteralLineBlockListMarker(state: ReturnType<typeof verbatimOnlyLazyState>, line: string): boolean {
@@ -429,8 +448,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const ln = admission.line
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
-    if (lexer.atDocumentLevel && lazyState.opaque === null && sourceLine !== undefined && authoredBodyColumn !== undefined &&
-        sourceColumn(sourceLine) < authoredBodyColumn && RE_ABBR_DEF.test(ln.trimStart())) return 'stop'
+    if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'
     // A line leaving a nested note's body is still that note's lazy line (carve#3885),
@@ -507,7 +525,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // tab: three engines, three readings (carve#796, carve-js#725). A rejected
     // continuation does not indent differently, it LEAVES the note and lands in
     // the document body, so the split moved content between blocks.
-    if (reachesAuthoredNoteBody(lexer, admission, authoredBodyColumn, defLineIndex)) {
+    const captionHostBlock = attachedCaptionTakesHostBlock(lexer, bodyLines, firstBlockAttached, admission, authoredBodyColumn)
+    if (reachesAuthoredNoteBody(lexer, admission, authoredBodyColumn, defLineIndex) || captionHostBlock) {
       for (let k = 0; k < pendingBlankRun.count; k++) {
         bufferedBlanks.add(bodyLines.length)
         bodyLines.push('')
@@ -515,7 +534,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(pendingBlankRun.lines[k])
       }
       pendingBlankRun.clear()
-      const content: string = sliceColumns(ln, bodyColumn, true)
+      const content: string = captionHostBlock ? ln : sliceColumns(ln, bodyColumn, true)
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
       if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(content.trimStart()))
@@ -533,8 +552,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         nestedNoteSpan = undefined
       }
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
-      const captionFollower = isAttachedCaptionFollower(firstBlockAttached, bodyLines)
-      bodyLines.push(captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
+      const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
+      bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
         : rebasedFootnoteContent(lexer, content, admission.sourceColumn, authoredBodyColumn))
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.

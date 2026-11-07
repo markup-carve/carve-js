@@ -724,6 +724,19 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           attached[index] = sliceColumns(attached[index]!, placement.contentCol, true)
       }
     }
+    const captionedQuote = RE_BLOCKQUOTE.test(attached[blockLine]?.trimStart() ?? '') &&
+      attached.slice(blockLine + 1).some(line => RE_CAPTION.test(line.trimStart()))
+    // The quote collector can strip the host margin from the line after a flush caption.
+    // Restore that line to the item's block parse when its source column still reaches the host.
+    while (captionedQuote && lexer.peek() !== undefined && !isBlankLine(lexer.peek()) &&
+        indentColumns(lexer.peek()!) < placement.contentCol) {
+      const authoredColumn = lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(lexer.peek()!)
+      if (authoredColumn < placement.contentCol ||
+          isSiblingMarker(shape, lexer.peek()!)) break
+      attached.push(lexer.peek()!)
+      attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+    }
     // A SECOND ATTACHED BLOCK TAKES A SECOND MARKER, and the first-block form
     // is no exception: `- +` / `para` / `+` / `> q` holds both, exactly as
     // `- a` / `+` / `para` / `+` / `> q` does. This branch published the item

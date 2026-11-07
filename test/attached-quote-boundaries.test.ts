@@ -24,6 +24,19 @@ it.each([
   expect(carveToHtml(source)).toContain(expected)
 })
 
+it('resumes the host after a flush caption on its attached quote', () => {
+  expect(carveToHtml('- +\n> q\n^ cap\n  # head\n')).toContain('<h1 id="head">head</h1>')
+})
+
+it('resumes a note after a flush caption on its attached quote', () => {
+  const html = carveToHtml('[^f]: +\n> q\n^ cap\n  # head\n\n[^f]\n')
+  expect(html.indexOf('<h1 id="head">head</h1>')).toBeGreaterThan(html.indexOf('<figcaption>cap</figcaption>'))
+})
+
+it('resumes a description after a flush caption on its attached quote', () => {
+  expect(carveToHtml(':: t\n: +\n> q\n^ cap\n  # head\n')).toContain('<h1 id="head">head</h1>')
+})
+
 it.each([
   ['- +\n> q\n  ^ cap\n  more\n', '<figcaption>cap\n  more</figcaption>'],
   ['[^1]: +\n> q\n  ^ cap\n  more\n\n[^1]\n', '<figcaption>cap\n  more</figcaption>'],
@@ -40,4 +53,17 @@ it('does not extend a quote past a refused description plus', () => {
   </dl>
 </blockquote>
 <p>h</p>`)
+})
+
+it('keeps a caption deeper than the host inside the quote paragraph', () => {
+  expect(carveToHtml('- +\n> q\n    ^ cap\n')).toContain('<blockquote><p>q\n^ cap</p></blockquote>')
+})
+
+it.each([
+  [':: t\n: +\n> q\n  ^ cap\n  # head\n', '<h1 id="head">head</h1>'],
+  ['[^1]: +\n> q\n  ^ cap\n  # head\n\n[^1]\n', '<h1 id="head">head</h1>'],
+])('lets a heading interrupt a caption in an attached quote host', (source, heading) => {
+  const html = carveToHtml(source)
+  expect(html).toContain('<figcaption>cap</figcaption>')
+  expect(html).toContain(heading)
 })
