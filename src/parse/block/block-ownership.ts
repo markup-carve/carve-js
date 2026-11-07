@@ -82,7 +82,7 @@ interface Frame {
   plusBody?: boolean
   // The marker line a `+` on it was accepted on.
   plus?: number
-  // A `+` attached code fence with no closer ahead ends at its first blank (§17 L3).
+  // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
@@ -1097,16 +1097,29 @@ export function ownLines(
     }
 
     function markUnclosedAttachedFence(form: Form): void {
-      if (form.family === 'code' && top().opened === at && !codeCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+      if (top().opened !== at) return
+      // The HTML reader already releases an unclosed colon here. Match that
+      // boundary in the trace without changing the reader's rewritten lines.
+      if (form.family === 'code' && !codeCloserAhead(top(), at, quotes) ||
+          trace !== null && form.kind === 'colon' && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
     // The item whose `+` attached the fence goes on at its content column after the blank (§17 L4).
     function handsBackAttachedHost(): boolean {
       const host = attachedHost
       if (m.rest !== '' || !top().endsAtBlank) return false
+      const colon = top().kind === 'colon'
       // Only the first blank decides, so a run of blanks is scanned once.
       top().endsAtBlank = false
       if (host?.at(-1)?.kind !== 'item') return false
+      if (colon) {
+        const parentItem = host.slice(0, -1).some((frame) => frame.kind === 'item')
+        const owner = Math.min(nextLineOwner(host, at, quotes), host.length - 1 - Number(parentItem))
+        frames.length = 0
+        frames.push(...host.slice(0, owner + 1))
+        top().last = 'block'
+        return true
+      }
       // Quote prefixes have their own coordinates; keep the existing reach rule there.
       if (host.some(frame => frame.kind === 'quote')) {
         if (!nextLineReaches(host.at(-1)!, at, quotes)) return false
@@ -1742,6 +1755,22 @@ export function ownLines(
       const n = quotedMeasure(k, quotes)
       if (n === null) return false
       if (n.rest !== '' && fence.closes!(n.rest, n.col)) return true
+    }
+    return false
+  }
+
+  function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
+    const host = attachedHost?.at(-1)
+    let pastBlank = false
+    for (let k = at + 1; k < lines.length; k++) {
+      const n = quotedMeasure(k, quotes)
+      if (n === null) return false
+      if (n.rest === '') { pastBlank = true; continue }
+      const closer = COLON_CLOSER.exec(n.rest)
+      if (closer && closer[1]!.length === container.run && n.col <= container.col) return true
+      if (pastBlank && host && n.col <= host.col &&
+          (matchMarker(n.rest) !== null || isQuoteLine(n.rest) || HEADING.test(n.rest) ||
+            RE_HR.test(n.rest) || isColonFenceOpener(n.rest))) return false
     }
     return false
   }
