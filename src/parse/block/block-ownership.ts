@@ -1272,7 +1272,7 @@ export function ownLines(
         return true
       }
       const nextOwner = nextLineOwner(host, at, quotes)
-      if (nextOwner === 0) {
+      if (nextOwner === 0 && topFence.lineBlock) {
         frames.length = 1
         top().last = 'block'
         return true
