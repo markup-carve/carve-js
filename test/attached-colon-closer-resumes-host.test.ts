@@ -43,6 +43,34 @@ it('resumes a footnote and description after an unclosed attached div (carve#541
 </dl>`)
 })
 
+it('uses the outer attached opener when a div contains a closed line block (carve#5413)', () => {
+  const body = '::: x\n::: |\nverse\n:::\n\n  ::: y\n  b\n  :::'
+  expect(carveToHtml(`[^1]: +\n${body}\n\n[^1]\n`)).toContain(`<li id="fn1">
+      <div class="x">
+        <div class="line-block">
+          <p>verse</p>
+        </div>
+      </div>
+      <div class="y">
+        <p>b</p>
+      </div>
+      <p>${backlink}</p>
+    </li>`)
+  expect(carveToHtml(`:: t\n: +\n${body}\n`)).toBe(`<dl>
+  <dt>t</dt>
+  <dd>
+    <div class="x">
+      <div class="line-block">
+        <p>verse</p>
+      </div>
+    </div>
+    <div class="y">
+      <p>b</p>
+    </div>
+  </dd>
+</dl>`)
+})
+
 it.each(['- +\n::: |\n\n   :::: \n', ':: t\n: +\n::: |\n\n   :::: \n', '[^1]: +\n::: |\n\n   :::: \n\n[^1]\n'])(
   'reads a wider colon run in the resumed host at an offset column (carve#5414): %s', source => {
     expect(carveToHtml(source)).toMatch(/<div class="line-block">\n\s*<\/div>\n\s*<div>\n\s*<\/div>/)
