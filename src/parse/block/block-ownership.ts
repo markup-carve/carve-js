@@ -373,9 +373,16 @@ function normalizeMarkerFollower(
 }
 
 function skippedNoteMarker(
-  line: string, noteLine: boolean, markerColumn: number | undefined,
+  line: string, noteLine: boolean, markerColumn: number | undefined, markerCanon: number | undefined,
   columnOfPlus: (text: string) => number, standInPlus: () => string,
 ): { line: string; column: number | null } {
+  const note = noteLine ? FOOTNOTE_DEF.exec(line.trimStart().replace(/^(?:>[ \t]*)*/, '')) : null
+  if (note && CONT_MARKER.test(note[2]!)) {
+    const plusAt = line.lastIndexOf('+')
+    const quotes = (line.slice(0, line.indexOf('[^')).match(/>/g) ?? []).length
+    const prefix = '> '.repeat(quotes) + ' '.repeat(markerCanon ?? 0)
+    return { line: prefix + line.slice(line.indexOf('[^'), plusAt) + '%%', column: columnOfPlus(line.slice(plusAt)) + 1 }
+  }
   if (!noteLine || !CONT_MARKER.test(line.trimStart().replace(/^(?:>[ \t]*)*/, ''))) return { line, column: null }
   const plusAt = line.lastIndexOf('+')
   const column = columnOfPlus(line.slice(plusAt))
@@ -494,7 +501,7 @@ export function ownLines(
       continue
     }
     function recordInvisible(line: string): void {
-      const skipped = skippedNoteMarker(line, skippedNotes.has(at), top().docMarker,
+      const skipped = skippedNoteMarker(line, skippedNotes.has(at), top().docMarker, top().markerCanon,
         (text) => docColumn(lines[at]!, text), () => standIn('+'))
       if ((refusedInvisibleFollowers.has(at) || skippedSpanLines.has(at)) && skippedComments.has(at)) skipped.line = standRefusedInvisible(skipped.line)
       result.push(skipped.line)

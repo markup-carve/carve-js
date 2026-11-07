@@ -338,12 +338,12 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const sourceAt = sourceColumn(source, noteQuoteDepth)
       // The note keeps an invisible line at its marker column or in its body, so either is skipped (§17 L3, carve#5288).
       const atMarker = sourceAt === authoredMarkerColumn || sourceAt >= authoredMarkerColumn + FOOTNOTE_BODY_COLUMN
-      if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()) ||
-          RE_FOOTNOTE_DEF.test(follower.trimStart()))) ||
+      if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
+          RE_FOOTNOTE_DEF.test(follower.trimStart()) ||
           isBlockAttributeLine(follower.trimStart()) ||
           RE_COMMENT_LINE.test(follower.trimStart()))) break
       // A skipped note definition takes its body along: lines up to a blank or a block opener (CARVE-P9-067, carve#5034).
-      if (lexer.atDocumentLevel && RE_FOOTNOTE_DEF.test(follower.trimStart())) {
+      if (RE_FOOTNOTE_DEF.test(follower.trimStart())) {
         for (let body = lexer.lineAt(followerIndex + 1); body !== undefined && skippedNoteBodyLine(body); body = lexer.lineAt(++followerIndex + 1));
       }
       follower = lexer.lineAt(++followerIndex)

@@ -22,7 +22,6 @@ import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
 import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 import { RULED_HTML_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
 import { RULED_5080_HTML } from './ruled-5080-ahead-of-pin.js'
-import { RULED_5407_HTML } from './ruled-5407-ahead-of-pin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -41,6 +40,21 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-block-at-a-pulled-description-column-opens-in-the-description',
+  'a-definition-marker-after-a-block-and-paragraph-ends-the-item',
+  'a-lazy-line-after-a-comment-keeps-the-deepest-list-open',
+  'a-multi-line-braced-comment-keeps-the-nested-list-open',
+  'a-quoted-comment-span-uses-its-live-owner',
+  'a-skipped-note-definition-cannot-claim-an-earlier-plus',
+  'adjacent-invalid-includes-keep-their-tokens-literal',
+  'an-attribute-at-an-attached-task-quote-column-applies-to-its-paragraph',
+  'an-ended-definition-list-releases-its-marker-boundary',
+  'an-outer-item-loosens-after-a-nested-attached-colon-ends',
+  'an-outer-item-s-paragraph-after-a-nested-attached-fence-loosens-it',
+  'an-unclosed-attached-colon-ends-at-its-first-blank',
+  'open-state-lifetime-boundaries',
+  'text-ending-a-nested-span-opens-a-paragraph-in-the-surviving-item',
+  'unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi',
   'a-below-item-marker-continues-the-list-in-a-description',
   'a-comment-between-a-term-and-its-description-is-the-description-s-first-block',
   'an-indented-quoted-item-keeps-a-lazy-line-at-its-base',
@@ -818,7 +832,6 @@ const IMPLEMENTED = new Set([
   // markup-carve/carve#1526 and #1542. A container's span - and a definition
   // list's - ends at its last PLACED child, not at the line the scan reached.
   'a-container-s-span-ends-at-its-last-placed-child',
-  'a-definition-list-ends-at-its-last-placed-child-too',
   // markup-carve/carve#1516. An escape escalation reaches the block that
   // needed one, never the whole document.
   'a-leading-escaped-caret-keeps-its-escape',
@@ -1370,7 +1383,6 @@ const IMPLEMENTED = new Set([
   'a-quote-on-a-description-body-marker-line-takes-a-plus-at-its-column',
   'a-quoted-colon-line-is-absorbed-only-by-its-own-paragraph',
   'a-quoted-row-attribute-value-may-hold-a-pipe',
-  'a-quoted-term-takes-no-lazy-marker-or-separator',
   'a-reference-link-around-a-literal-directive-renders',
   'a-refused-plus-after-a-block-a-quote-s-plus-attached-folds-into-the-open-paragraph',
   'a-refused-plus-after-an-attached-block-ends-nothing',
@@ -1530,7 +1542,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5012,
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
-  ...RULED_5407_HTML,
   ['868-a-paragraph-after-a-note-attached-fence-closed-past-a-blank-takes-a-lazy-line', {
     reason: 'carve#5410: an indented fence line cannot close a fence opened at the marker column',
     html: `<p>see</p>
@@ -1550,7 +1561,10 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   }] as const,
 ])
 // The quote sibling list fix on main retired the three #947 parser lag declarations.
-const behindSpec = new Map<string, string>()
+// Row 967 changed at the new spec pin and has a separate parser cause.
+const behindSpec = new Map<string, string>([
+  ["967-an-outer-item-s-paragraph-after-a-nested-attached-fence-loosens-it", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"],
+])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it

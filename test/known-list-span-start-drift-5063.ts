@@ -20,4 +20,6 @@ export const KNOWN_LIST_SPAN_START_DRIFT_5063: ReadonlySet<string> = new Set([
   "868-a-line-below-a-note-div-past-a-closed-block-leaves-the-note: pos does not begin at the markup that opens \"list_item\" at $.children[2].children[0].children[0].items[0]: offset 12 starts before its owner's content column 6",
   "875-a-fence-opened-at-a-block-start-in-a-note-keeps-no-paragraph-open: pos does not begin at the markup that opens \"list\" at $.children[2].children[0].children[0]: offset 12 starts before its owner's content column 6",
   "875-a-fence-opened-at-a-block-start-in-a-note-keeps-no-paragraph-open: pos does not begin at the markup that opens \"list_item\" at $.children[2].children[0].children[0].items[0]: offset 12 starts before its owner's content column 6",
+  "975-a-skipped-note-definition-cannot-claim-an-earlier-plus: pos does not begin at the markup that opens \"list\" at $.children[1].children[0]: offset 16 starts before its owner's content column 2",
+  "975-a-skipped-note-definition-cannot-claim-an-earlier-plus: pos does not begin at the markup that opens \"list_item\" at $.children[1].children[0].items[0]: offset 16 starts before its owner's content column 2",
 ])

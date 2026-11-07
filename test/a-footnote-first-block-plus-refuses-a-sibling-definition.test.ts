@@ -19,8 +19,8 @@ describe('a footnote first-block plus before a sibling definition', () => {
     expect(carveToHtml(note('a', '[^a]: +')).trim()).toBe(expected(''))
   })
 
-  it('keeps the plus when the duplicate has an indented follower', () => {
-    expect(carveToHtml(note('a', '[^a]: +\n flush')).trim()).toBe(expected(''))
+  it('leaves an indented follower after the duplicate in the document', () => {
+    expect(carveToHtml(note('a', '[^a]: +\n flush')).trim()).toBe(`<p>flush</p>\n${expected('')}`)
   })
 
   it('accepts a quote at the note marker column', () => {
