@@ -36,3 +36,9 @@ it('keeps the attached fence open when a later run pairs with a deeper run', () 
     '<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\ntail\n</code></pre>\n      </li>\n    </ul>\n    x\n    <pre><code></code></pre>\n  </li>\n</ul>',
   )
 })
+
+it('uses a valid closer after two indented runs', () => {
+  expect(carveToHtml('- +\n```\n\n  ```\n  ```\n```\n')).toBe(
+    '<ul>\n  <li>\n    <pre><code>\n  ```\n  ```\n</code></pre>\n  </li>\n</ul>',
+  )
+})

@@ -197,18 +197,19 @@ function attachedCodeCloserAhead(
   let pastBlank = false
   let deeperRunColumn: number | null = null
   let deeperRunLine = -1
+  let pairedRunLine: number | null = null
   for (let line = at + 1; line < length; line++) {
     const measured = measure(line, quotes)
-    if (measured === null) return { exists: false, paired: null }
+    if (measured === null) break
     if (measured.rest === '') { pastBlank = true; continue }
     if (fence.closes!(measured.rest, measured.col)) return { exists: true, paired: null }
     const pure = PURE_FENCE.exec(measured.rest)?.[1]
     if (!pastBlank || pure === undefined || pure[0] !== run[0] || pure.length < run.length || measured.col <= opener!.col) continue
-    if (deeperRunColumn !== null && measured.col <= deeperRunColumn) return { exists: true, paired: deeperRunLine }
+    if (deeperRunColumn !== null && measured.col <= deeperRunColumn) pairedRunLine ??= deeperRunLine
     deeperRunColumn = measured.col
     deeperRunLine = line
   }
-  return { exists: false, paired: null }
+  return { exists: pairedRunLine !== null, paired: pairedRunLine }
 }
 const RESUMING_HOSTS = new Set<Frame['kind']>(['item', 'note', 'dd'])
 // Trace vocabulary of the spec model's walk (scripts/spec/layout.mjs).
