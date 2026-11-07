@@ -2610,7 +2610,8 @@ export class ParseSession extends InlineParseSession {
         return origin.attachmentFenceClosers
       },
       end: lexer.lineCount,
-      contentColumn: Math.max(contentColumn + viewSlice, hostCloserColumn),
+      contentColumn: Math.max(contentColumn + viewSlice,
+        colonBlockOpenerRun(at(attributeLines) ?? '') === null ? 0 : hostCloserColumn),
       indexBase,
       base: lexer.pos + attributeLines,
       boundary: isBoundary,
