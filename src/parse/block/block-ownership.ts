@@ -990,7 +990,7 @@ export function ownLines(
     }
 
     function attrRunLeads(host: Frame, form: Form): boolean {
-      const pulledDescription = host.kind === 'dd' && host.plus === at - 1
+      const pulledDescription = (host.kind === 'dd' || host.kind === 'note') && host.plus === at - 1
       if ((host.kind !== 'item' || frames[reached]!.kind === 'dd') && !pulledDescription) return false
       if (reached !== frames.length - 2 || m.col !== host.markerCol ||
         (form.attrLines === undefined && !isAttrLine(trimEndSpaceTab(m.rest)))) return false
@@ -1001,8 +1001,8 @@ export function ownLines(
 
     function leadAttrRun(host: Frame, form: Form): void {
       if (form.attrLines) attrRest = { left: form.attrLines, cut: m.col - host.markerCanon!, floor: host.markerCanon! }
-      // A description's pulled block is the one after the run.
-      if (host.kind === 'dd') host.plus = at + (form.attrLines ?? 0)
+      // A description's or note's pulled block is the one after the run.
+      if (host.kind === 'dd' || host.kind === 'note') host.plus = at + (form.attrLines ?? 0)
       lead(host.markerCanon!)
       finish()
       afterPlus = true
