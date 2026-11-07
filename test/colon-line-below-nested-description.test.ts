@@ -27,4 +27,8 @@ describe('colon lines below a nested item description', () => {
   it("folds a lazy colon line below a nested quote-plus description", () => {
     expect(carveToHtml("- x\n  - > +\n    :: t\n    : d\n : z\n").trim()).toBe("<ul>\n  <li>x\n    <ul>\n      <li>\n        <blockquote>\n          <dl>\n            <dt>t</dt>\n            <dd>d\n: z</dd>\n          </dl>\n        </blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>")
   })
+
+  it("folds a shifted colon line into a quoted description below the item content column", () => {
+    expect(carveToHtml("- a\n  > +\n  :: t\n    : d\n : d\n").trim()).toBe("<ul>\n  <li>a\n    <blockquote>\n      <dl>\n        <dt>t</dt>\n        <dd>d\n: d</dd>\n      </dl>\n    </blockquote>\n  </li>\n</ul>")
+  })
 })
