@@ -1595,8 +1595,13 @@ export function ownLines(
         continue
       }
       if (COMMENT_LINE.test(rest)) { comments.push(k); continue }
-      if (FOOTNOTE_DEF.test(rest)) {
+      const skippedNote = FOOTNOTE_DEF.exec(rest)
+      if (skippedNote !== null) {
         const opener = k
+        // A later marker-line `+` is refused while this earlier claim is pending.
+        // It opens no body, so its next visible line remains this claim's candidate.
+        const pendingLabel = /\[\^([^\]]+)\]:/.exec(lines[at]!)?.[1]
+        if (CONT_MARKER.test(skippedNote[2]!) && skippedNote[1] !== pendingLabel) { notes.push(opener); continue }
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))

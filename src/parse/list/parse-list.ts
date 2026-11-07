@@ -3690,6 +3690,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const decision = admitContinuationMarker(l) ?? stopsBeforeBody(l) ?? readQuoteFacts(l) ??
         readDefinitionSource(l) ?? readDefinitionBand(l)
       if (decision !== undefined) return decision
+      // The ownership walk can rebase an invisible quoted note to its marker
+      // column. Its source start still reaches this item's content column.
+      if (admission.kind === 'below' && RE_BLOCKQUOTE.test(content) &&
+          RE_FOOTNOTE_DEF.test(sourceQuoteBody(l).trimStart()) &&
+          indentColumns((lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(lexer.pos) - 1] ?? l) >=
+            authoredItemMarkerColumn + contentCol - baseIndent) {
+        admitContentLine(' '.repeat(contentCol) + l)
+        return 'continue'
+      }
       // A blank reaches every frame, so no line missed the span's owner: a comment line
       // after it is the open span's, its own or a line block's (carve#4889, carve#4994).
       const spanOpen = lazyState.opaque?.kind === 'comment' ? lazyState.opaque !== childSpan?.state

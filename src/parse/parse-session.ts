@@ -1649,6 +1649,7 @@ export class ParseSession extends InlineParseSession {
     return parseFootnoteDef(lexer, {
       collectAttachedBlock: this.collectAttachedBlock.bind(this),
       parseBlocks: this.parseBlocks.bind(this),
+      isConsumedMarker: (line) => this.consumedMarkerLines.has(line),
     })
   }
 
