@@ -1,4 +1,4 @@
-import { attachedBlankClosers, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
@@ -467,7 +467,7 @@ export function createDefinitionListParser(
         for (const a of firstBlock.lines) track(a)
         // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
         for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), contentCol,
-          RE_LINE_BLOCK_OPEN.test(firstBlock.lines.find(line => /^:{3,}/.test(line.trimStart()))?.trimStart() ?? ''))) {
+          attachedStartsWithLineBlock(firstBlock.lines))) {
           bodyLines.push(closer)
           bodySourceLines.push(undefined)
           bodyLineNumbers.push(firstBlock.lineNumbers.at(-1)!)

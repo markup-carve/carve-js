@@ -343,6 +343,25 @@ export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFenc
   return fence !== null
 }
 
+/** Whether the first visible block offered by a marker-line `+` is a line block. */
+export function attachedStartsWithLineBlock(lines: readonly string[]): boolean {
+  let comment: number | undefined
+  for (const line of lines) {
+    const text = line.trimStart()
+    if (comment !== undefined) {
+      if (commentFenceRun(text) === comment) comment = undefined
+      continue
+    }
+    if (isBlankLine(line)) continue
+    const run = commentFenceRun(text)
+    if (run !== undefined) { comment = run; continue }
+    if (RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text) || RE_ABBR_DEF.test(text) ||
+        RE_FOOTNOTE_DEF.test(text) || isLinkDefLine(text)) continue
+    return RE_LINE_BLOCK_OPEN.test(text)
+  }
+  return false
+}
+
 /**
  * The closers a host writes at the first blank after its marker-line `+` block, or none when a closer
  * for those blocks stands at or left of the body column before a line leaves the body (PART 0 S1, carve#5404).
