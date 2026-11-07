@@ -1570,11 +1570,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 </section>`,
   }] as const,
 ])
-// The quote sibling list fix on main retired the three #947 parser lag declarations.
-// Row 967 changed at the new spec pin and has a separate parser cause.
-const behindSpec = new Map<string, string>([
-  ["967-an-outer-item-s-paragraph-after-a-nested-attached-fence-loosens-it", "<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code>\ntail\n</code></pre>\n      </li>\n    </ul>\n  </li>\n</ul>"],
-])
+const behindSpec = new Map<string, string>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it
