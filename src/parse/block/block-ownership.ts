@@ -188,7 +188,7 @@ function foldReleasedFence(form: Form, owner: Frame, rest: string, column: numbe
 }
 
 function attachedCodeCloserAhead(
-  fence: Frame, at: number, quotes: number, length: number, widest: Record<string, number[]>,
+  fence: Frame, at: number, quotes: number, length: number, widest: Record<string, number[]>, hostColumn: number,
   measure: (line: number, quotes: number) => { col: number; rest: string } | null,
 ): { exists: boolean; paired: number | null } {
   const opener = measure(at, quotes)
@@ -197,18 +197,20 @@ function attachedCodeCloserAhead(
   let pastBlank = false
   let deeperRunColumn: number | null = null
   let deeperRunLine = -1
+  let pairedRunLine: number | null = null
   for (let line = at + 1; line < length; line++) {
     const measured = measure(line, quotes)
-    if (measured === null) return { exists: false, paired: null }
+    if (measured === null) break
     if (measured.rest === '') { pastBlank = true; continue }
     if (fence.closes!(measured.rest, measured.col)) return { exists: true, paired: null }
+    if (pairedRunLine !== null && measured.col <= hostColumn) break
     const pure = PURE_FENCE.exec(measured.rest)?.[1]
     if (!pastBlank || pure === undefined || pure[0] !== run[0] || pure.length < run.length || measured.col <= opener!.col) continue
-    if (deeperRunColumn !== null && measured.col <= deeperRunColumn) return { exists: true, paired: deeperRunLine }
+    if (deeperRunColumn !== null && measured.col <= deeperRunColumn) pairedRunLine ??= deeperRunLine
     deeperRunColumn = measured.col
     deeperRunLine = line
   }
-  return { exists: false, paired: null }
+  return { exists: pairedRunLine !== null, paired: pairedRunLine }
 }
 const RESUMING_HOSTS = new Set<Frame['kind']>(['item', 'note', 'dd'])
 // Trace vocabulary of the spec model's walk (scripts/spec/layout.mjs).
@@ -1895,7 +1897,8 @@ export function ownLines(
   }
 
   function codeCloserAhead(fence: Frame, at: number, quotes: number): { exists: boolean; paired: number | null } {
-    return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest, quotedMeasure)
+    return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest,
+      attachedHost?.at(-1)?.markerCol ?? 0, quotedMeasure)
   }
 
   function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
