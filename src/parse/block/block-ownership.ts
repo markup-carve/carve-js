@@ -384,6 +384,19 @@ function skippedNoteMarker(
     : { line: line.slice(0, plusAt) + standInPlus() + line.slice(plusAt + 1), column: null }
 }
 
+function partialQuotePlusIsLazy(frames: Frame[], at: number, quotes: number): boolean {
+  const frame = frames[at]!
+  if (frame.kind !== 'quote' || !frame.para || quotes === 0) return false
+  let depth = 0
+  let attachedAncestor = false
+  for (let k = 1; k <= at; k++) {
+    if (frames[k]!.kind !== 'quote') continue
+    depth++
+    if (k < at && frames[k]!.plus !== undefined) attachedAncestor = true
+  }
+  return attachedAncestor && quotes < depth
+}
+
 /**
  * Rule A (carve#3885): every line is first matched against the open containers,
  * and an opener past its owner's content column opens there, measured from its
@@ -608,7 +621,7 @@ export function ownLines(
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
-      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f)) {
+      if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f) && !partialQuotePlusIsLazy(frames, k, quotes)) {
         plus = f
         plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out, contentColumn(f))
         break
