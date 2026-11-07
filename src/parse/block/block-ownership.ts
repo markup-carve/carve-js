@@ -403,6 +403,9 @@ export function ownLines(
   // The frames of the host a `+` last attached through. The attached block stands outside
   // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
   let attachedHost: Frame[] | null = null
+  // The block a quote's `+` attached outside the quote, by the depth it stands at.
+  // The blank that ends the quote ends that block too (§17 L3, carve#5383).
+  let quoteBlock: { depth: number; definitions: boolean } | null = null
   // A marker-line note can own a short text follower. Give the note reader the
   // same body column after ownership has decided that the + attaches nothing.
   const noteTextFollower: { value: PendingNoteFollower | null } = { value: null }
@@ -622,7 +625,14 @@ export function ownLines(
       m = indentCols(src)
     }
     reached = standInvisibleLine(reached, plus !== null)
+    reached = endQuoteBlockAtBlank(reached)
     reopenPlus()
+    function endQuoteBlockAtBlank(depth: number): number {
+      if (!quoteBlock || m.rest !== '' || top().kind === 'fence') return depth
+      const ended = Math.min(depth, quoteBlock.depth)
+      quoteBlock = null
+      return ended
+    }
     function reopenPlus(): void {
       if (plus || !attachedHost || !CONT_MARKER.test(m.rest)) return
       plus = reopenAttachedHost(attachedHost)
@@ -728,6 +738,7 @@ export function ownLines(
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
     const form = classify(m.rest, owner, at, m.col)
     if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
+    trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
@@ -1121,6 +1132,20 @@ export function ownLines(
       // Otherwise a `+` in its payload can reopen the old host.
       if (attachedHost && depth < attachedHost.length - 1 && form.kind === 'fence') return true
       return depth === 0 && !(owner.para && form.kind === 'text') && !isTableRow(m.rest) && form.kind !== 'item' && !isAttrLine(trimEndSpaceTab(m.rest))
+    }
+
+    function trackQuoteBlock(form: Form, owner: Frame, plusFollower: boolean): void {
+      const host = attachedHost as Frame[] | null
+      if (plusFollower) {
+        quoteBlock = host?.at(-1)?.kind === 'quote' && reached < host.length - 1 && m.rest !== ''
+          ? { depth: reached, definitions: form.kind === 'term' } : null
+        return
+      }
+      if (!quoteBlock || m.rest === '' || reached > quoteBlock.depth) return
+      // A sibling item, a term or description of the attached list, or paragraph text goes on with the block.
+      const continues = form.kind === 'item' || quoteBlock.definitions && (form.kind === 'term' || form.kind === 'dd') ||
+        owner.para && form.kind === 'text' || isTableRow(m.rest) || isAttrLine(trimEndSpaceTab(m.rest))
+      if (!continues) quoteBlock = null
     }
 
     function lazyMarkerLineAttaches(form: Form): boolean {
