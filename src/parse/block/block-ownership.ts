@@ -118,6 +118,9 @@ function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): b
   for (let i = frames.length - 1; i >= 0; i--) {
     const frame = frames[i]!
     if (frame.kind !== 'item' || frame.hasDefinition !== true || frame.markerCol !== column) continue
+    let openDescription = false
+    for (let k = i + 1; k < frames.length; k++) if (frames[k]!.kind === 'dd') openDescription = true
+    if (!openDescription) continue
     // A quote after the term keeps an unmarked line while its paragraph is open.
     for (let k = i + 1; k < frames.length; k++)
       if (frames[k]!.kind === 'quote' && frames[k]!.para) return false
