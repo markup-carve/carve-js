@@ -2596,9 +2596,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // it pulled, a later visible block belongs to the item even at the old
       // description-body column. Rebase that opener to the item's body; the
       // ordinary description without a quote keeps its own children.
-      const afterPulledQuoteDefinition = pendingBlankRun.count > 0 &&
-        lazyState.inDefList === 'description' && lineOpensItemBlock(l.trimStart()) &&
-        nested.some(line => RE_BLOCKQUOTE.test(line) && isContinuationMarker(sourceQuoteBody(line)))
+      let afterPulledQuoteDefinition = false
+      if (pendingBlankRun.count > 0 && lazyState.inDefList === 'description' && lineOpensItemBlock(l.trimStart())) {
+        for (let index = nested.length - 1; index >= 0; index--) {
+          const prior = nested[index]!.trimStart()
+          if (RE_DEFLIST_TERM.test(prior) || RE_DEFLIST_DEF.test(prior) || isBlankLine(prior) || RE_COMMENT_LINE.test(prior)) continue
+          afterPulledQuoteDefinition = RE_BLOCKQUOTE.test(prior) && isContinuationMarker(sourceQuoteBody(prior))
+          break
+        }
+      }
       if (attachedDescriptionBody > 0 && indentColumns(l) < attachedDescriptionBody) attachedDescriptionBody = -1
       const cut = attachedDescriptionBody > 0 ? 0 : contentCol
       placed = sliceColumns(l, cut, true, prefix => { strippedPrefix = prefix })
