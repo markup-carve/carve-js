@@ -465,6 +465,18 @@ function authoredSourceLine(lexer: Lexer, number: number): string | undefined {
   return (root.authoredRootLines ?? root.authoredLines)?.[number - 1]
 }
 
+/** Claimed lines are measured on the authored source, so their note's marker column is measured there too. */
+function authoredLabelColumn(lexer: Lexer, defLineIndex: number, defLineRaw: string, label: string, fallback: number): number {
+  const authored = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? defLineRaw
+  const at = authored.indexOf(`[^${label}]`)
+  return at < 0 ? fallback : sourceColumnAt(authored, at)
+}
+
+/** The note keeps an invisible line at its marker column or in its body (§17 L3, carve#5288). */
+function atNoteMarker(column: number, markerColumn: number): boolean {
+  return column === markerColumn || column >= markerColumn + FOOTNOTE_BODY_COLUMN
+}
+
 /** A follower's column after the quote prefixes left of `markerColumn`; a `>` at that column is its own block. */
 function followerColumnFrom(line: string, markerColumn: number): number {
   let index = 0
@@ -680,20 +692,16 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     let skippedClaimedNote = false
     const noteQuoteDepth = quotePrefixDepth(authoredLine ?? defLineRaw)
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
-    // Claimed lines are measured on the authored source, so their marker column is too.
-    const authoredDef = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? defLineRaw
-    const authoredMarkerAt = authoredDef.indexOf(`[^${label}]`)
-    const claimedMarkerColumn = authoredMarkerAt < 0 ? authoredMarkerColumn : sourceColumnAt(authoredDef, authoredMarkerAt)
+    const claimedMarkerColumn = authoredLabelColumn(lexer, defLineIndex, defLineRaw, label, authoredMarkerColumn)
     while (follower !== undefined && !isBlankLine(follower)) {
       const skippedNote = RE_FOOTNOTE_DEF.exec(follower.trimStart())
       const claimedNote = skippedNote !== null && normalizeRefLabel(skippedNote[1]!) !== normalizeRefLabel(label) &&
         hooks.isConsumedMarker(lexer.lineNumber(followerIndex))
       const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
-      const sourceAt = skippedClaimedNote || claimedNote
-        ? authoredPayloadAt(lexer, followerIndex, follower).column : sourceColumn(source, noteQuoteDepth)
-      // The note keeps an invisible line at its marker column or in its body, so either is skipped (§17 L3, carve#5288).
-      const markerAt = skippedClaimedNote || claimedNote ? claimedMarkerColumn : authoredMarkerColumn
-      const atMarker = sourceAt === markerAt || sourceAt >= markerAt + FOOTNOTE_BODY_COLUMN
+      const claimedLine = skippedClaimedNote || claimedNote
+      const atMarker = claimedLine
+        ? atNoteMarker(authoredPayloadAt(lexer, followerIndex, follower).column, claimedMarkerColumn)
+        : atNoteMarker(sourceColumn(source, noteQuoteDepth), authoredMarkerColumn)
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
           RE_FOOTNOTE_DEF.test(follower.trimStart()) ||
           isBlockAttributeLine(follower.trimStart()) ||
