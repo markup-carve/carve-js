@@ -3414,6 +3414,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // A line below the content column that the item keeps as lazy text.
     const continuesLazily = (l: string): boolean =>
       pendingBlankRun.count === 0 &&
+      // A code fence does not let a newly authored below-column line stay in
+      // the item, even if an earlier payload line looks like a comment opener.
+      !(lazyState.opaque?.kind === 'code' && lw < contentCol &&
+        !captionParagraphClaim && !captionLeafOpen(l) &&
+        !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+        !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
       !(leadState.bottomIsContinuationMarker && nested.length === 0 && leadingWhitespace(l) > 0) &&
       (sourceAfterNestedNote || (((((lazyFoldableOwner() || descendantVerseClaimAfterMiss(l) || captionParagraphClaim || captionLeafOpen(l) ||
