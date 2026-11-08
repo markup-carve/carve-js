@@ -418,6 +418,11 @@ function dropStandIns(doc: Document): void {
       item.definitions![index] = placed(children)
     })
     if (Array.isArray(item.children) && !STAND_IN_FREE.has(item.type ?? '')) item.children = placed(item.children)
+    // Footnote bodies live in a side table, not in `children`.
+    if (item.type === 'document') {
+      const notes = (value as Document).footnoteDefs
+      if (notes) for (const label of Object.keys(notes)) notes[label] = placed(notes[label]!) as BlockNode[]
+    }
     if (STAND_IN_FREE.has((value as { type?: string }).type ?? '')) return
     for (const [key, child] of Object.entries(value)) if (key !== 'pos') visit(child)
   }

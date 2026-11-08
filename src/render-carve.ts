@@ -75,6 +75,34 @@ function isPlusStandIn(node: { type: string; content?: unknown; transparentSourc
     node.transparentSource.trimEnd().endsWith('+') && !node.transparentSource.includes('%%')
 }
 
+/** The line comments a container's body opens with. */
+function leadingComments(blocks: readonly BlockNode[]): Comment[] {
+  const leading: Comment[] = []
+  for (const child of blocks) {
+    if (child.type !== 'comment' || child.block || child.delimited) break
+    leading.push(child)
+  }
+  return leading
+}
+
+/**
+ * The comments an item, a description or a note opens with are written at its content column,
+ * the first on the marker line: their authored column would erase the marker,
+ * or hand a later one to the document (CARVE-P11-040).
+ */
+function onMarkerLine(blocks: readonly BlockNode[], body: string): string {
+  const leading = leadingComments(blocks)
+  if (leading.length === 0 || !body.includes('\0')) return body
+  const lines = body.split('\n')
+  for (let line = 0, at = 0; line < lines.length && at < leading.length; line++) {
+    const written = leading[at]!.content === '' ? '%%' : `%% ${leading[at]!.content}`
+    if (lines[line]!.startsWith('\0')) lines[line] = written
+    else if (lines[line] !== written) break
+    at++
+  }
+  return lines.join('\n')
+}
+
 /** A transparent line keeps its authored column through list and quote writing. */
 function restoreTransparentLineColumns(source: string): string {
   if (!source.includes('\0')) return source
@@ -3057,6 +3085,8 @@ class CarveRenderSession {
   private preserveTableSeparators = false
   private canonicalTransparentLines = false
   private canonicalTrailingComments = new WeakSet<Comment | AbbreviationDef>()
+  /** Comments an item or description opens with: it writes them, not the gap after it. */
+  private itemLeadingComments = new WeakSet<object>()
   private indentedHostDepth = 0
   private pendingMarkerLineShift = 0
 
@@ -4078,7 +4108,7 @@ class CarveRenderSession {
       }
       case 'comment':
         if ((node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) &&
-            !this.canonicalTrailingComments.has(node)) {
+            !this.canonicalTrailingComments.has(node) && !this.itemLeadingComments.has(node)) {
           return ''
         } else if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined &&
             (!this.canonicalTransparentLines || isPlusStandIn(node))) {
@@ -4153,6 +4183,9 @@ class CarveRenderSession {
         delim === '.' &&
         node.olType === undefined &&
         (node.start ?? 1) === 1
+      for (const gap of node.transparentBetweenItems ?? []) {
+        if (leadingComments(node.items[gap.after]?.children ?? []).includes(gap.node as Comment)) this.itemLeadingComments.add(gap.node)
+      }
       node.items.forEach((item, idx) => {
         const indent = ''
         let prefix: string
@@ -4233,7 +4266,7 @@ class CarveRenderSession {
           this.pendingMarkerLineShift = item.checked === undefined || itemAttrs ? 0 : TASK_BOX_COLUMNS
           const body = this.renderListItem(item, ctx, tight)
           this.pendingMarkerLineShift = 0
-          return body
+          return onMarkerLine(item.children, body)
         }
         let itemSource = spellItem(renderItem(node.tight))
         // A boundary between direct same-marker child lists expands to an
@@ -4251,7 +4284,7 @@ class CarveRenderSession {
         out += itemSource
         let previousGap: NonNullable<List['transparentBetweenItems']>[number] | undefined
         for (const gap of node.transparentBetweenItems ?? []) {
-          if (gap.after !== idx) continue
+          if (gap.after !== idx || this.itemLeadingComments.has(gap.node)) continue
           // After the last item the comment is a block of its own (PART 11 §2).
           if (this.canonicalTransparentLines && idx === node.items.length - 1) this.canonicalTrailingComments.add(gap.node)
           // One blank boundary starts a loose host's run; adjacent lines within
@@ -4665,9 +4698,14 @@ class CarveRenderSession {
 
   private renderDefinitionList(node: DefinitionList, ctx: CarveContext): string {
     const out: string[] = []
+    for (const gap of node.transparentBetweenDescriptions ?? []) {
+      const def = gap.afterTerm === -1 ? node.items[gap.item]?.definitions[gap.afterDescription] ?? [] : []
+      if (leadingComments(def).includes(gap.node as Comment)) this.itemLeadingComments.add(gap.node)
+    }
     const appendGaps = (item: number, afterDescription: number, afterTerm = -1): void => {
       for (const gap of node.transparentBetweenDescriptions ?? []) {
-        if (gap.item !== item || gap.afterDescription !== afterDescription || gap.afterTerm !== afterTerm) continue
+        if (gap.item !== item || gap.afterDescription !== afterDescription || gap.afterTerm !== afterTerm ||
+            this.itemLeadingComments.has(gap.node)) continue
         // After the list's last description the comment is a block of its own (PART 11 §2).
         if (this.canonicalTransparentLines && afterTerm === -1 && item === node.items.length - 1 &&
             afterDescription === node.items[item]!.definitions.length - 1) this.canonicalTrailingComments.add(gap.node)
@@ -4760,6 +4798,7 @@ class CarveRenderSession {
           }
           // The canonical form keeps a description's lone `+` escaped (corpus 436).
           if (written.startsWith('+\n')) written = '\\' + written
+          written = onMarkerLine(def, written)
         } finally {
           this.descriptionBody = outerDescriptionBody
         }
@@ -5080,7 +5119,7 @@ class CarveRenderSession {
         throw new SourceUnspellableError(node?.type ?? 'code', 'a block-marker continuation cannot stay inside a footnote paragraph', node)
       }
     }
-    const body = trimNonNbsp(blocks.length === 1 && blocks[0]?.type === 'paragraph' ? rawBody.replace(/\n\n/g, '\n') : rawBody)
+    const body = onMarkerLine(blocks, trimNonNbsp(blocks.length === 1 && blocks[0]?.type === 'paragraph' ? rawBody.replace(/\n\n/g, '\n') : rawBody))
     if (body === '') {
       return `[^${writeFlatBracketRun(label)}]: ${EMPTY_BODY_SENTINEL}`
     }
