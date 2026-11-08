@@ -726,13 +726,31 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // An attached paragraph ends at an opener that reaches the body column.
       const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
       const visibleLeadIsList = attachedLeadIsList(lexer)
+      let nestedFenceCloser: RegExp | undefined
+      let nestedFenceColumn = 0
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
-        (a) => isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
+        (a) => {
+          if (visibleLeadIsList) {
+            if (nestedFenceCloser !== undefined) {
+              if (!isBlankLine(a) && indentColumns(a) < nestedFenceColumn) return true
+              if (nestedFenceCloser.test(a.trimStart())) nestedFenceCloser = undefined
+              return false
+            }
+            if (opensCodeFence(a.trimStart())) {
+              const run = /^(`{3,}|~{3,})/.exec(a.trimStart())?.[1]
+              if (run !== undefined) {
+                nestedFenceCloser = fenceCloseRe(run)
+                nestedFenceColumn = indentColumns(a)
+              }
+            }
+          }
+          return isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
           (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
-          (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
+          (!visibleLeadIsList && isListMarkerLine(a.trimStart()))
+        },
         0, true, true, 0, false, 0, 0, indentColumns(follower!) + 1,
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
@@ -767,7 +785,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn,
+      for (const closer of attachedBlankClosers(lexer, visibleLeadIsList ? [] : bodyFenceClosers(bodyLines), noteBodyColumn,
         attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {
