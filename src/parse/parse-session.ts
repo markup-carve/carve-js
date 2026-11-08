@@ -2660,7 +2660,10 @@ export class ParseSession extends InlineParseSession {
           !deflistMarkerLine(candidate)
         // The line after a refused brace run continues its paragraph whatever it opens (CARVE-P2-035);
         // a sibling item, description or note still ends its host first.
-        if (isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
+        // A `+` at the unclosed code fence's content column stays payload (PART 0 S1, §17 L3, carve#5494).
+        const payloadPlus = attachedCode && take > attributeLines && isContinuationMarker(at(take)!.trimStart()) &&
+          indentColumns(at(take)!) >= indentColumns(firstBlock)
+        if (!payloadPlus && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
           (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
         take++
       }
