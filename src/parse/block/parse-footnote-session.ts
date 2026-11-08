@@ -416,16 +416,18 @@ function consumeSameColumnLosingPlus(
   lexer: Lexer, defLineIndex: number, label: string, defLineRaw: string, firstBlockAttached: boolean,
 ): void {
   if (firstBlockAttached) return
-  const next = lexer.peek()
-  const duplicate = next === undefined ? null : RE_FOOTNOTE_DEF.exec(next.trimStart())
-  if (duplicate === null || normalizeRefLabel(duplicate[1]!) !== normalizeRefLabel(label)) return
   const original = (lexer.documentRoot ?? lexer).authoredLines
   const firstAuthored = original?.[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw
-  const nextAuthored = original?.[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
-  if (!/\]:[ \t]+\+[ \t]*$/.test(firstAuthored) || !/\]:[ \t]+\+[ \t]*$/.test(nextAuthored) ||
-      sourceColumn(firstAuthored) !== sourceColumn(nextAuthored)) return
-  lexer.losingFootnoteLines.add(lexer.lineNumber(lexer.pos))
-  lexer.consume()
+  if (!/\]:[ \t]+\+[ \t]*$/.test(firstAuthored)) return
+  for (let next = lexer.peek(); next !== undefined; next = lexer.peek()) {
+    const duplicate = RE_FOOTNOTE_DEF.exec(next.trimStart())
+    const nextAuthored = original?.[lexer.lineNumber(lexer.pos) - 1] ?? next
+    if (duplicate === null || normalizeRefLabel(duplicate[1]!) !== normalizeRefLabel(label) ||
+        !/\]:[ \t]+\+[ \t]*$/.test(nextAuthored) ||
+        sourceColumn(firstAuthored) !== sourceColumn(nextAuthored)) break
+    lexer.losingFootnoteLines.add(lexer.lineNumber(lexer.pos))
+    lexer.consume()
+  }
 }
 
 /** A same-label note nested in this body was read first, and loses to this one. */
