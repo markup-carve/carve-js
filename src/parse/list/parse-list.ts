@@ -4051,34 +4051,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     if (authoredDescendantFenceBlanks > 0) restoreDescendantFenceBlanks(lexer, children, authoredDescendantFenceBlanks)
     trimStrayPlusFence(lexer, children, itemStartLineIndex)
 
-    // Once the note ends on a block-shaped line, the blank before the item's first paragraph
-    // separates the closed note run from it instead.
-    const noteRunPartsFrom = (paragraphStart: number): boolean => {
-      let noteEndLine = lexer.lineNumber(itemStartLineIndex)
-      let noteEndsOnBlock = false
-      let noteEndIndex = -1
-      for (let index = nestedLineNumbers.length - 1; index >= 0; index--) {
-        const source = nestedSourceLines[index] ?? ''
-        if (nestedLineNumbers[index]! >= paragraphStart || isBlankLine(nested[index] ?? '') ||
-            isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
-        noteEndLine = nestedLineNumbers[index]!
-        noteEndIndex = index
-        noteEndsOnBlock = lineOpensItemBlock(source.trimStart())
-        break
-      }
-      // A list that ends the note under its open paragraph keeps the blank the note's (PART 0 S3, carve#4860);
-      // a blank inside the note parts the item's blocks as it parts the note's.
-      const noteRun = nestedSourceLines.slice(0, noteEndIndex + 1).map((line) => (line ?? '').trimStart())
-      if (noteRun.some((line, index) => isBlankLine(nested[index] ?? '') || isBlankLine(line) || isQuoteBlankLine(line))) {
-        noteEndsOnBlock = true
-      } else if (isListMarkerLine(noteRun[noteEndIndex] ?? '')) {
-        const above = noteRun[noteEndIndex - 1]
-        noteEndsOnBlock = above !== undefined && lineOpensItemBlock(above) && !isListMarkerLine(above) &&
-          !RE_BLOCKQUOTE.test(above) && !RE_DEFLIST_DEF.test(above)
-      }
-      return noteEndsOnBlock && noteEndLine > lexer.lineNumber(itemStartLineIndex) &&
-        session.hasAuthoredBlankBetween(lexer, noteEndLine, paragraphStart, opaqueBlankLines)
-    }
     // Authored blanks between the item's children loosen the list.
     const childSpacingLoosens = (): boolean => {
       // A note's body is the note's paragraph, never the item's own (L1).
@@ -4167,8 +4139,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
           authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
         // A lazy note paragraph owns the blank before the item's first child.
-        if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem &&
-            noteRunPartsFrom(span.start)) loose = true
+        // Definitions before the first visible child cannot separate item blocks (§17 L1).
         let previousVisibleEnd = previousVisibleSpan?.end
         let childListTail = previousVisibleBlock?.type === 'list'
           ? previousVisibleBlock.items.at(-1)?.children.at(-1)
