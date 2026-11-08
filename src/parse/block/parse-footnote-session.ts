@@ -74,7 +74,7 @@ function skippedNoteBodyLine(line: string): boolean {
 }
 
 function authoredPayloadAt(lexer: Lexer, index: number, fallback: string): { line: string; column: number } {
-  const line = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(index) - 1] ?? fallback
+  const line = authoredSourceLine(lexer, lexer.lineNumber(index)) ?? fallback
   const payload = sourceQuoteBody(line).trimStart()
   return { line, column: sourceColumnAt(line, Math.max(0, line.lastIndexOf(payload))) }
 }
@@ -122,7 +122,7 @@ function passedNotesInAttachment(lexer: Lexer, attached: string[], lineNumbers: 
   for (let index = 0; index < attached.length; index++) {
     const lead = attached[index]!.trimStart()
     if (!RE_FOOTNOTE_DEF.test(lead) && !RE_COMMENT_LINE.test(lead)) break
-    const source = (lexer.documentRoot ?? lexer).authoredLines?.[lineNumbers[index]! - 1] ??
+    const source = authoredSourceLine(lexer, lineNumbers[index]!) ??
       (lexer.rootLines ?? lexer.lines)[lineNumbers[index]! - 1] ?? attached[index]!
     const note = RE_FOOTNOTE_DEF.exec(sourceQuoteBody(source).trimStart())
     if (note !== null && normalizeRefLabel(note[1]!) !== normalizeRefLabel(label) && /^\+[ \t]*$/.test(note[2]!)) {
@@ -138,15 +138,14 @@ function collectPassedNoteLine(
 ): boolean {
   if (notes.length === 0) return false
   const ln = admission.line
-  const authored = (lexer.documentRoot ?? lexer).authoredLines
-  const passedColumn = sourceColumn(authored?.[lexer.lineNumber(lexer.pos) - 1] ?? admission.sourceLine)
+  const passedColumn = sourceColumn(authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? admission.sourceLine)
   if (admission.kind === 'blank') {
     let nextIndex = state.nextNonblank > lexer.pos ? state.nextNonblank : lexer.pos + 1
     while (lexer.lineAt(nextIndex) !== undefined && isBlankLine(lexer.lineAt(nextIndex)!)) nextIndex++
     state.nextNonblank = nextIndex
     const next = lexer.lineAt(nextIndex)
     const owner = state.body ?? notes.at(-1)!
-    const source = next === undefined ? undefined : authored?.[lexer.lineNumber(nextIndex) - 1] ??
+    const source = next === undefined ? undefined : authoredSourceLine(lexer, lexer.lineNumber(nextIndex)) ??
       (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(nextIndex) - 1] ?? next
     if (source !== undefined && sourceColumn(source) >= owner.column) {
       state.body = owner
@@ -442,7 +441,7 @@ function noteBodyContent(
 ): { content: string; fenceRun: string | undefined } {
   const line = admission.line
   const sourceLine = admission.sourceLine
-  const authoredFollower = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(lexer.pos) - 1]
+  const authoredFollower = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
   const fenceActive = firstFenceRun !== undefined || firstFenceEligible && firstBodyLine &&
     /^(`{3,}|~{3,})/.test(line.trimStart())
   const syntheticMargin = fenceActive && authoredFollower !== undefined && sourceLine !== undefined
@@ -489,12 +488,12 @@ function consumeSameColumnLosingPlus(
   lexer: Lexer, defLineIndex: number, label: string, defLineRaw: string, firstBlockAttached: boolean,
 ): void {
   if (firstBlockAttached) return
-  const original = (lexer.documentRoot ?? lexer).authoredLines
-  const firstAuthored = original?.[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw
+  // Read authored lines by source line: a transparent comment line is gone from the lexer's own view.
+  const firstAuthored = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? defLineRaw
   if (!/\]:[ \t]+\+[ \t]*$/.test(firstAuthored)) return
   for (let next = lexer.peek(); next !== undefined; next = lexer.peek()) {
     const duplicate = RE_FOOTNOTE_DEF.exec(next.trimStart())
-    const nextAuthored = original?.[lexer.lineNumber(lexer.pos) - 1] ?? next
+    const nextAuthored = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? next
     if (duplicate === null || normalizeRefLabel(duplicate[1]!) !== normalizeRefLabel(label) ||
         !/\]:[ \t]+\+[ \t]*$/.test(nextAuthored) ||
         sourceColumn(firstAuthored) !== sourceColumn(nextAuthored)) break
@@ -522,6 +521,7 @@ function losingPlusLeadEnd(lexer: Lexer, label: string, markerColumn: number, qu
   const labels = new Set([normalizeRefLabel(label)])
   let losing = false
   let otherLabel = false
+  let laterPlus = false
   let index = lexer.pos
   for (let line = lexer.lineAt(index); line !== undefined && !isBlankLine(line); line = lexer.lineAt(index)) {
     const source = authoredSourceLine(lexer, lexer.lineNumber(index)) ?? line
@@ -536,6 +536,7 @@ function losingPlusLeadEnd(lexer: Lexer, label: string, markerColumn: number, qu
     const plus = /\]:[ \t]+\+[ \t]*$/.test(source)
     losing = plus && (labels.has(key) || lexer.footnoteKeys.has(key))
     if (!labels.has(key) || !plus) otherLabel = true
+    if (plus && !losing) laterPlus = true
     labels.add(key)
     index++
     if (!plus) while (lexer.lineAt(index) !== undefined && skippedNoteBodyLine(lexer.lineAt(index)!)) index++
@@ -544,6 +545,8 @@ function losingPlusLeadEnd(lexer: Lexer, label: string, markerColumn: number, qu
   if (!losing || !otherLabel) return -1
   let next = index
   while (lexer.lineAt(next) !== undefined && isBlankLine(lexer.lineAt(next)!)) next++
+  // Past a blank, a winning `+` later in the lead offers the follower itself (carve#5528).
+  if (laterPlus && next > index) return -1
   const line = lexer.lineAt(next)
   if (line === undefined || RE_FOOTNOTE_DEF.test(line.trimStart())) return -1
   const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(next) - 1] ?? line
