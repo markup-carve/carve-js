@@ -730,7 +730,15 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(pendingBlankRun.lines[k])
       }
       pendingBlankRun.clear()
-      const content: string = captionHostBlock ? ln : sliceColumns(ln, bodyColumn, true)
+      // The quote ownership pass can add a synthetic margin to the first
+      // follower of a marker-line plus. Measure the note body's margin from
+      // the authored line so that this extra padding does not turn a fence
+      // opener into paragraph text.
+      const authoredFollower = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(lexer.pos) - 1]
+      const syntheticMargin = authoredFollower !== undefined && sourceLine !== undefined
+        ? Math.max(0, sourceColumn(sourceLine) - sourceColumn(authoredFollower)) : 0
+      const normalizedLine = syntheticMargin > 0 ? sliceColumns(ln, syntheticMargin, true) : ln
+      const content: string = captionHostBlock ? normalizedLine : sliceColumns(normalizedLine, bodyColumn, true)
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
       if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(content.trimStart()))
