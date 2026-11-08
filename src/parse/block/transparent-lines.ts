@@ -632,24 +632,38 @@ function placeInDescription(gap: { list: DefinitionList; item: number; afterDesc
   return true
 }
 
-/** Line comments of a quote that no open paragraph above could hold lazily. */
+/** Line comments of a quote that no open paragraph on the line above could hold lazily. */
 function unheldLineComments(blocks: readonly BlockNode[]): Comment[] {
   const unheld: Comment[] = []
-  let held = false
+  let previous: BlockNode | undefined
+  let heldThrough: number | undefined | null = null
   for (const block of blocks) {
-    if (block.type === 'comment') {
-      if (!held && !block.block && !block.delimited) unheld.push(block)
-    } else held = endsInParagraph(block)
+    if (block.type !== 'comment') {
+      previous = block
+      continue
+    }
+    // Measured only once a comment follows, so a deep nest without one costs nothing.
+    if (previous !== undefined) {
+      heldThrough = endsInParagraph(previous) ? previous.pos?.endLine : null
+      previous = undefined
+    }
+    const start = block.pos?.startLine
+    const held = heldThrough !== null && (heldThrough === undefined || start === undefined || start === heldThrough + 1)
+    if (held) heldThrough = block.pos?.endLine
+    else if (!block.block && !block.delimited) unheld.push(block)
   }
   return unheld
 }
 
-function endsInParagraph(block: BlockNode | undefined): boolean {
-  if (block === undefined) return false
-  if (block.type === 'paragraph') return true
-  if (block.type === 'list') return endsInParagraph(block.items.at(-1)?.children.at(-1))
-  if (block.type === 'definition_list') return endsInParagraph(block.items.at(-1)?.definitions.at(-1)?.at(-1))
-  if (block.type === 'block_quote') return block.fenced !== true && endsInParagraph(block.children.at(-1))
+function endsInParagraph(start: BlockNode): boolean {
+  let block: BlockNode | undefined = start
+  while (block !== undefined) {
+    if (block.type === 'paragraph') return true
+    if (block.type === 'list') block = block.items.at(-1)?.children.at(-1)
+    else if (block.type === 'definition_list') block = block.items.at(-1)?.definitions.at(-1)?.at(-1)
+    else if (block.type === 'block_quote' && block.fenced !== true) block = block.children.at(-1)
+    else return false
+  }
   return false
 }
 
