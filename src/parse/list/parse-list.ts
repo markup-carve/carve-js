@@ -940,12 +940,25 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   function frameCommentPayloads(content: string, nested: string[], terminatorFree: boolean, candidates: Map<number, string>): void {
     const closedComments = commentBlockSpans([content, ...nested])
     const nestedItemColumn = markerContentColumn(content, terminatorFree)
+    // Every item of a marker stack (`- - x`) holds a fence at its own body column.
+    const stackColumns = new Set<number>()
+    const bound = prefixWalkBound(content)
+    for (let at = 0, width = markerPrefixLength(content, 0, bound); width > 0; width = markerPrefixLength(content, at, bound)) {
+      at += width
+      stackColumns.add(indentColumns(content.slice(0, at).replace(/[^ \t]/g, ' ') + 'x'))
+    }
     let scanned = 0
     let opener = -1
+    let openRun: number | undefined
     for (const [index, payload] of candidates) {
       if (!closedComments[index + 1]) continue
       while (scanned < index) {
-        if (commentFenceRun(nested[scanned]!)) opener = scanned
+        // A run inside an open span is its payload or its closer, never the opener.
+        const run = commentFenceRun(nested[scanned]!)
+        if (run !== undefined && openRun === undefined) {
+          opener = scanned
+          openRun = run
+        } else if (run === openRun) openRun = undefined
         scanned++
       }
       // A nested item or description hides a fence at its own body column.
@@ -960,7 +973,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           }
         }
       }
-      if (openerColumn === nestedItemColumn || openerColumn === descriptionColumn) continue
+      if (openerColumn === nestedItemColumn || stackColumns.has(openerColumn) || openerColumn === descriptionColumn) continue
       nested[index] = LAZY_FRAME + stripLazyFrame(payload)
     }
   }
