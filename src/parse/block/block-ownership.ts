@@ -402,7 +402,7 @@ function normalizeMarkerFollower(
       !(isQuoteLine(indentCols(line).rest) && quoteDepth(line) > quoteDepth(note.prefix))) {
     const body = note.item ? line.trimStart() : line.replace(/^[ \t]*(?:> )?/, '')
     if (!CONT_MARKER.test(body) && (!note.item || indentCols(line).col < 2) &&
-        isText(body, at) && (line !== body || note.prefix.includes('> ') || note.prefix.length > 2)) {
+        isText(indentCols(body).rest, at) && (line !== body || note.prefix.includes('> ') || note.prefix.length > 2)) {
       line = note.prefix + body
       notePrefix = note.prefix
     }
