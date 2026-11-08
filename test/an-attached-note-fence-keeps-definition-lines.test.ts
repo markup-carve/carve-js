@@ -13,9 +13,8 @@ describe('a footnote attachment with an open code fence', () => {
     )
   })
 
-  it('still treats a lone plus as a new attachment boundary', () => {
+  it('keeps a lone plus at the fence column in the payload (carve#5494)', () => {
     const html = carveToHtml('[^f]: n\n+\n~~~\na\n+\nb\n\nsee[^f]\n')
-    expect(html).toContain('<pre><code>a\n</code></pre>')
-    expect(html).toContain('<p>b<a href="#fnref1" role="doc-backlink"')
+    expect(html).toContain('<pre><code>a\n+\nb\n</code></pre>')
   })
 })

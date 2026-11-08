@@ -603,9 +603,9 @@ export function ownLines(
       src = m.rest
     }
     // A quote opened on another marker line keeps that line's authored marker column.
-    const standsAtMarker = (f: Frame): boolean => f.kind === 'quote'
+    const standsAtMarker = (f: Frame): boolean => !payloadPlus && (f.kind === 'quote'
       ? docColumn(lines[at]!, m.rest) - viewDoc === f.viewMarker
-      : m.col === f.markerCol && m.col < f.col
+      : m.col === f.markerCol && m.col < f.col)
     const take = (count: number): void => {
       out += src.slice(0, count)
       src = src.slice(count)
@@ -657,6 +657,8 @@ export function ownLines(
       return deeper
     }
 
+    // A `+` at an open code fence's content column stays payload (PART 0 S1, §17 L3, carve#5494).
+    const payloadPlus = plusInCodePayload()
     restoreAttachedQuote()
     endAttachedColonAtSibling()
     let reached = 0
@@ -732,7 +734,7 @@ export function ownLines(
       return ended
     }
     function reopenPlus(): void {
-      if (plus || !attachedHost || !CONT_MARKER.test(m.rest)) return
+      if (plus || payloadPlus || !attachedHost || !CONT_MARKER.test(m.rest)) return
       plus = reopenAttachedHost(attachedHost)
       if (plus) plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, plus.kind, out, contentColumn(plus))
     }
@@ -1229,12 +1231,25 @@ export function ownLines(
       attachedHost = null
     }
 
+    // Measured through the quotes that hold the fence, as the frame walk reads them.
+    function plusInCodePayload(): boolean {
+      const fence = top()
+      if (fence.kind !== 'fence' || fence.family !== 'code') return false
+      let n = indentCols(src)
+      for (let k = 1; k < frames.length - 1; k++) {
+        if (frames[k]!.kind !== 'quote') continue
+        if (!isQuoteLine(n.rest)) return false
+        n = indentCols(quoteRest(n.rest))
+      }
+      return CONT_MARKER.test(n.rest) && n.col >= fence.col
+    }
+
     // A `+` at the saved quote's marker column continues that quote after
     // its previously attached block, even if that block left an item open.
     // A prefixed `+` behind the quote's own `>` does the same (carve#5132).
     function restoreAttachedQuote(): void {
       const host = attachedHost?.at(-1)
-      if (host?.kind !== 'quote' || frames.includes(host)) return
+      if (payloadPlus || host?.kind !== 'quote' || frames.includes(host)) return
       const rest = restInQuotes(at, attachedHost!.filter((f) => f.kind === 'quote').length)
       const follower = lines[at + 1]
       const atMarker = CONT_MARKER.test(m.rest) && docColumn(lines[at]!, m.rest) === host.docMarker &&
@@ -1297,7 +1312,8 @@ export function ownLines(
       const col = docColumn(lines[at]!, m.rest)
       const hostAt = host.findIndex((f, k) => k > 0 && f.docMarker === col &&
         host.slice(1, k).filter((o) => o.kind === 'quote').length === quotes)
-      if (hostAt <= 0) return null
+      // A blank ends a quote the host stood in; only the host itself resumes past it (§17 L3).
+      if (hostAt <= 0 || host[hostAt]!.kind === 'quote' && hostAt < host.length - 1 && at > 0 && lines[at - 1]!.trim() === '') return null
       frames.length = 0
       frames.push(...host.slice(0, hostAt + 1))
       return top()
