@@ -123,7 +123,7 @@ type DefinitionListSession = {
     contentColumn?: number,
     endAtFoldedDefinition?: boolean,
     acceptFirstNonList?: boolean,
-  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number }
+  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number; firstVisible: string | undefined }
   markerPrefixMemo(
     lexer: Lexer,
     index: number,
@@ -474,14 +474,17 @@ export function createDefinitionListParser(
           firstBlock.lines.length = blockCut
           firstBlock.lineNumbers.length = blockCut
         }
-        attachedOpenCodeFence = keepsOpenCodeFence(firstBlock.lines)
+        attachedOpenCodeFence = firstBlock.firstVisible !== undefined &&
+          opensCodeFence(firstBlock.firstVisible.trimStart()) && keepsOpenCodeFence(firstBlock.lines)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
         bodyLineNumbers.push(...firstBlock.lineNumbers)
         for (const a of firstBlock.lines) track(a)
         // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-        for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), contentCol,
+        const directFence = firstBlock.firstVisible !== undefined &&
+          (opensCodeFence(firstBlock.firstVisible.trimStart()) || firstBlock.firstVisible.trimStart().startsWith(':::'))
+        for (const closer of attachedBlankClosers(lexer, directFence ? bodyFenceClosers(bodyLines) : [], contentCol,
           attachedStartsWithLineBlock(firstBlock.lines), indentColumns(firstBlock.lines.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
           bodyLines.push(closer)
           bodySourceLines.push(undefined)

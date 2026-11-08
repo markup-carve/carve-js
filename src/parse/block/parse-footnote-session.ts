@@ -105,7 +105,7 @@ function quoteMissesOf(lexer: Lexer): PayloadMisses {
 }
 
 interface FootnoteHooks {
-  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
+  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number; firstVisible: string | undefined }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
   isClaimedMarker: (line: number) => boolean
@@ -731,7 +731,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       let nestedCommentRun: number | undefined
       let nestedCommentColumn = 0
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
-      const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
+      const { lines: attached, lineNumbers: attachedLineNumbers, firstVisible } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
           if (visibleLeadIsList) {
@@ -797,7 +797,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      for (const closer of attachedBlankClosers(lexer, visibleLeadIsList ? [] : bodyFenceClosers(bodyLines), noteBodyColumn,
+      const directFence = firstVisible !== undefined &&
+        (opensCodeFence(firstVisible.trimStart()) || firstVisible.trimStart().startsWith(':::'))
+      for (const closer of attachedBlankClosers(lexer, directFence ? bodyFenceClosers(bodyLines) : [], noteBodyColumn,
         attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {
