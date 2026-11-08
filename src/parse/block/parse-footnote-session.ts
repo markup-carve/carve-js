@@ -447,12 +447,28 @@ function noteBodyContent(
   return { content, fenceRun }
 }
 
+/** The authored text of source line `number`; erased comment lines keep the original numbering. */
+function authoredSourceLine(lexer: Lexer, number: number): string | undefined {
+  const root = lexer.documentRoot ?? lexer
+  return (root.authoredRootLines ?? root.authoredLines)?.[number - 1]
+}
+
+/** A follower's column after the quote prefixes left of `markerColumn`; a `>` at that column is its own block. */
+function followerColumnFrom(line: string, markerColumn: number): number {
+  let index = 0
+  for (;;) {
+    while (line[index] === ' ' || line[index] === '\t') index++
+    if (line[index] !== '>' || sourceColumnAt(line, index) >= markerColumn) return sourceColumnAt(line, index)
+    index++
+  }
+}
+
 function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, markerBody: string): boolean {
   if (!lexer.footnoteKeys.has(normalizeRefLabel(label))) return false
   const body = markerBody.trim()
   if (body === '+') return true
   // The ownership pass respells a refused `+` as `%%`; the authored line still shows it.
-  const authored = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(defLineIndex) - 1] ?? ''
+  const authored = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? ''
   return body === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authored)
 }
 
@@ -482,6 +498,87 @@ function dropNestedSameKeyNote(lexer: Lexer, nested: string | undefined, label: 
   lexer.footnoteDefs.delete(nested)
   lexer.footnoteDefPos.delete(nested)
   lexer.footnoteDefLines.delete(nested)
+}
+
+/**
+ * A refused marker-line `+` whose invisible lead ends in a losing duplicate `+`:
+ * the index after that lead when the next visible line reaches the note's body
+ * column, else -1. That follower belongs to this note (PART 9R R2, carve#5482).
+ */
+function losingPlusLeadEnd(lexer: Lexer, label: string, markerColumn: number, quoteDepth: number): number {
+  const labels = new Set([normalizeRefLabel(label)])
+  let losing = false
+  let otherLabel = false
+  let index = lexer.pos
+  for (let line = lexer.lineAt(index); line !== undefined && !isBlankLine(line); line = lexer.lineAt(index)) {
+    const source = authoredSourceLine(lexer, lexer.lineNumber(index)) ?? line
+    if (sourceColumn(source, quoteDepth) !== markerColumn) break
+    const note = RE_FOOTNOTE_DEF.exec(line.trimStart())
+    if (note === null) {
+      if (!RE_COMMENT_LINE.test(line.trimStart())) break
+      index++
+      continue
+    }
+    const key = normalizeRefLabel(note[1]!)
+    const plus = /\]:[ \t]+\+[ \t]*$/.test(source)
+    losing = plus && (labels.has(key) || lexer.footnoteKeys.has(key))
+    if (!labels.has(key) || !plus) otherLabel = true
+    labels.add(key)
+    index++
+    if (!plus) while (lexer.lineAt(index) !== undefined && skippedNoteBodyLine(lexer.lineAt(index)!)) index++
+  }
+  // Same-label losers alone are read away by `consumeSameColumnLosingPlus`.
+  if (!losing || !otherLabel) return -1
+  let next = index
+  while (lexer.lineAt(next) !== undefined && isBlankLine(lexer.lineAt(next)!)) next++
+  // A quoted blank keeps the follower in the quote, as the spec model reads it.
+  if (next > index && quoteDepth > 0) return -1
+  const line = lexer.lineAt(next)
+  if (line === undefined || RE_FOOTNOTE_DEF.test(line.trimStart())) return -1
+  const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(next) - 1] ?? line
+  return quotePrefixDepth(source) >= quoteDepth && sourceColumn(source, quoteDepth) >= markerColumn + FOOTNOTE_BODY_COLUMN
+    ? index : -1
+}
+
+/**
+ * Move a refused marker-line `+` note's losing lead into its body, so the
+ * follower is read there. Reports whether the lead holds this note's own label.
+ */
+function takeLosingPlusLead(
+  lexer: Lexer, defLineIndex: number, label: string, attached: boolean, markerBody: string, hostLine: string | undefined,
+  authoredBodyColumn: number | undefined, markerColumn: number,
+  body: { lines: string[]; sources: (string | undefined)[]; numbers: number[] },
+): boolean {
+  if (attached || markerBody.trim() !== '%%' || hostLine === undefined ||
+      !/\]:[ \t]+\+[ \t]*$/.test(authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? '')) return false
+  const leadEnd = losingPlusLeadEnd(lexer, label,
+    authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN, quotePrefixDepth(hostLine))
+  if (leadEnd === -1) return false
+  let ownLabel = false
+  body.lines[0] = ''
+  body.sources[0] = undefined
+  while (lexer.pos < leadEnd) {
+    const note = RE_FOOTNOTE_DEF.exec(lexer.peek()!.trimStart())
+    if (note !== null && normalizeRefLabel(note[1]!) === normalizeRefLabel(label)) ownLabel = true
+    body.lines.push(lexer.peek()!.trimStart())
+    body.sources.push(lexer.peek())
+    body.numbers.push(lexer.lineNumber(lexer.pos))
+    lexer.consume()
+  }
+  return ownLabel
+}
+
+/** Parse a note body; a duplicate of its label taken from the lead loses there, as it does outside. */
+function parseNoteBody(
+  lexer: Lexer, hooks: FootnoteHooks, sub: Lexer, key: string, label: string, ownLabelInLead: boolean, keyedBefore: boolean,
+): BlockNode[] {
+  const leadKey = ownLabelInLead && !keyedBefore
+  if (leadKey) lexer.footnoteKeys.set(key, label)
+  try {
+    return hooks.parseBlocks(sub, 0)
+  } finally {
+    if (leadKey) lexer.footnoteKeys.delete(key)
+  }
 }
 
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
@@ -594,7 +691,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const followerAuthored = follower === undefined ? undefined : authoredPayloadAt(lexer, followerIndex, follower)
     const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
       followerSource !== undefined && quotePrefixDepth(skippedClaimedNote ? followerAuthored!.line : followerSource) >= noteQuoteDepth &&
-      (skippedClaimedNote ? followerAuthored!.column : sourceColumn(followerSource, noteQuoteDepth)) === authoredMarkerColumn &&
+      (skippedClaimedNote ? followerColumnFrom(followerAuthored!.line, authoredMarkerColumn)
+        : sourceColumn(followerSource, noteQuoteDepth)) === authoredMarkerColumn &&
       !RE_FOOTNOTE_DEF.test(follower.trimStart())
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
@@ -655,6 +753,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       attachmentEnd = bodyLines.length
     }
   }
+  const ownLabelInLead = takeLosingPlusLead(lexer, defLineIndex, label, firstBlockAttached, m[2]!, authoredLine,
+    authoredBodyColumn, markerColumn, { lines: bodyLines, sources: bodySourceLines, numbers: bodyLineNumbers })
   // A same-key `+` encountered before the first attached block loses its own
   // attachment, but its marker still separates the winner from the following
   // body. Leave the follower to the ordinary column-based note collector.
@@ -930,7 +1030,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     sub.markerOpensSublist = true
     sub.hostBody = 'footnote'
     sub.hostBodyRoot = 'footnote'
-    const body = bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? [] : hooks.parseBlocks(sub, 0)
+    const body = bodyLines.length === 1 && trimEndSpaceTab(bodyLines[0] ?? '') === '{empty}' ? []
+      : parseNoteBody(lexer, hooks, sub, key, label, ownLabelInLead, keyedBefore)
     const ownLines: number[] = []
     for (let index = defLineIndex; index < lexer.pos; index++) ownLines.push(lexer.lineNumber(index))
     if (!wins) {
