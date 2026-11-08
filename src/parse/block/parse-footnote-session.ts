@@ -403,6 +403,21 @@ function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void
   }
 }
 
+function alignFirstFenceAtItsBase(bodyLines: string[], authoredMarker: string | undefined): void {
+  if (authoredMarker === undefined || !/\]:[ \t]+\+[ \t]*$/.test(authoredMarker) ||
+      bodyLines[0]?.trim() !== '%%') return
+  const opener = bodyLines[1] ?? ''
+  const marker = /^(`{3,}|~{3,})/.exec(opener.trimStart())?.[1]
+  const margin = indentColumns(opener)
+  if (marker === undefined || margin === 0) return
+  const closes = fenceCloseRe(marker)
+  for (let index = 1; index < bodyLines.length; index++) {
+    const line = bodyLines[index]!
+    bodyLines[index] = sliceColumns(line, margin, true)
+    if (index > 1 && closes.test(line.trimStart())) break
+  }
+}
+
 function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, markerBody: string): boolean {
   if (!lexer.footnoteKeys.has(normalizeRefLabel(label))) return false
   const body = markerBody.trim()
@@ -877,6 +892,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       )
     }
     if (!firstBlockAttached) measureLeadItemFromSource(bodyLines, defLineRaw.length - m[2]!.length - bodyColumn)
+    alignFirstFenceAtItsBase(bodyLines, authoredLines?.[lexer.lineNumber(defLineIndex) - 1])
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers, virtualOrigins)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
