@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { normalizeRefLabel } from '../../label-key.js'
-import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedDirectFence, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
@@ -797,9 +797,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      const directFence = firstVisible !== undefined &&
-        (opensCodeFence(firstVisible.trimStart()) || firstVisible.trimStart().startsWith(':::'))
-      for (const closer of attachedBlankClosers(lexer, directFence ? bodyFenceClosers(bodyLines) : [], noteBodyColumn,
+      for (const closer of attachedBlankClosers(lexer, attachedDirectFence(firstVisible) ? bodyFenceClosers(bodyLines) : [], noteBodyColumn,
         attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {

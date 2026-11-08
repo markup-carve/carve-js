@@ -69,6 +69,13 @@ import {
 // line's actual indent - see `parseFootnoteDef` (carve-js#677).
 export const FOOTNOTE_BODY_COLUMN = 2
 
+/** A first-block attachment whose visible block itself opens an opaque fence. */
+export function attachedDirectFence(firstVisible: string | undefined): boolean {
+  if (firstVisible === undefined) return false
+  const line = firstVisible.trimStart()
+  return opensCodeFence(line) || colonBlockOpenerRun(line) !== null
+}
+
 // NO TRAILING WHITESPACE (PART 2, NORMATIVE; carve#926). A `whitespace` run at
 // the END OF A CONTENT LINE is DROPPED. It does not reach the output and it is
 // not content.
