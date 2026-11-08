@@ -415,7 +415,7 @@ function normalizeMarkerFollower(
   if (note && at === note.at + 1 && line.trim() !== '' &&
       !(isQuoteLine(indentCols(line).rest) && quoteDepth(line) > quoteDepth(note.prefix))) {
     const body = note.item ? line.trimStart() : line.replace(/^[ \t]*(?:> )?/, '')
-    if (!CONT_MARKER.test(body) && (!note.item || indentCols(line).col < 2) &&
+    if (!CONT_MARKER.test(body.trimStart()) && (!note.item || indentCols(line).col < 2) &&
         isText(indentCols(body).rest, at) && (line !== body || note.prefix.includes('> ') || note.prefix.length > 2)) {
       line = note.prefix + body
       notePrefix = note.prefix
@@ -768,6 +768,8 @@ export function ownLines(
         rewritten = true
         finish()
         if (trace) emit(at, 'S2', ownerPath(), 'CARVE-P9-067', 'plus', { cell: 'B-plus-start' })
+        // A refused second marker ends a marker-line `+` note; its item reads the next block (carve#5515).
+        if (host.kind === 'note' && host.plusBody && frames.at(-2)?.kind === 'item') frames.pop()
         return true
       }
       attachedHost = frames.slice()
