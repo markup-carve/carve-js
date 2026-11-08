@@ -435,6 +435,11 @@ function skippedNoteMarker(
     const prefix = '> '.repeat(quotes) + ' '.repeat(markerCanon ?? 0)
     return { line: prefix + line.slice(line.indexOf('[^'), plusAt) + '%%', column: columnOfPlus(line.slice(plusAt)) + 1 }
   }
+  // A skipped definition with text stands at the marker column, as a `+` one does.
+  if (note && markerCanon !== undefined && line.indexOf('[^') > 0 && !/^[ \t]*>/.test(line) &&
+      columnOfPlus(line.slice(line.indexOf('[^'))) === markerColumn) {
+    return { line: ' '.repeat(markerCanon) + line.slice(line.indexOf('[^')), column: null }
+  }
   if (!noteLine || !CONT_MARKER.test(line.trimStart().replace(/^(?:>[ \t]*)*/, ''))) return { line, column: null }
   const plusAt = line.lastIndexOf('+')
   const column = columnOfPlus(line.slice(plusAt))
