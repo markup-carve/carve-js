@@ -3888,7 +3888,12 @@ class CarveRenderSession {
             const following = node.transparentFollowingLines?.find((entry) => entry.line === line)
             if (following && index < written.length) {
               const renderedLine = written[index]!
-              const authored = following.source
+              // A marked and a lazy follower can have the same content column
+              // after the AST wire drops their source layout. Write the quote's
+              // canonical marker for both when the paragraph still owns the line.
+              const authored = ctx.quoteDepth > 0 && !/^(?:[ \t]*>[ ]?)+/.test(following.source) &&
+                (/^[ \t]*/.exec(following.source)?.[0].length ?? 0) >= 2 * ctx.quoteDepth
+                ? `${'> '.repeat(ctx.quoteDepth)}${renderedLine}` : following.source
               const prefix = renderedLine && authored.endsWith(renderedLine)
                 ? authored.slice(0, -renderedLine.length)
                 : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? ''
