@@ -11,4 +11,11 @@ describe('a note plus attaching a list with an unclosed item fence', () => {
     expect(html).toContain(`<pre><code class="language-x">${payload}\n\n</code></pre>`)
     expect(html.match(/<pre>/g)).toHaveLength(1)
   })
+
+  it('does not open a code fence inside a comment span', () => {
+    const source = '[^a]: +\n- li\n  %%%\n  ```x\n  %%%\n\n  # heading\n\nsee[^a]\n'
+    const html = carveToHtml(source)
+    expect(html).toContain('</ul>\n      <h1 id="heading">heading</h1>')
+    expect(html).not.toContain('<pre>')
+  })
 })

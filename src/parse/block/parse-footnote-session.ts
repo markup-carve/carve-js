@@ -728,15 +728,27 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const visibleLeadIsList = attachedLeadIsList(lexer)
       let nestedFenceCloser: RegExp | undefined
       let nestedFenceColumn = 0
+      let nestedCommentRun: number | undefined
+      let nestedCommentColumn = 0
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
           if (visibleLeadIsList) {
+            if (nestedCommentRun !== undefined) {
+              if (!isBlankLine(a) && indentColumns(a) < nestedCommentColumn) return true
+              if (commentFenceRun(a.trimStart()) === nestedCommentRun) nestedCommentRun = undefined
+              return false
+            }
             if (nestedFenceCloser !== undefined) {
               if (!isBlankLine(a) && indentColumns(a) < nestedFenceColumn) return true
               if (nestedFenceCloser.test(a.trimStart())) nestedFenceCloser = undefined
               return false
+            }
+            const commentRun = commentFenceRun(a.trimStart())
+            if (commentRun !== undefined) {
+              nestedCommentRun = commentRun
+              nestedCommentColumn = indentColumns(a)
             }
             if (opensCodeFence(a.trimStart())) {
               const run = /^(`{3,}|~{3,})/.exec(a.trimStart())?.[1]
