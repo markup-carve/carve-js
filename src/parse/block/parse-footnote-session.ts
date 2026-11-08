@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { normalizeRefLabel } from '../../label-key.js'
-import { attachedBlankClosers, attachedDirectFence, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVerbatimBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
@@ -423,6 +423,21 @@ function rewrittenPlusStartsFence(authoredLines: readonly string[] | undefined, 
   return body.trim() === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authoredLines?.[lineNumber - 1] ?? '')
 }
 
+/** A fence nested in an attached container stays open past the block: its blank is payload (carve#5539). */
+function nestedAttachedFenceOpen(attached: readonly string[], bodyLines: readonly string[]): boolean {
+  return !attachedStartsWithVerbatimBlock(attached) && bodyEndsInOpenCodeFence(bodyLines)
+}
+
+/** The closers written at the first blank after a marker-line `+` block that is itself a fence (PART 0 S1). */
+function plusBlockClosers(
+  lexer: Lexer, attached: readonly string[], bodyLines: readonly string[],
+  scanner: (lines: readonly string[]) => string[], bodyColumn: number,
+): string[] {
+  if (!attachedStartsWithVerbatimBlock(attached)) return []
+  return attachedBlankClosers(lexer, scanner(bodyLines), bodyColumn, attachedStartsWithLineBlock(attached),
+    indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))
+}
+
 function rebaseAttachedCodeCloser(attached: readonly string[], bodyLines: string[]): void {
   const opener = attached[0]
   if (attached.length < 2 || opener === undefined || !opensCodeFence(opener.trimStart())) return
@@ -656,6 +671,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const bufferedBlanks = new Set<number>()
   const pendingBlankRun = new ContainerBlankBuffer()
   let attachmentEnd = -1
+  // An attached container left a descendant fence open, so a blank after it is that fence's payload.
+  let nestedFenceOpen = false
   let nestedSourceBodyColumn: number | undefined
   let nestedDefBodyIndex = -1
   // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
@@ -677,7 +694,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const lastRun = new Map<number, number>()
     attached.forEach((line, k) => { const run = commentFenceRun(line); if (run !== undefined) lastRun.set(run, k) })
     attached.forEach((a, k) => trackItemLazyState(a, lazyState, true,
-      (width) => (lastRun.get(width) ?? -1) > k || commentBlockHasCloser(lexer, width)))
+      (width) => (lastRun.get(width) ?? -1) > k || commentBlockHasCloser(lexer, width),
+      { whitespace: leadingWhitespace(a), descendantFrames: true, terminatorFree: false }))
   }
   // A marker-line `+` attaches only a visible block at the note's authored
   // marker column. Definitions with their own bodies are siblings; document
@@ -797,8 +815,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      for (const closer of attachedBlankClosers(lexer, attachedDirectFence(firstVisible) ? bodyFenceClosers(bodyLines) : [], noteBodyColumn,
-        attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
+      nestedFenceOpen = nestedAttachedFenceOpen(attached, bodyLines)
+      for (const closer of plusBlockClosers(lexer, attached, bodyLines, bodyFenceClosers, noteBodyColumn)) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {
           text: closer, parentIndex, prefix: (lexer.lineAt(parentIndex) ?? '').length, virtual: true,
@@ -916,6 +934,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         trackItemLazyState('', lazyState)
         trackAttached(attached)
         attachmentEnd = bodyLines.length
+        nestedFenceOpen = nestedAttachedFenceOpen(attached, bodyLines)
       }
       return 'continue'
     }
@@ -1056,7 +1075,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     })
   // A blank reaches every frame, so it is the open fence's content (corpus 291, carve#4033).
   // A `+` attachment ends at the blank instead.
-  const endsOnPlusAttachment = attachmentEnd === bodyLines.length
+  const endsOnPlusAttachment = attachmentEnd === bodyLines.length && !nestedFenceOpen
   if (pendingBlankRun.count > 0 && !endsOnPlusAttachment && bodyEndsInOpenCodeFence(bodyLines)) {
     for (let k = 0; k < pendingBlankRun.count; k++) {
       bufferedBlanks.add(bodyLines.length)

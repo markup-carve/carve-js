@@ -352,6 +352,20 @@ export function bodyEndsInOpenCodeFence(lines: readonly string[], itemMarkerFenc
 
 /** Whether the first visible block offered by a marker-line `+` is a line block. */
 export function attachedStartsWithLineBlock(lines: readonly string[]): boolean {
+  const text = firstAttachedBlockLine(lines)
+  return text !== undefined && RE_LINE_BLOCK_OPEN.test(text)
+}
+
+/**
+ * Whether a marker-line `+` attached a fence or colon block itself. A fence nested in an attached
+ * container runs to the end of that container instead (PART 0 S1, carve#5539).
+ */
+export function attachedStartsWithVerbatimBlock(lines: readonly string[]): boolean {
+  const text = firstAttachedBlockLine(lines)
+  return text !== undefined && (opensCodeFence(text) || colonBlockOpenerRun(text) !== null)
+}
+
+function firstAttachedBlockLine(lines: readonly string[]): string | undefined {
   let comment: number | undefined
   for (const line of lines) {
     const text = line.trimStart()
@@ -364,9 +378,9 @@ export function attachedStartsWithLineBlock(lines: readonly string[]): boolean {
     if (run !== undefined) { comment = run; continue }
     if (RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text) || RE_ABBR_DEF.test(text) ||
         RE_FOOTNOTE_DEF.test(text) || isLinkDefLine(text)) continue
-    return RE_LINE_BLOCK_OPEN.test(text)
+    return text
   }
-  return false
+  return undefined
 }
 
 /**
