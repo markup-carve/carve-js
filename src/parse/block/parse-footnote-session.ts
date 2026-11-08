@@ -412,6 +412,22 @@ function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, mar
   return body === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authored)
 }
 
+function consumeSameColumnLosingPlus(
+  lexer: Lexer, defLineIndex: number, label: string, defLineRaw: string, firstBlockAttached: boolean,
+): void {
+  if (firstBlockAttached) return
+  const next = lexer.peek()
+  const duplicate = next === undefined ? null : RE_FOOTNOTE_DEF.exec(next.trimStart())
+  if (duplicate === null || normalizeRefLabel(duplicate[1]!) !== normalizeRefLabel(label)) return
+  const original = (lexer.documentRoot ?? lexer).authoredLines
+  const firstAuthored = original?.[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw
+  const nextAuthored = original?.[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
+  if (!/\]:[ \t]+\+[ \t]*$/.test(firstAuthored) || !/\]:[ \t]+\+[ \t]*$/.test(nextAuthored) ||
+      sourceColumn(firstAuthored) !== sourceColumn(nextAuthored)) return
+  lexer.losingFootnoteLines.add(lexer.lineNumber(lexer.pos))
+  lexer.consume()
+}
+
 /** A same-label note nested in this body was read first, and loses to this one. */
 function dropNestedSameKeyNote(lexer: Lexer, nested: string | undefined, label: string): void {
   if (nested === undefined) return
@@ -591,6 +607,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       attachmentEnd = bodyLines.length
     }
   }
+  // A same-key `+` encountered before the first attached block loses its own
+  // attachment, but its marker still separates the winner from the following
+  // body. Leave the follower to the ordinary column-based note collector.
+  consumeSameColumnLosingPlus(lexer, defLineIndex, label, defLineRaw, firstBlockAttached)
   if (!firstBlockAttached) {
     // A fence behind an item marker on the note's line is no paragraph (CARVE-P0-013, PART 0 S4).
     const trackLead = (lead: string): void => {
