@@ -15,8 +15,9 @@ describe('non-HTML table column count (header-rowspan)', () => {
     expect(carveToMarkdown(src)).toBe('| A |  |\n| --- | --- |\n|  | x |\n')
   })
 
-  it('plain text drops the trailing empty header cell', () => {
-    expect(carveToPlainText(src)).toBe('A\n | x\n')
+  it('plain text drops the trailing empty header cell and the covered cell', () => {
+    // The `^` cell is covered by A's rowspan, so it writes nothing (CARVE-P11-082).
+    expect(carveToPlainText(src)).toBe('A\nx\n')
   })
 
   it('ansi pads a ragged header row to the full-width border', () => {

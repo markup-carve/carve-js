@@ -292,8 +292,14 @@ function renderTable(node: Table, ctx: PlainContext): string {
   let out = ''
   for (const [rowIndex, row] of node.rows.entries()) {
     const cells: string[] = []
+    let covered = 0
     for (let i = 0; i < cols; i++) {
       if (i < row.cells.length) tableSpanFlattened(ctx.options, { ...spanGrid[rowIndex]![i]!, pos: row.cells[i]!.pos }, 'plain')
+      // A cell a span covers writes nothing, not an empty cell (CARVE-P11-082).
+      if (i < row.cells.length && spanGrid[rowIndex]![i]!.skip) {
+        covered++
+        continue
+      }
       cells.push(i < row.cells.length ? trimNonNbsp(row.cells[i]!.blocks === undefined
         ? renderInlines(row.cells[i]!.children ?? [], ctx)
         : renderCellContent(row.cells[i]!.blocks!, nodes => renderInlines(nodes, ctx), 'renderPlainText', ctx.blockDepth)).replace(/[ \t\r]*(?:\n[ \t\r]*)+/g, ' ') : '')
@@ -301,7 +307,7 @@ function renderTable(node: Table, ctx: PlainContext): string {
     // Drop only SYNTHETIC trailing padding (columns this row does not have, so
     // a short/rowspan row stays ragged: `A`, not `A | `), but KEEP a genuine
     // trailing empty cell the row authored (`| x || ` -> `x |`). Matches carve-rs.
-    while (cells.length > row.cells.length && cells[cells.length - 1] === '') cells.pop()
+    while (cells.length > row.cells.length - covered && cells[cells.length - 1] === '') cells.pop()
     out += `${cells.join(' | ')}\n`
   }
   if (node.caption) out = `${trimEndNonNbsp(out)}\n${renderInlines(node.caption, ctx)}\n`

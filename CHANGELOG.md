@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Breaking
+
+- Plain text writes nothing for a cell a span covers: `| Summe netto | < |` is `Summe netto`, not `Summe netto |` (markup-carve/carve#5546, CARVE-P11-082).
+
 ## [0.1.16] - 2026-11-08
 
 This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, native table headers in the writer, and a large authoring lint set.
