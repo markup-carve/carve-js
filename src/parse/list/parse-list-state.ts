@@ -409,6 +409,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const run = commentFenceRun(content)
     // A line left of a nested owner's span misses that owner and ends the span (PART 0 S1).
     if (comment.column !== undefined && run !== comment.length && line.atContentColumn && content.trim() !== '' &&
+        !RE_COMMENT_LINE.test(content.trimStart()) &&
         indentColumns(content) < comment.column) {
       state.opaque = null
       return false
