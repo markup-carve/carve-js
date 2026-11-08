@@ -929,6 +929,7 @@ export class ParseSession extends InlineParseSession {
     for (const [k, v] of root.linkDefs) sub.linkDefs.set(k, v)
     for (const [k, v] of root.abbrDefs) sub.abbrDefs.set(k, v)
     sub.footnoteDefs = root.footnoteDefs
+    sub.footnoteKeys = root.footnoteKeys
     sub.footnoteDefPos = root.footnoteDefPos
     const ownership = ownLines(sub.lines as string[], 0)
     sub.applyOwnership(ownership)

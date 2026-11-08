@@ -1,4 +1,5 @@
 import type { BlockNode, Position } from '../parse-core.js'
+import { normalizeRefLabel } from '../../label-key.js'
 import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
@@ -124,7 +125,7 @@ function passedNotesInAttachment(lexer: Lexer, attached: string[], lineNumbers: 
     const source = (lexer.documentRoot ?? lexer).authoredLines?.[lineNumbers[index]! - 1] ??
       (lexer.rootLines ?? lexer.lines)[lineNumbers[index]! - 1] ?? attached[index]!
     const note = RE_FOOTNOTE_DEF.exec(sourceQuoteBody(source).trimStart())
-    if (note !== null && note[1] !== label && /^\+[ \t]*$/.test(note[2]!)) {
+    if (note !== null && normalizeRefLabel(note[1]!) !== normalizeRefLabel(label) && /^\+[ \t]*$/.test(note[2]!)) {
       passed.push({ label: note[1]!, column: sourceColumn(source) + FOOTNOTE_BODY_COLUMN, lines: [], numbers: [] })
     }
   }
@@ -402,6 +403,25 @@ function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void
   }
 }
 
+function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, markerBody: string): boolean {
+  if (!lexer.footnoteKeys.has(normalizeRefLabel(label))) return false
+  const body = markerBody.trim()
+  if (body === '+') return true
+  // The ownership pass respells a refused `+` as `%%`; the authored line still shows it.
+  const authored = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(defLineIndex) - 1] ?? ''
+  return body === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authored)
+}
+
+/** A same-label note nested in this body was read first, and loses to this one. */
+function dropNestedSameKeyNote(lexer: Lexer, nested: string | undefined, label: string): void {
+  if (nested === undefined) return
+  for (const line of lexer.footnoteDefLines.get(nested) ?? []) lexer.losingFootnoteLines.add(line)
+  if (nested === label) return
+  lexer.footnoteDefs.delete(nested)
+  lexer.footnoteDefPos.delete(nested)
+  lexer.footnoteDefLines.delete(nested)
+}
+
 export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const defLineIndex = lexer.pos
   const defLineRaw = lexer.consume()
@@ -424,12 +444,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // Preserve the raw label as the AST/source-layout spelling. Resolution and
   // duplicate handling derive their shared ASCII-whitespace key separately.
   const label = m[1]!
+  // A losing duplicate's `+` takes nothing: the block below is read without it (carve#5474).
+  if (losingPlusMarker(lexer, defLineIndex, label, m[2]!)) {
+    lexer.losingFootnoteLines.add(lexer.lineNumber(defLineIndex))
+    return null
+  }
   const authoredLines = (lexer.documentRoot ?? lexer).authoredLines
   let earlierClaim = false
   if (authoredLines !== undefined) {
     for (let line = lexer.lineNumber(defLineIndex) - 2; line >= 0 && !isBlankLine(authoredLines[line]!); line--) {
       const prior = /\[\^([^\]]+)\]:[ \t]+\+[ \t]*$/.exec(authoredLines[line]!)
-      if (prior !== null && prior[1] !== label) { earlierClaim = true; break }
+      if (prior !== null && normalizeRefLabel(prior[1]!) !== normalizeRefLabel(label)) { earlierClaim = true; break }
     }
   }
   const refusedMarker = earlierClaim && m[2]!.trim() === '%%' && hooks.isConsumedMarker(lexer.lineNumber(defLineIndex))
@@ -482,7 +507,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
     while (follower !== undefined && !isBlankLine(follower)) {
       const skippedNote = RE_FOOTNOTE_DEF.exec(follower.trimStart())
-      const claimedNote = skippedNote !== null && skippedNote[1] !== label &&
+      const claimedNote = skippedNote !== null && normalizeRefLabel(skippedNote[1]!) !== normalizeRefLabel(label) &&
         hooks.isConsumedMarker(lexer.lineNumber(followerIndex))
       const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(followerIndex) - 1] ?? follower
       const sourceAt = skippedClaimedNote || claimedNote
@@ -809,6 +834,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // A losing duplicate is still read: only its own label loses, and a definition
   // nested in its body is collected like any other (PART 9R R2).
   const wins = !lexer.footnoteDefs.has(label)
+  const key = normalizeRefLabel(label)
+  const keyedBefore = lexer.footnoteKeys.has(key)
   {
     // A recognized opener at or beyond the note's minimum column establishes
     // its authored column as a local base (carve#1729). The collector has
@@ -834,12 +861,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       for (const line of ownLines) lexer.losingFootnoteLines.add(line)
       return null
     }
-    // A same-label note nested in this body was read first, and loses to this one.
-    for (const line of lexer.footnoteDefs.has(label) ? lexer.footnoteDefLines.get(label) ?? [] : []) {
-      lexer.losingFootnoteLines.add(line)
-    }
+    dropNestedSameKeyNote(lexer, keyedBefore ? (lexer.footnoteDefs.has(label) ? label : undefined) : lexer.footnoteKeys.get(key), label)
     lexer.footnoteDefLines.set(label, ownLines)
     lexer.footnoteDefs.set(label, body)
+    if (!keyedBefore) lexer.footnoteKeys.set(key, label)
     registerPassedNoteBodies(lexer, passedNotes, defLineIndex, hooks)
     // The definition runs from its `[^label]:` marker to the last line it
     // consumed. The body blocks cannot supply that: the marker is not part of

@@ -371,6 +371,8 @@ export class Lexer {
   // Footnote definitions keyed by raw label; value is the parsed note
   // body (def line + indented continuation), set by parseFootnoteDef.
   footnoteDefs: Map<string, BlockNode[]>
+  /** The raw label registered first for each `normalizeRefLabel` key of `footnoteDefs`. */
+  footnoteKeys: Map<string, string>
   /** Where each definition sits in the source, parallel to `footnoteDefs`. */
   footnoteDefPos: Map<string, Position>
   /** Source lines read by a duplicate footnote definition that lost to an earlier one. */
@@ -493,6 +495,7 @@ export class Lexer {
     this.literalCommentLineOpeners = inherited?.literalCommentLineOpeners ?? new Set()
     this.declinedLinkDefLines = inherited?.declinedLinkDefLines ?? new Set()
     this.footnoteDefs = inherited?.footnoteDefs ?? new Map()
+    this.footnoteKeys = inherited?.footnoteKeys ?? new Map()
     this.footnoteDefPos = inherited?.footnoteDefPos ?? new Map()
     this.losingFootnoteLines = inherited?.losingFootnoteLines ?? new Set()
     this.footnoteDefLines = inherited?.footnoteDefLines ?? new Map()
