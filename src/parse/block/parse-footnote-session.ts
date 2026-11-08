@@ -1,5 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
+import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
@@ -438,6 +439,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // The source line each collected line came from, and which of them were
   // buffered blanks. `restoreVerbatimBlanks` reads both after the rebase.
   const bodySourceLines: (string | undefined)[] = [defLineRaw]
+  const virtualOrigins = new Map<number, StrippedLineOrigin>()
   const bufferedBlanks = new Set<number>()
   const pendingBlankRun = new ContainerBlankBuffer()
   let attachmentEnd = -1
@@ -551,6 +553,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
       for (const closer of attachedBlankClosers(lexer, bodyFenceClosers(bodyLines), noteBodyColumn,
         attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
+        const parentIndex = lexer.pos - 1
+        virtualOrigins.set(bodyLines.length, {
+          text: closer, parentIndex, prefix: (lexer.lineAt(parentIndex) ?? '').length, virtual: true,
+        })
         bodyLines.push(closer)
         bodyLineNumbers.push(attachedLineNumbers.at(-1)!)
         bodySourceLines.push(undefined)
@@ -814,7 +820,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       )
     }
     if (!firstBlockAttached) measureLeadItemFromSource(bodyLines, defLineRaw.length - m[2]!.length - bodyColumn)
-    const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers)
+    const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers, virtualOrigins)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
     // A marker body opens a list at its column 0 as an item does (PART 0 S3, carve#4860).
