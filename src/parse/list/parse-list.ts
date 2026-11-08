@@ -3417,6 +3417,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A code fence does not let a newly authored below-column line stay in
       // the item, even if an earlier payload line looks like a comment opener.
       !(lazyState.opaque?.kind === 'code' && lw < contentCol &&
+        !captionParagraphClaim && !captionLeafOpen(l) &&
         !lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) &&
         !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) &&
       (lw !== baseIndent || !isTableRow(l.trimStart())) &&
