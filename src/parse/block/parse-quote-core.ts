@@ -558,6 +558,8 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
       at += 2
       inner = note[2]!
       blockStart = true
+      // An item marker on the note's line opens an item in the note body (PART 0 S3).
+      if (markerPrefixLength(inner, 0, prefixWalkBound(inner)) > 0) continue
       break
     }
     // A description body is a host too: its column is where the body's blocks open.
@@ -1125,6 +1127,8 @@ export function classifyQuotedLine(
   const note = RE_FOOTNOTE_DEF.exec(content)
   if (note) {
     closeBlockQuoteParagraph(state)
+    // A marker-line `+` opens no paragraph: the next line starts the attached block (PART 9 §17 L3).
+    if (isContinuationMarker(note[2]!)) return null
     return classifyQuotedLine(note[2]!, state, hasCommentCloser, fenceOpens, () => false, terminatorFree, descent,
       prefixMemo, false, hasLiteralCommentCloser, payloadCloser)
   }
