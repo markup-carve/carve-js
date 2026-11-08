@@ -453,6 +453,16 @@ function authoredSourceLine(lexer: Lexer, number: number): string | undefined {
   return (root.authoredRootLines ?? root.authoredLines)?.[number - 1]
 }
 
+/** A follower's column after the quote prefixes left of `markerColumn`; a `>` at that column is its own block. */
+function followerColumnFrom(line: string, markerColumn: number): number {
+  let index = 0
+  for (;;) {
+    while (line[index] === ' ' || line[index] === '\t') index++
+    if (line[index] !== '>' || sourceColumnAt(line, index) >= markerColumn) return sourceColumnAt(line, index)
+    index++
+  }
+}
+
 function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, markerBody: string): boolean {
   if (!lexer.footnoteKeys.has(normalizeRefLabel(label))) return false
   const body = markerBody.trim()
@@ -681,8 +691,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const followerAuthored = follower === undefined ? undefined : authoredPayloadAt(lexer, followerIndex, follower)
     const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
       followerSource !== undefined && quotePrefixDepth(skippedClaimedNote ? followerAuthored!.line : followerSource) >= noteQuoteDepth &&
-      // The follower's own quote marker is its block, not a host prefix.
-      sourceColumn(skippedClaimedNote ? followerAuthored!.line : followerSource, noteQuoteDepth) === authoredMarkerColumn &&
+      (skippedClaimedNote ? followerColumnFrom(followerAuthored!.line, authoredMarkerColumn)
+        : sourceColumn(followerSource, noteQuoteDepth)) === authoredMarkerColumn &&
       !RE_FOOTNOTE_DEF.test(follower.trimStart())
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
