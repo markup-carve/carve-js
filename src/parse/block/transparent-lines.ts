@@ -459,7 +459,7 @@ function itemContentColumn(item: ListItem): number | undefined {
 type QuoteChain = { base: number | undefined; outer: QuoteChain } | undefined
 
 /** `quotes` holds, per quote between `blocks` and the paragraph, the least column of its marker (innermost first). */
-function containingParagraph(blocks: BlockNode[], offset: number, base?: number):
+function containingParagraph(blocks: BlockNode[], offset: number, base?: number, lineColumn?: number):
   { paragraph: Paragraph; siblings: BlockNode[]; quotes: Array<number | undefined> } | null {
   for (const block of candidateBlocks(blocks, offset)) {
     const span = spanOf(block)
@@ -472,8 +472,13 @@ function containingParagraph(blocks: BlockNode[], offset: number, base?: number)
         'children' in block && Array.isArray(block.children) && block.type !== 'heading' ?
           [[block.children as BlockNode[], block.type === 'block_quote' ? undefined : base]] : []
       for (const [child, childBase] of children) {
-        const match = containingParagraph(child, offset, childBase)
-        if (match && block.type === 'block_quote') match.quotes.push(block.pos?.startColumn ?? base)
+        const match = containingParagraph(child, offset, childBase, lineColumn)
+        if (match && block.type === 'block_quote') {
+          const marker = lineColumn === undefined ? undefined : lineColumn - 2 * (match.quotes.length + 1)
+          match.quotes.push(block.pos?.startColumn !== undefined
+            ? marker !== undefined && marker >= 1 ? Math.min(block.pos.startColumn, marker) : block.pos.startColumn
+            : base)
+        }
         if (match) return match
       }
     }
@@ -718,7 +723,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
-        const match = containingParagraph(blocks, block.pos.startOffset)
+        const match = containingParagraph(blocks, block.pos.startOffset, undefined, block.pos.startColumn)
         // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
         const source = authoredSource(block, match ? match.quotes : chain(quotes), !match && opensQuote)
         if (match) {
@@ -913,7 +918,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       }
     }
     const blocks = footnote ? document.footnoteDefs?.[footnote] ?? document.children : document.children
-    const match = containingParagraph(blocks, comment.pos!.startOffset!)
+    const match = containingParagraph(blocks, comment.pos!.startOffset!, undefined, comment.pos!.startColumn)
     if (match) {
       match.paragraph.transparentVisibleLines ??= visibleParagraphLines(match.paragraph, stream)
       match.paragraph.transparentComments ??= []
