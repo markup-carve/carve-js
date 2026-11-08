@@ -844,6 +844,19 @@ export function ownLines(
     // A missed quote keeps the line as the quote's lazy text.
     const missedFrames = framesPast(frames, reached)
     const missedNote = missed && missedFrames.some((f) => f.kind === 'note')
+    const openNote = missedFrames.find((f) => f.kind === 'note')
+    // A plus below a note's marker column is a letter. When it is the first
+    // line after the note's first-block plus, give it the same body column as
+    // any other text follower before the reader sees the sentinel letter.
+    if (openNote?.line === at - 1 && TRAILING_PLUS.test(lines[openNote.line]!.trimStart()) && form.kind === 'text' &&
+        /^\+[ \t]*$/.test(lines[at]!.trimStart()) && m.col > openNote.markerCol! && m.col < openNote.col) {
+      out += ' '.repeat(openNote.col)
+      src = m.rest
+      finish()
+      openNote.para = true
+      openNote.last = 'para'
+      continue
+    }
     // A `: ` line is a description sibling at any column where its list's owner reads it (CARVE-P0-024 S3).
     // A caption at its owner's block column attaches to the quote it follows and is never its lazy line (CARVE-P2-008, carve#4312).
     const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
