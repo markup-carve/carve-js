@@ -9,7 +9,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-## [0.1.16] - 2026-11-06
+## [0.1.16] - 2026-11-08
 
 This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, native table headers in the writer, and a large authoring lint set.
 
@@ -34,6 +34,13 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 
 ### Fixes
 
+- Lists, descriptions, quotes and attached blocks keep their intended owner and boundaries across nested fences, blank lines, lazy text and continuation markers (#4522, #4523, #4525, #4548, #4571, #4576, #4577, #4581, #4583, #4587, #4591, #4598, #4599, #4603, #4605, #4609, #4610, #4611, #4612, #4616, #4617, #4618, #4619, #4621, #4622, #4625, #4630, #4631, #4634, #4636, #4637, #4640, #4641, #4642, #4643, #4644, #4645, #4646, #4651, #4652, #4653, #4655, #4657, #4662, #4667, #4668, #4670, #4674, #4676, #4677).
+- Footnote and definition bodies keep later content, attachments and sibling blocks at their authored boundaries (#4503, #4510, #4514, #4538, #4542, #4544, #4549, #4550, #4556, #4564, #4565, #4568, #4573, #4584, #4590, #4592, #4593, #4632, #4633, #4638, #4654, #4659, #4669, #4678).
+- Comment spans and verse blocks preserve their surrounding list, quote and paragraph structure (#4506, #4518, #4520, #4527, #4529, #4530, #4533, #4541, #4555, #4557, #4561, #4562, #4569, #4570, #4574, #4580, #4586, #4684).
+- AST spans and source columns follow the authored positions of attached fences, comments, captions, tables and nested containers (#4500, #4513, #4521, #4552, #4553, #4578, #4589, #4672, #4675, #4683, #4686).
+- Lint reports setext underlines in footnotes, overlapping table alignment and unclosed colon containers (#4515, #4526, #4563).
+- Unresolved references preserve hard and verbatim line breaks (#4517).
+
 - Formatting preserves canonical breaks, colon-fence spans, captions, table boundaries and source-sensitive readbacks (#4413, #4421, #4422, #4424, #4425).
 - Comments, refused continuations and braced runs retain their owning container, follower and source columns (#4414, #4416, #4428, #4431, #4435, #4442, #4443, #4444, #4449, #4453, #4457, #4461, #4466, #4468, #4469, #4470, #4471, #4472).
 - Markdown export preserves inline HTML attribute order, and Djot import keeps blanks and paragraph forms around nested lists (#4418, #4440, #4445, #4446, #4447).
@@ -56,6 +63,8 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 - Lint: BBCode wrappers, table marker padding, pending block attributes, heading targets, emphasis false positives, wrong-column `+`, overindented openers (#3634, #3642, #3648, #3854, #3870, #3872, #3962, #3965, #4051, #4175, #4236, #4318, #4349).
 
 ### Improvements
+
+- Parsing and formatting avoid repeated ownership walks, blank lookahead and escape readbacks (#4531, #4532, #4582, #4647, #4648, #4650, #4679).
 
 - Formatting and lint avoid repeated readbacks, loose-list walks, escape searches and link-gap scans (#4432, #4437, #4438, #4439, #4441, #4458).
 - Djot import and erased-line layout avoid rescanning nested sub-items, definitions and paragraph lines (#4448, #4450, #4452).
