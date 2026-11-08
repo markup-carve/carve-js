@@ -1496,8 +1496,11 @@ export function ownLines(
     const chained: number[] = []
     let nextVisible = at + 1
     let firstKept = Infinity
+    let firstPending = Infinity
     const decide = (reason: RefusedPlus['reason'] | null): RefusedPlus['reason'] | null => {
-      // A refused `+` moves no line, so its skip ends at the first line off the marker column.
+      // A refused `+` moves no line, so its skip ends at the first line off the marker column,
+      // and a later `+` note it looked past decides its own block (carve#5542).
+      if (reason !== null) firstKept = Math.min(firstKept, firstPending)
       if (reason !== null && firstKept !== Infinity) dropKept()
       // A later marker in the same forward search has already offered its
       // follower, even when the first marker ultimately refuses that block.
@@ -1655,7 +1658,11 @@ export function ownLines(
         // A later marker-line `+` is refused while this earlier claim is pending.
         // It opens no body, so its next visible line remains this claim's candidate.
         const pendingLabel = /\[\^([^\]]+)\]:/.exec(lines[at]!)?.[1]
-        if (CONT_MARKER.test(skippedNote[2]!) && skippedNote[1] !== pendingLabel) { notes.push(opener); continue }
+        if (CONT_MARKER.test(skippedNote[2]!) && skippedNote[1] !== pendingLabel) {
+          firstPending = Math.min(firstPending, opener)
+          notes.push(opener)
+          continue
+        }
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))

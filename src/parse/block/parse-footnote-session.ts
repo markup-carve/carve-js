@@ -108,6 +108,7 @@ interface FootnoteHooks {
   collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
+  isClaimedMarker: (line: number) => boolean
 }
 
 interface PassedNote {
@@ -644,7 +645,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       if (prior !== null && normalizeRefLabel(prior[1]!) !== normalizeRefLabel(label)) { earlierClaim = true; break }
     }
   }
-  const refusedMarker = earlierClaim && m[2]!.trim() === '%%' && hooks.isConsumedMarker(lexer.lineNumber(defLineIndex))
+  const refusedMarker = earlierClaim && m[2]!.trim() === '%%' && hooks.isClaimedMarker(lexer.lineNumber(defLineIndex))
   const bodyLines = [m[2]!]
   const bodyFenceClosers = openFenceScanner()
   const bodyLineNumbers = [lexer.lineNumber(defLineIndex)]

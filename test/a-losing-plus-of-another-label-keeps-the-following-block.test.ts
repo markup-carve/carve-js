@@ -16,10 +16,16 @@ it('keeps the block below a losing plus of another label in the pending note (ca
 })
 
 it('reads the losing lead the same with a comment in it or with the pending label losing', () => {
-  for (const lead of ['[^m]: d1\n%% c\n[^m]: +', '[^m]: d1\n[^n]: +', '[^m]: +\n[^m]: +']) {
+  for (const lead of ['[^m]: d1\n%% c\n[^m]: +', '[^m]: d1\n[^n]: +']) {
     const html = carveToHtml(`[^n]: +\n${lead}\n  - item\n\nsee[^n][^m]\n`)
-    expect(html).toBe(notes(list, lead.startsWith('[^m]: d1') ? 'd1' : ''))
+    expect(html).toBe(notes(list, 'd1'))
   }
+})
+
+it('gives the block to a winning later plus note the earlier plus looked past (carve#5542, corpus row 998)', () => {
+  const html = carveToHtml('[^n]: +\n[^m]: +\n[^m]: +\n  - item\n\nsee[^n][^m]\n')
+  expect(html).toContain('<li id="fn1">\n      <p><a href="#fnref1"')
+  expect(html).toContain('<li id="fn2">\n      <ul>\n        <li>item</li>')
 })
 
 it('attaches a quote below a losing plus of another label', () => {

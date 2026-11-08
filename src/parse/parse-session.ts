@@ -640,6 +640,8 @@ export class ParseSession extends InlineParseSession {
   private skippedCommentFences = new Map<number, { closer: number; content: string }>()
   /** Document lines whose consumed `+` the ownership walk wrote as a `%%` stand-in. */
   private consumedMarkerLines = new Set<number>()
+  // Marker lines whose `+` an earlier marker's pending claim refused.
+  private claimedMarkerLines = new Set<number>()
   private quoteSiblingSeparators = new Set<number>()
   private walkLazyLines = new Set<number>()
 
@@ -787,6 +789,7 @@ export class ParseSession extends InlineParseSession {
     this.skippedCommentFences = new Map([...ownership.skippedFences].map(([index, { closer, content }]) =>
       [lexer.lineNumber(index), { closer: lexer.lineNumber(closer), content }]))
     this.consumedMarkerLines = new Set([...ownership.consumedMarkers].map((index) => lexer.lineNumber(index)))
+    this.claimedMarkerLines = new Set(ownership.refusedPlus.filter((plus) => plus.reason === 'claimed').map((plus) => lexer.lineNumber(plus.index)))
     this.quoteSiblingSeparators = new Set([...ownership.quoteSiblingSeparators].map((index) => lexer.lineNumber(index)))
     this.walkLazyLines = new Set([...ownership.lazyLines].map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
@@ -939,6 +942,7 @@ export class ParseSession extends InlineParseSession {
     const ownership = ownLines(sub.lines as string[], 0)
     sub.applyOwnership(ownership)
     for (const index of ownership.consumedMarkers) this.consumedMarkerLines.add(sub.lineNumber(index))
+    for (const plus of ownership.refusedPlus) if (plus.reason === 'claimed') this.claimedMarkerLines.add(sub.lineNumber(plus.index))
     for (const index of ownership.quoteSiblingSeparators) this.quoteSiblingSeparators.add(sub.lineNumber(index))
     for (const index of ownership.lazyLines) this.walkLazyLines.add(sub.lineNumber(index))
     this.collectLinkDefs(sub)
@@ -1657,6 +1661,7 @@ export class ParseSession extends InlineParseSession {
       collectAttachedBlock: this.collectAttachedBlock.bind(this),
       parseBlocks: this.parseBlocks.bind(this),
       isConsumedMarker: (line) => this.consumedMarkerLines.has(line),
+      isClaimedMarker: (line) => this.claimedMarkerLines.has(line),
     })
   }
 
