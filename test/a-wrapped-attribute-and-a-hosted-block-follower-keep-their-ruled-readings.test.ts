@@ -141,8 +141,8 @@ describe('an unclosed attached fence and a hosted sibling plus item', () => {
     })
   }
 
-  it('ends an unclosed attached fence at the attached block when a blank line follows', () => {
-    expect(flat(carveToHtml('- +\n```\nx\n- y\n\npara\n'))).toBe('<ul><li><pre><code>x</code></pre></li><li>y</li></ul><p>para</p>')
+  it('keeps a sibling marker as payload until the attached fence reaches its first blank (carve#5499)', () => {
+    expect(flat(carveToHtml('- +\n```\nx\n- y\n\npara\n'))).toBe('<ul><li><pre><code>x- y</code></pre></li></ul><p>para</p>')
   })
 
   // A sibling item's refused `+` is a paragraph, so the unprefixed line folds into it lazily.
