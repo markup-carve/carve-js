@@ -681,7 +681,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const noteQuoteDepth = quotePrefixDepth(authoredLine ?? defLineRaw)
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
     // Claimed lines are measured on the authored source, so their marker column is too.
-    const claimedMarkerColumn = authoredPayloadAt(lexer, defLineIndex, defLineRaw).column
+    const authoredDef = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex)) ?? defLineRaw
+    const authoredMarkerAt = authoredDef.indexOf(`[^${label}]`)
+    const claimedMarkerColumn = authoredMarkerAt < 0 ? authoredMarkerColumn : sourceColumnAt(authoredDef, authoredMarkerAt)
     while (follower !== undefined && !isBlankLine(follower)) {
       const skippedNote = RE_FOOTNOTE_DEF.exec(follower.trimStart())
       const claimedNote = skippedNote !== null && normalizeRefLabel(skippedNote[1]!) !== normalizeRefLabel(label) &&
