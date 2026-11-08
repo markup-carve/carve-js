@@ -403,6 +403,50 @@ function measureLeadItemFromSource(bodyLines: string[], leadShift: number): void
   }
 }
 
+function alignFirstFenceAtItsBase(bodyLines: string[], authoredLines: readonly string[] | undefined, lineNumber: number): void {
+  const authoredMarker = authoredLines?.[lineNumber - 1]
+  if (authoredMarker === undefined || !/\]:[ \t]+\+[ \t]*$/.test(authoredMarker) ||
+      bodyLines[0]?.trim() !== '%%') return
+  const opener = bodyLines[1] ?? ''
+  const marker = /^(`{3,}|~{3,})/.exec(opener.trimStart())?.[1]
+  const margin = indentColumns(opener)
+  if (marker === undefined || margin === 0) return
+  const closes = fenceCloseRe(marker)
+  for (let index = 1; index < bodyLines.length; index++) {
+    const line = bodyLines[index]!
+    bodyLines[index] = sliceColumns(line, margin, true)
+    if (index > 1 && indentColumns(line) === margin && closes.test(line.trimStart())) break
+  }
+}
+
+function rewrittenPlusStartsFence(authoredLines: readonly string[] | undefined, lineNumber: number, body: string): boolean {
+  return body.trim() === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authoredLines?.[lineNumber - 1] ?? '')
+}
+
+function noteBodyContent(
+  lexer: Lexer, admission: ContainerAdmission, bodyColumn: number, authoredBodyColumn: number | undefined,
+  captionHostBlock: boolean, firstFenceEligible: boolean, firstFenceRun: string | undefined, firstBodyLine: boolean,
+): { content: string; fenceRun: string | undefined } {
+  const line = admission.line
+  const sourceLine = admission.sourceLine
+  const authoredFollower = (lexer.documentRoot ?? lexer).authoredLines?.[lexer.lineNumber(lexer.pos) - 1]
+  const fenceActive = firstFenceRun !== undefined || firstFenceEligible && firstBodyLine &&
+    /^(`{3,}|~{3,})/.test(line.trimStart())
+  const syntheticMargin = fenceActive && authoredFollower !== undefined && sourceLine !== undefined
+    ? Math.max(0, sourceColumn(sourceLine) - sourceColumn(authoredFollower)) : 0
+  const normalizedLine = syntheticMargin > 0 ? sliceColumns(line, syntheticMargin, true) : line
+  const contentBase = captionHostBlock ? normalizedLine : sliceColumns(normalizedLine, bodyColumn, true)
+  let fenceRun = firstFenceRun
+  if (firstFenceEligible && firstBodyLine) fenceRun = /^(`{3,}|~{3,})/.exec(contentBase.trimStart())?.[1]
+  const authoredIndent = fenceRun !== undefined && authoredFollower !== undefined && authoredBodyColumn !== undefined &&
+    sourceLine !== undefined && quotePrefixDepth(sourceLine) > 0
+    ? Math.max(0, sourceColumn(authoredFollower) - authoredBodyColumn) : 0
+  const content = authoredIndent > indentColumns(contentBase)
+    ? ' '.repeat(authoredIndent - indentColumns(contentBase)) + contentBase : contentBase
+  if (fenceRun !== undefined && !firstBodyLine && fenceCloseRe(fenceRun).test(content.trimStart())) fenceRun = undefined
+  return { content, fenceRun }
+}
+
 function losingPlusMarker(lexer: Lexer, defLineIndex: number, label: string, markerBody: string): boolean {
   if (!lexer.footnoteKeys.has(normalizeRefLabel(label))) return false
   const body = markerBody.trim()
@@ -468,6 +512,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     return null
   }
   const authoredLines = (lexer.documentRoot ?? lexer).authoredLines
+  const firstFenceEligible = rewrittenPlusStartsFence(authoredLines, lexer.lineNumber(defLineIndex), m[2]!)
+  let firstFenceRun: string | undefined
   let earlierClaim = false
   if (authoredLines !== undefined) {
     for (let line = lexer.lineNumber(defLineIndex) - 2; line >= 0 && !isBlankLine(authoredLines[line]!); line--) {
@@ -730,7 +776,14 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(pendingBlankRun.lines[k])
       }
       pendingBlankRun.clear()
-      const content: string = captionHostBlock ? ln : sliceColumns(ln, bodyColumn, true)
+      // The quote ownership pass can add a synthetic margin to the first
+      // follower of a marker-line plus. Measure the note body's margin from
+      // the authored line so that this extra padding does not turn a fence
+      // opener into paragraph text.
+      const bodyContent = noteBodyContent(lexer, admission, bodyColumn, authoredBodyColumn, captionHostBlock,
+        firstFenceEligible, firstFenceRun, bodyLines.length === 1)
+      const content = bodyContent.content
+      firstFenceRun = bodyContent.fenceRun
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
       if (lazyState.opaque === null && RE_FOOTNOTE_DEF.test(content.trimStart()))
@@ -869,6 +922,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       )
     }
     if (!firstBlockAttached) measureLeadItemFromSource(bodyLines, defLineRaw.length - m[2]!.length - bodyColumn)
+    alignFirstFenceAtItsBase(bodyLines, authoredLines, lexer.lineNumber(defLineIndex))
     const sub = nestedSubLexer(lexer, bodyLines, defLineIndex, bodyLineNumbers, virtualOrigins)
     sub.sublistsCarryAuthoredBase = true
     sub.inFootnoteBody = true
