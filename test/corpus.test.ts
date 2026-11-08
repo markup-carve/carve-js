@@ -40,6 +40,13 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-block-at-a-pulled-footnote-column-opens-in-the-note',
+  'a-block-at-the-host-column-after-a-plus-attached-quote-stays-in-the-host',
+  'a-caption-at-the-host-column-captions-a-plus-attached-quote',
+  'a-nested-item-resumes-after-its-attached-fence-with-an-empty-line',
+  'an-attached-fence-closes-only-at-its-host-column-carve',
+  'an-attached-fence-closes-only-at-its-host-column-carve-5410',
+  'an-outer-plus-host-resumes-after-a-quote-holding-a-plus-host',
   'a-block-at-a-pulled-description-column-opens-in-the-description',
   'a-definition-marker-after-a-block-and-paragraph-ends-the-item',
   'a-lazy-line-after-a-comment-keeps-the-deepest-list-open',
@@ -1536,39 +1543,12 @@ const IMPLEMENTED = new Set([
  *    deleted in the same commit that moves the pin.
  */
 const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
-  ['851-a-first-block-plus-shape-reads-the-one-attach-rule-6', {
-    reason: 'carve#5415: a refused quoted description plus leaves no paragraph for a lazy line',
-    html: `<blockquote>
-  <dl>
-    <dt>t</dt>
-    <dd></dd>
-  </dl>
-</blockquote>
-<p>para</p>`,
-  }] as const,
   ...RULED_HTML_AHEAD_OF_PIN,
   ...RULED_5013_HTML,
   ...RULED_5016_HTML,
   ...RULED_HTML_AHEAD_OF_PIN_5012,
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
-  ['868-a-paragraph-after-a-note-attached-fence-closed-past-a-blank-takes-a-lazy-line', {
-    reason: 'carve#5410: an indented fence line cannot close a fence opened at the marker column',
-    html: `<p>see</p>
-<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
-<section role="doc-endnotes" aria-label="Footnotes">
-  <hr>
-  <ol>
-    <li id="fn1">
-      <pre><code>a
-</code></pre>
-      <pre><code>c
-</code></pre>
-      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
-    </li>
-  </ol>
-</section>`,
-  }] as const,
 ])
 const behindSpec = new Map<string, string>()
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
