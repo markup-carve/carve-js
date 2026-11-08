@@ -176,6 +176,20 @@ const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
 const TEXT: Form = { kind: 'text', interrupts: false }
 
+function offColumnFirstBlockNotePlus(note: Frame | undefined, at: number, lines: string[], form: Form, column: number): note is Frame {
+  return note?.line === at - 1 && TRAILING_PLUS.test(lines[note.line]!.trimStart()) && form.kind === 'text' &&
+    /^\+[ \t]*$/.test(lines[at]!.trimStart()) && column > note.markerCol! && column < note.col
+}
+
+function trailingPlusText(form: Form, rest: string): boolean {
+  return form.kind === 'text' && TRAILING_PLUS.test(rest)
+}
+
+function captionMissesQuote(missed: boolean, rest: string, column: number, owner: Frame, missedFrames: readonly Frame[]): boolean {
+  return missed && CAPTION.test(rest) && column === owner.col && missedFrames[0]?.kind === 'quote' &&
+    !missedFrames.some((f) => f.kind === 'note')
+}
+
 function foldReleasedFence(form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>): Form {
   const released = owner.releasedFence
   if (form.family === 'code' && PURE_FENCE.test(rest) && owner.para &&
@@ -837,17 +851,30 @@ export function ownLines(
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
     let form = foldReleasedFence(classify(m.rest, owner, at, m.col), owner, m.rest, m.col, at, lazyLines)
-    if (form.kind === 'text' && TRAILING_PLUS.test(m.rest)) spellTrailingPlusAsLetter()
+    if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
     trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) attachedHost = null
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
     const missedFrames = framesPast(frames, reached)
     const missedNote = missed && missedFrames.some((f) => f.kind === 'note')
+    const openNote = missedFrames.find((f) => f.kind === 'note')
+    // A plus below a note's marker column is a letter. When it is the first
+    // line after the note's first-block plus, give it the same body column as
+    // any other text follower before the reader sees the sentinel letter.
+    if (offColumnFirstBlockNotePlus(openNote, at, lines, form, m.col)) {
+      lineCuts.push({ at: out.length, removed: m.col - openNote.col })
+      out += ' '.repeat(openNote.col)
+      src = m.rest
+      finish()
+      openNote.para = true
+      openNote.last = 'para'
+      if (trace) emit(at, 'S5', ownerPath(), 'CARVE-P0-024', 'text')
+      continue
+    }
     // A `: ` line is a description sibling at any column where its list's owner reads it (CARVE-P0-024 S3).
     // A caption at its owner's block column attaches to the quote it follows and is never its lazy line (CARVE-P2-008, carve#4312).
-    const captionsQuote = missed && CAPTION.test(m.rest) && m.col === frames[reached]!.col && missedFrames[0]?.kind === 'quote' &&
-      !missedFrames.some((f) => f.kind === 'note')
+    const captionsQuote = captionMissesQuote(missed, m.rest, m.col, frames[reached]!, missedFrames)
     if (missed && !captionsQuote && foldsLazily(form, owner)) {
       // S4: a lazy line stays text where it stands, short of the frame it missed.
       // Past a note a marker folds too, so the readers must not meet it as one (carve#4160).
