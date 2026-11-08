@@ -473,7 +473,7 @@ function containingParagraph(blocks: BlockNode[], offset: number, base?: number)
           [[block.children as BlockNode[], block.type === 'block_quote' ? undefined : base]] : []
       for (const [child, childBase] of children) {
         const match = containingParagraph(child, offset, childBase)
-        if (match && block.type === 'block_quote') match.quotes.push(base)
+        if (match && block.type === 'block_quote') match.quotes.push(block.pos?.startColumn ?? base)
         if (match) return match
       }
     }
@@ -668,23 +668,24 @@ function lastParagraph(start: BlockNode): Paragraph | undefined {
   return undefined
 }
 
-/** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
-export function hydrateTransparentDefinitionGaps(document: Document): void {
-  derivedSpans = new WeakMap()
-  blockIndexes = new WeakMap()
-  const authoredPrefix = (column: number, innermostFirst: ReadonlyArray<number | undefined>, visibleLine = false): string => {
+/** Source prefix for a line owned by a paragraph through nested quotes. */
+function authoredPrefix(column: number, innermostFirst: ReadonlyArray<number | undefined>, firstContentColumn = column,
+  visibleLine = false): string {
     let source = ''
     let next = 1
     for (let index = innermostFirst.length - 1; index >= 0; index--) {
-      const at = Math.max(innermostFirst[index] ?? next, next)
-      // A following visible line can leave a quote instead of continuing it.
-      // Its source column then cannot contain this marker and its content.
-      if (visibleLine && at + 2 > column) break
+      const at = Math.max(innermostFirst[index] ?? (visibleLine ? firstContentColumn - 2 * (index + 1) : next), next)
+      if (visibleLine && (column < at || column === at && at === 1)) break
       source += ' '.repeat(at - next) + '> '
       next = at + 2
     }
     return source + ' '.repeat(Math.max(0, column - next))
-  }
+}
+
+/** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
+export function hydrateTransparentDefinitionGaps(document: Document): void {
+  derivedSpans = new WeakMap()
+  blockIndexes = new WeakMap()
   // A quote marker goes at the content column of the item holding the quote, so the line stays in
   // that item; otherwise right after the marker before it.
   const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>, opensQuote = false): string => {
@@ -727,8 +728,9 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
             .map((child) => child.pos!.startLine))]
           paragraph.transparentComments ??= []
           paragraph.transparentComments.push({ line: block.pos.startLine, source, node: block, originalValue })
+          const firstContentColumn = paragraph.children.find((child) => child.pos?.startColumn !== undefined)?.pos?.startColumn
           recordFollowingLines(paragraph, block.pos.startLine, (child) =>
-            authoredPrefix(child.pos?.startColumn ?? 1, match.quotes, true) +
+            authoredPrefix(child.pos?.startColumn ?? 1, match.quotes, firstContentColumn, true) +
               (child.type === 'text' ? child.value : ''))
           block.transparentInParagraph = true
         } else {
@@ -916,7 +918,11 @@ export function restoreTransparentComments(document: Document, authored: Documen
       match.paragraph.transparentVisibleLines ??= visibleParagraphLines(match.paragraph, stream)
       match.paragraph.transparentComments ??= []
       match.paragraph.transparentComments.push({ line: index + 1, source: original, node: comment, originalValue: comment.content })
-      recordFollowingLines(match.paragraph, index + 1, (child) => stream.original[child.pos!.startLine - 1]!)
+      const firstContentColumn = match.paragraph.children.find((child) => child.pos?.startColumn !== undefined)?.pos?.startColumn
+      recordFollowingLines(match.paragraph, index + 1, (child) =>
+        match.quotes.length === 0 ? stream.original[child.pos!.startLine - 1]! :
+          authoredPrefix(child.pos?.startColumn ?? 1, match.quotes, firstContentColumn, true) +
+          (child.type === 'text' ? child.value : ''))
       comment.transparentInParagraph = true
       placeHoisted()
       // A line below the paragraph's container column is not its container's, even where
