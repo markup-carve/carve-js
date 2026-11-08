@@ -8,5 +8,12 @@ it('reads a quoted note marker-line plus follower as one closed code fence', () 
     const html = carveToHtml(source)
     expect(html).toContain('<pre><code>x\n</code></pre>')
     expect(html).not.toContain('<p><code>')
+    const indentedPayload = `${quote}[^m]: +\n${line(fence)}\n${quote}${' '.repeat(margin + 1)}x\n${line(fence)}\n\nsee[^m]\n`
+    expect(carveToHtml(indentedPayload)).toContain('<pre><code> x\n</code></pre>')
   }
+})
+
+it('keeps a deeper fence-shaped line as payload until the closer reaches the opener base', () => {
+  const source = '> [^m]: +\n>     ```\n>         ```\n>     y\n>     ```\n\nsee[^m]\n'
+  expect(carveToHtml(source)).toContain('<pre><code>    ```\ny\n</code></pre>')
 })
