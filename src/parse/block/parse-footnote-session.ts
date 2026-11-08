@@ -105,7 +105,7 @@ function quoteMissesOf(lexer: Lexer): PayloadMisses {
 }
 
 interface FootnoteHooks {
-  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
+  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
 }
@@ -718,7 +718,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
           (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
-        0, true, true, 0, false, 0, indentColumns(follower!) + 1,
+        0, true, true, 0, false, 0, 0, indentColumns(follower!) + 1,
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)
