@@ -17,3 +17,8 @@ it('still gives the note a paragraph one column right of its marker', () => {
   const html = carveToHtml('> [^m]: +\n>  x\n\nsee[^m]\n')
   expect(html).toContain('<li id="fn1">\n      <p>x<a')
 })
+
+it('reads a tab-indented block follower of a refused quoted note plus as that block', () => {
+  const html = carveToHtml('> [^m]: +\n> \t# head\n\nsee[^m]\n')
+  expect(html).toContain('<h1 id="head">head</h1>')
+})
