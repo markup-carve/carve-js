@@ -105,7 +105,7 @@ function quoteMissesOf(lexer: Lexer): PayloadMisses {
 }
 
 interface FootnoteHooks {
-  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
+  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
 }
@@ -423,6 +423,19 @@ function rewrittenPlusStartsFence(authoredLines: readonly string[] | undefined, 
   return body.trim() === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authoredLines?.[lineNumber - 1] ?? '')
 }
 
+function rebaseAttachedCodeCloser(attached: readonly string[], bodyLines: string[]): void {
+  const opener = attached[0]
+  if (attached.length < 2 || opener === undefined || !opensCodeFence(opener.trimStart())) return
+  const run = /^(`{3,}|~{3,})/.exec(opener.trimStart())?.[1]
+  if (run === undefined) return
+  const last = bodyLines.length - 1
+  const closer = bodyLines[last]!
+  // The note host accepts a closer one column right of the opener. Its body
+  // parser reads the attached block at the opener's column.
+  if (indentColumns(closer) === indentColumns(opener) + 1 && fenceCloseRe(run).test(closer.trimStart()))
+    bodyLines[last] = closer.trimStart()
+}
+
 function noteBodyContent(
   lexer: Lexer, admission: ContainerAdmission, bodyColumn: number, authoredBodyColumn: number | undefined,
   captionHostBlock: boolean, firstFenceEligible: boolean, firstFenceRun: string | undefined, firstBodyLine: boolean,
@@ -705,7 +718,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
           (!visibleLeadIsList && isListMarkerLine(a.trimStart())),
-        0, true, true,
+        0, true, true, 0, false, 0, 0, indentColumns(follower!) + 1,
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)
@@ -733,6 +746,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(a)
       }
       bodyLineNumbers.push(...attachedLineNumbers)
+      rebaseAttachedCodeCloser(attached, bodyLines)
       // A definition in the invisible lead keeps its own continuation even
       // when this note reaches past it to attach the following block.
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)

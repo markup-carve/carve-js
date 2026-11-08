@@ -2573,6 +2573,7 @@ export class ParseSession extends InlineParseSession {
     itemHost = false,
     closerFloor = 0,
     hostCloserColumn = 0,
+    codeCloserColumn = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // The block is measured where its caller reads it, which a first-block `+` slices further.
@@ -2625,7 +2626,7 @@ export class ParseSession extends InlineParseSession {
       },
       end: lexer.lineCount,
       contentColumn: Math.max(contentColumn + viewSlice,
-        colonBlockOpenerRun(at(attributeLines) ?? '') === null ? 0 : hostCloserColumn),
+        colonBlockOpenerRun(at(attributeLines) ?? '') === null ? codeCloserColumn : hostCloserColumn),
       indexBase,
       base: lexer.pos + attributeLines,
       boundary: isBoundary,
