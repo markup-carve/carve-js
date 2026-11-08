@@ -1,6 +1,6 @@
 import type { BlockNode, Position } from '../parse-core.js'
 import { normalizeRefLabel } from '../../label-key.js'
-import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedDirectFence, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, verseStanzaOpen } from './parse-block-boundaries.js'
 import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
@@ -105,7 +105,7 @@ function quoteMissesOf(lexer: Lexer): PayloadMisses {
 }
 
 interface FootnoteHooks {
-  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number }
+  collectAttachedBlock: (lexer: Lexer, isBoundary: (line: string) => boolean, contentColumn?: number, endAtFoldedDefinition?: boolean, acceptFirstNonList?: boolean, viewSlice?: number, itemHost?: boolean, closerFloor?: number, hostCloserColumn?: number, codeCloserColumn?: number) => { lines: string[]; lineNumbers: number[]; startLineIndex: number; firstVisible: string | undefined }
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
   isClaimedMarker: (line: number) => boolean
@@ -731,7 +731,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       let nestedCommentRun: number | undefined
       let nestedCommentColumn = 0
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
-      const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
+      const { lines: attached, lineNumbers: attachedLineNumbers, firstVisible } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
           if (visibleLeadIsList) {
@@ -797,7 +797,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      for (const closer of attachedBlankClosers(lexer, visibleLeadIsList ? [] : bodyFenceClosers(bodyLines), noteBodyColumn,
+      for (const closer of attachedBlankClosers(lexer, attachedDirectFence(firstVisible) ? bodyFenceClosers(bodyLines) : [], noteBodyColumn,
         attachedStartsWithLineBlock(attached), indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {

@@ -2579,7 +2579,7 @@ export class ParseSession extends InlineParseSession {
     closerFloor = 0,
     hostCloserColumn = 0,
     codeCloserColumn = 0,
-  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
+  ): { lines: string[]; lineNumbers: number[]; startLineIndex: number; firstVisible: string | undefined } {
     const transform = contentColumn === 0 ? undefined : (line: string) => sliceColumns(line, contentColumn)
     // The block is measured where its caller reads it, which a first-block `+` slices further.
     const view = viewSlice === 0 ? transform
@@ -2614,6 +2614,7 @@ export class ParseSession extends InlineParseSession {
     // An invisible note may stand deeper than the block it precedes. The
     // block's own column, never the prelude's, bounds an open fence.
     const blockFloor = Math.min(closerFloor, indentColumns(lexer.peek(attributeLines) ?? ''))
+    const firstVisible = at(attributeLines)
     const fencedFromAttributes = fencedBlockEnd({
       at: (offset) => at(offset + attributeLines),
       index: closerIndex(lexer),
@@ -2702,7 +2703,7 @@ export class ParseSession extends InlineParseSession {
       }
     }
 
-    return { lines, lineNumbers, startLineIndex }
+    return { lines, lineNumbers, startLineIndex, firstVisible }
   }
 
   collectAttachedListBlock(
