@@ -644,7 +644,8 @@ function unheldLineComments(blocks: readonly BlockNode[]): Comment[] {
     }
     // Measured only once a comment follows, so a deep nest without one costs nothing.
     if (previous !== undefined) {
-      heldThrough = endsInParagraph(previous) ? previous.pos?.endLine : null
+      const paragraph = lastParagraph(previous)
+      heldThrough = paragraph === undefined ? null : paragraph.pos?.endLine
       previous = undefined
     }
     const start = block.pos?.startLine
@@ -655,16 +656,16 @@ function unheldLineComments(blocks: readonly BlockNode[]): Comment[] {
   return unheld
 }
 
-function endsInParagraph(start: BlockNode): boolean {
+function lastParagraph(start: BlockNode): Paragraph | undefined {
   let block: BlockNode | undefined = start
   while (block !== undefined) {
-    if (block.type === 'paragraph') return true
+    if (block.type === 'paragraph') return block
     if (block.type === 'list') block = block.items.at(-1)?.children.at(-1)
     else if (block.type === 'definition_list') block = block.items.at(-1)?.definitions.at(-1)?.at(-1)
     else if (block.type === 'block_quote' && block.fenced !== true) block = block.children.at(-1)
-    else return false
+    else return undefined
   }
-  return false
+  return undefined
 }
 
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */

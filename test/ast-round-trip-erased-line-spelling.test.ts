@@ -23,6 +23,7 @@ const cases: Array<[string, string, string]> = [
   ['a description opening with comments', ':: t\n: [^a]: +\n+\n%% c\n%% d\n', ':: t\n: %% c\n  %% d\n\n[^a]: {empty}'],
   ['a plus-held line in a nested quote', '> > a\n > +\n > %% c\n > b\n', '> > a\n> >\n> > %% c\n> >\n> > b'],
   ['a quote a plus hands a comment', '> [^a]: x\n+\n%% c\n', '> %% c\n\n[^a]: x'],
+  ['a quoted list gap a plus hands a comment', '> - [^a]: x\n+\n%% c\n- b\n', '> - {empty}\n> %% c\n>\n> - b\n\n[^a]: x'],
   ['a quoted paragraph a plus closes before a comment', '> a\n+\n%% c\n', '> a\n>\n> %% c'],
 ]
 
