@@ -4063,15 +4063,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             isBlankLine(source) || isQuoteBlankLine(source) || RE_COMMENT_LINE.test(nested[index]!.trimStart())) continue
         noteEndLine = nestedLineNumbers[index]!
         noteEndIndex = index
-        noteEndsOnBlock = lineOpensItemBlock(source.trimStart())
+        noteEndsOnBlock = lineOpensItemBlock(source.trimStart()) && !RE_FOOTNOTE_DEF.test(source.trimStart())
         break
       }
       // A list that ends the note under its open paragraph keeps the blank the note's (PART 0 S3, carve#4860);
       // a blank inside the note parts the item's blocks as it parts the note's.
       const noteRun = nestedSourceLines.slice(0, noteEndIndex + 1).map((line) => (line ?? '').trimStart())
-      if (noteRun.some((line, index) => isBlankLine(nested[index] ?? '') || isBlankLine(line) || isQuoteBlankLine(line))) {
-        noteEndsOnBlock = true
-      } else if (isListMarkerLine(noteRun[noteEndIndex] ?? '')) {
+      if (isListMarkerLine(noteRun[noteEndIndex] ?? '')) {
         const above = noteRun[noteEndIndex - 1]
         noteEndsOnBlock = above !== undefined && lineOpensItemBlock(above) && !isListMarkerLine(above) &&
           !RE_BLOCKQUOTE.test(above) && !RE_DEFLIST_DEF.test(above)
@@ -4166,7 +4164,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           sourceColumn(rootLine, itemQuoteDepth) < previousVisibleSpan.startColumn - 1
         const authoredBlockParagraph = child.type === 'paragraph' && nestedIndex >= 0 &&
           authoredBaseEligible.has(nestedIndex) && lineOpensBlock(nested[nestedIndex]!)
-        // A lazy note paragraph owns the blank before the item's first child.
+        // A note-body block before the first visible child can own the separating blank.
+        // Invisible definitions alone cannot (§17 L1; CARVE-P9-013).
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && markerNoteItem &&
             noteRunPartsFrom(span.start)) loose = true
         let previousVisibleEnd = previousVisibleSpan?.end
