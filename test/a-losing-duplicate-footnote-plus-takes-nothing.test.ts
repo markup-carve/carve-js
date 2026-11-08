@@ -44,4 +44,10 @@ describe('a losing duplicate footnote definition`s + takes nothing', () => {
       '      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
       '    </li>\n  </ol>\n</section>')
   })
+
+  it('does not consume a same-key marker outside the winner`s authored column', () => {
+    const html = carveToHtml('  [^n]: +\n[^n]: +\n  - item\n\nsee[^n]\n')
+    expect(html).toContain('<ul>\n  <li>item</li>\n</ul>')
+    expect(html).toContain('<li id="fn1">\n      <p><a href="#fnref1"')
+  })
 })
