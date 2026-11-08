@@ -384,13 +384,13 @@ export function attachedBlankClosers(lexer: Lexer, closers: readonly string[], b
       }
       if (nested.at(-1)?.lineBlock && column >= bodyColumn) continue
       if (nested.length === 0 && closers.some(run => run[0] === ':'
-        ? closeWidth === run.length : column === fenceColumn && fenceCloseRe(run).test(text))) return []
+        ? closeWidth === run.length : column >= fenceColumn && column <= fenceColumn + 1 && fenceCloseRe(run).test(text))) return []
       if (!lineBlock && !codeOpen && closeWidth === undefined) {
         const open = colonBlockOpenerRun(text)
         if (open !== null) nested.push({ width: open, lineBlock: RE_LINE_BLOCK_OPEN.test(text) })
       }
     }
-    if (column < bodyColumn) break
+    if (column < (codeOpen ? fenceColumn : bodyColumn)) break
     if (payload !== undefined) {
       if (payload.test(text)) payload = undefined
     } else if (!codeOpen && opensCodeFence(text)) payload = fenceCloseRe(/^(`{3,}|~{3,})/.exec(text)![1]!)
