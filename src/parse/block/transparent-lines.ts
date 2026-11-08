@@ -632,17 +632,53 @@ function placeInDescription(gap: { list: DefinitionList; item: number; afterDesc
   return true
 }
 
+/** Line comments of a quote that no open paragraph on the line above could hold lazily. */
+function unheldLineComments(blocks: readonly BlockNode[]): Comment[] {
+  const unheld: Comment[] = []
+  let previous: BlockNode | undefined
+  let heldThrough: number | undefined | null = null
+  for (const block of blocks) {
+    if (block.type !== 'comment') {
+      previous = block
+      continue
+    }
+    // Measured only once a comment follows, so a deep nest without one costs nothing.
+    if (previous !== undefined) {
+      heldThrough = endsInParagraph(previous) ? previous.pos?.endLine : null
+      previous = undefined
+    }
+    const start = block.pos?.startLine
+    const held = heldThrough !== null && (heldThrough === undefined || start === undefined || start === heldThrough + 1)
+    if (held) heldThrough = block.pos?.endLine
+    else if (!block.block && !block.delimited) unheld.push(block)
+  }
+  return unheld
+}
+
+function endsInParagraph(start: BlockNode): boolean {
+  let block: BlockNode | undefined = start
+  while (block !== undefined) {
+    if (block.type === 'paragraph') return true
+    if (block.type === 'list') block = block.items.at(-1)?.children.at(-1)
+    else if (block.type === 'definition_list') block = block.items.at(-1)?.definitions.at(-1)?.at(-1)
+    else if (block.type === 'block_quote' && block.fenced !== true) block = block.children.at(-1)
+    else return false
+  }
+  return false
+}
+
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
 export function hydrateTransparentDefinitionGaps(document: Document): void {
   derivedSpans = new WeakMap()
   blockIndexes = new WeakMap()
   // A quote marker goes at the content column of the item holding the quote, so the line stays in
   // that item; otherwise right after the marker before it.
-  const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>): string => {
+  const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>, opensQuote = false): string => {
     const column = block.pos?.startColumn ?? 1
     let source = ''
     let next = 1
-    if (column > 1) for (let index = innermostFirst.length - 1; index >= 0; index--) {
+    // A line a `+` hands to a quote it opens is written with that quote's marker.
+    if (column > 1 || opensQuote) for (let index = innermostFirst.length - 1; index >= 0; index--) {
       const quote = innermostFirst[index]
       const at = Math.max(quote ?? next, next)
       source += ' '.repeat(at - next) + '> '
@@ -659,15 +695,15 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       return out
     }
     const pending: Array<{ block: BlockNode; quotes: QuoteChain; base: number | undefined;
-      markerLine: number | undefined; description?: BlockNode[] }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
+      markerLine: number | undefined; description?: BlockNode[]; opensQuote?: boolean }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
     for (let at = 0; at < pending.length; at++) {
-      const { block, quotes, base, markerLine, description } = pending[at]!
+      const { block, quotes, base, markerLine, description, opensQuote } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
       // A comment a description holds before another of its blocks is inside it, not a gap (CARVE-P12-027).
       if (block.type === 'comment' && description && description.indexOf(block) < description.length - 1) continue
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
-        block.transparentSource = authoredSource(block, chain(quotes))
+        block.transparentSource = authoredSource(block, chain(quotes), opensQuote)
         block.transparentOriginalValue = block.content
       }
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
@@ -676,7 +712,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset)
         // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
-        const source = authoredSource(block, match ? match.quotes : chain(quotes))
+        const source = authoredSource(block, match ? match.quotes : chain(quotes), !match && opensQuote)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -707,8 +743,9 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index], description: definition })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
         const inner = block.type === 'block_quote' ? { base, outer: quotes } : quotes
+        const opener = block.type === 'block_quote' && block.fenced !== true ? unheldLineComments(block.children) : []
         for (const child of block.children as BlockNode[]) pending.push({ block: child, quotes: inner,
-          base: block.type === 'block_quote' ? undefined : base,
+          base: block.type === 'block_quote' ? undefined : base, opensQuote: opener.includes(child as Comment),
           markerLine: block.type === 'block_quote' ? block.pos?.startLine : markerLine })
       }
     }
@@ -801,6 +838,13 @@ function recordFollowingLines(paragraph: Paragraph, line: number, sourceFor: (ch
   followingFromLine.set(paragraph, line)
 }
 
+/** How many quotes an owner path nests, when it holds nothing but quotes. */
+function quoteOnlyDepth(owner: string | undefined): number | null {
+  const steps = owner?.split('/').slice(1)
+  if (steps === undefined || steps.length === 0 || !steps.every((step) => step.startsWith('quote:'))) return null
+  return steps.length
+}
+
 /** Keep the authored comment node and let a paragraph crossing it write its line. */
 export function restoreTransparentComments(document: Document, authored: Document | null,
   stream: TransparentLineStream, direct?: Map<number, Comment>): void {
@@ -830,9 +874,18 @@ export function restoreTransparentComments(document: Document, authored: Documen
     }
   }
   for (const index of stream.erased) {
-    const original = stream.original[index]!
-    const rest = original.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '')
+    const authored = stream.original[index]!
+    const rest = authored.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '')
     if (!COMMENT_LINE.test(rest) || COMMENT_FENCE.test(rest) || REGION_MARKER.test(rest)) continue
+    // Content glued to the marker reads the same after the one separator space,
+    // which is the spelling a tree without this line's source gets (PART 7).
+    const spelled = /^%%[^ ]/.test(rest) ? `%% ${rest.slice(2)}` : rest
+    // A quote that holds the line through a `+` writes its own prefix: the `+` leaves no node.
+    const prefix = authored.slice(0, authored.length - rest.length)
+    const quotes = quoteOnlyDepth(ownersByLine.get(index + 1))
+    const original = quotes !== null && quotes !== (prefix.match(/>/g) ?? []).length
+      ? '> '.repeat(quotes) + spelled
+      : prefix + spelled
     const comment = comments.get(index + 1)
     if (!comment?.pos || comment.pos.startOffset === undefined) continue
     comment.transparentSource = original

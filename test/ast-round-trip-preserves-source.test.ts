@@ -43,7 +43,7 @@ const corpusDir = resolve(__dirname, '../spec/tests/corpus')
  * tree back differs from writing the parsed tree back - which is what an editor
  * does when it round-trips through the published AST.
  *
- * WAS 41, THEN 2, NOW 0.
+ * WAS 41, THEN 2, THEN 0, THEN 27, NOW 0.
  *
  * The 39 generated-heading-id documents went first: publishing the id is right
  * (PART 12 §5), and 7f86472 stopped the WRITER emitting it, because an authored
@@ -69,35 +69,7 @@ const corpusDir = resolve(__dirname, '../spec/tests/corpus')
  * started losing source that did not before, and a document LEAVING it without
  * its entry going too is the failure this file could not previously report.
  */
-const KNOWN_LOSSES = new Set<string>([
-  '435-the-continuation-marker-s-column-gate-reaches-every-container-2.crv',
-  '435-the-continuation-marker-s-column-gate-reaches-every-container-4.crv',
-  '437-a-first-block-marker-in-a-footnote-body-or-a-quote-attaches-only-at-its-marker-column-2.crv',
-  '437-a-first-block-marker-in-a-footnote-body-or-a-quote-attaches-only-at-its-marker-column-3.crv',
-  '498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-3.crv',
-  '498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-5.crv',
-  '588-a-block-quote-and-a-footnote-body-take-the-first-block-form-7.crv',
-  '588-a-block-quote-and-a-footnote-body-take-the-first-block-form-8.crv',
-  '629-a-dangling-plus-is-a-letter-and-a-nested-quote-reads-it-like-an-unnested-one-4.crv',
-  '629-a-dangling-plus-is-a-letter-and-a-nested-quote-reads-it-like-an-unnested-one-8.crv',
-  '662-a-tab-after-a-comment-marker-stays-in-its-text.crv',
-  '726-a-second-plus-starts-its-own-paragraph-after-attachment-4.crv',
-  '801-a-footnote-body-refuses-a-first-block-at-its-body-column-2.crv',
-  '801-a-footnote-body-refuses-a-first-block-at-its-body-column-3.crv',
-  '801-a-footnote-body-refuses-a-first-block-at-its-body-column-8.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block-3.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block-4.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block-5.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block-6.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block-7.crv',
-  '802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block.crv',
-  '840-a-refused-plus-reads-like-a-letter-2.crv',
-  '851-a-first-block-plus-shape-reads-the-one-attach-rule-7.crv',
-  '851-a-first-block-plus-shape-reads-the-one-attach-rule-8.crv',
-  '851-a-first-block-plus-shape-reads-the-one-attach-rule-9.crv',
-  '855-invisible-lines-after-a-plus-are-skipped-and-the-first-visible-line-decides-3.crv',
-  '881-an-indented-quote-prefix-keeps-an-invisible-plus-follower-in-its-host-2.crv',
-])
+const KNOWN_LOSSES = new Set<string>([])
 
 /*
  * A KNOWN LOSS THAT NAMES NO CORPUS FILE IS NOT A KNOWN LOSS.
