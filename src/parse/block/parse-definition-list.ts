@@ -1,4 +1,4 @@
-import { attachedBlankClosers, attachedDirectFence, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVerbatimBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { parentLineIndices, type StrippedLineOrigin } from './parse-block-scan-core.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
@@ -474,15 +474,15 @@ export function createDefinitionListParser(
           firstBlock.lines.length = blockCut
           firstBlock.lineNumbers.length = blockCut
         }
-        attachedOpenCodeFence = firstBlock.firstVisible !== undefined &&
-          opensCodeFence(firstBlock.firstVisible.trimStart()) && keepsOpenCodeFence(firstBlock.lines)
+        const attachedVerbatim = attachedStartsWithVerbatimBlock(firstBlock.lines)
+        attachedOpenCodeFence = attachedVerbatim && keepsOpenCodeFence(firstBlock.lines)
         for (let k = 0; k < firstBlock.lines.length; k++) bodyBaseEligible.add(bodyLines.length + k)
         bodyLines.push(...firstBlock.lines)
         bodySourceLines.push(...firstBlock.lines)
         bodyLineNumbers.push(...firstBlock.lineNumbers)
         for (const a of firstBlock.lines) track(a)
         // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-        for (const closer of attachedBlankClosers(lexer, attachedDirectFence(firstBlock.firstVisible) ? bodyFenceClosers(bodyLines) : [], contentCol,
+        for (const closer of attachedBlankClosers(lexer, attachedVerbatim ? bodyFenceClosers(bodyLines) : [], contentCol,
           attachedStartsWithLineBlock(firstBlock.lines), indentColumns(firstBlock.lines.find(line => opensCodeFence(line.trimStart())) ?? ''))) {
           bodyLines.push(closer)
           bodySourceLines.push(undefined)
