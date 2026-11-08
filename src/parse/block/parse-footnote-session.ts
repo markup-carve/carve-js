@@ -749,7 +749,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       let nestedCommentRun: number | undefined
       let nestedCommentColumn = 0
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
-      const { lines: attached, lineNumbers: attachedLineNumbers, firstVisible } = hooks.collectAttachedBlock(
+      const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
           if (visibleLeadIsList) {
