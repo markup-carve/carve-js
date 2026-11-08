@@ -398,6 +398,8 @@ export class Lexer {
    * True for the sub-lexer over a LIST ITEM's own body, and for that body only.
    */
   markerOpensSublist = false
+  /** The sub-lexer over a stacked first-block item's body (`- - +`): its column-0 list sits in that item. */
+  stackedItemBody = false
 
   // Cache the scan start and longest bare run by fence character. Later
   // openers with a longer marker can skip the scan.

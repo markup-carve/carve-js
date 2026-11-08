@@ -573,6 +573,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       /^>\s*$/.test(attached.lines[0] ?? '') && /^> \+[ \t]*$/.test(head.content)
     if (emptyQuotedFollower) lines[0] = head.content.replace(/\+[ \t]*$/, '>')
     const sub = nestedSubLexer(lexer, lines, itemStartLineIndex, numbers)
+    sub.stackedItemBody = true
     const children = session.parseBlocks(sub, 0)
     if (emptyQuotedFollower && children[0]?.type === 'block_quote' && children[0].children[0]?.type === 'block_quote') {
       const outer = children[0]
