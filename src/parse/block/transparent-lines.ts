@@ -672,20 +672,26 @@ function lastParagraph(start: BlockNode): Paragraph | undefined {
 export function hydrateTransparentDefinitionGaps(document: Document): void {
   derivedSpans = new WeakMap()
   blockIndexes = new WeakMap()
+  const authoredPrefix = (column: number, innermostFirst: ReadonlyArray<number | undefined>, visibleLine = false): string => {
+    let source = ''
+    let next = 1
+    for (let index = innermostFirst.length - 1; index >= 0; index--) {
+      const at = Math.max(innermostFirst[index] ?? next, next)
+      // A following visible line can leave a quote instead of continuing it.
+      // Its source column then cannot contain this marker and its content.
+      if (visibleLine && at + 2 > column) break
+      source += ' '.repeat(at - next) + '> '
+      next = at + 2
+    }
+    return source + ' '.repeat(Math.max(0, column - next))
+  }
   // A quote marker goes at the content column of the item holding the quote, so the line stays in
   // that item; otherwise right after the marker before it.
   const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>, opensQuote = false): string => {
     const column = block.pos?.startColumn ?? 1
-    let source = ''
-    let next = 1
     // A line a `+` hands to a quote it opens is written with that quote's marker.
-    if (column > 1 || opensQuote) for (let index = innermostFirst.length - 1; index >= 0; index--) {
-      const quote = innermostFirst[index]
-      const at = Math.max(quote ?? next, next)
-      source += ' '.repeat(at - next) + '> '
-      next = at + 2
-    }
-    return source + ' '.repeat(Math.max(0, column - next)) +
+    const prefix = column > 1 || opensQuote ? authoredPrefix(column, innermostFirst) : ' '.repeat(Math.max(0, column - 1))
+    return prefix +
       (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
         `*[${block.abbr}]: ${block.expansion}`)
   }
@@ -722,7 +728,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           paragraph.transparentComments ??= []
           paragraph.transparentComments.push({ line: block.pos.startLine, source, node: block, originalValue })
           recordFollowingLines(paragraph, block.pos.startLine, (child) =>
-            ' '.repeat(Math.max(0, (child.pos?.startColumn ?? 1) - 1)) +
+            authoredPrefix(child.pos?.startColumn ?? 1, match.quotes, true) +
               (child.type === 'text' ? child.value : ''))
           block.transparentInParagraph = true
         } else {
