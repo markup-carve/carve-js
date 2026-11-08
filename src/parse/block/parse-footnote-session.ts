@@ -739,7 +739,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         const openerColumn = indentColumns(attached[0]!)
         const close = fenceCloseRe(/^(`{3,}|~{3,})/.exec(attached[0]!.trimStart())![1]!)
         const last = bodyLines.length - 1
-        if (indentColumns(bodyLines[last]!) > openerColumn && close.test(bodyLines[last]!.trimStart()))
+        if (indentColumns(bodyLines[last]!) === openerColumn + 1 && close.test(bodyLines[last]!.trimStart()))
           bodyLines[last] = bodyLines[last]!.trimStart()
       }
       // A definition in the invisible lead keeps its own continuation even
