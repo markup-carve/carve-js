@@ -3870,13 +3870,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (hiddenByComment[boundary.openerIndex + 1] === true) continue
         for (const lineNumber of boundary.lines) opaqueBlankLines.add(lineNumber)
       }
-      // A note's body lines at its body column are as invisible as its definition line.
+      // A note's body lines at its body column are as invisible as its definition line,
+      // and so are its lazy lines (CARVE-P9-013, carve#5466).
       const noteDefinitionOf = new Map<number, number>()
       for (let j = 0; j < nested.length; j++) {
         if (!invisibleNested(j) || !RE_FOOTNOTE_DEF.test(nested[j]!)) continue
         for (let m = j + 1; m < nested.length; m++) {
           if (isBlankLine(nested[m]!)) continue
-          if (indentColumns(nested[m]!, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) break
+          if (indentColumns(nested[m]!, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) {
+            const lazy = nested[m]!.trimStart()
+            if (isBlankLine(nested[m - 1]!) || lineOpensItemBlock(lazy) || isLinkDefLine(lazy)) break
+          }
           noteDefinitionOf.set(m, j)
         }
       }
@@ -4126,7 +4130,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // A directive ends at its own line, so a paragraph can follow one with no blank (§17 L1).
         if (child.type === 'paragraph' && isDirectiveLine(previousVisibleBlock)) loose = true
         // A `+` lead still sets the paragraph apart; an invisible lead separates nothing (§17 L1a, L1b, carve#4639).
+        // A definition's own `+` is part of that invisible lead (CARVE-P9-013, carve#5466).
         if (previousVisibleSpan === undefined && child.type === 'paragraph' && /\+[ \t]*$/.test(itemSource) &&
+            !RE_FOOTNOTE_DEF.test(content.trimStart()) &&
             session.hasAuthoredBlankBetween(lexer, lexer.lineNumber(itemStartLineIndex), span.start, opaqueBlankLines))
           loose = true
         const rootLine = (lexer.rootLines ?? lexer.lines)[span.start - 1]
