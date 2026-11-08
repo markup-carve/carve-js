@@ -423,6 +423,19 @@ function rewrittenPlusStartsFence(authoredLines: readonly string[] | undefined, 
   return body.trim() === '%%' && /\]:[ \t]+\+[ \t]*$/.test(authoredLines?.[lineNumber - 1] ?? '')
 }
 
+function rebaseAttachedCodeCloser(attached: readonly string[], bodyLines: string[]): void {
+  const opener = attached[0]
+  if (attached.length < 2 || opener === undefined || !opensCodeFence(opener.trimStart())) return
+  const run = /^(`{3,}|~{3,})/.exec(opener.trimStart())?.[1]
+  if (run === undefined) return
+  const last = bodyLines.length - 1
+  const closer = bodyLines[last]!
+  // The note host accepts a closer one column right of the opener. Its body
+  // parser reads the attached block at the opener's column.
+  if (indentColumns(closer) === indentColumns(opener) + 1 && fenceCloseRe(run).test(closer.trimStart()))
+    bodyLines[last] = closer.trimStart()
+}
+
 function noteBodyContent(
   lexer: Lexer, admission: ContainerAdmission, bodyColumn: number, authoredBodyColumn: number | undefined,
   captionHostBlock: boolean, firstFenceEligible: boolean, firstFenceRun: string | undefined, firstBodyLine: boolean,
@@ -733,15 +746,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         bodySourceLines.push(a)
       }
       bodyLineNumbers.push(...attachedLineNumbers)
-      // The attached block is read at its opener's column. A closer accepted by
-      // the note host one column farther right closes that same block here.
-      if (attached.length > 1 && opensCodeFence(attached[0]!.trimStart())) {
-        const openerColumn = indentColumns(attached[0]!)
-        const close = fenceCloseRe(/^(`{3,}|~{3,})/.exec(attached[0]!.trimStart())![1]!)
-        const last = bodyLines.length - 1
-        if (indentColumns(bodyLines[last]!) === openerColumn + 1 && close.test(bodyLines[last]!.trimStart()))
-          bodyLines[last] = bodyLines[last]!.trimStart()
-      }
+      rebaseAttachedCodeCloser(attached, bodyLines)
       // A definition in the invisible lead keeps its own continuation even
       // when this note reaches past it to attach the following block.
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
