@@ -22,7 +22,14 @@ describe('a lazy line of a definition in a list item', () => {
   it.each([
     ['without a lazy line', '- [^a]: xa\n\n  [^b]: xb\n- next\n'],
     ['with a lazy line', '- [^a]: xa\n\n  [^b]: xb\n  see[^a]\n- next\n'],
+    ['with a lazy line of a quoted body', '- [^a]: xa\n\n  [^b]: > qb\n  flb\n- next\n'],
   ])('%s keeps the list loose', (_name, source) => {
     expect(carveToHtml(source)).toContain('<li><p>next</p></li>')
+  })
+
+  it('a block-shaped note body takes no lazy line', () => {
+    const html = carveToHtml('- [^a]: x\n\n  [^f]: # head\n  see\n- next\n')
+    expect(html).toContain('<li>see</li>')
+    expect(html).toContain('<li>next</li>')
   })
 })

@@ -3874,13 +3874,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // and so are its lazy lines (CARVE-P9-013, carve#5466).
       const noteDefinitionOf = new Map<number, number>()
       for (let j = 0; j < nested.length; j++) {
-        if (!invisibleNested(j) || !RE_FOOTNOTE_DEF.test(nested[j]!)) continue
+        const definition = RE_FOOTNOTE_DEF.exec(nested[j]!)
+        if (!invisibleNested(j) || definition === null) continue
+        // Only an open note paragraph, a quoted one included, takes a lazy line.
+        const opensParagraph = (text: string): boolean =>
+          !lineOpensItemBlock(text) || /^(?:>[ \t]?)+[ \t]*\S/.test(text) && RE_BLOCKQUOTE.test(text)
+        let openParagraph = /^\+[ \t]*$/.test(definition[2]!) || opensParagraph(definition[2]!)
         for (let m = j + 1; m < nested.length; m++) {
-          if (isBlankLine(nested[m]!)) continue
-          if (indentColumns(nested[m]!, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) {
-            const lazy = nested[m]!.trimStart()
-            if (isBlankLine(nested[m - 1]!) || lineOpensItemBlock(lazy) || isLinkDefLine(lazy)) break
+          const line = nested[m]!.trimStart()
+          if (isBlankLine(line)) {
+            openParagraph = false
+            continue
           }
+          if (indentColumns(nested[m]!, FOOTNOTE_BODY_COLUMN) < FOOTNOTE_BODY_COLUMN) {
+            if (!openParagraph || lineOpensItemBlock(line) || isLinkDefLine(line)) break
+          } else openParagraph = opensParagraph(line)
           noteDefinitionOf.set(m, j)
         }
       }
