@@ -591,6 +591,21 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       attachmentEnd = bodyLines.length
     }
   }
+  // A same-key `+` encountered before the first attached block loses its own
+  // attachment, but its marker still separates the winner from the following
+  // body. Leave the follower to the ordinary column-based note collector.
+  if (!firstBlockAttached) {
+    const next = lexer.peek()
+    const duplicate = next === undefined ? null : RE_FOOTNOTE_DEF.exec(next.trimStart())
+    const original = (lexer.documentRoot ?? lexer).authoredLines
+    const firstAuthored = original?.[lexer.lineNumber(defLineIndex) - 1] ?? defLineRaw
+    const nextAuthored = original?.[lexer.lineNumber(lexer.pos) - 1] ?? next ?? ''
+    if (duplicate !== null && normalizeRefLabel(duplicate[1]!) === normalizeRefLabel(label) &&
+        /\]:[ \t]+\+[ \t]*$/.test(firstAuthored) && /\]:[ \t]+\+[ \t]*$/.test(nextAuthored)) {
+      lexer.losingFootnoteLines.add(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+    }
+  }
   if (!firstBlockAttached) {
     // A fence behind an item marker on the note's line is no paragraph (CARVE-P0-013, PART 0 S4).
     const trackLead = (lead: string): void => {

@@ -35,4 +35,13 @@ describe('a losing duplicate footnote definition`s + takes nothing', () => {
     const html = carveToHtml('[^L L]: +\n[^L  L]: +\n- item\n\nsee[^L L]\n')
     expect(html).toContain('<li id="fn1">\n      <ul>\n        <li>item</li>')
   })
+
+  it('keeps the first indented list in the winner and a later sibling at the root (carve#5489)', () => {
+    const html = carveToHtml('[^n]: +\n[^n]: +\n  - item\n- sibling\n\nsee[^n]\n')
+    expect(html).toBe('<ul>\n  <li>sibling</li>\n</ul>\n' + see +
+      '<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n' +
+      '      <ul>\n        <li>item</li>\n      </ul>\n' +
+      '      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
+      '    </li>\n  </ol>\n</section>')
+  })
 })
