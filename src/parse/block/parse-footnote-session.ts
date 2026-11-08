@@ -680,6 +680,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     let skippedClaimedNote = false
     const noteQuoteDepth = quotePrefixDepth(authoredLine ?? defLineRaw)
     const authoredMarkerColumn = authoredBodyColumn === undefined ? markerColumn : authoredBodyColumn - FOOTNOTE_BODY_COLUMN
+    // Claimed lines are measured on the authored source, so their marker column is too.
+    const claimedMarkerColumn = authoredPayloadAt(lexer, defLineIndex, defLineRaw).column
     while (follower !== undefined && !isBlankLine(follower)) {
       const skippedNote = RE_FOOTNOTE_DEF.exec(follower.trimStart())
       const claimedNote = skippedNote !== null && normalizeRefLabel(skippedNote[1]!) !== normalizeRefLabel(label) &&
@@ -688,7 +690,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const sourceAt = skippedClaimedNote || claimedNote
         ? authoredPayloadAt(lexer, followerIndex, follower).column : sourceColumn(source, noteQuoteDepth)
       // The note keeps an invisible line at its marker column or in its body, so either is skipped (§17 L3, carve#5288).
-      const atMarker = sourceAt === authoredMarkerColumn || sourceAt >= authoredMarkerColumn + FOOTNOTE_BODY_COLUMN
+      const markerAt = skippedClaimedNote || claimedNote ? claimedMarkerColumn : authoredMarkerColumn
+      const atMarker = sourceAt === markerAt || sourceAt >= markerAt + FOOTNOTE_BODY_COLUMN
       if (!atMarker || !((lexer.atDocumentLevel && (isLinkDefLine(follower.trimStart()) || RE_ABBR_DEF.test(follower.trimStart()))) ||
           RE_FOOTNOTE_DEF.test(follower.trimStart()) ||
           isBlockAttributeLine(follower.trimStart()) ||
@@ -705,8 +708,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const followerAuthored = follower === undefined ? undefined : authoredPayloadAt(lexer, followerIndex, follower)
     const canAttachFirstBlock = follower !== undefined && !isBlankLine(follower) &&
       followerSource !== undefined && quotePrefixDepth(skippedClaimedNote ? followerAuthored!.line : followerSource) >= noteQuoteDepth &&
-      (skippedClaimedNote ? followerColumnFrom(followerAuthored!.line, authoredMarkerColumn)
-        : sourceColumn(followerSource, noteQuoteDepth)) === authoredMarkerColumn &&
+      (skippedClaimedNote ? followerColumnFrom(followerAuthored!.line, claimedMarkerColumn) === claimedMarkerColumn
+        : sourceColumn(followerSource, noteQuoteDepth) === authoredMarkerColumn) &&
       !RE_FOOTNOTE_DEF.test(follower.trimStart())
     if (canAttachFirstBlock) {
       // An attached paragraph ends at an opener that reaches the body column.
