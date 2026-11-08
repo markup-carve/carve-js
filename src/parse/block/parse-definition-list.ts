@@ -1,5 +1,5 @@
 import { attachedBlankClosers, attachedStartsWithLineBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
-import type { StrippedLineOrigin } from './parse-block-scan-core.js'
+import { parentLineIndices, type StrippedLineOrigin } from './parse-block-scan-core.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
@@ -1205,13 +1205,9 @@ export function createDefinitionListParser(
       // Synthetic separators and closers occupy no source. Anchor them at the
       // end of their borrowed source line so they do not unplace real children.
       const virtualOrigins = new Map<number, StrippedLineOrigin>()
-      const parentIndices = new Map<number, number>()
       for (let index = 0; index < bodyLines.length; index++) {
         if (bodySourceLines[index] !== undefined) continue
-        if (parentIndices.size === 0) {
-          for (let i = 0; i < lexer.lineCount; i++) parentIndices.set(lexer.lineNumber(i), i)
-        }
-        const parentIndex = parentIndices.get(bodyLineNumbers[index]!)
+        const parentIndex = parentLineIndices(lexer).get(bodyLineNumbers[index]!)?.at(-1)
         if (parentIndex === undefined) continue
         virtualOrigins.set(index, {
           text: bodyLines[index]!, parentIndex,
