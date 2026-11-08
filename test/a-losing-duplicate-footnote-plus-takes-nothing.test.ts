@@ -24,6 +24,13 @@ const cases: Array<[string, string, string]> = [
 ]
 
 describe('a losing duplicate footnote definition`s + takes nothing', () => {
+  it('keeps an interleaved losing label from taking a quoted follower (carve#5528)', () => {
+    const source = '> [^n]: +\n> [^m]: d1\n> [^m]: +\n>\n>   para\n\nsee[^n][^m]\n'
+    const html = carveToHtml(source)
+    expect(html).toContain('<blockquote>\n\n</blockquote>')
+    expect(html).toContain('<li id="fn1">\n      <p>para<a href="#fnref1"')
+    expect(html).toContain('<li id="fn2">\n      <p>d1<a href="#fnref2"')
+  })
   for (const [name, source, html] of cases) {
     it(name, () => {
       expect(carveToHtml(source)).toBe(html)

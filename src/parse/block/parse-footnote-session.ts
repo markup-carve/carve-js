@@ -544,8 +544,6 @@ function losingPlusLeadEnd(lexer: Lexer, label: string, markerColumn: number, qu
   if (!losing || !otherLabel) return -1
   let next = index
   while (lexer.lineAt(next) !== undefined && isBlankLine(lexer.lineAt(next)!)) next++
-  // A quoted blank keeps the follower in the quote, as the spec model reads it.
-  if (next > index && quoteDepth > 0) return -1
   const line = lexer.lineAt(next)
   if (line === undefined || RE_FOOTNOTE_DEF.test(line.trimStart())) return -1
   const source = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(next) - 1] ?? line
