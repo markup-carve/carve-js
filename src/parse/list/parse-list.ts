@@ -3876,9 +3876,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       for (let j = 0; j < nested.length; j++) {
         const definition = RE_FOOTNOTE_DEF.exec(nested[j]!)
         if (!invisibleNested(j) || definition === null) continue
-        // Only an open note paragraph, a quoted one included, takes a lazy line.
-        const opensParagraph = (text: string): boolean =>
-          !lineOpensItemBlock(text) || /^(?:>[ \t]?)+[ \t]*\S/.test(text) && RE_BLOCKQUOTE.test(text)
+        // Only an open note paragraph takes a lazy line, one in a quote or list item included.
+        const opensParagraph = (text: string): boolean => {
+          let rest = text.trimStart()
+          for (;;) {
+            const marker = /^>[ \t]?/.exec(rest) ?? (isListMarkerLine(rest) ? /^\S+[ \t]+(?:\[[^\]]\][ \t]+)?/.exec(rest) : null)
+            if (marker === null) break
+            rest = rest.slice(marker[0].length).trimStart()
+          }
+          return rest !== '' && !lineOpensItemBlock(rest)
+        }
         let openParagraph = /^\+[ \t]*$/.test(definition[2]!) || opensParagraph(definition[2]!)
         for (let m = j + 1; m < nested.length; m++) {
           const line = nested[m]!.trimStart()

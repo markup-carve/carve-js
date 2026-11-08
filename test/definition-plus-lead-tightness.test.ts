@@ -23,6 +23,7 @@ describe('a lazy line of a definition in a list item', () => {
     ['without a lazy line', '- [^a]: xa\n\n  [^b]: xb\n- next\n'],
     ['with a lazy line', '- [^a]: xa\n\n  [^b]: xb\n  see[^a]\n- next\n'],
     ['with a lazy line of a quoted body', '- [^a]: xa\n\n  [^b]: > qb\n  flb\n- next\n'],
+    ['with a lazy line of a listed body', '- [^a]: xa\n\n  [^f]: x\n    - kid\n  see\n- next\n'],
   ])('%s keeps the list loose', (_name, source) => {
     expect(carveToHtml(source)).toContain('<li><p>next</p></li>')
   })
