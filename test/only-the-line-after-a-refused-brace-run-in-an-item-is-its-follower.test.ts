@@ -21,4 +21,14 @@ describe('the follower of a refused brace run in an item', () => {
     expect(carveToHtml('- +\n  {.x\n  .y}\n  ```\n  - li\n  - lj\n  ```\ntail\n').trim())
       .toBe('<ul>\n  <li>{.x\n.y}\n<code>\n- li\n- lj\n</code>\ntail</li>\n</ul>')
   })
+
+  it('leaves a real fence after a run in a nested quote closable', () => {
+    expect(carveToHtml('- a\n  > q\n  {.x\n  .y}\n  ```\n  x\n  ```\n  # h\n').trim())
+      .toBe('<ul>\n  <li>a\n    <blockquote><p>q\n{.x\n.y}</p></blockquote>\n    <pre><code>x\n</code></pre>\n    <h1 id="h">h</h1>\n  </li>\n</ul>')
+  })
+
+  it('keeps every payload line of a real fence after a run in a nested quote', () => {
+    expect(carveToHtml('- +\n  > q\n  {.x\n  .y}\n  ```\n  - li\n  - lj\n').trim())
+      .toBe('<ul>\n  <li>\n    <blockquote><p>q\n{.x\n.y}</p></blockquote>\n    <pre><code>- li\n- lj\n</code></pre>\n  </li>\n</ul>')
+  })
 })

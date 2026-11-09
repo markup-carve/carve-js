@@ -3739,7 +3739,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const refusedFollower = lazyState.refusedBraceFollower === true && !isBlankLine(l)
       if (refusedFollower) lazyState.refusedBraceFollower = false
       unpairedFenceFollower = refusedFollower && opensCodeFence(l.trimStart())
-      const keptThroughCloser = lazyState.refusedRunKept instanceof RegExp && !isBlankLine(l)
+      // The closer itself takes the ordinary path, which ends the hold or a real fence.
+      const kept = lazyState.refusedRunKept
+      const keptThroughCloser = kept instanceof RegExp && !isBlankLine(l) && !kept.test(l.trimStart())
       if ((refusedFollower &&
           !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
           keptThroughCloser && insideRefusedHolder(l) ||
@@ -3750,9 +3752,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
         trackItemLazyState(follower, lazyState, false)
-        // The frame hides the closer from the tracker's own test.
-        if (keptThroughCloser && lazyState.refusedRunKept instanceof RegExp && lazyState.refusedRunKept.test(l.trimStart()))
-          lazyState.refusedRunKept = undefined
         lexer.consume()
         return 'continue'
       }
