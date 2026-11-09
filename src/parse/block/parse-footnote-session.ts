@@ -36,6 +36,14 @@ function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
   return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
 }
 
+/** A continuation the authored columns refuse is paragraph text, so its moved indentation is dropped. */
+function rebasedRunContent(lexer: Lexer, state: { attrRun?: string | null }, attrSource: { column: number },
+  content: string, sourceColumn: number, authoredBodyColumn: number | undefined): string {
+  const column = state.attrRun == null || attrSource.column < 0 ? undefined : authoredColumnAt(lexer, lexer.pos)
+  if (column !== undefined && column <= attrSource.column) return content.trimStart()
+  return rebasedFootnoteContent(lexer, content, sourceColumn, authoredBodyColumn)
+}
+
 /** Tracks a body line, recording where a run it opens was written. */
 function trackAuthoredAttributeRun(lexer: Lexer, state: { attrRun?: string | null; attrShallow?: boolean },
   attrSource: { column: number }, track: () => void): void {
@@ -1035,7 +1043,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
       bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
-        : rebasedFootnoteContent(lexer, content, admission.sourceColumn, authoredBodyColumn))
+        : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn))
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
