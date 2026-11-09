@@ -537,8 +537,14 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   const lazyItem = paragraph && !host.kinds.includes('note') && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
     markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 &&
     bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+  // A quoted prose line below a note's body column can continue its open
+  // paragraph. Keep that note in the tracker so a later unprefixed marker
+  // cannot be mistaken for lazy text of the quote (CARVE-P2-008).
+  const lazyNote = paragraph && host.kinds.at(-1) === 'note' && column < host.columns.at(-1)! &&
+    markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 &&
+    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody || open.markerBody === true)
-  while (!lazyItem && host.columns.length > 1 && host.columns.at(-1)! > column) popQuoteHost(host)
+  while (!lazyItem && !lazyNote && host.columns.length > 1 && host.columns.at(-1)! > column) popQuoteHost(host)
   const colons = host.colons ??= []
   while (colons.length > 0 && colons.at(-1)!.floor > host.columns.at(-1)!) colons.pop()
   const insideItem = host.kinds.at(-1) === 'item'
