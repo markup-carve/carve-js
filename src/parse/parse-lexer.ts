@@ -117,6 +117,8 @@ export const layoutWork = {
 export class Lexer {
   attachmentBoundaries: Set<number>
   consumedContinuationLines: Set<number>
+  /** Refused item `+` lines keep their item's ownership after the walk replaces them with `%%`. */
+  refusedItemMarkers = new Map<number, number>()
   /** Per document line whose quote chain ends in a lone `+`: text length at each depth to the levels below it. */
   /** Per first-block `+` line: the follower column of the outermost quote opened on it. */
   prefixMemoLines?: boolean[]
@@ -162,6 +164,10 @@ export class Lexer {
   applyOwnership({ lines, cuts, letters, refusedPlus, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
     this.skippedAbbreviations = skippedAbbreviations
     this.separatingAbbreviations = separatingAbbreviations
+    for (const { index, column, host, reason } of refusedPlus) {
+      if (host === 'list item' && (reason === 'right' || reason === 'blank'))
+        this.refusedItemMarkers.set(this.lineNumber(index), column - 1)
+    }
     for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
     for (const index of lazyCaptions ?? []) this.itemLazyLines.add(this.lineNumber(index))
     for (const o of overindented) {

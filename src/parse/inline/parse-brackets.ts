@@ -105,14 +105,19 @@ export function buildBracketMap(
     const commentEnd = s[at + 1] === '#' ? opaqueEnd(at, false) : undefined
     if (commentEnd !== undefined) {
       // A later `#}` inside another bracket label belongs to that label.
+      // A `#}` quoted inside a valid attribute value is not a comment closer.
       // Only a closer reached after its brackets balance claims this opener.
       let depth = 0
+      let quote: '"' | "'" | undefined
       for (let j = at + 2; j < commentEnd - 2; j++) {
         if (s[j] === '\\') { j++; continue }
-        if (s[j] === '[') depth++
+        if (quote) {
+          if (s[j] === quote) quote = undefined
+        } else if (s[j] === '"' || s[j] === "'") quote = s[j] as '"' | "'"
+        else if (s[j] === '[') depth++
         else if (s[j] === ']' && depth > 0) depth--
       }
-      if (depth === 0) return undefined
+      if (depth === 0 && quote === undefined) return undefined
     }
     let quote: '"' | "'" | undefined
     for (let k = at + 1; k < s.length; k++) {

@@ -40,6 +40,8 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  'a-css-escape-cannot-hide-a-style-vector',
+  'nested-reference-labels-contribute-to-heading-text',
   'a-block-at-a-pulled-footnote-column-opens-in-the-note',
   'a-block-at-the-host-column-after-a-plus-attached-quote-stays-in-the-host',
   'a-caption-at-the-host-column-captions-a-plus-attached-quote',
@@ -1611,14 +1613,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_5080_HTML,
 ])
 const behindSpec = new Map<string, string>([
-  // Pending carve-js PR #4813 (#5670); this pin brings the ruling before its port.
-  ["1026-abbreviations-test-rendered-adjacency-across-inline-nodes", "<p><a href=\"\">w<abbr title=\"t\">HTML</abbr></a></p>"],
-  // Pending carve-js PR #4813 (#5670); this pin brings the ruling before its port.
-  ["1026-abbreviations-test-rendered-adjacency-across-inline-nodes-2", "<p>w<strong><abbr title=\"t\">HTML</abbr></strong></p>"],
-  // Pending carve-js PR #4813 (#5671); this pin brings the ruling before its port.
-  ["1027-a-region-marker-between-items-splits-the-list", "<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>"],
-  // Pending carve-js PR #4813 (#5673); this pin brings the ruling before its port.
-  ["1027-a-declined-bracket-tail-releases-an-editorial-comment", "<p>[[][[]]{#1}][]#}</p>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

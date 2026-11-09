@@ -26,5 +26,7 @@ describe('November 9 spec rulings', () => {
   it('lets a comment atom form before a failed bracket attribute tail (carve#5673)', () => {
     expect(carveToHtml('[[][[]]{#1}][]#}\n').trim())
       .toBe('<p>[[][[]]<span class="critic-comment">1}][]</span></p>')
+    expect(carveToHtml('[a[b](u){#id title="#}"}c](v)\n').trim())
+      .toBe('<p><a href="v">abc</a></p>')
   })
 })
