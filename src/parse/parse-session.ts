@@ -2307,7 +2307,9 @@ export class ParseSession extends InlineParseSession {
     // open paragraph (heading/table/fence/thematic/div), terminates the quote
     // instead of being swallowed. This is also what ends the quote on a lazy
     // list marker when no open paragraph precedes it.
+    const closedRefusedNoteAttribute = this.normalizeRefusedNoteAttributeRuns(q)
     this.trackUntrackedQuoteLines(q)
+    if (closedRefusedNoteAttribute) q.paragraphOpen = false
     q.paragraphOpen ??= blockQuoteParagraphClaimOpen(state)
     if (q.handDown && q.handDown.paragraphOpen === undefined) q.handDown.paragraphOpen = q.paragraphOpen
     if (!q.paragraphOpen && !lazyFootnote) return false
@@ -2326,8 +2328,9 @@ export class ParseSession extends InlineParseSession {
     return true
   }
 
-  private finishBlockQuote(q: QuoteCollect): BlockQuote | Figure {
-    const { lexer, firstLineIndex } = q
+  private normalizeRefusedNoteAttributeRuns(q: QuoteCollect): boolean {
+    const { lexer } = q
+    let closedAtEnd = false
     // A note's refused first-block `+` leaves a wrapped attribute run at the
     // quote's block position. The quote lexer carries the note's synthetic
     // margin, so restore the run's authored relative columns before parsing.
@@ -2336,12 +2339,11 @@ export class ParseSession extends InlineParseSession {
     if (authoredLines !== undefined) for (let i = 1; i < q.inner.length; i++) {
       const note = authoredLines[q.innerLineNumbers[i - 1]! - 1]
       const opener = authoredLines[q.innerLineNumbers[i]! - 1]
-      if (!/^\s*\[\^/.test(q.inner[i - 1]!) || note === undefined || opener === undefined ||
+      if (!sourceQuoteBody(q.inner[i - 1]!).trimStart().startsWith('[^') || note === undefined || opener === undefined ||
           !/^\[\^[^\]]+\]:[ \t]+\+[ \t]*$/.test(sourceQuoteBody(note)) ||
           !sourceQuoteBody(opener).startsWith('{') || quotePrefixDepth(note) !== quotePrefixDepth(opener)) continue
       const depth = quotePrefixDepth(opener)
       const column = sourceColumn(opener, depth)
-      if (column >= sourceColumn(note, depth) + FOOTNOTE_BODY_COLUMN) continue
       const run: string[] = []
       for (let j = i; j < q.inner.length; j++) {
         const source = authoredLines[q.innerLineNumbers[j]! - 1]
@@ -2349,12 +2351,26 @@ export class ParseSession extends InlineParseSession {
             j > i && sourceColumn(source, depth) <= column) break
         run.push(' '.repeat(sourceColumn(source, depth) - column) + sourceQuoteBody(source))
         if (source.includes('}')) {
-          if (parseBlockAttributeRun(run.join('\n')) !== null)
-            for (let k = 0; k < run.length; k++) q.inner[i + k] = run[k]!
+          if (parseBlockAttributeRun(run.join('\n')) !== null) {
+            const directNote = /^\s*\[\^/.test(q.inner[i - 1]!)
+            if (i + run.length === q.inner.length) closedAtEnd = true
+            if (directNote) for (let k = 0; k < run.length; k++) {
+              q.inner[i + k] = run[k]!
+              const lineNumber = q.innerLineNumbers[i + k]
+              const untracked = q.untracked.find(([, index]) => lexer.lineNumber(index) === lineNumber)
+              if (untracked !== undefined) untracked[0] = run[k]!
+            }
+          }
           break
         }
       }
     }
+    return closedAtEnd
+  }
+
+  private finishBlockQuote(q: QuoteCollect): BlockQuote | Figure {
+    const { lexer, firstLineIndex } = q
+    this.normalizeRefusedNoteAttributeRuns(q)
     const subLexer = nestedSubLexer(lexer, q.inner, firstLineIndex, q.innerLineNumbers, q.origins)
     subLexer.quoteLazyHint = q.handDown
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
