@@ -288,6 +288,8 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
       if (attribute && isValidInlineAttrPayload(attribute[1]!) && !isEmptyAttrs(parseAttrs(attribute[1]!))) {
         ends.set(at, at + attribute[0].length)
         attributeTails.set(at, at + attribute[0].length)
+        // A glued block may be followed by more blocks in the same run.
+        constructEnds.add(at + attribute[0].length)
         at += attribute[0].length - 1
         continue
       }
