@@ -111,6 +111,8 @@ export const ATTR_INERT_PREV = new Set([
   'mention',
   'tag',
   'heading_ref',
+  // `{=format}` completes a raw inline; it has no trailing attribute slot.
+  'raw_inline',
   // Smart typography is a source-to-glyph substitution, not one of PART 9's
   // inline attribute carriers. Attaching a block here consumes source that no
   // renderer has an element on which to emit.
