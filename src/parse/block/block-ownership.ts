@@ -869,13 +869,7 @@ export function ownLines(
       if (attachedHost!.at(-1)!.kind === 'dd') endedDescription = attachedHost
       attachedHost = null
     }
-    if (m.rest === '') endedDescription = null
-    // Only the fence-shaped follower of the refused brace run the `+` took (CARVE-P2-035).
-    else if (endedDescription && form.kind === 'fence' && form.family === 'code' && reached === 0 &&
-        at > 0 && trimEndSpaceTab(lines[at - 1]!).endsWith('}')) {
-      ddBlockFence = { host: endedDescription, at }
-      endedDescription = null
-    }
+    trackDescriptionBlockFence(form)
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
     const missedFrames = framesPast(frames, reached)
@@ -1358,6 +1352,16 @@ export function ownLines(
       frames.push(...host)
       top().last = 'block'
       return true
+    }
+
+    function trackDescriptionBlockFence(form: Form): void {
+      if (m.rest === '') endedDescription = null
+      // Only the fence-shaped follower of the refused brace run the `+` took (CARVE-P2-035).
+      else if (endedDescription && form.kind === 'fence' && form.family === 'code' && reached === 0 &&
+          at > 0 && trimEndSpaceTab(lines[at - 1]!).endsWith('}')) {
+        ddBlockFence = { host: endedDescription, at }
+        endedDescription = null
+      }
     }
 
     function resumesDescriptionAfterFence(): boolean {
