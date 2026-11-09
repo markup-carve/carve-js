@@ -681,11 +681,11 @@ function authoredPrefix(column: number, innermostFirst: ReadonlyArray<number | u
     for (let index = innermostFirst.length - 1; index >= 0; index--) {
       const at = Math.max(innermostFirst[index] ?? (visibleLine ? firstContentColumn - 2 * (index + 1) : next), next)
       // Visible continuations retain their structural quote even if its
-      // canonical marker shifts the token. An erased line with a known quote
-      // base cannot move its token beyond the published column.
+      // canonical marker shifts the token. An erased line whose token precedes
+      // a known quote base belongs before that marker.
       if (visibleLine
         ? column < at || (column === at && at === 1)
-        : column < at + 2 && innermostFirst[index] !== undefined) break
+        : column < at && innermostFirst[index] !== undefined) break
       source += ' '.repeat(at - next) + '> '
       next = at + 2
     }
@@ -731,8 +731,9 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
   blockIndexes = new WeakMap()
   // A quote marker goes at the content column of the item holding the quote, so the line stays in
   // that item; otherwise right after the marker before it.
-  const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>, opensQuote = false): string => {
-    const column = block.pos?.startColumn ?? 1
+  const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>,
+    opensQuote = false, minimumColumn = 1): string => {
+    const column = Math.max(block.pos?.startColumn ?? 1, minimumColumn)
     // Structural quote ownership survives even when a consumed `+` left the
     // comment's token at column one. The writer must still spell its quote.
     const prefix = innermostFirst.length > 0 || opensQuote
@@ -762,6 +763,15 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       if (base === undefined && before?.type === 'list' &&
           quoteBases.length > 0 && sourceColumn !== undefined && sourceColumn > 2)
         quoteBases[0] = sourceColumn - 2
+      // The writer keeps a separate opener when the quote's first child is an
+      // erased comment on a later line. That opener already owns the comment,
+      // so its line needs only the outer quote markers.
+      if (opensQuote && before === undefined && quoteBases[0] !== undefined &&
+          sourceColumn !== undefined && sourceColumn < quoteBases[0] + 2 &&
+          block.pos?.startLine !== undefined && markerLine !== undefined &&
+          block.pos.startLine > markerLine) quoteBases.shift()
+      const descriptionColumn = description?.find((child) => child.type !== 'comment' &&
+        child.pos?.startColumn !== undefined)?.pos?.startColumn
       if (block.type === 'list' && block.transparentBetweenItems?.length) {
         const owned = new Map<number, Set<Comment | AbbreviationDef>>()
         block.transparentBetweenItems = block.transparentBetweenItems.filter((gap) => {
@@ -778,7 +788,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       }
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
-        block.transparentSource = authoredSource(block, quoteBases, opensQuote)
+        block.transparentSource = authoredSource(block, quoteBases, opensQuote, descriptionColumn)
         block.transparentOriginalValue = block.content
       }
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
@@ -790,8 +800,8 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         // overlap a quoted paragraph's span without belonging to that quote.
         // An abbreviation pulled out of the paragraph keeps its quoted source.
         const source = authoredSource(block,
-          block.type === 'abbreviation_def' && match ? match.quotes : quoteBases,
-          !match && opensQuote)
+          match && (block.type === 'abbreviation_def' || description) ? match.quotes : quoteBases,
+          !match && opensQuote, descriptionColumn)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
