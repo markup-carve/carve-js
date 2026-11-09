@@ -190,12 +190,16 @@ function captionMissesQuote(missed: boolean, rest: string, column: number, owner
     !missedFrames.some((f) => f.kind === 'note')
 }
 
-function foldReleasedFence(form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>): Form {
+function foldReleasedFence(
+  form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>, laterCloser: () => boolean,
+): Form {
   const released = owner.releasedFence
   const run = PURE_FENCE.exec(rest)?.[1]
+  const sameRun = run !== undefined && released?.character === rest[0]
   // Past a single host only a run that could close the fence folds; a shorter one opens a fence (carve#5604).
-  if (form.family === 'code' && run !== undefined && owner.para && released !== undefined &&
-      released.character === rest[0] && column > released.column && (released.stacked || run.length >= released.length)) {
+  // Past a stacked host any unpaired fence line folds too (carve#5367).
+  if (form.family === 'code' && owner.para && released !== undefined && column > released.column &&
+      (released.stacked ? sameRun || !laterCloser() : sameRun && run.length >= released.length)) {
     lazyLines.add(at)
     return TEXT
   }
@@ -570,6 +574,7 @@ export function ownLines(
     return from
   }
 
+  const laterCloserCache = new Map<string, { through: number; paired: boolean }>()
   for (let at = nextWalkedLine(start); at < lines.length; at = nextWalkedLine(at + 1)) {
     const invisible = invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, separatingLinks, skippedComments, skippedNotes)
     if (invisible !== null) {
@@ -876,7 +881,20 @@ export function ownLines(
     if (inner.kind === 'fence') frames.pop()
     let owner = frames[reached]!
     if (m.rest !== '') for (const f of frames) if (f.closedList && m.col < f.closedList.col) f.closedList = undefined
-    let form = foldReleasedFence(classify(m.rest, owner, at, m.col), owner, m.rest, m.col, at, lazyLines)
+    const classified = classify(m.rest, owner, at, m.col)
+    const laterCloser = (): boolean => {
+      const key = `${quotes}:${owner.col}:${m.col}:${/^(`{3,}|~{3,})/.exec(m.rest)?.[1] ?? ''}`
+      const cached = laterCloserCache.get(key)
+      if (cached && at < cached.through) return cached.paired
+      const remember = (through: number, paired: boolean): boolean => (laterCloserCache.set(key, { through, paired }), paired)
+      for (let next = at + 1; next < lines.length; next++) {
+        const measured = quotedMeasure(next, quotes)
+        if (measured === null || measured.rest !== '' && measured.col < owner.col) return remember(next, false)
+        if (measured.rest !== '' && classified.closes!(measured.rest, measured.col)) return remember(next, true)
+      }
+      return remember(lines.length, false)
+    }
+    let form = foldReleasedFence(classified, owner, m.rest, m.col, at, lazyLines, laterCloser)
     if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
     trackQuoteBlock(form, owner, plusFollower)
     if (!plusFollower && attachedBlockEnded(form, owner, reached)) {
