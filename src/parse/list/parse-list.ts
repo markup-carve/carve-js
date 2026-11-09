@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
-import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, parseBlockAttributeRun } from '../parse-prepass-core.js'
+import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, isRefusedBraceRun, parseBlockAttributeRun } from '../parse-prepass-core.js'
 import { leadingCommentEnd, sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
@@ -720,7 +720,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         } else if (opensCodeFence(text)) {
           fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
         }
-        return index > 0 && (index === blockCut || indentColumns(line) === placement.contentCol && (isListMarkerLine(text) ||
+        return index > 0 && (index === blockCut || indentColumns(line) === placement.contentCol &&
+          !(isListMarkerLine(text) && isRefusedBraceRun(at => lines[at], index)) && (isListMarkerLine(text) ||
           !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text))))
       })
       if (cut > 0) {
@@ -3718,7 +3719,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      if ((lazyState.refusedBraceFollower && !isListMarkerLine(l.trimStart()) &&
+      if ((lazyState.refusedBraceFollower &&
           !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
           isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l)) && !isBlankLine(l)) {
         lazyState.refusedBraceFollower = false
