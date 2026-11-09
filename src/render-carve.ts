@@ -826,7 +826,7 @@ function writtenAsOneRun(previous: BlockNode, block: BlockNode, containerOwned =
   if (!lineComments && (previous.type !== 'citation_definition' || block.type !== 'citation_definition')) return false
   const before = previous.pos
   const after = block.pos
-  if (!before || !after) return false
+  if (!before || !after) return lineComments
   return after.startLine === before.endLine + 1
 }
 
