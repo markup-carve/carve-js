@@ -484,6 +484,7 @@ export function ownLines(
   const top = (): Frame => frames[frames.length - 1]!
   let reach = 0
   let runs: { widest: Record<string, number[]> } | null = null
+  const verseRunsByQuoteDepth = new Map<number, Record<'`' | '~', number[]>>()
   // The line after an accepted `+` keeps its column: the marker reads it.
   let afterPlus = false
   let nextVisible = -1
@@ -1941,13 +1942,20 @@ export function ownLines(
 
   function versePayloadRunPairs(run: string, at: number): boolean {
     const quoteDepth = frames.filter(frame => frame.kind === 'quote').length
-    for (let k = at + 1; k < lines.length; k++) {
-      const measured = quotedMeasure(k, quoteDepth)
-      if (measured === null) return false
-      const later = PURE_FENCE.exec(measured.rest)?.[1]
-      if (later?.[0] === run[0] && later.length >= run.length) return true
+    let ahead = verseRunsByQuoteDepth.get(quoteDepth)
+    if (ahead === undefined) {
+      ahead = { '`': new Array<number>(lines.length + 1).fill(0), '~': new Array<number>(lines.length + 1).fill(0) }
+      for (let k = lines.length - 1; k >= 0; k--) {
+        const measured = quotedMeasure(k, quoteDepth)
+        if (measured === null) continue
+        ahead['`'][k] = ahead['`'][k + 1]!
+        ahead['~'][k] = ahead['~'][k + 1]!
+        const later = PURE_FENCE.exec(measured.rest)?.[1]
+        if (later !== undefined) ahead[later[0] as '`' | '~'][k] = Math.max(ahead[later[0] as '`' | '~'][k]!, later.length)
+      }
+      verseRunsByQuoteDepth.set(quoteDepth, ahead)
     }
-    return false
+    return ahead[run[0] as '`' | '~'][at + 1]! >= run.length
   }
 
   function nextLineOwner(host: Frame[], at: number, quotes: number): number {
