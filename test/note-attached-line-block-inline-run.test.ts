@@ -9,3 +9,33 @@ for (const run of ['`', '```', '~~~~']) {
     expect(html).not.toContain('<code>\n</code>')
   })
 }
+
+for (const run of ['```', '~~~~']) {
+  it(`honors a physical line-block closer after ${run} verse`, () => {
+    const html = carveToHtml(`r[^a]\n\n[^a]: +\n::: |\na\n${run}\n:::\n\n  tail\n`)
+    expect(html).toContain(run.startsWith('`') ? '<p>a<br>\n<code></code></p>' : `<p>a<br>\n${run}</p>`)
+    expect(html).toContain('<p>tail<a href="#fnref1"')
+    expect(html).not.toContain('<div>\n')
+  })
+}
+
+it('does not treat a closer inside a verse comment span as physical', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n%%%\n:::\n%%%\n\n  tail\n')
+  expect(html).toContain('<div class="line-block">\n        <p>a</p>\n      </div>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})
+
+it('does not treat a closer inside paired code verse as physical', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n```\n:::\n```\n\n  tail\n')
+  expect(html).toContain('<code>\n:::\n</code>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})
+
+it('keeps a percent run inside paired code verse', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n```\n%%%\n:::\n```\n\n  tail\n')
+  expect(html).toContain('<code></code>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})
