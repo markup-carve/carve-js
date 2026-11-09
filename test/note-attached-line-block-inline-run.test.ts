@@ -32,3 +32,10 @@ it('does not treat a closer inside paired code verse as physical', () => {
   expect(html).toContain('<p>tail<a href="#fnref1"')
   expect(html).not.toContain('<p>tail</p>')
 })
+
+it('keeps a percent run inside paired code verse', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n```\n%%%\n:::\n```\n\n  tail\n')
+  expect(html).toContain('<code></code>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})

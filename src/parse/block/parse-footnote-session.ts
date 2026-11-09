@@ -491,19 +491,12 @@ function plusBlockClosers(
     let commentRun: number | undefined
     let codeRun: string | undefined
     const remainingCodeRuns = new Map<string, number>()
-    let countingComment: number | undefined
     let countingAfterOpener = false
     for (const line of bodyLines) {
       if (!countingAfterOpener) {
         if (line === opener) countingAfterOpener = true
         continue
       }
-      const comment = commentFenceRun(line.trimStart())
-      if (countingComment !== undefined) {
-        if (comment === countingComment) countingComment = undefined
-        continue
-      }
-      if (comment !== undefined) { countingComment = comment; continue }
       const code = /^(`{3,})$/.exec(line.trim())?.[1]
       if (code) remainingCodeRuns.set(code, (remainingCodeRuns.get(code) ?? 0) + 1)
     }
