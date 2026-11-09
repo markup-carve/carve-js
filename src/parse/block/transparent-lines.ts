@@ -680,11 +680,48 @@ function authoredPrefix(column: number, innermostFirst: ReadonlyArray<number | u
     let next = 1
     for (let index = innermostFirst.length - 1; index >= 0; index--) {
       const at = Math.max(innermostFirst[index] ?? (visibleLine ? firstContentColumn - 2 * (index + 1) : next), next)
-      if (visibleLine && (column < at || column === at && at === 1)) break
+      // The published position is the token's column, not of a quote marker.
+      // A list quote with an authored base cannot add a marker that pushes the
+      // token past that column. A base-less quote remains its structural owner
+      // even when the `+` that opened it placed the comment at its marker.
+      if (column < at + 2 && (visibleLine || innermostFirst[index] !== undefined)) break
       source += ' '.repeat(at - next) + '> '
       next = at + 2
     }
     return source + ' '.repeat(Math.max(0, column - next))
+}
+
+/** Comments that an item's block tree owns, so a gap cannot write them twice. */
+function ownedByItem(blocks: readonly BlockNode[]): Set<Comment | AbbreviationDef> {
+  const owned = new Set<Comment | AbbreviationDef>()
+  const pending = blocks.map((block) => ({ block, nested: false }))
+  while (pending.length > 0) {
+    const { block, nested } = pending.pop()!
+    if (nested && (block.type === 'comment' || block.type === 'abbreviation_def')) owned.add(block)
+    if (block.type === 'list') {
+      for (const item of block.items) for (const child of item.children) pending.push({ block: child, nested: true })
+    } else if (block.type === 'definition_list') {
+      for (const item of block.items) for (const description of item.definitions)
+        for (const child of description) pending.push({ block: child, nested: true })
+    } else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
+      for (const child of block.children as BlockNode[]) pending.push({ block: child, nested: true })
+    }
+  }
+  return owned
+}
+
+/** The first positioned child supplies a marker line when erased lines removed the host span. */
+function firstBlockLine(block: BlockNode | undefined): number | undefined {
+  let node = block
+  while (node !== undefined) {
+    if (node.pos?.startLine !== undefined) return node.pos.startLine
+    if (node.type === 'list') node = node.items[0]?.children[0]
+    else if (node.type === 'definition_list') node = node.items[0]?.definitions[0]?.[0]
+    else if ('children' in node && Array.isArray(node.children) && node.type !== 'paragraph' && node.type !== 'heading')
+      node = (node.children as BlockNode[])[0]
+    else return undefined
+  }
+  return undefined
 }
 
 /** Rebuild writer-only placement after a PART 12 AST round trip strips it. */
@@ -695,8 +732,10 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
   // that item; otherwise right after the marker before it.
   const authoredSource = (block: Comment | AbbreviationDef, innermostFirst: ReadonlyArray<number | undefined>, opensQuote = false): string => {
     const column = block.pos?.startColumn ?? 1
-    // A line a `+` hands to a quote it opens is written with that quote's marker.
-    const prefix = column > 1 || opensQuote ? authoredPrefix(column, innermostFirst) : ' '.repeat(Math.max(0, column - 1))
+    // Structural quote ownership survives even when a consumed `+` left the
+    // comment's token at column one. The writer must still spell its quote.
+    const prefix = innermostFirst.length > 0 || opensQuote
+      ? authoredPrefix(column, innermostFirst) : ' '.repeat(Math.max(0, column - 1))
     return prefix +
       (block.type === 'comment' ? block.content === '' ? '%%' : `%% ${block.content}` :
         `*[${block.abbr}]: ${block.expansion}`)
@@ -708,15 +747,37 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
       return out
     }
     const pending: Array<{ block: BlockNode; quotes: QuoteChain; base: number | undefined;
-      markerLine: number | undefined; description?: BlockNode[]; opensQuote?: boolean }> = blocks.map((block) => ({ block, quotes: undefined, base: undefined, markerLine }))
+      markerLine: number | undefined; description?: BlockNode[]; opensQuote?: boolean;
+      before: BlockNode | undefined }> = blocks.map((block, index) => ({ block, quotes: undefined, base: undefined, markerLine, before: blocks[index - 1] }))
     for (let at = 0; at < pending.length; at++) {
-      const { block, quotes, base, markerLine, description, opensQuote } = pending[at]!
+      const { block, quotes, base, markerLine, description, opensQuote, before } = pending[at]!
       const onMarkerLine = block.pos?.startLine !== undefined && block.pos.startLine === markerLine
-      // A comment a description holds before another of its blocks is inside it, not a gap (CARVE-P12-027).
-      if (block.type === 'comment' && description && description.indexOf(block) < description.length - 1) continue
+      const quoteBases = chain(quotes)
+      const sourceColumn = block.pos?.startColumn
+      // A comment after a list is a sibling of that list. Moving its quote
+      // marker left can make the list claim it. Keep the marker at the comment's
+      // own preceding column in that host, which is the smallest departure that
+      // leaves the AST ownership intact.
+      if (base === undefined && before?.type === 'list' &&
+          quoteBases.length > 0 && sourceColumn !== undefined && sourceColumn > 2)
+        quoteBases[0] = sourceColumn - 2
+      if (block.type === 'list' && block.transparentBetweenItems?.length) {
+        const owned = new Map<number, Set<Comment | AbbreviationDef>>()
+        block.transparentBetweenItems = block.transparentBetweenItems.filter((gap) => {
+          let comments = owned.get(gap.after)
+          if (comments === undefined) {
+            comments = ownedByItem(block.items[gap.after]?.children ?? [])
+            owned.set(gap.after, comments)
+          }
+          if (!comments.has(gap.node)) return true
+          delete gap.node.transparentInList
+          return false
+        })
+        if (block.transparentBetweenItems.length === 0) delete block.transparentBetweenItems
+      }
       if (block.type === 'comment' && !block.block && !block.delimited && block.pos &&
           !onMarkerLine && block.transparentSource === undefined) {
-        block.transparentSource = authoredSource(block, chain(quotes), opensQuote)
+        block.transparentSource = authoredSource(block, quoteBases, opensQuote)
         block.transparentOriginalValue = block.content
       }
       if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
@@ -724,8 +785,10 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset, undefined, block.pos.startColumn)
-        // A line erased inside a quoted paragraph is spelled with that paragraph's quotes (carve#5129).
-        const source = authoredSource(block, match ? match.quotes : chain(quotes), !match && opensQuote)
+        // A line erased inside a quoted paragraph keeps the quote markers of
+        // its own structural host. A document sibling can overlap that quoted
+        // paragraph's source span without being inside the quote (carve-js#4694).
+        const source = authoredSource(block, quoteBases, !match && opensQuote)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -739,6 +802,10 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
               (child.type === 'text' ? child.value : ''))
           block.transparentInParagraph = true
         } else {
+          // A direct description child before another block stays at that
+          // location. It is a gap only when it follows the description's last
+          // block; otherwise moving it behind that block changes their order.
+          if (description && description.indexOf(block) < description.length - 1) continue
           const listGap = betweenListItems(blocks, block.pos.startOffset)
           if (listGap) {
             listGap.list.transparentBetweenItems ??= []
@@ -751,16 +818,20 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         }
       }
       if (block.type === 'list') for (const item of block.items)
-        for (const child of item.children) pending.push({ block: child, quotes, base: itemContentColumn(item), markerLine: item.pos?.startLine })
+        for (const [index, child] of item.children.entries()) pending.push({ block: child, quotes,
+          base: itemContentColumn(item), markerLine: item.pos?.startLine ?? firstBlockLine(item.children[0]),
+          before: item.children[index - 1] })
       else if (block.type === 'definition_list') for (const item of block.items)
         for (const [index, definition] of item.definitions.entries())
-          for (const child of definition) pending.push({ block: child, quotes, base, markerLine: item.definitionLines?.[index], description: definition })
+          for (const [childIndex, child] of definition.entries()) pending.push({ block: child, quotes,
+            base, markerLine: item.definitionLines?.[index], description: definition, before: definition[childIndex - 1] })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
         const inner = block.type === 'block_quote' ? { base, outer: quotes } : quotes
         const opener = block.type === 'block_quote' && block.fenced !== true ? unheldLineComments(block.children) : []
-        for (const child of block.children as BlockNode[]) pending.push({ block: child, quotes: inner,
+        for (const [index, child] of (block.children as BlockNode[]).entries()) pending.push({ block: child, quotes: inner,
           base: block.type === 'block_quote' ? undefined : base, opensQuote: opener.includes(child as Comment),
-          markerLine: block.type === 'block_quote' ? block.pos?.startLine : markerLine })
+          markerLine: block.type === 'block_quote' ? block.pos?.startLine ?? markerLine : markerLine,
+          before: (block.children as BlockNode[])[index - 1] })
       }
     }
   }
