@@ -807,7 +807,9 @@ export function createDefinitionListParser(
           }
           pendingMarkerLineBlock = null
         }
-        const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody)
+        const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody) ||
+          lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined && residual > 0 &&
+          !lazyUnderNestedItem && isListMarkerLine(flush) && reachesSourceBody
         if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
         // A line AT the body's column 0 is the body's own block, so it replaces
         // whatever container stood there: another list marker keeps a list
@@ -819,7 +821,11 @@ export function createDefinitionListParser(
         // A marker opens a list in the body; only a div's paragraph keeps it as text (PART 0 S3, carve#4860).
         const foldedMarker = lazyState.lazyFoldable && lazyState.divDepth > 0 && nestedItemColumn < 0 &&
           markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
-        if (bodyReadsFlush && residual > 0 && !foldedMarker) authoredOpeners.add(bodyLines.length - 1)
+        if (bodyReadsFlush && residual > 0 && !foldedMarker) {
+          authoredOpeners.add(bodyLines.length - 1)
+          // A refused run forced the fence line only; the next block uses its authored base.
+          if (lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined) bodyLines[bodyLines.length - 1] = flush
+        }
         if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
         else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
         if (!foldedMarker) track(bodyReadsFlush ? flush : dedented)

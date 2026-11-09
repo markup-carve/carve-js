@@ -36,6 +36,16 @@ function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
   return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
 }
 
+/** A refused run forces the fence line only; later blocks return to the note body base. */
+function endsRefusedFenceParagraph(
+  state: { refusedBraceFollower?: boolean; refusedRunKept?: RegExp | null | undefined },
+  previous: string, content: string, framedBelow: boolean,
+): boolean {
+  return state.refusedBraceFollower === true && state.refusedRunKept === undefined &&
+    opensCodeFence(previous.trimStart()) && lineOpensItemBlock(content.trimStart()) &&
+    content !== content.trimStart() && !framedBelow
+}
+
 /** A continuation the authored columns refuse is paragraph text, so its moved indentation is dropped. */
 function rebasedRunContent(lexer: Lexer, state: { attrRun?: string | null }, attrSource: { column: number },
   content: string, sourceColumn: number, authoredBodyColumn: number | undefined): string {
@@ -1103,6 +1113,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
       bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
         : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn))
+      if (endsRefusedFenceParagraph(lazyState, bodyLines.at(-2) ?? '', content, framedBelow))
+        bodyLines[bodyLines.length - 1] = content.trimStart()
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
