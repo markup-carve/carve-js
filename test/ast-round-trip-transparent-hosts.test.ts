@@ -26,3 +26,14 @@ describe('transparent comments through AST JSON', () => {
     })
   }
 })
+
+describe('quotes after a consumed plus', () => {
+  it.each([
+    '- > a\n  +\n  %% c\n- z\n',
+    '> :: t\n> : a\n> +\n> %% c\n> z\n',
+  ])('keeps the AST owner and HTML for %j', (source) => {
+    const through = renderCarve(fromAstJson(carveToAstJson(source)))
+    expect(readbackTree(through)).toBe(readbackTree(source))
+    expect(carveToHtml(through)).toBe(carveToHtml(source))
+  })
+})
