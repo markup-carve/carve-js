@@ -96,9 +96,9 @@ function walkBlockInlines(
       }
       break
     case 'figure':
-      visit(node.caption)
       if (node.target.type === 'block_quote' || node.target.type === 'table')
         walkBlockInlines(node.target, visit, depth + 1)
+      visit(node.caption)
       break
     case 'figure_group':
       if (node.caption) visit(node.caption)
