@@ -2414,6 +2414,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (l.startsWith(LAZY_FRAME) && !lazyState.lazyFoldable && !lazyState.retainedMarker &&
           !insideOpenFence(lazyState) && !descendantVerseClaimAfterMiss(l)) return 'stop'
       lw = indentColumns(l, contentCol)
+      // An abutting marker attribute can leave the line's indentation in
+      // the lexer frame. Recover that frame before assigning a comment opener
+      // to the item whose content column it reaches.
+      if (head.attr !== null && commentFenceRun(l.trimStart()) !== undefined) {
+        lw += lexer.lineStartColumn(lexer.pos) - lexer.lineStartColumn(itemStartLineIndex)
+      }
       // The note may have ended while this item's paragraph still owns a
       // follower. Check the authored columns: rebasing the note can make the
       // same line appear to reach its body in this local frame.
@@ -2506,6 +2512,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // Lazy text in an ordinary colon body retains its paragraph frame.
         lazyState.opaque === null && lazyState.literalColon === undefined
       if (lw < contentCol && spanEndingMisses.has(lexer.pos)) return 'stop'
+      // An unclosed comment in this item ends when a non-comment line misses
+      // the item's body column (PART 0 S1), including after an attributed marker.
+      if (lw < contentCol && lazyState.opaque?.kind === 'comment' &&
+          !RE_COMMENT_LINE.test(l.trimStart())) return 'stop'
       belowItemComment = lw < contentCol && RE_COMMENT_LINE.test(l.trimStart())
       // Comment lines are column-exempt, so every one stays in a span the item holds (PART 0 S1, corpus 824).
       const heldCommentSpan = belowItemComment && bodyHoldsOpenCommentSpan(nested, itemSpanScan, degradedOpeners)
