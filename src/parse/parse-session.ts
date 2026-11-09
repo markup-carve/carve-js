@@ -3028,7 +3028,8 @@ export class ParseSession extends InlineParseSession {
           (lexer.consumesHostedLinkDefs === 'lazy' &&
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))))) &&
           this.isLinkDefLine(stripLazyFrame(ln))) ||
-          startsInterruptingBlock(lexer) ||
+          (openInlineCode !== 0 && ln.trimStart().startsWith('{')
+            ? false : startsInterruptingBlock(lexer)) ||
           (lexer.hostedFootnoteLines.has(lexer.lineNumber(lexer.pos)) &&
             !ln.startsWith(LAZY_FRAME) && RE_FOOTNOTE_DEF.test(ln.trimStart())))
       )
