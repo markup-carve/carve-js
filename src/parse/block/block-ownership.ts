@@ -86,7 +86,7 @@ interface Frame {
   plus?: number
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
-  releasedFence?: { column: number; character: string; length: number; stacked: boolean }
+  releasedFence?: { minimumFoldColumn: number }
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
   listShift?: number
@@ -208,15 +208,13 @@ function captionMissesQuote(missed: boolean, rest: string, column: number, owner
 }
 
 function foldReleasedFence(
-  form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>, laterCloser: () => boolean,
+  form: Form, owner: Frame, column: number, at: number, lazyLines: Set<number>, laterCloser: () => boolean,
 ): Form {
   const released = owner.releasedFence
-  const run = PURE_FENCE.exec(rest)?.[1]
-  const sameRun = run !== undefined && released?.character === rest[0]
-  // Past a single host only a run that could close the fence folds; a shorter one opens a fence (carve#5604).
-  // Past a stacked host any unpaired fence line folds too (carve#5367).
-  if (form.family === 'code' && owner.para && released !== undefined && column > released.column &&
-      (released.stacked ? sameRun || !laterCloser() : sameRun && run.length >= released.length)) {
+  // The fold belongs to the paragraph's owner, regardless of how many hosts the blank released.
+  // Its source column must first pass the attachment's host reach (carve#5604).
+  if (form.family === 'code' && owner.para && released !== undefined && column >= released.minimumFoldColumn &&
+      !laterCloser()) {
     lazyLines.add(at)
     return TEXT
   }
@@ -1090,7 +1088,7 @@ export function ownLines(
       trackDescriptionBlockFence(form)
       return form
     }
-    let form = advanceAttachedForm(foldReleasedFence(classified, owner, m.rest, m.col, at, lazyLines, laterCloser))
+    let form = advanceAttachedForm(foldReleasedFence(classified, owner, m.col, at, lazyLines, laterCloser))
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
     const missedFrames = framesPast(frames, reached)
@@ -1570,24 +1568,21 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
-        const host0 = host.at(-1)!
-        const parent = host[nextOwner]!
-        const sameStack = host0.kind === 'item' && parent.kind === 'item' && parent.line === host0.line
-        if (topFence.kind === 'fence' && topFence.family === 'code' &&
-            (nextOwner === host.length - 2 || sameStack)) {
-          const released = quotedMeasure(topFence.opened!, quotes)
-          if (released !== null) {
-            top().releasedFence = {
-              column: released.col, character: released.rest[0]!, length: /^(`+|~+)/.exec(released.rest)![1]!.length,
-              stacked: sameStack || host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
-            }
+      } else {
+        frames.length = 0
+        frames.push(...host)
+        top().last = 'block'
+      }
+      if (topFence.kind === 'fence' && topFence.family === 'code') {
+        const released = quotedMeasure(topFence.opened!, quotes)
+        if (released !== null) {
+          const host0 = host.at(-1)!
+          const stacked = host.some((frame) => frame !== host0 && frame.kind !== 'doc' && frame.line === host0.line)
+          top().releasedFence = {
+            minimumFoldColumn: host0.kind === 'item' && !stacked ? host0.col : released.col + (stacked ? 1 : 2),
           }
         }
-        return true
       }
-      frames.length = 0
-      frames.push(...host)
-      top().last = 'block'
       return true
     }
 
