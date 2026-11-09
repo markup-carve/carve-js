@@ -1005,7 +1005,8 @@ export function ownLines(
         const parent = held.host.length - 2
         if (reached !== parent || frames[parent] !== held.host[parent]) continue
         if (held.block ? frames.includes(held.block) && frames.indexOf(held.block) <= reached
-          : held.table && form.table === true && m.rest !== '' && m.col === host.markerCol && held.last === at - 1) {
+          : held.table && form.table === true && m.rest !== '' &&
+            m.col >= host.markerCol! - 1 && m.col <= host.markerCol! && held.last === at - 1) {
           held.last = at
           continue
         }
