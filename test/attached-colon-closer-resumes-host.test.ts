@@ -3,6 +3,25 @@ import { carveToHtml } from '../src/index.js'
 
 const backlink = '<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a>'
 
+it('resumes a note after an exactly closed attached line block (carve#5599)', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\n  a\n:::\n  - sib\n')
+  expect(html).toBe(`<p>r<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <div class="line-block">
+        <p>&nbsp;&nbsp;a</p>
+      </div>
+      <ul>
+        <li>sib</li>
+      </ul>
+      <p>${backlink}</p>
+    </li>
+  </ol>
+</section>`)
+})
+
 it('keeps a closed line block attached to an item through its later exact closer (carve#5405)', () => {
   expect(carveToHtml('- +\n::: |\n\n  ::: x\n  :::\n')).toBe(`<ul>
   <li>

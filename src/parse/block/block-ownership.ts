@@ -1851,7 +1851,7 @@ export function ownLines(
     if (colon && isColonFenceOpener(rest)) {
       const run = colon[1]!.length
       if (RE_LINE_BLOCK_OPEN.test(rest)) {
-        return { kind: 'fence', family: 'div', interrupts: true, lineBlock: true, closes: (r, closerCol) => closerCol <= col && COLON_CLOSER.exec(r)?.[1]!.length === run }
+        return { kind: 'fence', family: 'div', run, interrupts: true, lineBlock: true, closes: (r, closerCol) => closerCol <= col && COLON_CLOSER.exec(r)?.[1]!.length === run }
       }
       return { kind: 'colon', run, interrupts: true }
     }
