@@ -15,4 +15,10 @@ describe('nested tab marker columns', () => {
       '<ul>\n  <li>o\n    <ul>\n      <li>e\n        <blockquote><p>q</p></blockquote>\n      </li>\n    </ul>\n  </li>\n</ul>',
     )
   })
+
+  it('preserves marker-looking tabbed payload inside a code fence', () => {
+    expect(carveToHtml('- a\n  ```\n   \t- x\n')).toBe(
+      '<ul>\n  <li>a\n    <pre><code> \t- x\n</code></pre>\n  </li>\n</ul>',
+    )
+  })
 })
