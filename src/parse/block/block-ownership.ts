@@ -895,14 +895,23 @@ export function ownLines(
         reached = k
         continue
       }
-      if (m.rest !== '' && m.col < f.col) {
-        if (stripped === null && src.slice(0, src.length - m.rest.length).includes('\t')) {
+      if (m.rest !== '' && src.slice(0, src.length - m.rest.length).includes('\t')) {
+        if (stripped === null) {
           const origins: number[] = []
           for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
           const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
             frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
           stripped = strippedColumn(src, origins, canonicalChild)
         }
+        // Normalize before deciding reach. An identical later marker must not gain
+        // a new column merely because the first one opened a child frame.
+        if (stripped !== m.col) {
+          lineCuts.push({ at: out.length, removed: src.length - m.rest.length - stripped })
+          src = ' '.repeat(stripped) + m.rest
+          m = indentCols(src)
+        }
+      }
+      if (m.rest !== '' && m.col < f.col) {
         if (stripped === null || stripped < f.col) break
         frameReach = true
       }
