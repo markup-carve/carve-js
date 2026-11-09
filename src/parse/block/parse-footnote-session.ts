@@ -16,17 +16,43 @@ function wrappedAttributeRunAt(lexer: Lexer): number {
   const opener = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? lexer.peek()
   if (opener === undefined || !opensWrappedAttributeBlock(sourceQuoteBody(opener).trimStart())) return 0
   const quoteDepth = quotePrefixDepth(opener)
-  const column = sourceColumn(opener, quoteDepth)
+  const column = sourceQuoteLocalColumn(opener, quoteDepth)
   const lines: string[] = []
   for (let offset = 0; ; offset++) {
     const line = lexer.peek(offset)
     const authored = line === undefined ? undefined : authoredSourceLine(lexer, lexer.lineNumber(lexer.pos + offset)) ?? line
-    if (authored === undefined || quotePrefixDepth(authored) !== quoteDepth || isBlankLine(line!) ||
-        offset > 0 && sourceColumn(authored, quoteDepth) <= column) return 0
-    lines.push(' '.repeat(sourceColumn(authored, quoteDepth) - column) + sourceQuoteBody(authored))
+    if (authored === undefined || isBlankLine(line!)) return 0
+    const depth = quotePrefixDepth(authored)
+    // A lazy continuation of a quoted note keeps its written source column,
+    // even when it omits the quote prefix (PART 0 S4, carve#5619).
+    if (depth !== quoteDepth && !(offset > 0 && depth === 0 && quoteDepth > 0 &&
+        lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + offset)))) return 0
+    const authoredColumn = sourceQuoteLocalColumn(authored, depth)
+    if (offset > 0 && authoredColumn <= column) return 0
+    lines.push(' '.repeat(authoredColumn - column) + sourceQuoteBody(authored))
     if (authored.includes('}')) break
   }
   return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length ? lines.length : 0
+}
+
+function cutShiftedNoteFence(lexer: Lexer, attached: string[], numbers: number[], markerColumn: number, bodyColumn: number): void {
+  const run = /^(`{3,}|~{3,})/.exec(attached[0] ?? '')?.[1]
+  if (run === undefined) return
+  const root = lexer.documentRoot ?? lexer
+  const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
+  let pastBlank = false
+  for (let index = 1; index < attached.length; index++) {
+    pastBlank ||= isBlankLine(attached[index]!)
+    const source = authored[numbers[index]! - 1]
+    if (!pastBlank || source === undefined || isBlankLine(source)) continue
+    const column = sourceColumn(source)
+    if (column > markerColumn && column < bodyColumn && fenceCloseRe(run).test(source.trimStart())) {
+      lexer.pos -= attached.length - index
+      attached.length = index
+      numbers.length = index
+      break
+    }
+  }
 }
 
 /** The column `lexer`'s line `index` was written at, before the ownership walk moved it. */
@@ -953,7 +979,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
           (!visibleLeadIsList && !visibleLeadIsLineBlock && isListMarkerLine(a.trimStart()))
         },
-        0, true, true, 0, false, 0, 0, indentColumns(follower!) + 1,
+        0, true, true, 0, false, 0, 0, indentColumns(follower!),
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)
@@ -1034,9 +1060,23 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const attrSource = { column: -1 }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
+  const keepRefusedQuoteFollower = (ln: string): boolean => {
+    if (!m[2]?.trimStart().startsWith('>') || ln.trim() !== '%%') return false
+    const root = lexer.documentRoot ?? lexer
+    const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
+    const written = authored[lexer.lineNumber(lexer.pos) - 1]
+    const nextWritten = authored[lexer.lineNumber(lexer.pos + 1) - 1]
+    if (written === undefined || !isContinuationMarker(written.trimStart()) ||
+        nextWritten === undefined || sourceColumn(nextWritten) < bodyColumn) return false
+    // A refused marker after a note's attached quote is invisible. Its
+    // body-column follower still belongs to the note (PART 0 S2).
+    lexer.consume()
+    return true
+  }
   runIndentationContainer(
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
+    if (keepRefusedQuoteFollower(ln)) return 'continue'
     if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'
     if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
@@ -1065,7 +1105,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     // which case all three are body text (corpus category 279).
     const noteMarkerLine = isContinuationMarker(ln.slice(leadingWhitespace(ln)))
     const noteMarker = noteMarkerLine ? markerDecision(lexer, lexer.pos) : undefined
-    if (pendingBlankRun.count === 0 && noteMarkerLine &&
+    if (noteMarkerLine &&
         lexer.peek(1) !== undefined && !RE_ADMONITION_CLOSE.test(lexer.peek(1)!) &&
         (isPhysicalContinuationMarker(sourceLine ?? ln) || noteMarker?.owner?.kind === 'footnote')) {
       const plusLineNumber = lexer.lineNumber(lexer.pos)
@@ -1090,6 +1130,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         0,
         true,
       )
+      cutShiftedNoteFence(lexer, attached, attachedLineNumbers, markerColumn, bodyColumn)
       if (attached.length > 0) {
         for (const closer of bodyFenceClosers(bodyLines)) {
           bodyLines.push(closer)

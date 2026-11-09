@@ -514,8 +514,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // four columns, so those lines are measured at the marker column (carve#5586).
     const laterColumn = head.checked !== undefined && followerColumn === markerColumn + 4 ? markerColumn : followerColumn
     const closerFloor = markerColumn === laterColumn ? laterColumn : 0
+    const outerContentColumn = contentStart < 0 ? 0 : sourceColumnAt(head.line, contentStart)
     // A line the ownership walk folded lazily stays in the block's open paragraph.
-    const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) || (followerOpensBlock &&
+    const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) ||
+      (indentColumns(line) < outerContentColumn &&
+        (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))) ||
+      (followerOpensBlock &&
       indentColumns(line, laterColumn) < laterColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
       (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))),
     shape.baseIndent, false, followerColumn, closerFloor,
@@ -2144,6 +2148,49 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lexer.consume()
       return 'continue'
     }
+    const adjustAttachedItemFence = (attachedLines: string[], attachedLineNumbers: number[]): void => {
+      const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
+      const lead = RE_FENCE.exec(attachedLines[0] ?? '') ?? RE_RAW_FENCE.exec(attachedLines[0] ?? '')
+      const run = lead === null ? undefined : RE_FENCE.test(attachedLines[0]!) ? lead[2]! : lead[1]!
+      if (run === undefined) return
+      let pastBlank = false
+      for (let index = 1; index < attachedLines.length; index++) {
+        pastBlank ||= isBlankLine(attachedLines[index]!)
+        const source = authored[attachedLineNumbers[index]! - 1]
+        if (!pastBlank || source === undefined || isBlankLine(source)) continue
+        const column = indentColumns(source)
+        const closer = fenceCloseRe(run).test(source.trimStart())
+        const shiftedFence = column > baseIndent && column < contentCol && closer
+        if (!shiftedFence && closer) break
+        const firstBlankMiss = isBlankLine(attachedLines[1] ?? '') && column < contentCol && !closer
+        if (shiftedFence || firstBlankMiss) {
+          // After its retained blank, a nonblank line below the own-line
+          // fence's host column belongs to the parent (S1, F06).
+          lexer.pos -= attachedLines.length - index
+          attachedLines.length = index
+          attachedLineNumbers.length = index
+          break
+        }
+      }
+      if (attachedLines.slice(1).some(line => fenceCloseRe(run).test(line)) ||
+          lexer.peek() === undefined || !isBlankLine(lexer.peek()!)) return
+      // An own-line attachment keeps an unclosed fence's blank and following
+      // payload while the item is still reached. The first-blank boundary is
+      // reserved for a marker-line attachment (PART 0 S1, carve#5658).
+      let sawBlank = false
+      while (lexer.peek() !== undefined) {
+        const next = lexer.peek()!
+        if (!isBlankLine(next) && sawBlank && indentColumns(next) < contentCol) {
+          const closes = fenceCloseRe(run).test(next.trimStart()) && indentColumns(next) === indentColumns(attachedLines[0]!)
+          if (!closes) break
+        }
+        sawBlank ||= isBlankLine(next)
+        attachedLines.push(next)
+        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+        if (!isBlankLine(next) && fenceCloseRe(run).test(next.trimStart())) break
+      }
+    }
     const attachAfterPlus = (plusColumn: number): Decision => {
       for (const lineNumber of pendingBlankRun.lineNumbers) opaqueBlankLines.add(lineNumber)
       const rootLines = lexer.rootLines ?? lexer.lines
@@ -2240,6 +2287,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // severed a code fence from its opener and a colon fence severed on
       // every boundary there is.
       const { lines: attachedLines, lineNumbers: attachedLineNumbers } = session.collectAttachedListBlock(lexer, isItemAttachBoundary, baseIndent, true)
+      adjustAttachedItemFence(attachedLines, attachedLineNumbers)
       if (attachedLines.length === 0) {
         // The next `+` is itself the block the first marker reaches; its own
         // refusal remains text. Do not publish the first marker as a second
