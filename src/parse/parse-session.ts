@@ -2670,7 +2670,7 @@ export class ParseSession extends InlineParseSession {
         if (refusedInlineCloser === null) {
           const opener = RE_FENCE.exec(visible.trimStart())?.[2] ?? RE_RAW_FENCE.exec(visible.trimStart())?.[1]
           if (opener && isRefusedBraceRun(at, take)) {
-            const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length},}[ \\t]*$`)
+            const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length}${opener[0] === '`' ? '' : ','}}[ \\t]*$`)
             for (let n = take + 1; at(n) !== undefined && !isBlankLine(at(n)!); n++) {
               if (closer.test(at(n)!)) { refusedInlineCloser = closer; openedRefusedInline = true; break }
             }

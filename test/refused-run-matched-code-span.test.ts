@@ -21,4 +21,10 @@ describe('a matched code span after a refused brace run', () => {
           }
     expect(checked).toBe(1000)
   })
+
+  it('does not treat a longer backtick run as an inline closer', () => {
+    const html = carveToHtml('- a\n+\n{x\ny}\n```\nwa\n- b\n````\n')
+    expect(html).toContain('<li>b</li>')
+    expect(html).not.toContain('wa\n- b')
+  })
 })
