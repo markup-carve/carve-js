@@ -19,7 +19,7 @@ import { nextContainerContent, runIndentationContainer } from './parse-indentati
 import { sourceQuoteBody } from '../parse-core.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
-import { attachedLeadIsList } from './parse-footnote-session.js'
+import { attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
 import { taskBoxColumns } from './task-box-frame.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import {
@@ -459,9 +459,11 @@ export function createDefinitionListParser(
         RE_DEFLIST_TERM.test(a) ||
         RE_DEFLIST_DEF.test(a)
       // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
-      const attachedBoundary = (): ((a: string) => boolean) => attachedLeadIsList(lexer)
-        ? isDefBodyBoundary
-        : (a) => isDefBodyBoundary(a) || isListMarkerLine(a.trimStart())
+      const attachedBoundary = (): ((a: string) => boolean) => {
+        if (!attachedLeadIsList(lexer)) return (a) => isDefBodyBoundary(a) || isListMarkerLine(a.trimStart())
+        const listFence = attachedListFenceBoundary(indentColumns(lexer.peek() ?? ''))
+        return (a) => listFence(a) ?? isDefBodyBoundary(a)
+      }
       // First-block form (`:  +`, mirroring the list `- +`): when the sole
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
       // block, with no indentation. `:  \+` keeps a literal `+` instead.
