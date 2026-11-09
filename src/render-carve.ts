@@ -15,6 +15,7 @@ import type {
   AbbreviationDef,
   Attrs,
   BlockNode,
+  BlockQuote,
   Comment,
   DefinitionList,
   Document,
@@ -3089,6 +3090,7 @@ class CarveRenderSession {
   private itemLeadingComments = new WeakSet<object>()
   private indentedHostDepth = 0
   private pendingMarkerLineShift = 0
+  private noteBodyHost: { quoteDepth: number; listDepth: number } | undefined
 
   private refusedSpans: SourceUnspellableError[] = []
 
@@ -3747,7 +3749,7 @@ class CarveRenderSession {
             parts.length > 0 &&
             (heldNoteEnd !== undefined
               ? isRegionMarker(block) && block.pos?.startLine === heldNoteEnd + 1
-              : writtenAsOneRun(previousBlock, block, item !== undefined || descriptionBody || ctx.blockDepth > 1) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
+              : writtenAsOneRun(previousBlock, block, item !== undefined || descriptionBody || this.noteBodyHost !== undefined || ctx.blockDepth > 1) || regionMarkerAdjacent(previousBlock, block, text) || codeIncludeCaptionJoins(codeCaptionGap, item) ||
                 // A marker body's list ends its paragraph with no blank, as an item's does (PART 0 S3, carve#4860).
                 (blocks === this.markerBodyBlocks && previousBlock.type === 'paragraph' && block.type === 'list') ||
                 (block.type === 'comment' && (!isRegionMarker(block) || regionMarkerAdjacent(previousBlock, block, text)) && ((!this.canonicalTransparentLines ||
@@ -3884,6 +3886,8 @@ class CarveRenderSession {
           : paragraphText
         let withComments = text
         if (node.transparentComments?.length) {
+          const atNoteBodyColumn = this.noteBodyHost !== undefined &&
+            ctx.quoteDepth === this.noteBodyHost.quoteDepth && ctx.listDepth === this.noteBodyHost.listDepth
           const sourceLines = node.transparentVisibleLines ?? [...new Set(node.children
             .filter((child) => child.type !== 'soft_break' && child.pos !== undefined)
             .map((child) => child.pos!.startLine))]
@@ -3893,9 +3897,12 @@ class CarveRenderSession {
             if (following && index < written.length) {
               const renderedLine = written[index]!
               const authored = following.source
-              const prefix = renderedLine && authored.endsWith(renderedLine)
+              const visible = node.children.find((child) => child.type !== 'soft_break' && child.pos?.startLine === line)
+              const notePrefix = atNoteBodyColumn && visible?.pos?.startColumn !== undefined
+                ? ' '.repeat(Math.max(0, visible.pos.startColumn - 1)) : undefined
+              const prefix = notePrefix ?? (renderedLine && authored.endsWith(renderedLine)
                 ? authored.slice(0, -renderedLine.length)
-                : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? ''
+                : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? '')
               written[index] = `\0${prefix}${renderedLine}`
             }
           }
@@ -3906,7 +3913,10 @@ class CarveRenderSession {
               this.canonicalTrailingComments.add(comment.node)
               continue
             }
-            written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource(comment)}`)
+            const source = atNoteBodyColumn && comment.node.pos?.startColumn !== undefined
+              ? comment.source.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, ' '.repeat(Math.max(0, comment.node.pos.startColumn - 1)))
+              : comment.source
+            written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource({ ...comment, source })}`)
           }
           withComments = written.join('\n')
         }
@@ -3965,23 +3975,7 @@ class CarveRenderSession {
         return attrsWithoutTitle ? `${attrsWithoutTitle}\n${body}` : body
       }
       case 'block_quote': {
-        // Written back in the spelling it was read in (markup-carve/carve#1718).
-        // Choosing structurally instead - the fence whenever the quote holds a
-        // non-paragraph block - changes authored multi-block quotes, so the node
-        // carries the author's choice rather than the writer inferring one.
-        if (node.fenced) {
-          const fence = colonFenceFor(ctx)
-          const body = this.renderColonFenceBody(node.children, ctx)
-          return withAttrs(`${fence} >\n${body}\n${fence}`)
-        }
-        ctx.quoteDepth++
-        let inner: string
-        try { inner = this.renderHostedBlocks(node.children, ctx) }
-        finally { ctx.quoteDepth-- }
-        const body = canonicalQuoteBodyLines(inner.split('\n'))
-          .map((line) => (line === '' ? '>' : `> ${line}`))
-          .join('\n')
-        return withAttrs(body)
+        return withAttrs(this.renderQuote(node, ctx))
       }
       case 'list':
         return withLooseAttrs(node, attrs, this.renderList(node, ctx), (body) => this.normalize(body))
@@ -4111,29 +4105,57 @@ class CarveRenderSession {
         return `[@${node.key}]:${tail === '' ? '' : ` ${tail}`}`
       }
       case 'comment':
-        if ((node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) &&
-            !this.canonicalTrailingComments.has(node) && !this.itemLeadingComments.has(node)) {
-          return ''
-        } else if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined &&
-            (!this.canonicalTransparentLines || isPlusStandIn(node))) {
-          return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
-        }
-        // THE SEPARATOR IS LOAD-BEARING HERE, and this arm must NOT follow the
-        // inline one (carve#581) in joining a percent-leading content onto the
-        // marker. At block level the comment-LINE marker is exactly `%%`; a run
-        // of three or more is a comment FENCE (PART 9 §28), so `%%` + `%` is a
-        // different construct that pairs with any later same-width run and
-        // swallows everything between (markup-carve/carve-js#1674).
-        return node.block
-          ? this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
-          : node.delimited
-            ? `{% ${node.content} %}`
-            : `%% ${node.content}`
+        return this.renderComment(node, ctx)
       default: {
         const t: never = node
         throw new Error(`renderCarve: unknown block ${(t as { type: string }).type}`)
       }
     }
+  }
+
+  private renderQuote(node: BlockQuote, ctx: CarveContext): string {
+    // Written back in the spelling it was read in (markup-carve/carve#1718).
+    // Choosing structurally instead changes authored multi-block quotes.
+    if (node.fenced) {
+      const fence = colonFenceFor(ctx)
+      const body = this.renderColonFenceBody(node.children, ctx)
+      return `${fence} >\n${body}\n${fence}`
+    }
+    ctx.quoteDepth++
+    let inner: string
+    try { inner = this.renderHostedBlocks(node.children, ctx) }
+    finally { ctx.quoteDepth-- }
+    const body = canonicalQuoteBodyLines(inner.split('\n'))
+      .map((line) => (line === '' ? '>' : `> ${line}`))
+      .join('\n')
+    const first = node.children[0]
+    // A transparent first child can remove the generated quote prefix. Keep
+    // the opener on its own line so the quote and any containing list survive.
+    if (inner.startsWith('\0') && first?.type === 'comment' &&
+        first.pos?.startLine !== undefined && node.pos?.startLine !== undefined &&
+        first.pos.startLine > node.pos.startLine &&
+        (ctx.listDepth > 0 || !/^(?:[ \t]*>[ ]?)+/.test(first.transparentSource ?? ''))) {
+      return `> +\n${body}`
+    }
+    return body
+  }
+
+  private renderComment(node: Comment, ctx: CarveContext): string {
+    if ((node.transparentInParagraph || node.transparentInList || node.transparentInDefinitionList) &&
+        !this.canonicalTrailingComments.has(node) && !this.itemLeadingComments.has(node)) return ''
+    if (node.transparentSource !== undefined && node.transparentOriginalValue !== undefined &&
+        (this.noteBodyHost === undefined || ctx.quoteDepth !== this.noteBodyHost.quoteDepth ||
+          ctx.listDepth !== this.noteBodyHost.listDepth || isPlusStandIn(node)) &&
+        (!this.canonicalTransparentLines || isPlusStandIn(node))) {
+      return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
+    }
+    // At block level `%%` plus percent-leading content needs a separator:
+    // `%%%` would open a comment fence instead (carve-js#1674).
+    return node.block
+      ? this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
+      : node.delimited
+        ? `{% ${node.content} %}`
+        : `%% ${node.content}`
   }
 
   private renderTableWithColumns(node: Table, ctx: CarveContext): string {
@@ -5106,12 +5128,15 @@ class CarveRenderSession {
     let rawBody: string
     try {
       const outerBody = this.markerBodyBlocks
+      const outerNoteHost = this.noteBodyHost
       this.markerBodyBlocks = blocks
+      this.noteBodyHost = { quoteDepth: ctx.quoteDepth, listDepth: ctx.listDepth }
       try {
         rawBody = atAnAuthoredBodyColumn(ctx, () => this.renderBlocks(blocks, ctx))
           .replace(new RegExp(`${this.verbatimLineGuardPattern()}(?=\\[)`, 'g'), this.sentinels[7]!)
       } finally {
         this.markerBodyBlocks = outerBody
+        this.noteBodyHost = outerNoteHost
       }
     } finally {
       this.indentedHostDepth--
