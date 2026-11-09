@@ -2187,6 +2187,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const run = lead === null ? undefined : RE_FENCE.test(attachedLines[0]!) ? lead[2]! : lead[1]!
       if (run === undefined) return
       const sourceColumnOfOpener = sourceColumn(authored[attachedLineNumbers[0]! - 1] ?? attachedLines[0]!, itemQuoteDepth)
+      const sourceContentColumn = authoredItemMarkerColumn + contentCol - baseIndent
       const hasLaterSourceCloser = (afterLine: number): boolean => {
         const root = lexer.documentRoot ?? lexer
         let cache = itemSourceClosers.get(root)
@@ -2219,11 +2220,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         pastBlank ||= isBlankLine(attachedLines[index]!)
         const source = authored[attachedLineNumbers[index]! - 1]
         if (!pastBlank || source === undefined || isBlankLine(source)) continue
-        const column = indentColumns(source)
-        const closer = fenceCloseRe(run).test(source.trimStart())
-        const shiftedFence = column > baseIndent && column < contentCol && closer
+        const column = sourceColumn(source, itemQuoteDepth)
+        const closer = fenceCloseRe(run).test(sourceQuoteBody(source).trimStart())
+        const shiftedFence = column > sourceColumnOfOpener && column < sourceContentColumn && closer
         if (!shiftedFence && closer) break
-        const blankMiss = pastBlank && column < contentCol && !closer &&
+        const blankMiss = pastBlank && column < sourceContentColumn && !closer &&
           !hasLaterSourceCloser(attachedLineNumbers[index]!)
         if (shiftedFence || blankMiss) {
           // After its retained blank, a nonblank line below the own-line
@@ -3844,6 +3845,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let unpairedFenceFollower = false
     let followingUnpairedFence = false
     let retainedRefusalFollower = false
+    const closeRefusedFence = (lineNumber: number): void => {
+      if (lazyState.opaque?.kind !== 'code') return
+      let opener: string | undefined = leadFence ? content : undefined
+      for (let index = nested.length - 1; opener === undefined && index >= 0; index--)
+        if (RE_FENCE.test(nested[index]!) || RE_RAW_FENCE.test(nested[index]!)) opener = nested[index]!
+      if (opener === undefined) return
+      const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+      if (fence === null) return
+      const run = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+      nestedOrigins.set(nested.length, { text: run, parentIndex: lexer.pos, prefix: 0, virtual: true })
+      nested.push(run)
+      nestedSourceLines.push(undefined)
+      nestedLineNumbers.push(lineNumber)
+      trackItemLazyState(run, lazyState)
+    }
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       const refusedColumn = lexer.refusedItemMarkers.get(admission.lineNumber) ??
@@ -3860,14 +3876,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           trackItemLazyState('', lazyState)
         }
         pendingBlankRun.clear()
-        if (lazyState.opaque?.kind === 'code' && leadFence) {
-          const run = RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!
-          nestedOrigins.set(nested.length, { text: run, parentIndex: lexer.pos, prefix: 0, virtual: true })
-          nested.push(run)
-          nestedSourceLines.push(undefined)
-          nestedLineNumbers.push(admission.lineNumber)
-          trackItemLazyState(run, lazyState)
-        }
+        closeRefusedFence(admission.lineNumber)
         nested.push('%%')
         nestedSourceLines.push(l)
         nestedLineNumbers.push(admission.lineNumber)

@@ -16,15 +16,15 @@ const ruledHtml = new Map<string, string>([
   ],
   [
     "- ```\n+\n  x\n",
-    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>"
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n    x\n  </li>\n</ul>"
   ],
   [
     "- ```\n+\n\n  x\n",
-    "<ul>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>x</p>"
+    "<ul>\n  <li>\n    <pre><code></code></pre>\n    <p>x</p>\n  </li>\n</ul>"
   ],
   [
     "- ```\n  a\n+\n  x\n",
-    "<ul>\n  <li>\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>x</p>"
+    "<ul>\n  <li>\n    <pre><code>a\n</code></pre>\n    x\n  </li>\n</ul>"
   ],
   [
     "- ```\n+\n\ntail\n",
