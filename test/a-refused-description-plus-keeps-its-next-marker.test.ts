@@ -43,4 +43,14 @@ it('keeps a body-column sibling after the shifted marker', () => {
     '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <ul>\n      <li>sib</li>\n      <li>tail</li>\n    </ul>\n  </dd>\n</dl>')
 })
 
+it('keeps a list-shaped line inside an open fence under the attached item', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n   ```\n   +\n   - code\n   ```\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li\n        <pre><code>+\n- code\n</code></pre>\n      </li>\n    </ol>\n  </dd>\n</dl>')
+})
+
+it('leaves an item-owned plus with the attached item', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n   +\n   - sib\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li\n+\n        <ul>\n          <li>sib</li>\n        </ul>\n      </li>\n    </ol>\n  </dd>\n</dl>')
+})
+
 

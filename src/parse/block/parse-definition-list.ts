@@ -471,14 +471,17 @@ export function createDefinitionListParser(
           return isListMarkerLine(text) && /^[-*]/.test(text) ? text[0]! : null
         }
         return (a, offset = 0) => {
+          const fenced = listFence(a)
+          if (fenced !== undefined) return fenced
           if (offset > 0) {
             const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
             const prior = authored[lexer.lineNumber(lexer.pos + offset - 1) - 1]
             const nextAxis = listAxis(a)
             if (prior?.trim() === '+' && nextAxis !== null &&
+                sourceColumn(prior, quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol &&
                 nextAxis !== listAxis(first) && indentColumns(a) > contentCol) return true
           }
-          return listFence(a) ?? isDefBodyBoundary(a)
+          return isDefBodyBoundary(a)
         }
       }
       // First-block form (`:  +`, mirroring the list `- +`): when the sole
