@@ -175,7 +175,7 @@ import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidInlineAttrPayload } from '../extension/attribute-parser.js'
-import { leadingAttributeRun } from './block/leading-attribute-run.js'
+import { leadingAttributeRun, wrappedAttributeLinesAt } from './block/leading-attribute-run.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
@@ -258,11 +258,14 @@ function skippedNoteBodyLine(line: string, floor: number): boolean {
 }
 
 /** Attribute runs, notes and comments before a `+`-attached block: the host keeps them (§17 L3, carve#5288, carve#5324). */
-function leadingInvisibleRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
+function leadingInvisibleRun(at: (offset: number) => string | undefined, options: ParseOptions,
+  unsliced: (offset: number) => string | undefined = at): number {
   let count = 0
   for (;;) {
+    // A wrapped run is read where it was written: a column slice can take a continuation's lead.
     // After a note the attribute line may stand at the note's column.
-    const attrs = leadingAttributeRun(offset => count > 0 ? at(count + offset)?.trimStart() : at(count + offset), options)
+    const attrs = wrappedAttributeLinesAt(offset => unsliced(count + offset), options) ||
+      leadingAttributeRun(offset => count > 0 ? at(count + offset)?.trimStart() : at(count + offset), options)
     if (attrs > 0) count += attrs
     const note = leadingNoteEnd(at, count)
     const comment = note === -1 ? leadingCommentEnd(at, count) : -1
@@ -2591,7 +2594,10 @@ export class ParseSession extends InlineParseSession {
     }
     // A leading attribute run belongs to the block after it, so a fence there
     // still makes its body opaque to the container's boundaries.
-    const attributeLines = leadingInvisibleRun(at, lexer.parseOptions)
+    const attributeLines = leadingInvisibleRun(at, lexer.parseOptions, (offset) => {
+      const line = lexer.peek(offset)
+      return line === undefined || transform === undefined ? line : transform(line)
+    })
     // An invisible note may stand deeper than the block it precedes. The
     // block's own column, never the prelude's, bounds an open fence.
     const blockFloor = Math.min(closerFloor, indentColumns(lexer.peek(attributeLines) ?? ''))

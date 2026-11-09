@@ -1497,6 +1497,8 @@ export function ownLines(
     const closers = new Set<number>()
     const notes: number[] = []
     const chained: number[] = []
+    const runOpeners = new Map<number, number>()
+    const shifts = new Map<number, number>()
     let nextVisible = at + 1
     let firstKept = Infinity
     let firstPending = Infinity
@@ -1530,7 +1532,10 @@ export function ownLines(
           prefix = quoteLead
         }
         // A line skipped past the marker column stands at it, so its indentation maps to no column.
-        const past = index >= firstKept ? Math.min(docColumn(lines[index]!, indentCols(rest).rest) - marker, /^ */.exec(rest)![0].length) : 0
+        const opener = runOpeners.get(index)
+        const shift = opener === undefined ? docColumn(lines[index]!, indentCols(rest).rest) - marker : shifts.get(opener) ?? 0
+        const past = index >= firstKept ? Math.min(shift, /^ */.exec(rest)![0].length) : 0
+        shifts.set(index, past)
         if (past > 0) {
           cuts.set(index, [...cuts.get(index) ?? [], { at: prefix.length, removed: past }])
           rest = rest.slice(past)
@@ -1679,6 +1684,12 @@ export function ownLines(
       }
       const wrapped = rest[0] === '{' ? wrappedAttrRun(rest, quotes, k) : null
       if (wrapped !== null) {
+        // Kept, the whole run moves to the marker column by its opener's shift, as a one-line run does;
+        // right after a skipped note it stays in place, where a one-line run folds into the note.
+        if (kept && notes.at(-1) !== k - 1) for (let line = k; line <= k + wrapped; line++) {
+          comments.push(line)
+          if (line > k) runOpeners.set(line, k)
+        }
         k += wrapped
         continue
       }

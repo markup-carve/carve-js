@@ -33,6 +33,7 @@ import {
   trimStructural,
 } from '../parse-prepass-core.js'
 import { indentColumns, isBlankLine, Lexer } from '../parse-lexer.js'
+import { afterAttributeLines } from './leading-attribute-run.js'
 import { buildBracketMap } from '../inline/parse-brackets.js'
 import { linkDestinationValue } from '../../link-destination.js'
 import { isEmptyAttrs, isValidInlineAttrPayload, parseAttrs } from '../../extension/attribute-parser.js'
@@ -197,7 +198,11 @@ export const RE_CAPTION = new RegExp(String.raw`^\^ (?!${CAPTION_COMMENT_ONLY}) 
  */
 export function attachedQuoteEnd(lines: readonly string[]): number {
   let opener = 0
-  while (opener < lines.length - 1 && (isBlockAttributeLine(lines[opener]!.trimStart()) || RE_COMMENT_LINE.test(lines[opener]!))) opener++
+  for (let from = -1; from !== opener;) {
+    from = opener
+    opener = afterAttributeLines(lines, opener)
+    while (opener < lines.length - 1 && RE_COMMENT_LINE.test(lines[opener]!)) opener++
+  }
   if (!RE_BLOCKQUOTE.test(lines[opener]?.trimStart() ?? '')) return lines.length
   for (let k = opener + 1; k < lines.length; k++) {
     const text = lines[k]!.trimStart()
