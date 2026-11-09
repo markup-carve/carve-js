@@ -1369,6 +1369,16 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return isInvisibleLine(text, remaining >= 0 ? remaining : undefined)
     }
     const nestedSourceLines: (string | undefined)[] = []
+    let tabbedNestedMarkerScanned = 0
+    let hasTabbedNestedMarker = false
+    const tabbedNestedItem = (): boolean => {
+      while (tabbedNestedMarkerScanned < nestedSourceLines.length) {
+        const source = nestedSourceLines[tabbedNestedMarkerScanned++]
+        if (source !== undefined && source.slice(0, leadingWhitespace(source)).includes('\t') &&
+            isListMarkerLine(source.trimStart())) hasTabbedNestedMarker = true
+      }
+      return hasTabbedNestedMarker
+    }
     const bufferedBlanks = new Set<number>()
     // Lines admitted by reaching this item's content column. A below-column
     // lazy line can retain a positive residual indent for recursive safety,
@@ -1416,6 +1426,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // like. A below-column run then folded into a paragraph the deepest
     // structure did not hold (markup-carve/carve#2509, carve-js#2261).
     let descendantOpaque: DescendantOpaque | null = null
+    let tabbedOpenerRebased = false
     let descriptionFenceAwaitingPayload = false
     let descriptionMarkerFence = false
     let closedDescendantFence = false
@@ -1632,7 +1643,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       openedLaterNoteFence = laterNoteFence
       if (descendantNoteBody) noteBodyHeldCode = true
       descendantNoteParagraphBefore = lazyState.lazyFoldable
-      descendantOpaque = { close: fenceCloseRe(marker), base, markerLine: opener !== line.trimStart() }
+      descendantOpaque = { close: fenceCloseRe(marker), base, markerLine: opener !== line.trimStart(), rebasedTab: tabbedOpenerRebased }
     }
     // Candidate sublist markers, resolved after authored fence bases are applied.
     const subListMarkers = new Set<number>()
@@ -2867,12 +2878,21 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (afterPulledQuoteDefinition) placed = l.trimStart()
       // A leading tab left after the cut is still measured from the authored
       // list frame. Re-express its remaining columns before a child parses it
-      // from column zero. A verbatim payload keeps its source tab unchanged.
+      // from column zero. A fence payload retains tabs beyond its base.
+      tabbedOpenerRebased = false
+      const freshFence = opensCodeFence(placed.trimStart())
       if (placed.slice(0, leadingWhitespace(placed)).includes('\t') &&
           lazyState.opaque === null && descendantOpaque === null &&
-          !opensCodeFence(placed.trimStart()) &&
+          (!freshFence || tabbedNestedItem()) &&
           (lineOpensItemBlock(placed.trimStart()) || isListMarkerLine(placed.trimStart()))) {
         placed = ' '.repeat(Math.max(0, indentColumns(l) - cut)) + l.trimStart()
+        tabbedOpenerRebased = freshFence
+      } else if (descendantOpaque?.rebasedTab === true && !descendantOpaque.markerLine &&
+          placed.slice(0, leadingWhitespace(placed)).includes('\t')) {
+        const base = contentCol + descendantOpaque.base
+        if (indentColumns(l) >= base) {
+          placed = ' '.repeat(descendantOpaque.base) + sliceColumns(l, base, true)
+        }
       }
       if (blockedNoteClaimFloor !== undefined && indentColumns(l, blockedNoteClaimFloor) < blockedNoteClaimFloor &&
           isListMarkerLine(placed.trimStart())) blockedNoteClaimFloor = undefined
