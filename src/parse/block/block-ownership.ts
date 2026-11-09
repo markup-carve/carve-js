@@ -1036,7 +1036,8 @@ export function ownLines(
 
     function keepsMissedLineBlock(inner: Frame, missed: boolean, reached: number): boolean {
       if (inner.kind !== 'fence' || !inner.lineBlock || !missed || !inner.para || m.rest === '' || colonEndsItem ||
-          classify(m.rest, frames[reached]!, at, m.col).interrupts) return false
+          // Only text folds into the stanza; a marker that opens in the reached body ends it (PART 0 S1, S4).
+          classify(m.rest, frames[reached]!, at, m.col).kind !== 'text') return false
       // An open payload span cannot carry the stanza past a quote the line missed (carve#5062).
       if (inner.span && inner.span[0] !== '%' && frames.slice(reached + 1).some(f => f.kind === 'quote')) return false
       const marker = matchMarker(m.rest)
