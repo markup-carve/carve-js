@@ -31,4 +31,9 @@ describe('the follower of a refused brace run in an item', () => {
     expect(carveToHtml('- +\n  > q\n  {.x\n  .y}\n  ```\n  - li\n  - lj\n').trim())
       .toBe('<ul>\n  <li>\n    <blockquote><p>q\n{.x\n.y}</p></blockquote>\n    <pre><code>- li\n- lj\n</code></pre>\n  </li>\n</ul>')
   })
+
+  it('reads a shifted run in the middle of a paragraph', () => {
+    expect(carveToHtml('- a\n   {.x\n   .y}\n   ```\n   - li\ntail\n').trim())
+      .toBe('<ul>\n  <li>a\n{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>')
+  })
 })

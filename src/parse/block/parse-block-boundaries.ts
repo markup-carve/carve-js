@@ -227,6 +227,8 @@ export interface ItemLazyState {
   attrShallow?: boolean
   refusedBraceRun?: boolean
   refusedBraceFollower?: boolean
+  /** Width of the inline code span the open paragraph holds, or 0 (pairs as parseParagraph does). */
+  inlineCodeOpen?: number
   /** The open wrapped run began inside a nested quote's open paragraph. */
   attrRunInQuote?: boolean
   /** See keepsRefusedRunLine. */
