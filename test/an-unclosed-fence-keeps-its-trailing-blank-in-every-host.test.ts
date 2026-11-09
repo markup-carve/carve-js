@@ -28,10 +28,11 @@ describe('an unclosed fence keeps its trailing blank in every host', () => {
     expect(code('r[^1]\n\n[^1]: ```\n  code\n   \nafter\n')).toBe('code\n \n')
   })
 
-  it.each([
-    ['a + attachment ends at the blank', 'see[^f]\n\n[^f]: n\n+\n```\na\n\nb\n', 'a\n'],
-    ['a closed fence', ':: t\n: ```\n  code\n  ```\n\nafter\n', 'code\n'],
-  ])('%s has no trailing blank', (_name, source, payload) => {
-    expect(code(source)).toBe(payload)
+  it('keeps the blank after an own-line + fence (carve#5560)', () => {
+    expect(code('see[^f]\n\n[^f]: n\n+\n```\na\n\nb\n')).toBe('a\n\n')
+  })
+
+  it('gives a closed fence no trailing blank', () => {
+    expect(code(':: t\n: ```\n  code\n  ```\n\nafter\n')).toBe('code\n')
   })
 })
