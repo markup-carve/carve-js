@@ -745,9 +745,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const column = opener === undefined ? localBlockColumn : Math.min(localBlockColumn, indentColumns(unsliced[opener] ?? ''))
       attached[index] = sliceColumns(line, captionAtHostColumn ? placement.contentCol : column, true)
     }
-    // A closed line block keeps the host's body lines, whose indentation is
-    // measured from the item's content column even when its opener was flush left.
-    if (RE_LINE_BLOCK_OPEN.test(attached[blockLine] ?? '')) {
+    // A flush-left attached line block owns its verse spaces itself. For a block
+    // opened within the item, the item's content column is still a prefix.
+    if (localBlockColumn > 0 && RE_LINE_BLOCK_OPEN.test(attached[blockLine] ?? '')) {
       for (let index = blockLine + 1; index < attached.length; index++) {
         if (indentColumns(attached[index]!) >= placement.contentCol)
           attached[index] = sliceColumns(attached[index]!, placement.contentCol, true)
