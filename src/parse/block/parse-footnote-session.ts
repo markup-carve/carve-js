@@ -683,6 +683,30 @@ function refusedMarkerEndsAtBelowColumn(refusedMarker: boolean, kind: string): b
   return refusedMarker && kind === 'below'
 }
 
+function refusedPlusFollowerReachesNote(
+  lexer: Lexer, line: string, firstBlockAttached: boolean,
+  authoredBodyColumn: number | undefined, authoredLine: string | undefined, defLineRaw: string,
+): boolean {
+  if (!firstBlockAttached || line.trim() !== '%%' || authoredBodyColumn === undefined) return false
+  const authoredLines = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
+  const marker = authoredLines[lexer.lineNumber(lexer.pos) - 1]
+  const follower = authoredLines[lexer.lineNumber(lexer.pos + 1) - 1]
+  return marker?.trim() === '+' && follower !== undefined && !isBlankLine(follower) &&
+    sourceColumn(follower, quotePrefixDepth(authoredLine ?? defLineRaw)) >= authoredBodyColumn
+}
+
+function noteEarlyAdmission(
+  lexer: Lexer, line: string, kind: string, refusedMarker: boolean, firstBlockAttached: boolean,
+  authoredBodyColumn: number | undefined, authoredLine: string | undefined, defLineRaw: string,
+): 'continue' | 'stop' | undefined {
+  if (refusedMarkerEndsAtBelowColumn(refusedMarker, kind) || lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
+  if (refusedPlusFollowerReachesNote(lexer, line, firstBlockAttached, authoredBodyColumn, authoredLine, defLineRaw)) {
+    lexer.consume()
+    return 'continue'
+  }
+  return undefined
+}
+
 /** The note keeps an invisible line at its marker column or in its body (§17 L3, carve#5288). */
 function atNoteMarker(column: number, markerColumn: number): boolean {
   return column === markerColumn || column >= markerColumn + FOOTNOTE_BODY_COLUMN
@@ -1036,18 +1060,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
     if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'
-    if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
-    if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
+    const early = noteEarlyAdmission(lexer, ln, admission.kind, refusedMarker, firstBlockAttached,
+      authoredBodyColumn, authoredLine, defLineRaw)
+    if (early !== undefined) return early
     const sourceLine = admission.sourceLine
-    const authoredLines = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
-    const authoredMarker = authoredLines[lexer.lineNumber(lexer.pos) - 1]
-    const nextSource = authoredLines[lexer.lineNumber(lexer.pos + 1) - 1]
-    if (firstBlockAttached && ln.trim() === '%%' && authoredMarker?.trim() === '+' &&
-        nextSource !== undefined && !isBlankLine(nextSource) && authoredBodyColumn !== undefined &&
-        sourceColumn(nextSource, quotePrefixDepth(authoredLine ?? defLineRaw)) >= authoredBodyColumn) {
-      lexer.consume()
-      return 'continue'
-    }
     if (quotedRefusedFollowerLeavesNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
       authoredBodyColumn, firstBlockAttached, pendingBlankRun.count, bodyLines.length)) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
