@@ -46,6 +46,7 @@ function childListOwnsBlankBefore(
 }
 
 export function createListParser(helpers: typeof listHelpers, trackItemLazyState: ReturnType<typeof createListStateTracker>) {
+  const itemSourceClosers = new WeakMap<Lexer, Map<string, number[]>>()
   const {
     FOOTNOTE_BODY_COLUMN,
     LAZY_FRAME,
@@ -2185,17 +2186,47 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const lead = RE_FENCE.exec(attachedLines[0] ?? '') ?? RE_RAW_FENCE.exec(attachedLines[0] ?? '')
       const run = lead === null ? undefined : RE_FENCE.test(attachedLines[0]!) ? lead[2]! : lead[1]!
       if (run === undefined) return
+      const sourceColumnOfOpener = sourceColumn(authored[attachedLineNumbers[0]! - 1] ?? attachedLines[0]!, itemQuoteDepth)
+      const sourceContentColumn = authoredItemMarkerColumn + contentCol - baseIndent
+      const hasLaterSourceCloser = (afterLine: number): boolean => {
+        const root = lexer.documentRoot ?? lexer
+        let cache = itemSourceClosers.get(root)
+        if (cache === undefined) {
+          cache = new Map()
+          itemSourceClosers.set(root, cache)
+        }
+        const key = `${run}:${sourceColumnOfOpener}:${itemQuoteDepth}`
+        let positions = cache.get(key)
+        if (positions === undefined) {
+          positions = []
+          const closes = fenceCloseRe(run)
+          for (let index = 0; index < authored.length; index++) {
+            const line = authored[index]!
+            if (sourceColumn(line, itemQuoteDepth) === sourceColumnOfOpener && closes.test(sourceQuoteBody(line).trimStart()))
+              positions.push(index + 1)
+          }
+          cache.set(key, positions)
+        }
+        let low = 0, high = positions.length
+        while (low < high) {
+          const middle = (low + high) >>> 1
+          if (positions[middle]! <= afterLine) low = middle + 1
+          else high = middle
+        }
+        return low < positions.length
+      }
       let pastBlank = false
       for (let index = 1; index < attachedLines.length; index++) {
         pastBlank ||= isBlankLine(attachedLines[index]!)
         const source = authored[attachedLineNumbers[index]! - 1]
         if (!pastBlank || source === undefined || isBlankLine(source)) continue
-        const column = indentColumns(source)
-        const closer = fenceCloseRe(run).test(source.trimStart())
-        const shiftedFence = column > baseIndent && column < contentCol && closer
+        const column = sourceColumn(source, itemQuoteDepth)
+        const closer = fenceCloseRe(run).test(sourceQuoteBody(source).trimStart())
+        const shiftedFence = column > sourceColumnOfOpener && column < sourceContentColumn && closer
         if (!shiftedFence && closer) break
-        const firstBlankMiss = isBlankLine(attachedLines[1] ?? '') && column < contentCol && !closer
-        if (shiftedFence || firstBlankMiss) {
+        const blankMiss = pastBlank && column < sourceContentColumn && !closer &&
+          !hasLaterSourceCloser(attachedLineNumbers[index]!)
+        if (shiftedFence || blankMiss) {
           // After its retained blank, a nonblank line below the own-line
           // fence's host column belongs to the parent (S1, F06).
           lexer.pos -= attachedLines.length - index
@@ -2214,7 +2245,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const next = lexer.peek()!
         if (!isBlankLine(next) && sawBlank && indentColumns(next) < contentCol) {
           const closes = fenceCloseRe(run).test(next.trimStart()) && indentColumns(next) === indentColumns(attachedLines[0]!)
-          if (!closes) break
+          if (!closes && !hasLaterSourceCloser(lexer.lineNumber(lexer.pos))) break
         }
         sawBlank ||= isBlankLine(next)
         attachedLines.push(next)
@@ -3813,8 +3844,55 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     let unpairedFenceFollower = false
     let followingUnpairedFence = false
+    let retainedRefusalFollower = false
+    const closeRefusedFence = (lineNumber: number): void => {
+      if (lazyState.opaque?.kind !== 'code') return
+      let opener: string | undefined = leadFence ? content : undefined
+      for (let index = nested.length - 1; opener === undefined && index >= 0; index--)
+        if (RE_FENCE.test(nested[index]!) || RE_RAW_FENCE.test(nested[index]!)) opener = nested[index]!
+      if (opener === undefined) return
+      const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+      if (fence === null) return
+      const run = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+      nestedOrigins.set(nested.length, { text: run, parentIndex: lexer.pos, prefix: 0, virtual: true })
+      nested.push(run)
+      nestedSourceLines.push(undefined)
+      nestedLineNumbers.push(lineNumber)
+      trackItemLazyState(run, lazyState)
+    }
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
+      const refusedColumn = lexer.refusedItemMarkers.get(admission.lineNumber) ??
+        lexer.documentRoot?.refusedItemMarkers.get(admission.lineNumber)
+      if (l.trim() === '%%' && (refusedColumn === physicalItemMarkerColumn || refusedColumn === authoredItemMarkerColumn)) {
+        // The ownership walk leaves a refused marker as an invisible leaf.
+        // It closes an unclosed marker-line fence but does not close its item
+        // (CARVE-P9-067, carve#5637). Keep the leaf in the item's body so a
+        // following content-column line is read there, after any child list.
+        for (let k = 0; k < pendingBlankRun.lines.length; k++) {
+          nested.push(sliceColumns(pendingBlankRun.lines[k] ?? '', contentCol, true))
+          nestedSourceLines.push(pendingBlankRun.lines[k])
+          nestedLineNumbers.push(pendingBlankRun.lineNumbers[k]!)
+          trackItemLazyState('', lazyState)
+        }
+        pendingBlankRun.clear()
+        closeRefusedFence(admission.lineNumber)
+        nested.push('%%')
+        nestedSourceLines.push(l)
+        nestedLineNumbers.push(admission.lineNumber)
+        trackItemLazyState('%%', lazyState)
+        lexer.consume()
+        retainedRefusalFollower = true
+        return 'continue'
+      }
+      if (retainedRefusalFollower && admission.kind !== 'blank') {
+        retainedRefusalFollower = false
+        if (pendingBlankRun.count > 0 && admission.kind === 'content') {
+          readNoteFacts(l)
+          admitContentLine(l)
+          return 'continue'
+        }
+      }
       if (admission.kind === 'blank') lazyState.refusedBraceFollower = false
       if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
       const attached = admitAttachedLead(admission)
@@ -4382,6 +4460,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   function invisibleBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
     const line = lexer.peek()
     const lineAt = (index: number) => lexer.lineAt(index)
+    // A region marker is the list's sibling (CARVE-P11-073), not an erased
+    // comment between adjacent items. Leave it for the outer block reader.
+    if (line !== undefined && /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/.test(line.trimStart())) return
     if (line === undefined || !(RE_COMMENT_LINE.test(line) || isLinkDefLine(line) ||
       RE_ABBR_DEF.test(line) || commentOnlyParagraphEnd(lineAt, lexer.pos, lexer.markerOpensSublist) !== -1)) return
     // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
@@ -4394,6 +4475,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         k++
         continue
       }
+      if (/^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/.test(at.trimStart())) break
       const paragraphEnd = commentOnlyParagraphEnd(lineAt, k, lexer.markerOpensSublist)
       if (paragraphEnd !== -1) {
         k = paragraphEnd

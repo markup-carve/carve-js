@@ -46,8 +46,8 @@ describe('nested item looseness does not propagate to the outer item (carve#322)
     expect(carveToHtml('- a\n  - [ ] b\n\n    text\n')).toContain('<li>a\n    <ul class="task-list">')
   })
 
-  it('paragraphs after a closed marker-line fence child loosen the outer item (carve#4734)', () => {
-    expect(carveToHtml('- - ```\n  +\n\n    x')).toBe("<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n      </li>\n    </ul>\n    <p>x</p>\n  </li>\n</ul>")
+  it('a refused marker keeps the post-blank paragraph in the child item (carve#5637)', () => {
+    expect(carveToHtml('- - ```\n  +\n\n    x')).toBe("<ul>\n  <li>\n    <ul>\n      <li>\n        <pre><code></code></pre>\n        <p>x</p>\n      </li>\n    </ul>\n  </li>\n</ul>")
   })
 
   it('a blank before text at the outer column loosens the outer item', () => {

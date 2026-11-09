@@ -540,6 +540,27 @@ export function ownLines(
   // The frames of the host a `+` last attached through. The attached block stands outside
   // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
   let attachedHost: Frame[] | null = null
+  const sourceCloserPositions = new Map<string, number[]>()
+  const laterSourceCloser = (at: number, run: string, column: number, depth: number): boolean => {
+    const key = `${run}:${column}:${depth}`
+    let positions = sourceCloserPositions.get(key)
+    if (positions === undefined) {
+      positions = []
+      const closes = fenceCloseRe(run)
+      for (let index = 0; index < lines.length; index++) {
+        const measured = quotedMeasure(index, depth)
+        if (measured?.col === column && closes.test(measured.rest)) positions.push(index)
+      }
+      sourceCloserPositions.set(key, positions)
+    }
+    let low = 0, high = positions.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (positions[middle]! <= at) low = middle + 1
+      else high = middle
+    }
+    return low < positions.length
+  }
   let attachedInlineCode = 0
   let braceRunStart = -1
   let shiftedAttachedFence: { column: number; run: string } | null = null
@@ -617,7 +638,25 @@ export function ownLines(
         shiftedAttachedFence = null
       if (shiftedCut) rewritten = true
     }
-    const ownHost = (attachedHost as Frame[] | null)?.at(-1)
+    let ownHost = (attachedHost as Frame[] | null)?.at(-1)
+    if (ownHost && ownHost.plus !== ownHost.line && top().kind === 'fence' && top().family === 'code' &&
+        at > 0 && lines[at - 1]!.trim() === '' && src.trim() !== '') {
+      const depth = attachedHost!.filter((frame) => frame.kind === 'quote').length
+      const measured = quotedMeasure(at, depth)
+      const opener = quotedMeasure(top().opened!, depth)
+      const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
+      if (measured && run && measured.col < ownHost.col &&
+          !(measured.col === ownHost.markerCol && CONT_MARKER.test(measured.rest)) &&
+          !fenceCloseRe(run).test(measured.rest) &&
+          !laterSourceCloser(at, run, ownHost.markerCol!, depth)) {
+        // An own-line fence ends when the next nonblank line misses its host
+        // and no source-column closer can still finish it (PART 0 S1).
+        frames.length = attachedHost!.length - 1
+        attachedHost = null
+        attachedInlineCode = 0
+        ownHost = undefined
+      }
+    }
     const parent = frames.at(-1)
     const descriptionAttached = braceRunStart > 0 && DD.test(lines[braceRunStart - 1]!.trimStart()) &&
       TRAILING_PLUS.test(lines[braceRunStart - 1]!.trimStart())

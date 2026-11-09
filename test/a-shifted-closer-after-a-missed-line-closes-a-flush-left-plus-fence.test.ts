@@ -24,5 +24,5 @@ it('bounds the closer by a list marker that follows the blank', () => {
 })
 
 it('keeps a lone plus fence ending at its blank', () => {
-  expect(carveToHtml('- x\n+\n```\na\n\nb\n ```\n').trim()).toBe('<ul>\n  <li>x\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>\n<p>b\n<code></code></p>')
+  expect(carveToHtml('- x\n+\n```\na\n\nb\n ```\n').trim()).toBe('<ul>\n  <li>x\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>\n<p>b</p>\n<pre><code></code></pre>')
 })
