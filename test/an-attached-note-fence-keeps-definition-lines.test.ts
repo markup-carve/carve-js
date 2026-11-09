@@ -7,7 +7,7 @@ describe('a footnote attachment with an open code fence', () => {
       '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
       '<section role="doc-endnotes" aria-label="Footnotes">\n' +
       '  <hr>\n  <ol>\n    <li id="fn1">\n' +
-      '      <p>n</p>\n      <pre><code>a\n[^z]: z\nb\n</code></pre>\n' +
+      '      <p>n</p>\n      <pre><code>a\n[^z]: z\nb\n\n</code></pre>\n' +
       '      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
       '    </li>\n  </ol>\n</section>',
     )
@@ -15,6 +15,6 @@ describe('a footnote attachment with an open code fence', () => {
 
   it('keeps a lone plus at the fence column in the payload (carve#5494)', () => {
     const html = carveToHtml('[^f]: n\n+\n~~~\na\n+\nb\n\nsee[^f]\n')
-    expect(html).toContain('<pre><code>a\n+\nb\n</code></pre>')
+    expect(html).toContain('<pre><code>a\n+\nb\n\n</code></pre>')
   })
 })

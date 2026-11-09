@@ -1,4 +1,14 @@
 {
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
-  "entries": []
+  "entries": [
+    {
+      "ticket": "markup-carve/carve#5560",
+      "cases": [
+        "notes-5ad58f3eaad3",
+        "notes-ab1ebf8987b6",
+        "notes-dd130b0b59c1",
+        "notes-ffd53f488294"
+      ]
+    }
+  ]
 }
