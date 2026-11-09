@@ -469,7 +469,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const column = line.atContentColumn
       ? line.facts?.whitespace ?? indentColumns(content)
       : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))
-    if (trackWrappedAttributeRun(state, content, column)) return endsOnBlock(state)
+    // A run indented past the content column is still a run (CARVE-P2-035, carve#5610).
+    const runText = line.atContentColumn ? content.trimStart() : content
+    if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
       state.refusedBraceFollower = true

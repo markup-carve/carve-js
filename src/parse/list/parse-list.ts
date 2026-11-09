@@ -3724,16 +3724,24 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      if ((lazyState.refusedBraceFollower &&
+      // Only the line right after the run is its follower, a fence-shaped one included (CARVE-P2-035, carve#5610).
+      // A fence follower with a closer ahead keeps its lines through that closer.
+      const refusedFollower = lazyState.refusedBraceFollower === true && !isBlankLine(l)
+      if (refusedFollower) lazyState.refusedBraceFollower = false
+      const keptThroughCloser = lazyState.refusedRunKept instanceof RegExp && !isBlankLine(l)
+      if ((refusedFollower &&
           !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
+          keptThroughCloser && insideRefusedHolder(l) ||
           isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l)) && !isBlankLine(l)) {
-        lazyState.refusedBraceFollower = false
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)
         nestedSourceLines.push(l)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
         lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
         trackItemLazyState(follower, lazyState, false)
+        // The frame hides the closer from the tracker's own test.
+        if (keptThroughCloser && lazyState.refusedRunKept instanceof RegExp && lazyState.refusedRunKept.test(l.trimStart()))
+          lazyState.refusedRunKept = undefined
         lexer.consume()
         return 'continue'
       }
