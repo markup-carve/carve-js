@@ -311,8 +311,10 @@ function hasLeadingTab(line: string, rest: string): boolean {
   return rest !== '' && line.slice(0, line.length - rest.length).includes('\t')
 }
 
-function tabbedMarkerOutsideCode(rest: string, frame: Frame): boolean {
-  return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null
+function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Frame[]): boolean {
+  return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null &&
+    frames.some((child, index) => index > 1 && child.kind === 'item' &&
+      frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
 }
 
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
@@ -904,7 +906,7 @@ export function ownLines(
         continue
       }
       const tabLead = hasLeadingTab(src, m.rest)
-      const markerWithTab = tabLead && tabbedMarkerOutsideCode(m.rest, top())
+      const markerWithTab = tabLead && tabbedMarkerOutsideCode(m.rest, top(), frames)
       if (tabLead && (m.col < f.col || markerWithTab)) {
         if (stripped === null) {
           const origins: number[] = []
