@@ -642,6 +642,25 @@ function authoredLabelColumn(lexer: Lexer, defLineIndex: number, defLineRaw: str
   return at < 0 ? fallback : sourceColumnAt(authored, at)
 }
 
+function quotedAttributeLeavesRefusedNote(
+  lexer: Lexer, defLineIndex: number, defLineRaw: string, label: string, markerColumn: number,
+  firstBlockAttached: boolean, pendingBlankCount: number,
+): boolean {
+  if (firstBlockAttached || pendingBlankCount > 0) return false
+  const authoredDef = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex))
+  const authoredCurrent = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
+  if (authoredDef === undefined || authoredCurrent === undefined ||
+      !/\]:[ \t]+\+[ \t]*$/.test(authoredDef)) return false
+  const depth = quotePrefixDepth(authoredDef)
+  return depth > 0 && sourceColumn(authoredCurrent, depth) >
+    authoredLabelColumn(lexer, defLineIndex, defLineRaw, label, markerColumn) &&
+    wrappedAttributeRunAt(lexer) > 0
+}
+
+function refusedMarkerEndsAtBelowColumn(refusedMarker: boolean, kind: string): boolean {
+  return refusedMarker && kind === 'below'
+}
+
 /** The note keeps an invisible line at its marker column or in its body (§17 L3, carve#5288). */
 function atNoteMarker(column: number, markerColumn: number): boolean {
   return column === markerColumn || column >= markerColumn + FOOTNOTE_BODY_COLUMN
@@ -995,16 +1014,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
     const ln = admission.line
     if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'
-    if (refusedMarker && admission.kind === 'below') return 'stop'
+    if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
-    const authoredDef = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex))
-    const authoredCurrent = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
-    if (!firstBlockAttached && authoredDef !== undefined && authoredCurrent !== undefined &&
-        /\]:[ \t]+\+[ \t]*$/.test(authoredDef) && quotePrefixDepth(authoredDef) > 0 &&
-        sourceColumn(authoredCurrent, quotePrefixDepth(authoredDef)) >
-          authoredLabelColumn(lexer, defLineIndex, defLineRaw, label, markerColumn) &&
-        wrappedAttributeRunAt(lexer) > 0) return 'stop'
+    if (quotedAttributeLeavesRefusedNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
+      firstBlockAttached, pendingBlankRun.count)) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'

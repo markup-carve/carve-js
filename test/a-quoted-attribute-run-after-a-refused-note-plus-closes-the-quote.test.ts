@@ -18,3 +18,9 @@ it.each(['> >   {#i}', '> >   {#i\n> >    .y}'])(
     expect(html).toContain('</blockquote>\n<p>next</p>')
   },
 )
+
+it('retains a quoted attribute after a separating blank', () => {
+  const html = carveToHtml('> [^a]: +\n> \n>   {.x\n>    .y}\nnext\n\nsee[^a]\n')
+  expect(html).toContain('<blockquote>\n\n</blockquote>\n<p>next</p>')
+  expect(html).not.toContain('<p>{.x')
+})
