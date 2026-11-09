@@ -935,7 +935,7 @@ export function createDefinitionListParser(
           for (const closer of bodyFenceClosers(bodyLines)) {
             bodyLines.push(closer)
             bodySourceLines.push(undefined)
-            bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos - 1))
             track(closer)
           }
           attachedOpenCodeFence = false
