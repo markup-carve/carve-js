@@ -1022,7 +1022,7 @@ export function ownLines(
         // A span in a line-block payload pairs past the column too (carve-php#3137).
         const f = RE_FENCE.test(m.rest) || RE_RAW_FENCE.test(m.rest) ? /^(`{3,}|~{3,})/.exec(m.rest)![1]! : null
         const comment = COMMENT_FENCE.exec(m.rest)
-        if (f && (closerRuns().widest[f[0] as '`' | '~']![at + 1] ?? 0) >= f.length) inner.span = f
+        if (f && versePayloadRunPairs(f, at)) inner.span = f
         else if (comment) inner.span = comment[1]!
       }
       // A `%%%` span leaves nothing, so the stanza it interrupted stays as it was (carve#4956).
@@ -1937,6 +1937,17 @@ export function ownLines(
       n = indentCols(quoteRest(n.rest))
     }
     return n
+  }
+
+  function versePayloadRunPairs(run: string, at: number): boolean {
+    const quoteDepth = frames.filter(frame => frame.kind === 'quote').length
+    for (let k = at + 1; k < lines.length; k++) {
+      const measured = quotedMeasure(k, quoteDepth)
+      if (measured === null) return false
+      const later = PURE_FENCE.exec(measured.rest)?.[1]
+      if (later?.[0] === run[0] && later.length >= run.length) return true
+    }
+    return false
   }
 
   function nextLineOwner(host: Frame[], at: number, quotes: number): number {
