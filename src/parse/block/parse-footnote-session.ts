@@ -896,6 +896,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // Deferred: scanning the body at every `+` made a run of markers quadratic (carve-js#4795).
   let nestedFenceOpen: () => boolean = () => false
   let nestedSourceBodyColumn: number | undefined
+  let losingNestedBodyColumn: number | undefined
   let nestedDefBodyIndex = -1
   // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
   let nestedOpenMemo = { index: -1, length: 0, open: false }
@@ -1185,6 +1186,17 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const bodyContent = noteBodyContent(lexer, admission, bodyColumn, authoredBodyColumn, captionHostBlock,
         firstFenceEligible, firstFenceRun, bodyLines.length === 1)
       const content = bodyContent.content
+      const nestedDefinition = RE_FOOTNOTE_DEF.exec(content.trimStart())
+      if (nestedDefinition !== null && normalizeRefLabel(nestedDefinition[1]!) === normalizeRefLabel(label))
+        losingNestedBodyColumn = admission.sourceColumn + FOOTNOTE_BODY_COLUMN
+      else if (losingNestedBodyColumn !== undefined && admission.sourceColumn < losingNestedBodyColumn &&
+          admission.sourceColumn >= (authoredBodyColumn ?? bodyColumn)) {
+        // The duplicate nested note loses its body at this dedent. Its line
+        // block or fence cannot lend a paragraph claim to the surviving note.
+        for (const key of Object.keys(lazyState)) Reflect.deleteProperty(lazyState, key)
+        Object.assign(lazyState, verbatimOnlyLazyState())
+        losingNestedBodyColumn = undefined
+      }
       firstFenceRun = bodyContent.fenceRun
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
