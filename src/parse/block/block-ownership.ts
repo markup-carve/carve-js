@@ -212,6 +212,7 @@ function attachedCodeCloserAhead(
   fence: Frame, at: number, quotes: number, length: number, widest: Record<string, number[]>, hostColumn: number,
   measure: (line: number, quotes: number) => { col: number; rest: string } | null,
   itemContentColumn: number | null = null,
+  shiftedMarkerLineCloser = false,
 ): { exists: boolean; paired: number | null } {
   const opener = measure(at, quotes)
   const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
@@ -228,6 +229,10 @@ function attachedCodeCloserAhead(
     if (measured === null) break
     if (measured.rest === '') { pastBlank = firstAfterBlank = true; continue }
     if (fence.closes!(measured.rest, measured.col)) return { exists: true, paired: null }
+    const hostCloser = pastBlank && shiftedMarkerLineCloser && measured.col === opener!.col + 1
+      ? PURE_FENCE.exec(measured.rest)?.[1] : undefined
+    if (hostCloser !== undefined && hostCloser[0] === run[0] && hostCloser.length >= run.length)
+      return { exists: true, paired: line }
     if (pastBlank && itemContentColumn !== null && pairedRunLine === null && measured.col < itemContentColumn) {
       const shifted = PURE_FENCE.exec(measured.rest)?.[1]
       if (shifted !== undefined && shifted[0] === run[0] && shifted.length >= run.length) return { exists: true, paired: line }
@@ -2079,7 +2084,8 @@ export function ownLines(
   function codeCloserAhead(fence: Frame, at: number, quotes: number): { exists: boolean; paired: number | null } {
     const host = attachedHost?.at(-1)
     return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest,
-      host?.markerCol ?? 0, quotedMeasure, attachedHost && flushLeftMarkerLineItem(attachedHost, fence) ? host!.col : null)
+      host?.markerCol ?? 0, quotedMeasure, attachedHost && flushLeftMarkerLineItem(attachedHost, fence) ? host!.col : null,
+      host?.line !== undefined && TRAILING_PLUS.test(lines[host.line]!.trimStart()))
   }
 
   // A top-level item whose marker-line `+` took a fence left of its content column.

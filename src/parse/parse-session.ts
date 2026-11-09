@@ -2769,9 +2769,10 @@ export class ParseSession extends InlineParseSession {
     viewSlice = 0,
     closerFloor = 0,
     hostCloserColumn = 0,
+    codeCloserColumn = 0,
   ): { lines: string[]; lineNumbers: number[]; startLineIndex: number } {
     const attached = this.collectAttachedBlock(lexer, isBoundary, baseIndent, endAtFoldedDefinition, true,
-      viewSlice, true, closerFloor, hostCloserColumn)
+      viewSlice, true, closerFloor, hostCloserColumn, codeCloserColumn)
     const view = (line: string | undefined) => line === undefined || viewSlice === 0 ? line : sliceColumns(line, viewSlice, true)
     // Attribute lines and line comments before the block render nothing, so the fence below them is the attached block.
     let leadLines = 0
