@@ -2320,6 +2320,33 @@ export class ParseSession extends InlineParseSession {
 
   private finishBlockQuote(q: QuoteCollect): BlockQuote | Figure {
     const { lexer, firstLineIndex } = q
+    // A note's refused first-block `+` leaves a wrapped attribute run at the
+    // quote's block position. The quote lexer carries the note's synthetic
+    // margin, so restore the run's authored relative columns before parsing.
+    const root = lexer.documentRoot ?? lexer
+    const authoredLines = root.authoredRootLines ?? root.authoredLines
+    if (authoredLines !== undefined) for (let i = 1; i < q.inner.length; i++) {
+      const note = authoredLines[q.innerLineNumbers[i - 1]! - 1]
+      const opener = authoredLines[q.innerLineNumbers[i]! - 1]
+      if (!/^\s*\[\^/.test(q.inner[i - 1]!) || note === undefined || opener === undefined ||
+          !/^\[\^[^\]]+\]:[ \t]+\+[ \t]*$/.test(sourceQuoteBody(note)) ||
+          !sourceQuoteBody(opener).startsWith('{') || quotePrefixDepth(note) !== quotePrefixDepth(opener)) continue
+      const depth = quotePrefixDepth(opener)
+      const column = sourceColumn(opener, depth)
+      if (column >= sourceColumn(note, depth) + FOOTNOTE_BODY_COLUMN) continue
+      const run: string[] = []
+      for (let j = i; j < q.inner.length; j++) {
+        const source = authoredLines[q.innerLineNumbers[j]! - 1]
+        if (source === undefined || quotePrefixDepth(source) !== depth ||
+            j > i && sourceColumn(source, depth) <= column) break
+        run.push(' '.repeat(sourceColumn(source, depth) - column) + sourceQuoteBody(source))
+        if (source.includes('}')) {
+          if (parseBlockAttributeRun(run.join('\n')) !== null)
+            for (let k = 0; k < run.length; k++) q.inner[i + k] = run[k]!
+          break
+        }
+      }
+    }
     const subLexer = nestedSubLexer(lexer, q.inner, firstLineIndex, q.innerLineNumbers, q.origins)
     subLexer.quoteLazyHint = q.handDown
     // A QUOTE'S CONTENT COLUMN COMES FROM ITS MARKER, so the note body's leniency
