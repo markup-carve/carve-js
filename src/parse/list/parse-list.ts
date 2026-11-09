@@ -731,6 +731,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn, new Set(runOpeners.keys()))
     const unsliced = attached.slice()
+    // A run after a kept note keeps its continuations' indentation too.
+    for (let index = blockLine; index < unsliced.length; index++) {
+      const run = wrappedAttributeLinesAt(offset => unsliced[index + offset], lexer.parseOptions)
+      for (let line = index; line < index + run; line++) runOpeners.set(line, index)
+      index += Math.max(0, run - 1)
+    }
     for (let index = 0; index < attached.length; index++) {
       const line = attached[index]!
       const captionAtHostColumn = index > 0 && RE_BLOCKQUOTE.test(attached[blockLine]?.trimStart() ?? '') &&
