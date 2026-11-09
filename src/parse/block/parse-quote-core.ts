@@ -523,6 +523,14 @@ function continuesAfterComment(q: QuoteHostLine): boolean {
 // Pop hosts the line has left, then push the item, note or description markers it opens.
 function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   const { host, column, text } = q
+  // A marker at the note's marker column closes that note and its paragraph.
+  // It starts a block in the surviving quote; the old paragraph cannot turn
+  // the marker into lazy text or admit an unprefixed follower (CARVE-P2-008).
+  if (host.kinds.at(-1) === 'note' && column < host.columns.at(-1)! &&
+      markerPrefixLength(text, 0, prefixWalkBound(text)) > 0) {
+    closeBlockQuoteParagraph(q.state)
+    paragraph = false
+  }
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
   const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
   // A marker that misses a marker body closes it (PART 0 S3, carve#4860), so only text is a lazy item line.
