@@ -2838,11 +2838,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           : placed
       if (markerTermText) dedented = LAZY_FRAME + sourceEntry
       // Rebase the first ordinary block after an unpaired forced fence line.
-      if (lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined &&
-          lazyState.opaque === null && opensCodeFence((nested.at(-1) ?? '').trimStart()) &&
+      if (followingUnpairedFence && lazyState.opaque === null &&
+          opensCodeFence((nested.at(-1) ?? '').trimStart()) &&
           lineOpensItemBlock(placed.trimStart()) && indentColumns(placed) > 0) {
         dedented = placed.trimStart()
-        lazyState.refusedBraceFollower = false
       }
       if (pastDefinitionEntry && survivingItemParagraph &&
           definitionHostColumn === lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent &&
@@ -3721,6 +3720,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
+    let unpairedFenceFollower = false
+    let followingUnpairedFence = false
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       if (admission.kind === 'blank') lazyState.refusedBraceFollower = false
@@ -3731,10 +3732,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
+      followingUnpairedFence = unpairedFenceFollower && lazyState.refusedRunKept === undefined
+      unpairedFenceFollower = false
       // Only the line right after the run is its follower, a fence-shaped one included (CARVE-P2-035, carve#5610).
       // A fence follower with a closer ahead keeps its lines through that closer.
       const refusedFollower = lazyState.refusedBraceFollower === true && !isBlankLine(l)
       if (refusedFollower) lazyState.refusedBraceFollower = false
+      unpairedFenceFollower = refusedFollower && opensCodeFence(l.trimStart())
       const keptThroughCloser = lazyState.refusedRunKept instanceof RegExp && !isBlankLine(l)
       if ((refusedFollower &&
           !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
