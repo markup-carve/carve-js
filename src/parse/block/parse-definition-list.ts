@@ -1267,9 +1267,6 @@ export function createDefinitionListParser(
         if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
         const early = admitPlusContinuation(ln)
         if (early !== undefined) return early
-        if (admission.kind === 'below' && RE_CAPTION.test(stripLazyFrame(bodyLines.at(-1) ?? '').trimStart()) &&
-            lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(ln) >= bodySourceColumn &&
-            lineOpensItemBlock(ln.trimStart())) return admitContentLine(' '.repeat(contentCol) + ln, true)
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         if (refusedPlusTextParagraph && isListMarkerLine(ln.trimStart()) &&
             sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol) return 'stop'
