@@ -204,19 +204,31 @@ function foldReleasedFence(form: Form, owner: Frame, rest: string, column: numbe
 function attachedCodeCloserAhead(
   fence: Frame, at: number, quotes: number, length: number, widest: Record<string, number[]>, hostColumn: number,
   measure: (line: number, quotes: number) => { col: number; rest: string } | null,
+  itemContentColumn: number | null = null,
 ): { exists: boolean; paired: number | null } {
   const opener = measure(at, quotes)
   const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
   if (run === undefined || (widest[run[0]!]?.[at + 1] ?? 0) < run.length) return { exists: false, paired: null }
   let pastBlank = false
+  // A flush-left fence an item's marker-line `+` took: past a blank, the item reads a closer below its
+  // content column, where its own dedent puts it at the fence's column (§17 L3, carve-js#4763).
+  let firstAfterBlank = false
   let deeperRunColumn: number | null = null
   let deeperRunLine = -1
   let pairedRunLine: number | null = null
   for (let line = at + 1; line < length; line++) {
     const measured = measure(line, quotes)
     if (measured === null) break
-    if (measured.rest === '') { pastBlank = true; continue }
+    if (measured.rest === '') { pastBlank = firstAfterBlank = true; continue }
     if (fence.closes!(measured.rest, measured.col)) return { exists: true, paired: null }
+    if (pastBlank && itemContentColumn !== null && pairedRunLine === null && measured.col < itemContentColumn) {
+      const shifted = PURE_FENCE.exec(measured.rest)?.[1]
+      if (shifted !== undefined && shifted[0] === run[0] && shifted.length >= run.length) return { exists: true, paired: line }
+      // A marker as the first line there opens an item whose content column then bounds the closer too.
+      const marker = firstAfterBlank ? matchMarker(measured.rest) : null
+      if (marker !== null) itemContentColumn = Math.min(itemContentColumn, measured.col + marker.width)
+    }
+    firstAfterBlank = false
     if (pairedRunLine !== null && measured.col <= hostColumn) break
     const pure = PURE_FENCE.exec(measured.rest)?.[1]
     if (!pastBlank || pure === undefined || pure[0] !== run[0] || pure.length < run.length || measured.col <= opener!.col) continue
@@ -1996,8 +2008,16 @@ export function ownLines(
   }
 
   function codeCloserAhead(fence: Frame, at: number, quotes: number): { exists: boolean; paired: number | null } {
+    const host = attachedHost?.at(-1)
     return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest,
-      attachedHost?.at(-1)?.markerCol ?? 0, quotedMeasure)
+      host?.markerCol ?? 0, quotedMeasure, attachedHost && flushLeftMarkerLineItem(attachedHost, fence) ? host!.col : null)
+  }
+
+  // A top-level item whose marker-line `+` took a fence left of its content column.
+  function flushLeftMarkerLineItem(host: Frame[], fence: Frame): boolean {
+    const item = host.at(-1)!
+    return host.length === 2 && item.kind === 'item' && fence.col < item.col &&
+      item.line !== undefined && TRAILING_PLUS.test(lines[item.line]!.trimStart())
   }
 
   function colonCloserAhead(container: Frame, at: number, quotes: number): boolean {
