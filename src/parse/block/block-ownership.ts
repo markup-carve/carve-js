@@ -229,6 +229,7 @@ function attachedCodeCloserAhead(
   measure: (line: number, quotes: number) => { col: number; rest: string } | null,
   itemContentColumn: number | null = null,
   shiftedMarkerLineCloser = false,
+  stackedContentColumn: number | null = null,
 ): { exists: boolean; paired: number | null } {
   const opener = measure(at, quotes)
   const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
@@ -248,6 +249,11 @@ function attachedCodeCloserAhead(
     const hostCloser = pastBlank && shiftedMarkerLineCloser && measured.col === opener!.col + 1
       ? PURE_FENCE.exec(measured.rest)?.[1] : undefined
     if (hostCloser !== undefined && hostCloser[0] === run[0] && hostCloser.length >= run.length)
+      return { exists: true, paired: line }
+    const stackedCloser = pastBlank && shiftedMarkerLineCloser && stackedContentColumn !== null &&
+      measured.col > opener!.col && measured.col < stackedContentColumn
+      ? PURE_FENCE.exec(measured.rest)?.[1] : undefined
+    if (stackedCloser !== undefined && stackedCloser[0] === run[0] && stackedCloser.length >= run.length)
       return { exists: true, paired: line }
     if (pastBlank && itemContentColumn !== null && pairedRunLine === null && measured.col < itemContentColumn) {
       const shifted = PURE_FENCE.exec(measured.rest)?.[1]
@@ -1492,14 +1498,16 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
-        if (nextOwner === host.length - 2 && topFence.kind === 'fence' && topFence.family === 'code') {
+        const host0 = host.at(-1)!
+        const parent = host[nextOwner]!
+        const sameStack = host0.kind === 'item' && parent.kind === 'item' && parent.line === host0.line
+        if (topFence.kind === 'fence' && topFence.family === 'code' &&
+            (nextOwner === host.length - 2 || sameStack)) {
           const released = quotedMeasure(topFence.opened!, quotes)
           if (released !== null) {
-            const host0 = host.at(-1)!
-            const parent = host[nextOwner]!
             top().releasedFence = {
               column: released.col, character: released.rest[0]!, length: /^(`+|~+)/.exec(released.rest)![1]!.length,
-              stacked: host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
+              stacked: sameStack || host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
             }
           }
         }
@@ -2198,7 +2206,8 @@ export function ownLines(
     const host = attachedHost?.at(-1)
     return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest,
       host?.markerCol ?? 0, quotedMeasure, attachedHost && flushLeftMarkerLineItem(attachedHost, fence) ? host!.col : null,
-      host?.line !== undefined && TRAILING_PLUS.test(lines[host.line]!.trimStart()))
+      host?.line !== undefined && TRAILING_PLUS.test(lines[host.line]!.trimStart()),
+      host?.kind === 'item' && host.plus === host.line ? host.col : null)
   }
 
   // A top-level item whose marker-line `+` took a fence left of its content column.

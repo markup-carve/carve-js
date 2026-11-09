@@ -1061,15 +1061,21 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   const keepRefusedQuoteFollower = (ln: string): boolean => {
-    if (!m[2]?.trimStart().startsWith('>') || ln.trim() !== '%%') return false
+    if (!(m[2]?.trimStart().startsWith('>') || m[2]?.trim() === '+') || ln.trim() !== '%%') return false
     const root = lexer.documentRoot ?? lexer
     const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
     const written = authored[lexer.lineNumber(lexer.pos) - 1]
     const nextWritten = authored[lexer.lineNumber(lexer.pos + 1) - 1]
     if (written === undefined || !isContinuationMarker(written.trimStart()) ||
         nextWritten === undefined || sourceColumn(nextWritten) < bodyColumn) return false
-    // A refused marker after a note's attached quote is invisible. Its
-    // body-column follower still belongs to the note (PART 0 S2).
+    // A refused marker after a note's attached block is invisible, but ends
+    // that block before the note reads its body-column follower (PART 0 S2).
+    if (m[2]?.trim() === '+' && bodyLines.at(-1) !== '' && !bodyEndsInOpenCodeFence(bodyLines)) {
+      bodyLines.push('')
+      bodySourceLines.push(undefined)
+      bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+      trackItemLazyState('', lazyState)
+    }
     lexer.consume()
     return true
   }

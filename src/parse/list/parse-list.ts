@@ -449,6 +449,36 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     )] }
   }
 
+  /** Carry a stacked marker-line fence through its in-host shifted closer. */
+  function extendStackedFence(
+    lexer: Lexer,
+    attached: { lines: string[]; lineNumbers: number[] },
+    markerColumn: number,
+    contentColumn: number,
+    boundary: AttachBoundary,
+  ): void {
+    const first = attached.lines[0] ?? ''
+    const firstText = first.trimStart()
+    const fence = RE_FENCE.exec(firstText) ?? RE_RAW_FENCE.exec(firstText)
+    const run = fence === null ? undefined : RE_FENCE.test(firstText) ? fence[2]! : fence[1]!
+    if (run === undefined || attached.lines.slice(1).some(line => fenceCloseRe(run).test(line)) ||
+        lexer.peek() === undefined || !isBlankLine(lexer.peek()!)) return
+    let closerAt = -1
+    for (let offset = 0; lexer.peek(offset) !== undefined; offset++) {
+      const line = lexer.peek(offset)!
+      if (isBlankLine(line)) continue
+      if (indentColumns(line) < markerColumn || boundary(line)) break
+      if (indentColumns(line) < contentColumn && fenceCloseRe(run).test(line.trimStart())) { closerAt = offset; break }
+    }
+    if (closerAt < 0) return
+    for (let offset = 0; offset <= closerAt; offset++) {
+      const line = lexer.peek()!
+      attached.lines.push(offset === closerAt ? ' '.repeat(indentColumns(first)) + line.trimStart() : line)
+      attached.lineNumbers.push(lexer.lineNumber(lexer.pos))
+      lexer.consume()
+    }
+  }
+
   /** An item whose first block is attached by a `+` on the marker line, or stacked behind a quote marker. */
   function firstBlockItem(
     lexer: Lexer, session: ParseSession, shape: ListShape, head: ItemHead, placement: ItemPlacement,
@@ -524,6 +554,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))),
     shape.baseIndent, false, followerColumn, closerFloor,
     0, markerColumn + 1)
+    if (quotePrefixDepth(itemSource) > 0) extendStackedFence(lexer, attached, markerColumn,
+      contentStart < 0 ? markerColumn : sourceColumnAt(head.line, contentStart + markersEnd), isItemAttachBoundary)
     // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
     // A task item's content column is its box's column.
     const contentOffset = head.line.lastIndexOf(head.content)

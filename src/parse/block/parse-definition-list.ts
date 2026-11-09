@@ -924,6 +924,14 @@ export function createDefinitionListParser(
         }
         if (attachedOpenCodeFence && bodyEndsInOpenCodeFence(bodyLines) &&
             (after === undefined || indentColumns(after, contentCol) < contentCol)) {
+          for (let k = 0; k < look; k++) {
+            bodyBaseEligible.add(bodyLines.length)
+            bodyLines.push('')
+            bodySourceLines.push(lexer.peek())
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+            track('')
+            lexer.consume()
+          }
           for (const closer of bodyFenceClosers(bodyLines)) {
             bodyLines.push(closer)
             bodySourceLines.push(undefined)
