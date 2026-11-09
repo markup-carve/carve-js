@@ -1230,7 +1230,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     })
   // A blank reaches every frame, so it is the open fence's content (corpus 291, carve#4033).
   // A `+` attachment ends at the blank instead.
-  const endsOnPlusAttachment = attachmentEnd === bodyLines.length && !nestedFenceOpen
+  const endsOnPlusAttachment = firstBlockAttached && attachmentEnd === bodyLines.length && !nestedFenceOpen
   if (pendingBlankRun.count > 0 && !endsOnPlusAttachment && bodyEndsInOpenCodeFence(bodyLines)) {
     for (let k = 0; k < pendingBlankRun.count; k++) {
       bufferedBlanks.add(bodyLines.length)
