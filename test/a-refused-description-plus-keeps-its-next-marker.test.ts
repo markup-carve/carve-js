@@ -16,6 +16,21 @@ it('hands a root list after the refused marker text back to the document', () =>
     '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <p>+ sib</p>\n  </dd>\n</dl>\n<ul>\n  <li>other</li>\n</ul>')
 })
 
+it('opens a body-column heading after a refused description marker', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n  # h\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <h1 id="h">h</h1>\n  </dd>\n</dl>')
+})
+
+it('keeps the complete body-column fence under the description after a refused marker', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n  ```\n  code\n  ```\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <pre><code>code\n</code></pre>\n  </dd>\n</dl>')
+})
+
+it('keeps the complete colon container under the description after a refused marker', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n  ::: note\n  body\n  :::\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <aside class="admonition note" aria-label="Note">\n      <p>body</p>\n    </aside>\n  </dd>\n</dl>')
+})
+
 it.each([0, 2])('keeps a bullet at column %i in the description after a refused plus (carve#5608)', (column) => {
   const source = `:: t\n: +\n1. li\n+\n${' '.repeat(column)}- sib\n`
   expect(carveToHtml(source)).toBe(

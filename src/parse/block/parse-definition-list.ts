@@ -1220,11 +1220,36 @@ export function createDefinitionListParser(
             currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart()) &&
             !RE_DEFLIST_TERM.test(ln.trimStart()) && !RE_DEFLIST_DEF.test(ln.trimStart()) &&
             (currentColumn >= (refusedPlusFollowerContentColumn ?? Infinity) ||
-              !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()))) {
-          const placed = ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
+              !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()) ||
+              previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+                bodyLines.at(-1)?.trim() === '%%')) {
           const startsAfterRefused = previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
             bodyLines.at(-1)?.trim() === '%%'
-          if (startsAfterRefused && !lineOpensItemBlock(placed)) {
+          if (startsAfterRefused && (opensCodeFence(ln.trimStart()) ||
+              colonFenceOpenerLen(ln.trimStart()) !== null)) {
+            const start = lexer.pos
+            const fenced = parseSession.collectAttachedBlock(lexer, attachedBoundary(),
+              Math.min(contentCol, indentColumns(ln)), true, true)
+            bodyLines.push('')
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(previousLine)
+            track('')
+            for (let index = 0; index < fenced.lines.length; index++) {
+              const line = fenced.lines[index]!
+              bodyBaseEligible.add(bodyLines.length)
+              bodyLines.push(line)
+              bodySourceLines.push(lexer.lineAt(start + index) ?? line)
+              bodyLineNumbers.push(fenced.lineNumbers[index]!)
+              track(line)
+            }
+            refusedPlusFollowerColumn = null
+            refusedPlusFollowerContentColumn = null
+            return 'continue'
+          }
+          const placed = startsAfterRefused && lineOpensItemBlock(ln.trimStart())
+            ? ln.trimStart()
+            : ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
+          if (startsAfterRefused && !isListMarkerLine(placed)) {
             bodyLines.push('')
             bodySourceLines.push(undefined)
             bodyLineNumbers.push(previousLine)
