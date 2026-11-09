@@ -307,6 +307,16 @@ function strippedColumn(line: string, origins: readonly number[], canonicalChild
   return col
 }
 
+function hasLeadingTab(line: string, rest: string): boolean {
+  return rest !== '' && line.slice(0, line.length - rest.length).includes('\t')
+}
+
+function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Frame[]): boolean {
+  return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null &&
+    frames.some((child, index) => index > 1 && child.kind === 'item' &&
+      frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
+}
+
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
 function isQuoteLine(rest: string): boolean {
   if (rest[0] !== '>') return false
@@ -895,14 +905,25 @@ export function ownLines(
         reached = k
         continue
       }
-      if (m.rest !== '' && m.col < f.col) {
-        if (stripped === null && src.slice(0, src.length - m.rest.length).includes('\t')) {
+      const tabLead = hasLeadingTab(src, m.rest)
+      const markerWithTab = tabLead && tabbedMarkerOutsideCode(m.rest, top(), frames)
+      if (tabLead && (m.col < f.col || markerWithTab)) {
+        if (stripped === null) {
           const origins: number[] = []
           for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
           const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
             frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
           stripped = strippedColumn(src, origins, canonicalChild)
         }
+        // Normalize before deciding reach. An identical later marker must not gain
+        // a new column merely because the first one opened a child frame.
+        if (markerWithTab && stripped !== m.col) {
+          lineCuts.push({ at: out.length, removed: src.length - m.rest.length - stripped })
+          src = ' '.repeat(stripped) + m.rest
+          m = indentCols(src)
+        }
+      }
+      if (m.rest !== '' && m.col < f.col) {
         if (stripped === null || stripped < f.col) break
         frameReach = true
       }
