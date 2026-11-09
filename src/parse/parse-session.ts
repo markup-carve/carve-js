@@ -170,7 +170,7 @@ import {
 import { InlineParseSession } from './inline/parse-inline-session.js'
 import { withKeptFenceLookahead } from './block/parse-quote-core.js'
 import { scanDirectiveShape } from '../include-directive.js'
-import { parseFootnoteDef } from './block/parse-footnote-session.js'
+import { attachedLeadIsList, attachedListFenceBoundary, parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
@@ -504,6 +504,14 @@ const commentOnlyParagraph = (paragraph: Paragraph): boolean =>
   paragraph.children.some(child => child.type === 'comment') && paragraph.children.every(child =>
     child.type === 'comment' || child.type === 'soft_break' || child.type === 'hard_break' ||
     child.type === 'text' && /^[ \t\n\r]*$/.test(child.value))
+
+/** A quote's `+` ends its block at a blank or a further `+`, except inside a fence its attached list leaves open. */
+function quoteAttachedBoundary(lexer: Lexer): (line: string) => boolean {
+  const plain = (next: string): boolean => isBlankLine(next) || /^\+[ \t]*$/.test(next)
+  if (!attachedLeadIsList(lexer)) return plain
+  const listFence = attachedListFenceBoundary(indentColumns(lexer.peek() ?? ''))
+  return (next) => listFence(next) ?? plain(next)
+}
 
 export class ParseSession extends InlineParseSession {
   /**
@@ -2025,7 +2033,7 @@ export class ParseSession extends InlineParseSession {
     const stackedSource = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lineIndex) - 1] ?? ln
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       lexer,
-      (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+      quoteAttachedBoundary(lexer),
       // A follower at a stacked opener's column is read from that column.
       isStackedFirstBlockQuoteMarker(stackedSource) ? indentColumns(lexer.peek() ?? '') : 0,
       true,
@@ -2121,7 +2129,7 @@ export class ParseSession extends InlineParseSession {
     lexer.consume()
     const { lines: attached, lineNumbers: attachedLineNumbers } = this.collectAttachedBlock(
       lexer,
-      (next) => isBlankLine(next) || /^\+[ \t]*$/.test(next),
+      quoteAttachedBoundary(lexer),
       0,
       true,
     )

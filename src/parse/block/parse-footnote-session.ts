@@ -493,6 +493,54 @@ function continuesAttachedList(line: string, listColumn: number): boolean {
   return column > listColumn || (column === listColumn && isListMarkerLine(line.trimStart()))
 }
 
+/**
+ * The `+` attaches a list, not its child fence (carve#5539): while that fence or comment span is open a
+ * blank is its payload, and a line still in the list ends the fence there (PART 0 S1, §11 N1).
+ * Returns whether the line ends the attached block, or undefined to leave it to the host's boundary.
+ */
+export function attachedListFenceBoundary(listColumn: number): (line: string) => boolean | undefined {
+  let fenceCloser: RegExp | undefined
+  let fenceColumn = 0
+  let commentRun: number | undefined
+  let commentColumn = 0
+  return (a) => {
+    if (commentRun !== undefined) {
+      // Only a fence holds a blank as payload; at a blank the host decides (PART 0 S1).
+      if (isBlankLine(a)) {
+        commentRun = undefined
+        return undefined
+      }
+      if (indentColumns(a) >= commentColumn) {
+        if (commentFenceRun(a.trimStart()) === commentRun) commentRun = undefined
+        return false
+      }
+      if (!continuesAttachedList(a, listColumn)) return true
+      commentRun = undefined
+    }
+    if (fenceCloser !== undefined) {
+      if (isBlankLine(a) || indentColumns(a) >= fenceColumn) {
+        if (fenceCloser.test(a.trimStart())) fenceCloser = undefined
+        return false
+      }
+      if (!continuesAttachedList(a, listColumn)) return true
+      fenceCloser = undefined
+    }
+    const run = commentFenceRun(a.trimStart())
+    if (run !== undefined) {
+      commentRun = run
+      commentColumn = indentColumns(a)
+    }
+    // A fence on an item's marker line opens at the item's content column, the width of what precedes it.
+    const fenceText = opensCodeFence(a.trimStart()) ? a.trimStart() : markerFreeContent(a)
+    const marker = opensCodeFence(fenceText) ? /^(`{3,}|~{3,})/.exec(fenceText)?.[1] : undefined
+    if (marker !== undefined) {
+      fenceCloser = fenceCloseRe(marker)
+      fenceColumn = indentColumns(a.slice(0, a.length - fenceText.length).replace(/[^\t]/g, ' '))
+    }
+    return undefined
+  }
+}
+
 function rebaseAttachedCodeCloser(attached: readonly string[], bodyLines: string[]): void {
   const opener = attached[0]
   if (attached.length < 2 || opener === undefined || !opensCodeFence(opener.trimStart())) return
@@ -799,44 +847,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // An attached paragraph ends at an opener that reaches the body column.
       const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
       const visibleLeadIsList = attachedLeadIsList(lexer)
-      let nestedFenceCloser: RegExp | undefined
-      let nestedFenceColumn = 0
-      let nestedCommentRun: number | undefined
-      let nestedCommentColumn = 0
+      const listFence = visibleLeadIsList ? attachedListFenceBoundary(indentColumns(follower!)) : undefined
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
         (a) => {
-          if (visibleLeadIsList) {
-            if (nestedCommentRun !== undefined) {
-              if (!isBlankLine(a) && indentColumns(a) < nestedCommentColumn) return true
-              if (commentFenceRun(a.trimStart()) === nestedCommentRun) nestedCommentRun = undefined
-              return false
-            }
-            if (nestedFenceCloser !== undefined) {
-              if (isBlankLine(a) || indentColumns(a) >= nestedFenceColumn) {
-                if (nestedFenceCloser.test(a.trimStart())) nestedFenceCloser = undefined
-                return false
-              }
-              // A blank inside the open fence is payload, so a line still in the list continues it (§11 N1, carve#5555).
-              if (!continuesAttachedList(a, indentColumns(follower!))) return true
-              nestedFenceCloser = undefined
-            }
-            const commentRun = commentFenceRun(a.trimStart())
-            if (commentRun !== undefined) {
-              nestedCommentRun = commentRun
-              nestedCommentColumn = indentColumns(a)
-            }
-            // A fence on an item's marker line opens at the item's content column.
-            const fenceText = opensCodeFence(a.trimStart()) ? a.trimStart() : markerFreeContent(a)
-            if (opensCodeFence(fenceText)) {
-              const run = /^(`{3,}|~{3,})/.exec(fenceText)?.[1]
-              if (run !== undefined) {
-                nestedFenceCloser = fenceCloseRe(run)
-                nestedFenceColumn = indentColumns(a.slice(0, a.length - fenceText.length))
-              }
-            }
-          }
+          const held = listFence?.(a)
+          if (held !== undefined) return held
           return isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
           (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
