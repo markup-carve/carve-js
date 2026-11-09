@@ -14,3 +14,19 @@ x
   </li>
 </ul>`)
 })
+
+it('does not widen a line-block closer with the code-fence rule', () => {
+  expect(carveToHtml('- - +\n  ::: |\n\n  x\n   :::\n').trim()).toBe(`<ul>
+  <li>
+    <ul>
+      <li>
+        <div class="line-block">
+
+        </div>
+      </li>
+    </ul>
+    <p>x
+:::</p>
+  </li>
+</ul>`)
+})

@@ -519,7 +519,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       indentColumns(line, laterColumn) < laterColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
       (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))),
     shape.baseIndent, false, followerColumn, closerFloor,
-    markerColumn + 1)
+    0, markerColumn + 1)
     // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
     // A task item's content column is its box's column.
     const contentOffset = head.line.lastIndexOf(head.content)
