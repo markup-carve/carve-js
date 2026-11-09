@@ -3874,10 +3874,13 @@ class CarveRenderSession {
           attrs === '' && ctx.paragraphStartsAfterCaptionHost,
           ctx.lineBlockDepth > 0,
         )
-        const text = guardThematicBreakLines(
-          ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered,
-          ctx.lineBlockDepth > 0,
-        )
+        const paragraphText = ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered
+        // Text nodes escape a thematic break themselves. Only a smart punctuation
+        // node needs this guard; applying it to the whole paragraph otherwise
+        // changes a literal `---` inside an inline code span into an em dash.
+        const text = children.some(child => child.type === 'smart_punctuation')
+          ? guardThematicBreakLines(paragraphText, ctx.lineBlockDepth > 0)
+          : paragraphText
         let withComments = text
         if (node.transparentComments?.length) {
           const sourceLines = node.transparentVisibleLines ?? [...new Set(node.children
@@ -5404,6 +5407,7 @@ class CarveRenderSession {
           // A run of three or more backticks at block start is a code fence.
           // A shorter run, or one after an inline opener, can start a code span.
           idx === nodes.length - 1 && (out !== '' || ctx.inlineDepth > 1 || (node.type === 'code' && codeSpanFence(node.value).length < 3)),
+          node.type === 'code' && node.value.startsWith('\n') && nodes[idx - 1]?.type === 'soft_break' && overrides.has(idx - 2),
         )
         // THE TWO DECISIONS BELOW NEED THE LINE WRITTEN SO FAR, which is why they
         // live here and not in `renderInline`: the answer is a property of the
@@ -5537,6 +5541,7 @@ class CarveRenderSession {
     captionCanOpen = false,
     nextOpensBacktickRun = false,
     mayRunToEndOfText = false,
+    refusedRunFollower = false,
   ): string {
     const previous = this.escapeUnit
     const parentProjections = this.inlineChildProjections
@@ -5544,7 +5549,7 @@ class CarveRenderSession {
     this.escapeUnit = node as unknown as object
     try {
       const result = this.renderInlineBody(
-        node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText,
+        node, ctx, prevChar, nextChar, captionCanOpen, nextOpensBacktickRun, mayRunToEndOfText, refusedRunFollower,
       )
       this.lastLiteralRanges = []
       this.lastNoteCloses = []
@@ -5602,6 +5607,7 @@ class CarveRenderSession {
      * opening the first line of a block is a code FENCE and not a span at all.
      */
     mayRunToEndOfText = false,
+    refusedRunFollower = false,
   ): string {
     const renderSession = this
     // A stored tree may still carry a type this engine no longer emits; map it
@@ -5717,7 +5723,7 @@ class CarveRenderSession {
         // span. An attribute block is written after it, so a code span carrying
         // one keeps the closed form (and `raw_inline` and `literal_inline`, which
         // both append to `renderCode`, never ask for it).
-        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === '', 'code', ctx, renderSession.inlineAttrs(node.attrs, node) === '', node.cellWraps), ctx, 'code', node))
+        return withAttrs(renderSession.guardCodeLines(renderSession.renderCode(node.value, mayRunToEndOfText && renderSession.inlineAttrs(node.attrs, node) === '', 'code', ctx, renderSession.inlineAttrs(node.attrs, node) === '', node.cellWraps, refusedRunFollower), ctx, 'code', node))
       case 'link':
         return renderSession.renderLink(node, ctx)
       case 'image':
@@ -5980,7 +5986,7 @@ class CarveRenderSession {
       && new RegExp(`[\\r\\n][ \\t]*:{${ctx.colonFenceDepth + 2}}[ \\t]*(?=[\\r\\n])`).test(content)
   }
 
-  private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true, cellWraps?: readonly VerbatimCellWrap[]): string {
+  private renderCode(content: string, allowUnclosed = false, nodeType = 'code', ctx?: CarveContext, canPairFence = true, cellWraps?: readonly VerbatimCellWrap[], refusedRunFollower = false): string {
     // A code span is verbatim too, so an authored U+E000 is the CHARACTER here as
     // much as it is inside a fence - and `normalize()` would otherwise rewrite it
     // to `\ `, which inside backticks is a literal backslash and a space
@@ -5998,7 +6004,7 @@ class CarveRenderSession {
     }
     // Description markers stay at the content column and need a fence run to remain inline.
     const descriptionFence = this.descriptionParagraph && nodeType === 'code' && canPairFence && /^\n/.test(content) && /\n(?:[-*] +|(?:[0-9]+|[ivxlcdm]+|[IVXLCDM]+|[a-z]|[A-Z])[.)] +|>(?: |\n|$)|\[[^\]\n]+\]:[ \t])/.test(content)
-    const fence = hidesLineBlockCloser || descriptionFence ? safeFence(content, 3) : codeSpanFence(content)
+    const fence = hidesLineBlockCloser || descriptionFence || refusedRunFollower ? safeFence(content, 3) : codeSpanFence(content)
     const needsPad = codeSpanNeedsPad(content)
       || (!/^[\r\n]/.test(content) && /\n\[[^\]\n]+\]:[ \t]+[^\n]+$/.test(content))
       || (this.verbatimSpelling(nodeType, content) >= 4 && !/^[\r\n]|[\r\n]$/.test(content))
