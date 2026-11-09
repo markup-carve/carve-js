@@ -8,13 +8,16 @@ export function leadingAttributeRun(at: (offset: number) => string | undefined, 
   let count = 0
   while (at(count)?.startsWith('{')) {
     const lines: string[] = []
+    let closed = false
     for (let line = at(count); line !== undefined && !isBlankLine(line); line = at(count + lines.length)) {
-      const closed = line.includes('}')
+      closed = line.includes('}')
       // The same early refusal `probeBlockAttributes` makes, so a stray `{` scans one line.
       if (lines.length > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return count
       lines.push(line)
       if (closed) break
     }
+    // A run that never reaches a `}` is no attribute block; the probe would only rescan it.
+    if (!closed) break
     const run = probeBlockAttributes(new Lexer(lines, options, 0))
     if (run === null) break
     count += run.count
