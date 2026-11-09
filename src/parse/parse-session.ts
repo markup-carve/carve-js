@@ -503,7 +503,7 @@ const holdsNothing = (block: BlockNode): boolean => block.type === 'comment' ||
 
 const commentOnlyParagraph = (paragraph: Paragraph): boolean =>
   paragraph.children.some(child => child.type === 'comment') && paragraph.children.every(child =>
-    child.type === 'comment' || child.type === 'soft_break' || child.type === 'hard_break' ||
+    child.type === 'comment' || child.type === 'soft_break' ||
     child.type === 'text' && /^[ \t\n\r]*$/.test(child.value))
 
 /** A quote's `+` ends its block at a blank or a further `+`, except inside a fence its attached list leaves open. */
