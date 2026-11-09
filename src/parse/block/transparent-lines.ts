@@ -680,11 +680,12 @@ function authoredPrefix(column: number, innermostFirst: ReadonlyArray<number | u
     let next = 1
     for (let index = innermostFirst.length - 1; index >= 0; index--) {
       const at = Math.max(innermostFirst[index] ?? (visibleLine ? firstContentColumn - 2 * (index + 1) : next), next)
-      // The published position is the token's column, not of a quote marker.
-      // A list quote with an authored base cannot add a marker that pushes the
-      // token past that column. A base-less quote remains its structural owner
-      // even when the `+` that opened it placed the comment at its marker.
-      if (column < at + 2 && (visibleLine || innermostFirst[index] !== undefined)) break
+      // Visible continuations retain their structural quote even if its
+      // canonical marker shifts the token. An erased line with a known quote
+      // base cannot move its token beyond the published column.
+      if (visibleLine
+        ? column < at || (column === at && at === 1)
+        : column < at + 2 && innermostFirst[index] !== undefined) break
       source += ' '.repeat(at - next) + '> '
       next = at + 2
     }
@@ -785,10 +786,12 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`
         const match = containingParagraph(blocks, block.pos.startOffset, undefined, block.pos.startColumn)
-        // A line erased inside a quoted paragraph keeps the quote markers of
-        // its own structural host. A document sibling can overlap that quoted
-        // paragraph's source span without being inside the quote (carve-js#4694).
-        const source = authoredSource(block, quoteBases, !match && opensQuote)
+        // A comment follows its structural host, since a document sibling can
+        // overlap a quoted paragraph's span without belonging to that quote.
+        // An abbreviation pulled out of the paragraph keeps its quoted source.
+        const source = authoredSource(block,
+          block.type === 'abbreviation_def' && match ? match.quotes : quoteBases,
+          !match && opensQuote)
         if (match) {
           const paragraph = match.paragraph
           paragraph.transparentVisibleLines ??= [...new Set(paragraph.children
@@ -826,7 +829,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
           for (const [childIndex, child] of definition.entries()) pending.push({ block: child, quotes,
             base, markerLine: item.definitionLines?.[index], description: definition, before: definition[childIndex - 1] })
       else if ('children' in block && Array.isArray(block.children) && block.type !== 'paragraph' && block.type !== 'heading') {
-        const inner = block.type === 'block_quote' ? { base, outer: quotes } : quotes
+        const inner = block.type === 'block_quote' && block.fenced !== true ? { base, outer: quotes } : quotes
         const opener = block.type === 'block_quote' && block.fenced !== true ? unheldLineComments(block.children) : []
         for (const [index, child] of (block.children as BlockNode[]).entries()) pending.push({ block: child, quotes: inner,
           base: block.type === 'block_quote' ? undefined : base, opensQuote: opener.includes(child as Comment),
