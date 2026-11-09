@@ -1074,7 +1074,9 @@ export function collectColonFenceBody(lexer: Lexer, opener: ColonFenceOpener): C
     if (layoutWork.on) layoutWork.colonLines++
     const lineIndex = lexer.pos
     const text = lexer.peek()!
-    if (consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
+    // A line block reads its body as inline payload; block-shaped runs there
+    // cannot hide the exact colon closer of this or an enclosing frame.
+    if (stack.at(-1)!.kind !== 'line block' && consumeOpaqueColonFenceBodySpan(lexer, lines, lineIndex, text)) continue
     const close = RE_ADMONITION_CLOSE.exec(text)
 
     if (close && close[1]!.length === stack[stack.length - 1]?.fenceWidth) {
