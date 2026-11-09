@@ -1043,7 +1043,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const authoredMarker = authoredLines[lexer.lineNumber(lexer.pos) - 1]
     const nextSource = authoredLines[lexer.lineNumber(lexer.pos + 1) - 1]
     if (firstBlockAttached && ln.trim() === '%%' && authoredMarker?.trim() === '+' &&
-        nextSource !== undefined && authoredBodyColumn !== undefined &&
+        nextSource !== undefined && !isBlankLine(nextSource) && authoredBodyColumn !== undefined &&
         sourceColumn(nextSource, quotePrefixDepth(authoredLine ?? defLineRaw)) >= authoredBodyColumn) {
       lexer.consume()
       return 'continue'

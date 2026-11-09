@@ -17,3 +17,8 @@ it('returns a reachable follower to the note after a refused plus', () => {
   </ol>
 </section>`)
 })
+
+it('does not treat an indented blank as a follower', () => {
+  const source = (blank: string): string => `[^a]: +\n- li\n  \`\`\`\n+\n${blank}\n\nsee[^a]\n`
+  expect(carveToHtml(source('  '))).toBe(carveToHtml(source('')))
+})
