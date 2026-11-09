@@ -393,8 +393,8 @@ function sourceOwnerLeavesNote(
 }
 
 function markerLinePlusEndsAtBlank(firstBlockAttached: boolean, attachmentEnd: number,
-  bodyLength: number, nestedFenceOpen: boolean): boolean {
-  return firstBlockAttached && attachmentEnd === bodyLength && !nestedFenceOpen
+  bodyLength: number, nestedFenceOpen: () => boolean): boolean {
+  return firstBlockAttached && attachmentEnd === bodyLength && !nestedFenceOpen()
 }
 
 function reachesAuthoredNoteBody(
@@ -867,7 +867,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const pendingBlankRun = new ContainerBlankBuffer()
   let attachmentEnd = -1
   // An attached container left a descendant fence open, so a blank after it is that fence's payload.
-  let nestedFenceOpen = false
+  // Deferred: scanning the body at every `+` made a run of markers quadratic (carve-js#4795).
+  let nestedFenceOpen: () => boolean = () => false
   let nestedSourceBodyColumn: number | undefined
   let nestedDefBodyIndex = -1
   // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
@@ -986,7 +987,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       passedNotes = passedNotesInAttachment(lexer, attached, attachedLineNumbers, label)
       trackAttached(attached)
       // An unclosed fence or colon the marker-line `+` took ends at its first blank (PART 0 S1, carve#5404).
-      nestedFenceOpen = nestedAttachedFenceOpen(attached, bodyLines)
+      const firstNestedFenceOpen = nestedAttachedFenceOpen(attached, bodyLines)
+      nestedFenceOpen = () => firstNestedFenceOpen
       for (const closer of plusBlockClosers(lexer, attached, bodyLines, bodyFenceClosers, noteBodyColumn)) {
         const parentIndex = lexer.pos - 1
         virtualOrigins.set(bodyLines.length, {
@@ -1108,7 +1110,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
         trackItemLazyState('', lazyState)
         trackAttached(attached)
         attachmentEnd = bodyLines.length
-        nestedFenceOpen = nestedAttachedFenceOpen(attached, bodyLines)
+        // Read only when nothing follows the attachment, so the body is unchanged by then.
+        nestedFenceOpen = () => nestedAttachedFenceOpen(attached, bodyLines)
       }
       return 'continue'
     }
