@@ -4382,6 +4382,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   function invisibleBeforeSibling(lexer: Lexer, session: ParseSession, shape: ListShape, last: ListItem, flags: ListFlags): void {
     const line = lexer.peek()
     const lineAt = (index: number) => lexer.lineAt(index)
+    // A region marker is the list's sibling (CARVE-P11-073), not an erased
+    // comment between adjacent items. Leave it for the outer block reader.
+    if (line !== undefined && /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/.test(line.trimStart())) return
     if (line === undefined || !(RE_COMMENT_LINE.test(line) || isLinkDefLine(line) ||
       RE_ABBR_DEF.test(line) || commentOnlyParagraphEnd(lineAt, lexer.pos, lexer.markerOpensSublist) !== -1)) return
     // A comment is erased from layout, so the blanks around it are one run; three end the list (carve#4660, CARVE-P9-014).
@@ -4394,6 +4397,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         k++
         continue
       }
+      if (/^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/.test(at.trimStart())) break
       const paragraphEnd = commentOnlyParagraphEnd(lineAt, k, lexer.markerOpensSublist)
       if (paragraphEnd !== -1) {
         k = paragraphEnd

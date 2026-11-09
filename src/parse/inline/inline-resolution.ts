@@ -55,17 +55,71 @@ function fragmentPos(
 }
 
 
-export function applyAbbreviations(
-  nodes: InlineNode[],
-  defs: Map<string, string>,
-): InlineNode[] {
+const WORD_CHAR = /[\p{L}\p{N}]/u
+
+function scalarAt(value: string, index: number): string | undefined {
+  const point = value.codePointAt(index)
+  return point === undefined ? undefined : String.fromCodePoint(point)
+}
+
+function scalarBefore(value: string, index: number): string | undefined {
+  if (index === 0) return undefined
+  const low = value.charCodeAt(index - 1)
+  const start = low >= 0xdc00 && low <= 0xdfff && index > 1 ? index - 2 : index - 1
+  return scalarAt(value, start)
+}
+
+/** An eligible inline edge contributes its rendered character to R3. */
+function edgeWord(node: InlineNode, side: 'first' | 'last'): boolean | undefined {
+  if (node.type === 'comment') return undefined
+  if (node.type === 'text' || node.type === 'escaped_text') {
+    const char = side === 'first' ? scalarAt(node.value, 0) : scalarBefore(node.value, node.value.length)
+    return char === undefined ? undefined : WORD_CHAR.test(char)
+  }
+  if (node.type === 'emphasis' || node.type === 'strong' || node.type === 'underline' ||
+      node.type === 'strike' || node.type === 'superscript' || node.type === 'subscript' ||
+      node.type === 'highlight' || node.type === 'link' || node.type === 'span' ||
+      node.type === 'small_caps' || node.type === 'insert' || node.type === 'delete' ||
+      node.type === 'inline_extension') {
+    const children = node.type === 'inline_extension' ? node.content : node.children
+    const order = side === 'first' ? children : [...children].reverse()
+    for (const child of order) {
+      const word = edgeWord(child, side)
+      if (word !== undefined) return word
+    }
+    return undefined
+  }
+  return false
+}
+
+function expandAbbreviations(nodes: InlineNode[], defs: Map<string, string>, left: boolean, right: boolean): InlineNode[] {
   if (defs.size === 0) return nodes
   const out: InlineNode[] = []
-  // PART 9R R3: a boundary is an absent neighbor or one outside Unicode L and N (`_` is a boundary).
+  // PART 9R R3 reads adjacent rendered characters, including across eligible
+  // inline element edges. Compute each sibling's outside neighbors once.
+  const before: boolean[] = []
+  const after: boolean[] = []
+  let word = left
+  for (let i = 0; i < nodes.length; i++) {
+    before[i] = word
+    word = edgeWord(nodes[i]!, 'last') ?? word
+  }
+  word = right
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    after[i] = word
+    word = edgeWord(nodes[i]!, 'first') ?? word
+  }
   const abbrRe = new RegExp(`(?<![\\p{L}\\p{N}])(${[...defs.keys()].join('|')})(?![\\p{L}\\p{N}])`, 'gu')
-  for (const node of nodes) {
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]!
     if (node.type !== 'text') {
-      mapInlineChildren(node, applyAbbreviations, defs)
+      const transparent = node.type === 'emphasis' || node.type === 'strong' ||
+        node.type === 'underline' || node.type === 'strike' || node.type === 'superscript' ||
+        node.type === 'subscript' || node.type === 'highlight' || node.type === 'link' ||
+        node.type === 'span' || node.type === 'small_caps' || node.type === 'insert' ||
+        node.type === 'delete' || node.type === 'inline_extension'
+      mapInlineChildren(node, children => expandAbbreviations(children, defs,
+        transparent ? before[index]! : false, transparent ? after[index]! : false), undefined)
       out.push(node)
       continue
     }
@@ -74,6 +128,9 @@ export function applyAbbreviations(
     abbrRe.lastIndex = 0
     let m: RegExpExecArray | null
     while ((m = abbrRe.exec(value))) {
+      const preceding = m.index === 0 ? before[index]! : WORD_CHAR.test(scalarBefore(value, m.index)!)
+      const following = m.index + m[0].length === value.length ? after[index]! : WORD_CHAR.test(scalarAt(value, m.index + m[0].length)!)
+      if (preceding || following) continue
       if (m.index > last) {
         const frag = { type: 'text', value: value.slice(last, m.index) } as Text
         const fragSpan = fragmentPos(node.pos, last, m.index)
@@ -100,6 +157,10 @@ export function applyAbbreviations(
     }
   }
   return out
+}
+
+export function applyAbbreviations(nodes: InlineNode[], defs: Map<string, string>): InlineNode[] {
+  return expandAbbreviations(nodes, defs, false, false)
 }
 
 /**

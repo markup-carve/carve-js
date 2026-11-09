@@ -99,6 +99,10 @@ export function buildBracketMap(
   let lastDelimitedCommentClose: number | undefined
   let lastEditorialCommentClose: number | undefined
   const referenceAttributeEnd = (at: number): number | undefined => {
+    // Comment atoms take precedence over a bracket run's attribute tail.
+    // If `{#` has its `#}` closer, the first `}` cannot claim this as an
+    // attribute and hide the comment from the bracket scan (carve#5673).
+    if (s[at + 1] === '#' && opaqueEnd(at, false) !== undefined) return undefined
     let quote: '"' | "'" | undefined
     for (let k = at + 1; k < s.length; k++) {
       const ch = s[k]
