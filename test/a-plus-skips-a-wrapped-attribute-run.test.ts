@@ -18,3 +18,24 @@ it('a note `+` reaches the list past a wrapped attribute run', () => {
   expect(html('[^n]: +\n{.x\n .y}\n- li\n\nsee[^n]\n'))
     .toContain('<li id="fn1">\n      <ul class="x y">\n        <li>li</li>\n      </ul>')
 })
+
+// A wrapped run written past the marker column moves to it by its opener's shift, as a one-line run does.
+it.each([
+  [':: t\n: +\n  {.x\n   .y}\n- li\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <ul class="x y">\n      <li>li</li>\n    </ul>\n  </dd>\n</dl>'],
+  [':: t\n: +\n   {.x\n    .y}\n> q\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote class="x y"><p>q</p></blockquote>\n  </dd>\n</dl>'],
+])('an indented wrapped run still leads the attached block: %j', (source, expected) => {
+  expect(html(source)).toBe(expected)
+})
+
+it('a note `+` reaches the list past an indented wrapped run', () => {
+  expect(html('[^n]: +\n  {.x\n   .y}\n- li\n\nsee[^n]\n'))
+    .toContain('<li id="fn1">\n      <ul class="x y">\n        <li>li</li>\n      </ul>')
+})
+
+// An item `+` reads the block after the run and any note it keeps, whatever column the run was written at.
+it.each([
+  ['- +\n  {.x\n   .y}\n  [^m]: n\n> q\n', '<ul>\n  <li>\n    <blockquote class="x y"><p>q</p></blockquote>\n  </li>\n</ul>'],
+  ['- +\n  {.x\n   .y}\n  [^m]: n\n: d\n', '<ul>\n  <li></li>\n</ul>'],
+])('an item `+` past a wrapped run and a kept note: %j', (source, expected) => {
+  expect(html(source)).toBe(expected)
+})

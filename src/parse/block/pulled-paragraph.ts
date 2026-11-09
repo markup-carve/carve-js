@@ -1,6 +1,7 @@
 import { indentColumns, sliceColumns } from '../parse-lexer.js'
 import { RE_FOOTNOTE_DEF, isBlockAttributeLine, isLinkDefLine, isListMarkerLine, lineOpensBlock } from '../parse-prepass-core.js'
 import { fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
+import { afterAttributeLines } from './leading-attribute-run.js'
 
 /**
  * Where a block at or past `contentCol` ends the paragraph a first-block `+` pulled left of it,
@@ -9,8 +10,7 @@ import { fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
  * own rules at the callers.
  */
 export function pulledParagraphBlockCut(lines: readonly string[], contentCol: number): number {
-  let first = 0
-  while (first < lines.length - 1 && isBlockAttributeLine(lines[first]!.trimStart())) first++
+  const first = afterAttributeLines(lines, 0)
   if (first >= lines.length || lineOpensBlock(sliceColumns(lines[first]!, indentColumns(lines[first]!), true))) return -1
   let fenceRun: string | undefined
   for (let index = first + 1; index < lines.length; index++) {

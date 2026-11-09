@@ -10,6 +10,7 @@ import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, ty
 import { dropPositions } from '../../source/source-positions.js'
 import { isDirectiveLine } from '../block/paragraph-indent.js'
 import { pulledParagraphBlockCut } from '../block/pulled-paragraph.js'
+import { wrappedAttributeLinesAt } from '../block/leading-attribute-run.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
@@ -177,7 +178,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     while (k < lines.length - 1) {
       const text = lines[k]!.trimStart()
       const comment = leadingCommentEnd(offset => lines[offset], k)
-      if (isBlockAttributeLine(text)) k++
+      const wrapped = wrappedAttributeLinesAt(offset => lines[k + offset])
+      if (wrapped > 0) k += wrapped
+      else if (isBlockAttributeLine(text)) k++
       else if (comment !== -1 && comment < lines.length) k = comment
       else if (RE_FOOTNOTE_DEF.test(text)) {
         const floor = indentColumns(lines[k]!) + FOOTNOTE_BODY_COLUMN
@@ -192,8 +195,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     return k
   }
-  const attachesQuote = (lines: readonly string[]): boolean =>
-    /^>/.test(lines.find(line => !isBlankLine(line) && !isBlockAttributeLine(line.trimStart())) ?? '')
+  const attachesQuote = (lines: readonly string[]): boolean => {
+    for (let k = 0; k < lines.length; k++) {
+      const wrapped = wrappedAttributeLinesAt(offset => lines[k + offset])
+      if (wrapped > 0) k += wrapped - 1
+      else if (!isBlankLine(lines[k]!) && !isBlockAttributeLine(lines[k]!.trimStart())) return /^>/.test(lines[k]!)
+    }
+    return false
+  }
   // The `<dd>` body column a column-0 line of a `+`-attached block leaves open: 0 after a term, -1 outside a description list.
   const attachedBodyColumnAfter = (line: string, column: number): number => {
     if (indentColumns(line) !== 0) return column
@@ -654,7 +663,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // The follower stands at the marker column; this lexer's lines start at the item's frame.
     // A leading attribute run floats onto the block after it, so that block's column is the one read (carve#5288).
     let blockLine = 0
-    while (isBlockAttributeLine((lexer.peek(blockLine) ?? '').trimStart()) && !isBlankLine(lexer.peek(blockLine + 1))) blockLine++
+    // A wrapped run's continuations move with its opener.
+    const runOpeners = new Map<number, number>()
+    for (;;) {
+      const run = wrappedAttributeLinesAt(offset => lexer.peek(blockLine + offset), lexer.parseOptions) ||
+        (isBlockAttributeLine((lexer.peek(blockLine) ?? '').trimStart()) ? 1 : 0)
+      if (run === 0 || isBlankLine(lexer.peek(blockLine + run))) break
+      if (run > 1) for (let line = blockLine; line < blockLine + run; line++) runOpeners.set(line, blockLine)
+      blockLine += run
+    }
     const localBlockColumn = indentColumns(lexer.peek(blockLine) ?? '')
     const {
       lines: attached,
@@ -679,10 +696,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // blocks pulled by a separate + at their own source columns.
     // A marker at the item's content column opens a sublist under an attached paragraph (§24 C3),
     // and a definition there interrupts it as it does any paragraph (PART 0 S4), unless a folded fence holds it.
-    const cutAtItemColumn = (lines: string[], lineNumbers: number[], blockColumn: number): void => {
+    const cutAtItemColumn = (lines: string[], lineNumbers: number[], blockColumn: number, wrapped = new Set<number>()): void => {
       // A leading attribute run floats onto the block after it, which is the one asked (carve#5288).
       let first = 0
-      while (first < lines.length - 1 && isBlockAttributeLine(sliceColumns(lines[first]!, blockColumn, true).trimStart())) first++
+      while (first < lines.length - 1 && (wrapped.has(first) ||
+        isBlockAttributeLine(sliceColumns(lines[first]!, blockColumn, true).trimStart()))) first++
       const block = sliceColumns(lines[first]!, blockColumn, true)
       const quoteEnd = attachedQuoteEnd(lines)
       if (quoteEnd < lines.length) {
@@ -711,12 +729,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         lineNumbers.length = cut
       }
     }
-    cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn)
+    cutAtItemColumn(attached, attachedLineNumbers, localBlockColumn, new Set(runOpeners.keys()))
+    const unsliced = attached.slice()
     for (let index = 0; index < attached.length; index++) {
       const line = attached[index]!
       const captionAtHostColumn = index > 0 && RE_BLOCKQUOTE.test(attached[blockLine]?.trimStart() ?? '') &&
         indentColumns(line) === placement.contentCol && RE_CAPTION.test(line.trimStart())
-      attached[index] = sliceColumns(line, captionAtHostColumn ? placement.contentCol : localBlockColumn, true)
+      const opener = runOpeners.get(index)
+      const column = opener === undefined ? localBlockColumn : Math.min(localBlockColumn, indentColumns(unsliced[opener] ?? ''))
+      attached[index] = sliceColumns(line, captionAtHostColumn ? placement.contentCol : column, true)
     }
     // A closed line block keeps the host's body lines, whose indentation is
     // measured from the item's content column even when its opener was flush left.
