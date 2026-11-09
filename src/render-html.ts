@@ -711,6 +711,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
   // `::: footnotes` placement directive: when present, the endnotes section is
   // flushed at the marker instead of at document end (see the intercept below).
   let footnotesPlaced = false
+  let placedEndnotes: { index: number; tokens: PlacedTokens } | undefined
 
   // Document TRAILERS: blocks held in `children` that belong to the document
   // rather than to the section a heading opened around them. Skipped here and
@@ -755,7 +756,8 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       // from carve-php / carve-rs, which insert the section at the marker).
       // The marker's title and label go INSIDE the section it places, so they
       // travel with it rather than being pushed here.
-      out.push(renderFootnoteSection(ast, footnotes, opts, placedTokens))
+      placedEndnotes = { index: out.length, tokens: placedTokens }
+      out.push('')
       footnotesPlaced = true
       continue
     }
@@ -818,6 +820,11 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
     if (rendered !== '' || owesALine(node)) out.push(rendered)
   }
   closeTo(1) // close any sections still open at end of document
+  // Generated endnote bodies follow body admonitions in the shared title-id
+  // sequence, regardless of where the placement marker emits their HTML.
+  if (placedEndnotes) {
+    out[placedEndnotes.index] = renderFootnoteSection(ast, footnotes, opts, placedEndnotes.tokens)
+  }
   const abbrTemplate = renderAbbreviationTemplate(ast, opts)
   if (abbrTemplate !== '') out.push(abbrTemplate)
   if (footnotes.order.length && !footnotesPlaced) out.push(renderFootnoteSection(ast, footnotes, opts))
