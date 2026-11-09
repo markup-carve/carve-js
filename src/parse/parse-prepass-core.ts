@@ -994,6 +994,7 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
   let collected = ''
   let count = 0
   let openingColumn = 0
+  const scan: OpenRunScan = { open: false, quote: null, escape: false, broken: false }
   const columns = (value: string): number => {
     let column = 0
     for (const char of /^[ \t]*/.exec(value)![0]) column = char === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
@@ -1014,30 +1015,45 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     // source line, including any padding before that brace.
     if (count === 0) openingColumn = columns(firstLine ?? line)
     count++
-    const attrs = parseBlockAttributeRun(collected)
-    if (attrs) return { attrs, count }
-    if (!hasOpenAttributeBlock(collected)) return null
+    // Only a line holding `}` can close the run; rescanning the whole run on
+    // every other line made an unclosed run quadratic (carve-js#4750).
+    if (closed) {
+      const attrs = parseBlockAttributeRun(collected)
+      if (attrs) return { attrs, count }
+    }
+    if (!continueOpenRunScan(scan, count === 1 ? line : '\n' + line)) return null
   }
 }
 
-function hasOpenAttributeBlock(source: string): boolean {
-  let open = false
-  let quote: '"' | "'" | null = null
-  for (let i = 0; i < source.length; i++) {
-    const ch = source[i]!
-    if (quote) {
-      if (ch === '\\') i++
-      else if (ch === quote) quote = null
-    } else if (ch === '"' || ch === "'") quote = ch
-    else if (ch === '{') {
-      if (open) return false
-      open = true
-    } else if (ch === '}') {
-      if (!open) return false
-      open = false
+interface OpenRunScan {
+  open: boolean
+  quote: '"' | "'" | null
+  escape: boolean
+  broken: boolean
+}
+
+/** Incremental hasOpenAttributeBlock: feeds one more segment of the run. */
+function continueOpenRunScan(scan: OpenRunScan, segment: string): boolean {
+  if (scan.broken) return false
+  for (let i = 0; i < segment.length; i++) {
+    const ch = segment[i]!
+    if (scan.escape) {
+      scan.escape = false
+      continue
+    }
+    if (scan.quote) {
+      if (ch === '\\') scan.escape = true
+      else if (ch === scan.quote) scan.quote = null
+    } else if (ch === '"' || ch === "'") scan.quote = ch
+    else if (ch === '{' || ch === '}') {
+      if (scan.open === (ch === '{')) {
+        scan.broken = true
+        return false
+      }
+      scan.open = ch === '{'
     }
   }
-  return open
+  return scan.open
 }
 
 export function parseBlockAttributeRun(src: string): Attrs | null {
