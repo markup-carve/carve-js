@@ -133,7 +133,10 @@ function comparisonEquals(text: string, at: number): boolean {
   if (text[at] !== '=') return false
   if (comparisonCache?.text !== text) {
     const found = new Set<number>()
+    const atoms = atomicLinkRegions(text)
+    let atom = 0
     for (let p = 0; p < text.length;) {
+      if (atoms[atom]?.[0] === p) { p = atoms[atom++]![1]; continue }
       if (text[p] === '\\') { p += 2; continue }
       const tok = '<>=!-+'.includes(text[p]!) ? SYMBOL_TOKENS.find(t => text.startsWith(t, p)) : undefined
       if (tok) {
