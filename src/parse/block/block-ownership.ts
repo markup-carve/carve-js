@@ -792,6 +792,14 @@ export function ownLines(
         refuse(plusReason, host.kind)
         host.para = false
         consumedMarkers.add(at)
+        const noteHost = attachedHost?.at(-1)
+        const next = lines[at + 1]
+        if (trace && host.kind === 'item' && noteHost?.kind === 'note' && next !== undefined &&
+            next.trim() !== '' && indentCols(next).col >= noteHost.col) {
+          const notePath = attachedHost!.slice(1).map((frame) =>
+            `/${TRACE_FRAME[frame.kind] ?? frame.family}:${(frame.line ?? frame.opened!) + 1}`).join('')
+          traceAlias = { from: ownerPath(), to: `doc${notePath}` }
+        }
         if (plusReason === 'sibling' && attachedHost?.some((frame) => frame.kind === 'quote')) quoteSiblingSeparators.add(at)
         src = ' '.repeat(plusReason === 'claimed' || crossedDescendant ? 0 : Math.max(0, host.canon - host.markerCanon!)) + '%%'
         rewritten = true
