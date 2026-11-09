@@ -102,7 +102,18 @@ export function buildBracketMap(
     // Comment atoms take precedence over a bracket run's attribute tail.
     // If `{#` has its `#}` closer, the first `}` cannot claim this as an
     // attribute and hide the comment from the bracket scan (carve#5673).
-    if (s[at + 1] === '#' && opaqueEnd(at, false) !== undefined) return undefined
+    const commentEnd = s[at + 1] === '#' ? opaqueEnd(at, false) : undefined
+    if (commentEnd !== undefined) {
+      // A later `#}` inside another bracket label belongs to that label.
+      // Only a closer reached after its brackets balance claims this opener.
+      let depth = 0
+      for (let j = at + 2; j < commentEnd - 2; j++) {
+        if (s[j] === '\\') { j++; continue }
+        if (s[j] === '[') depth++
+        else if (s[j] === ']' && depth > 0) depth--
+      }
+      if (depth === 0) return undefined
+    }
     let quote: '"' | "'" | undefined
     for (let k = at + 1; k < s.length; k++) {
       const ch = s[k]
