@@ -1383,7 +1383,7 @@ function renderSemanticSpanWith(
     const authoredKey = mapsTo === undefined ? undefined : Object.keys(attrs.keyValues ?? {}).find((k) => k.toLowerCase() === mapsTo)
     const derivedValue = authoredKey === undefined ? value : attrs.keyValues![authoredKey]!
     if (authoredKey !== undefined) attrs = stripKeyValue(attrs, authoredKey)!
-    const derived = mapsTo !== undefined ? ` ${mapsTo}="${escapeAttr(derivedValue)}"` : ''
+    const derived = mapsTo !== undefined ? ` ${mapsTo}="${escapeAttr(sanitizeAttrValue(mapsTo, derivedValue))}"` : ''
     html = `<${name}${derived}${renderAttrs(attrs)}>${html}</${name}>`
   }
   return html
