@@ -483,7 +483,9 @@ function plusBlockClosers(
   scanner: (lines: readonly string[]) => string[], bodyColumn: number,
 ): string[] {
   if (!attachedStartsWithVerbatimBlock(attached)) return []
-  return attachedBlankClosers(lexer, scanner(bodyLines), bodyColumn, attachedStartsWithLineBlock(attached),
+  const lineBlock = attachedStartsWithLineBlock(attached)
+  const closers = scanner(bodyLines).filter(run => !lineBlock || run[0] === ':')
+  return attachedBlankClosers(lexer, closers, bodyColumn, lineBlock,
     indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))
 }
 
@@ -848,6 +850,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const attachedParagraph = !lineOpensItemBlock(follower!.trimStart())
       const visibleLeadIsList = attachedLeadIsList(lexer)
       const listFence = visibleLeadIsList ? attachedListFenceBoundary(indentColumns(follower!)) : undefined
+      const visibleLeadIsLineBlock = attachedStartsWithLineBlock([follower!])
       const noteBodyColumn = markerColumn + FOOTNOTE_BODY_COLUMN
       const { lines: attached, lineNumbers: attachedLineNumbers } = hooks.collectAttachedBlock(
         lexer,
@@ -857,7 +860,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           return isBlankLine(a) || /^\+[ \t]*$/.test(a) ||
           (attachedParagraph && indentColumns(a) >= noteBodyColumn && startsInterruptingBlock(lexer, a.trimStart(), false)) ||
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
-          (!visibleLeadIsList && isListMarkerLine(a.trimStart()))
+          (!visibleLeadIsList && !visibleLeadIsLineBlock && isListMarkerLine(a.trimStart()))
         },
         0, true, true, 0, false, 0, 0, indentColumns(follower!) + 1,
       )

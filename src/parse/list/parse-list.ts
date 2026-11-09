@@ -746,11 +746,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const column = opener === undefined ? localBlockColumn : Math.min(localBlockColumn, indentColumns(unsliced[opener] ?? ''))
       attached[index] = sliceColumns(line, captionAtHostColumn ? placement.contentCol : column, true)
     }
-    // A closed line block keeps the host's body lines, whose indentation is
-    // measured from the item's content column even when its opener was flush left.
+    // A flush-left attached line block owns its first stanza's verse spaces.
+    // Past a blank, a later closer or stanza line resumes at the item column.
     if (RE_LINE_BLOCK_OPEN.test(attached[blockLine] ?? '')) {
+      let afterBlank = false
       for (let index = blockLine + 1; index < attached.length; index++) {
-        if (indentColumns(attached[index]!) >= placement.contentCol)
+        if (isBlankLine(attached[index]!)) afterBlank = true
+        if ((localBlockColumn > 0 || afterBlank) && indentColumns(attached[index]!) >= placement.contentCol)
           attached[index] = sliceColumns(attached[index]!, placement.contentCol, true)
       }
     }
