@@ -2705,6 +2705,9 @@ export class ParseSession extends InlineParseSession {
         // until its first blank, not only a `+` line (PART 0 S1, carve#5499).
         const codePayload = attachedCode && take > attributeLines && !isBlankLine(candidate) &&
           indentColumns(at(take)!) >= indentColumns(firstBlock)
+        // A sibling marker ends the host even inside the refused run's inline span (PART 0 S2, carve#5592).
+        if (refusedInlineCloser !== null && !openedRefusedInline && isBoundary(candidate, take) &&
+          (itemHost ? isListMarkerLine(candidate) : deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate))) break
         if (refusedInlineCloser === null && !codePayload && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
           (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
         if (!openedRefusedInline && refusedInlineCloser?.test(visible)) refusedInlineCloser = null
