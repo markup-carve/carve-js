@@ -2907,7 +2907,8 @@ export class ParseSession extends InlineParseSession {
     let openInlineCode = 0
     const scanInlineCode = (line: string): void => {
       for (let i = 0; i < line.length; i++) {
-        if (line[i] === '\\') { i++; continue }
+        // A backslash inside an open code span is code text, not an escape.
+        if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
         if (line[i] !== '`') continue
         let end = i + 1
         while (line[end] === '`') end++

@@ -974,7 +974,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
 /** The open inline code width after `line`, pairing backtick runs as parseParagraph does. */
 function pairInlineCode(line: string, open: number): number {
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === '\\') { i++; continue }
+    if (line[i] === '\\' && open === 0) { i++; continue }
     if (line[i] !== '`') continue
     let end = i + 1
     while (line[end] === '`') end++
