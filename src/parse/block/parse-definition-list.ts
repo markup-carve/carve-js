@@ -1177,7 +1177,9 @@ export function createDefinitionListParser(
         const currentSource = authored[lexer.lineNumber(lexer.pos) - 1] ?? sourceFollower
         const currentColumn = sourceColumn(currentSource, quotePrefixDepth(markerSource))
         if (admission.kind !== 'blank' && refusedPlusFollowerColumn !== null &&
-            currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart())) {
+            currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart()) &&
+            !RE_DEFLIST_TERM.test(ln.trimStart()) && !RE_DEFLIST_DEF.test(ln.trimStart()) &&
+            (!lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()))) {
           const placed = ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(placed)

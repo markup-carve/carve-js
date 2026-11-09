@@ -17,3 +17,13 @@ it('releases a marker between the document and description body columns', () => 
     '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n  </dd>\n</dl>\n<ul>\n  <li>sib</li>\n</ul>')
 })
 
+it('ends the retained description before a document heading', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n- sib\n# heading\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <ul>\n      <li>sib</li>\n    </ul>\n  </dd>\n</dl>\n<section id="heading">\n  <h1>heading</h1>\n</section>')
+})
+
+it('hands the next term to the definition list', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n- sib\n:: next\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <ul>\n      <li>sib</li>\n    </ul>\n  </dd>\n  <dt>next</dt>\n</dl>')
+})
+
