@@ -8,7 +8,7 @@ import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
-import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
@@ -29,6 +29,31 @@ function wrappedAttributeRunAt(lexer: Lexer): number {
   return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length ? lines.length : 0
 }
 
+/** The column `lexer`'s line `index` was written at, before the ownership walk moved it. */
+function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
+  return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+}
+
+/** Tracks a body line, recording where a run it opens was written. */
+function trackAuthoredAttributeRun(lexer: Lexer, state: { attrRun?: string | null; attrShallow?: boolean },
+  attrSource: { column: number }, track: () => void): void {
+  const open = authoredAttributeShallow(lexer, state, attrSource)
+  track()
+  if (!open && state.attrRun != null) attrSource.column = authoredColumnAt(lexer, lexer.pos) ?? -1
+}
+
+// A run's continuation must sit past its `{` where the author wrote it (CARVE-P2-035); the walk
+// can move an opener to the body column without its lines. Returns whether a run was open.
+function authoredAttributeShallow(lexer: Lexer, state: { attrRun?: string | null; attrShallow?: boolean },
+  attrSource: { column: number }): boolean {
+  if (state.attrRun == null) return false
+  const column = authoredColumnAt(lexer, lexer.pos)
+  if (column !== undefined && attrSource.column >= 0 && column <= attrSource.column) state.attrShallow = true
+  return true
+}
+
 function wrappedAttributeLeavesNote(
   lexer: Lexer, admission: ContainerAdmission, sourceLine: string | undefined,
   authoredBodyColumn: number | undefined, state: ReturnType<typeof verbatimOnlyLazyState>, seen: { value: boolean; until: number },
@@ -42,7 +67,9 @@ function wrappedAttributeLeavesNote(
     seen.until = lexer.pos + run - 1
     state.lazyFoldable = false
   } else if (admission.kind === 'content' && lexer.pos > seen.until && state.attrRun === null &&
-      !isBlockAttributeLine(admission.line.trimStart()) && !lineOpensItemBlock(admission.line.trimStart())) {
+      !isBlockAttributeLine(admission.line.trimStart()) &&
+      // A nested note opens a paragraph its lazy lines continue (CARVE-P9-067).
+      (!lineOpensItemBlock(admission.line.trimStart()) || RE_FOOTNOTE_DEF.test(admission.line.trimStart()))) {
     seen.value = false
   }
   return false
@@ -884,6 +911,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   const wrappedAttributeAtBody = { value: false, until: -1 }
+  const attrSource = { column: -1 }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   runIndentationContainer(
@@ -1012,10 +1040,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
         ? content : lazyState.literalColon !== undefined ? content : trackedFootnoteContent(content)
-      trackItemLazyState(tracked, lazyState, true, (run) => commentBlockHasCloser(lexer, run),
+      trackAuthoredAttributeRun(lexer, lazyState, attrSource, () => trackItemLazyState(tracked, lazyState, true, (run) => commentBlockHasCloser(lexer, run),
         framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false,
           payloadFenceCloser: marker => payloadCloserInBody(lexer, marker, bodyColumn),
-          quotePayloadFenceCloser: marker => quotedPayloadCloserAhead(lexer, marker, lexer.pos, quoteMissesOf(lexer)) })
+          quotePayloadFenceCloser: marker => quotedPayloadCloserAhead(lexer, marker, lexer.pos, quoteMissesOf(lexer)) }))
       // A fence in a description's marker-line body opens no lazy paragraph.
       // Only a line reaching this note's body column can replace its paragraph claim (carve#4627).
       const description = RE_DEFLIST_DEF.exec(content)
@@ -1091,6 +1119,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
       bodySourceLines.push(ln)
       if (!attributeLine) lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+      authoredAttributeShallow(lexer, lazyState, attrSource)
       trackItemLazyState(trackedLiteralLine(content, framedBelow), lazyState, false,
         (run) => commentBlockHasCloser(lexer, run))
       lexer.consume()
