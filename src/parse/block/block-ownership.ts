@@ -1040,6 +1040,8 @@ export function ownLines(
       // An open payload span cannot carry the stanza past a quote the line missed (carve#5062).
       if (inner.span && inner.span[0] !== '%' && frames.slice(reached + 1).some(f => f.kind === 'quote')) return false
       const marker = matchMarker(m.rest)
+      if (marker !== null && frames.slice(reached + 1).some(f => f.kind === 'quote') &&
+          frames[reached]?.kind === 'item' && m.col >= frames[reached]!.col) return false
       return marker === null || !frames.slice(1).some(f => f.kind === 'item' && f.markerCol !== undefined &&
         m.col <= f.markerCol)
     }
