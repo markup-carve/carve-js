@@ -71,6 +71,8 @@ interface Frame {
   // The line a fence or colon body opened on, for trace owner paths only.
   opened?: number
   family?: 'code' | 'comment' | 'div'
+  /** The code opener's authored indent includes a tab, so its closer uses that same measured base. */
+  tabbedCodeOpener?: boolean
   // The owner's last block a `%%%` span in an entry restores at its closer.
   entryLast?: string | undefined
   axes?: string | undefined
@@ -1236,7 +1238,8 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      const nestedCodeTab = inner.family === 'code' && hasNestedItemFrame(frames) && hasLeadingTab(src, m.rest)
+      const nestedCodeTab = inner.family === 'code' && !inner.tabbedCodeOpener &&
+        hasNestedItemFrame(frames) && hasLeadingTab(src, m.rest)
       const closerColumn = nestedCodeTab
         ? tabColumnInFrames(src, frames, segment) : m.col
       const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at) &&
@@ -1383,6 +1386,7 @@ export function ownLines(
         const cut = form.family === 'comment' && inHost ? owner.col - owner.canon : col - canon
         frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut,
           closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null,
+          tabbedCodeOpener: form.family === 'code' && hasLeadingTab(lines[at]!, lines[at]!.trimStart()),
           entryLast: spanInEntry ? owner.last! : undefined })
         return
       }
