@@ -70,6 +70,15 @@ function scalarBefore(value: string, index: number): string | undefined {
 }
 
 /** An eligible inline edge contributes its rendered character to R3. */
+function edgeWordList(nodes: InlineNode[], side: 'first' | 'last'): boolean | undefined {
+  const order = side === 'first' ? nodes : [...nodes].reverse()
+  for (const node of order) {
+    const word = edgeWord(node, side)
+    if (word !== undefined) return word
+  }
+  return undefined
+}
+
 function edgeWord(node: InlineNode, side: 'first' | 'last'): boolean | undefined {
   if (node.type === 'comment') return undefined
   if (node.type === 'text' || node.type === 'escaped_text') {
@@ -82,12 +91,12 @@ function edgeWord(node: InlineNode, side: 'first' | 'last'): boolean | undefined
       node.type === 'small_caps' || node.type === 'insert' || node.type === 'delete' ||
       node.type === 'inline_extension') {
     const children = node.type === 'inline_extension' ? node.content : node.children
-    const order = side === 'first' ? children : [...children].reverse()
-    for (const child of order) {
-      const word = edgeWord(child, side)
-      if (word !== undefined) return word
-    }
-    return undefined
+    return edgeWordList(children, side)
+  }
+  if (node.type === 'substitution') {
+    const first = side === 'first' ? node.old : node.new
+    const second = side === 'first' ? node.new : node.old
+    return edgeWordList(first, side) ?? edgeWordList(second, side)
   }
   return false
 }
@@ -113,6 +122,14 @@ function expandAbbreviations(nodes: InlineNode[], defs: Map<string, string>, lef
   for (let index = 0; index < nodes.length; index++) {
     const node = nodes[index]!
     if (node.type !== 'text') {
+      if (node.type === 'substitution') {
+        const oldEnd = edgeWordList(node.old, 'last')
+        const newStart = edgeWordList(node.new, 'first')
+        node.old = expandAbbreviations(node.old, defs, before[index]!, newStart ?? after[index]!)
+        node.new = expandAbbreviations(node.new, defs, oldEnd ?? before[index]!, after[index]!)
+        out.push(node)
+        continue
+      }
       const transparent = node.type === 'emphasis' || node.type === 'strong' ||
         node.type === 'underline' || node.type === 'strike' || node.type === 'superscript' ||
         node.type === 'subscript' || node.type === 'highlight' || node.type === 'link' ||

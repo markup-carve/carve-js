@@ -7,6 +7,7 @@ describe('November 9 spec rulings', () => {
     expect(carveToHtml('[w[HTML](u)]()' + def).trim()).toBe('<p><a href="">wHTML</a></p>')
     expect(carveToHtml('w{*HTML*}' + def).trim()).toBe('<p>w<strong>HTML</strong></p>')
     expect(carveToHtml('( *HTML* )' + def).trim()).toBe('<p>( <strong><abbr title="t">HTML</abbr></strong> )</p>')
+    expect(carveToHtml('w{~x~>HTML~}' + def).trim()).toBe('<p>w<del>x</del><ins>HTML</ins></p>')
   })
 
   it('keeps a region marker between items as a sibling of both lists (carve#5671)', () => {
