@@ -1039,6 +1039,15 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
+    const authoredLines = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
+    const authoredMarker = authoredLines[lexer.lineNumber(lexer.pos) - 1]
+    const nextSource = authoredLines[lexer.lineNumber(lexer.pos + 1) - 1]
+    if (firstBlockAttached && ln.trim() === '%%' && authoredMarker?.trim() === '+' &&
+        nextSource !== undefined && authoredBodyColumn !== undefined &&
+        sourceColumn(nextSource, quotePrefixDepth(authoredLine ?? defLineRaw)) >= authoredBodyColumn) {
+      lexer.consume()
+      return 'continue'
+    }
     if (quotedRefusedFollowerLeavesNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
       authoredBodyColumn, firstBlockAttached, pendingBlankRun.count, bodyLines.length)) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
