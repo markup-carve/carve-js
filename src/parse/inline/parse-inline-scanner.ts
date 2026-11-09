@@ -1044,6 +1044,11 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
       (prev as { attrs?: Attrs }).attrs,
       parsed,
     )
+    // Quote context may already have visited this node while scanning the
+    // opening brace. Its new attributes make a symbol a closed inline element.
+    if (prev.type === 'symbol' && s.quoteContextIndex === out.length) {
+      s.quoteContext = lastEmittedGlyph(prev)
+    }
     // A TRAILING ATTRIBUTE BLOCK IS THE NODE'S OWN MARKUP (PART 12 §4,
     // carve#521), so the span covers it: `*x*{#i}` gives the `strong`
     // offsets 0..7, not 0..3. The braces are where the node's `attrs`
