@@ -36,4 +36,10 @@ describe('the follower of a refused brace run in an item', () => {
     expect(carveToHtml('- a\n   {.x\n   .y}\n   ```\n   - li\ntail\n').trim())
       .toBe('<ul>\n  <li>a\n{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>')
   })
+
+  it('reads a backslash inside an open code span as code text', () => {
+    expect(carveToHtml('a `x\\`\n{.x\n.y}\n```\nz\n').trim()).toBe('<p>a <code>x\\</code>\n{.x\n.y}\n<code>\nz</code></p>')
+    expect(carveToHtml('- a `x\\`\n   {.x\n   .y}\n   ```\n   - li\ntail\n').trim())
+      .toBe('<ul>\n  <li>a <code>x\\</code>\n{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>')
+  })
 })
