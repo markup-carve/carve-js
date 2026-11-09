@@ -489,10 +489,34 @@ function plusBlockClosers(
     const run = RE_LINE_BLOCK_OPEN.exec(opener.trimStart())![1]!
     const openerColumn = indentColumns(opener)
     let commentRun: number | undefined
+    let codeRun: string | undefined
+    const remainingCodeRuns = new Map<string, number>()
+    let countingComment: number | undefined
+    let countingAfterOpener = false
+    for (const line of bodyLines) {
+      if (!countingAfterOpener) {
+        if (line === opener) countingAfterOpener = true
+        continue
+      }
+      const comment = commentFenceRun(line.trimStart())
+      if (countingComment !== undefined) {
+        if (comment === countingComment) countingComment = undefined
+        continue
+      }
+      if (comment !== undefined) { countingComment = comment; continue }
+      const code = /^(`{3,})$/.exec(line.trim())?.[1]
+      if (code) remainingCodeRuns.set(code, (remainingCodeRuns.get(code) ?? 0) + 1)
+    }
     let afterOpener = false
     for (const line of bodyLines) {
       if (!afterOpener) {
         if (line === opener) afterOpener = true
+        continue
+      }
+      const code = /^(`{3,})$/.exec(line.trim())?.[1]
+      if (codeRun !== undefined) {
+        if (code) remainingCodeRuns.set(code, remainingCodeRuns.get(code)! - 1)
+        if (code === codeRun) codeRun = undefined
         continue
       }
       const comment = commentFenceRun(line.trimStart())
@@ -501,6 +525,8 @@ function plusBlockClosers(
         continue
       }
       if (comment !== undefined) { commentRun = comment; continue }
+      if (code) remainingCodeRuns.set(code, remainingCodeRuns.get(code)! - 1)
+      if (code !== undefined && (remainingCodeRuns.get(code) ?? 0) > 0) { codeRun = code; continue }
       if (line.trim() === run && indentColumns(line) === openerColumn) return []
     }
   }

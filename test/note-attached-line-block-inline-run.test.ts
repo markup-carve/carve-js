@@ -25,3 +25,10 @@ it('does not treat a closer inside a verse comment span as physical', () => {
   expect(html).toContain('<p>tail<a href="#fnref1"')
   expect(html).not.toContain('<p>tail</p>')
 })
+
+it('does not treat a closer inside paired code verse as physical', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n```\n:::\n```\n\n  tail\n')
+  expect(html).toContain('<code>\n:::\n</code>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})
