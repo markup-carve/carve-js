@@ -447,6 +447,7 @@ export function createDefinitionListParser(
        */
       let authoredBase: number | null = null
       let attachedOpenCodeFence = false
+      let refusedPlusFollowerColumn: number | null = null
       const keepsOpenCodeFence = (lines: string[]): boolean =>
         lines.some((line) => opensCodeFence(line.trimStart())) && bodyEndsInOpenCodeFence(lines)
       // The boundary set for a `+`-attached block in a definition body: a blank,
@@ -1168,10 +1169,40 @@ export function createDefinitionListParser(
             lineOpensItemBlock(ln.trimStart())) return admitContentLine(' '.repeat(contentCol) + ln, true)
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
+        // The ownership walk consumes a refused `+` as a placeholder. The
+        // description remains its owner, so the next list marker opens there
+        // even when the walk has handed it back below the body's column.
+        const previousLine = bodyLineNumbers.at(-1)
+        const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
+        const currentSource = authored[lexer.lineNumber(lexer.pos) - 1] ?? sourceFollower
+        const currentColumn = sourceColumn(currentSource, quotePrefixDepth(markerSource))
+        if (admission.kind !== 'blank' && refusedPlusFollowerColumn !== null &&
+            currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart())) {
+          const placed = ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
+          bodyBaseEligible.add(bodyLines.length)
+          bodyLines.push(placed)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          track(placed)
+          lexer.consume()
+          return 'continue'
+        }
+        if (isListMarkerLine(ln.trimStart()) && bodyLines.at(-1)?.trim() === '%%' &&
+            previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+            (currentColumn === 0 || currentColumn >= bodySourceColumn)) {
+          refusedPlusFollowerColumn = currentColumn
+          bodyBaseEligible.add(bodyLines.length)
+          bodyLines.push(ln.trimStart())
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          track(ln.trimStart())
+          lexer.consume()
+          return 'continue'
+        }
         const left = leavesBeforeSourceBody(ln, sourceFollower, reachesSourceBody)
         if (left !== undefined) return left
         if (admission.kind === 'content') return admitContentLine(ln, reachesSourceBody)
-        if (admission.kind === 'blank') return admitBlankLine()
+        if (admission.kind === 'blank') { refusedPlusFollowerColumn = null; return admitBlankLine() }
         return admitLazyLine(ln)
       })
       // A refused first-block marker owns no list child. The description's
