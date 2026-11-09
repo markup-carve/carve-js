@@ -3847,13 +3847,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let retainedRefusalFollower = false
     const closeRefusedFence = (lineNumber: number): void => {
       if (lazyState.opaque?.kind !== 'code') return
-      let opener: string | undefined = leadFence ? content : undefined
-      for (let index = nested.length - 1; opener === undefined && index >= 0; index--)
-        if (RE_FENCE.test(nested[index]!) || RE_RAW_FENCE.test(nested[index]!)) opener = nested[index]!
-      if (opener === undefined) return
-      const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-      if (fence === null) return
-      const run = RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+      let run: string | undefined
+      for (let index = nested.length - 1; run === undefined && index >= 0; index--) {
+        const opener = nested[index]!
+        const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
+        const candidate = fence === null ? undefined : RE_FENCE.test(opener) ? fence[2]! : fence[1]!
+        if (candidate !== undefined && lazyState.opaque.close.test(candidate)) run = candidate
+      }
+      if (run === undefined && leadFence) {
+        const candidate = RE_FENCE.test(content) ? leadFence[2]! : leadFence[1]!
+        if (lazyState.opaque.close.test(candidate)) run = candidate
+      }
+      if (run === undefined) return
       nestedOrigins.set(nested.length, { text: run, parentIndex: lexer.pos, prefix: 0, virtual: true })
       nested.push(run)
       nestedSourceLines.push(undefined)
