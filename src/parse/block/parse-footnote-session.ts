@@ -438,6 +438,12 @@ function plusBlockClosers(
     indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))
 }
 
+/** Whether a line below an open item fence still belongs to the attached list: item text or a sibling marker. */
+function continuesAttachedList(line: string, listColumn: number): boolean {
+  const column = indentColumns(line)
+  return column > listColumn || (column === listColumn && isListMarkerLine(line.trimStart()))
+}
+
 function rebaseAttachedCodeCloser(attached: readonly string[], bodyLines: string[]): void {
   const opener = attached[0]
   if (attached.length < 2 || opener === undefined || !opensCodeFence(opener.trimStart())) return
@@ -759,20 +765,26 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
               return false
             }
             if (nestedFenceCloser !== undefined) {
-              if (!isBlankLine(a) && indentColumns(a) < nestedFenceColumn) return true
-              if (nestedFenceCloser.test(a.trimStart())) nestedFenceCloser = undefined
-              return false
+              if (isBlankLine(a) || indentColumns(a) >= nestedFenceColumn) {
+                if (nestedFenceCloser.test(a.trimStart())) nestedFenceCloser = undefined
+                return false
+              }
+              // A blank inside the open fence is payload, so a line still in the list continues it (§11 N1, carve#5555).
+              if (!continuesAttachedList(a, indentColumns(follower!))) return true
+              nestedFenceCloser = undefined
             }
             const commentRun = commentFenceRun(a.trimStart())
             if (commentRun !== undefined) {
               nestedCommentRun = commentRun
               nestedCommentColumn = indentColumns(a)
             }
-            if (opensCodeFence(a.trimStart())) {
-              const run = /^(`{3,}|~{3,})/.exec(a.trimStart())?.[1]
+            // A fence on an item's marker line opens at the item's content column.
+            const fenceText = opensCodeFence(a.trimStart()) ? a.trimStart() : markerFreeContent(a)
+            if (opensCodeFence(fenceText)) {
+              const run = /^(`{3,}|~{3,})/.exec(fenceText)?.[1]
               if (run !== undefined) {
                 nestedFenceCloser = fenceCloseRe(run)
-                nestedFenceColumn = indentColumns(a)
+                nestedFenceColumn = indentColumns(a.slice(0, a.length - fenceText.length))
               }
             }
           }
