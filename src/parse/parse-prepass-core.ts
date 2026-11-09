@@ -1263,8 +1263,10 @@ export function attachBlockPos(
     const sourceLineNumber = lexer.lineNumber(endLineIndex)
     const root = lexer.documentRoot ?? lexer
     const sourceLine = (lexer.rootLines ?? root.lines)[sourceLineNumber - 1] ?? ''
+    // A rewritten opener on the next line may have a leading ownership cut.
+    // An ending at that line's start still points before the cut.
     const nextLineOffset = sourceLineNumber < lexer.documentLineCount
-      ? root.lineOffset(sourceLineNumber) : undefined
+      ? root.lineOffsets[sourceLineNumber] : undefined
     if (
       isBlankLine(endLine) &&
       !/[ \t]$/.test(sourceLine) &&

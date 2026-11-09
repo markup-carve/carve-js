@@ -20,9 +20,9 @@ it('leaves a run at the content column to the document paragraph', () => {
 })
 
 it('bounds the closer by a list marker that follows the blank', () => {
-  expect(carveToHtml('1. +\n```\n\n- z\n  ```\n').trim()).toBe('<ol>\n  <li>\n    <pre><code></code></pre>\n  </li>\n</ol>\n<ul>\n  <li>z\n    <pre><code></code></pre>\n  </li>\n</ul>')
+  expect(carveToHtml('1. +\n```\n\n- z\n  ```\n').trim()).toBe(closed('- z\n').replace('<ul>', '<ol>').replace('</ul>', '</ol>'))
 })
 
 it('keeps a lone plus fence ending at its blank', () => {
-  expect(carveToHtml('- x\n+\n```\na\n\nb\n ```\n').trim()).toBe('<ul>\n  <li>x\n    <pre><code>a\n</code></pre>\n  </li>\n</ul>\n<p>b\n<code></code></p>')
+  expect(carveToHtml('- x\n+\n```\na\n\nb\n ```\n').trim()).toBe('<ul>\n  <li>x\n    <pre><code>a\n\n</code></pre>\n  </li>\n</ul>\n<p>b\n<code></code></p>')
 })

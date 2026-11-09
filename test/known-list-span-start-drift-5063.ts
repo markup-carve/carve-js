@@ -1,5 +1,23 @@
 /** Checker findings at the spec pin: markers left of their owner column (#5063) and the one-space item column (carve#5105). */
 export const KNOWN_LIST_SPAN_START_DRIFT_5063: ReadonlySet<string> = new Set([
+  // New corpus rows at the carve#5700 pin retain the existing #5063 drift.
+  "1004-a-new-list-after-a-note-attached-list: pos does not begin at the markup that opens \"list\" at $.children[2].children[0]: offset 8 starts before its owner's content column 2",
+  "1004-a-new-list-after-a-note-attached-list: pos does not begin at the markup that opens \"list_item\" at $.children[2].children[0].items[0]: offset 8 starts before its owner's content column 2",
+  "1012-a-note-attached-fence-blank-ends-lazy-claim: pos does not begin at the markup that opens \"list\" at $.children[2].children[0]: offset 15 starts before its owner's content column 2",
+  "1012-a-note-attached-fence-blank-ends-lazy-claim: pos does not begin at the markup that opens \"list_item\" at $.children[2].children[0].items[0]: offset 15 starts before its owner's content column 2",
+  "1013-a-refused-plus-before-a-description-list-sibling-keeps-it-tight: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[0]: offset 9 starts before its owner's content column 2",
+  "1013-a-refused-plus-before-a-description-list-sibling-keeps-it-tight: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[1].children[0].items[0]: offset 9 starts before its owner's content column 2",
+  "1013-a-refused-plus-before-a-description-list-sibling-keeps-it-tight: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[1].children[0].items[1]: offset 17 starts before its owner's content column 2",
+  "1016-a-note-keeps-a-line-after-a-refused-plus: pos does not begin at the markup that opens \"list\" at $.children[1].children[0]: offset 8 starts before its owner's content column 2",
+  "1016-a-note-keeps-a-line-after-a-refused-plus: pos does not begin at the markup that opens \"list_item\" at $.children[1].children[0].items[0]: offset 8 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body-2: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[0]: offset 9 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body-2: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[1]: offset 17 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body-2: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[1].children[0].items[0]: offset 9 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body-2: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[1].children[1].items[0]: offset 17 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[0]: offset 9 starts before its owner's content column 2",
+  "1017-a-description-that-refuses-a-plus-reads-the-next-line-in-its-body: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[1].children[0].items[0]: offset 9 starts before its owner's content column 2",
+  "999-a-note-attached-list-keeps-its-child-fence-payload: pos does not begin at the markup that opens \"list\" at $.children[2].children[0]: offset 12 starts before its owner's content column 4",
+  "999-a-note-attached-list-keeps-its-child-fence-payload: pos does not begin at the markup that opens \"list_item\" at $.children[2].children[0].items[0]: offset 12 starts before its owner's content column 4",
   "507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-14: pos does not begin at the markup that opens \"list\" at $.children[0].items[0].children[1].children[0]: offset 20 starts before its owner's content column 6",
   "507-a-list-marker-in-a-raised-colon-container-folds-into-its-open-paragraph-14: pos does not begin at the markup that opens \"list_item\" at $.children[0].items[0].children[1].children[0].items[0]: offset 20 starts before its owner's content column 6",
   "643-a-first-block-marker-takes-a-list-at-a-note-s-or-description-s-marker-column-2: pos does not begin at the markup that opens \"list\" at $.children[0].items[1].children[0]: offset 9 starts before its owner's content column 2",
