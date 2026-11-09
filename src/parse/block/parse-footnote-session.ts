@@ -4,6 +4,7 @@ import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVe
 import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
+import { leadingAttributeRun } from './leading-attribute-run.js'
 import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
@@ -56,9 +57,22 @@ export function attachedLeadIsList(lexer: Lexer): boolean {
   skipCommentParagraph()
   // A note's body is part of it, so a lead after two lazy lines is still measured (carve#5034).
   let inNoteBody = false
-  for (let ln = lexer.peek(k); ln !== undefined && !isBlankLine(ln) && (isBlockAttributeLine(ln.trimStart()) ||
-    isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
-    RE_COMMENT_LINE.test(ln.trimStart()) || (inNoteBody && skippedNoteBodyLine(ln))); ln = lexer.peek(k)) {
+  for (let ln = lexer.peek(k); ln !== undefined && !isBlankLine(ln); ln = lexer.peek(k)) {
+    // A wrapped attribute run is one attribute line (PART 9 §15 A5).
+    const column = indentColumns(ln)
+    const attrs = leadingAttributeRun((offset) => {
+      const line = lexer.peek(k + offset)
+      return line === undefined ? undefined : sliceColumns(line, column, true)
+    }, lexer.parseOptions)
+    if (attrs > 1) {
+      inNoteBody = false
+      k += attrs
+      skipCommentParagraph()
+      continue
+    }
+    if (!(isBlockAttributeLine(ln.trimStart()) ||
+      isLinkDefLine(ln.trimStart()) || RE_FOOTNOTE_DEF.test(ln.trimStart()) || RE_ABBR_DEF.test(ln.trimStart()) ||
+      RE_COMMENT_LINE.test(ln.trimStart()) || (inNoteBody && skippedNoteBodyLine(ln)))) break
     inNoteBody = RE_FOOTNOTE_DEF.test(ln.trimStart()) || (inNoteBody && skippedNoteBodyLine(ln))
     k++
     skipCommentParagraph()

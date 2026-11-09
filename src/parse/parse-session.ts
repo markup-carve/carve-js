@@ -153,7 +153,6 @@ import {
   startsInterruptingBlock,
   stripLazyFrame,
   stripPositions,
-  probeBlockAttributes,
   parseBlockAttributeRun,
   subLexer,
   taskMatch,
@@ -175,7 +174,8 @@ import { parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
-import { isValidAttrPayload, isValidInlineAttrPayload } from '../extension/attribute-parser.js'
+import { isValidInlineAttrPayload } from '../extension/attribute-parser.js'
+import { leadingAttributeRun } from './block/leading-attribute-run.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
@@ -238,25 +238,6 @@ function isCommentedImageLine(line: string): boolean {
   const lead = (text: string): string => /^[ \t]*/.exec(text)![0]
   return quiet !== trimmed && lead(quiet) === lead(trimmed) && !/[ \t]$/.test(quiet) &&
     (isBlockImageLine(quiet) || isReferenceImageLine(quiet))
-}
-
-/** How many lines at the start of `at` are block attribute lines. */
-function leadingAttributeRun(at: (offset: number) => string | undefined, options: ParseOptions): number {
-  let count = 0
-  while (at(count)?.startsWith('{')) {
-    const lines: string[] = []
-    for (let line = at(count); line !== undefined && !isBlankLine(line); line = at(count + lines.length)) {
-      const closed = line.includes('}')
-      // The same early refusal `probeBlockAttributes` makes, so a stray `{` scans one line.
-      if (lines.length > 0 && !closed && !isValidAttrPayload('\n' + line + '\n')) return count
-      lines.push(line)
-      if (closed) break
-    }
-    const run = probeBlockAttributes(subLexer(lines, options, 0))
-    if (run === null) break
-    count += run.count
-  }
-  return count
 }
 
 // The line after a footnote definition at `offset` and its unbroken body, or -1.
