@@ -461,10 +461,28 @@ export function createDefinitionListParser(
         RE_DEFLIST_TERM.test(a) ||
         RE_DEFLIST_DEF.test(a)
       // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
-      const attachedBoundary = (): ((a: string) => boolean) => {
+      const attachedBoundary = (): ((a: string, offset?: number) => boolean) => {
         if (!attachedLeadIsList(lexer)) return (a) => isDefBodyBoundary(a) || isListMarkerLine(a.trimStart())
         const listFence = attachedListFenceBoundary(indentColumns(lexer.peek() ?? ''))
-        return (a) => listFence(a) ?? isDefBodyBoundary(a)
+        const first = (lexer.peek() ?? '').trimStart()
+        const listAxis = (line: string): string | null => {
+          const text = line.trimStart()
+          if (RE_ORDERED.test(text)) return text.match(/^\d+([.)])/)?.[1] ?? '.'
+          return isListMarkerLine(text) && /^[-*]/.test(text) ? text[0]! : null
+        }
+        return (a, offset = 0) => {
+          const fenced = listFence(a)
+          if (fenced !== undefined) return fenced
+          if (offset > 0) {
+            const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
+            const prior = authored[lexer.lineNumber(lexer.pos + offset - 1) - 1]
+            const nextAxis = listAxis(a)
+            if (prior?.trim() === '+' && nextAxis !== null &&
+                sourceColumn(prior, quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol &&
+                nextAxis !== listAxis(first) && indentColumns(a) > contentCol) return true
+          }
+          return isDefBodyBoundary(a)
+        }
       }
       // First-block form (`:  +`, mirroring the list `- +`): when the sole
       // content is a lone `+`, the definition body is the FOLLOWING flush-left
@@ -1191,11 +1209,27 @@ export function createDefinitionListParser(
           lexer.consume()
           return 'continue'
         }
+        if (admission.kind !== 'blank' && refusedPlusFollowerColumn !== null &&
+            currentColumn >= bodySourceColumn && currentColumn < refusedPlusFollowerColumn &&
+            isListMarkerLine(ln.trimStart())) {
+          const placed = ' '.repeat(currentColumn - bodySourceColumn) + ln.trimStart()
+          bodyBaseEligible.add(bodyLines.length)
+          bodyLines.push(placed)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          track(placed)
+          lexer.consume()
+          refusedPlusFollowerColumn = currentColumn
+          refusedPlusFollowerContentColumn = currentColumn + markerContentColumn(ln.trimStart())
+          return 'continue'
+        }
         if (isListMarkerLine(ln.trimStart()) && bodyLines.at(-1)?.trim() === '%%' &&
             previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
             (currentColumn === 0 || currentColumn >= bodySourceColumn)) {
-          refusedPlusFollowerColumn = currentColumn
-          refusedPlusFollowerContentColumn = currentColumn + markerContentColumn(ln.trimStart())
+          if (isListMarkerLine(ln.trimStart())) {
+            refusedPlusFollowerColumn = currentColumn
+            refusedPlusFollowerContentColumn = currentColumn + markerContentColumn(ln.trimStart())
+          }
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(ln.trimStart())
           bodySourceLines.push(ln)
