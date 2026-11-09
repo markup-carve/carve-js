@@ -547,7 +547,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const outerContentColumn = contentStart < 0 ? 0 : sourceColumnAt(head.line, contentStart)
     // A line the ownership walk folded lazily stays in the block's open paragraph.
     const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) ||
-      (indentColumns(line) < outerContentColumn &&
+      (!followerOpensBlock && indentColumns(line) < outerContentColumn &&
         (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))) ||
       (followerOpensBlock &&
       indentColumns(line, laterColumn) < laterColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&

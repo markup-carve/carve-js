@@ -12,7 +12,7 @@ describe('a refused quote plus stays in an open fence', () => {
     ['tilde fence', '> a\n+\n~~~\nx\n+\n',
       "<blockquote><p>a</p><pre><code>x\n+\n</code></pre></blockquote>"],
     ['refused plus before a blank and a paragraph', '> a\n+\n``` js\nx\n+\n\ny\n',
-      "<blockquote><p>a</p><pre><code class=\"language-js\">x\n+\n</code></pre></blockquote><p>y</p>"],
+      "<blockquote><p>a</p><pre><code class=\"language-js\">x\n+\n\n</code></pre></blockquote><p>y</p>"],
     ['first-block plus quote', '> +\n``` js\nx\n+\n',
       "<blockquote><pre><code class=\"language-js\">x\n+\n</code></pre></blockquote>"],
     ['list-hosted quote', '- > a\n  +\n  ``` js\n  x\n  +\n',

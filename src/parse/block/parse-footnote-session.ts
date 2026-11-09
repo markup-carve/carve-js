@@ -979,7 +979,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
           (!visibleLeadIsList && !visibleLeadIsLineBlock && isListMarkerLine(a.trimStart()))
         },
-        0, true, true, 0, false, 0, 0, indentColumns(follower!),
+        0, true, true, 0, false, 0, 0, indentColumns(follower!) + (noteQuoteDepth > 0 ? 1 : 0),
       )
       // A block at the note's body column ends the pulled paragraph, as in a description (CARVE-P0-011, carve#5421).
       const quoteEnd = attachedQuoteEnd(attached)

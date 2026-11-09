@@ -619,7 +619,9 @@ export function ownLines(
     }
     const ownHost = (attachedHost as Frame[] | null)?.at(-1)
     const parent = frames.at(-1)
-    if (parent?.kind === 'item' && braceRunStart >= 0 && at - braceRunStart >= 2 &&
+    const descriptionAttached = braceRunStart > 0 && DD.test(lines[braceRunStart - 1]!.trimStart()) &&
+      TRAILING_PLUS.test(lines[braceRunStart - 1]!.trimStart())
+    if (descriptionAttached && parent?.kind === 'item' && braceRunStart >= 0 && at - braceRunStart >= 2 &&
         PURE_FENCE.test(indentCols(src).rest) && indentCols(src).col > parent.col &&
         indentCols(lines[braceRunStart]!).col === parent.col) {
       const pieces = lines.slice(braceRunStart, at).map(part => part.trimStart())
@@ -1008,8 +1010,9 @@ export function ownLines(
       const hostForSpan = (attachedHost as Frame[] | null)?.at(-1)
       const shiftedOpener = hostForSpan && m.col > hostForSpan.markerCol! && m.col < hostForSpan.col &&
         PURE_FENCE.test(m.rest)
+      const definition = isLinkDefLine(m.rest) || FOOTNOTE_DEF.test(m.rest) || RE_ABBR_DEF.test(m.rest)
       if (attachedHost && attachedInlineCode !== 0 && m.rest !== '' && !plusFollower &&
-          form.kind !== 'quote' && !shiftedOpener) form = TEXT
+          form.kind !== 'quote' && !shiftedOpener && !definition) form = TEXT
       attachedInlineCode = attachedHost && form.kind === 'text' && m.rest !== ''
         ? pairAttachedCode(m.rest, attachedInlineCode) : 0
       if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
