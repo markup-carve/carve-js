@@ -510,10 +510,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const markerColumn = contentStart >= 0
       ? sourceColumnAt(head.line, contentStart + innermostMarker) - (head.checked === undefined ? 0 : 4)
       : -1
-    const closerFloor = markerColumn === followerColumn ? followerColumn : 0
+    // The walk keeps the follower where it stands but writes the lines after it without the box's
+    // four columns, so those lines are measured at the marker column (carve#5586).
+    const laterColumn = head.checked !== undefined && followerColumn === markerColumn + 4 ? markerColumn : followerColumn
+    const closerFloor = markerColumn === laterColumn ? laterColumn : 0
     // A line the ownership walk folded lazily stays in the block's open paragraph.
     const attached = session.collectAttachedListBlock(lexer, (line, offset) => isItemAttachBoundary(line) || (followerOpensBlock &&
-      indentColumns(line, followerColumn) < followerColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
+      indentColumns(line, laterColumn) < laterColumn && (!followerIsQuote || lineOpensBlock(line.trimStart())) &&
       (offset === undefined || !session.isWalkLazyLine(lexer.lineNumber(lexer.pos + offset)))),
     shape.baseIndent, false, followerColumn, closerFloor)
     // Later blocks are measured against this lexer's lines, so the column is read in the same frame.
