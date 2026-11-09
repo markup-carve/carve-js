@@ -1210,7 +1210,7 @@ export function createDefinitionListParser(
         const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
         const currentSource = authored[lexer.lineNumber(lexer.pos) - 1] ?? sourceFollower
         const currentColumn = sourceColumn(currentSource, quotePrefixDepth(markerSource))
-        if (refusedPlusFollowerColumn === null && previousLine !== undefined &&
+        if (first.trim() === '+' && refusedPlusFollowerColumn === null && previousLine !== undefined &&
             authored[previousLine - 1]?.trim() === '+' && bodyLines.at(-1)?.trim() === '%%' &&
             !isListMarkerLine(ln.trimStart())) {
           refusedPlusFollowerColumn = bodySourceColumn - contentCol
@@ -1221,9 +1221,9 @@ export function createDefinitionListParser(
             !RE_DEFLIST_TERM.test(ln.trimStart()) && !RE_DEFLIST_DEF.test(ln.trimStart()) &&
             (currentColumn >= (refusedPlusFollowerContentColumn ?? Infinity) ||
               !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()) ||
-              previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+              first.trim() === '+' && previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
                 bodyLines.at(-1)?.trim() === '%%')) {
-          const startsAfterRefused = previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+          const startsAfterRefused = first.trim() === '+' && previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
             bodyLines.at(-1)?.trim() === '%%'
           if (startsAfterRefused && (opensCodeFence(ln.trimStart()) ||
               colonFenceOpenerLen(ln.trimStart()) !== null)) {
