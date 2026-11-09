@@ -662,6 +662,23 @@ function quotedAttributeLeavesRefusedNote(
     wrappedAttributeRunAt(lexer) > 0
 }
 
+/** A refused quoted note plus leaves an offset follower to its enclosing quote (CARVE-P9-067). */
+function quotedRefusedFollowerLeavesNote(
+  lexer: Lexer, defLineIndex: number, defLineRaw: string, label: string, markerColumn: number,
+  authoredBodyColumn: number | undefined, firstBlockAttached: boolean, pendingBlankCount: number,
+): boolean {
+  if (quotedAttributeLeavesRefusedNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
+    firstBlockAttached, pendingBlankCount)) return true
+  if (firstBlockAttached || authoredBodyColumn === undefined) return false
+  const definition = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex))
+  const follower = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
+  if (definition === undefined || follower === undefined ||
+      !/\]:[ \t]+\+[ \t]*$/.test(definition) || isBlankLine(follower)) return false
+  const depth = quotePrefixDepth(definition)
+  const column = sourceColumn(follower, depth)
+  return depth > 0 && column > authoredBodyColumn - FOOTNOTE_BODY_COLUMN && column < authoredBodyColumn
+}
+
 function refusedMarkerEndsAtBelowColumn(refusedMarker: boolean, kind: string): boolean {
   return refusedMarker && kind === 'below'
 }
@@ -1022,8 +1039,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
-    if (quotedAttributeLeavesRefusedNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
-      firstBlockAttached, pendingBlankRun.count)) return 'stop'
+    if (quotedRefusedFollowerLeavesNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
+      authoredBodyColumn, firstBlockAttached, pendingBlankRun.count)) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'
