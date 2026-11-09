@@ -311,17 +311,20 @@ function hasLeadingTab(line: string, rest: string): boolean {
   return rest !== '' && line.slice(0, line.length - rest.length).includes('\t')
 }
 
+function hasNestedItemFrame(frames: readonly Frame[]): boolean {
+  return frames.some((child, index) => index > 1 && child.kind === 'item' &&
+      frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
+}
+
 function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Frame[]): boolean {
   return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null &&
-    frames.some((child, index) => index > 1 && child.kind === 'item' &&
-      frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
+    hasNestedItemFrame(frames)
 }
 
 function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number): number {
   const origins: number[] = []
   for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
-  const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
-    frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
+  const canonicalChild = hasNestedItemFrame(frames)
   return strippedColumn(line, origins, canonicalChild)
 }
 
@@ -1235,10 +1238,11 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      const closerColumn = inner.family === 'code' && hasLeadingTab(src, m.rest)
+      const nestedCodeTab = inner.family === 'code' && hasNestedItemFrame(frames) && hasLeadingTab(src, m.rest)
+      const closerColumn = nestedCodeTab
         ? tabColumnInFrames(src, frames, segment) : m.col
       const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at) &&
-        closerColumn <= inner.canon + inner.cut
+        (!nestedCodeTab || closerColumn <= inner.canon + inner.cut)
       lead(pairedCloser ? inner.canon : payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
