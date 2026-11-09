@@ -13,15 +13,18 @@ import { FOOTNOTE_BODY_COLUMN, isBlockAttributeLine, LAZY_FRAME, markerContentCo
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
 function wrappedAttributeRunAt(lexer: Lexer): number {
-  const opener = lexer.peek()
-  if (opener === undefined || !opensWrappedAttributeBlock(opener.trimStart())) return 0
-  const column = indentColumns(opener)
+  const opener = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? lexer.peek()
+  if (opener === undefined || !opensWrappedAttributeBlock(sourceQuoteBody(opener).trimStart())) return 0
+  const quoteDepth = quotePrefixDepth(opener)
+  const column = sourceColumn(opener, quoteDepth)
   const lines: string[] = []
   for (let offset = 0; ; offset++) {
     const line = lexer.peek(offset)
-    if (line === undefined || isBlankLine(line) || offset > 0 && indentColumns(line) <= column) return 0
-    lines.push(sliceColumns(line, column, true))
-    if (line.includes('}')) break
+    const authored = line === undefined ? undefined : authoredSourceLine(lexer, lexer.lineNumber(lexer.pos + offset)) ?? line
+    if (authored === undefined || quotePrefixDepth(authored) !== quoteDepth || isBlankLine(line!) ||
+        offset > 0 && sourceColumn(authored, quoteDepth) <= column) return 0
+    lines.push(' '.repeat(sourceColumn(authored, quoteDepth) - column) + sourceQuoteBody(authored))
+    if (authored.includes('}')) break
   }
   return probeBlockAttributes(subLexer(lines, lexer.parseOptions, 0))?.count === lines.length ? lines.length : 0
 }
@@ -30,8 +33,9 @@ function wrappedAttributeLeavesNote(
   lexer: Lexer, admission: ContainerAdmission, sourceLine: string | undefined,
   authoredBodyColumn: number | undefined, state: ReturnType<typeof verbatimOnlyLazyState>, seen: { value: boolean; until: number },
 ): boolean {
-  if (admission.kind === 'below' && sourceLine !== undefined && authoredBodyColumn !== undefined &&
-      sourceColumn(sourceLine) < authoredBodyColumn && (seen.value || wrappedAttributeRunAt(lexer) > 0)) return true
+  const authored = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? sourceLine
+  if (admission.kind !== 'blank' && authored !== undefined && authoredBodyColumn !== undefined &&
+      sourceColumn(authored) < authoredBodyColumn && (seen.value || wrappedAttributeRunAt(lexer) > 0)) return true
   const run = admission.kind === 'content' && state.opaque === null ? wrappedAttributeRunAt(lexer) : 0
   if (run > 0) {
     seen.value = true
