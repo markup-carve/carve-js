@@ -665,11 +665,11 @@ function quotedAttributeLeavesRefusedNote(
 /** A refused quoted note plus leaves an offset follower to its enclosing quote (CARVE-P9-067). */
 function quotedRefusedFollowerLeavesNote(
   lexer: Lexer, defLineIndex: number, defLineRaw: string, label: string, markerColumn: number,
-  authoredBodyColumn: number | undefined, firstBlockAttached: boolean, pendingBlankCount: number,
+  authoredBodyColumn: number | undefined, firstBlockAttached: boolean, pendingBlankCount: number, bodyLength: number,
 ): boolean {
   if (quotedAttributeLeavesRefusedNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
     firstBlockAttached, pendingBlankCount)) return true
-  if (firstBlockAttached || authoredBodyColumn === undefined) return false
+  if (firstBlockAttached || authoredBodyColumn === undefined || bodyLength > 1) return false
   const definition = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex))
   const follower = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
   if (definition === undefined || follower === undefined ||
@@ -1040,7 +1040,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
     if (quotedRefusedFollowerLeavesNote(lexer, defLineIndex, defLineRaw, label, markerColumn,
-      authoredBodyColumn, firstBlockAttached, pendingBlankRun.count)) return 'stop'
+      authoredBodyColumn, firstBlockAttached, pendingBlankRun.count, bodyLines.length)) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'

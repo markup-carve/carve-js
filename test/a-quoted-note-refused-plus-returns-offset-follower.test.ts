@@ -10,3 +10,8 @@ it('returns an offset follower of a refused quoted note plus to the quote (carve
     '      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n' +
     '    </li>\n  </ol>\n</section>')
 })
+
+it('keeps an offset lazy continuation once the quoted note body starts', () => {
+  expect(carveToHtml('> [^a]: +\n>   body\n>  tail\n\nsee[^a]\n')).toContain(
+    'body\ntail<a href="#fnref1" role="doc-backlink"')
+})
