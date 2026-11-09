@@ -9,6 +9,13 @@
         "notes-dd130b0b59c1",
         "notes-ffd53f488294"
       ]
+    },
+    {
+      "ticket": "markup-carve/carve#5638",
+      "cases": [
+        "attributes-d159c613f798",
+        "roundtrip-1fecc86692d0"
+      ]
     }
   ]
 }

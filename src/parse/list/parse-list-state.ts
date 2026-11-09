@@ -466,6 +466,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   // like.
   function attributeRun(line: LazyLine): boolean {
     const { content, state } = line
+    // Inline pairing owns every brace line inside an open code span, whether
+    // the attribute spelling closes on this line or a later one (carve#5638).
+    if (state.attrRun === null && line.inlineCodeOpen !== 0) return false
     const column = line.atContentColumn
       ? line.facts?.whitespace ?? indentColumns(content)
       : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))
