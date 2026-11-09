@@ -998,6 +998,13 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     if (refusedMarker && admission.kind === 'below') return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
     const sourceLine = admission.sourceLine
+    const authoredDef = authoredSourceLine(lexer, lexer.lineNumber(defLineIndex))
+    const authoredCurrent = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos))
+    if (!firstBlockAttached && authoredDef !== undefined && authoredCurrent !== undefined &&
+        /\]:[ \t]+\+[ \t]*$/.test(authoredDef) && quotePrefixDepth(authoredDef) > 0 &&
+        sourceColumn(authoredCurrent, quotePrefixDepth(authoredDef)) >
+          authoredLabelColumn(lexer, defLineIndex, defLineRaw, label, markerColumn) &&
+        wrappedAttributeRunAt(lexer) > 0) return 'stop'
     if (abbreviationLeavesNote(lexer, lazyState, sourceLine, authoredBodyColumn, ln)) return 'stop'
     if (sourceOwnerLeavesNote(lexer, sourceLine, authoredBodyColumn, pendingBlankRun.count, ln, bodyColumn, defLineIndex)) return 'stop'
     if (wrappedAttributeLeavesNote(lexer, admission, sourceLine, authoredBodyColumn, lazyState, wrappedAttributeAtBody)) return 'stop'
