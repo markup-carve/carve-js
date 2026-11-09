@@ -757,7 +757,17 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
   function scanInlineLink(s: InlineScan, close: number, innerText: string, tail: string): boolean {
     const { text, i, session, source } = s
     // Inline link [text](url "title"){attrs}
-    const ml = s.destinationOpeners.has(i + close + 1) ? execLinkTail(tail, offset => !spanAttrProvablyInvalid(text, i + close + 1 + offset, s.quoteEnd, s.valueEnd)) : null
+    let enclosing: { start: number; close: number } | undefined
+    for (let n = s.bracketRuns.length - 1; n >= 0; n--) {
+      const run = s.bracketRuns[n]!
+      if (run.start < i && run.close > i + close) { enclosing = run; break }
+    }
+    const ml = s.destinationOpeners.has(i + close + 1) ? execLinkTail(tail, offset => {
+      const start = i + close + 1 + offset
+      if (spanAttrProvablyInvalid(text, start, s.quoteEnd, s.valueEnd)) return false
+      const attr = RE_INLINE_ATTR.exec(text.slice(start))
+      return enclosing === undefined || (attr !== null && start + attr[0].length <= enclosing.close)
+    }) : null
     if (!ml) return false
     flush(s)
     const link: Link = {
@@ -1024,6 +1034,8 @@ export function createInlineScanner(helpers: typeof inlineScannerHelpers) {
     // that adds nothing (CARVE-P9-021, carve#4077).
     const empty = !s.buf && hasBrace && out.at(-1)?.type === 'span' ? execAt(RE_EMPTY_ATTR, text, i) : null
     const attr = empty ?? (!s.buf && hasBrace && !spanAttrProvablyInvalid(text, i, s.quoteEnd, s.valueEnd) ? RE_INLINE_ATTR.exec(text.slice(i)) : null)
+    const enclosing = s.bracketRuns.at(-1)
+    if (attr && enclosing && i + attr[0].length > enclosing.close) return false
     // A digit-leading key or otherwise invalid payload (`{2=v}`) makes the
     // whole block literal (§14), same strict rule as block/span attrs — so
     // `` `code`{#1a} `` keeps the braces rather than parsing a bogus attr.
