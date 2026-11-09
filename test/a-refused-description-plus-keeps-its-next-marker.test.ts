@@ -1,6 +1,21 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
+it('reads plus-prefixed text after a refused description marker as the next description paragraph (carve-js#4783)', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n+ sib\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <p>+ sib</p>\n  </dd>\n</dl>')
+})
+
+it('keeps body-column text after a refused description marker', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n  + sib\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <p>+ sib</p>\n  </dd>\n</dl>')
+})
+
+it('hands a root list after the refused marker text back to the document', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n+ sib\n- other\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <p>+ sib</p>\n  </dd>\n</dl>\n<ul>\n  <li>other</li>\n</ul>')
+})
+
 it.each([0, 2])('keeps a bullet at column %i in the description after a refused plus (carve#5608)', (column) => {
   const source = `:: t\n: +\n1. li\n+\n${' '.repeat(column)}- sib\n`
   expect(carveToHtml(source)).toBe(
