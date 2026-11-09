@@ -488,7 +488,21 @@ function plusBlockClosers(
     const opener = attached.find(line => RE_LINE_BLOCK_OPEN.test(line.trimStart()))!
     const run = RE_LINE_BLOCK_OPEN.exec(opener.trimStart())![1]!
     const openerColumn = indentColumns(opener)
-    if (bodyLines.some(line => line.trim() === run && indentColumns(line) === openerColumn)) return []
+    let commentRun: number | undefined
+    let afterOpener = false
+    for (const line of bodyLines) {
+      if (!afterOpener) {
+        if (line === opener) afterOpener = true
+        continue
+      }
+      const comment = commentFenceRun(line.trimStart())
+      if (commentRun !== undefined) {
+        if (comment === commentRun) commentRun = undefined
+        continue
+      }
+      if (comment !== undefined) { commentRun = comment; continue }
+      if (line.trim() === run && indentColumns(line) === openerColumn) return []
+    }
   }
   const closers = scanner(bodyLines).filter(run => !lineBlock || run[0] === ':')
   return attachedBlankClosers(lexer, closers, bodyColumn, lineBlock,

@@ -18,3 +18,10 @@ for (const run of ['```', '~~~~']) {
     expect(html).not.toContain('<div>\n')
   })
 }
+
+it('does not treat a closer inside a verse comment span as physical', () => {
+  const html = carveToHtml('r[^a]\n\n[^a]: +\n::: |\na\n%%%\n:::\n%%%\n\n  tail\n')
+  expect(html).toContain('<div class="line-block">\n        <p>a</p>\n      </div>')
+  expect(html).toContain('<p>tail<a href="#fnref1"')
+  expect(html).not.toContain('<p>tail</p>')
+})
