@@ -2436,13 +2436,13 @@ function runEndsAtEmptyCodeSpan(code: object, parents: WeakMap<object, Parent>):
  * So the guard sits on the rendered line instead, where it does not care which
  * node produced the hyphens.
  */
-function guardThematicBreakLines(body: string, inLineBlock: boolean): string {
+function guardThematicBreakLines(body: string, inLineBlock: boolean, candidateLines: ReadonlySet<number>): string {
   // Line-block bodies parse as inline content; padding would add a no-break space.
   if (inLineBlock || !body.includes('-')) return body
   return body
     .split('\n')
     // A backslash would read `\---` as `-–`; the glyphs the run renders as keep the line.
-    .map((line) => (/^-{3,}[ \t]*$/.test(line) ? allocateDashes(line.trimEnd().length) : line))
+    .map((line, index) => (candidateLines.has(index) && /^-{3,}[ \t]*$/.test(line) ? allocateDashes(line.trimEnd().length) : line))
     .join('\n')
 }
 
@@ -3868,18 +3868,19 @@ class CarveRenderSession {
         const tabRun = this.markerLineParagraphs.has(node) && head?.type === 'text' ? /^\t[ \t]*/.exec(head.value)?.[0] : undefined
         const children = tabRun === undefined || head?.type !== 'text' ? node.children
           : [{ ...head, value: head.value.slice(tabRun.length) }, ...node.children.slice(1)]
+        const thematicGuardLines = new Set<number>()
         const rendered = (tabRun ?? '') + this.renderInlines(
           children,
           ctx,
           attrs === '' && ctx.paragraphStartsAfterCaptionHost,
           ctx.lineBlockDepth > 0,
+          thematicGuardLines,
         )
         const paragraphText = ctx.lineBlockDepth === 0 && tabRun === undefined ? paragraphLineText(rendered) : rendered
-        // Text nodes escape a thematic break themselves. Only a smart punctuation
-        // node needs this guard; applying it to the whole paragraph otherwise
-        // changes a literal `---` inside an inline code span into an em dash.
-        const text = children.some(child => child.type === 'smart_punctuation')
-          ? guardThematicBreakLines(paragraphText, ctx.lineBlockDepth > 0)
+        // Text nodes escape a thematic break themselves. Guard only the lines
+        // where a smart punctuation node wrote hyphens, leaving code verbatim.
+        const text = thematicGuardLines.size > 0
+          ? guardThematicBreakLines(paragraphText, ctx.lineBlockDepth > 0, thematicGuardLines)
           : paragraphText
         let withComments = text
         if (node.transparentComments?.length) {
@@ -5350,6 +5351,7 @@ class CarveRenderSession {
      * a stanza, and its last node is not at a stanza boundary.
      */
     isStanza = false,
+    thematicGuardLines?: Set<number>,
   ): string {
     const nodes = flattenRubyForCarve(sourceNodes)
     if (ctx.inlineDepth >= MAX_RENDER_DEPTH) throw new RenderDepthError('renderCarve', MAX_RENDER_DEPTH)
@@ -5374,6 +5376,7 @@ class CarveRenderSession {
       // growing accumulator per node is the quadratic shape this engine's scaling
       // guards exist to keep out. Two counters answer both questions in O(piece).
       let lineLength = 0
+      let outputLine = 0
       let brokeLine = false
       let lineOnlyIndentation = true
       /** The last up-to-two characters of the current output line. */
@@ -5494,6 +5497,7 @@ class CarveRenderSession {
           }
         }
         out += piece
+        if (node.type === 'smart_punctuation' && piece.includes('-')) thematicGuardLines?.add(outputLine)
         if (piece !== '') verbatimTail = piece.endsWith('`') && (this.renderedVerbatimTail || ['code', 'math', 'literal_inline'].includes(node.type))
         outTail = (outTail + piece).slice(-OUT_TAIL_LENGTH)
         const lastNewline = piece.lastIndexOf('\n')
@@ -5502,6 +5506,7 @@ class CarveRenderSession {
           if (piece !== '' && !(node.type === 'non_breaking_space' && this.inlineAttrs(node.attrs, node) === '')) lineOnlyIndentation = false
           lineTail = (lineTail + piece).slice(-2)
         } else {
+          outputLine += piece.match(/\n/g)?.length ?? 0
           brokeLine = true
           lineLength = piece.length - lastNewline - 1
           lineOnlyIndentation = lineLength === 0

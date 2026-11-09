@@ -8,3 +8,8 @@ for (const marker of ['> q', '# h', '::: note', '| a |', '---']) {
     expect(carveToHtml(formatted)).toBe(carveToHtml(input))
   })
 }
+
+test('a smart punctuation node elsewhere does not rewrite verbatim hyphens', () => {
+  const input = 'a -- b\n{.x\n.y}\n```\n---\n ```\n'
+  expect(carveToHtml(carveToCarve(input))).toBe(carveToHtml(input))
+})
