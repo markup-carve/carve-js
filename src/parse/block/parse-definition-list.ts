@@ -1,6 +1,6 @@
 import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVerbatimBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { parentLineIndices, type StrippedLineOrigin } from './parse-block-scan-core.js'
-import { LAZY_FRAME as LEAD_TAB_FRAME, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
+import { LAZY_FRAME as LEAD_TAB_FRAME, RE_ORDERED, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
   BlockNode,
   DefinitionList,
@@ -1185,6 +1185,18 @@ export function createDefinitionListParser(
           const depth = quotePrefixDepth(quoteLead ? markerSource : source ?? '')
           if (source !== undefined && sourceColumn(source, depth) === leadColumn &&
               (quoteLead ? RE_BLOCKQUOTE.test(lead) : isListMarkerLine(lead))) bodyLines[index] = lead
+        }
+      }
+      // A refused `+` leaves a placeholder in the collected body. When the
+      // ordinary description first-block form opened an ordered list, a later
+      // ordered marker continues that list instead of nesting under its item.
+      // Keep bodySourceLines intact for positions and the writer.
+      if (firstBlockOpenerContent(first) && contentCol === 2 && RE_ORDERED.test(bodyLines[0] ?? '')) {
+        const rootLines = lexer.rootLines ?? lexer.lines
+        for (let index = 1; index < bodyLines.length; index++) {
+          const previousSource = (lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? rootLines)[bodyLineNumbers[index - 1]! - 1]
+          if (previousSource?.trim() === '+' && bodyLines[index - 1]?.trim() === '%%' &&
+              RE_ORDERED.test(bodyLines[index]!.trimStart())) bodyLines[index] = bodyLines[index]!.trimStart()
         }
       }
       // The same authored-base rule list items use, now in the definition body's
