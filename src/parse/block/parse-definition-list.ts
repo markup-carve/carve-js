@@ -449,6 +449,7 @@ export function createDefinitionListParser(
       let attachedOpenCodeFence = false
       let refusedPlusFollowerColumn: number | null = null
       let refusedPlusFollowerContentColumn: number | null = null
+      let refusedPlusTextParagraph = false
       const keepsOpenCodeFence = (lines: string[]): boolean =>
         lines.some((line) => opensCodeFence(line.trimStart())) && bodyEndsInOpenCodeFence(lines)
       // The boundary set for a `+`-attached block in a definition body: a blank,
@@ -587,6 +588,18 @@ export function createDefinitionListParser(
       // Form B: `+` pull-left continuation.
       const admitPlusContinuation = (ln: string): DescriptionVerdict => {
         const descriptionDecision = isContinuationMarker(ln) ? markerDecision(lexer, lexer.pos) : undefined
+        if (first.trim() === '+' && descriptionDecision?.owner?.kind === 'list' &&
+            !isListMarkerLine(lexer.peek(1)?.trimStart() ?? '') &&
+            sourceColumn(sourceLineAt(lexer, lexer.pos, ln), quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol) {
+          const markerLine = lexer.lineNumber(lexer.pos)
+          bodyLines.push('%%')
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(markerLine)
+          refusedPlusFollowerColumn = bodySourceColumn - contentCol
+          refusedPlusFollowerContentColumn = bodySourceColumn
+          lexer.consume()
+          return 'continue'
+        }
         if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description') {
           const follower = lexer.peek(1)
           if (lazyState.opaque?.kind === 'code' &&
@@ -1187,6 +1200,8 @@ export function createDefinitionListParser(
             lexer.lineStartColumn(lexer.pos) - 1 + indentColumns(ln) >= bodySourceColumn &&
             lineOpensItemBlock(ln.trimStart())) return admitContentLine(' '.repeat(contentCol) + ln, true)
         const sourceFollower = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        if (refusedPlusTextParagraph && isListMarkerLine(ln.trimStart()) &&
+            sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol) return 'stop'
         const reachesSourceBody = sourceColumn(sourceFollower, quotePrefixDepth(markerSource)) >= bodySourceColumn
         // The ownership walk consumes a refused `+` as a placeholder. The
         // description remains its owner, so the next list marker opens there
@@ -1195,17 +1210,61 @@ export function createDefinitionListParser(
         const authored = lexer.authoredRootLines ?? lexer.documentRoot?.authoredLines ?? lexer.authoredLines ?? lexer.rootLines ?? lexer.lines
         const currentSource = authored[lexer.lineNumber(lexer.pos) - 1] ?? sourceFollower
         const currentColumn = sourceColumn(currentSource, quotePrefixDepth(markerSource))
+        if (first.trim() === '+' && refusedPlusFollowerColumn === null && previousLine !== undefined &&
+            authored[previousLine - 1]?.trim() === '+' && bodyLines.at(-1)?.trim() === '%%' &&
+            !isListMarkerLine(ln.trimStart())) {
+          refusedPlusFollowerColumn = bodySourceColumn - contentCol
+          refusedPlusFollowerContentColumn = bodySourceColumn
+        }
         if (admission.kind !== 'blank' && refusedPlusFollowerColumn !== null &&
             currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart()) &&
             !RE_DEFLIST_TERM.test(ln.trimStart()) && !RE_DEFLIST_DEF.test(ln.trimStart()) &&
             (currentColumn >= (refusedPlusFollowerContentColumn ?? Infinity) ||
-              !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()))) {
-          const placed = ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
+              !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()) ||
+              first.trim() === '+' && previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+                bodyLines.at(-1)?.trim() === '%%')) {
+          const startsAfterRefused = first.trim() === '+' && previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
+            bodyLines.at(-1)?.trim() === '%%'
+          if (startsAfterRefused && (opensCodeFence(ln.trimStart()) ||
+              colonFenceOpenerLen(ln.trimStart()) !== null)) {
+            const start = lexer.pos
+            const fenced = parseSession.collectAttachedBlock(lexer, attachedBoundary(),
+              Math.min(contentCol, indentColumns(ln)), true, true)
+            bodyLines.push('')
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(previousLine)
+            track('')
+            for (let index = 0; index < fenced.lines.length; index++) {
+              const line = fenced.lines[index]!
+              bodyBaseEligible.add(bodyLines.length)
+              bodyLines.push(line)
+              bodySourceLines.push(lexer.lineAt(start + index) ?? line)
+              bodyLineNumbers.push(fenced.lineNumbers[index]!)
+              track(line)
+            }
+            refusedPlusFollowerColumn = null
+            refusedPlusFollowerContentColumn = null
+            return 'continue'
+          }
+          const placed = startsAfterRefused && lineOpensItemBlock(ln.trimStart())
+            ? ln.trimStart()
+            : ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
+          if (startsAfterRefused && !isListMarkerLine(placed)) {
+            bodyLines.push('')
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(previousLine)
+            track('')
+          }
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(placed)
           bodySourceLines.push(ln)
           bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
           track(placed)
+          if (!isListMarkerLine(placed) && startsAfterRefused) {
+            refusedPlusFollowerColumn = null
+            refusedPlusFollowerContentColumn = null
+            refusedPlusTextParagraph = true
+          }
           lexer.consume()
           return 'continue'
         }
@@ -1244,6 +1303,7 @@ export function createDefinitionListParser(
         if (admission.kind === 'blank') {
           refusedPlusFollowerColumn = null
           refusedPlusFollowerContentColumn = null
+          refusedPlusTextParagraph = false
           return admitBlankLine()
         }
         return admitLazyLine(ln)
