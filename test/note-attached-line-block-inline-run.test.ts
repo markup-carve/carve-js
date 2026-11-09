@@ -9,3 +9,12 @@ for (const run of ['`', '```', '~~~~']) {
     expect(html).not.toContain('<code>\n</code>')
   })
 }
+
+for (const run of ['```', '~~~~']) {
+  it(`honors a physical line-block closer after ${run} verse`, () => {
+    const html = carveToHtml(`r[^a]\n\n[^a]: +\n::: |\na\n${run}\n:::\n\n  tail\n`)
+    expect(html).toContain(run.startsWith('`') ? '<p>a<br>\n<code></code></p>' : `<p>a<br>\n${run}</p>`)
+    expect(html).toContain('<p>tail<a href="#fnref1"')
+    expect(html).not.toContain('<div>\n')
+  })
+}

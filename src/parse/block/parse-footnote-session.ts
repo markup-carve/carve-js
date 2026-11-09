@@ -5,7 +5,7 @@ import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
-import { commentOnlyParagraphEnd } from '../parse-prepass-core.js'
+import { commentOnlyParagraphEnd, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
 import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
@@ -484,6 +484,12 @@ function plusBlockClosers(
 ): string[] {
   if (!attachedStartsWithVerbatimBlock(attached)) return []
   const lineBlock = attachedStartsWithLineBlock(attached)
+  if (lineBlock) {
+    const opener = attached.find(line => RE_LINE_BLOCK_OPEN.test(line.trimStart()))!
+    const run = RE_LINE_BLOCK_OPEN.exec(opener.trimStart())![1]!
+    const openerColumn = indentColumns(opener)
+    if (bodyLines.some(line => line.trim() === run && indentColumns(line) === openerColumn)) return []
+  }
   const closers = scanner(bodyLines).filter(run => !lineBlock || run[0] === ':')
   return attachedBlankClosers(lexer, closers, bodyColumn, lineBlock,
     indentColumns(attached.find(line => opensCodeFence(line.trimStart())) ?? ''))
