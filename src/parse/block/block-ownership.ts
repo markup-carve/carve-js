@@ -84,7 +84,7 @@ interface Frame {
   plus?: number
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
-  releasedFence?: { column: number; character: string }
+  releasedFence?: { column: number; character: string; length: number; stacked: boolean }
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
   listShift?: number
@@ -192,8 +192,10 @@ function captionMissesQuote(missed: boolean, rest: string, column: number, owner
 
 function foldReleasedFence(form: Form, owner: Frame, rest: string, column: number, at: number, lazyLines: Set<number>): Form {
   const released = owner.releasedFence
-  if (form.family === 'code' && PURE_FENCE.test(rest) && owner.para &&
-      released !== undefined && released.character === rest[0] && column > released.column) {
+  const run = PURE_FENCE.exec(rest)?.[1]
+  // Past a single host only a run that could close the fence folds; a shorter one opens a fence (carve#5604).
+  if (form.family === 'code' && run !== undefined && owner.para && released !== undefined &&
+      released.character === rest[0] && column > released.column && (released.stacked || run.length >= released.length)) {
     lazyLines.add(at)
     return TEXT
   }
@@ -1357,7 +1359,14 @@ export function ownLines(
         top().last = 'block'
         if (nextOwner === host.length - 2 && topFence.kind === 'fence' && topFence.family === 'code') {
           const released = quotedMeasure(topFence.opened!, quotes)
-          if (released !== null) top().releasedFence = { column: released.col, character: released.rest[0]! }
+          if (released !== null) {
+            const host0 = host.at(-1)!
+            const parent = host[nextOwner]!
+            top().releasedFence = {
+              column: released.col, character: released.rest[0]!, length: /^(`+|~+)/.exec(released.rest)![1]!.length,
+              stacked: host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
+            }
+          }
         }
         return true
       }
