@@ -317,6 +317,14 @@ function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Fr
       frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
 }
 
+function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number): number {
+  const origins: number[] = []
+  for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
+  const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
+    frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
+  return strippedColumn(line, origins, canonicalChild)
+}
+
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
 function isQuoteLine(rest: string): boolean {
   if (rest[0] !== '>') return false
@@ -908,13 +916,7 @@ export function ownLines(
       const tabLead = hasLeadingTab(src, m.rest)
       const markerWithTab = tabLead && tabbedMarkerOutsideCode(m.rest, top(), frames)
       if (tabLead && (m.col < f.col || markerWithTab)) {
-        if (stripped === null) {
-          const origins: number[] = []
-          for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
-          const canonicalChild = frames.some((f, index) => index > 1 && f.kind === 'item' &&
-            frames[index - 1]?.kind === 'item' && f.markerCol === frames[index - 1]?.col)
-          stripped = strippedColumn(src, origins, canonicalChild)
-        }
+        if (stripped === null) stripped = tabColumnInFrames(src, frames, segment)
         // Normalize before deciding reach. An identical later marker must not gain
         // a new column merely because the first one opened a child frame.
         if (markerWithTab && stripped !== m.col) {
@@ -1233,14 +1235,17 @@ export function ownLines(
       payloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
-      const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at)
+      const closerColumn = inner.family === 'code' && hasLeadingTab(src, m.rest)
+        ? tabColumnInFrames(src, frames, segment) : m.col
+      const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at) &&
+        closerColumn <= inner.canon + inner.cut
       lead(pairedCloser ? inner.canon : payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
         if (c && c[1]![0] === inner.span[0] &&
             (inner.span[0] === '%' ? c[1]!.length === inner.span.length : c[1]!.length >= inner.span.length)) inner.span = null
-      } else if (pairedCloser || m.rest !== '' && inner.closes!(m.rest, m.col)) {
+      } else if (pairedCloser || m.rest !== '' && inner.closes!(m.rest, closerColumn)) {
         frames.pop()
         top().last = inner.entryLast ?? 'block'
         payloadForm = 'closer'
