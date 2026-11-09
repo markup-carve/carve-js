@@ -471,11 +471,15 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))
     // At block start, a run indented past the content column is still a run (CARVE-P2-035, carve#5610).
     const runText = line.atContentColumn && state.attrRun === null && !state.lazyFoldable ? content.trimStart() : content
+    const opener = state.attrRun === null
     if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
+    // A run that lazily continues a nested quote's paragraph is that quote's text, not the item's.
+    if (opener && state.attrRun !== null) state.attrRunInQuote = line.wasQuote !== null && blockQuoteParagraphOpen(line.wasQuote)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
-      state.refusedBraceFollower = true
-      state.refusedRunKept = null
+      const ownRun = state.attrRunInQuote !== true
+      state.refusedBraceFollower = ownRun
+      state.refusedRunKept = ownRun ? null : undefined
       state.lazyFoldable = true
       return true
     }

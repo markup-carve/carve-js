@@ -227,6 +227,8 @@ export interface ItemLazyState {
   attrShallow?: boolean
   refusedBraceRun?: boolean
   refusedBraceFollower?: boolean
+  /** The open wrapped run began inside a nested quote's open paragraph. */
+  attrRunInQuote?: boolean
   /** See keepsRefusedRunLine. */
   refusedRunKept?: RegExp | null | undefined
   /** The line just tracked was one a refused brace run's paragraph keeps. */
