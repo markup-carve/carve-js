@@ -448,6 +448,7 @@ export function createDefinitionListParser(
       let authoredBase: number | null = null
       let attachedOpenCodeFence = false
       let refusedPlusFollowerColumn: number | null = null
+      let refusedPlusFollowerContentColumn: number | null = null
       const keepsOpenCodeFence = (lines: string[]): boolean =>
         lines.some((line) => opensCodeFence(line.trimStart())) && bodyEndsInOpenCodeFence(lines)
       // The boundary set for a `+`-attached block in a definition body: a blank,
@@ -1179,7 +1180,8 @@ export function createDefinitionListParser(
         if (admission.kind !== 'blank' && refusedPlusFollowerColumn !== null &&
             currentColumn >= refusedPlusFollowerColumn && !isContinuationMarker(ln.trimStart()) &&
             !RE_DEFLIST_TERM.test(ln.trimStart()) && !RE_DEFLIST_DEF.test(ln.trimStart()) &&
-            (!lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()))) {
+            (currentColumn >= (refusedPlusFollowerContentColumn ?? Infinity) ||
+              !lineOpensItemBlock(ln.trimStart()) || isListMarkerLine(ln.trimStart()))) {
           const placed = ' '.repeat(currentColumn - refusedPlusFollowerColumn) + ln.trimStart()
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(placed)
@@ -1193,6 +1195,7 @@ export function createDefinitionListParser(
             previousLine !== undefined && authored[previousLine - 1]?.trim() === '+' &&
             (currentColumn === 0 || currentColumn >= bodySourceColumn)) {
           refusedPlusFollowerColumn = currentColumn
+          refusedPlusFollowerContentColumn = currentColumn + markerContentColumn(ln.trimStart())
           bodyBaseEligible.add(bodyLines.length)
           bodyLines.push(ln.trimStart())
           bodySourceLines.push(ln)
@@ -1204,7 +1207,11 @@ export function createDefinitionListParser(
         const left = leavesBeforeSourceBody(ln, sourceFollower, reachesSourceBody)
         if (left !== undefined) return left
         if (admission.kind === 'content') return admitContentLine(ln, reachesSourceBody)
-        if (admission.kind === 'blank') { refusedPlusFollowerColumn = null; return admitBlankLine() }
+        if (admission.kind === 'blank') {
+          refusedPlusFollowerColumn = null
+          refusedPlusFollowerContentColumn = null
+          return admitBlankLine()
+        }
         return admitLazyLine(ln)
       })
       // A refused first-block marker owns no list child. The description's
