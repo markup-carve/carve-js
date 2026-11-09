@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carveToHtml } from '../src/index.js'
+import { carveToHtml, parse } from '../src/index.js'
 
 describe('a losing nested note releases a line below its body column', () => {
   it('keeps the heading in the winner and the following reference in the document', () => {
@@ -22,5 +22,13 @@ describe('a losing nested note releases a line below its body column', () => {
   it('lets ordinary prose at the winning note column open a paragraph', () => {
     const source = '[^n]: a\n  [^n]: a\n      ::: |\n  tail\n\n[^n]\n'
     expect(carveToHtml(source)).toContain('<p>tail<a href="#fnref1"')
+  })
+
+  it('does not let an unclosed code fence lend its paragraph state to the winner', () => {
+    const source = '[^n]: a\n  [^n]: x\n      ```\n  tail\n[^n]\n'
+    const doc = parse(source)
+    expect(doc.children).toEqual([])
+    expect(doc.footnoteDefs?.n?.at(-1)).toMatchObject({ type: 'paragraph' })
+    expect(carveToHtml(source)).toBe('')
   })
 })
