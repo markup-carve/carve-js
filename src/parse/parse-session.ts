@@ -1,4 +1,5 @@
 import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
+import { destinationSlotEnds } from '../link-destination.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd, isRefusedBraceRun } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
@@ -2922,7 +2923,13 @@ export class ParseSession extends InlineParseSession {
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
     const scanInlineCode = (line: string): void => {
+      const destinations = line.includes('](') ? destinationSlotEnds(line) : undefined
       for (let i = 0; i < line.length; i++) {
+        // A complete link or image tail owns its destination and title.
+        if (openInlineCode === 0 && line[i] === '(' && line[i - 1] === ']' && destinations?.has(i)) {
+          i = destinations.get(i)! - 1
+          continue
+        }
         // A backslash inside an open code span is code text, not an escape.
         if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
         if (line[i] !== '`') continue
