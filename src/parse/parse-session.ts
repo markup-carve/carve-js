@@ -2329,7 +2329,7 @@ export class ParseSession extends InlineParseSession {
       const note = authoredLines[q.innerLineNumbers[i - 1]! - 1]
       const opener = authoredLines[q.innerLineNumbers[i]! - 1]
       if (!/^\s*\[\^/.test(q.inner[i - 1]!) || note === undefined || opener === undefined ||
-          !/^\[\^[^\]]+\]: \+[ \t]*$/.test(sourceQuoteBody(note)) ||
+          !/^\[\^[^\]]+\]:[ \t]+\+[ \t]*$/.test(sourceQuoteBody(note)) ||
           !sourceQuoteBody(opener).startsWith('{') || quotePrefixDepth(note) !== quotePrefixDepth(opener)) continue
       const depth = quotePrefixDepth(opener)
       const column = sourceColumn(opener, depth)

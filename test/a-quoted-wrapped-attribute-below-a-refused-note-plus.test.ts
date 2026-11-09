@@ -15,4 +15,9 @@ describe('a quoted wrapped attribute run below a refused note plus', () => {
     expect(html).toContain(attrs.startsWith('#id') ? '<p id="id" class="x">para</p>' : `<p class="${className}">para</p>`)
     expect(html).toContain(`<li id="fn1">\n      <p>${backlink}</p>`)
   })
+
+  it('accepts extra spacing before the note plus', () => {
+    const html = carveToHtml('> [^a]:  +\n>  {.x\n>   .y}\n> para\n\nsee[^a]\n')
+    expect(html).toContain('<blockquote><p class="x y">para</p></blockquote>')
+  })
 })
