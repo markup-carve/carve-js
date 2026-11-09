@@ -9,3 +9,9 @@ it('keeps an own-line attached fence closer inside its quoted item', () => {
     )
   }
 })
+
+it('closes the active fence when a refused marker follows a different delimiter', () => {
+  expect(carveToHtml('- ```\n  ```\n  ~~~\n+\n  x\n').trim()).toBe(
+    '<ul>\n  <li>\n    <pre><code></code></pre>\n    <pre><code></code></pre>\n    x\n  </li>\n</ul>',
+  )
+})
