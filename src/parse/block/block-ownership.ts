@@ -307,6 +307,10 @@ function strippedColumn(line: string, origins: readonly number[], canonicalChild
   return col
 }
 
+function hasLeadingTab(line: string, rest: string): boolean {
+  return rest !== '' && line.slice(0, line.length - rest.length).includes('\t')
+}
+
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
 function isQuoteLine(rest: string): boolean {
   if (rest[0] !== '>') return false
@@ -895,7 +899,9 @@ export function ownLines(
         reached = k
         continue
       }
-      if (m.rest !== '' && src.slice(0, src.length - m.rest.length).includes('\t')) {
+      const tabLead = hasLeadingTab(src, m.rest)
+      const markerWithTab = tabLead && matchMarker(m.rest) !== null
+      if (tabLead && (m.col < f.col || markerWithTab)) {
         if (stripped === null) {
           const origins: number[] = []
           for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
@@ -905,7 +911,7 @@ export function ownLines(
         }
         // Normalize before deciding reach. An identical later marker must not gain
         // a new column merely because the first one opened a child frame.
-        if (stripped !== m.col) {
+        if (markerWithTab && stripped !== m.col) {
           lineCuts.push({ at: out.length, removed: src.length - m.rest.length - stripped })
           src = ' '.repeat(stripped) + m.rest
           m = indentCols(src)
