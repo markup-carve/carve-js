@@ -10,6 +10,7 @@ import {
   isLinkDefLine,
   isTableRow,
   parseBlockAttributeRun,
+  isRefusedBraceRun,
   RE_ABBR_DEF,
   RE_FENCE,
   RE_HR,
@@ -177,6 +178,21 @@ const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
 const TEXT: Form = { kind: 'text', interrupts: false }
 
+/** Pair inline backtick runs in a paragraph an attached block is carrying. */
+function pairAttachedCode(line: string, open: number): number {
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\' && open === 0) { i++; continue }
+    if (line[i] !== '`') continue
+    let end = i + 1
+    while (line[end] === '`') end++
+    const width = end - i
+    if (open === 0) open = width
+    else if (open === width) open = 0
+    i = end - 1
+  }
+  return open
+}
+
 function offColumnFirstBlockNotePlus(note: Frame | undefined, at: number, lines: string[], form: Form, column: number): note is Frame {
   return note?.line === at - 1 && TRAILING_PLUS.test(lines[note.line]!.trimStart()) && form.kind === 'text' &&
     /^\+[ \t]*$/.test(lines[at]!.trimStart()) && column > note.markerCol! && column < note.col
@@ -213,6 +229,7 @@ function attachedCodeCloserAhead(
   measure: (line: number, quotes: number) => { col: number; rest: string } | null,
   itemContentColumn: number | null = null,
   shiftedMarkerLineCloser = false,
+  stackedContentColumn: number | null = null,
 ): { exists: boolean; paired: number | null } {
   const opener = measure(at, quotes)
   const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
@@ -232,6 +249,11 @@ function attachedCodeCloserAhead(
     const hostCloser = pastBlank && shiftedMarkerLineCloser && measured.col === opener!.col + 1
       ? PURE_FENCE.exec(measured.rest)?.[1] : undefined
     if (hostCloser !== undefined && hostCloser[0] === run[0] && hostCloser.length >= run.length)
+      return { exists: true, paired: line }
+    const stackedCloser = pastBlank && shiftedMarkerLineCloser && stackedContentColumn !== null &&
+      measured.col > opener!.col && measured.col < stackedContentColumn
+      ? PURE_FENCE.exec(measured.rest)?.[1] : undefined
+    if (stackedCloser !== undefined && stackedCloser[0] === run[0] && stackedCloser.length >= run.length)
       return { exists: true, paired: line }
     if (pastBlank && itemContentColumn !== null && pairedRunLine === null && measured.col < itemContentColumn) {
       const shifted = PURE_FENCE.exec(measured.rest)?.[1]
@@ -518,6 +540,9 @@ export function ownLines(
   // The frames of the host a `+` last attached through. The attached block stands outside
   // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
   let attachedHost: Frame[] | null = null
+  let attachedInlineCode = 0
+  let braceRunStart = -1
+  let shiftedAttachedFence: { column: number; run: string } | null = null
   // A fence that ended a description's `+` block at the document; a later description closes it (carve#4408, carve#5592).
   let ddBlockFence: { host: Frame[]; at: number } | null = null
   let endedDescription: Frame[] | null = null
@@ -560,7 +585,7 @@ export function ownLines(
   // span pending, takes the S5 path unchanged. Skipping it in the loop header keeps
   // the body's per-line closures off that path.
   const passesThrough = (at: number): boolean => {
-    if (trace || frames.length !== 1 || attachedHost || resumable.length > 0 || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
+    if (trace || frames.length !== 1 || attachedHost || shiftedAttachedFence || resumable.length > 0 || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
         releasedFollowers.has(at) || noteTextFollower.value?.at === at - 1 || tabQuoteFollower.value?.at === at - 1) return false
     const doc = frames[0]!
     if (doc.cut !== 0 || doc.endsAtBlank || doc.closedList || doc.termShift !== undefined) return false
@@ -578,6 +603,80 @@ export function ownLines(
   const nextWalkedLine = (from: number): number => {
     while (from < lines.length && passesThrough(from)) from++
     return from
+  }
+
+  function prepareAttachedSource(at: number, line: string): { src: string; shiftedCut: number } {
+    let src = line
+    let shiftedCut = 0
+    if (shiftedAttachedFence !== null && src !== '') {
+      const measured = indentCols(src)
+      shiftedCut = Math.min(shiftedAttachedFence.column, src.length - measured.rest.length)
+      src = src.slice(shiftedCut)
+      const closer = PURE_FENCE.exec(measured.rest)?.[1]
+      if (closer && closer[0] === shiftedAttachedFence.run[0] && closer.length >= shiftedAttachedFence.run.length)
+        shiftedAttachedFence = null
+      if (shiftedCut) rewritten = true
+    }
+    const ownHost = (attachedHost as Frame[] | null)?.at(-1)
+    const parent = frames.at(-1)
+    if (parent?.kind === 'item' && braceRunStart >= 0 && at - braceRunStart >= 2 &&
+        PURE_FENCE.test(indentCols(src).rest) && indentCols(src).col > parent.col &&
+        indentCols(lines[braceRunStart]!).col === parent.col) {
+      const pieces = lines.slice(braceRunStart, at).map(part => part.trimStart())
+      if (parseBlockAttributeRun(pieces.join('\n')) !== null) {
+        // A wrapped attribute run released from a description leads the
+        // parent's shifted fence. Flatten the run for the parent reader;
+        // its continuation lines become invisible placeholders.
+        result[braceRunStart] = ' '.repeat(parent.col) + pieces.join(' ')
+        for (let index = braceRunStart + 1; index < at; index++) result[index] = ' '.repeat(parent.col) + '%%'
+        rewritten = true
+      }
+    }
+    if (ownHost?.kind === 'quote' && attachedInlineCode !== 0 && braceRunStart >= 0 &&
+        at - braceRunStart >= 2 && indentCols(src).col < ownHost.markerCol!) {
+      const quoteWrappedAttribute = indentCols(lines[braceRunStart + 1] ?? '').col >
+        indentCols(lines[braceRunStart]!).col &&
+        parseBlockAttributeRun(lines.slice(braceRunStart, at).map(part => part.trimStart()).join('\n')) !== null
+      if (quoteWrappedAttribute) {
+        frames.length = 1
+        attachedHost = null
+        attachedInlineCode = 0
+      }
+    }
+    if (ownHost && attachedInlineCode !== 0 && (ownHost.kind === 'note' || ownHost.kind === 'dd') &&
+        indentCols(src).col < ownHost.markerCol! && !isQuoteLine(indentCols(src).rest)) {
+      // A lazy line in an attached inline span remains in a stacked host.
+      // Give its reader the host margin selected by the ownership walk.
+      src = ' '.repeat(ownHost.markerCol!) + indentCols(src).rest
+      rewritten = true
+    }
+    const shiftedRun = PURE_FENCE.exec(indentCols(src).rest)?.[1]
+    if (ownHost && ownHost.plus !== ownHost.line && top().kind === 'fence' && top().family === 'code' &&
+        at > 0 && lines[at - 1]!.trim() === '' && shiftedRun &&
+        indentCols(src).col > ownHost.markerCol! && indentCols(src).col < ownHost.col) {
+      // The line misses an own-line attachment after its retained blank. It
+      // starts a new fence in the host's parent at its written column (F06).
+      frames.length = attachedHost!.length - 1
+      attachedHost = null
+      attachedInlineCode = 0
+      const column = indentCols(src).col
+      shiftedAttachedFence = { column, run: shiftedRun }
+      shiftedCut += src.length - indentCols(src).rest.length
+      src = indentCols(src).rest
+      rewritten = true
+    }
+    // A refused brace run protects its immediate follower from marker
+    // interpretation (CARVE-P2-035, carve#5658 R03).
+    const rawLine = lines[at]!
+    const protectedPlus = attachedInlineCode === 0 && braceRunStart >= 0 && CONT_MARKER.test(rawLine.trimStart()) &&
+      isRefusedBraceRun((index) => lines[braceRunStart + index], at - braceRunStart)
+    if (protectedPlus) {
+      src = src.replace(/\+([ \t]*)$/, `${standIn('+')}$1`)
+      rewritten = true
+    }
+    if (rawLine.trim() === '' || protectedPlus) braceRunStart = -1
+    else if (rawLine.trimStart().startsWith('{')) braceRunStart = at
+    return { src, shiftedCut }
   }
 
   const laterCloserCache = new Map<string, { through: number; paired: boolean }>()
@@ -629,7 +728,8 @@ export function ownLines(
     const startingLine = releasedFollowers.has(at) ? lines[at]!.trimStart() : lines[at]!
     const normalized = normalizeMarkerFollower(startingLine, at, noteTextFollower.value, tabQuoteFollower.value,
       (body, line) => classify(body, frames[0]!, line, 0).kind === 'text')
-    let src = normalized.line
+    const { src: preparedSource, shiftedCut } = prepareAttachedSource(at, normalized.line)
+    let src = preparedSource
     const noteOverridePrefix = normalized.notePrefix
     if (src !== lines[at]) rewritten = true
     let out = ''
@@ -637,6 +737,7 @@ export function ownLines(
     let viewDoc = 0
     let m = indentCols(src)
     const lineCuts: OwnershipCut[] = []
+    if (shiftedCut) lineCuts.push({ at: 0, removed: shiftedCut })
     // `spaces` writes a leading tab as the columns it reaches, so a term and its body read alike in both spellings.
     const lead = (target: number, spaces = false): void => {
       const col = Math.min(target, m.col)
@@ -807,6 +908,7 @@ export function ownLines(
         return true
       }
       attachedHost = frames.slice()
+      attachedInlineCode = 0
       host.para = false
       finish()
       afterPlus = true
@@ -900,14 +1002,27 @@ export function ownLines(
       }
       return remember(lines.length, false)
     }
-    let form = foldReleasedFence(classified, owner, m.rest, m.col, at, lazyLines, laterCloser)
-    if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
-    trackQuoteBlock(form, owner, plusFollower)
-    if (!plusFollower && attachedBlockEnded(form, owner, reached)) {
-      if (attachedHost!.at(-1)!.kind === 'dd') endedDescription = attachedHost
-      attachedHost = null
+    function advanceAttachedForm(form: Form): Form {
+      // Block-shaped lines inside a paragraph's open code span remain text in
+      // the attachment. A later marker can then reach the same live host.
+      const hostForSpan = (attachedHost as Frame[] | null)?.at(-1)
+      const shiftedOpener = hostForSpan && m.col > hostForSpan.markerCol! && m.col < hostForSpan.col &&
+        PURE_FENCE.test(m.rest)
+      if (attachedHost && attachedInlineCode !== 0 && m.rest !== '' && !plusFollower &&
+          form.kind !== 'quote' && !shiftedOpener) form = TEXT
+      attachedInlineCode = attachedHost && form.kind === 'text' && m.rest !== ''
+        ? pairAttachedCode(m.rest, attachedInlineCode) : 0
+      if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
+      trackQuoteBlock(form, owner, plusFollower)
+      if (!plusFollower && attachedBlockEnded(form, owner, reached)) {
+        if (attachedHost!.at(-1)!.kind === 'dd') endedDescription = attachedHost
+        attachedHost = null
+        attachedInlineCode = 0
+      }
+      trackDescriptionBlockFence(form)
+      return form
     }
-    trackDescriptionBlockFence(form)
+    let form = advanceAttachedForm(foldReleasedFence(classified, owner, m.rest, m.col, at, lazyLines, laterCloser))
     // Past a missed note a marker opens where an item or a description body owns it (§10 I2), or beside a missed list.
     // A missed quote keeps the line as the quote's lazy text.
     const missedFrames = framesPast(frames, reached)
@@ -1347,11 +1462,13 @@ export function ownLines(
 
     function markUnclosedAttachedFence(form: Form): void {
       if (top().opened !== at) return
+      const host = attachedHost?.at(-1)
+      const markerLine = host?.plus === host?.line
       if (form.family === 'code') {
         const closer = codeCloserAhead(top(), at, quotes)
-        if (!closer.exists) top().endsAtBlank = true
+        if (!closer.exists && markerLine) top().endsAtBlank = true
         if (closer.paired !== null) pairedCodeClosers.add(closer.paired)
-      } else if ((form.kind === 'colon' || form.lineBlock) && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
+      } else if (markerLine && (form.kind === 'colon' || form.lineBlock) && !colonCloserAhead(top(), at, quotes)) top().endsAtBlank = true
     }
 
     // The host whose `+` attached the fence goes on at its content column after the blank (§17 L4).
@@ -1381,14 +1498,16 @@ export function ownLines(
         frames.length = 0
         frames.push(...host.slice(0, nextOwner + 1))
         top().last = 'block'
-        if (nextOwner === host.length - 2 && topFence.kind === 'fence' && topFence.family === 'code') {
+        const host0 = host.at(-1)!
+        const parent = host[nextOwner]!
+        const sameStack = host0.kind === 'item' && parent.kind === 'item' && parent.line === host0.line
+        if (topFence.kind === 'fence' && topFence.family === 'code' &&
+            (nextOwner === host.length - 2 || sameStack)) {
           const released = quotedMeasure(topFence.opened!, quotes)
           if (released !== null) {
-            const host0 = host.at(-1)!
-            const parent = host[nextOwner]!
             top().releasedFence = {
               column: released.col, character: released.rest[0]!, length: /^(`+|~+)/.exec(released.rest)![1]!.length,
-              stacked: host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
+              stacked: sameStack || host0.kind === 'item' && parent.kind !== 'quote' && parent.line === host0.line,
             }
           }
         }
@@ -1442,10 +1561,12 @@ export function ownLines(
     function attachedBlockEnded(form: Form, owner: Frame, depth: number): boolean {
       // Only a held attachment can end; the checks below read the line again.
       if (!attachedHost) return false
+      if (attachedInlineCode !== 0) return false
       // An attribute line leads the attached block, so the line after it still opens that block.
       if (at > 0 && isAttrLine(trimEndSpaceTab(lines[at - 1]!.replace(/^(?:[ \t]*>[ \t]?)*[ \t]*/, '')))) return false
-      // A blank after an item's attached block still lets a `+` reach that item (§17 L3, carve#4629).
-      if (m.rest === '') return top().kind !== 'fence' && attachedHost?.at(-1)?.kind !== 'item'
+      // A blank after an attached block still lets a later `+` reach any
+      // live host, including notes and descriptions (PART 9 §17 L3).
+      if (m.rest === '') return top().kind !== 'fence' && !RESUMING_HOSTS.has(attachedHost.at(-1)!.kind)
       // A later ancestor fence ends the old descendant's attachment.
       // Otherwise a `+` in its payload can reopen the old host.
       if (attachedHost && depth < attachedHost.length - 1 && form.kind === 'fence') return true
@@ -2085,7 +2206,8 @@ export function ownLines(
     const host = attachedHost?.at(-1)
     return attachedCodeCloserAhead(fence, at, quotes, lines.length, closerRuns().widest,
       host?.markerCol ?? 0, quotedMeasure, attachedHost && flushLeftMarkerLineItem(attachedHost, fence) ? host!.col : null,
-      host?.line !== undefined && TRAILING_PLUS.test(lines[host.line]!.trimStart()))
+      host?.line !== undefined && TRAILING_PLUS.test(lines[host.line]!.trimStart()),
+      host?.kind === 'item' && host.plus === host.line ? host.col : null)
   }
 
   // A top-level item whose marker-line `+` took a fence left of its content column.

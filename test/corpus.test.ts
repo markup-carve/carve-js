@@ -1523,6 +1523,66 @@ const IMPLEMENTED = new Set([
   'a-container-owned-comment-run-is-one-writer-block',
   'a-document-owned-comment-run-stays-between-list-items',
   'a-lazy-braced-comment-uses-source-columns-in-every-host',
+  // Categories introduced by the carve#5700 spec pin.
+  'a-caption-code-span-ends-at-a-later-fence',
+  'a-cross-reference-id-is-atomic-inside-a-forced-span',
+  'a-declined-bracket-tail-releases-an-editorial-comment',
+  'a-description-plus-after-a-blank-reaches-its-host',
+  'a-description-s-own-line-plus-fence-keeps-its-trailing-blank',
+  'a-description-sibling-in-an-unclosed-attached-fence-is-payload',
+  'a-description-that-refuses-a-plus-reads-the-next-line-in-its-body',
+  'a-fence-after-an-attached-description-blank-opens-in-the-description',
+  'a-footnote-definition-between-sub-lists-separates-them',
+  'a-later-fence-opener-ends-a-description-after-a-refused-run',
+  'a-lazy-line-after-a-double-plus-note-has-no-sentinel',
+  'a-line-inside-an-open-inline-code-span-starts-no-brace-run',
+  'a-literal-bracket-region-cuts-an-inner-attribute',
+  'a-losing-duplicate-footnote-definition-s-plus-takes-nothing',
+  'a-losing-interleaved-note-plus-keeps-the-later-note-s-body',
+  'a-losing-note-plus-does-not-take-an-immediate-follower',
+  'a-losing-note-plus-keeps-a-later-sibling-outside-the-note',
+  'a-losing-note-plus-leaves-following-blocks-with-their-owner',
+  'a-marker-line-note-resumes-after-its-plus-block',
+  'a-nested-attached-fence-keeps-list-looseness-at-the-owning-item',
+  'a-nested-quoted-attribute-run-closes-the-outer-lazy-claim',
+  'a-new-list-after-a-note-attached-list',
+  'a-note-attached-fence-blank-ends-lazy-claim',
+  'a-note-attached-list-keeps-its-child-fence-payload',
+  'a-note-keeps-a-line-after-a-refused-plus',
+  'a-note-plus-after-a-blank-reaches-its-host',
+  'a-one-line-attribute-inside-an-open-code-span-is-code',
+  'a-passed-note-keeps-its-blank-separated-continuation',
+  'a-plus-at-a-quoted-fence-s-content-column-stays-payload',
+  'a-quoted-attribute-run-after-a-refused-note-plus-closes-the-quote',
+  'a-quoted-note-plus-refuses-an-offset-brace-run',
+  'a-quoted-note-run-uses-the-lazy-line-written-column',
+  'a-refused-brace-run-keeps-a-following-plus-literal',
+  'a-refused-brace-run-keeps-its-follower-in-an-attached-note',
+  'a-refused-plus-before-a-description-list-sibling-keeps-it-tight',
+  'a-region-marker-between-items-splits-the-list',
+  'a-shallower-line-ends-a-descendant-comment-span-and-opens-a-paragraph',
+  'a-sibling-marker-in-an-unclosed-attached-fence-is-payload',
+  'a-stacked-host-reads-its-shifted-closer-past-a-payload-line',
+  'a-terminal-heading-hard-break-keeps-its-implicit-reference',
+  'a-top-level-sibling-marker-in-an-unclosed-attached-fence-is-payload',
+  'abbreviations-test-rendered-adjacency-across-inline-nodes',
+  'an-attribute-line-between-two-sub-lists-of-an-item-makes-the-second-a-different-list',
+  'an-attribute-line-left-of-a-note-s-body-column-is-the-plus-host-s',
+  'an-escaped-row-closer-stays-in-an-open-code-span',
+  'an-indented-closer-protects-a-refused-run-s-fence-follower',
+  'an-item-own-line-plus-fence-keeps-its-trailing-blank',
+  'an-own-line-plus-fence-ends-before-a-shifted-run',
+  'an-own-line-plus-fence-keeps-a-quote-blank',
+  'an-own-line-plus-note-fence-keeps-its-trailing-blank',
+  'an-unclosed-backtick-follower-stays-in-a-note-paragraph',
+  'an-unpaired-fence-folds-in-an-outer-item',
+  'code-attributes-keep-dollar-sequences',
+  'del-is-ascii-nonalphanumeric-for-heading-slugs',
+  'invisible-note-definitions-do-not-loosen-a-list-item',
+  'literal-angle-brackets-in-heading-reference-key',
+  'nested-link-with-an-inline-note-unwraps',
+  'open-code-makes-brace-run-text-before-fence',
+  'repeated-losing-note-pluses-leave-the-block-with-the-winning-note',
 ])
 
 /**
@@ -1550,7 +1610,16 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
 ])
-const behindSpec = new Map<string, string>()
+const behindSpec = new Map<string, string>([
+  // Pending carve-js PR #4813 (#5670); this pin brings the ruling before its port.
+  ["1026-abbreviations-test-rendered-adjacency-across-inline-nodes", "<p><a href=\"\">w<abbr title=\"t\">HTML</abbr></a></p>"],
+  // Pending carve-js PR #4813 (#5670); this pin brings the ruling before its port.
+  ["1026-abbreviations-test-rendered-adjacency-across-inline-nodes-2", "<p>w<strong><abbr title=\"t\">HTML</abbr></strong></p>"],
+  // Pending carve-js PR #4813 (#5671); this pin brings the ruling before its port.
+  ["1027-a-region-marker-between-items-splits-the-list", "<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>"],
+  // Pending carve-js PR #4813 (#5673); this pin brings the ruling before its port.
+  ["1027-a-declined-bracket-tail-releases-an-editorial-comment", "<p>[[][[]]{#1}][]#}</p>"],
+])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
 // shifts whenever a section is inserted upstream. Keying the allowlist by it

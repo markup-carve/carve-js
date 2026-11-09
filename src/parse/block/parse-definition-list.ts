@@ -586,7 +586,7 @@ export function createDefinitionListParser(
       nestedLeadScans = descriptionLeadFenceScans(first)
       lazyState.lazyFoldable = nestedLeadScans.paragraphOpen(bodyLines, lazyState.lazyFoldable, true)
       // Form B: `+` pull-left continuation.
-      const admitPlusContinuation = (ln: string): DescriptionVerdict => {
+      const admitPlusContinuation = (ln: string, forceDescription = false): DescriptionVerdict => {
         const descriptionDecision = isContinuationMarker(ln) ? markerDecision(lexer, lexer.pos) : undefined
         if (first.trim() === '+' && descriptionDecision?.owner?.kind === 'list' &&
             !isListMarkerLine(lexer.peek(1)?.trimStart() ?? '') &&
@@ -600,7 +600,7 @@ export function createDefinitionListParser(
           lexer.consume()
           return 'continue'
         }
-        if (isContinuationMarker(ln) && descriptionDecision?.owner?.kind === 'description') {
+        if (isContinuationMarker(ln) && (descriptionDecision?.owner?.kind === 'description' || forceDescription)) {
           const follower = lexer.peek(1)
           if (lazyState.opaque?.kind === 'code' &&
               (follower === undefined || isBlankLine(follower) || indentColumns(follower) !== 0)) {
@@ -615,6 +615,25 @@ export function createDefinitionListParser(
             0,
             true,
           )
+          const attachedRun = /^(`{3,}|~{3,})/.exec(attached[0] ?? '')?.[1]
+          if (attachedRun !== undefined) {
+            const root = lexer.documentRoot ?? lexer
+            const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
+            let pastBlank = false
+            for (let index = 1; index < attached.length; index++) {
+              pastBlank ||= isBlankLine(attached[index]!)
+              const source = authored[attachedLineNumbers[index]! - 1]
+              if (!pastBlank || source === undefined || isBlankLine(source)) continue
+              const column = sourceColumn(source, quotePrefixDepth(markerSource))
+              if (column > bodySourceColumn - contentCol && column < bodySourceColumn &&
+                  fenceCloseRe(attachedRun).test(source.trimStart())) {
+                lexer.pos -= attached.length - index
+                attached.length = index
+                attachedLineNumbers.length = index
+                break
+              }
+            }
+          }
           attachedOpenCodeFence = keepsOpenCodeFence(attached)
           if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
             for (const closer of bodyFenceClosers(bodyLines)) {
@@ -879,8 +898,40 @@ export function createDefinitionListParser(
       // outer block stream see it unchanged.
       const admitBlankLine = (): 'continue' | 'stop' => {
         const { offset: look, line: after } = nextContainerContent(lexer)
+        const plusAtHost = after !== undefined && isContinuationMarker(after.trimStart()) &&
+          sourceColumn(sourceLineAt(lexer, lexer.pos + look, after), quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol
+        if (attachedOpenCodeFence && bodyEndsInOpenCodeFence(bodyLines) && plusAtHost) {
+          // The own-line fence keeps its blank, then the next marker reaches
+          // the description after that fence ends (F04, carve#5639).
+          for (let k = 0; k < look; k++) {
+            bodyBaseEligible.add(bodyLines.length)
+            bodyLines.push('')
+            bodySourceLines.push(lexer.peek())
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+            track('')
+            lexer.consume()
+          }
+          for (const closer of bodyFenceClosers(bodyLines)) {
+            bodyLines.push(closer)
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos - 1))
+            track(closer)
+          }
+          attachedOpenCodeFence = false
+          const resumed = admitPlusContinuation(lexer.peek() ?? '', true)
+          if (resumed !== undefined) return resumed
+          return 'continue'
+        }
         if (attachedOpenCodeFence && bodyEndsInOpenCodeFence(bodyLines) &&
             (after === undefined || indentColumns(after, contentCol) < contentCol)) {
+          for (let k = 0; k < look; k++) {
+            bodyBaseEligible.add(bodyLines.length)
+            bodyLines.push('')
+            bodySourceLines.push(lexer.peek())
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+            track('')
+            lexer.consume()
+          }
           for (const closer of bodyFenceClosers(bodyLines)) {
             bodyLines.push(closer)
             bodySourceLines.push(undefined)
@@ -902,6 +953,10 @@ export function createDefinitionListParser(
           after !== undefined &&
           !isBlankLine(after) &&
           (indentColumns(after, contentCol) >= contentCol ||
+            // A later marker at this body's marker column can reach it
+            // through the blank (PART 9 §17 L3, carve#5639).
+            (isContinuationMarker(after.trimStart()) &&
+              sourceColumn(sourceLineAt(lexer, lexer.pos + look, after), quotePrefixDepth(markerSource)) === bodySourceColumn - contentCol) ||
             // A blank hidden by a verse span cannot end the stanza that preceded it.
             (lazyState.literalColon?.opaque?.belowBaseCloses === true && verseStanzaOpen(lazyState)) ||
             // A blank inside a live span is payload; a comment line below the column still closes it (§28).
@@ -1193,6 +1248,22 @@ export function createDefinitionListParser(
       //    CommonMark lazy rule list items and block quotes use, matching djot).
       runIndentationContainer(lexer, 'description', 0, contentCol, quotePrefixDepth(markerSource), (admission) => {
         const ln = admission.line
+        const source = (lexer.documentRoot ?? lexer).authoredRootLines ??
+          (lexer.documentRoot ?? lexer).authoredLines ?? lexer.rootLines ?? lexer.lines
+        const written = source[lexer.lineNumber(lexer.pos) - 1] ?? ln
+        const writtenColumn = sourceColumn(written, quotePrefixDepth(markerSource))
+        if (attachedOpenCodeFence && /^(`{3,}|~{3,})[ \t]*$/.test(ln.trimStart()) &&
+            writtenColumn > bodySourceColumn - contentCol && writtenColumn < bodySourceColumn &&
+            lexer.pos > 0 && isBlankLine(source[lexer.lineNumber(lexer.pos) - 2] ?? '')) {
+          for (const closer of bodyFenceClosers(bodyLines)) {
+            bodyLines.push(closer)
+            bodySourceLines.push(undefined)
+            bodyLineNumbers.push(lexer.lineNumber(lexer.pos - 1))
+            track(closer)
+          }
+          attachedOpenCodeFence = false
+          return 'stop'
+        }
         if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
         const early = admitPlusContinuation(ln)
         if (early !== undefined) return early

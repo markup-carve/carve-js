@@ -2134,6 +2134,24 @@ export class ParseSession extends InlineParseSession {
       0,
       true,
     )
+    const firstFence = attached[0] ?? ''
+    const fence = RE_FENCE.exec(firstFence) ?? RE_RAW_FENCE.exec(firstFence)
+    const run = fence === null ? undefined : RE_FENCE.test(firstFence) ? fence[2]! : fence[1]!
+    if (run !== undefined && !attached.slice(1).some(line => fenceCloseRe(run).test(line)) &&
+        lexer.peek() !== undefined && isBlankLine(lexer.peek()!)) {
+      // An own-line quote attachment retains its fence's blank. Later lines
+      // bearing this quote's prefix are still payload, with that prefix read
+      // by the quote before the fence (PART 0 S1, carve#5658).
+      while (lexer.peek() !== undefined) {
+        const next = lexer.peek()!
+        const content = isBlankLine(next) ? '' : quotedLineText(next, lexer.lineTerminatorFree(lexer.pos))
+        if (content === null) break
+        attached.push(content)
+        attachedLineNumbers.push(lexer.lineNumber(lexer.pos))
+        lexer.consume()
+        if (fenceCloseRe(run).test(content)) break
+      }
+    }
     if (attached.length > 0) {
       lexer.attachmentBoundaries.add(attachedLineNumbers[0]!)
       // An earlier probe may have read these lines as lazy; the `+` decides them.
@@ -2336,7 +2354,7 @@ export class ParseSession extends InlineParseSession {
     // quote's block position. The quote lexer carries the note's synthetic
     // margin, so restore the run's authored relative columns before parsing.
     const root = lexer.documentRoot ?? lexer
-    const authoredLines = root.authoredRootLines ?? root.authoredLines
+    const authoredLines = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
     if (authoredLines !== undefined) for (let i = 1; i < q.inner.length; i++) {
       const note = authoredLines[q.innerLineNumbers[i - 1]! - 1]
       const opener = authoredLines[q.innerLineNumbers[i]! - 1]
@@ -2344,13 +2362,17 @@ export class ParseSession extends InlineParseSession {
           !/^\[\^[^\]]+\]:[ \t]+\+[ \t]*$/.test(sourceQuoteBody(note)) ||
           !sourceQuoteBody(opener).startsWith('{') || quotePrefixDepth(note) !== quotePrefixDepth(opener)) continue
       const depth = quotePrefixDepth(opener)
-      const column = sourceColumn(opener, depth)
+      const column = sourceQuoteLocalColumn(opener, depth)
       const run: string[] = []
       for (let j = i; j < q.inner.length; j++) {
         const source = authoredLines[q.innerLineNumbers[j]! - 1]
-        if (source === undefined || quotePrefixDepth(source) !== depth ||
-            j > i && sourceColumn(source, depth) <= column) break
-        run.push(' '.repeat(sourceColumn(source, depth) - column) + sourceQuoteBody(source))
+        if (source === undefined) break
+        const sourceDepth = quotePrefixDepth(source)
+        if (sourceDepth !== depth && !(j > i && sourceDepth === 0 && depth > 0 &&
+            lexer.quoteLazyLines.has(q.innerLineNumbers[j]!))) break
+        const writtenColumn = sourceQuoteLocalColumn(source, sourceDepth)
+        if (j > i && writtenColumn <= column) break
+        run.push(' '.repeat(writtenColumn - column) + sourceQuoteBody(source))
         if (source.includes('}')) {
           if (parseBlockAttributeRun(run.join('\n')) !== null) {
             const directNote = /^\s*\[\^/.test(q.inner[i - 1]!)
@@ -2923,11 +2945,16 @@ export class ParseSession extends InlineParseSession {
     const braceScan: { closerless?: number } = {}
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
+    let openInlineComment = false
     const scanInlineCode = (line: string): void => {
       const destinations = line.includes('](') ? destinationSlotEnds(line) : undefined
       let bracketDepth = 0
       let closedLabel = false
       for (let i = 0; i < line.length; i++) {
+        if (openInlineComment) {
+          if (line[i] === '%' && line[i + 1] === '}') { openInlineComment = false; i++ }
+          continue
+        }
         // A complete link or image tail owns its destination and title.
         if (openInlineCode === 0 && line[i] === '(' && closedLabel && destinations?.has(i)) {
           i = destinations.get(i)! - 1
@@ -2941,6 +2968,11 @@ export class ParseSession extends InlineParseSession {
         closedLabel = false
         // A backslash inside an open code span is code text, not an escape.
         if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
+        if (openInlineCode === 0 && line[i] === '{' && line[i + 1] === '%') {
+          openInlineComment = true
+          i++
+          continue
+        }
         if (line[i] !== '`') continue
         let end = i + 1
         while (line[end] === '`') end++
@@ -2981,7 +3013,7 @@ export class ParseSession extends InlineParseSession {
       }
       // Every line start is block position, a continuation line included (carve#5189).
       if (codeInclude && lines.length > 0) break
-      const refusedLines = flattened || openInlineCode !== 0 ? 0 : refusedBraceLines(lexer, braceScan)
+      const refusedLines = flattened || openInlineCode !== 0 || openInlineComment ? 0 : refusedBraceLines(lexer, braceScan)
       if (refusedLines > 0) {
         const start = lines.length
         for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
@@ -3029,7 +3061,7 @@ export class ParseSession extends InlineParseSession {
           (lexer.consumesHostedLinkDefs === 'lazy' &&
             lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))))) &&
           this.isLinkDefLine(stripLazyFrame(ln))) ||
-          (openInlineCode !== 0 && ln.trimStart().startsWith('{')
+          ((openInlineCode !== 0 || openInlineComment) && ln.trimStart().startsWith('{')
             ? false : startsInterruptingBlock(lexer)) ||
           (lexer.hostedFootnoteLines.has(lexer.lineNumber(lexer.pos)) &&
             !ln.startsWith(LAZY_FRAME) && RE_FOOTNOTE_DEF.test(ln.trimStart())))
