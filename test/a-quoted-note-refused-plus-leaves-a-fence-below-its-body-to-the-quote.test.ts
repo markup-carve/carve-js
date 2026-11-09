@@ -13,9 +13,10 @@ it('keeps a fence one column right of a quoted note marker whole in the quote', 
   }
 })
 
-it('still gives the note a paragraph one column right of its marker', () => {
+it('keeps a paragraph one column right of its marker in the quote (carve#5627)', () => {
   const html = carveToHtml('> [^m]: +\n>  x\n\nsee[^m]\n')
-  expect(html).toContain('<li id="fn1">\n      <p>x<a')
+  expect(html).toContain('<blockquote><p>x</p></blockquote>')
+  expect(html).toContain('<li id="fn1">\n      <p><a')
 })
 
 it('reads a tab-indented block follower of a refused quoted note plus as that block', () => {
