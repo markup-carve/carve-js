@@ -2417,7 +2417,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // An abutting marker attribute can leave the line's indentation in
       // the lexer frame. Recover that frame before assigning a comment opener
       // to the item whose content column it reaches.
-      if (commentFenceRun(l.trimStart()) !== undefined) {
+      if (head.attr !== null && commentFenceRun(l.trimStart()) !== undefined) {
         lw += lexer.lineStartColumn(lexer.pos) - lexer.lineStartColumn(itemStartLineIndex)
       }
       // The note may have ended while this item's paragraph still owns a
