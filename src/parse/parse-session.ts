@@ -2662,8 +2662,20 @@ export class ParseSession extends InlineParseSession {
     } else {
       const firstBlock = at(attributeLines)
       const attachedCode = firstBlock !== undefined && (RE_FENCE.test(firstBlock) || RE_RAW_FENCE.test(firstBlock))
+      let refusedInlineCloser: RegExp | null = null
       while (lexer.peek(take) !== undefined) {
         const candidate = lexer.peek(take)!
+        const visible = at(take) ?? candidate
+        let openedRefusedInline = false
+        if (refusedInlineCloser === null) {
+          const opener = RE_FENCE.exec(visible.trimStart())?.[2] ?? RE_RAW_FENCE.exec(visible.trimStart())?.[1]
+          if (opener && isRefusedBraceRun(at, take)) {
+            const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length}${opener[0] === '`' ? '' : ','}}[ \\t]*$`)
+            for (let n = take + 1; at(n) !== undefined && !isBlankLine(at(n)!); n++) {
+              if (closer.test(at(n)!)) { refusedInlineCloser = closer; openedRefusedInline = true; break }
+            }
+          }
+        }
         // The first block may start at a nested item's marker column. Once a
         // code fence has opened there, a line below that column is outside its
         // host even when the attachment boundary accepts it as lazy text.
@@ -2685,8 +2697,9 @@ export class ParseSession extends InlineParseSession {
         // until its first blank, not only a `+` line (PART 0 S1, carve#5499).
         const codePayload = attachedCode && take > attributeLines && !isBlankLine(candidate) &&
           indentColumns(at(take)!) >= indentColumns(firstBlock)
-        if (!codePayload && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
+        if (refusedInlineCloser === null && !codePayload && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
           (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
+        if (!openedRefusedInline && refusedInlineCloser?.test(visible)) refusedInlineCloser = null
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition, attributeLines)
