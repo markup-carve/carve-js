@@ -33,3 +33,14 @@ it.each(['  # h', '  > q', '  | a |', '  ```\n  code\n  ```'])('keeps a nested b
   expect(html, block).not.toContain('</ul>\n    <')
 })
 
+it.each([3, 4])('hands a different list kind at column %i back to the description', (column) => {
+  expect(carveToHtml(`:: t\n: +\n1. li\n+\n${' '.repeat(column)}- sib\n`)).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <ul>\n      <li>sib</li>\n    </ul>\n  </dd>\n</dl>')
+})
+
+it('keeps a body-column sibling after the shifted marker', () => {
+  expect(carveToHtml(':: t\n: +\n1. li\n+\n   - sib\n  - tail\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <ol>\n      <li>li</li>\n    </ol>\n    <ul>\n      <li>sib</li>\n      <li>tail</li>\n    </ul>\n  </dd>\n</dl>')
+})
+
+
