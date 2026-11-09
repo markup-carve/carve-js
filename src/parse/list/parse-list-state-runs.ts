@@ -24,6 +24,8 @@ export interface LazyLine {
   readonly authoredFenceColumns: number | undefined
   readonly authoredFenceWhitespace: number | undefined
   readonly authoredQuoteParagraphOpen: boolean
+  /** Width of the inline code span the paragraph holds open before this line, or 0. */
+  inlineCodeOpen?: number
   readonly wasDescendantColumn: boolean
   readonly wasClosedColon: boolean
   readonly wasClosedLiteralComment: boolean

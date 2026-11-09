@@ -469,8 +469,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const column = line.atContentColumn
       ? line.facts?.whitespace ?? indentColumns(content)
       : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))
-    // At block start, a run indented past the content column is still a run (CARVE-P2-035, carve#5610).
-    const runText = line.atContentColumn && state.attrRun === null && !state.lazyFoldable ? content.trimStart() : content
+    // A run indented past the content column is still a run, unless an open code span holds it (CARVE-P2-035, carve#5610).
+    const runText = line.atContentColumn && state.attrRun === null && line.inlineCodeOpen === 0 ? content.trimStart() : content
     const opener = state.attrRun === null
     if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
     // A run that lazily continues a nested quote's paragraph is that quote's text, not the item's.
@@ -954,6 +954,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       inDescriptionBody(state, indentColumns(content))
     const line = beginLine(content, state, atContentColumn, hasCommentCloser, facts,
       hasLiteralCommentCloser, authoredFenceColumns, authoredFenceWhitespace, authoredQuoteParagraphOpen)
+    line.inlineCodeOpen = state.lazyFoldable ? state.inlineCodeOpen ?? 0 : 0
+    state.inlineCodeOpen = pairInlineCode(content, line.inlineCodeOpen)
     const trimmed = content.trimStart()
     // A comment line or span is invisible, so it leaves the term's entry open.
     const termOpen = state.inDefList === 'term' && trimmed !== '' && !trimmed.startsWith('%%') && state.opaque?.kind !== 'comment'
@@ -967,4 +969,19 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
   }
 
   return trackItemLazyState
+}
+
+/** The open inline code width after `line`, pairing backtick runs as parseParagraph does. */
+function pairInlineCode(line: string, open: number): number {
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '\\') { i++; continue }
+    if (line[i] !== '`') continue
+    let end = i + 1
+    while (line[end] === '`') end++
+    const width = end - i
+    if (open === 0) open = width
+    else if (open === width) open = 0
+    i = end - 1
+  }
+  return open
 }
