@@ -550,7 +550,7 @@ export function lazyContinuationEndsList(line: string, lexer: Lexer): boolean {
  * Tracking it here as well moved nothing over 1968 corpus documents and 13776
  * generated shapes.
  */
-export interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean; holder?: number }
+export interface DescendantOpaque { close: RegExp; base: number; markerLine?: boolean; holder?: number; rebasedTab?: boolean }
 
 export function isRetainableLineComment(lexer: Lexer, content: string): boolean {
   if (!RE_COMMENT_LINE.test(content.trimStart())) return false
