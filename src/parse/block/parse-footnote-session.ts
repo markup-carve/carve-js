@@ -1103,6 +1103,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
       bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
         : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn))
+      // After an unpaired forced fence line, later blocks use the note body base.
+      if (lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined &&
+          opensCodeFence((bodyLines.at(-2) ?? '').trimStart()) &&
+          lineOpensItemBlock(content.trimStart()) && content !== content.trimStart() && !framedBelow)
+        bodyLines[bodyLines.length - 1] = content.trimStart()
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn

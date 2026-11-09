@@ -127,7 +127,9 @@ export function keepsRefusedRunLine(state: { refusedRunKept?: RegExp | null | un
   const marker = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
   const close = marker === undefined ? undefined : fenceCloseRe(marker)
   // Without a closer before the paragraph ends the opener is kept alone.
-  state.refusedRunKept = close !== undefined && keptFenceCloserAhead?.(close) !== false ? close : undefined
+  // Only a confirmed closer extends the forced follower. Without a lookahead,
+  // the following line returns to ordinary block interruption.
+  state.refusedRunKept = close !== undefined && keptFenceCloserAhead?.(close) === true ? close : undefined
   return true
 }
 

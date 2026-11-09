@@ -2837,6 +2837,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             ? placed.trimStart()
           : placed
       if (markerTermText) dedented = LAZY_FRAME + sourceEntry
+      // Rebase the first ordinary block after an unpaired forced fence line.
+      if (lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined &&
+          lazyState.opaque === null && opensCodeFence((nested.at(-1) ?? '').trimStart()) &&
+          lineOpensItemBlock(placed.trimStart()) && indentColumns(placed) > 0) {
+        dedented = placed.trimStart()
+        lazyState.refusedBraceFollower = false
+      }
       if (pastDefinitionEntry && survivingItemParagraph &&
           definitionHostColumn === lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent &&
           (startsInterruptingBlock(lexer, placed.trimStart()) ||
