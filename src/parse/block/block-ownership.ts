@@ -3,6 +3,7 @@ import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
 import { CAPTION_COMMENT_ONLY, fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
+import { FOOTNOTE_BODY_COLUMN } from './parse-block-boundaries.js'
 import {
   commentOnlyParagraphEnd,
   isColonFenceOpener,
@@ -1740,6 +1741,7 @@ export function ownLines(
       const skippedNote = FOOTNOTE_DEF.exec(rest)
       if (skippedNote !== null) {
         const opener = k
+        const noteBodyColumn = col + FOOTNOTE_BODY_COLUMN
         // A later marker-line `+` is refused while this earlier claim is pending.
         // It opens no body, so its next visible line remains this claim's candidate.
         const pendingLabel = /\[\^([^\]]+)\]:/.exec(lines[at]!)?.[1]
@@ -1751,6 +1753,9 @@ export function ownLines(
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))
+          if (body.rest.startsWith('{') &&
+              (isAttrLine(trimEndSpaceTab(body.rest)) || wrappedAttrRun(trimEndSpaceTab(body.rest), quotes, k) !== null) &&
+              docColumn(lines[k]!, body.rest) < noteBodyColumn) break
           // An attribute line folds into the note's paragraph like text (CARVE-P9-013).
           if (body.rest === '' || /^::? /.test(body.rest) ||
               classify(body.rest, frames[0]!, k, body.col).kind !== 'text' && !isAttrLine(trimEndSpaceTab(body.rest))) break
