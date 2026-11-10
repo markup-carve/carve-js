@@ -2272,10 +2272,11 @@ export function ownLines(
     const openerColumn = docColumn(trimEndSpaceTab(lines[at]!), rest)
     let collected = rest
     for (let j = at + 1; j < lines.length; j++) {
+      // A line under fewer `>` than the run is lazy to its quote; it is measured past the prefixes it has.
       const source = lines[j]!
-      const quoted = quotedMeasure(j, depth)
-      const line = quoted === null ? source : quoted.rest
-      const column = quoted === null ? indentCols(source).col : docColumn(source, quoted.rest)
+      let line = indentCols(source).rest
+      for (let q = 0; q < depth && isQuoteLine(line); q++) line = indentCols(quoteRest(line)).rest
+      const column = docColumn(source, line)
       if (line.trim() === '' || column <= openerColumn || /^[ \t]*\{/.test(line)) return null
       const closed = line.includes('}')
       if (!closed && !isValidAttrPayload(`\n${line}\n`)) return null

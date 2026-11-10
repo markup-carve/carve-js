@@ -9,8 +9,15 @@ it.each([
   expect(carveToHtml(source)).toBe('<blockquote>\n\n</blockquote>\n<p>plain</p>')
 })
 
-it('closes a nested run through a continuation under fewer quote markers', () => {
-  expect(carveToHtml('> > {.x\n>    .y}\n')).toBe('<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>')
+it.each([
+  ['', '> > {.x\n>    .y}\n'],
+  [' behind padding', '> >  {.x\n>     .y}\n'],
+])('closes a nested run%s through a continuation under fewer quote markers', (_name, source) => {
+  expect(carveToHtml(source)).toBe('<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>')
+})
+
+it('keeps a padded nested run continued at its brace column as paragraph text', () => {
+  expect(carveToHtml('> >  {.x\n>    .y}\n')).toBe('<blockquote>\n  <blockquote><p>{.x\n.y}</p></blockquote>\n</blockquote>')
 })
 
 it('keeps a tab-led run continued at its brace column as paragraph text', () => {
