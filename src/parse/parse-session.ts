@@ -2,7 +2,7 @@ import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { braceRunHolds, type BraceRunHolds } from './block/brace-run-holds.js'
 import { destinationSlotEnds } from '../link-destination.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
-import { mergeRun } from '../coalesce-text-runs.js'
+import { occupiedPrivateUse, pickSentinelRun } from './inline/sentinel-run.js'
 import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import { endsAtConsumedMarker, entriesToWire } from '../ast/definition-list-wire.js'
@@ -3210,9 +3210,11 @@ export class ParseSession extends InlineParseSession {
           })
         : undefined
     const firstBoundary = paragraphBoundary(0, firstLead)
+    // A refused opener's `{` is the only literal byte; the paragraph is still one inline parse (carve#5830 rule A).
+    const literalBrace = literalBraces.length > 0 ? pickSentinelRun(occupiedPrivateUse(text), LITERAL_BRACE_BASE, 1)[0]! : ''
     const paragraphNode: Paragraph = {
       type: 'paragraph',
-      children: (codeIncludeLiteral || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
+      children: (codeIncludeLiteral || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(literalBrace === '' ? text : bracesAsStandIn(text, literalBraces, literalBrace), lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
         baseOffset: firstBoundary.offset,
         startLine: lexer.lineNumber(startLineIndex),
@@ -3220,67 +3222,7 @@ export class ParseSession extends InlineParseSession {
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
-    if (literalBraces.length > 0) {
-      const normalizedLines = text.split('\n')
-      const offsets = [0]
-      for (const line of normalizedLines) offsets.push(offsets.at(-1)! + line.length + 1)
-      const positionAt = (offset: number): { line: number; column: number; offset: number } => {
-        let line = 0
-        while (line + 1 < offsets.length && offsets[line + 1]! <= offset) line++
-        const point = anchors?.[line] ?? {
-          ...paragraphBoundary(line, line === 0 ? firstLead : 0),
-          line: lexer.lineNumber(startLineIndex + line),
-        }
-        const delta = offset - offsets[line]!
-        return { line: point.line, column: point.column + delta, offset: point.offset + delta }
-      }
-      const parseSegment = (from: number, to: number): Paragraph['children'] => {
-        const segment = text.slice(from, to)
-        const start = positionAt(from)
-        const lineAnchors = [start]
-        for (let i = 0; i < segment.length; i++) if (segment[i] === '\n') lineAnchors.push(positionAt(from + i + 1))
-        return this.parseInline(segment, lexer.abbrDefs, lexer.linkDefs, {
-          anchored: lexer.hasDocumentOffsets,
-          baseOffset: start.offset,
-          startLine: start.line,
-          startColumn: start.column,
-          ...(lineAnchors.length > 1 ? { lineAnchors } : {}),
-        })
-      }
-      let at = 0
-      paragraphNode.children = []
-      const addLiteralText = (from: number, to: number): void => {
-        if (from === to) return
-        const startPosition = positionAt(from), endPosition = positionAt(to)
-        const value = text.slice(from, to)
-        // A run joined across a stripped indent or quote prefix is not a source slice (CARVE-P12-022).
-        const pieces = value.split('\n')
-        let first = 0
-        while (first + 1 < offsets.length && offsets[first + 1]! <= from) first++
-        const sourceLine = (line: number): string => (lexer.rootLines ?? lexer.lines)[
-          (anchors?.[line]?.line ?? lexer.lineNumber(startLineIndex + line)) - 1] ?? ''
-        let contiguous = pieces.length === 1 || sourceLine(first).endsWith(pieces[0]!)
-        for (let piece = 1; piece < pieces.length && contiguous; piece++) {
-          const line = sourceLine(first + piece)
-          contiguous = piece === pieces.length - 1 ? line.startsWith(pieces[piece]!) : line === pieces[piece]
-        }
-        paragraphNode.children.push({ type: 'text', value,
-          ...(lexer.hasDocumentOffsets && contiguous ? { pos: {
-            startLine: startPosition.line, startColumn: startPosition.column, startOffset: startPosition.offset,
-            endLine: endPosition.line, endColumn: endPosition.column, endOffset: endPosition.offset,
-          } } : {}),
-        })
-      }
-      for (const line of literalBraces) {
-        const from = offsets[line]! + (normalizedLines[line]!.length - normalizedLines[line]!.trimStart().length)
-        if (from > at) paragraphNode.children.push(...parseSegment(at, from))
-        addLiteralText(from, from + 1)
-        at = from + 1
-      }
-      if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
-      const merged = mergeRun(paragraphNode.children as unknown as Array<Record<string, unknown>>)
-      if (merged !== null) paragraphNode.children = merged as unknown as Paragraph['children']
-    }
+    if (literalBrace !== '') restoreStandIn(paragraphNode.children, literalBrace, '{')
     if (codeIncludeLiteral) {
       const startOffset = firstBoundary.offset
       const startColumn = firstBoundary.column
@@ -3335,4 +3277,32 @@ function commentCloserAhead(lexer: Lexer): number {
     runs.set(lexer.pos + n, run)
   }
   return run.last
+}
+
+const LITERAL_BRACE_BASE = 0xe7b0
+
+/** `text` with the first `{` of each listed line replaced by `standIn`. */
+function bracesAsStandIn(text: string, lines: readonly number[], standIn: string): string {
+  const out = text.split('\n')
+  for (const line of lines) out[line] = out[line]!.replace('{', standIn)
+  return out.join('\n')
+}
+
+/** Replace `standIn` with `value` in every string of an inline tree. */
+function restoreStandIn(node: unknown, standIn: string, value: string): void {
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      const item: unknown = node[i]
+      if (typeof item === 'string') node[i] = item.replaceAll(standIn, value)
+      else restoreStandIn(item, standIn, value)
+    }
+    return
+  }
+  if (node === null || typeof node !== 'object') return
+  const record = node as Record<string, unknown>
+  for (const key of Object.keys(record)) {
+    const item = record[key]
+    if (typeof item === 'string') record[key] = item.replaceAll(standIn, value)
+    else restoreStandIn(item, standIn, value)
+  }
 }
