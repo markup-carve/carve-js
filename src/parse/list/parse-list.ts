@@ -3986,7 +3986,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           admission.kind === 'below' && content.trimStart().startsWith('{') &&
             !lineOpensBlock(l.trimStart()) && !isContinuationMarker(l) &&
             followsRefusedRunWithinHolder(l, true)) && !isBlankLine(l)) {
-        const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
+        // The lazy paragraph drops residual indentation. Strip it before framing so
+        // the sub-lexer's source anchor still begins at the follower's first text.
+        const follower = LAZY_FRAME + sliceColumns(l, contentCol, true).replace(/^[ \t]+/, '')
         nested.push(follower)
         nestedSourceLines.push(l)
         nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
