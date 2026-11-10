@@ -54,3 +54,19 @@ it('reads an empty colon line under a term on the item marker line as text', () 
     '<ul><li><dl><dt>t</dt></dl> : :</li></ul>',
   ))
 })
+
+it('opens no description span under a marker-line term with no text', () => {
+  expect(normalize(carveToHtml('- :: \n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize('<ul><li>:: : x :</li></ul>'))
+})
+
+it('opens no description span after deeper text ends a marker-line term', () => {
+  expect(normalize(carveToHtml('- :: t\n    x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt></dl> x :</li></ul>',
+  ))
+})
+
+it('opens no description span after deeper text ends a term in the body', () => {
+  expect(normalize(carveToHtml('- a\n  :: t\n    x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li>a<dl><dt>t</dt></dl> x :</li></ul>',
+  ))
+})
