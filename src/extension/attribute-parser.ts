@@ -33,9 +33,15 @@ export function isValidAttrPayload(inner: string): boolean {
  */
 const ATTR_ITEM_SRC =
   '(?:#[a-zA-Z0-9_][\\w-]*)|(?:\\.[a-zA-Z0-9_][\\w-]*)|(?:[a-zA-Z_][\\w-]*=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^}|"\'\\\\ \\t\\n\\r]+))|(?::(?:[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*)?)|(?:[a-zA-Z][\\w-]*)'
+const ATTR_ITEM = new RegExp(`^(?:${ATTR_ITEM_SRC})$`)
 const ATTR_PAYLOAD = new RegExp(
   `^[ \\n\\r]*(?:(?:${ATTR_ITEM_SRC})(?:[ \\n\\r]+(?:${ATTR_ITEM_SRC}))*[ \\n\\r]*)?$`,
 )
+
+/** Whether one whitespace-free token is a whole attribute item. */
+export function isValidAttrItem(token: string): boolean {
+  return ATTR_ITEM.test(token)
+}
 
 /**
  * The same question for an INLINE attribute block, which additionally requires

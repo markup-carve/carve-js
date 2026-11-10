@@ -176,6 +176,7 @@ import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidInlineAttrPayload } from '../extension/attribute-parser.js'
+import { inlineAttributeEnds } from './block/inline-attribute-hold.js'
 import { leadingAttributeRun, wrappedAttributeLinesAt } from './block/leading-attribute-run.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -2968,8 +2969,20 @@ export class ParseSession extends InlineParseSession {
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
     let openInlineComment = false
+    // A `{%` holds later lines only when its `%}` follows in this nonblank run (carve#5740).
+    let lastCommentCloser: number | undefined
+    const commentClosesAhead = (): boolean => {
+      if (lastCommentCloser === undefined) {
+        lastCommentCloser = -1
+        for (let n = 0; lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!); n++)
+          if (lexer.peek(n)!.includes('%}')) lastCommentCloser = lexer.pos + n
+      }
+      return lastCommentCloser >= lexer.pos
+    }
     const scanInlineCode = (line: string): void => {
       const destinations = line.includes('](') ? destinationSlotEnds(line) : undefined
+      const attributeEndAt = inlineAttributeEnds(line)
+      const lastCommentCloserOnLine = line.lastIndexOf('%}')
       let bracketDepth = 0
       let closedLabel = false
       for (let i = 0; i < line.length; i++) {
@@ -2988,10 +3001,14 @@ export class ParseSession extends InlineParseSession {
           else if (line[i] === ']' && bracketDepth > 0) { bracketDepth--; closedLabel = true; continue }
         }
         closedLabel = false
+        if (openInlineCode === 0) {
+          const attributeEnd = attributeEndAt(i)
+          if (attributeEnd !== -1) { i = attributeEnd; continue }
+        }
         // A backslash inside an open code span is code text, not an escape.
         if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
         if (openInlineCode === 0 && line[i] === '{' && line[i + 1] === '%') {
-          openInlineComment = true
+          if (lastCommentCloserOnLine > i + 1 || commentClosesAhead()) openInlineComment = true
           i++
           continue
         }
