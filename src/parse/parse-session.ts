@@ -162,6 +162,7 @@ import {
   commentFenceRun,
   trimEndSpaceTab,
   tryCollectBlockAttributes,
+  probeBlockAttributes,
   unclosedContainerFromOpener,
   unescapeAttrValue,
   unorderedMatch,
@@ -293,6 +294,43 @@ function commentBetweenListSiblings(lexer: Lexer): boolean {
   return before !== undefined && (indentColumns(before) > column || isListMarkerLine(before.trimStart()))
 }
 
+// A lazy paragraph line has already been folded into its owner. Its
+// authored column, after quote prefixes, is the P2-035 comparison frame.
+function authoredRunColumn(lexer: Lexer, offset: number): number {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos + offset) - 1]
+  if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
+  return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+}
+
+const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
+
+/**
+ * The source column, after quote prefixes, that the continuations of a brace
+ * run opened behind a marker must pass (CARVE-P2-035): its `{`, or the body
+ * column of a note head it follows. Null when the run starts its source line.
+ */
+function markerLineRunColumn(lexer: Lexer, first: string): number | null {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
+  const rest = source === undefined ? null : sourceQuoteRest(source, quotePrefixDepth(source))
+  if (rest == null) return null
+  const at = rest.indexOf(first.trimStart())
+  if (at <= leadingWhitespace(rest)) return null
+  const head = NOTE_HEAD_BEFORE_RUN.exec(rest.slice(0, at))
+  return head ? sourceColumnAt(rest, head.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(rest, at)
+}
+
+/** Whether the block attribute run of `count` lines at the cursor, opened behind a marker, has a continuation short of its `{`. */
+function markerLineRunShallow(lexer: Lexer, count: number): boolean {
+  const first = lexer.peek()
+  if (count < 2 || first === undefined) return false
+  const column = markerLineRunColumn(lexer, stripLazyFrame(first))
+  if (column === null) return false
+  for (let n = 1; n < count; n++) if (authoredRunColumn(lexer, n) <= column) return true
+  return false
+}
+
 /**
  * A block brace run refused only because a continuation is too shallow.
  * `memo.closerless` is the lexer index a `{%` scan reached without a `%}`; no later
@@ -311,26 +349,12 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
   const lazyBrace = firstRaw?.startsWith(LAZY_FRAME) ||
     lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
     lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
-  // A lazy paragraph line has already been folded into its owner here. Its
-  // authored column, after quote prefixes, is the P2-035 comparison frame.
-  const authoredColumn = (offset: number): number => {
-    const index = lexer.pos + offset
-    const root = lexer.documentRoot ?? lexer
-    const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
-    if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
-    return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
-  }
-  const root = lexer.documentRoot ?? lexer
-  const openerSource = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
-  const quoteLocalSource = openerSource === undefined ? undefined : sourceQuoteRest(openerSource, quotePrefixDepth(openerSource))
-  const authoredOpenerAt = comment && quoteLocalSource != null
-    ? quoteLocalSource.indexOf(first.trimStart()) : -1
+  const authoredColumn = (offset: number): number => authoredRunColumn(lexer, offset)
   // A marker-line opener is rebased to the host's content column. Compare its
   // continuation with the brace's written column, not the rebased zero.
-  const markerLineComment = authoredOpenerAt > 0 && quoteLocalSource != null &&
-    authoredOpenerAt > leadingWhitespace(quoteLocalSource)
-  const sourceOpenerColumn = markerLineComment
-    ? sourceColumnAt(quoteLocalSource, authoredOpenerAt) : lazyBrace ? authoredColumn(0) : openerColumn
+  const markerColumn = markerLineRunColumn(lexer, first)
+  const markerLineComment = markerColumn !== null
+  const sourceOpenerColumn = markerColumn ?? (lazyBrace ? authoredColumn(0) : openerColumn)
   const lines: string[] = []
   let shallow = false
   let quoted: string | null = null
@@ -1118,7 +1142,8 @@ export class ParseSession extends InlineParseSession {
       if (indent < baseIndent) break
 
       const attrLineIndex = lexer.pos
-      const ba = tryCollectBlockAttributes(lexer)
+      const probe = probeBlockAttributes(lexer)
+      const ba = probe === null || markerLineRunShallow(lexer, probe.count) ? null : tryCollectBlockAttributes(lexer)
       if (ba) {
         pending = pending ? accumulateAttrs(pending, ba) : ba
         if (pendingAt === null) pendingAt = attrLineIndex
