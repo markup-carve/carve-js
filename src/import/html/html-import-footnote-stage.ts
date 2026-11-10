@@ -154,6 +154,7 @@ export class FootnoteStage {
      * candidates - only the ORDER in which the two halves ran.
      */
     const carriers = this.footnoteCarriers(definitions)
+    if (!heuristic) for (const definition of definitions) this.reportDefinitionAttributes(definition.block)
     definitions.forEach((definition, index) => {
       const label = carriers[index]!.label
       if (index === 0) this.removeFootnoteSeparator(definition.block)
@@ -373,6 +374,36 @@ export class FootnoteStage {
       taken.add(String(next))
       return { label: String(next), inline: entry.inline }
     })
+  }
+
+  /**
+   * A footnote definition has no attribute slot, so an authored attribute on
+   * the note element is lost and reported (CARVE-P9-066, carve#5747). The id
+   * is navigation the renderer regenerates, and the note role and the carriers
+   * are read rather than authored.
+   */
+  private reportDefinitionAttributes(block: P5Node): void {
+    for (const attribute of domAttrs(block) ?? []) {
+      const name = attribute.name.toLowerCase()
+      if (name === 'id' || RESERVED_CARRIER_ATTRIBUTES.has(name)) continue
+      if (name === 'role' && ['doc-endnote', 'doc-footnote'].includes(attribute.value.trim().toLowerCase())) continue
+      if (name === 'style') {
+        for (const declaration of attribute.value.split(';')) {
+          const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase()
+          if (declaration.includes(':') && property) {
+            this.context.report.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', 'footnote', block)
+          }
+        }
+        continue
+      }
+      this.context.report.add(
+        'attribute-dropped',
+        `Dropped ${name} on <${domTag(block)}>: a footnote definition has no attribute slot`,
+        'info',
+        'footnote',
+        block,
+      )
+    }
   }
 
   /**

@@ -78,9 +78,13 @@ describe('footnote carrier recovery (carve#2918)', () => {
         expect(result.value).toBe('[^1]\n\n[^1]: body\n')
         expect(result.report.diagnostics.map(({ code, severity, fidelity, confidence }) => ({
           code, severity, fidelity, confidence,
-        }))).toEqual([{
-          code: 'attribute-dropped', severity: 'warning', fidelity: 'dropped', confidence: 'exact',
-        }])
+        }))).toEqual([
+          { code: 'attribute-dropped', severity: 'warning', fidelity: 'dropped', confidence: 'exact' },
+          // carve#5747: a former data-djot- name is an authored attribute the definition cannot hold.
+          ...Array.from({ length: inline ? 2 : 1 }, () => ({
+            code: 'attribute-dropped', severity: 'info', fidelity: 'dropped', confidence: 'exact',
+          })),
+        ])
         const attributes = authoredAttributeNames(htmlToAst(html, { mode }).value)
         for (const name of fixtures[0]!.forbiddenAuthoredAttributes) expect(attributes).not.toContain(name)
       })
@@ -91,6 +95,22 @@ describe('footnote carrier recovery (carve#2918)', () => {
       const result = htmlToCarve(html, { mode })
       expect(result.value).toBe('[^1] [^1]\n\n[^1]: body\n')
       expect(result.report.diagnostics.map(({ code }) => code)).toEqual(['attribute-dropped'])
+    })
+  }
+
+  for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
+    it(`${mode} reports authored attributes on an endnote item (carve#5747)`, () => {
+      const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
+        + '<section role="doc-endnotes"><ol><li id="fn1" role="doc-endnote" class="k" title="t" hidden data-x="1" style="color: red"><p>body</p></li></ol></section>'
+      const result = htmlToCarve(html, { mode })
+      expect(result.value).toBe('[^1]\n\n[^1]: body\n')
+      expect(result.report.diagnostics.map(({ code, severity, message }) => ({ code, severity, message }))).toEqual(
+        ['class', 'title', 'hidden', 'data-x'].map((name) => ({
+          code: 'attribute-dropped',
+          severity: 'info',
+          message: `Dropped ${name} on <li>: a footnote definition has no attribute slot`,
+        })).concat([{ code: 'style-unmapped', severity: 'info', message: 'CSS declaration color was not mapped' }]),
+      )
     })
   }
 
