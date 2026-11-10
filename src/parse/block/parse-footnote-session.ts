@@ -8,7 +8,7 @@ import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
 import { commentOnlyParagraphEnd, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
-import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, sourceQuoteRest, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
@@ -60,6 +60,17 @@ function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
   const root = lexer.documentRoot ?? lexer
   const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
   return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+}
+
+/** The quote-local body column of the note `def`, the end of line `index`, where it was written; -1 without an open run on that line. */
+function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attached: boolean, state: { attrRun?: string | null }): number {
+  if (attached || state.attrRun == null) return -1
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
+  if (source === undefined) return -1
+  const text = trimEndSpaceTab(sourceQuoteRest(source, quotePrefixDepth(source)) ?? source)
+  const head = trimEndSpaceTab(def.trimStart())
+  return text.endsWith(head) ? sourceColumnAt(text, text.length - head.length) + FOOTNOTE_BODY_COLUMN : -1
 }
 
 /** A refused run forces the fence line only; later blocks return to the note body base. */
@@ -1053,6 +1064,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // attachment, but its marker still separates the winner from the following
   // body. Leave the follower to the ordinary column-based note collector.
   consumeSameColumnLosingPlus(lexer, defLineIndex, label, defLineRaw, firstBlockAttached)
+  let innermostDef = m[0]
   if (!firstBlockAttached) {
     // A fence behind an item marker on the note's line is no paragraph (CARVE-P0-013, PART 0 S4).
     const trackLead = (lead: string): void => {
@@ -1068,6 +1080,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     let column = m[0].length - m[2]!.length
     for (let nested = RE_FOOTNOTE_DEF.exec(m[2]!); nested !== null; nested = RE_FOOTNOTE_DEF.exec(nested[2]!)) {
       trackLead(nested[2]!)
+      innermostDef = nested[0]
       const run = commentFenceRun(nested[2]!)
       if (run !== undefined && lazyState.opaque?.kind === 'comment') nestedNoteSpan = { run, column, state: lazyState.opaque }
       column += nested[0].length - nested[2]!.length
@@ -1075,7 +1088,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   }
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   const wrappedAttributeAtBody = { value: false, until: -1 }
-  const attrSource = { column: -1 }
+  // A run opened on the note's line is measured from the body column of the note that holds it (CARVE-P2-035).
+  const attrSource = { column: authoredNoteBodyColumn(lexer, defLineIndex, innermostDef, firstBlockAttached, lazyState) }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   const keepRefusedQuoteFollower = (ln: string): boolean => {

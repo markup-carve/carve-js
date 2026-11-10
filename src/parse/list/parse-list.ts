@@ -3826,6 +3826,17 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         frame = frame.deepest) holderColumn += frame.ownedColumn
       return indentColumns(l) >= holderColumn
     }
+    // A follower short of the content column of the nested item whose paragraph holds the run is not that run's follower (CARVE-P2-035).
+    const missesRunDescendant = (l: string): boolean => {
+      for (let at = nestedSourceLines.length - 1; at >= 0; at--) {
+        const line = nestedSourceLines[at]!
+        if (isBlankLine(line)) return false
+        if (!isListMarkerLine(line.trimStart())) continue
+        const markerBody = markerContentColumn(line.trimStart())
+        return markerBody >= 0 && indentColumns(l) < indentColumns(line) + markerBody
+      }
+      return false
+    }
     const followsRefusedRunWithinHolder = (l: string): boolean => {
       const last = nestedSourceLines.at(-1)
       if (!last?.includes('}')) return false
@@ -3937,7 +3948,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const kept = lazyState.refusedRunKept
       const keptThroughCloser = kept instanceof RegExp && !isBlankLine(l) && !kept.test(l.trimStart())
       if ((refusedFollower &&
-          !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) ||
+          !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) && !missesRunDescendant(l) ||
           keptThroughCloser && insideRefusedHolder(l) ||
           isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l)) && !isBlankLine(l)) {
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)

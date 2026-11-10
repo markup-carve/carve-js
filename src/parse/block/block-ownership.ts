@@ -163,6 +163,8 @@ const COMMENT_LINE = /^[ \t]*%%/
 // CARVE-P11-073: a region marker below a list closes every item.
 const REGION_MARKER = /^%%[ \t]*#(?:end)?region(?![A-Za-z0-9_])/
 const NOTE_HEAD = /^\[\^[^\]]+\]: +/
+// The note heads before a line's text; the group ends where the last head starts.
+const NOTE_HEADS = /^([ \t]*(?:\[\^[^\]]+\]:[ \t]+)*)\[\^[^\]]+\]:[ \t]+$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
 const DD = /^:( +)(?=[ \t]*[^ \t])/
@@ -2170,6 +2172,11 @@ export function ownLines(
       return { kind: 'leaf', interrupts: true }
     }
     if (rest[0] === '{') {
+      // A `{%` run continues past its `{` to its `%}`, brace lines included (CARVE-P2-035).
+      if (rest.startsWith('{%') && !rest.includes('%}')) {
+        const commentLines = wrappedCommentLines(rest, owner, at)
+        if (commentLines !== null) return { kind: 'leaf', interrupts: true, attrLines: commentLines }
+      }
       const attrLines = wrappedAttrLines(rest, owner, at)
       if (attrLines !== null) return { kind: 'leaf', interrupts: true, attrLines }
     }
@@ -2201,10 +2208,30 @@ export function ownLines(
     return wrappedAttrRun(rest, frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length, at)
   }
 
-  function wrappedAttrRun(rest: string, depth: number, at: number): number | null {
+  function wrappedCommentLines(rest: string, owner: Frame, at: number): number | null {
+    const depth = frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length
+    const col = runOpenerColumn(rest, depth, at)
+    for (let end = at + 1; end < lines.length; end++) {
+      const body = quotedMeasure(end, depth)
+      if (body === null || body.rest === '' || body.col <= col) return null
+      // A comment-only run is invisible and takes the lazy path as a `%%` line would (CARVE-P9-013).
+      if (body.rest.includes('%}')) return trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) === '' ? null : end - at
+    }
+    return null
+  }
+
+  // The column a brace run's continuations must pass: its `{`, or the body column of a note head it follows (CARVE-P2-035).
+  function runOpenerColumn(rest: string, depth: number, at: number): number {
     let openerLine = lines[at]!
     for (let q = 0; q < depth && isQuoteLine(indentCols(openerLine).rest); q++) openerLine = quoteRest(indentCols(openerLine).rest)
-    const openerColumn = indentCols(openerLine).col
+    const trimmed = trimEndSpaceTab(openerLine)
+    if (!trimmed.endsWith(rest)) return indentCols(openerLine).col
+    const heads = NOTE_HEADS.exec(trimmed.slice(0, trimmed.length - rest.length))
+    return heads ? docColumn(trimmed, trimmed.slice(heads[1]!.length)) + FOOTNOTE_BODY_COLUMN : docColumn(trimmed, rest)
+  }
+
+  function wrappedAttrRun(rest: string, depth: number, at: number): number | null {
+    const openerColumn = runOpenerColumn(rest, depth, at)
     let collected = rest
     for (let j = at + 1; j < lines.length; j++) {
       let line: string | null = lines[j]!
