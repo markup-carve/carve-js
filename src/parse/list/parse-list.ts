@@ -3914,6 +3914,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       nestedLineNumbers.push(lineNumber)
       trackItemLazyState(run, lazyState)
     }
+    const shallowCommentCloser = (admission: ContainerAdmission): boolean =>
+      admission.kind === 'below' && lazyState.attrRun?.startsWith('{%') === true &&
+      admission.line.includes('%}') && !isListMarkerLine(admission.line.trimStart())
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       const refusedColumn = lexer.refusedItemMarkers.get(admission.lineNumber) ??
@@ -3955,6 +3958,13 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
+      // A closer below an open comment run's column refuses that whole run.
+      // Keep the closer in the paragraph even when a brace-shaped middle line
+      // made the item tracker temporarily report no open paragraph (carve#5806).
+      if (shallowCommentCloser(admission)) {
+        admitLazyLine(l)
+        return 'continue'
+      }
       followingUnpairedFence = unpairedFenceFollower && lazyState.refusedRunKept === undefined
       unpairedFenceFollower = false
       // Only the line right after the run is its follower, a fence-shaped one included (CARVE-P2-035, carve#5610).
