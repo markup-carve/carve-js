@@ -110,6 +110,17 @@ function sourceLineAt(lexer: Lexer, index: number, fallback: string): string {
   return (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
 }
 
+function closesMarkerLineBraceRun(run: string | null, content: string): boolean {
+  if (run === null) return false
+  if (run.startsWith('{%')) return content.includes('%}')
+  return continueWrappedAttributeBlock(run, content).verdict === 'attributes'
+}
+
+function directMarkerLineBraceColumn(first: string, run: string | null, bodyColumn: number, runColumn: number): number | null {
+  if (run === null || !first.trimStart().startsWith('{')) return null
+  return bodyColumn + runColumn
+}
+
 function isBelowColumnListAfterTerm(state: ItemLazyState, atDocumentColumn: boolean, line: string,
   isListMarker: (line: string) => boolean): boolean {
   return state.inDefList === 'term' && state.opaque === null && !atDocumentColumn && isListMarker(line)
@@ -376,8 +387,7 @@ export function createDefinitionListParser(
         // A marker at the body's column 0 opens a sub-item frame, as in a note body (PART 0 S3, carve#4860).
         const framed = atContentColumn && !content.startsWith(LAZY_FRAME)
         const markerRun = markerLineBraceColumn !== null ? lazyState.attrRun : null
-        const closedMarkerRun = markerRun !== null && (markerRun.startsWith('{%')
-          ? content.includes('%}') : continueWrappedAttributeBlock(markerRun, content).verdict === 'attributes')
+        const closedMarkerRun = closesMarkerLineBraceRun(markerRun, content)
         trackItemLazyState(content, lazyState, atContentColumn, () => true, {
           terminatorFree: true,
           payloadFenceCloser: marker => payloadFenceHasCloser(lexer, marker),
@@ -546,8 +556,8 @@ export function createDefinitionListParser(
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
         const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
-        if (first.trimStart().startsWith('{') && firstState.wrappedAttributeRun !== null)
-          markerLineBraceColumn = bodySourceColumn + firstState.wrappedAttributeColumn
+        markerLineBraceColumn = directMarkerLineBraceColumn(first, firstState.wrappedAttributeRun,
+          bodySourceColumn, firstState.wrappedAttributeColumn)
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
         nestedItemColumn = markerContentColumn(first)
