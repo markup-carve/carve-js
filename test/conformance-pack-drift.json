@@ -8,13 +8,6 @@
       ]
     },
     {
-      "ticket": "markup-carve/carve#5740",
-      "cases": [
-        "attributes-028c5a7f2ecc",
-        "attributes-d159c613f798"
-      ]
-    },
-    {
       "ticket": "markup-carve/carve#5731",
       "cases": [
         "ownership-515b9fdab518",
