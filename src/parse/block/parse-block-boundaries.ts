@@ -322,6 +322,37 @@ export function verseStanzaOpen(state: ItemLazyState): boolean {
   return state.lazyFoldable
 }
 
+/**
+ * Extends an own-line `+` attachment that leaves a code fence open through its
+ * blanks: the payload stays verbatim from the opener column in every host, and
+ * the first line that misses the host ends it (PART 0 S1, carve#5855). The
+ * trailing blank run stays with the host's own blank handling.
+ */
+export function extendOwnLineFence(lexer: Lexer, attached: string[], numbers: number[],
+  reaches: (line: string) => boolean): void {
+  let opener = 0
+  while (opener < attached.length - 1 && /^[ \t]*(?:\{|%%|\[\^)/.test(attached[opener]!)) opener++
+  const lead = /^[ \t]*(`{3,}|~{3,})/.exec(attached[opener] ?? '')
+  if (lead === null || !isBlankLine(lexer.peek() ?? 'x')) return
+  const closes = fenceCloseRe(lead[1]!)
+  if (attached.slice(opener + 1).some(line => closes.test(line.trimStart()))) return
+  const openerColumn = indentColumns(attached[opener]!)
+  let end = 0
+  for (let take = 0, line = lexer.peek(0); line !== undefined; line = lexer.peek(++take)) {
+    if (isBlankLine(line)) continue
+    if (!reaches(line)) {
+      if (indentColumns(line) === openerColumn && closes.test(line.trimStart())) end = take + 1
+      break
+    }
+    end = take + 1
+  }
+  for (let k = 0; k < end; k++) {
+    attached.push(lexer.peek()!)
+    numbers.push(lexer.lineNumber(lexer.pos))
+    lexer.consume()
+  }
+}
+
 const RE_BODY_HOST_MARKER = /^(?::[ \t]+|\[\^[^\]]+\]:[ \t]+)/
 
 /** Whether a collected host body ends inside a code fence, on any marker line of the stack (carve#4047). */

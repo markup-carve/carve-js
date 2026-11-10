@@ -1,4 +1,4 @@
-import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVerbatimBlock, bodyEndsInOpenCodeFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
+import { attachedBlankClosers, attachedStartsWithLineBlock, attachedStartsWithVerbatimBlock, bodyEndsInOpenCodeFence, extendOwnLineFence, holdsOpenDiv, verbatimOnlyLazyState, verseStanzaOpen } from './parse-block-boundaries.js'
 import { parentLineIndices, type StrippedLineOrigin } from './parse-block-scan-core.js'
 import { LAZY_FRAME as LEAD_TAB_FRAME, RE_ORDERED, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import type {
@@ -667,6 +667,7 @@ export function createDefinitionListParser(
               }
             }
           }
+          extendOwnLineFence(lexer, attached, attachedLineNumbers, line => indentColumns(line, contentCol) >= contentCol)
           attachedOpenCodeFence = keepsOpenCodeFence(attached)
           if (hasAttachedBlockOrMarker(attached, lexer.peek(), isContinuationMarker)) {
             for (const closer of bodyFenceClosers(bodyLines)) {
