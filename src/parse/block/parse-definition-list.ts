@@ -1400,6 +1400,13 @@ export function createDefinitionListParser(
           for (let lineNumber = bodyLineNumbers[0]! + 1; lineNumber <= authored.length; lineNumber++) {
             const sourceLine = authored[lineNumber - 1]!
             if (isBlankLine(sourceLine)) break
+            const sourceBody = sourceQuoteBody(sourceLine).trimStart()
+            if (sourceColumn(sourceLine, depth) <= sourceColumn(markerSource, depth) &&
+                (RE_DEFLIST_DEF.test(sourceBody) || RE_DEFLIST_TERM.test(sourceBody))) {
+              shallow = true
+              closerLine = lineNumber
+              break
+            }
             if (sourceColumn(sourceLine, depth) <= openerColumn) shallow = true
             if (sourceLine.includes('%}')) { closerLine = lineNumber; break }
           }

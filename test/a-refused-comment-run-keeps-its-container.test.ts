@@ -23,3 +23,12 @@ it('still hides a valid description comment run with a brace-shaped middle line'
     '<dl>\n  <dt>t</dt>\n  <dd> y</dd>\n</dl>',
   )
 })
+
+it('does not let a later description close an earlier comment run', () => {
+  expect(carveToHtml(':: t\n:   {% a\n     {k=v}\n: next\nz %} y\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>{% a\n{k=v}</dd>\n  <dd>next\nz %} y</dd>\n</dl>',
+  )
+  expect(carveToHtml(':: t\n:   {% a\n     {k=v}\n: next\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>{% a\n{k=v}</dd>\n  <dd>next</dd>\n</dl>',
+  )
+})
