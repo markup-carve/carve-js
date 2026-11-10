@@ -98,6 +98,14 @@ describe('footnote carrier recovery (carve#2918)', () => {
     })
   }
 
+  it('locates an endnote item report and keeps a dropped handler at warning (carve#5747)', () => {
+    const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
+      + '<section role="doc-endnotes"><hr><ol><li id="fn1" onclick="x()"><p>body</p></li></ol></section>'
+    expect(htmlToCarve(html).report.diagnostics.map(({ code, severity, path }) => ({ code, severity, path }))).toEqual([
+      { code: 'attribute-dropped', severity: 'warning', path: '/section[2]/ol[2]/li[1]' },
+    ])
+  })
+
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
     it(`${mode} reports authored attributes on an endnote item (carve#5747)`, () => {
       const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
