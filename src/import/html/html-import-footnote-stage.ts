@@ -4,6 +4,7 @@ import { domAttrs, domChild, domContainer, domChildren, domParent, domTag, domVa
 import type { HtmlImportReportCollector } from './html-import-report.js'
 import { setOwn } from '../../own-property.js'
 import { RESERVED_CARRIER_ATTRIBUTES } from '../../ast/roundtrip-carriers.js'
+import { isDangerousAttrName } from '../../render-html.js'
 import { RE_ABBR_DEF, RE_FOOTNOTE_DEF } from '../../parse.js'
 import { normalizeRefLabel } from '../../label-key.js'
 
@@ -154,6 +155,7 @@ export class FootnoteStage {
      * candidates - only the ORDER in which the two halves ran.
      */
     const carriers = this.footnoteCarriers(definitions)
+    if (!heuristic) for (const definition of definitions) this.reportDefinitionAttributes(definition.block, root)
     definitions.forEach((definition, index) => {
       const label = carriers[index]!.label
       if (index === 0) this.removeFootnoteSeparator(definition.block)
@@ -373,6 +375,50 @@ export class FootnoteStage {
       taken.add(String(next))
       return { label: String(next), inline: entry.inline }
     })
+  }
+
+  /**
+   * A footnote definition has no attribute slot, so an authored attribute on
+   * the note element is lost and reported (CARVE-P9-066, carve#5747). The id
+   * is navigation the renderer regenerates, and the note role and the carriers
+   * are read rather than authored.
+   */
+  private reportDefinitionAttributes(block: P5Node, root: P5Node): void {
+    const path = this.nodePath(block, root)
+    for (const attribute of domAttrs(block) ?? []) {
+      const name = attribute.name.toLowerCase()
+      if (name === 'id' || RESERVED_CARRIER_ATTRIBUTES.has(name)) continue
+      if (name === 'role' && ['doc-endnote', 'doc-footnote'].includes(attribute.value.trim().toLowerCase())) continue
+      if (name === 'style') {
+        for (const declaration of attribute.value.split(';')) {
+          const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase()
+          if (declaration.includes(':') && property) {
+            this.context.report.add('style-unmapped', `CSS declaration ${property} was not mapped`, 'info', path, block)
+          }
+        }
+        continue
+      }
+      const dangerous = isDangerousAttrName(name)
+      const subject = dangerous ? `${name.startsWith('on') ? 'event-handler' : 'injection-sink'} attribute ${name}` : name
+      this.context.report.add(
+        'attribute-dropped',
+        `Dropped ${subject} on <${domTag(block)}>: a footnote definition has no attribute slot`,
+        dangerous ? 'warning' : 'info',
+        path,
+        block,
+      )
+    }
+  }
+
+  /** The report path of `node`, each step indexed among all of its parent's child nodes. */
+  private nodePath(node: P5Node, root: P5Node): string {
+    const steps: string[] = []
+    for (let at: P5Node | undefined = node; at !== undefined && at !== root; at = domParent(at)) {
+      const parent = domParent(at)
+      if (parent === undefined) break
+      steps.unshift(`${domTag(at)}[${(domChildren(parent) ?? []).indexOf(at as never) + 1}]`)
+    }
+    return `/${steps.join('/')}`
   }
 
   /**
