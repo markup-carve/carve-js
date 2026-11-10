@@ -3970,7 +3970,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           keptThroughCloser && insideRefusedHolder(l) ||
           isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l) ||
           admission.kind === 'below' && content.trimStart().startsWith('{') &&
-            !lineOpensBlock(l.trimStart()) &&
+            !lineOpensBlock(l.trimStart()) && !isContinuationMarker(l) &&
             followsRefusedRunWithinHolder(l, true)) && !isBlankLine(l)) {
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)
