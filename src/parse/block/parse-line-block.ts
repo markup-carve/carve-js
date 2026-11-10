@@ -34,9 +34,10 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const openBoundary = view.sourceBoundaries?.[opener]
       const lineBoundary = view.sourceBoundaries?.[line]
       if (!openBoundary || !lineBoundary || openBoundary.parent !== lineBoundary.parent) return undefined
-      // A source boundary counts literal bytes; the owner's content columns
-      // name the structural width to consume in this frame.
-      cuts.push(Math.max(0, view.hostContentColumn - openBoundary.parent.hostContentColumn))
+      // A source boundary counts literal bytes. The marker and content
+      // columns give this item's own cut even when its parent is a quote,
+      // whose source columns include the quote prefix.
+      cuts.push(Math.max(0, view.hostContentColumn - (view.hostMarkerColumn ?? openBoundary.parent.hostContentColumn)))
       view = openBoundary.parent
       opener = openBoundary.line
       line = lineBoundary.line

@@ -9,6 +9,17 @@ describe('tabbed line block verse columns after owner frames', () => {
     expect(carveToHtml(tabbed)).toContain('<p>&nbsp;&nbsp;y</p>')
   })
 
+  it('uses the item marker width rather than the quote source column for each cut', () => {
+    const tabbed = '> * a\n>   * a\n>  \t::: |\n>   \ty\n>  \t:::\n'
+    const spaced = '> * a\n>   * a\n>     ::: |\n>       y\n>     :::\n'
+    expect(carveToHtml(tabbed)).toBe(carveToHtml(spaced))
+    expect(carveToHtml(tabbed)).toContain('<p>&nbsp;&nbsp;y</p>')
+  })
+
+  it('keeps a verse space after a quoted item tab', () => {
+    expect(carveToHtml('> - a\n> \t::: |\n> \t XYZ\n> \t:::\n')).toContain('<p>&nbsp;XYZ</p>')
+  })
+
   it('uses the nested item fence column after a partly consumed tab', () => {
     expect(carveToHtml('* a\n  * a\n   \t::: |\n  \ty\n   \t:::\n')).toBe(`<ul>
   <li>a
