@@ -166,6 +166,7 @@ const NOTE_HEAD = /^\[\^[^\]]+\]: +/
 // The note heads before a line's text; the group ends where the last head starts.
 const NOTE_HEADS = /^([ \t]*(?:\[\^[^\]]+\]:[ \t]+)*)\[\^[^\]]+\]:[ \t]+$/
 const FOOTNOTE_DEF = /^\[\^([^\]]+)\]: +(?![ \t]*$)([^ ].*)$/
+const NOTE_HEADS_LEAD = /^((?:\[\^[^\]]+\]:[ \t]+)*)\[\^[^\]]+\]:[ \t]+/
 const DEFLIST_TERM = /^:: (?=[ \t]*[^ \t\n\r])/
 const DD = /^:( +)(?=[ \t]*[^ \t])/
 const HEADING = /^(#{1,6}) +(?=.*[^ \t\n\r])(.*)$/
@@ -587,6 +588,7 @@ export function ownLines(
   let attachedInlineCode = 0
   let braceRunStart = -1
   let braceRunOpener = ''
+  let braceRunDepth = 0
   let shiftedAttachedFence: { column: number; run: string } | null = null
   // A fence that ended a description's `+` block at the document; a later description closes it (carve#4408, carve#5592).
   let ddBlockFence: { host: Frame[]; at: number } | null = null
@@ -733,22 +735,22 @@ export function ownLines(
     // A refused brace run protects its immediate follower from marker
     // interpretation (CARVE-P2-035, carve#5658 R03).
     const rawLine = lines[at]!
-    const candidatePlus = CONT_MARKER.test(rawLine.trimStart())
-    let noteRest = rawLine
-    if (rawLine.includes('[^')) {
-      for (let quoted = indentCols(noteRest).rest; isQuoteLine(quoted); quoted = indentCols(noteRest).rest) {
-        noteRest = quoteRest(quoted)
-      }
+    // A quoted line is read after its quote prefixes (carve#5770).
+    let unquoted = rawLine
+    for (let quoted = indentCols(unquoted).rest; isQuoteLine(quoted); quoted = indentCols(unquoted).rest) {
+      unquoted = quoteRest(quoted)
     }
+    const candidatePlus = CONT_MARKER.test(unquoted.trimStart())
+    const noteRest = unquoted
     const candidateNote = FOOTNOTE_DEF.test(noteRest.trimStart())
     const refusedFollower = (candidatePlus || candidateNote) && attachedInlineCode === 0 && braceRunStart >= 0 &&
       isRefusedBraceRun((index) => {
         if (index === 0) return braceRunOpener
+        // Read in the opener's quote frame; a lazy line keeps its written column (carve#5619).
         const authored = lines[braceRunStart + index]!
-        let rest = authored
-        for (let quoted = indentCols(rest).rest; isQuoteLine(quoted); quoted = indentCols(rest).rest) rest = quoteRest(quoted)
+        const rest = quoteBody(authored, braceRunDepth) ?? authored
         const text = rest.trimStart()
-        return ' '.repeat(docColumn(authored, text)) + text
+        return ' '.repeat(docColumn(rest, text)) + text
       }, at - braceRunStart)
     const protectedPlus = refusedFollower && candidatePlus
     const protectedNote = refusedFollower && candidateNote
@@ -761,13 +763,25 @@ export function ownLines(
       rewritten = true
     }
     if (rawLine.trim() === '' || protectedPlus || candidateNote) braceRunStart = -1
-    else if (rawLine.includes('{')) {
-      const bottom = markerLineBottomBlock(rawLine.trimStart())
+    if (rawLine.trim() !== '' && !protectedPlus && !protectedNote && rawLine.includes('{')) {
+      const stripped = markerLineBottomBlock(rawLine.trimStart())
+      const heads = NOTE_HEADS_LEAD.exec(stripped)
+      const bottom = heads ? stripped.slice(heads[0].length) : stripped
       const opener = bottom.startsWith(': ') ? bottom.slice(2).trimStart() : bottom
       if (opener.startsWith('{')) {
         braceRunStart = at
-        const brace = rawLine.indexOf(opener)
-        braceRunOpener = ' '.repeat(docColumn(rawLine, rawLine.slice(brace))) + opener
+        braceRunDepth = 0
+        let body = rawLine
+        for (let quoted = indentCols(body).rest; isQuoteLine(quoted); quoted = indentCols(body).rest) {
+          body = quoteRest(quoted)
+          braceRunDepth++
+        }
+        if (!body.includes(stripped)) body = rawLine
+        // A run on a note head is measured from the note's body column (CARVE-P2-035).
+        const column = heads
+          ? docColumn(body, body.slice(body.indexOf(stripped) + heads[1]!.length)) + FOOTNOTE_BODY_COLUMN
+          : docColumn(body, body.slice(body.indexOf(opener)))
+        braceRunOpener = ' '.repeat(column) + opener
       }
     }
     return { src, shiftedCut }
@@ -2139,6 +2153,17 @@ export function ownLines(
   }
 
   // The document column where `rest`, a suffix of `line`, starts.
+  // `line` after `depth` quote prefixes; null when it has fewer.
+  function quoteBody(line: string, depth: number): string | null {
+    let rest = line
+    for (let d = 0; d < depth; d++) {
+      const quoted = indentCols(rest).rest
+      if (!isQuoteLine(quoted)) return null
+      rest = quoteRest(quoted)
+    }
+    return rest
+  }
+
   function docColumn(line: string, rest: string): number {
     let col = 0
     for (const ch of line.slice(0, line.length - rest.length)) col = ch === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1
