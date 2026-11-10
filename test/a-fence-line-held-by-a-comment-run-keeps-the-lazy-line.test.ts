@@ -28,6 +28,8 @@ describe('a fence line held by a comment run keeps the lazy line', () => {
   it.each([
     ['- {% a\n   ```\n   z %}\nplain\n', '<ul><li>plain</li></ul>'],
     ['- {% a\n   ```\n   z %}\n- s\n', '<ul><li></li><li>s</li></ul>'],
+    // A continuation missing the opener's quote level is not held, so its fence opens there.
+    ['> > {% a\n>   ```\n>   z %}\n- next\n', '<blockquote><blockquote><p>{% a</p></blockquote><pre><code>z %}</code></pre></blockquote><ul><li>next</li></ul>'],
     // A `{%` line inside fence payload is payload, so the fence still closes.
     ['- x\n  ```\n  {% a\n   ```\n  ```\nplain\n', '<ul><li>x<pre><code>{% a\n ```</code></pre></li></ul><p>plain</p>'],
   ])('%j', (source, expected) => expect(html(source)).toBe(expected))

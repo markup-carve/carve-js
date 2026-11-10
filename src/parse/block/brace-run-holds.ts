@@ -36,7 +36,9 @@ export function braceRunHolds(lexer: Lexer): BraceRunHolds {
       const openerDepth = quotePrefixDepth(opener)
       for (let k = index + 1; k < lexer.lineCount; k++) {
         const line = source(k)
-        if (isBlankLine(line.replace(/^[ \t>]*/, '')) || sourceColumn(line, openerDepth) <= column) return
+        // A line missing one of the opener's quote levels is a lazy line, which a run does not take (carve#5830).
+        const at = sourceColumn(line, openerDepth)
+        if (isBlankLine(line.replace(/^[ \t>]*/, '')) || at === Infinity || at <= column) return
         if (line.includes('%}')) {
           first = index
           through = k
