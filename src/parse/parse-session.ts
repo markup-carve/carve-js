@@ -314,6 +314,13 @@ function authoredRunDepth(lexer: Lexer): number {
   return source === undefined ? Infinity : quotePrefixDepth(source)
 }
 
+/** The document column `lexer`'s line `offset` starts at, quote prefixes included. */
+function authoredSourceColumn(lexer: Lexer, offset: number): number {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos + offset) - 1]
+  return source === undefined ? indentColumns(stripLazyFrame(lexer.peek(offset) ?? '')) : sourceColumn(source)
+}
+
 const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
 
 /**
@@ -387,8 +394,12 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
       // A quote's lazy line retains its source column even when the opener was
       // a marked line. Ordinary list lines still use their local content column.
       const sourceColumns = markerLineComment || lazyBrace || quoteLazyContinuation
+      // A lazy line has no quote prefix, so it is compared with the `{` where it is written (carve#5820).
+      const lazyAgainstWrittenBrace = quoteLazyContinuation && !markerLineComment && !lazyBrace
       if (sourceColumns
-        ? authoredColumn(n) <= (markerLineComment || lazyBrace ? sourceOpenerColumn : authoredColumn(0))
+        ? lazyAgainstWrittenBrace
+          ? authoredSourceColumn(lexer, n) <= authoredSourceColumn(lexer, 0)
+          : authoredColumn(n) <= (markerLineComment || lazyBrace ? sourceOpenerColumn : authoredColumn(0))
         : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n))) shallow = true
     }
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
+import { RULED_5820_HTML } from './ruled-5820-ahead-of-pin.js'
 
 const newCorpus = [
   '1025-an-item-own-line-plus-fence-keeps-its-trailing-blank',
@@ -15,7 +16,8 @@ const newCorpus = [
 for (const name of newCorpus) {
   it(`renders pinned corpus row ${name}`, () => {
     const source = readFileSync(new URL(`../spec/tests/corpus/${name}.crv`, import.meta.url), 'utf8')
-    const expected = readFileSync(new URL(`../spec/tests/corpus/${name}.html`, import.meta.url), 'utf8').trimEnd()
+    const expected = RULED_5820_HTML.get(name)?.html ??
+      readFileSync(new URL(`../spec/tests/corpus/${name}.html`, import.meta.url), 'utf8').trimEnd()
     expect(carveToHtml(source).trimEnd()).toBe(expected)
   })
 }
