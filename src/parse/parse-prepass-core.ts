@@ -1005,7 +1005,8 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     if (line === undefined || (count > 0 && isBlankLine(line))) return null
     // A quoted note's first-block attribute run keeps a lazy continuation
     // at its written column (PART 0 S4, carve#5619).
-    if (count > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count)) && !lexer.inFootnoteBody) return null
+    if (count > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count)) &&
+      (!lexer.inFootnoteBody || !lazyLinePassesWrittenBrace(lexer, count))) return null
     if (count > 0 && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + count))) return null
     if (count > 0 && columns(line) <= openingColumn) return null
     const closed = line.includes('}')
@@ -1025,6 +1026,17 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     }
     if (!continueOpenRunScan(scan, count === 1 ? line : '\n' + line)) return null
   }
+}
+
+/**
+ * A quote's lazy line continues a run only past the document column its `{`
+ * is written at (CARVE-P2-035, carve#5820), not the brace's column in the note.
+ */
+function lazyLinePassesWrittenBrace(lexer: Lexer, offset: number): boolean {
+  const opener = lexer.peek()!
+  const line = lexer.peek(offset)!
+  const at = (index: number, text: string): number => lexer.sourceBoundary(index, text.length - text.trimStart().length).column
+  return at(lexer.pos + offset, line) > at(lexer.pos, opener)
 }
 
 interface OpenRunScan {
