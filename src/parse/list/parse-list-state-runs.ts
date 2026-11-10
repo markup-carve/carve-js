@@ -108,7 +108,6 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     markerLineState,
     markerPrefixLength,
     opensCodeFence,
-    opensWrappedAttributeBlock,
     prefixWalkBound,
     verbatimOnlyLazyState,
   } = helpers
@@ -235,7 +234,7 @@ export function createRunPhases(helpers: typeof listStateHelpers, trackItemLazyS
     if (!rebased && !state.ownedAuthored && state.deepest?.lazyFoldable && state.lazyFoldable &&
         (marker
           ? state.ownedMarker !== undefined && run > state.ownedMarker
-          : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text))) return true
+          : bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text))) return true
     if (!state.ownedAuthored && RE_COMMENT_LINE.test(text)) {
       state.invisibleAtColumn = true
       state.commentAtColumn = true
