@@ -1480,9 +1480,8 @@ export function ownLines(
     // The rest of a marker line. Only a quote starts new coordinates, so only there can its content move.
     function content(frame: Frame, start: number, canon: number): void {
       if (m.rest === '' || frames.length > MAX_FRAMES) return
-      const leadTab = src.slice(0, src.length - m.rest.length).includes('\t')
-      // CARVE-P2-010: behind an item marker's tab the line is text, whatever it spells.
-      // A quote's lazy reading of that shape is still open (carve#4404), so a quoted stack keeps the shape.
+      // CARVE-P2-010: behind an item marker's tab the line is text, whatever it spells; a quote has no such rule.
+      const leadTab = frame.kind !== 'quote' && src.slice(0, src.length - m.rest.length).includes('\t')
       const form = leadTab ? TEXT : classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
       if (form.kind === 'text') {
         let refusedMarker = false
@@ -2232,7 +2231,7 @@ export function ownLines(
         const commentLines = wrappedCommentLines(rest, owner, at)
         if (commentLines !== null) return { kind: 'leaf', interrupts: true, attrLines: commentLines }
       }
-      const attrLines = wrappedAttrLines(rest, owner, at)
+      const attrLines = wrappedAttrLines(rest, owner, at, col)
       if (attrLines !== null) return { kind: 'leaf', interrupts: true, attrLines }
     }
     if (CAPTION.test(rest)) return { kind: 'leaf', interrupts: false, caption: true }
@@ -2259,8 +2258,31 @@ export function ownLines(
   }
 
   // How many lines below `at` a wrapped attribute block runs; its lines carry the owner's quote prefixes.
-  function wrappedAttrLines(rest: string, owner: Frame, at: number): number | null {
-    return wrappedAttrRun(rest, frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length, at)
+  function wrappedAttrLines(rest: string, owner: Frame, at: number, col: number): number | null {
+    const depth = frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length
+    const opener = trimEndSpaceTab(lines[at]!)
+    // A quoted run behind a tab or padding is measured in source columns, so an
+    // unprefixed continuation keeps its written column (CARVE-P2-035, carve#5796).
+    if (depth > 0 && owner.kind === 'quote' && opener.endsWith(rest) &&
+        (opener.slice(0, opener.length - rest.length).includes('\t') || col > 0)) return sourceAttrRun(rest, depth, at)
+    return wrappedAttrRun(rest, depth, at)
+  }
+
+  function sourceAttrRun(rest: string, depth: number, at: number): number | null {
+    const openerColumn = docColumn(trimEndSpaceTab(lines[at]!), rest)
+    let collected = rest
+    for (let j = at + 1; j < lines.length; j++) {
+      const source = lines[j]!
+      const quoted = quotedMeasure(j, depth)
+      const line = quoted === null ? source : quoted.rest
+      const column = quoted === null ? indentCols(source).col : docColumn(source, quoted.rest)
+      if (line.trim() === '' || column <= openerColumn || /^[ \t]*\{/.test(line)) return null
+      const closed = line.includes('}')
+      if (!closed && !isValidAttrPayload(`\n${line}\n`)) return null
+      collected += `\n${line}`
+      if (closed) return parseBlockAttributeRun(collected) ? j - at : null
+    }
+    return null
   }
 
   function wrappedCommentLines(rest: string, owner: Frame, at: number): number | null {

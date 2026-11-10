@@ -210,7 +210,7 @@ interface QuoteCollect {
   quoteMarkerColumn: number
   physicalQuoteColumn: number
   /** Authored brace and quote-inner columns of an open quoted attribute run. */
-  pendingAttribute: { sourceColumn: number; innerColumn: number; prefix: string; prefixColumn: number; confirmed?: boolean } | undefined
+  pendingAttribute: { sourceColumn: number; innerColumn: number; prefix: string; prefixColumn: number; quoteDepth: number; confirmed?: boolean } | undefined
   // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
   // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
   // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
@@ -2161,6 +2161,7 @@ export class ParseSession extends InlineParseSession {
         innerColumn: sourceColumnAt(content, content.indexOf(body)),
         prefix,
         prefixColumn: sourceColumnAt(content, prefix.length),
+        quoteDepth: quotePrefixDepth(authored),
       }
     }
   }
@@ -2398,7 +2399,8 @@ export class ParseSession extends InlineParseSession {
       const quoted = quotedLineText(line, lexer.lineTerminatorFree(lexer.pos + offset))
       const authored = authoredLines[lexer.lineNumber(lexer.pos + offset) - 1] ?? line
       const depth = quotePrefixDepth(authored)
-      if (quoted === null && depth > 0) return false
+      // A line under fewer `>` than the run's own is lazy to the run's quote.
+      if (quoted === null && depth > 0 && depth >= pending.quoteDepth) return false
       const rest = sourceQuoteRest(authored, depth) ?? authored
       const writtenColumn = sourceColumnAt(authored, authored.length - rest.length + leadingWhitespace(rest))
       // The next quoted opener at the same column cannot be a continuation.
@@ -2427,7 +2429,8 @@ export class ParseSession extends InlineParseSession {
       const root = lexer.documentRoot ?? lexer
       const authored = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
       const writtenColumn = sourceColumn(authored)
-      if (leaf.attrRun !== null && writtenColumn > pending.sourceColumn && quotePrefixDepth(authored) === 0 &&
+      if (leaf.attrRun !== null && writtenColumn > pending.sourceColumn &&
+          (quotePrefixDepth(authored) === 0 || quotePrefixDepth(authored) < pending.quoteDepth) &&
           (pending.confirmed || this.quotedAttributeCloses(q, pending, leaf.attrRun))) {
         pending.confirmed = true
         const column = pending.innerColumn + writtenColumn - pending.sourceColumn
