@@ -1667,10 +1667,7 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 ])
 // Layout rewrite #5731 remains pending; the alias pin exposes these existing engine outputs.
 const behindSpec = new Map<string, string>([
-  // carve#5755 (nested tab payloads per frame) is not ported yet.
-  ["1042-a-quoted-nested-item-keeps-three-verse-spaces", "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>a\n          <div class=\"line-block\">\n            <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"],
-  ["1043-a-second-tab-keeps-two-verse-spaces", "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>a\n          <div class=\"line-block\">\n            <p>&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"],
-  ["1044-a-nested-item-without-a-quote-keeps-three-verse-spaces", "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <div class=\"line-block\">\n          <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"],
+  // carve#5755: the nested code payload per frame is not ported yet (verse leads are).
   ["1045-a-nested-code-body-keeps-its-literal-content-after-frame-stripping", "<ul>\n  <li>a\n    <ul>\n      <li>a\n<code>\nz\n</code></li>\n    </ul>\n  </li>\n</ul>"],
   // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
   ["964-a-lazy-line-after-a-comment-keeps-the-deepest-list-open", "<ul>\n  <li>a\n    <ul>\n      <li><p>b\n{% c\nd %}\ntail</p></li>\n      <li><p>z</p></li>\n    </ul>\n  </li>\n</ul>"],
