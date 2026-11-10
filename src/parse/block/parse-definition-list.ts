@@ -1407,6 +1407,7 @@ export function createDefinitionListParser(
               closerLine = lineNumber
               break
             }
+            if (lineOpensBlock(sourceBody) && !sourceBody.startsWith('{')) break
             if (sourceColumn(sourceLine, depth) <= openerColumn) shallow = true
             if (sourceLine.includes('%}')) { closerLine = lineNumber; break }
           }

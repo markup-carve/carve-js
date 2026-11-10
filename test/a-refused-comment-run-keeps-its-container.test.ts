@@ -40,6 +40,12 @@ it('does not let a later description close an earlier comment run', () => {
   )
 })
 
+it('keeps a heading between a description comment opener and a later shallow closer as a block', () => {
+  expect(carveToHtml(':: t\n:   {% a\n     # h\nz %} y\n')).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>{% a</p>\n    <h1 id="h">h</h1>\n  </dd>\n</dl>\n<p>z %} y</p>',
+  )
+})
+
 it.each([
   ['# h %} y', '<section id="h-y">\n  <h1>h %} y</h1>\n</section>'],
   ['> q %} y', '<blockquote><p>q %} y</p></blockquote>'],
