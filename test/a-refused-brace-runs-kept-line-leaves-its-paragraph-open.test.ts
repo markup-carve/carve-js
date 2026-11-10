@@ -1,45 +1,47 @@
 /*
- * markup-carve/carve#5191: the line a refused brace run keeps, and a fence
- * opener's lines through its closer, are paragraph text (CARVE-P2-035), so a
- * following line that misses its container folds into that paragraph (PART 0 S4).
+ * A refused brace run claims no lines (carve#5830 rule A, replacing the kept-line
+ * reading of carve#5191): the line after it is read normally, so a block there
+ * ends the paragraph and a line that misses its container does not fold back.
  */
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 const html = (lines: string[]): string => carveToHtml(lines.join('\n') + '\n').trim()
 
-describe("a refused brace run's kept line", () => {
-  it('leaves a quote paragraph open', () => {
+describe('the line after a refused brace run', () => {
+  it('ends a quote paragraph at a heading', () => {
     expect(html(['> a', '> {x', '> y}', '> # c', 'more'])).toBe('<blockquote>\n  <p>a\n{x\ny}</p>\n  <h1 id="c">c</h1>\n</blockquote>\n<p>more</p>')
   })
 
-  it("leaves a plus paragraph open", () => {
+  it('ends a plus paragraph at a heading', () => {
     expect(html(['- a', '+', '{x', 'y}', '  # c', 'more'])).toBe('<ul>\n  <li>a\n    {x\ny}\n    <h1 id="c">c</h1>\n  </li>\n</ul>\n<p>more</p>')
   })
 
-  it.each([['***'], ['| c |'], ['```', 'b', '```']])('leaves a nested item paragraph open after %s', (...follower) => {
-    const out = html(['- x', '  - a', '    {x', '    y}', ...follower.map(l => '    ' + l), 'more'])
-    expect(out).toMatch(/more<\/li>\n {4}<\/ul>/)
-    expect(out).not.toContain('<p>more</p>')
+  it.each([
+    [['***'], '<hr>'],
+    [['| c |'], '<table>\n          <tbody>\n            <tr><td>c</td></tr>\n          </tbody>\n        </table>'],
+    [['```', 'b', '```'], '<pre><code>b\n</code></pre>'],
+  ])('ends a nested item paragraph at %j', (follower, block) => {
+    expect(html(['- x', '  - a', '    {x', '    y}', ...follower.map(l => '    ' + l), 'more'])).toBe(
+      `<ul>\n  <li>x\n    <ul>\n      <li>a\n{x\ny}\n        ${block}\n      </li>\n    </ul>\n  </li>\n</ul>\n<p>more</p>`)
   })
 
-  it.each(['- ', '> '])('keeps a fence through its closer behind %s', (prefix) => {
-    const out = html([prefix + 'a', ...['{x', 'y}', '```', 'b', '```'].map(l => (prefix === '- ' ? '  ' : prefix) + l), 'more'])
-    expect(out).toContain('<code>\nb\n</code>\nmore')
+  it.each([['b'], ['# h']])('opens a fence in an item whose payload is %s', (line) => {
+    expect(html(['- a', ...['{x', 'y}', '```', line, '```'].map(l => '  ' + l), 'more'])).toBe(
+      `<ul>\n  <li>a\n{x\ny}\n    <pre><code>${line}\n</code></pre>\n  </li>\n</ul>\n<p>more</p>`)
   })
 
-  it.each(['- ', '> '])('keeps block-shaped fence payload behind %s', (prefix) => {
-    const out = html([prefix + 'a', ...['{x', 'y}', '```', '# h', '```'].map(l => (prefix === '- ' ? '  ' : prefix) + l), 'more'])
-    expect(out).toContain('<code>\n# h\n</code>\nmore')
+  it.each([['b'], ['# h']])('opens a fence in a quote whose payload is %s', (line) => {
+    expect(html(['> a', ...['{x', 'y}', '```', line, '```'].map(l => '> ' + l), 'more'])).toBe(
+      `<blockquote>\n  <p>a\n{x\ny}</p>\n  <pre><code>${line}\n</code></pre>\n</blockquote>\n<p>more</p>`)
   })
 
-  it("looks for the fence closer only inside the opener's container", () => {
-    const out = html(['> a', '> {x', '> y}', '> ```', '> # h', '- x', '  ```', 'more'])
-    expect(out).toContain('<h1 id="h">h</h1>\n</blockquote>\n<ul>')
-    expect(out).toContain('<p>more</p>')
+  it('keeps an unclosed fence inside its quote', () => {
+    expect(html(['> a', '> {x', '> y}', '> ```', '> # h', '- x', '  ```', 'more'])).toBe(
+      '<blockquote>\n  <p>a\n{x\ny}</p>\n  <pre><code># h\n</code></pre>\n</blockquote>\n<ul>\n  <li>x\n    <pre><code></code></pre>\n  </li>\n</ul>\n<p>more</p>')
   })
 
-  it('still ends the paragraph at a block after an unclosed fence opener', () => {
+  it('takes block-shaped lines into an unclosed fence', () => {
     expect(html(['> a', '> {x', '> y}', '> ```', '> b', '> # h', 'more'])).toBe(
       '<blockquote>\n  <p>a\n{x\ny}</p>\n  <pre><code>b\n# h\n</code></pre>\n</blockquote>\n<p>more</p>')
   })

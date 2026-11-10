@@ -12,7 +12,7 @@ describe('a wrapped attribute at a note marker-line item column', () => {
 
   it('folds the next line into the refused run', () => {
     const html = h('[^n]: 1. a\n         {#i .c\n         .d\n}\n  b\n\nx[^n]\n')
-    expect(html).toContain('<li>a\n{#i .c\n.d\n}\nb</li>')
+    expect(html).toContain('<li>a\n{<span class="tag"><strong>#i</strong></span> .c\n.d\n}\nb</li>')
   })
 
   it('does the same inside a quote', () => {
