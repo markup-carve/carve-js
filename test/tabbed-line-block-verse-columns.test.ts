@@ -16,6 +16,20 @@ describe('tabbed line block verse columns after owner frames', () => {
     expect(carveToHtml(tabbed)).toContain('<p>&nbsp;&nbsp;y</p>')
   })
 
+  it('cuts a nested ordered item frame from the authored tab, not a respelled opener', () => {
+    const tabbed = '- a\n  1. a\n  \t::: |\n  \t x\n'
+    const spaced = '- a\n  1. a\n      ::: |\n       x\n'
+    expect(carveToHtml(tabbed)).toBe(carveToHtml(spaced))
+    expect(carveToHtml(tabbed)).toContain('<p>&nbsp;x</p>')
+  })
+
+  it('keeps the verse lead before a literal greater-than sign in a quote', () => {
+    const tabbed = '> \t::: |\n> \t\t> z\n> \t:::\n'
+    const spaced = '>     ::: |\n>         > z\n>     :::\n'
+    expect(carveToHtml(tabbed)).toBe(carveToHtml(spaced))
+    expect(carveToHtml(tabbed)).toContain('<p>&nbsp;&nbsp;&nbsp;&nbsp;&gt; z</p>')
+  })
+
   it('keeps a verse space after a quoted item tab', () => {
     expect(carveToHtml('> - a\n> \t::: |\n> \t XYZ\n> \t:::\n')).toContain('<p>&nbsp;XYZ</p>')
   })

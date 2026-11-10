@@ -43,8 +43,12 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       line = lineBoundary.line
     }
     if (cuts.length === 0) return undefined
-    let openText = view.lineAt(opener)
-    let lineText = view.lineAt(line)
+    // At the document root a list view may already have respelled a tabbed
+    // opener as spaces; the authored line still holds the tab to cut.
+    const root = lexer.documentRoot ?? lexer
+    const authored = view === root ? root.authoredLines ?? root.rootLines : undefined
+    let openText = authored?.[view.lineNumber(opener) - 1] ?? view.lineAt(opener)
+    let lineText = authored?.[view.lineNumber(line) - 1] ?? view.lineAt(line)
     if (openText === undefined || lineText === undefined) return undefined
     for (let depth = cuts.length - 1; depth >= 0; depth--) {
       const contentColumn = cuts[depth]!
@@ -196,7 +200,7 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const rebaseTab = comparableSource && (tabbedSources || quoteSpaceGap)
       const parentVerse = rebaseTab && tabbedSources && lexer.hostBody === 'list' ? tabbedVerseInOwner(lexer, openLineIndex, lineIndex) : undefined
       const quoteBody = (text: string, contentAt: number): string =>
-        text.slice(text.lastIndexOf('>', contentAt) + 1).replace(/^ /, '')
+        text.slice(contentAt === 0 ? 0 : text.lastIndexOf('>', contentAt - 1) + 1).replace(/^ /, '')
       const quoteGap = rebaseTab && openerQuoteAt >= 0 && (quoteSpaceGap || lexer.hostBody !== 'list')
         ? (() => {
             const first = quoteBody(openerSource, openerAt)
