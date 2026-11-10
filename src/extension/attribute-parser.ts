@@ -43,6 +43,21 @@ export function isValidAttrItem(token: string): boolean {
   return ATTR_ITEM.test(token)
 }
 
+const LEADING_ATTR_ITEM = new RegExp(`(?:${ATTR_ITEM_SRC})(?=[ \\r}])`, 'y')
+
+/**
+ * Whether the one-line payload of a `{` at `at` can start as an attribute: its
+ * first item, if any, ends at a space or the closing `}`. Reading only that item
+ * keeps a line of many failed openers linear.
+ */
+export function inlineAttrPayloadStarts(line: string, at: number): boolean {
+  let start = at + 1
+  while (line[start] === ' ' || line[start] === '\r') start++
+  if (line[start] === '}') return true
+  LEADING_ATTR_ITEM.lastIndex = start
+  return LEADING_ATTR_ITEM.test(line)
+}
+
 /**
  * The same question for an INLINE attribute block, which additionally requires
  * every whitespace slot of its interior to be a SPACE (markup-carve/carve#906,

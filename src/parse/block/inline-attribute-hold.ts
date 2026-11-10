@@ -1,4 +1,4 @@
-import { isValidAttrItem, isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
+import { inlineAttrPayloadStarts, isValidAttrItem, isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
 
 type Mark = [line: number, column: number]
 /** Whether inline pairing attaches an attribute written right after `prefix`. */
@@ -170,6 +170,7 @@ function payloadEnds(line: string): (at: number) => number {
     const end = scan(at)
     if (end === -1) return -1
     if (quotes(at + 1, end) === 0 && (neverUnquoted(at + 1, end) > 0 || invalidTail(at + 1, end))) return -1
+    if (!inlineAttrPayloadStarts(line, at)) return -1
     return isValidInlineAttrPayload(line.slice(at + 1, end)) ? end : -1
   }
 }
