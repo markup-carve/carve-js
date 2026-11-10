@@ -29,7 +29,6 @@
 
 import { trimEndSpaceTab } from './trim-non-nbsp.js'
 import { recoveredCodeFence } from './parse/parse-prepass-core.js'
-import { sourceQuotePrefixEnd } from './parse/block/parse-block-boundaries.js'
 import {
   parse,
   isTableRow,
@@ -1171,6 +1170,14 @@ export function lintCarve(
     })
   })
   const seenMarker = new Set<string>()
+  const visiblePlusSpans: Array<{ startOffset: number; endOffset: number }> = []
+  walkDocument(doc, (node) => {
+    if (node.type !== 'text' || typeof node.value !== 'string' || !node.value.includes('+')) return
+    const pos = node.pos as { startOffset?: number; endOffset?: number } | undefined
+    if (pos?.startOffset !== undefined && pos.endOffset !== undefined) {
+      visiblePlusSpans.push({ startOffset: pos.startOffset, endOffset: pos.endOffset })
+    }
+  })
   for (const marker of refusedContinuationMarkers) {
     const key = `${marker.line}:${marker.column}`
     // A `+` no marker column reaches is a letter under PART 0 S2, so it is quiet (carve#4704).
@@ -1179,6 +1186,9 @@ export function lintCarve(
     const sourceLine = sourceLines[marker.line - 1] ?? ''
     const plus = sourceLine.lastIndexOf('+')
     const start = plus < 0 ? sourceOffset(marker.line, marker.column) : lineOffsets[marker.line - 1]! + plus
+    // Some nested quote lines remain literal text even though the parser recorded
+    // a failed offer. A visible plus is not a refused, discarded marker (P6).
+    if (!marker.firstBlock && visiblePlusSpans.some(span => span.startOffset <= start && start < span.endOffset)) continue
     const reasons: Record<typeof marker.reason, string> = {
       blank: 'a blank line follows it',
       document: 'it reaches the end of the document',
@@ -1189,8 +1199,8 @@ export function lintCarve(
       claimed: 'an earlier marker already claims the next block',
     }
     out.push({ line: marker.line, column: marker.column, start, end: start + 1,
-      rule: 'continuation-marker-refused',
-      message: `This + attaches nothing because ${reasons[marker.reason]}. ${refusedMarkerEffect(marker)}` })
+      rule: marker.firstBlock ? 'continuation-marker-refused' : 'refused-continuation-marker',
+      message: `This + attaches nothing because ${reasons[marker.reason]}. ${refusedMarkerEffect(marker)} It can be removed.` })
   }
 
   out.push(...overindentedOpeners.map((opener) => overindentedOpenerWarning(opener, sourceOffset(opener.line, opener.column))))
@@ -1644,18 +1654,6 @@ export function lintCarve(
   // never going to render. `table-marker-run-padding` had this false positive.
   const unrendered = new Set(verbatimLines)
   for (const ln of collectCommentLines(doc, false, true)) unrendered.add(ln)
-  for (let i = 1; i < sourceLines.length; i++) {
-    const atEnd = i + 1 >= sourceLines.length ||
-      (i + 1 === sourceLines.length - 1 && sourceLines[i + 1] === '')
-    if (!/^\+[ \t]*$/.test(sourceLines[i]!) ||
-      (!atEnd && !isBlankLine(sourceLines[i + 1])) ||
-      sourceQuotePrefixEnd(sourceLines[i - 1]!, 0) < 0 ||
-      unrendered.has(i + 1) || seenMarker.has(`${i + 1}:1`)) continue
-    const reason = atEnd ? 'it reaches the end of the document' : 'a blank line follows it'
-    out.push({ line: i + 1, column: 1, start: lineOffsets[i]!, end: lineOffsets[i]! + 1,
-      rule: 'continuation-marker-refused',
-      message: `This + attaches nothing because ${reason}. It renders nothing.` })
-  }
   collectSemanticAttributeWarnings(doc, out, toUtf16, semanticElementNames(opts.extensions))
   collectMarkerBeforeAttributes(source, doc, out, toUtf16)
   const termFoldLines = collectTermFoldWarnings(source, doc, out)

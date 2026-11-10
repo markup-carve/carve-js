@@ -3,7 +3,7 @@ import { carveToHtml, parse } from '../src/index.js'
 import { lintCarve } from '../src/lint.js'
 
 const refusedMarkers = (source: string) =>
-  lintCarve(source).filter(finding => finding.rule === 'continuation-marker-refused')
+  lintCarve(source).filter(finding => finding.rule === 'refused-continuation-marker')
 
 describe('a plus in a fence content column', () => {
   it('keeps the shared vector silent and renders its payload', () => {
