@@ -2555,10 +2555,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         { whitespace: 0, descendantFrames: true, terminatorFree: true })
       // The note's body column sits past a task box, as in the item's own frame.
       if (lazyState.footnoteBodyColumn !== undefined) claim.footnoteBodyColumn = lazyState.footnoteBodyColumn
-      for (const text of nested) {
+      nested.forEach((line, k) => {
+        const text = braceHeld.maskLine(nestedLineNumbers[k] ?? 0, line)
         trackItemLazyState(text, claim, true, () => false,
           { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
-      }
+      })
       return !(claim.lazyFoldable && claim.opaque === null && claim.divDepth === 0)
     }
     const stopsBeforeBody = (l: string): Decision | undefined => {
