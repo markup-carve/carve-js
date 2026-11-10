@@ -1442,7 +1442,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let definitionAuthored = false
     let definitionBodyColumn: number | undefined
     let authoredDescriptionBodyColumn: number | undefined
-    const itemSpanScan = { ...newCommentSpanScan(), markerOwners: true }
+    const itemSpanScan = { ...newCommentSpanScan(content), markerOwners: true }
     // Lines the item took from BELOW its content column, a narrower fact than
     // `authoredBaseEligible`'s complement: that set also excludes a fence
     // body, which reached the column and carries authored indentation.

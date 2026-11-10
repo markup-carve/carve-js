@@ -761,7 +761,14 @@ function descriptionLeadOpens(entries: Array<[number, boolean]>, column: number)
   return false
 }
 
-export const newCommentSpanScan = (): CommentSpanScan => ({ index: 0, opaque: null, atBlockStart: true })
+/** `lead`: an item's marker-line content, which the scan never walks; a term on it is the first entry. */
+export function newCommentSpanScan(lead?: string): CommentSpanScan {
+  const scan: CommentSpanScan = { index: 0, opaque: null, atBlockStart: true }
+  const body = lead === undefined ? '' : markerFreeContent(lead)
+  if (lead !== undefined && /^:: /.test(body))
+    scan.entries = [[body === lead.trimStart() ? indentColumns(lead) : stackedItemContentColumn(lead), true]]
+  return scan
+}
 
 export function bodyHoldsOpenCommentSpan(
   lines: readonly string[],
@@ -786,9 +793,14 @@ export function bodyHoldsOpenCommentSpan(
       : null
     if (line !== '') {
       // A `: ` line with no entry above is paragraph text, so it starts no list either (PART 0 S3).
-      const entry = /^:: /.test(line) || line.startsWith(': ') && descriptionLeadOpens(entries, column)
+      const entry = /^:: /.test(line) || RE_DESCRIPTION_LEAD.test(line) && descriptionLeadOpens(entries, column)
       while (entries.length > 0 && entries.at(-1)![0] >= column) entries.pop()
       entries.push([column, entry])
+      // A term behind list markers opens its list at the bottom item's content column.
+      if (isListMarkerLine(line) && /^:: /.test(markerFreeContent(line))) {
+        const body = stackedItemContentColumn(raw)
+        if (body > column) entries.push([body, true])
+      }
     }
     const open = scan.opaque
     if (open !== null) {

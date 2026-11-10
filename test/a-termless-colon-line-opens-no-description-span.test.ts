@@ -30,3 +30,27 @@ it('keeps a description span under a term', () => {
     '<ul><li>a<dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
   ))
 })
+
+it('keeps a description span under a term on the item marker line', () => {
+  expect(normalize(carveToHtml('- :: t\n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
+  ))
+})
+
+it('keeps a description span under a term behind two markers', () => {
+  expect(normalize(carveToHtml('- - :: t\n    : x\n    : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul></li></ul><p>c</p>',
+  ))
+})
+
+it('keeps a description span under a term on a child marker line', () => {
+  expect(normalize(carveToHtml('- a\n  - :: t\n    : x\n    : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li>a<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul></li></ul><p>c</p>',
+  ))
+})
+
+it('reads an empty colon line under a term on the item marker line as text', () => {
+  expect(normalize(carveToHtml('- :: t\n  : \n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt></dl> : :</li></ul>',
+  ))
+})
