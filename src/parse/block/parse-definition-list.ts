@@ -21,7 +21,7 @@ import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
 import { taskBoxColumns } from './task-box-frame.js'
-import { pulledParagraphBlockCut } from './pulled-paragraph.js'
+import { pulledBodyBlockCut } from './pulled-paragraph.js'
 import {
   attachedQuoteEnd,
   continueWrappedAttributeBlock,
@@ -515,7 +515,7 @@ export function createDefinitionListParser(
       if (/^\+[ \t]*$/.test(first)) {
         const firstBlock = parseSession.collectAttachedBlock(lexer, attachedBoundary(), 0, true, true)
         const quoteEnd = attachedQuoteEnd(firstBlock.lines)
-        const blockCut = quoteEnd < firstBlock.lines.length ? quoteEnd : pulledParagraphBlockCut(firstBlock.lines, contentCol)
+        const blockCut = quoteEnd < firstBlock.lines.length ? quoteEnd : pulledBodyBlockCut(firstBlock.lines, contentCol)
         if (blockCut > 0) {
           lexer.pos -= firstBlock.lines.length - blockCut
           firstBlock.lines.length = blockCut
