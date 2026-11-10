@@ -3712,7 +3712,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       indentColumns(line, contentCol) < contentCol && RE_DEFLIST_DEF.test(line.trimStart()) &&
       !descendantDefinitionReachesContent(line) &&
       lazyState.inDefList === false && !lazyState.deepest?.inDefList
+    // A run's continuation past its `{` carries the item's prefix, so it is no lazy line (CARVE-P2-035, carve#5830 B).
+    const heldRunLine = (l: string): boolean =>
+      braceHeld.holds(lexer.pos) || lazyState.attrRun !== null && !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos)) &&
+        indentColumns(l) > (lazyState.attrOwnerColumn ?? 0) + (lazyState.attrColumn ?? 0)
     const lazyLineFor = (l: string): string => {
+      if (heldRunLine(l)) return l
       if (termlessDefinitionNeedsLazyFrame(l))
         return LAZY_FRAME + l.trimStart()
       if (captionLeafOpen(l)) return LAZY_FRAME + l.trimStart()
