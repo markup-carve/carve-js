@@ -4,9 +4,9 @@ import { carveToAstJson, carveToHtml } from '../src/index.js'
 describe('tabbed line block verse columns after owner frames', () => {
   it('restarts a tab after each nested item cut, matching the space spelling', () => {
     const tabbed = '* a\n  * a\n  \t::: |\n    \ty\n  \t:::\n'
-    const spaced = '* a\n  * a\n      ::: |\n      y\n      :::\n'
+    const spaced = '* a\n  * a\n      ::: |\n        y\n      :::\n'
     expect(carveToHtml(tabbed)).toBe(carveToHtml(spaced))
-    expect(carveToHtml(tabbed)).toContain('<p>y</p>')
+    expect(carveToHtml(tabbed)).toContain('<p>&nbsp;&nbsp;y</p>')
   })
 
   it('uses the nested item fence column after a partly consumed tab', () => {

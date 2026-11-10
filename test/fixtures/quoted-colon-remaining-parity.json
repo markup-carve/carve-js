@@ -962,7 +962,7 @@
   {
     "id": "js-deep-descendant-tabs",
     "source": "- a\n  - b\n\t- c\n\t  ::: |\n\t\tbody\n\t%%%\n\thidden\n\t%%%\n",
-    "html": "<ul><li>a\n    <ul><li>b\n        <ul><li>c\n            <div class=\"line-block\"><p>body</p></div></li></ul></li></ul></li></ul>"
+    "html": "<ul><li>a\n    <ul><li>b\n        <ul><li>c\n            <div class=\"line-block\"><p>&nbsp;&nbsp;body</p></div></li></ul></li></ul></li></ul>"
   },
   {
     "id": "unpaired-handoff-0",

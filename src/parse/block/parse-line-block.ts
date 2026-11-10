@@ -45,12 +45,10 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
     let openText = view.lineAt(opener)
     let lineText = view.lineAt(line)
     if (openText === undefined || lineText === undefined) return undefined
-    const rebaseLead = (text: string): string =>
-      ' '.repeat(indentColumns(text)) + text.slice(leadLength(text))
     for (let depth = cuts.length - 1; depth >= 0; depth--) {
       const contentColumn = cuts[depth]!
-      openText = rebaseLead(sliceColumns(openText, contentColumn, true))
-      lineText = rebaseLead(sliceColumns(lineText, contentColumn, true))
+      openText = sliceColumns(openText, contentColumn, true)
+      lineText = sliceColumns(lineText, contentColumn, true)
     }
     // The fence consumes its own indentation in the final owner too. A tab
     // crossing an item cut can leave spaces on the opener, so returning the
