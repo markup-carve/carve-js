@@ -475,7 +475,11 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // A run indented past the content column is still a run, unless an open code span holds it (CARVE-P2-035, carve#5610).
     const runText = line.atContentColumn && state.attrRun === null && line.inlineCodeOpen === 0 ? content.trimStart() : content
     const opener = state.attrRun === null
+    // A lazy line's column here is not its authored one, so only a run at the content column refuses a `{%` comment.
+    state.attrRunLazy = !line.atContentColumn || !opener && state.attrRunLazy === true
+    const comment = (opener ? runText.trimStart() : state.attrRun!).startsWith('{%')
     if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
+    if (state.refusedBraceRun && comment && state.attrRunLazy) state.refusedBraceRun = false
     // A run that lazily continues a nested quote's paragraph is that quote's text, not the item's.
     if (opener && state.attrRun !== null) state.attrRunInQuote = line.wasQuote !== null && blockQuoteParagraphOpen(line.wasQuote)
     if (state.refusedBraceRun) {
