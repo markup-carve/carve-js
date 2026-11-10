@@ -1641,7 +1641,10 @@ export function continueWrappedAttributeBlock(
 ): { run: string; verdict: 'open' | 'attributes' | 'text' } {
   if (isBlankLine(content)) return { run: '', verdict: 'text' }
   const run = `${collected}\n${content}`
-  if (!content.includes('}') || !closesAttributeBlock(run)) return { run, verdict: 'open' }
+  // A `{%` run is a comment that only `%}` closes, whatever braces it holds (CARVE-P2-035).
+  if (!content.includes('}') || !closesAttributeBlock(run) || run.startsWith('{%') && !content.includes('%}')) {
+    return { run, verdict: 'open' }
+  }
 
   // A failed opener is one text line; a later `{` line can still open the block (carve#4089).
   const lastOpener = run.lastIndexOf('\n{')
