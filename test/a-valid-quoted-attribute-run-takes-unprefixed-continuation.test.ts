@@ -13,3 +13,7 @@ it.each([
 it('keeps a shallow unprefixed continuation as paragraph text', () => {
   expect(carveToHtml('> {.x\n .y}\nplain\n')).toBe('<blockquote><p>{.x\n.y}\nplain</p></blockquote>')
 })
+
+it('leaves a heading outside the quote when the attribute run never closes', () => {
+  expect(carveToHtml('> {.x\n   # h\nplain\n')).toBe('<blockquote><p>{.x</p></blockquote>\n<section id="h">\n  <h1>h</h1>\n  <p>plain</p>\n</section>')
+})

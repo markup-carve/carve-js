@@ -85,6 +85,7 @@ import {
   commentBlockHasCloser,
   commentCloserLookup,
   commentLineContent,
+  continueWrappedAttributeBlock,
   consumeLooseKey,
   deflistMarkerLine,
   delimitedTable,
@@ -209,7 +210,7 @@ interface QuoteCollect {
   quoteMarkerColumn: number
   physicalQuoteColumn: number
   /** Authored brace and quote-inner columns of an open quoted attribute run. */
-  pendingAttribute: { sourceColumn: number; innerColumn: number; prefix: string; prefixColumn: number } | undefined
+  pendingAttribute: { sourceColumn: number; innerColumn: number; prefix: string; prefixColumn: number; confirmed?: boolean } | undefined
   // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
   // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
   // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
@@ -2366,6 +2367,31 @@ export class ParseSession extends InlineParseSession {
     return true
   }
 
+  /** Confirm a pending run before it claims unprefixed lines that could instead open blocks. */
+  private quotedAttributeCloses(q: QuoteCollect, pending: NonNullable<QuoteCollect['pendingAttribute']>, run: string): boolean {
+    const { lexer } = q
+    const collected = [run]
+    const root = lexer.documentRoot ?? lexer
+    const authoredLines = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
+    for (let offset = 0; ; offset++) {
+      const line = lexer.peek(offset)
+      if (line === undefined || isBlankLine(line)) return false
+      const quoted = quotedLineText(line, lexer.lineTerminatorFree(lexer.pos + offset))
+      if (quoted === null) {
+        const authored = authoredLines[lexer.lineNumber(lexer.pos + offset) - 1] ?? line
+        if (quotePrefixDepth(authored) > 0 || sourceColumn(authored) <= pending.sourceColumn) return false
+      }
+      const content = quoted === null ? line : quoted
+      const continuation = ' ' + content.trimStart()
+      if (content.includes('}')) {
+        const next = continueWrappedAttributeBlock(collected.join('\n'), continuation)
+        if (next.verdict === 'attributes') return true
+        if (next.verdict === 'text') return false
+      }
+      collected.push(continuation)
+    }
+  }
+
   // False when the unmarked line ends the quote instead of continuing it.
   private takeLazyQuoteLine(q: QuoteCollect, ln: string): boolean {
     const { lexer, state } = q
@@ -2377,7 +2403,9 @@ export class ParseSession extends InlineParseSession {
       const root = lexer.documentRoot ?? lexer
       const authored = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
       const writtenColumn = sourceColumn(authored)
-      if (leaf.attrRun !== null && writtenColumn > pending.sourceColumn && quotePrefixDepth(authored) === 0) {
+      if (leaf.attrRun !== null && writtenColumn > pending.sourceColumn && quotePrefixDepth(authored) === 0 &&
+          (pending.confirmed || this.quotedAttributeCloses(q, pending, leaf.attrRun))) {
+        pending.confirmed = true
         const column = pending.innerColumn + writtenColumn - pending.sourceColumn
         const content = pending.prefix + ' '.repeat(Math.max(0, column - pending.prefixColumn)) + ln.trimStart()
         const lineIndex = lexer.pos
