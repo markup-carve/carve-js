@@ -921,6 +921,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       endsOnTableRow: false,
       bottomIsContinuationMarker: false,
       wrappedAttributeRun: null,
+      wrappedAttributeColumn: 0,
       quote: null,
     } : markerLineState(content, session.markerPrefixMemo(lexer, itemStartLineIndex))
     const memo = session.markerPrefixMemo(lexer, itemStartLineIndex)
@@ -943,6 +944,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ? 'description'
           : false,
       attrRun: leadState.wrappedAttributeRun,
+      attrColumn: leadState.wrappedAttributeColumn,
       attrOwnerColumn: contentCol,
       // A container may open on the marker line itself, which never reaches
       // `trackItemLazyState`, so the first line collected below it has to be

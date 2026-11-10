@@ -1529,11 +1529,19 @@ export function markerLineBottomBlock(content: string, memo?: Map<number, number
   return walked === 0 ? content : content.slice(walked)
 }
 
+function prefixColumns(prefix: string): number {
+  let col = 0
+  for (const ch of prefix) col = ch === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1
+  return col
+}
+
 export function markerLineState(content: string, memo?: Map<number, number>): {
   leavesParagraphOpen: boolean
   endsOnTableRow: boolean
   bottomIsContinuationMarker: boolean
   wrappedAttributeRun: string | null
+  /** The column of the run's `{` in `content`, which its continuations must pass (CARVE-P2-035). */
+  wrappedAttributeColumn: number
   quote: BlockQuoteLazyState | null
 } {
   const bottom = markerLineBottomBlock(content, memo)
@@ -1541,7 +1549,10 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
   const note = RE_FOOTNOTE_DEF.exec(bottom)
   const quote = markerLineQuoteState(content, memo)
   // A quote holding the note still carries the lines below it.
-  if (note) return { ...markerLineState(note[2]!), quote }
+  if (note) {
+    const body = markerLineState(note[2]!)
+    return { ...body, wrappedAttributeColumn: body.wrappedAttributeColumn + prefixColumns(content.slice(0, content.length - note[2]!.length)), quote }
+  }
   const fenceShaped = RE_FENCE.test(bottom) || RE_RAW_FENCE.test(bottom) ||
     colonFenceShapeEndsLazyContinuation(bottom)
   let hasNestedQuote = false
@@ -1570,6 +1581,7 @@ export function markerLineState(content: string, memo?: Map<number, number>): {
     // A stacked quote's `+` (`- - > +`) is quote text when refused, which a lazy line continues.
     bottomIsContinuationMarker,
     wrappedAttributeRun: opensWrappedAttributeBlock(bottom) ? bottom : null,
+    wrappedAttributeColumn: prefixColumns(content.slice(0, content.length - bottom.length)),
     quote,
   }
 }
