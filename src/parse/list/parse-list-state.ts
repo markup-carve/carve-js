@@ -467,6 +467,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // Inline pairing owns every brace line inside an open code span, whether
     // the attribute spelling closes on this line or a later one (carve#5638).
     if (state.attrRun === null && line.inlineCodeOpen !== 0) return false
+    // An unquoted continuation of a quote's run is a lazy line, which refuses the run (carve#5830 rule B).
+    if (state.attrRun !== null && line.wasQuote?.attrRun != null && !RE_BLOCKQUOTE.test(content)) {
+      state.attrRun = null
+      line.wasQuote.attrRun = null
+      line.wasQuote.mode = { kind: 'paragraph' }
+      return false
+    }
     const column = line.atContentColumn
       ? line.facts?.whitespace ?? indentColumns(content)
       : Math.max(0, indentColumns(content) - (state.attrOwnerColumn ?? 0))

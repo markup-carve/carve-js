@@ -952,6 +952,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
   }
 
+  // How far right of the content column the lead content was written; a marker-glued attribute moves it.
+  function leadContentShift(line: string | undefined, content: string, contentCol: number): number {
+    const at = line === undefined || content === '' ? -1 : line.lastIndexOf(content)
+    return at < 0 ? 0 : Math.max(0, sourceColumnAt(line!, at) - contentCol)
+  }
+
   function leadLazyState(
     lexer: Lexer, session: ParseSession, content: string, itemStartLineIndex: number, markerLineTerm: boolean, contentCol: number,
     boxWidth: number,
@@ -991,8 +997,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ? 'description'
           : false,
       attrRun: leadState.wrappedAttributeRun,
-      // A run behind a task box is measured from its `{`, past the box (CARVE-P2-035).
-      attrColumn: leadState.wrappedAttributeColumn + boxWidth,
+      // A run behind a task box or a marker-glued attribute is measured from its written `{` (CARVE-P2-035, carve#5788).
+      attrColumn: leadState.wrappedAttributeColumn + Math.max(boxWidth, leadContentShift(lexer.lineAt(itemStartLineIndex), content, contentCol)),
       attrOwnerColumn: contentCol,
       // A container may open on the marker line itself, which never reaches
       // `trackItemLazyState`, so the first line collected below it has to be
