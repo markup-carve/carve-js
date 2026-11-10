@@ -23,7 +23,7 @@ describe('tabbed line block verse columns after owner frames', () => {
       <ul>
         <li>a
           <div class="line-block">
-            <p>&nbsp;z</p>
+            <p>&nbsp;&nbsp;&nbsp;z</p>
           </div>
         </li>
       </ul>
@@ -32,14 +32,14 @@ describe('tabbed line block verse columns after owner frames', () => {
 </blockquote>`)
   })
 
-  it('retains no verse indent after a second frame tab', () => {
+  it('retains the second tab residual inside the final frame', () => {
     expect(carveToHtml('> - a\n>   - a\n>   \t::: |\n> \t\tz\n>   \t:::\n')).toBe(`<blockquote>
   <ul>
     <li>a
       <ul>
         <li>a
           <div class="line-block">
-            <p>z</p>
+            <p>&nbsp;&nbsp;z</p>
           </div>
         </li>
       </ul>

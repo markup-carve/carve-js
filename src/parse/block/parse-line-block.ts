@@ -34,9 +34,9 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const openBoundary = view.sourceBoundaries?.[opener]
       const lineBoundary = view.sourceBoundaries?.[line]
       if (!openBoundary || !lineBoundary || openBoundary.parent !== lineBoundary.parent) return undefined
-      // A source boundary counts the marker's literal bytes. A tab before a
-      // nested marker may make that wider than the columns this frame owns.
-      cuts.push(Math.min(openBoundary.start, Math.max(0, view.hostContentColumn - openBoundary.parent.hostContentColumn)))
+      // A source boundary counts literal bytes; the owner's content columns
+      // name the structural width to consume in this frame.
+      cuts.push(Math.max(0, view.hostContentColumn - openBoundary.parent.hostContentColumn))
       view = openBoundary.parent
       opener = openBoundary.line
       line = lineBoundary.line
@@ -45,16 +45,12 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
     let openText = view.lineAt(opener)
     let lineText = view.lineAt(line)
     if (openText === undefined || lineText === undefined) return undefined
-    if (view === (lexer.documentRoot ?? lexer)) {
-      const expandLead = (text: string): string => ' '.repeat(indentColumns(text)) + text.slice(leadLength(text))
-      openText = expandLead(openText)
-      lineText = expandLead(lineText)
-    }
+    const rebaseLead = (text: string, column: number): string =>
+      ' '.repeat(indentColumns(' '.repeat(column) + text) - column) + text.slice(leadLength(text))
     for (let depth = cuts.length - 1; depth >= 0; depth--) {
       const contentColumn = cuts[depth]!
-      const cut = depth === 0 ? Math.max(contentColumn, indentColumns(openText)) : contentColumn
-      openText = sliceColumns(openText, cut, true)
-      lineText = sliceColumns(lineText, cut, true)
+      openText = rebaseLead(sliceColumns(openText, contentColumn, true), contentColumn)
+      lineText = rebaseLead(sliceColumns(lineText, contentColumn, true), contentColumn)
     }
     return lineText
   }
