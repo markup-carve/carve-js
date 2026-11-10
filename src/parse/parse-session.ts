@@ -2,7 +2,7 @@ import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { braceRunHolds, type BraceRunHolds } from './block/brace-run-holds.js'
 import { destinationSlotEnds } from '../link-destination.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
-import { commentOnlyParagraphEnd, isRefusedBraceRun } from './parse-prepass-core.js'
+import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import { endsAtConsumedMarker, entriesToWire } from '../ast/definition-list-wire.js'
 import type { Comment, DefinitionItem, LinkReferenceDefinition } from '../ast.js'
@@ -171,7 +171,6 @@ import {
 } from './parse-core.js'
 
 import { InlineParseSession } from './inline/parse-inline-session.js'
-import { withKeptFenceLookahead } from './block/parse-quote-core.js'
 import { scanDirectiveShape } from '../include-directive.js'
 import { attachedLeadIsList, attachedListFenceBoundary, parseFootnoteDef } from './block/parse-footnote-session.js'
 import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
@@ -2055,7 +2054,7 @@ export class ParseSession extends InlineParseSession {
     while (level.mode.kind === 'quote') level = level.mode.inner
     // Inside verbatim payload a `{%` line is payload, not a run.
     if (level.mode.kind !== 'code_fence' && level.mode.kind !== 'comment_fence') held.open(lineIndex, content)
-    withKeptFenceLookahead(lexer, lineIndex, () => trackBlockQuoteLazyState(
+    trackBlockQuoteLazyState(
       held.mask(lineIndex, content),
       state,
       (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
@@ -2065,7 +2064,7 @@ export class ParseSession extends InlineParseSession {
       !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
       (fence, depth, floor) => literalCommentHasCloser(lexer, fence, lineIndex, depth, floor),
       marker => this.quotePayloadCloser(q, marker, lineIndex),
-    ))
+    )
     // Reuse the handed-down state only while lazy text leaves it unchanged.
     if (!descent.preserved && q.handDown && state.mode.kind === 'quote' && state.mode.inner === q.handDown.state) q.handDown = null
   }
@@ -2792,20 +2791,8 @@ export class ParseSession extends InlineParseSession {
     } else {
       const firstBlock = at(attributeLines)
       const attachedCode = firstBlock !== undefined && (RE_FENCE.test(firstBlock) || RE_RAW_FENCE.test(firstBlock))
-      let refusedInlineCloser: RegExp | null = null
       while (lexer.peek(take) !== undefined) {
         const candidate = lexer.peek(take)!
-        const visible = at(take) ?? candidate
-        let openedRefusedInline = false
-        if (refusedInlineCloser === null) {
-          const opener = RE_FENCE.exec(visible.trimStart())?.[2] ?? RE_RAW_FENCE.exec(visible.trimStart())?.[1]
-          if (opener && isRefusedBraceRun(at, take)) {
-            const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length}${opener[0] === '`' ? '' : ','}}[ \\t]*$`)
-            for (let n = take + 1; at(n) !== undefined && !isBlankLine(at(n)!); n++) {
-              if (closer.test(at(n)!)) { refusedInlineCloser = closer; openedRefusedInline = true; break }
-            }
-          }
-        }
         // The first block may start at a nested item's marker column. Once a
         // code fence has opened there, a line below that column is outside its
         // host even when the attachment boundary accepts it as lazy text.
@@ -2821,18 +2808,11 @@ export class ParseSession extends InlineParseSession {
         const firstNonList = acceptFirstNonList && first && !isBlankLine(candidate) &&
           !isContinuationMarker(candidate) && !isListMarkerLine(candidate) &&
           !deflistMarkerLine(candidate)
-        // The line after a refused brace run continues its paragraph whatever it opens (CARVE-P2-035);
-        // a sibling item, description or note still ends its host first.
         // Every line at an unclosed attached fence's content column is payload
         // until its first blank, not only a `+` line (PART 0 S1, carve#5499).
         const codePayload = attachedCode && take > attributeLines && !isBlankLine(candidate) &&
           indentColumns(at(take)!) >= indentColumns(firstBlock)
-        // A sibling marker ends the host even inside the refused run's inline span (PART 0 S2, carve#5592).
-        if (refusedInlineCloser !== null && !openedRefusedInline && isBoundary(candidate, take) &&
-          (itemHost ? isListMarkerLine(candidate) : deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate))) break
-        if (refusedInlineCloser === null && !codePayload && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList &&
-          (itemHost || deflistMarkerLine(candidate) || RE_FOOTNOTE_DEF.test(candidate) || !isRefusedBraceRun(at, take))) break
-        if (!openedRefusedInline && refusedInlineCloser?.test(visible)) refusedInlineCloser = null
+        if (!codePayload && isBoundary(candidate, take) && !firstFlushLeft && !firstNonList) break
         take++
       }
       const measured = this.attachedBlockExtent(lexer, take, view, endAtFoldedDefinition, attributeLines)

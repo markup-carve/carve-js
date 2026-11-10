@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
-import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, isRefusedBraceRun } from '../parse-prepass-core.js'
+import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { leadingCommentEnd, sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
@@ -14,7 +14,7 @@ import { wrappedAttributeLinesAt } from '../block/leading-attribute-run.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, sourceColumn, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { braceRunHolds } from '../block/brace-run-holds.js'
-import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
+import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
 /** One marker of a stacked marker chain, with its trailing space. */
@@ -803,7 +803,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
         }
         return index > 0 && (index === blockCut || indentColumns(line) === placement.contentCol &&
-          !(isListMarkerLine(text) && isRefusedBraceRun(at => lines[at], index)) && (isListMarkerLine(text) ||
+          (isListMarkerLine(text) ||
           !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text))))
       })
       if (cut > 0) {
@@ -1596,17 +1596,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
-    // A line a refused brace run's paragraph keeps opens no fence (CARVE-P2-035).
-    const keptByRefusedRun = (): boolean => {
-      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
-        if (frame.refusedRunKept !== undefined) return true
-      return false
-    }
-    const lastLineKept = (): boolean => {
-      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
-        if (frame.keptRunLine === true) return true
-      return false
-    }
     const braceHeld = braceRunHolds(lexer)
     braceHeld.open(itemStartLineIndex, content)
     const trackDescendantOpaque = (
@@ -1678,7 +1667,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         return
       }
       const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-      if (fence === null || keptByRefusedRun() || descendantOpaque === null && braceHeld.holds(lexer.pos)) return
+      if (fence === null || descendantOpaque === null && braceHeld.holds(lexer.pos)) return
       if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
@@ -2624,7 +2613,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A run past an open quote's column is quoted text, not an item-ending break.
       if (!isBlankLine(l) && lw <= baseIndent && lazyState.literalColon === undefined &&
           !insideOpenFence(lazyState) &&
-          RE_HR.test((nested.at(-1) ?? '').trimStart()) && !lastLineKept() &&
+          RE_HR.test((nested.at(-1) ?? '').trimStart()) &&
           !(insideOpenQuoteParagraph(lazyState) &&
             indentColumns(nestedSourceLines.at(-1) ?? '') > contentCol)) return 'stop'
       if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked && noteClaimEnds()) return 'stop'
@@ -3316,7 +3305,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       // Inside verbatim payload a `{%` line is payload, not a run.
       if (lazyState.opaque === null && descendantOpaque === null && !insideOpenFence(lazyState)) braceHeld.open(fenceLineIndex, trackedContent)
-      if (!skipConsumedCloser) withKeptFenceLookahead(lexer, fenceLineIndex, () => trackItemLazyState(
+      if (!skipConsumedCloser) trackItemLazyState(
         braceHeld.mask(fenceLineIndex, trackedContent),
         lazyState,
         true,
@@ -3360,7 +3349,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
         tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
         authoredQuoteParagraphOpen,
-      ))
+      )
       if (captionAtItemColumn) {
         captionParagraphClaim = hadQuoteParagraph
         lazyState.quoteInner = null

@@ -889,9 +889,7 @@ export function createDefinitionListParser(
           }
           pendingMarkerLineBlock = null
         }
-        const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody) ||
-          lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined && residual > 0 &&
-          !lazyUnderNestedItem && isListMarkerLine(flush) && reachesSourceBody
+        const bodyReadsFlush = contentReadsFlush(dedented, flush, residual, lazyUnderNestedItem, reachesSourceBody)
         if (RE_BLOCKQUOTE.test(flush)) bodyHoldsQuote = true
         // A line AT the body's column 0 is the body's own block, so it replaces
         // whatever container stood there: another list marker keeps a list
@@ -905,8 +903,6 @@ export function createDefinitionListParser(
           markerContentColumn(dedented) >= 0 && !insideOpenFence(lazyState)
         if (bodyReadsFlush && residual > 0 && !foldedMarker) {
           authoredOpeners.add(bodyLines.length - 1)
-          // A refused run forced the fence line only; the next block uses its authored base.
-          if (lazyState.refusedBraceFollower && lazyState.refusedRunKept === undefined) bodyLines[bodyLines.length - 1] = flush
         }
         if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
         else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
@@ -1199,10 +1195,7 @@ export function createDefinitionListParser(
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
-        if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below) &&
-            (lazyState.refusedRunKept === undefined || markerContentColumn(first) >= 0 ||
-              RE_BLOCKQUOTE.test(first) || nestedItemColumn >= 0 ||
-              lazyState.quoteInner !== null)) return 'stop'
+        if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below)) return 'stop'
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
         // A span in verse leaves nothing, so the stanza it interrupted still takes the line (carve#4956).

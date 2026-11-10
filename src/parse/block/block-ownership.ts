@@ -589,9 +589,6 @@ export function ownLines(
   let attachedInlineCode = 0
   let braceRunStart = -1
   let shiftedAttachedFence: { column: number; run: string } | null = null
-  // A fence that ended a description's `+` block at the document; a later description closes it (carve#4408, carve#5592).
-  let ddBlockFence: { host: Frame[]; at: number } | null = null
-  let endedDescription: Frame[] | null = null
   // The host a marker-line `+` gave its block to, and the frame that block opened (null for a leaf).
   // The host resumes at its content column once that block has ended (CARVE-P0-024, carve#5407).
   const resumable: { host: Frame[]; block: Frame | null; table: boolean; last: number }[] = []
@@ -1009,7 +1006,6 @@ export function ownLines(
       frames[reached]!.cut = Math.max(frames[reached]!.cut, top().markerCol! - top().markerCanon!)
     }
     if (handsBackAttachedHost()) reached = frames.length - 1
-    if (resumesDescriptionAfterFence()) reached = frames.length - 1
     const missed = reached < frames.length - 1
     reach = reached
     const inner = top()
@@ -1092,11 +1088,9 @@ export function ownLines(
       if (trailingPlusText(form, m.rest)) spellTrailingPlusAsLetter()
       trackQuoteBlock(form, owner, plusFollower)
       if (!plusFollower && attachedBlockEnded(form, owner, reached)) {
-        if (attachedHost!.at(-1)!.kind === 'dd') endedDescription = attachedHost
         attachedHost = null
         attachedInlineCode = 0
       }
-      trackDescriptionBlockFence(form)
       return form
     }
     let form = advanceAttachedForm(foldReleasedFence(classified, owner, m.col, at, lazyLines, laterCloser))
@@ -1595,34 +1589,6 @@ export function ownLines(
           }
         }
       }
-      return true
-    }
-
-    function trackDescriptionBlockFence(form: Form): void {
-      if (m.rest === '') endedDescription = null
-      // Only the fence-shaped follower of the refused brace run the `+` took (CARVE-P2-035).
-      else if (endedDescription && form.kind === 'fence' && form.family === 'code' && reached === 0 &&
-          at > 0 && trimEndSpaceTab(lines[at - 1]!).endsWith('}')) {
-        ddBlockFence = { host: endedDescription, at }
-        endedDescription = null
-      }
-    }
-
-    function resumesDescriptionAfterFence(): boolean {
-      const ended = ddBlockFence
-      if (ended === null || m.rest === '') return false
-      if (top().kind !== 'fence' || top().opened !== ended.at) {
-        ddBlockFence = null
-        return false
-      }
-      const dd = ended.host.at(-1)!
-      const parent = ended.host.at(-2)!
-      if (!/^:[ \t]+\S/.test(m.rest) || m.col >= dd.col || (m.col < parent.col && m.col !== parent.markerCol)) return false
-      ddBlockFence = null
-      frames.length = 0
-      frames.push(...ended.host.slice(0, -1))
-      top().last = 'dd'
-      top().para = false
       return true
     }
 

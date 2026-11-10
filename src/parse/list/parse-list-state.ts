@@ -36,7 +36,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     isBlockAttributeLine,
     isLinkDefLine,
     isTableRow,
-    keepsRefusedRunLine,
     lineOpensBlock,
     leadingWhitespace,
     markerLineQuoteState,
@@ -72,7 +71,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     authoredQuoteParagraphOpen: boolean,
   ): LazyLine {
     delete state.retainedMarker
-    delete state.keptRunLine
     const wasDescendantColumn = state.ownedColumn >= 0 && !state.ownedAuthored
     const wasClosedColon = state.closedColonBody === true
     const wasClosedLiteralComment = state.closedLiteralComment === true
@@ -480,13 +478,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const comment = (opener ? runText.trimStart() : state.attrRun!).startsWith('{%')
     if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
     if (state.refusedBraceRun && comment && state.attrRunLazy) state.refusedBraceRun = false
-    // A run that lazily continues a nested quote's paragraph is that quote's text, not the item's.
-    if (opener && state.attrRun !== null) state.attrRunInQuote = line.wasQuote !== null && blockQuoteParagraphOpen(line.wasQuote)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
-      const ownRun = state.attrRunInQuote !== true
-      state.refusedBraceFollower = ownRun
-      state.refusedRunKept = ownRun ? null : undefined
       state.lazyFoldable = true
       return true
     }
@@ -495,17 +488,9 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     return false
   }
 
-  function refusedRunKeptLine(line: LazyLine): boolean {
-    if (!keepsRefusedRunLine(line.state, line.content, line.state.lazyFoldable)) return false
-    line.state.lazyFoldable = true
-    line.state.keptRunLine = true
-    return true
-  }
-
   function blankLine(line: LazyLine): boolean {
     const { state } = line
     if (!isBlankLine(line.content)) return false
-    state.refusedBraceFollower = false
     delete state.termAfterComment
     if (state.descriptionHasTerm === false) state.inDefList = false
     // A blank is a separator; a `:  def` may follow it (djot allows a blank
@@ -923,7 +908,6 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     openCommentSpan,
     openCodeFence,
     termComment,
-    refusedRunKeptLine,
     attributeRun,
     blankLine,
     definitionMarker,
