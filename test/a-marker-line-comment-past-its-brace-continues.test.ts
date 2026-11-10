@@ -16,4 +16,3 @@ it.each(sources)('continues a marker-line comment past its written brace: %s', s
   expect(html).toContain('<p> y<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>')
   expect(html).not.toContain('{% a')
 })
-
