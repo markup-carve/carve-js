@@ -1113,9 +1113,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     }
     trackLead(m[2]!)
     // A span on a nested note's marker line is that note's, so a line below its body ends it (PART 0 S1).
+    // trackLead recursively tracks every nested note body. Replaying one here
+    // would feed its marker-line run twice and falsely leave a paragraph open.
     let column = m[0].length - m[2]!.length
     for (let nested = RE_FOOTNOTE_DEF.exec(m[2]!); nested !== null; nested = RE_FOOTNOTE_DEF.exec(nested[2]!)) {
-      trackLead(nested[2]!)
       innermostDef = nested[0]
       const run = commentFenceRun(nested[2]!)
       if (run !== undefined && lazyState.opaque?.kind === 'comment') nestedNoteSpan = { run, column, state: lazyState.opaque }
