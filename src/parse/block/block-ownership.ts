@@ -8,6 +8,7 @@ import {
   commentOnlyParagraphEnd,
   isColonFenceOpener,
   isLinkDefLine,
+  lineOpensBlock,
   isTableRow,
   parseBlockAttributeRun,
   isRefusedBraceRun,
@@ -2211,11 +2212,14 @@ export function ownLines(
   function wrappedCommentLines(rest: string, owner: Frame, at: number): number | null {
     const depth = frames.slice(1, frames.indexOf(owner) + 1).filter((f) => f.kind === 'quote').length
     const col = runOpenerColumn(rest, depth, at)
+    let blockShaped = false
     for (let end = at + 1; end < lines.length; end++) {
       const body = quotedMeasure(end, depth)
       if (body === null || body.rest === '' || body.col <= col) return null
-      // A comment-only run is invisible and takes the lazy path as a `%%` line would (CARVE-P9-013).
-      if (body.rest.includes('%}')) return trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) === '' ? null : end - at
+      blockShaped ||= lineOpensBlock(body.rest) || isAttrLine(body.rest) || COMMENT_LINE.test(body.rest)
+      // A comment-only run still owns its continuation lines, including
+      // block-shaped spellings inside the comment (CARVE-P2-035).
+      if (body.rest.includes('%}')) return blockShaped || trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) !== '' ? end - at : null
     }
     return null
   }
