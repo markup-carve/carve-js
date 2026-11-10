@@ -410,12 +410,8 @@ function refusedBraceLines(lexer: Lexer, memo: BraceScanMemo = {}): number {
       return 0
     }
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
-    // A continuation takes no lazy line (carve#5830 rule B). A lazy opener's
-    // continuation only has to reach a container the opener does not.
-    const lazy = lazyAt(0)
-      ? lexer.peek(n)!.startsWith(LAZY_FRAME) || lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n)) ||
-        lexer.outerItemLazyLines.has(lexer.lineNumber(lexer.pos + n))
-      : lazyAt(n)
+    // A continuation takes no lazy line (carve#5830 rule B), a lazy opener's included.
+    const lazy = lazyAt(n) || lazyAt(0) && lexer.outerItemLazyLines.has(lexer.lineNumber(lexer.pos + n))
     if (n > 0 && (lazy || (quotedMarkerColumn !== null
       ? documentRunColumn(lexer, n) <= quotedMarkerColumn
       : sourceOpenerColumn !== null
