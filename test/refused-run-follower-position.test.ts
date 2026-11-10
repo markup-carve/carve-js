@@ -6,6 +6,7 @@ it.each([
   '- [ ] {.x\n   }\n    word\n',
   '- {.x\n  }\n   word\n',
   '1. {.x\n   }\n    word\n',
+  '- {.x\n  }\n   word\n',
 ])('places a refused run follower on its authored text in %j (carve-js#4872)', (source) => {
   const ast = toAstJson(parse(source))
   const visit = (node: unknown): void => {
