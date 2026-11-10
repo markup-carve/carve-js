@@ -3862,6 +3862,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // A description marker can open the same brace run that a bare item line opens.
         const opener = markerLineBottomBlock(line).trimStart().replace(/^:[ \t]+/, '')
         if (!opener.startsWith('{')) continue
+        if (!opensWrappedAttributeBlock(opener)) return false
         if (run.length < 2) return false
         let nestedContentColumn: number | undefined
         for (let earlier = at - 1; earlier >= 0; earlier--) {

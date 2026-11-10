@@ -546,7 +546,7 @@ export function createDefinitionListParser(
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
         const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
-        if (firstState.wrappedAttributeRun !== null)
+        if (first.trimStart().startsWith('{') && firstState.wrappedAttributeRun !== null)
           markerLineBraceColumn = bodySourceColumn + firstState.wrappedAttributeColumn
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
@@ -1193,7 +1193,8 @@ export function createDefinitionListParser(
         const below = ln.replace(/^[ \t]+/, '')
         // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
         if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below) &&
-            (lazyState.refusedRunKept === undefined || markerContentColumn(first) >= 0 || nestedItemColumn >= 0 ||
+            (lazyState.refusedRunKept === undefined || markerContentColumn(first) >= 0 ||
+              RE_BLOCKQUOTE.test(first) || nestedItemColumn >= 0 ||
               lazyState.quoteInner !== null)) return 'stop'
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
