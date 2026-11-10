@@ -193,11 +193,12 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const quoteSpaceGap = comparableSource && sameQuoteColumn && openerTabbed && !verseSource.includes('\t')
       const rebaseTab = comparableSource && (tabbedSources || quoteSpaceGap)
       const parentVerse = rebaseTab && tabbedSources && lexer.hostBody === 'list' ? tabbedVerseInOwner(lexer, openLineIndex, lineIndex) : undefined
-      const quoteBody = (text: string): string => text.slice(text.indexOf('>') + 1).replace(/^ /, '')
+      const quoteBody = (text: string, contentAt: number): string =>
+        text.slice(text.lastIndexOf('>', contentAt) + 1).replace(/^ /, '')
       const quoteGap = rebaseTab && openerQuoteAt >= 0 && (quoteSpaceGap || lexer.hostBody !== 'list')
         ? (() => {
-            const first = quoteBody(openerSource)
-            const next = quoteBody(verseSource)
+            const first = quoteBody(openerSource, openerAt)
+            const next = quoteBody(verseSource, verseAt)
             return sourceColumnAt(next, leadLength(next)) - sourceColumnAt(first, leadLength(first))
           })() : undefined
       const removedIndent = rebaseTab ? leadLength(ln) : 0

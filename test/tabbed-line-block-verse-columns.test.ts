@@ -61,6 +61,20 @@ describe('tabbed line block verse columns after owner frames', () => {
 </blockquote>`)
   })
 
+  it('uses the innermost quote columns for a nested quoted item', () => {
+    expect(carveToHtml('> > - a\n> > \t::: |\n> >       xyz\n> > \t:::\n')).toBe(`<blockquote>
+  <blockquote>
+    <ul>
+      <li>a
+        <div class="line-block">
+          <p>&nbsp;&nbsp;xyz</p>
+        </div>
+      </li>
+    </ul>
+  </blockquote>
+</blockquote>`)
+  })
+
   it('keeps source offsets on the authored verse words', () => {
     for (const source of [
       '* a\n  * a\n   \t::: |\n  \ty\n   \t:::\n',
