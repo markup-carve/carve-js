@@ -435,6 +435,23 @@ function reachesAuthoredNoteBody(
     admission.sourceColumn >= authoredBodyColumn
 }
 
+/** A nested duplicate's block state ends where its line misses its own body column. */
+function losingNestedBodyBoundary(
+  state: ReturnType<typeof verbatimOnlyLazyState>, content: string, label: string,
+  sourceColumnValue: number, nestedBodyColumn: number | undefined,
+  authoredBodyColumn: number | undefined, bodyColumn: number,
+): number | undefined {
+  const nested = RE_FOOTNOTE_DEF.exec(content.trimStart())
+  if (nested !== null && normalizeRefLabel(nested[1]!) === normalizeRefLabel(label))
+    return sourceColumnValue + FOOTNOTE_BODY_COLUMN
+  if (nestedBodyColumn === undefined || sourceColumnValue >= nestedBodyColumn ||
+      sourceColumnValue < (authoredBodyColumn ?? bodyColumn)) return nestedBodyColumn
+  // The duplicate's line block or fence cannot lend a paragraph claim to the winner.
+  for (const key of Object.keys(state)) Reflect.deleteProperty(state, key)
+  Object.assign(state, verbatimOnlyLazyState())
+  return undefined
+}
+
 function markerLineCommentContinuesNote(
   lexer: Lexer, defLineIndex: number, sourceLine: string | undefined,
   authoredBodyColumn: number | undefined, line: string,
@@ -896,6 +913,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   // Deferred: scanning the body at every `+` made a run of markers quadratic (carve-js#4795).
   let nestedFenceOpen: () => boolean = () => false
   let nestedSourceBodyColumn: number | undefined
+  let losingNestedBodyColumn: number | undefined
   let nestedDefBodyIndex = -1
   // A lazy line keeps an open paragraph open, so only lines added another way need a rescan.
   let nestedOpenMemo = { index: -1, length: 0, open: false }
@@ -1185,6 +1203,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const bodyContent = noteBodyContent(lexer, admission, bodyColumn, authoredBodyColumn, captionHostBlock,
         firstFenceEligible, firstFenceRun, bodyLines.length === 1)
       const content = bodyContent.content
+      losingNestedBodyColumn = losingNestedBodyBoundary(lazyState, content, label, admission.sourceColumn,
+        losingNestedBodyColumn, authoredBodyColumn, bodyColumn)
       firstFenceRun = bodyContent.fenceRun
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
