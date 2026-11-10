@@ -14,20 +14,19 @@ import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZ
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
 function wrappedAttributeRunAt(lexer: Lexer): number {
-  const opener = authoredSourceLine(lexer, lexer.lineNumber(lexer.pos)) ?? lexer.peek()
+  // Physical lines: a container's body arrives dedented, which can lift a continuation that misses its body column.
+  const opener = authoredRunLine(lexer, lexer.pos) ?? lexer.peek()
   if (opener === undefined || !opensWrappedAttributeBlock(sourceQuoteBody(opener).trimStart())) return 0
   const quoteDepth = quotePrefixDepth(opener)
   const column = sourceQuoteLocalColumn(opener, quoteDepth)
   const lines: string[] = []
   for (let offset = 0; ; offset++) {
     const line = lexer.peek(offset)
-    const authored = line === undefined ? undefined : authoredSourceLine(lexer, lexer.lineNumber(lexer.pos + offset)) ?? line
+    const authored = line === undefined ? undefined : authoredRunLine(lexer, lexer.pos + offset) ?? line
     if (authored === undefined || isBlankLine(line!)) return 0
     const depth = quotePrefixDepth(authored)
-    // A lazy continuation of a quoted note keeps its written source column,
-    // even when it omits the quote prefix (PART 0 S4, carve#5619).
-    if (depth !== quoteDepth && !(offset > 0 && depth === 0 && quoteDepth > 0 &&
-        lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + offset)))) return 0
+    // A run in a container takes no lazy lines (carve#5830 rule B).
+    if (depth !== quoteDepth) return 0
     const authoredColumn = sourceQuoteLocalColumn(authored, depth)
     if (offset > 0 && authoredColumn <= column) return 0
     lines.push(' '.repeat(authoredColumn - column) + sourceQuoteBody(authored))
