@@ -17,6 +17,8 @@ const CASES: Array<[string, string]> = [
   // Row 1029: the `{` is written at column 2, the lazy line at 1.
   ['> [^a]: +\n> {#i\n .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{#i\n.y}')],
   ['> [^a]: +\n> {.x\n  .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{.x\n.y}')],
+  // A tab before the quote marker counts to the next tab stop: the `{` is at 6.
+  ['\t> [^a]: +\n\t> {#i\n      .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{#i\n.y}')],
   // Past the written `{` the run continues and attaches to nothing.
   ['> [^a]: +\n> {.x\n   .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>')],
   ['> > [^a]: +\n> > {.x\n    .y}\n\nsee[^a]\n', '<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n' + note('      <p>{.x\n.y}')],
