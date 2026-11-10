@@ -1,0 +1,72 @@
+import { describe, expect, it } from 'vitest'
+import { carveToAstJson, carveToHtml } from '../src/index.js'
+
+describe('tabbed line block verse columns after owner frames', () => {
+  it('uses the nested item fence column after a partly consumed tab', () => {
+    expect(carveToHtml('* a\n  * a\n   \t::: |\n  \ty\n   \t:::\n')).toBe(`<ul>
+  <li>a
+    <ul>
+      <li>a
+        <div class="line-block">
+          <p>y</p>
+        </div>
+      </li>
+    </ul>
+  </li>
+</ul>`)
+  })
+
+  it('preserves only the verse column beyond a quoted nested fence', () => {
+    expect(carveToHtml('> - a\n>   - a\n>   \t::: |\n>     \t z\n>   \t:::\n')).toBe(`<blockquote>
+  <ul>
+    <li>a
+      <ul>
+        <li>a
+          <div class="line-block">
+            <p>&nbsp;z</p>
+          </div>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</blockquote>`)
+  })
+
+  it('retains no verse indent after a second frame tab', () => {
+    expect(carveToHtml('> - a\n>   - a\n>   \t::: |\n> \t\tz\n>   \t:::\n')).toBe(`<blockquote>
+  <ul>
+    <li>a
+      <ul>
+        <li>a
+          <div class="line-block">
+            <p>z</p>
+          </div>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</blockquote>`)
+  })
+
+  it('keeps source offsets on the authored verse words', () => {
+    for (const source of [
+      '* a\n  * a\n   \t::: |\n  \ty\n   \t:::\n',
+      '> - a\n>   - a\n>   \t::: |\n>     \t z\n>   \t:::\n',
+      '> - a\n>   - a\n>   \t::: |\n> \t\tz\n>   \t:::\n',
+    ]) {
+      const words: Array<{ value: string, pos?: { startOffset: number, endOffset: number } }> = []
+      const visit = (node: unknown): void => {
+        if (Array.isArray(node)) node.forEach(visit)
+        else if (node !== null && typeof node === 'object') {
+          const record = node as Record<string, unknown>
+          if (record.type === 'text') words.push(record as typeof words[number])
+          for (const [key, value] of Object.entries(record)) if (key !== 'pos') visit(value)
+        }
+      }
+      visit(carveToAstJson(source))
+      const verseWord = words.find((word) => word.value === 'y' || word.value === 'z')
+      expect(verseWord?.pos).toBeDefined()
+      expect(source.slice(verseWord!.pos!.startOffset, verseWord!.pos!.endOffset)).toBe(verseWord!.value)
+    }
+  })
+})

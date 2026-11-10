@@ -1,5 +1,5 @@
 import type { Lexer } from '../parse-lexer.js'
-import { indentColumns } from '../parse-lexer.js'
+import { indentColumns, sliceColumns } from '../parse-lexer.js'
 import { sourceColumnAt } from '../list/parse-item-core.js'
 import type { InlineSource } from '../../parse.js'
 import type { LinkDef } from '../inline/inline-resolution.js'
@@ -20,6 +20,42 @@ export interface LineBlockHost {
 
 export function createLineBlockParser(helpers: typeof import('../../parse.js').lineBlockHelpers) {
   const { RE_LINE_BLOCK_OPEN, collectLiteralColonFenceBody, dropTrailingSpaces, expandLineBlockWhitespace, inlineSource, isBlankLine, mapInlineChildren, restoreVerseGaps, stripLazyFrame, stripPositions, trimEndSpaceTab, verseSourceOffset, visitInlineChildren } = helpers
+  const leadLength = (text: string): number => /^[ \t]*/.exec(text)![0].length
+
+  // Rebuild a tabbed verse line through the same column cuts as its opener.
+  // The list parser's intermediate spelling may have replaced an opener tab
+  // with spaces before the final owner had a chance to measure its fence base.
+  const tabbedVerseInOwner = (lexer: Lexer, openIndex: number, lineIndex: number): string | undefined => {
+    let view = lexer
+    let opener = openIndex
+    let line = lineIndex
+    const cuts: number[] = []
+    while (view.hostBody === 'list') {
+      const openBoundary = view.sourceBoundaries?.[opener]
+      const lineBoundary = view.sourceBoundaries?.[line]
+      if (!openBoundary || !lineBoundary || openBoundary.parent !== lineBoundary.parent) return undefined
+      cuts.push(openBoundary.start)
+      view = openBoundary.parent
+      opener = openBoundary.line
+      line = lineBoundary.line
+    }
+    if (cuts.length === 0) return undefined
+    let openText = view.lineAt(opener)
+    let lineText = view.lineAt(line)
+    if (openText === undefined || lineText === undefined) return undefined
+    if (view === (lexer.documentRoot ?? lexer)) {
+      const expandLead = (text: string): string => ' '.repeat(indentColumns(text)) + text.slice(leadLength(text))
+      openText = expandLead(openText)
+      lineText = expandLead(lineText)
+    }
+    for (let depth = cuts.length - 1; depth >= 0; depth--) {
+      const contentColumn = cuts[depth]!
+      const cut = depth === 0 ? Math.max(contentColumn, indentColumns(openText)) : contentColumn
+      openText = sliceColumns(openText, cut, true)
+      lineText = sliceColumns(lineText, cut, true)
+    }
+    return lineText
+  }
 
   return function parseLineBlock(host: LineBlockHost, lexer: Lexer): LineBlock {
     const openLineIndex = lexer.pos
@@ -141,22 +177,41 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const openerSource = authored[lexer.lineNumber(openLineIndex) - 1] ?? open
       const verseSource = authored[lexer.lineNumber(lineIndex) - 1] ?? ln
       const openerAt = Math.max(0, openerSource.lastIndexOf(open.trimStart()))
-      const verseAt = Math.max(0, verseSource.lastIndexOf(ln.trimStart()))
+      const verseAt = Math.max(0, verseSource.lastIndexOf(ln.slice(leadLength(ln))))
       const openerQuoteAt = openerSource.indexOf('>')
       const verseQuoteAt = verseSource.indexOf('>')
       const sameQuoteColumn = openerQuoteAt >= 0 && verseQuoteAt >= 0 &&
         sourceColumnAt(openerSource, openerQuoteAt) === sourceColumnAt(verseSource, verseQuoteAt)
-      const sourceGap = !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
-        !verseSource.includes('\t') && sameQuoteColumn
+      const comparableSource = !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
+        (sameQuoteColumn || (openerQuoteAt < 0 && verseQuoteAt < 0))
+      const tabbedSources = openerSource.slice(0, openerAt).includes('\t') &&
+        verseSource.slice(0, verseAt).includes('\t')
+      const sourceGap = comparableSource && (tabbedSources || (!verseSource.includes('\t') && sameQuoteColumn))
         ? sourceColumnAt(verseSource, verseAt) - sourceColumnAt(openerSource, openerAt) : 0
-      const missingIndent = Math.max(0, sourceGap - indentColumns(ln))
-      const verse = ' '.repeat(missingIndent) + ln
-      const sourceOffsets: Array<number | undefined> | undefined = verse.includes('\t') || missingIndent > 0 ? [] : undefined
+      // Once an owner has consumed columns from a tab, its transformed spelling
+      // cannot tell us how much of that tab is verse. A quoted list may also
+      // remeasure the opener's tab at its own stop. Read both lines in their
+      // common parent view, then strip the fence indent by columns there.
+      const rebaseTab = comparableSource && tabbedSources
+      const parentVerse = rebaseTab && lexer.hostBody === 'list' ? tabbedVerseInOwner(lexer, openLineIndex, lineIndex) : undefined
+      const quoteBody = (text: string): string => text.slice(text.indexOf('>') + 1).replace(/^ /, '')
+      const quoteGap = rebaseTab && lexer.hostBody !== 'list' && openerQuoteAt >= 0
+        ? (() => {
+            const first = quoteBody(openerSource)
+            const next = quoteBody(verseSource)
+            return sourceColumnAt(next, leadLength(next)) - sourceColumnAt(first, leadLength(first))
+          })() : undefined
+      const removedIndent = rebaseTab ? leadLength(ln) : 0
+      const missingIndent = rebaseTab && parentVerse === undefined ? Math.max(0, quoteGap ?? sourceGap) :
+        Math.max(0, sourceGap - indentColumns(ln))
+      const verse = parentVerse ?? (' '.repeat(missingIndent) + (rebaseTab ? ln.slice(removedIndent) : ln))
+      const rebasedLead = parentVerse === undefined ? missingIndent : leadLength(parentVerse)
+      const sourceOffsets: Array<number | undefined> | undefined = verse.includes('\t') || missingIndent > 0 || rebaseTab ? [] : undefined
       const expanded = expandLineBlockWhitespace(verse, sourceOffsets)
-      if (sourceOffsets !== undefined && missingIndent > 0) {
+      if (sourceOffsets !== undefined && (missingIndent > 0 || rebaseTab)) {
         for (let index = 0; index < sourceOffsets.length; index++) {
           const offset = sourceOffsets[index]
-          sourceOffsets[index] = offset === undefined || offset < missingIndent ? undefined : offset - missingIndent
+          sourceOffsets[index] = offset === undefined || offset < rebasedLead ? undefined : offset - rebasedLead + removedIndent
         }
       }
       stanza.push({
