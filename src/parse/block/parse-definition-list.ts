@@ -303,6 +303,8 @@ export function createDefinitionListParser(
         ownedAuthored: false,
       }
       let belowCommentSpan = false
+      // A `{%` run opened on a lazy line, awaiting its closer (carve#5830 rule B).
+      let lazyCommentRun = false
       /**
        * The CONTENT COLUMN of the nested item this body currently has open, in
        * the body's own coordinates, or -1 for none.
@@ -377,6 +379,9 @@ export function createDefinitionListParser(
        * paragraph it was folded into is still open behind it.
        */
       const track = (content: string, atContentColumn = true): void => {
+        const runText = stripLazyFrame(content).trimStart()
+        if (runText.startsWith('{%')) lazyCommentRun = (!atContentColumn || content.startsWith(LAZY_FRAME)) && !runText.includes('%}', 2)
+        else if (runText === '' || runText.includes('%}')) lazyCommentRun = false
         // Keep payload classification separate from the actual span state.
         // An unfinished prefix can leave a paragraph open for S4, but blocks
         // inside a completed comment must not change the surrounding state.
@@ -1145,9 +1150,19 @@ export function createDefinitionListParser(
             (insideOpenQuoteParagraph(lazyState) && !atDocumentColumn && RE_FOOTNOTE_DEF.test(below)) ||
             !belowBandInterrupts(ln, below, atDocumentColumn)))
       )
+      const authoredLineAt = (index: number, fallback: string): string => {
+        const root = lexer.documentRoot ?? lexer
+        return (root.authoredRootLines ?? root.authoredLines ?? lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
+      }
+      // The body column where the description marker is written.
+      const authoredBodyColumn = sourceColumn(authoredLineAt(firstLineIndex, markerSource), quotePrefixDepth(markerSource)) + contentCol
       const foldLazyLine = (ln: string, below: string, atDocumentColumn: boolean): 'continue' => {
         const lineIndex = lexer.pos
-        if (indentColumns(ln, contentCol) < contentCol) {
+        // A lazy `{%` run's continuation is lazy exactly when it is written below the body (carve#5866).
+        const runLineLazy = lazyCommentRun
+          ? sourceColumn(authoredLineAt(lineIndex, ln), quotePrefixDepth(markerSource)) < authoredBodyColumn
+          : indentColumns(ln, contentCol) < contentCol
+        if (runLineLazy) {
           lexer.itemLazyLines.add(lexer.lineNumber(lineIndex))
         }
         // CLAMPED TO ONE COLUMN, as the list collector clamps it
@@ -1287,6 +1302,18 @@ export function createDefinitionListParser(
           (lexer.documentRoot ?? lexer).authoredLines ?? lexer.rootLines ?? lexer.lines
         const written = source[lexer.lineNumber(lexer.pos) - 1] ?? ln
         const writtenColumn = sourceColumn(written, quotePrefixDepth(markerSource))
+        // A lazy `{%` run's continuation written below the body is lazy too, however the item
+        // handed it over, so the run is refused (carve#5830 rule B, carve#5866).
+        if (admission.kind === 'content' && lazyCommentRun && writtenColumn < authoredBodyColumn) {
+          const folded = LAZY_FRAME + ln.trimStart()
+          lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+          bodyLines.push(folded)
+          bodySourceLines.push(ln)
+          bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+          track(folded, false)
+          lexer.consume()
+          return 'continue'
+        }
         if (attachedOpenCodeFence && /^(`{3,}|~{3,})[ \t]*$/.test(ln.trimStart()) &&
             writtenColumn > bodySourceColumn - contentCol && writtenColumn < bodySourceColumn &&
             lexer.pos > 0 && isBlankLine(source[lexer.lineNumber(lexer.pos) - 2] ?? '')) {

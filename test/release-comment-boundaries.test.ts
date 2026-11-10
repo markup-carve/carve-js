@@ -7,10 +7,10 @@ it('keeps a lazy line in the quote after a sibling ends a hosted comment span', 
   )
 })
 
-it('opens the nested marker after a valid multiline braced comment', () => {
+it('opens the nested marker after a refused lazy multiline braced comment', () => {
   const source = '- a\n  - b\n{% c\n  d %}\n    - c\n'
   expect(carveToHtml(source)).toBe(
-    '<ul>\n  <li>a\n    <ul>\n      <li>b\n\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
+    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n        <ul>\n          <li>c</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
   )
   expect(lintCarve(source)).toEqual([])
 })
