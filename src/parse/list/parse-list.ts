@@ -3916,6 +3916,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     const shallowCommentCloser = (admission: ContainerAdmission): boolean =>
       admission.kind === 'below' && lazyState.attrRun?.startsWith('{%') === true &&
+      content.trimStart().startsWith('{%') &&
+      !nested.some((line) => lineOpensBlock(line.trimStart()) && !line.trimStart().startsWith('{')) &&
       admission.line.includes('%}') && !lineOpensBlock(admission.line.trimStart())
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line

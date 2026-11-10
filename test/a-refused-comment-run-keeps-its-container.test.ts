@@ -8,6 +8,13 @@ it.each([
   expect(carveToHtml(source)).toBe(html)
 })
 
+it.each([
+  ['- > {% a\n  > # h\nz %} y\n', '<ul>\n  <li>\n    <blockquote>\n      <p>{% a</p>\n      <h1 id="h">h</h1>\n    </blockquote>\n  </li>\n</ul>\n<p>z %} y</p>'],
+  ['- {% a\n  > # h\nz %} y\n', '<ul>\n  <li>{% a\n    <blockquote>\n      <h1 id="h">h</h1>\n    </blockquote>\n  </li>\n</ul>\n<p>z %} y</p>'],
+])('ends item comment ownership when a quote block interrupts its paragraph: %j', (source, html) => {
+  expect(carveToHtml(source)).toBe(html)
+})
+
 it('keeps the brace-shaped middle line in a description when the closer leaves it', () => {
   expect(carveToHtml(':: t\n:   {% a\n     {k=v}\nz %} y\n')).toBe(
     '<dl>\n  <dt>t</dt>\n  <dd>{% a\n{k=v}</dd>\n</dl>\n<p>z %} y</p>',
