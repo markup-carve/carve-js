@@ -83,9 +83,9 @@ function closesRefusedRunAt(lexer: Lexer, floor: number): boolean {
 }
 
 /** A refused run on lazy lines keeps its follower in the paragraph, as one at the body column does. */
-function keepLazyRunFollower(lexer: Lexer, floor: number,
-  state: { refusedRunKept?: RegExp | null | undefined; refusedBraceFollower?: boolean; lazyFoldable: boolean }): void {
-  if (!closesRefusedRunAt(lexer, floor)) return
+// A run that lazily continues a nested block's paragraph is that block's text, not the note's.
+function keepLazyRunFollower(lexer: Lexer, floor: number, state: ReturnType<typeof verbatimOnlyLazyState>): void {
+  if (state.quoteInner != null || state.deepest != null || !closesRefusedRunAt(lexer, floor)) return
   state.refusedRunKept = null
   state.refusedBraceFollower = true
   state.lazyFoldable = true
