@@ -5,10 +5,10 @@ describe('refused markers inside retained raw HTML', () => {
   it.each(['data-carve-src', 'data-djot-src'])('reports %s on the retained element', (name) => {
     const result = htmlToCarve(`<form ${name}="x" data-user="y">kept</form>`, { mode: 'roundtrip' })
     expect(result.value).toContain(`${name}="x"`)
-    expect(result.report.diagnostics.filter(row => row.code === 'attribute-preserved')).toEqual([
+    expect(result.report.diagnostics.filter(row => row.code === 'attribute-preserved')).toEqual(name === 'data-carve-src' ? [
       expect.objectContaining({ severity: 'info', path: '/form[1]',
         message: `Preserved round-trip marker attribute ${name} on <form> in the raw HTML this element is kept as` }),
-    ])
+    ] : [])
   })
 
   it('reports the semantic key without reporting an ordinary attribute beside it', () => {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { carveToHtmlWithReport } from '../src/index.js'
 
-describe('a deprecated carrier spelling is dropped on roundtrip export', () => {
-  it.each(['data-djot-ref', 'DATA-DJOT-TIGHT', 'data-djot-escaped'])('drops and reports %s', (name) => {
+describe('a former carrier spelling is an ordinary attribute on roundtrip export', () => {
+  it.each(['data-djot-ref', 'DATA-DJOT-TIGHT', 'data-djot-escaped'])('keeps %s', (name) => {
     const source = `[a](/u){${name}=x}\n`
     const exported = carveToHtmlWithReport(source, { roundtrip: true })
-    expect(exported.value.toLowerCase()).not.toContain(name.toLowerCase())
-    expect(exported.losses).toContainEqual(expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: name }))
+    expect(exported.value.toLowerCase()).toContain(`${name.toLowerCase()}="x"`)
+    expect(exported.losses).toEqual([])
     const ordinary = carveToHtmlWithReport(source)
     expect(ordinary.value.toLowerCase()).toContain(`${name.toLowerCase()}="x"`)
     expect(ordinary.losses).toEqual([])

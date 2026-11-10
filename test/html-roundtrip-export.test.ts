@@ -231,10 +231,10 @@ describe('the HTML carriers', () => {
     expect(htmlToCarve(carveToHtml(src)).value).toBe('|={<} a |={>} b |\n| 1 | 2 |\n')
   })
 
-  it('imports the deprecated spelling of the carrier too', () => {
+  it('keeps the former width spelling as an ordinary attribute', () => {
     const html = '<table data-djot-col-widths="4,2">\n<tr><th>a</th><th>b</th></tr>\n'
       + '<tr><td>1</td><td>2</td></tr>\n</table>'
-    expect(htmlToCarve(html).value).toBe('| a | b |\n|----|--|\n| 1 | 2 |\n')
+    expect(htmlToCarve(html).value).toBe('{data-djot-col-widths=4,2}\n|= a |= b |\n| 1 | 2 |\n')
   })
 
   it('refuses the WHOLE carrier where an entry exceeds the bound', () => {
@@ -373,11 +373,12 @@ describe('export does not select an import mode (§13b)', () => {
     }
   })
 
-  it('refuses both spellings of a carrier, in safe mode as in roundtrip', () => {
+  it('consumes canonical carriers and keeps the former spelling as an attribute', () => {
     for (const mode of ['safe', 'roundtrip'] as const) {
       for (const name of ['data-carve-ref', 'data-djot-ref', 'data-marker', 'data-char']) {
         const back = htmlToCarve(`<p><a href="/u" ${name}="r">t</a></p>`, { mode }).value
-        expect(back, `${mode} ${name}`).not.toContain(name)
+        if (name.startsWith('data-djot-')) expect(back, `${mode} ${name}`).toContain(name)
+        else expect(back, `${mode} ${name}`).not.toContain(name)
       }
     }
   })

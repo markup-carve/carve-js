@@ -15,7 +15,7 @@ describe('roundtrip carriers stay on their defined hosts', () => {
     expect(htmlToCarve(html, { mode }).value).toContain('{#C}')
   })
 
-  it.each(['data-carve', 'data-djot'])('accepts the %s explicit-ID carrier on either host', prefix => {
+  it.each(['data-carve'])('accepts the %s explicit-ID carrier on either host', prefix => {
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
       for (const html of [
         `<section id="C" ${prefix}-explicit-id="1"><h1>C</h1></section>`,
@@ -27,7 +27,7 @@ describe('roundtrip carriers stay on their defined hosts', () => {
     }
   })
 
-  it.each(['data-carve', 'data-djot'])('reads %s carrier presence before ID order', prefix => {
+  it.each(['data-carve'])('reads %s carrier presence before ID order', prefix => {
     for (const value of ['', '=""', '="1"']) {
       for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
         for (const html of [
@@ -75,7 +75,7 @@ describe('roundtrip carriers stay on their defined hosts', () => {
 
   it.each(['header', 'div'])('preserves section IDs through an unwrapped %s', tag => {
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-      for (const marker of ['', 'data-carve-explicit-id', 'data-djot-explicit-id']) {
+      for (const marker of ['', 'data-carve-explicit-id']) {
         const id = marker ? 'Setup' : 'install'
         const result = htmlToCarve(`<section id="${id}" ${marker}><${tag}><h2>Setup</h2></${tag}></section>`, { mode })
         expect(result.value).toContain(`#${id}`)

@@ -34,9 +34,9 @@ describe('the writer', () => {
 })
 
 describe('the reader', () => {
-  it.each(['safe', 'semantic', 'roundtrip'] as const)('rebuilds each node in %s mode, legacy spelling included', (mode) => {
+  it.each(['safe', 'semantic', 'roundtrip'] as const)('rebuilds canonical nodes and keeps a former div spelling in %s mode', (mode) => {
     expect(htmlToCarve('<div data-carve-div><p>x</p></div>', { mode }).value).toBe(':::\nx\n:::\n')
-    expect(htmlToCarve('<div data-djot-div><p>x</p></div>', { mode }).value).toBe(':::\nx\n:::\n')
+    expect(htmlToCarve('<div data-djot-div><p>x</p></div>', { mode }).value).toBe('{data-djot-div}\n:::\nx\n:::\n')
     expect(htmlToCarve('<div data-carve-line-block class="line-block"><p>a<br>\nb</p></div>', { mode }).value).toBe('::: |\na\nb\n:::\n')
     expect(htmlToCarve('<p><span data-carve-substitution><del>o</del><ins>n</ins></span></p>', { mode }).value).toBe('{~o~>n~}\n')
   })

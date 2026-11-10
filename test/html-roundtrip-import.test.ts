@@ -243,13 +243,13 @@ describe('each carrier reconstructs its own node', () => {
   })
 })
 
-describe('the deprecated data-djot- spelling still reads', () => {
+describe('the former data-djot- spelling stays ordinary data', () => {
   it.each([
-    ['<p><a href="https://e.com" data-djot-autolink="1">https://e.com</a></p>', '<https://e.com>\n'],
-    ['<p><span data-djot-raw="tex">\\x</span></p>', '`\\x`{=tex}\n'],
-    ['<p><span data-djot-escaped>*</span></p>', '\\*\n'],
-    ['<p><a href="/u" data-djot-ref="r">t</a></p>', '[t][r]\n\n[r]: /u\n'],
-  ])('reads %j', (html, expected) => {
+    ['<p><a href="https://e.com" data-djot-autolink="1">https://e.com</a></p>', '[https://e.com](https://e.com){data-djot-autolink=1}\n'],
+    ['<p><span data-djot-raw="tex">\\x</span></p>', '[\\x]{data-djot-raw=tex}\n'],
+    ['<p><span data-djot-escaped>*</span></p>', '[*]{data-djot-escaped}\n'],
+    ['<p><a href="/u" data-djot-ref="r">t</a></p>', '[t](/u){data-djot-ref=r}\n'],
+  ])('keeps %j as authored data', (html, expected) => {
     expect(htmlToCarve(html).value).toBe(expected)
   })
 
@@ -388,7 +388,7 @@ describe('the section 13a rows added for markup-carve/carve#2894', () => {
     const section = (slot: string) => `<section id="mine" data-carve-explicit-id${slot}><h1 data-x="1" class="c">H</h1></section>`
     expect(first(section(' data-carve-id-slot="1"')).attrs.order).toEqual(['data-x', '#id', '.class'])
     expect(first(section(' data-carve-id-slot="99"')).attrs.order).toEqual(['#id', 'data-x', '.class'])
-    expect(first(section(' data-djot-id-slot="2"')).attrs.order).toEqual(['data-x', '.class', '#id'])
+    expect(first(section(' data-djot-id-slot="2"')).attrs.order).toEqual(['#id', 'data-x', '.class'])
     expect(first(section('')).attrs.order).toEqual(['#id', 'data-x', '.class'])
     expect(rows(section(' data-carve-id-slot="1"'))).toEqual(['element-unwrapped info Unwrapped unsupported <section> element'])
   })
@@ -460,8 +460,13 @@ describe('contradictory carriers restore neither meaning (§13d)', () => {
     for (const mode of modes) {
       for (const [auto, ref] of [['data-carve-autolink', 'data-carve-ref'], ['data-djot-autolink', 'data-carve-ref'], ['data-carve-autolink', 'data-djot-ref']]) {
         const html = `<p><a href="https://e.com" ${auto} ${ref}="r">https://e.com</a></p>`
-        expect(htmlToCarve(html, { mode }).value, `${mode} ${auto}`).toBe('[https://e.com](https://e.com)\n')
-        expect(dropped(html, mode), `${mode} ${auto}`).toEqual([
+        const expected = auto.startsWith('data-djot-')
+          ? '[https://e.com][r]{data-djot-autolink}\n\n[r]: https://e.com\n'
+          : ref.startsWith('data-djot-')
+            ? '<https://e.com>{data-djot-ref=r}\n'
+            : '[https://e.com](https://e.com)\n'
+        expect(htmlToCarve(html, { mode }).value, `${mode} ${auto}`).toBe(expected)
+        expect(dropped(html, mode), `${mode} ${auto}`).toEqual(auto.startsWith('data-djot-') || ref.startsWith('data-djot-') ? [] : [
           `warning Dropped contradictory carriers ${auto} and ${ref} on <a>: neither meaning is restored`,
         ])
       }

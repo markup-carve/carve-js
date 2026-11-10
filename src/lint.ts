@@ -318,7 +318,7 @@ function collectLinkAuthoringWarnings(
   doc: Document, out: LintWarning[], toUtf16: (offset: number) => number,
   enabledRules: readonly string[] | undefined, source: string,
 ): void {
-  const enabled = new Set(enabledRules?.map(rule => rule === 'a11y/heading-jump' ? 'heading-level-skip' : rule))
+  const enabled = new Set(enabledRules)
   const definitions: Array<Record<string, unknown>> = []
   const used = new Set<string>()
   const add = (node: Record<string, unknown>, rule: string, message: string): void => {
@@ -394,7 +394,7 @@ function suppressLintWarnings(
     if (!match) return
     const ids = match[2]?.trim()
     directives.push({ line: pos.startLine, kind: match[1] as LintDirective['kind'],
-      ids: ids ? new Set(ids.split(/[ ,]+/).map(id => id === 'a11y/heading-jump' ? 'heading-level-skip' : id)) : null })
+      ids: ids ? new Set(ids.split(/[ ,]+/)) : null })
   })
   if (!directives.length) return warnings
   directives.sort((a, b) => a.line - b.line)

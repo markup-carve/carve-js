@@ -42,7 +42,7 @@ import { hasOwnKey, setOwn } from './own-property.js'
 import { normalizeRefLabel } from './label-key.js'
 import { RE_AUTOLINK, RE_ESCAPABLE_PUNCTUATION, RE_FOOTNOTE_DEF, RE_RAW_INLINE_FORMAT } from './parse.js'
 import { trimEndMatchingEdges, trimEndSpaceTab, trimNonNbsp } from './trim-non-nbsp.js'
-import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, legacyCarrier, readCarrier } from './ast/roundtrip-carriers.js'
+import { CARRIER_CHAR, CARRIER_MARKER, MAX_CARRIED_SEPARATOR_WIDTH, RE_ID_SLOT, RESERVED_CARRIER_ATTRIBUTES, carrier, readCarrier } from './ast/roundtrip-carriers.js'
 import type { CarrierName, PrefixedCarrier } from './ast/roundtrip-carriers.js'
 
 export type HtmlImportMode = 'safe' | 'semantic' | 'roundtrip'
@@ -598,9 +598,8 @@ function fallbackImage(math: P5Node): P5Node | undefined {
  * The `data-` names that are A SERIALIZER'S PROTOCOL, not an author's content.
  *
  * Everything else the source carries is kept, so these need naming:
- * `RESERVED_CARRIER_ATTRIBUTES` is PART 10 §13a's whole inventory, under both
- * the canonical `data-carve-` spelling and the deprecated `data-djot-` one that
- * released carve-php versions wrote, plus the verbatim-source names §13a
+ * `RESERVED_CARRIER_ATTRIBUTES` is PART 10 §13a's whole inventory under
+ * the canonical `data-carve-` spelling, plus the verbatim-source names §13a
  * excludes from export. Re-emitting one as an authored attribute
  * is what markup-carve/carve#2902 ruling 5 stops: a `<hr data-char="_">` came
  * back as `{data-char=_}` plus `---`, and a reference link as
@@ -1228,7 +1227,7 @@ class Importer {
         // exactly as `data-delim` is: a row here would name a loss that did
         // not happen.
         if (!this.isReconstructedCarrier(node, domTag(node) ?? '', name) && !this.contradicted.get(node)?.has(name)) {
-          const lostRaw = this.mode === 'roundtrip' && (name === 'data-carve-raw' || name === 'data-djot-raw')
+          const lostRaw = this.mode === 'roundtrip' && name === 'data-carve-raw'
           this.report.refuseAttribute(node, path, `round-trip marker attribute ${name}`, '', lostRaw ? 'warning' : 'info', destinationIsDenied(attr.value))
         }
       } else if ((name === 'data-carve-ext' || name === 'data-carve-selected') && this.isReconstructedCarrier(node, domTag(node) ?? '', name)) {
@@ -1751,9 +1750,7 @@ class Importer {
   }
 
   /**
-   * A §13a carrier's value, the canonical `data-carve-` spelling first and the
-   * deprecated `data-djot-` one second, so documents released carve-php
-   * versions exported keep round-tripping (markup-carve/carve#2902 ruling 0).
+   * A §13a carrier's value from its canonical `data-carve-` spelling.
    */
   private carrierValue(node: P5Node, name: CarrierName): string | undefined {
     return readCarrier((attribute) => this.attr(node, attribute), name)
@@ -1778,10 +1775,7 @@ class Importer {
 
   /** The reserved name a carrier was found under, for the consumed test. */
   private carrierName(node: P5Node, name: CarrierName): string | undefined {
-    for (const spelling of name === 'ext' || name === 'selected' ? [carrier(name)] : [carrier(name), legacyCarrier(name)]) {
-      if (this.attr(node, spelling) !== undefined) return spelling
-    }
-    return undefined
+    return this.attr(node, carrier(name)) !== undefined ? carrier(name) : undefined
   }
 
   /**
@@ -1820,7 +1814,7 @@ class Importer {
    */
   private refuseContradiction(node: P5Node, path: string, first: PrefixedCarrier, second: PrefixedCarrier): void {
     const names = [first, second]
-      .flatMap((name) => [carrier(name), legacyCarrier(name)])
+      .map((name) => carrier(name))
       .filter((spelling) => this.attr(node, spelling) !== undefined)
     this.contradicted.set(node, new Set(names))
     this.report.refuseAttribute(
@@ -1931,7 +1925,7 @@ class Importer {
     }
     if (tag === 'span' && this.hasCarrier(node, 'substitution')) {
       // One `<del>` then one `<ins>`, nothing else on the span or its halves.
-      const names = [carrier('substitution'), legacyCarrier('substitution')]
+      const names = [carrier('substitution')]
       const bare = (domAttrs(node) ?? []).every(attribute => names.includes(attribute.name.toLowerCase()))
       const elements = domChildren(node) ?? []
       const pair = elements.length === 2 && domTag(elements[0]!) === 'del' && domTag(elements[1]!) === 'ins'
@@ -1941,7 +1935,7 @@ class Importer {
       }
     }
     if (tag === 'span' && this.hasCarrier(node, 'caption-number')) {
-      const bare = (domAttrs(node) ?? []).every(attribute => [carrier('caption-number'), legacyCarrier('caption-number')].includes(attribute.name))
+      const bare = (domAttrs(node) ?? []).every(attribute => attribute.name === carrier('caption-number'))
       if (bare && (domChildren(node) ?? []).every(child => child.nodeName === '#text')) this.recordCarrier(node, 'caption-number')
     }
     if (tag === 'span') {

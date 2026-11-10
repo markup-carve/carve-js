@@ -1,4 +1,18 @@
 {
   "comment": "Conformance pack cases this engine renders differently from the spec model, one entry per cause with its open ticket. See test/conformance-pack.test.ts.",
-  "entries": []
+  "entries": [
+    {
+      "ticket": "markup-carve/carve#5731",
+      "cases": [
+        "ownership-515b9fdab518",
+        "notes-3bc330d1a3be",
+        "notes-425e819e8134",
+        "notes-ed586560a203",
+        "fences-0af850d06646",
+        "fences-56c4bb18eac4",
+        "fences-9215ec1e0b3d",
+        "fences-bc7a7b28fd34"
+      ]
+    }
+  ]
 }

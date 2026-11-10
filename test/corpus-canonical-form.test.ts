@@ -27,7 +27,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { carveToCarve } from '../src/index.js'
-import { CANONICAL_AHEAD_OF_PIN } from './canonical-ahead-of-pin.js'
+import { CANONICAL_AHEAD_OF_PIN, CANONICAL_BEHIND_SPEC } from './canonical-ahead-of-pin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const corpusDir = resolve(__dirname, '../spec/tests/corpus')
@@ -65,6 +65,12 @@ describe('the pinned canonical form', () => {
     it(`is what fmt produces for ${slug}`, () => {
       const source = readFileSync(resolve(corpusDir, `${slug}.crv`), 'utf8')
       const expected = readFileSync(resolve(corpusDir, `${slug}.fmt`), 'utf8')
+      const behind = CANONICAL_BEHIND_SPEC.get(slug)
+      if (behind !== undefined) {
+        expect(carveToCarve(source), behind.reason).toBe(behind.fmt)
+        expect(expected, `${slug} now matches: delete its lag entry`).not.toBe(behind.fmt)
+        return
+      }
       const ahead = CANONICAL_AHEAD_OF_PIN.get(slug)
       if (ahead === undefined) {
         expect(carveToCarve(source)).toBe(expected)

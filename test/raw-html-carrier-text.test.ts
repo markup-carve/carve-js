@@ -45,10 +45,11 @@ describe('raw HTML roundtrip carriers contain text', () => {
     expect(carveToHtml(source('<b>x</b>'), { allowRawHtml: false })).toBe('<p>lead &lt;b&gt;x&lt;/b&gt; tail <strong>strong</strong></p>')
   })
 
-  it.each(['safe', 'semantic', 'roundtrip'] as const)('keeps live-child legacy reader compatibility in %s mode', (mode) => {
+  it.each(['safe', 'semantic', 'roundtrip'] as const)('keeps a former raw carrier as an authored attribute in %s mode', (mode) => {
     const html = '<p><span data-djot-raw="html"><b>x</b></span> tail</p>'
     const ast = htmlToAst(html, { mode }).value
-    expect(ast).toEqual(htmlToAst(html.replace('data-djot-', 'data-carve-'), { mode }).value)
-    expect(renderHtml(ast)).toBe(mode === 'roundtrip' ? '<p><b>x</b> tail</p>' : '<p><strong>x</strong> tail</p>')
+    expect(JSON.stringify(ast).replaceAll('data-djot-', 'data-keep-'))
+      .toBe(JSON.stringify(htmlToAst(html.replace('data-djot-', 'data-keep-'), { mode }).value))
+    expect(renderHtml(ast)).toBe('<p><span data-djot-raw="html"><strong>x</strong></span> tail</p>')
   })
 })
