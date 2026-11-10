@@ -91,6 +91,8 @@ function keepLazyRunFollower(lexer: Lexer, floor: number, state: ReturnType<type
   state.lazyFoldable = true
 }
 
+const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
+
 /** The quote-local body column of the note `def`, the end of line `index`, where it was written; -1 without an open run on that line. */
 function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attached: boolean, state: { attrRun?: string | null }): number {
   if (attached || state.attrRun == null) return -1
@@ -99,7 +101,12 @@ function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attach
   if (source === undefined) return -1
   const text = trimEndSpaceTab(sourceQuoteRest(source, quotePrefixDepth(source)) ?? source)
   const head = trimEndSpaceTab(def.trimStart())
-  return text.endsWith(head) ? sourceColumnAt(text, text.length - head.length) + FOOTNOTE_BODY_COLUMN : -1
+  if (!text.endsWith(head)) return -1
+  // A run behind a marker is measured from its own `{`, one behind a note head from that note's body (CARVE-P2-035).
+  const at = text.lastIndexOf(state.attrRun.trimStart())
+  if (at <= text.length - head.length) return sourceColumnAt(text, text.length - head.length) + FOOTNOTE_BODY_COLUMN
+  const note = NOTE_HEAD_BEFORE_RUN.exec(text.slice(0, at))
+  return note ? sourceColumnAt(text, note.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(text, at)
 }
 
 /** A refused run forces the fence line only; later blocks return to the note body base. */

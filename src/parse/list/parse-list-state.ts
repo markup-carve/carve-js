@@ -690,6 +690,8 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       facts?.descendantFrames === true && isListMarkerLine(note[2]!)
         ? { terminatorFree: facts.terminatorFree, whitespace: 0, descendantFrames: true }
         : undefined)
+    // A run behind a marker in the note's body is measured from its `{`, not the body column (CARVE-P2-035).
+    if (frame.attrRun != null && !note[2]!.startsWith('{')) frame.attrColumn = (frame.attrColumn ?? 0) + note[0].length - note[2]!.length - FOOTNOTE_BODY_COLUMN
     state.noteFrame = frame
     state.lazyFoldable = noteFrameParagraphOpen(frame)
     state.inDefList = false

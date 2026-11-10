@@ -355,6 +355,8 @@ interface QuoteHostLine {
 interface QuoteHostBody {
   inner: string
   at: number
+  /** Where `at` was written: a note head followed by a marker is wider than its body column. */
+  written: number
   blockStart: boolean
   paragraph: boolean
   insideItem: boolean
@@ -553,6 +555,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   const insideBody = insideItem || host.kinds.at(-1) === 'note' || host.kinds.at(-1) === 'description'
   let inner = text
   let at = column
+  let writtenShift = 0
   let blockStart = false
   for (;;) {
     const width = markerPrefixLength(inner, 0, prefixWalkBound(inner))
@@ -562,7 +565,10 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
       host.markers.push(at)
       const attrs = extractItemAttr(inner)
       const markerText = attrs?.stripped ?? inner
-      at += RE_TASK.test(markerText) ? 2 : width - (inner.length - markerText.length)
+      const markerWidth = width - (inner.length - markerText.length)
+      // A task item's column is its box; the text behind the box is still written past it.
+      if (RE_TASK.test(markerText)) writtenShift += markerWidth - 2
+      at += RE_TASK.test(markerText) ? 2 : markerWidth
       host.columns.push(at)
       host.kinds.push('item')
       host.terms.push(false)
@@ -580,7 +586,10 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
       inner = note[2]!
       blockStart = true
       // An item marker on the note's line opens an item in the note body (PART 0 S3).
-      if (markerPrefixLength(inner, 0, prefixWalkBound(inner)) > 0) continue
+      if (markerPrefixLength(inner, 0, prefixWalkBound(inner)) > 0) {
+        writtenShift += note[0].length - inner.length - 2
+        continue
+      }
       break
     }
     // A description body is a host too: its column is where the body's blocks open.
@@ -603,7 +612,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
     break
   }
   return {
-    inner, at, blockStart, paragraph, insideItem, colons,
+    inner, at, written: at + writtenShift, blockStart, paragraph, insideItem, colons,
     floor: host.columns.at(-1)!,
     pendingColonBody: colons.at(-1)?.awaitingBody === true,
   }
@@ -788,7 +797,8 @@ export function trackQuoteHostFence(
     return true
   }
   if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
-    const closed = trackWrappedAttributeRun(state, b.inner, b.at)
+    // A run behind a marker is measured from its written `{` (CARVE-P2-035).
+    const closed = trackWrappedAttributeRun(state, b.inner, state.attrRun === null ? b.written : b.at)
     if (state.refusedBraceRun) {
       state.refusedBraceRun = false
       state.refusedRunKept = null
