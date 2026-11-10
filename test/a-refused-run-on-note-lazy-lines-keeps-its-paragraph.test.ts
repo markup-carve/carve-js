@@ -16,3 +16,9 @@ it("folds the later lazy line when only the refused run's closer is lazy (carve#
 it("folds the later lazy line after a three-line refused comment run (carve#5769)", () => {
   expect(carveToHtml("[^n]: p\n{% a\n  b\n%}\n  # q\nafter\n\nx[^n]\n").trim()).toBe(note("p\n{% a\nb\n%}\n# q\nafter"))
 })
+
+it("leaves a refused run that continues a nested quote's paragraph to the quote", () => {
+  const html = carveToHtml("[^n]: > p\n{% a\n%}\n  # q\nafter\n\nx[^n]\n").trim()
+  expect(html.startsWith("<p>after</p>")).toBe(true)
+  expect(html).toMatch(/<h1[^>]*>q<\/h1>/)
+})
