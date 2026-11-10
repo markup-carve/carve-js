@@ -734,9 +734,22 @@ export function ownLines(
     // interpretation (CARVE-P2-035, carve#5658 R03).
     const rawLine = lines[at]!
     const candidatePlus = CONT_MARKER.test(rawLine.trimStart())
-    const candidateNote = /^\[\^[^\]]+\]:/.test(rawLine.trimStart())
+    let noteRest = rawLine
+    if (rawLine.includes('[^')) {
+      for (let quoted = indentCols(noteRest).rest; isQuoteLine(quoted); quoted = indentCols(noteRest).rest) {
+        noteRest = quoteRest(quoted)
+      }
+    }
+    const candidateNote = FOOTNOTE_DEF.test(noteRest.trimStart())
     const refusedFollower = (candidatePlus || candidateNote) && attachedInlineCode === 0 && braceRunStart >= 0 &&
-      isRefusedBraceRun((index) => index === 0 ? braceRunOpener : lines[braceRunStart + index], at - braceRunStart)
+      isRefusedBraceRun((index) => {
+        if (index === 0) return braceRunOpener
+        const authored = lines[braceRunStart + index]!
+        let rest = authored
+        for (let quoted = indentCols(rest).rest; isQuoteLine(quoted); quoted = indentCols(rest).rest) rest = quoteRest(quoted)
+        const text = rest.trimStart()
+        return ' '.repeat(docColumn(authored, text)) + text
+      }, at - braceRunStart)
     const protectedPlus = refusedFollower && candidatePlus
     const protectedNote = refusedFollower && candidateNote
     if (protectedPlus) {
