@@ -20,3 +20,8 @@ it('leaves a marker outside a description when a quote owns the refused run', ()
   expect(carveToHtml(':: t\n: > {% a\n%}\n- next\n').trim()).toBe(
     '<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>{% a\n%}</p></blockquote>\n  </dd>\n</dl>\n<ul>\n  <li>next</li>\n</ul>')
 })
+
+it('leaves a marker outside a description after an invalid brace sequence', () => {
+  expect(carveToHtml(':: t\n: {#x\n%}\n- next\n').trim()).toBe(
+    '<dl>\n  <dt>t</dt>\n  <dd>{<span class="tag"><strong>#x</strong></span>\n%}</dd>\n</dl>\n<ul>\n  <li>next</li>\n</ul>')
+})

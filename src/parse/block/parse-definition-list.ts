@@ -375,13 +375,15 @@ export function createDefinitionListParser(
         }
         // A marker at the body's column 0 opens a sub-item frame, as in a note body (PART 0 S3, carve#4860).
         const framed = atContentColumn && !content.startsWith(LAZY_FRAME)
-        const openMarkerRun = markerLineBraceColumn !== null && lazyState.attrRun !== null
+        const markerRun = markerLineBraceColumn !== null ? lazyState.attrRun : null
+        const closedMarkerRun = markerRun !== null && (markerRun.startsWith('{%')
+          ? content.includes('%}') : continueWrappedAttributeBlock(markerRun, content).verdict === 'attributes')
         trackItemLazyState(content, lazyState, atContentColumn, () => true, {
           terminatorFree: true,
           payloadFenceCloser: marker => payloadFenceHasCloser(lexer, marker),
           ...(framed ? { whitespace: leadingWhitespace(content), descendantFrames: true } : {}),
         })
-        if (openMarkerRun && lazyState.attrRun === null) {
+        if (closedMarkerRun && lazyState.attrRun === null) {
           const lineNumber = bodyLineNumbers.at(-1)
           const source = lineNumber === undefined ? content :
             (lexer.rootLines ?? lexer.lines)[lineNumber - 1] ?? content
@@ -392,6 +394,7 @@ export function createDefinitionListParser(
           }
           markerLineBraceColumn = null
         }
+        if (markerRun !== null && lazyState.attrRun === null) markerLineBraceColumn = null
         if (isBlankLine(content)) markerLineBraceColumn = null
         seedMarkerLineBlock(content)
         if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
