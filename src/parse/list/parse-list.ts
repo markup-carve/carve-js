@@ -3859,7 +3859,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const line = at < 0 ? content : nestedSourceLines[at]!
         if (isBlankLine(line)) return false
         run.unshift(line)
-        if (!line.trimStart().startsWith('{')) continue
+        // A description marker can open the same brace run that a bare item line opens.
+        const opener = markerLineBottomBlock(line).trimStart().replace(/^:[ \t]+/, '')
+        if (!opener.startsWith('{')) continue
         if (run.length < 2) return false
         let nestedContentColumn: number | undefined
         for (let earlier = at - 1; earlier >= 0; earlier--) {
@@ -3879,17 +3881,15 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           : root && nestedLineNumbers[index] !== undefined
           ? sourceColumn(root[nestedLineNumbers[index]! - 1] ?? nestedSourceLines[index]!)
           : indentColumns(nestedSourceLines[index]!)
-        const openerSource = at < 0 ? itemSource : root?.[nestedLineNumbers[at]! - 1]
-        const openerText = line.trimStart()
-        const openerOffset = openerSource?.lastIndexOf(openerText) ?? -1
-        // A marker-line run may follow a glued attribute. Its authored brace
-        // is farther right than the item's own marker column (carve#5788).
-        const sourceOpen = openerSource !== undefined && openerOffset >= 0
+        const openerSource = at < 0 ? itemSource : root?.[nestedLineNumbers[at]! - 1] ?? line
+        const openerOffset = openerSource.lastIndexOf(opener)
+        // Measure the brace after its marker, including a glued attribute or a description prefix.
+        const sourceOpen = openerOffset >= 0
           ? sourceColumnAt(openerSource, openerOffset) : sourceRunColumn(at)
         if (!run.slice(1).some((_next, offset) => sourceRunColumn(at + offset + 1) <= sourceOpen)) return false
-        if (line.trimStart().startsWith('{%')) return last.includes('%}') &&
+        if (opener.startsWith('{%')) return last.includes('%}') &&
           (indentColumns(last) >= indentColumns(l) || indentColumns(l) >= (nestedContentColumn ?? contentCol))
-        return parseBlockAttributeRun(run.map((part, index) => index === 0 ? part.trimStart() : ' ' + part.trimStart()).join('\n')) !== null
+        return parseBlockAttributeRun(run.map((part, index) => index === 0 ? opener : ' ' + part.trimStart()).join('\n')) !== null
       }
       return false
     }
