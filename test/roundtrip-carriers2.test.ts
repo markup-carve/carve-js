@@ -54,7 +54,7 @@ describe('new roundtrip carriers', () => {
     const html = carveToHtml(row.source, { roundtrip: true })
     expect(html).toContain('<pre data-carve-label="Example">')
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-      for (const prefix of ['data-carve', 'data-djot']) {
+      for (const prefix of ['data-carve']) {
         const input = html.replaceAll('data-carve-label', `${prefix}-label`)
         projection(htmlToAst(input, { mode }).value, row.expectedNodes)
         const restored = htmlToCarve(input, { mode }).value
@@ -149,14 +149,15 @@ describe('new roundtrip carriers', () => {
     expect(result.value).toContain('<pre class="code" data-carve-label="A &amp; &quot;B&quot;">')
     expect(result.losses).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: 'data-carve-label' })]))
   })
-  it('prefers the canonical label and consumes labels on other hosts', () => {
+  it('reads the canonical label and keeps a former label as ordinary data', () => {
     for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-      expect(htmlToAst('<pre data-carve-label="New" data-djot-label="Old"><code>x</code></pre>', { mode }).value.children[0]).toMatchObject({ label: 'New' })
+      expect(htmlToAst('<pre data-carve-label="New" data-djot-label="Old"><code>x</code></pre>', { mode }).value.children[0])
+        .toMatchObject({ label: 'New', attrs: { keyValues: { 'data-djot-label': 'Old' } } })
       for (const html of ['<pre data-carve-label="Label">x</pre>', '<p data-djot-label="Label">x</p>']) {
         const tree = htmlToAst(html, { mode }).value
         expect(tree.children[0]).not.toHaveProperty('label')
         expect(JSON.stringify(tree)).not.toContain('data-carve-label')
-        expect(JSON.stringify(tree)).not.toContain('data-djot-label')
+        if (html.includes('data-djot-label')) expect(JSON.stringify(tree)).toContain('data-djot-label')
       }
     }
   })

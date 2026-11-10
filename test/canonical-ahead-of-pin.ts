@@ -16,3 +16,9 @@ export const CANONICAL_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; fmt: 
   ...RULED_FMT_AHEAD_OF_PIN_5091,
   ...RULED_FMT_AHEAD_OF_PIN_5109,
 ])
+
+// Existing formatter lag exposed by the #5735 spec pin; owned by layout rewrite #5731.
+export const CANONICAL_BEHIND_SPEC: ReadonlyMap<string, { reason: string; fmt: string }> = new Map([
+  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-2', { reason: 'layout rewrite #5731', fmt: "see[^f]\n\n[^f]: n\n\n  ```\n  a\n\n  b\n  ```\n" }],
+  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-3', { reason: 'layout rewrite #5731', fmt: ":: t\n: d\n\n  ```\n  a\n\n  b\n  ```\n" }],
+])

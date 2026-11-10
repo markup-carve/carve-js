@@ -8,7 +8,7 @@ import {
   carveToMarkdown,
   carveToPlainText,
 } from '../src/index.js'
-import { CANONICAL_AHEAD_OF_PIN } from './canonical-ahead-of-pin.js'
+import { CANONICAL_AHEAD_OF_PIN, CANONICAL_BEHIND_SPEC } from './canonical-ahead-of-pin.js'
 
 const corpusDir = resolve(dirname(fileURLToPath(import.meta.url)), '../spec/tests/corpus')
 
@@ -36,7 +36,7 @@ const MARKDOWN_AHEAD_OF_PIN: ReadonlyMap<string, { reason: string; md: string }>
 /** The bytes this engine is ahead of the pinned sidecar with, if it is. */
 const aheadOfPin = (fixture: { slug: string; target: Target }) => {
   if (fixture.target === 'fmt') {
-    const entry = CANONICAL_AHEAD_OF_PIN.get(fixture.slug)
+    const entry = CANONICAL_AHEAD_OF_PIN.get(fixture.slug) ?? CANONICAL_BEHIND_SPEC.get(fixture.slug)
     return entry && { reason: entry.reason, bytes: entry.fmt }
   }
   if (fixture.target === 'md') {

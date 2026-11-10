@@ -9,7 +9,7 @@ function nodes(value: unknown): Record<string, any>[] {
 }
 function noReservedAttrs(value: unknown) {
   for (const node of nodes(value)) {
-    expect(Object.keys(node.attrs?.keyValues ?? {}).filter(key => /^data-(carve|djot)-(xref|caption-number|ref|autolink|footnote-label)$/.test(key))).toEqual([])
+    expect(Object.keys(node.attrs?.keyValues ?? {}).filter(key => /^data-carve-(xref|caption-number|ref|autolink|footnote-label)$/.test(key))).toEqual([])
   }
 }
 
@@ -31,7 +31,7 @@ it('wraps a resolved caption number only under roundtrip export', () => {
 })
 
 for (const mode of modes) {
-  for (const prefix of ['data-carve', 'data-djot']) {
+  for (const prefix of ['data-carve']) {
     it(`imports ${prefix} carriers in ${mode}`, () => {
       const result = htmlToAst(`<p><a href="#H" ${prefix}-xref="anything" title="tip" class="c">generated <em>label</em></a><span ${prefix}-caption-number>arbitrary text</span></p>`, { mode })
       expect(nodes(result.value).find(node => node.type === 'heading_ref')).toMatchObject({ target: 'H', attrs: { classes: ['c'], keyValues: { title: 'tip' } } })

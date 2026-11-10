@@ -40,6 +40,13 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // New categories at the #5735 spec pin; layout lag is declared below.
+  'a-nested-refused-plus-keeps-its-item',
+  'a-quote-attached-colon-keeps-a-later-plus',
+  'a-tab-led-quote-under-nested-descriptions-opens-in-the-inner-description',
+  'a-tabbed-nested-note-keeps-document-references',
+  'an-item-attached-colon-keeps-a-later-plus',
+  'an-own-line-item-fence-ends-in-a-note',
   'a-css-escape-cannot-hide-a-style-vector',
   'nested-reference-labels-contribute-to-heading-text',
   'a-block-at-a-pulled-footnote-column-opens-in-the-note',
@@ -1612,7 +1619,14 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
 ])
+// Layout rewrite #5731 remains pending; the alias pin exposes these existing engine outputs.
 const behindSpec = new Map<string, string>([
+  ['1033-a-quote-attached-colon-keeps-a-later-plus', "<blockquote>\n  <aside class=\"admonition note\" aria-label=\"Note\">\n    <p>x</p>\n    <p>zq</p>\n  </aside>\n</blockquote>"],
+  ['1034-an-item-attached-colon-keeps-a-later-plus', "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>x</p>\n      <p>zq</p>\n    </aside>\n  </li>\n</ul>"],
+  ['1037-a-tab-led-quote-under-nested-descriptions-opens-in-the-inner-description', "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <dl>\n      <dt>t</dt>\n      <dd>a\n&gt; b</dd>\n    </dl>\n  </dd>\n</dl>"],
+  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-2', "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n</p>\n      <pre><code>a\n\nb\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
+  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-3', "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </dd>\n</dl>"],
+  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-7', "<ul>\n  <li>x\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>\n<p>z</p>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it

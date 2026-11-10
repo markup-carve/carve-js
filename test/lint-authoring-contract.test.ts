@@ -101,7 +101,7 @@ function capture(source: string, files: Record<string, string> = {}) {
 }
 
 describe('authoring lint CLI', () => {
-  it('accepts optional rules and the heading input alias', async () => {
+  it('ignores an unknown heading rule name while default rules still run', async () => {
     const result = capture('[here](/u)\n\n# One\n### Three\n')
     expect(await run(['lint', '--json', '--rule', 'non-descriptive-link-text', '--rule', 'a11y/heading-jump'], result.io)).toBe(1)
     expect(JSON.parse(result.output()).map((w: { rule: string }) => w.rule)).toEqual(['non-descriptive-link-text', 'heading-level-skip'])
@@ -163,7 +163,7 @@ describe('authoring lint in included files', () => {
 
 it('uses canonical heading ids and suppression scopes in the accessibility API', () => {
   expect(lintAccessibility('# One\n\n### Three\n').map(w => w.rule)).toEqual(['heading-level-skip'])
-  expect(lintAccessibility('%% carve-lint-disable a11y/heading-jump,a11y/image-alt\n# One\n\n### Three\n\n![](/map.png)\n')).toEqual([])
+  expect(lintAccessibility('%% carve-lint-disable a11y/heading-jump,a11y/image-alt\n# One\n\n### Three\n\n![](/map.png)\n').map(w => w.rule)).toEqual(['heading-level-skip'])
 })
 
 

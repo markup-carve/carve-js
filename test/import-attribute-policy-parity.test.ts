@@ -15,9 +15,9 @@ it.each(['safe', 'semantic', 'roundtrip'] as const)('reports semantic marker col
 it.each(['safe', 'semantic'] as const)('reports ignored nested source markers in %s mode', (mode) => {
   for (const name of ['data-carve-src', 'data-djot-src']) {
     const rows = htmlToCarve(`<form><p ${name}="stored">text</p></form>`, { mode }).report.diagnostics
-    expect(rows.filter((row) => row.code === 'attribute-dropped')).toMatchObject([
+    expect(rows.filter((row) => row.code === 'attribute-dropped')).toMatchObject(name === 'data-carve-src' ? [
       { severity: 'info', fidelity: 'dropped', confidence: 'exact', path: '/form[1]/p[1]' },
-    ])
+    ] : [])
   }
 })
 
@@ -41,7 +41,6 @@ it.each(['semantic', 'roundtrip'] as const)('reports CSS precedence in either at
 it.each(['safe', 'semantic', 'roundtrip'] as const)('consumes reserved code source attributes in %s mode', (mode) => {
   for (const name of ['data-carve-src', 'data-djot-src']) {
     const result = htmlToCarve(`<pre ${name}="stored"><code class="language-js">x\n</code></pre>`, { mode })
-    expect(result.value).toBe('```js\nx\n```\n')
-    expect(result.value).not.toContain(name)
+    expect(result.value).toBe(name === 'data-carve-src' ? '```js\nx\n```\n' : '{data-djot-src=stored}\n```js\nx\n```\n')
   }
 })

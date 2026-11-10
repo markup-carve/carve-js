@@ -372,7 +372,7 @@
       {
         "name": "legacy-heading-alias",
         "source": "# One\n\n### Three %% carve-lint-disable-line a11y/heading-jump\n",
-        "expected": []
+        "expected": [["heading-level-skip", 3]]
       },
       {
         "name": "same-line-does-not-reach-next",

@@ -5,9 +5,7 @@
  * a prefix pattern, which is why `data-marker` and `data-char` sit in the same
  * list as the prefixed ones.
  *
- * Writers emit `data-carve-*`. Importers also accept the `data-djot-*`
- * spelling, which released carve-php versions wrote, so a document exported
- * before the rename keeps round-tripping (markup-carve/carve#2902 ruling 0).
+ * Writers and importers use only the enumerated `data-carve-*` names.
  */
 
 import type { Attrs, Position } from '../ast.js'
@@ -75,31 +73,25 @@ export type CarrierName = PrefixedCarrier | 'ext' | 'selected'
 /** The canonical spelling a writer emits. */
 export const carrier = (name: CarrierName): string => `data-carve-${name}`
 
-/** The deprecated spelling an importer still reads. */
-export const legacyCarrier = (name: PrefixedCarrier): string => `data-djot-${name}`
-
 /**
- * Every name reserved on import, canonical and deprecated, lowercase.
+ * Every name reserved on import, lowercase.
  *
  * An importer tests membership here to decide that a name is the serializer's
- * protocol rather than the author's content: ruling 5 says `safe` import
- * consumes the inventory and never writes a reserved name back out, so the
- * deprecated spellings have to be in the set too.
+ * protocol rather than the author's content. Former `data-djot-*` names are
+ * ordinary authored attributes under the #5735 ruling.
  */
 export const RESERVED_CARRIER_ATTRIBUTES: ReadonlySet<string> = new Set<string>([
   CARRIER_MARKER,
   CARRIER_CHAR,
   ...PREFIXED.map(carrier),
-  ...PREFIXED.map(legacyCarrier),
   // Verbatim-source names remain reserved on import but are excluded from §13a export.
   RETIRED_SOURCE_CARRIER,
-  'data-djot-src',
 ])
 
 /**
- * Read a carrier off an element, canonical spelling first.
+ * Read a canonical carrier off an element.
  *
- * `undefined` means the element carries neither spelling. An empty string is a
+ * `undefined` means the element carries no carrier. An empty string is a
  * real value: a presence carrier is written as `name` or `name="1"`, and §13a
  * says a reader reads presence and does not compare the value.
  */
@@ -107,7 +99,7 @@ export function readCarrier(
   get: (name: string) => string | undefined,
   name: CarrierName,
 ): string | undefined {
-  return get(carrier(name)) ?? (name === 'ext' || name === 'selected' ? undefined : get(legacyCarrier(name)))
+  return get(carrier(name))
 }
 
 export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.roundtrip === true
@@ -115,7 +107,7 @@ export const roundtripExport = (opts: { roundtrip?: boolean }): boolean => opts.
 export function isReservedExportName(key: string): boolean {
   const name = key.toLowerCase()
   return name === CARRIER_MARKER || name === CARRIER_CHAR || name === RETIRED_SOURCE_CARRIER
-    || name === 'data-djot-src' || PREFIXED.some((entry) => carrier(entry) === name || legacyCarrier(entry) === name)
+    || PREFIXED.some((entry) => carrier(entry) === name)
 }
 
 export function reportReservedAuthoredNames(

@@ -23,7 +23,7 @@ const attributes = (html: string) => {
   return attrs
 }
 const inventory = ['explicit-id', 'generated-id', 'ref', 'autolink', 'footnote-label', 'inline-footnote', 'raw', 'escaped', 'abbreviations', 'col-widths', 'label', 'id-slot', 'tight']
-const reserved = new Set(['data-marker', 'data-char', ...inventory.map(name => `data-carve-${name}`), 'data-carve-src', 'data-djot-src'])
+const reserved = new Set(['data-marker', 'data-char', ...inventory.map(name => `data-carve-${name}`), 'data-carve-src'])
 const nested = ':: Outer\n: body\n\n  :: Inner\n  : inner body\n'
 
 describe('rule 1: generated heading ids have a carrier on their own host', () => {
@@ -41,7 +41,7 @@ describe('rule 2: tight is a presence carrier', () => {
   it('writes 1 and reads every value without a diagnostic', () => {
     expect(rt('- {.x}\n  a\n')).toContain('data-carve-tight="1"')
     expect(first('<ul><li><p>a</p></li></ul>')).toMatchObject({ tight: false })
-    for (const mode of modes) for (const prefix of ['data-carve', 'data-djot']) for (const value of ['', '1', 'false', 'anything']) {
+    for (const mode of modes) for (const prefix of ['data-carve']) for (const value of ['', '1', 'false', 'anything']) {
       const html = `<ul ${prefix}-tight="${value}"><li><p>a</p></li></ul>`
       expect(first(html, mode)).toMatchObject({ tight: true })
       expect(htmlToAst(html, { mode }).report.diagnostics).toEqual([])
@@ -56,7 +56,7 @@ describe('rule 3: heading ids are authored unless marked generated', () => {
       expect(headingAttrs('<section id="T"><h2>T</h2></section>', mode)).toBeUndefined()
       expect(headingAttrs('<section id="T-2"><h2>T</h2></section>', mode)).toBeUndefined()
       expect(headingAttrs('<section id="T-02"><h2>T</h2></section>', mode)).toEqual({ id: 'T-02' })
-      for (const prefix of ['data-carve', 'data-djot']) for (const [open, close] of [['<h2', '>T</h2>'], ['<section', '><h2>T</h2></section>']]) {
+      for (const prefix of ['data-carve']) for (const [open, close] of [['<h2', '>T</h2>'], ['<section', '><h2>T</h2></section>']]) {
         expect(headingAttrs(`${open} id="other" ${prefix}-generated-id="false"${close}`, mode)).toBeUndefined()
         expect(dropped(`${open} id="other" ${prefix}-generated-id="false"${close}`, mode)).toEqual([])
         expect(headingAttrs(`${open} id="T" ${prefix}-explicit-id${close}`, mode)?.id).toBe('T')
@@ -96,7 +96,7 @@ describe('rule 4 with rule 7: the slot counts the attributes that survive', () =
 
 describe('rule 5: only four validated carrier pairs contradict', () => {
   it('refuses each pair once, including aliases and roundtrip raw mode', () => {
-    for (const mode of modes) for (const prefix of ['data-carve', 'data-djot']) {
+    for (const mode of modes) for (const prefix of ['data-carve']) {
       for (const html of [
         `<section id="mine" ${prefix}-explicit-id ${prefix}-generated-id><h1>H</h1></section>`,
         `<h1 id="mine" ${prefix}-explicit-id ${prefix}-generated-id>H</h1>`,
@@ -127,13 +127,22 @@ describe('rule 5: only four validated carrier pairs contradict', () => {
   })
 })
 
-describe('rule 6: both source names remain reserved', () => {
-  it('consumes each source name and reports each authored export drop', () => {
+describe('rule 6: only the canonical source name remains reserved', () => {
+  it('consumes the canonical name and keeps the former name as authored data', () => {
     for (const name of ['data-carve-src', 'data-djot-src']) {
-      for (const mode of modes) expect(headingAttrs(`<h1 ${name}="x">H</h1>`, mode)).toBeUndefined()
+      for (const mode of modes) {
+        const attrs = headingAttrs(`<h1 ${name}="x">H</h1>`, mode)
+        if (name === 'data-carve-src') expect(attrs).toBeUndefined()
+        else expect(attrs?.keyValues?.[name]).toBe('x')
+      }
       const result = carveToHtmlWithReport(`{${name}=x}\n# H\n`, { roundtrip: true })
-      expect(result.value).not.toContain(name)
-      expect(result.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: name })])
+      if (name === 'data-carve-src') {
+        expect(result.value).not.toContain(name)
+        expect(result.losses).toEqual([expect.objectContaining({ code: 'carrier-attribute-dropped', attribute: name })])
+      } else {
+        expect(result.value).toContain(`${name}="x"`)
+        expect(result.losses).toEqual([])
+      }
     }
   })
 })
@@ -164,7 +173,7 @@ describe('rule 7: roundtrip drops every reserved authored name on every node', (
     expect(reference.losses).toHaveLength(1)
   })
 
-  it('covers table group attributes, mixed-case keys and deprecated carrier spellings', () => {
+  it('covers table group attributes, mixed-case keys and former carrier spellings', () => {
     const ast = parse('| a |\n|---|\n| b |\n')
     const table = ast.children[0] as Extract<BlockNode, { type: 'table' }>
     const attrs = () => ({ keyValues: { 'DATA-CARVE-REF': 'x', 'data-keep': 'x', 'data-carve-ext': 'x', 'data-djot-ref': 'x', 'data-djot-ext': 'x' } })
@@ -172,10 +181,10 @@ describe('rule 7: roundtrip drops every reserved authored name on every node', (
     const losses: unknown[] = []
     const html = renderHtml(ast, { roundtrip: true, onRenderLoss: row => losses.push(row) })
     expect(html).not.toContain('DATA-CARVE-REF')
-    expect(attributes(html).filter(attr => attr.name === 'data-djot-ref')).toHaveLength(0)
-    expect(losses).toHaveLength(6)
-    for (const name of ['data-keep', 'data-carve-ext', 'data-djot-ext']) expect(attributes(html).filter(attr => attr.name === name)).toHaveLength(3)
-    for (const prefix of ['data-carve', 'data-djot']) expect(first(`<p ${prefix}-ext="x">a</p>`).attrs?.keyValues).toEqual({ [`${prefix}-ext`]: 'x' })
+    expect(attributes(html).filter(attr => attr.name === 'data-djot-ref')).toHaveLength(3)
+    expect(losses).toHaveLength(3)
+    for (const name of ['data-keep', 'data-carve-ext', 'data-djot-ref', 'data-djot-ext']) expect(attributes(html).filter(attr => attr.name === name)).toHaveLength(3)
+    for (const prefix of ['data-carve']) expect(first(`<p ${prefix}-ext="x">a</p>`).attrs?.keyValues).toEqual({ [`${prefix}-ext`]: 'x' })
   })
 })
 

@@ -30,7 +30,7 @@ describe('footnote carrier recovery (carve#2918)', () => {
   }
 
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-    for (const prefix of ['data-carve', 'data-djot']) {
+    for (const prefix of ['data-carve']) {
       it(`${mode} ${prefix} contradictory endnotes retain numbered notes with reference metadata`, () => {
         const html = `<p><a href="#fn1" role="doc-noteref" ${prefix}-footnote-label="named">1</a></p>`
           + `<section role="doc-endnotes"><ol><li id="fn1" role="doc-endnote" ${prefix}-footnote-label="named" ${prefix}-inline-footnote="1"><p>body</p></li></ol></section>`
@@ -48,7 +48,7 @@ describe('footnote carrier recovery (carve#2918)', () => {
     }
   }
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-    for (const prefix of ['data-carve', 'data-djot']) {
+    for (const prefix of ['data-carve']) {
       for (const label of ['', 'bad]label', 'a]: body', 'a]: `<script>`{=html}', 'line&#10;label', 'line&#13;label', 'line&#x2028;label', 'line&#x2029;label']) {
         for (const inline of [false, true]) {
           it(`${mode} ${prefix} drops invalid label ${JSON.stringify(label)} with inline=${inline}`, () => {
@@ -71,11 +71,11 @@ describe('footnote carrier recovery (carve#2918)', () => {
 
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
     for (const inline of [false, true]) {
-      it(`${mode} rejects an invalid canonical label before a legacy label, inline=${inline}`, () => {
+      it(`${mode} rejects an invalid canonical label beside former ordinary attributes, inline=${inline}`, () => {
         const html = '<p><a href="#fn1" role="doc-noteref">1</a></p>'
           + `<section role="doc-endnotes"><ol><li id="fn1" data-carve-footnote-label="bad]label" data-djot-footnote-label="named"${inline ? ' data-djot-inline-footnote="1"' : ''}><p>body</p></li></ol></section>`
         const result = htmlToCarve(html, { mode })
-        expect(result.value).toBe(inline ? '^[body]\n' : '[^1]\n\n[^1]: body\n')
+        expect(result.value).toBe('[^1]\n\n[^1]: body\n')
         expect(result.report.diagnostics.map(({ code, severity, fidelity, confidence }) => ({
           code, severity, fidelity, confidence,
         }))).toEqual([{
@@ -95,7 +95,7 @@ describe('footnote carrier recovery (carve#2918)', () => {
   }
 
   for (const mode of ['safe', 'semantic', 'roundtrip'] as const) {
-    for (const prefix of ['data-carve', 'data-djot']) {
+    for (const prefix of ['data-carve']) {
       for (const labels of [['a b', 'a  b'], ['1 ', undefined]]) {
         it(`${mode} ${prefix} preserves both bodies with normalized labels ${JSON.stringify(labels)}`, () => {
           const html = '<p><a href="#fn1" role="doc-noteref">1</a> <a href="#fn2" role="doc-noteref">2</a></p>'
