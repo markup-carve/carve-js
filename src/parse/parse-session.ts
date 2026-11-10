@@ -283,6 +283,9 @@ function leadingInvisibleRun(at: (offset: number) => string | undefined, options
 
 /** Whether the comment-only paragraph at the cursor sits on blank lines between two items of a list. */
 function commentBetweenListSiblings(lexer: Lexer): boolean {
+  // Checked first: a continuation line has no blank before it, and the forward walk is O(paragraph).
+  let back = lexer.pos - 1
+  if (back < 0 || !isBlankLine(lexer.lineAt(back))) return false
   const end = commentOnlyParagraphEnd((offset) => lexer.peek(offset), 0)
   if (end <= 1 || !isBlankLine(lexer.peek(end))) return false
   const column = indentColumns(lexer.peek()!)
@@ -290,8 +293,6 @@ function commentBetweenListSiblings(lexer: Lexer): boolean {
   while (lexer.peek(next) !== undefined && isBlankLine(lexer.peek(next))) next++
   const after = lexer.peek(next)
   if (after === undefined || indentColumns(after) > column || !isListMarkerLine(after.trimStart())) return false
-  let back = lexer.pos - 1
-  if (back < 0 || !isBlankLine(lexer.lineAt(back))) return false
   while (back >= 0 && isBlankLine(lexer.lineAt(back))) back--
   const before = back >= 0 ? lexer.lineAt(back) : undefined
   return before !== undefined && (indentColumns(before) > column || isListMarkerLine(before.trimStart()))
@@ -361,12 +362,16 @@ function markerLineRunShallow(lexer: Lexer, count: number): boolean {
   return false
 }
 
+type BraceScanMemo = { closerless?: number; closer?: { from: number; at: number } }
+
 /**
  * A block brace run refused only because a continuation is too shallow.
  * `memo.closerless` is the lexer index a `{%` scan reached without a `%}`; no later
  * line before it can close a run either, so the scan is not repeated per line.
+ * `memo.closer` is the `%}` line a `{%` scan from `from` reached: a later opener before it reaches
+ * the same line, so once that opener is shallow its length is known without walking on.
  */
-function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): number {
+function refusedBraceLines(lexer: Lexer, memo: BraceScanMemo = {}): number {
   const firstRaw = lexer.peek()
   const first = firstRaw === undefined ? undefined : stripLazyFrame(firstRaw)
   if (!first?.trimStart().startsWith('{')) return 0
@@ -411,7 +416,12 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
       : indentColumns(line) <= openerColumn))) shallow = true
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
     if (comment) {
-      if (line.includes('%}')) return shallow ? n + 1 : 0
+      if (line.includes('%}')) {
+        memo.closer = { from: lexer.pos, at: lexer.pos + n }
+        return shallow ? n + 1 : 0
+      }
+      const closer = memo.closer
+      if (shallow && closer !== undefined && closer.from <= lexer.pos && lexer.pos + n < closer.at) return closer.at - lexer.pos + 1
       continue
     }
     for (let i = 0; i < line.length; i++) {
@@ -3006,7 +3016,7 @@ export class ParseSession extends InlineParseSession {
     const lines: string[] = []
     // Lines whose leading `{` is a refused run's literal opener (CARVE-P2-035, carve#5830).
     const literalBraces: number[] = []
-    const braceScan: { closerless?: number } = {}
+    const braceScan: BraceScanMemo = {}
     let openInlineCode = 0
     let openInlineComment = false
     // A `{%` holds later lines only when its `%}` follows before a blank line or a block that interrupts (carve#5740).
