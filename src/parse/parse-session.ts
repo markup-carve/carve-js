@@ -562,6 +562,8 @@ function quoteAttachedBoundary(lexer: Lexer): (line: string) => boolean {
 }
 
 export class ParseSession extends InlineParseSession {
+  private readonly lastAttributeCloserLine = new WeakMap<Lexer, number>()
+
   /**
    * `text` with a trailing comment and its whole separating run removed, for a
    * container's `[label]`.
@@ -2370,6 +2372,21 @@ export class ParseSession extends InlineParseSession {
   /** Confirm a pending run before it claims unprefixed lines that could instead open blocks. */
   private quotedAttributeCloses(q: QuoteCollect, pending: NonNullable<QuoteCollect['pendingAttribute']>, run: string): boolean {
     const { lexer } = q
+    // Most failed probes have no closer anywhere in the remaining document.
+    // Record the last possible closer once per lexer so each later run can
+    // reject that suffix without walking it again.
+    let lastCloser = this.lastAttributeCloserLine.get(lexer)
+    if (lastCloser === undefined) {
+      lastCloser = -1
+      for (let i = lexer.lineCount - 1; i >= 0; i--) {
+        if (lexer.lineAt(i)?.includes('}')) {
+          lastCloser = i
+          break
+        }
+      }
+      this.lastAttributeCloserLine.set(lexer, lastCloser)
+    }
+    if (lastCloser < lexer.pos) return false
     const collected = [run]
     const root = lexer.documentRoot ?? lexer
     const authoredLines = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
