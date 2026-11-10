@@ -750,6 +750,8 @@ export interface CommentSpanScan {
   entries?: Array<[number, DefinitionEntry]>
   /** Whether a span opened behind list markers is owned by the bottom item, so a line below its column ends it. */
   markerOwners?: boolean
+  /** Body lines a valid `{%` run holds as its text, so none of them opens a span (CARVE-P2-035). */
+  held?: ReadonlySet<number>
 }
 
 const RE_NOTE_LEAD = /^\[\^[^\]]+\]: +(?=[^ \t])/
@@ -832,6 +834,7 @@ export function bodyHoldsOpenCommentSpan(
     const opensItem = scan.atBlockStart || (raw === lines[scan.index] && isListMarkerLine(line))
     const opener = lead !== null ? markerFreeContent(line.slice(lead[0].length)) : opensItem ? markerFreeContent(line) : line
     scan.atBlockStart = false
+    if (scan.held?.has(scan.index) === true) continue
     const code = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
     if (code !== null) {
       const marker = RE_FENCE.test(opener) ? code[2]! : code[1]!
@@ -858,6 +861,7 @@ export function bodyHoldsClosableCommentSpan(
 ): boolean {
   const runs = scan.runs ??= { indexed: 0, last: new Map() }
   for (; runs.indexed < lines.length; runs.indexed++) {
+    if (scan.held?.has(runs.indexed) === true) continue
     const run = commentFenceRun(stripLazyFrame(lines[runs.indexed]!).replace(/^[ \t]+/, ''))
     if (run !== undefined) runs.last.set(run, runs.indexed)
   }
