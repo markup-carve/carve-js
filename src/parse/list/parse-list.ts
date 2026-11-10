@@ -3916,7 +3916,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
     const shallowCommentCloser = (admission: ContainerAdmission): boolean =>
       admission.kind === 'below' && lazyState.attrRun?.startsWith('{%') === true &&
-      admission.line.includes('%}') && !isListMarkerLine(admission.line.trimStart())
+      admission.line.includes('%}') && !lineOpensBlock(admission.line.trimStart())
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       const refusedColumn = lexer.refusedItemMarkers.get(admission.lineNumber) ??

@@ -32,3 +32,13 @@ it('does not let a later description close an earlier comment run', () => {
     '<dl>\n  <dt>t</dt>\n  <dd>{% a\n{k=v}</dd>\n  <dd>next</dd>\n</dl>',
   )
 })
+
+it.each([
+  ['# h %} y', '<section id="h-y">\n  <h1>h %} y</h1>\n</section>'],
+  ['> q %} y', '<blockquote><p>q %} y</p></blockquote>'],
+  [':: next %} y', '<dl>\n  <dt>next %} y</dt>\n</dl>'],
+])('lets a block opener leave the item even when it contains a comment closer: %s', (line, after) => {
+  expect(carveToHtml(`- {% a\n   {k=v}\n${line}\n`)).toBe(
+    `<ul>\n  <li>{% a</li>\n</ul>\n${after}`,
+  )
+})
