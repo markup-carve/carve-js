@@ -435,6 +435,23 @@ function reachesAuthoredNoteBody(
     admission.sourceColumn >= authoredBodyColumn
 }
 
+/** A nested duplicate's block state ends where its line misses its own body column. */
+function losingNestedBodyBoundary(
+  state: ReturnType<typeof verbatimOnlyLazyState>, content: string, label: string,
+  sourceColumnValue: number, nestedBodyColumn: number | undefined,
+  authoredBodyColumn: number | undefined, bodyColumn: number,
+): number | undefined {
+  const nested = RE_FOOTNOTE_DEF.exec(content.trimStart())
+  if (nested !== null && normalizeRefLabel(nested[1]!) === normalizeRefLabel(label))
+    return sourceColumnValue + FOOTNOTE_BODY_COLUMN
+  if (nestedBodyColumn === undefined || sourceColumnValue >= nestedBodyColumn ||
+      sourceColumnValue < (authoredBodyColumn ?? bodyColumn)) return nestedBodyColumn
+  // The duplicate's line block or fence cannot lend a paragraph claim to the winner.
+  for (const key of Object.keys(state)) Reflect.deleteProperty(state, key)
+  Object.assign(state, verbatimOnlyLazyState())
+  return undefined
+}
+
 function markerLineCommentContinuesNote(
   lexer: Lexer, defLineIndex: number, sourceLine: string | undefined,
   authoredBodyColumn: number | undefined, line: string,
@@ -1186,17 +1203,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const bodyContent = noteBodyContent(lexer, admission, bodyColumn, authoredBodyColumn, captionHostBlock,
         firstFenceEligible, firstFenceRun, bodyLines.length === 1)
       const content = bodyContent.content
-      const nestedDefinition = RE_FOOTNOTE_DEF.exec(content.trimStart())
-      if (nestedDefinition !== null && normalizeRefLabel(nestedDefinition[1]!) === normalizeRefLabel(label))
-        losingNestedBodyColumn = admission.sourceColumn + FOOTNOTE_BODY_COLUMN
-      else if (losingNestedBodyColumn !== undefined && admission.sourceColumn < losingNestedBodyColumn &&
-          admission.sourceColumn >= (authoredBodyColumn ?? bodyColumn)) {
-        // The duplicate nested note loses its body at this dedent. Its line
-        // block or fence cannot lend a paragraph claim to the surviving note.
-        for (const key of Object.keys(lazyState)) Reflect.deleteProperty(lazyState, key)
-        Object.assign(lazyState, verbatimOnlyLazyState())
-        losingNestedBodyColumn = undefined
-      }
+      losingNestedBodyColumn = losingNestedBodyBoundary(lazyState, content, label, admission.sourceColumn,
+        losingNestedBodyColumn, authoredBodyColumn, bodyColumn)
       firstFenceRun = bodyContent.fenceRun
       // The line reaches this body's column, so a definition on it registers
       // here even where a nested item takes it as lazy text (CARVE-P0-020).
