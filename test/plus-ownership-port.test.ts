@@ -32,8 +32,9 @@ it('returns an unprefixed line after a stacked quote attribute to the document',
   )
 })
 
-it('keeps a block-shaped attribute inside an open inline comment span', () => {
+// An unclosed `{%` is text and holds no brace line (carve#5740, option B).
+it('ends the paragraph at a block-shaped attribute after an unclosed inline comment opener', () => {
   expect(carveToHtml('{%%%:fr}\n*y*{k="a\tb"}\n{lang=de}\n')).toBe(
-    '<p>{%%%:fr}\n<strong k="a\tb">y</strong>\n{lang=de}</p>',
+    '<p>{%%%:fr}\n<strong k="a\tb">y</strong></p>',
   )
 })
