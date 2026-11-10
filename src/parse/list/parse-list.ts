@@ -3847,14 +3847,14 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
-    const followsRefusedRunWithinHolder = (l: string): boolean => {
+    const followsRefusedRunWithinHolder = (l: string, allowBelow = false): boolean => {
       const last = nestedSourceLines.at(-1)
       if (!last?.includes('}')) return false
       const previous = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
-      if (previous === undefined || isBlankLine(previous) || !insideRefusedHolder(l)) return false
+      if (previous === undefined || isBlankLine(previous) || !allowBelow && !insideRefusedHolder(l)) return false
       const run: string[] = []
-      for (let at = nestedSourceLines.length - 1; at >= 0; at--) {
-        const line = nestedSourceLines[at]!
+      for (let at = nestedSourceLines.length - 1; at >= -1; at--) {
+        const line = at < 0 ? content : nestedSourceLines[at]!
         if (isBlankLine(line)) return false
         run.unshift(line)
         if (!line.trimStart().startsWith('{')) continue
@@ -3872,10 +3872,18 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // difference between its opener and continuation. Refusal is decided
         // at the source columns, before any item body has been rebased.
         const root = lexer.rootLines
-        const sourceRunColumn = (index: number): number => root && nestedLineNumbers[index] !== undefined
+        const sourceRunColumn = (index: number): number => index < 0
+          ? sourceColumnAt(itemSource, Math.max(0, itemSource.lastIndexOf(content)))
+          : root && nestedLineNumbers[index] !== undefined
           ? sourceColumn(root[nestedLineNumbers[index]! - 1] ?? nestedSourceLines[index]!)
           : indentColumns(nestedSourceLines[index]!)
-        const sourceOpen = sourceRunColumn(at)
+        const openerSource = at < 0 ? itemSource : root?.[nestedLineNumbers[at]! - 1]
+        const openerText = line.trimStart()
+        const openerOffset = openerSource?.lastIndexOf(openerText) ?? -1
+        // A marker-line run may follow a glued attribute. Its authored brace
+        // is farther right than the item's own marker column (carve#5788).
+        const sourceOpen = openerSource !== undefined && openerOffset >= 0
+          ? sourceColumnAt(openerSource, openerOffset) : sourceRunColumn(at)
         if (!run.slice(1).some((_next, offset) => sourceRunColumn(at + offset + 1) <= sourceOpen)) return false
         if (line.trimStart().startsWith('{%')) return last.includes('%}') &&
           (indentColumns(last) >= indentColumns(l) || indentColumns(l) >= (nestedContentColumn ?? contentCol))
@@ -3960,7 +3968,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if ((refusedFollower &&
           !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) && !missesRunDescendant(l) ||
           keptThroughCloser && insideRefusedHolder(l) ||
-          isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l)) && !isBlankLine(l)) {
+          isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l) ||
+          admission.kind === 'below' && content.trimStart().startsWith('{') &&
+            !lineOpensBlock(l.trimStart()) &&
+            followsRefusedRunWithinHolder(l, true)) && !isBlankLine(l)) {
         const follower = LAZY_FRAME + sliceColumns(l, contentCol, true)
         nested.push(follower)
         nestedSourceLines.push(l)
