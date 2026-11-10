@@ -491,6 +491,18 @@ function stopRemappedHostsAtChildren(doc: Document, remapped: WeakSet<object>): 
     node.pos.endOffset = last.endOffset
   }
   visit(doc)
+  // Collected footnotes keep their spans in a document side table, so the
+  // node walk above cannot see them as closerless containers. Apply the same
+  // last-child boundary after a trailing stand-in has been removed.
+  for (const [label, children] of Object.entries(doc.footnoteDefs ?? {})) {
+    const pos = doc.footnoteDefPos?.[label]
+    const last = children.at(-1)?.pos
+    if (!pos || !remapped.has(pos) || last?.endOffset === undefined ||
+        pos.endOffset === undefined || pos.endOffset <= last.endOffset) continue
+    pos.endLine = last.endLine
+    if (last.endColumn !== undefined) pos.endColumn = last.endColumn
+    pos.endOffset = last.endOffset
+  }
 }
 
 function restoringLetters(blocks: BlockNode[], letters: string[] | null): BlockNode[] {
