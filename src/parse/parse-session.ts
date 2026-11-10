@@ -176,7 +176,7 @@ import { recordLosingFootnoteLines } from './losing-footnote-lines.js'
 import { ownLines, restoreLetters } from './block/block-ownership.js'
 import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLinesStandAlone, restoreErasedDefinitions, restoreTransparentAbbreviations, restoreTransparentComments, transparentLineStream } from './block/transparent-lines.js'
 import { isValidInlineAttrPayload } from '../extension/attribute-parser.js'
-import { inlineAttributeEnds } from './block/inline-attribute-hold.js'
+import { InlineAttributeHosts } from './block/inline-attribute-hold.js'
 import { leadingAttributeRun, wrappedAttributeLinesAt } from './block/leading-attribute-run.js'
 import { isQuoteBlankLine } from './parse-lexer.js'
 
@@ -2969,20 +2969,21 @@ export class ParseSession extends InlineParseSession {
     let refusedFence: RegExp | null = null
     let openInlineCode = 0
     let openInlineComment = false
-    // A `{%` holds later lines only when its `%}` follows in this nonblank run (carve#5740).
+    // A `{%` holds later lines only when its `%}` follows before a blank line or a block that interrupts (carve#5740).
     let lastCommentCloser: number | undefined
     const commentClosesAhead = (): boolean => {
-      if (lastCommentCloser === undefined) {
-        lastCommentCloser = -1
-        for (let n = 0; lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!); n++)
-          if (lexer.peek(n)!.includes('%}')) lastCommentCloser = lexer.pos + n
-      }
+      lastCommentCloser ??= commentCloserAhead(lexer)
       return lastCommentCloser >= lexer.pos
     }
+    const attributeHosts = new InlineAttributeHosts((prefix) => {
+      let marker = 'data-carve-host-probe'
+      while (prefix.includes(marker)) marker += 'x'
+      return inlinesCarryKey(this.parseInline(`${prefix}{${marker}=1}`, lexer.abbrDefs, lexer.linkDefs), marker)
+    })
     const scanInlineCode = (line: string): void => {
       const destinations = line.includes('](') ? destinationSlotEnds(line) : undefined
-      const attributeEndAt = inlineAttributeEnds(line)
       const lastCommentCloserOnLine = line.lastIndexOf('%}')
+      attributeHosts.beginLine(line)
       let bracketDepth = 0
       let closedLabel = false
       for (let i = 0; i < line.length; i++) {
@@ -2997,19 +2998,21 @@ export class ParseSession extends InlineParseSession {
           continue
         }
         if (openInlineCode === 0) {
-          if (line[i] === '[') bracketDepth++
-          else if (line[i] === ']' && bracketDepth > 0) { bracketDepth--; closedLabel = true; continue }
-        }
-        const afterLabel = closedLabel
-        closedLabel = false
-        if (openInlineCode === 0) {
-          const attributeEnd = attributeEndAt(i, afterLabel)
-          if (attributeEnd !== -1) { i = attributeEnd; continue }
+          const attributeEnd = attributeHosts.acceptedAttributeEnd(i)
+          if (attributeEnd !== -1) { i = attributeEnd; closedLabel = false; continue }
         }
         // A backslash inside an open code span is code text, not an escape.
         if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
+        const opensComment = openInlineCode === 0 && line[i] === '{' && line[i + 1] === '%' &&
+          (lastCommentCloserOnLine > i + 1 || commentClosesAhead())
+        if (line[i] !== '`' && !opensComment) attributeHosts.noteText(i)
+        if (openInlineCode === 0) {
+          if (line[i] === '[') bracketDepth++
+          else if (line[i] === ']' && bracketDepth > 0) { bracketDepth--; closedLabel = true; continue }
+        }
+        closedLabel = false
         if (openInlineCode === 0 && line[i] === '{' && line[i + 1] === '%') {
-          if (lastCommentCloserOnLine > i + 1 || commentClosesAhead()) openInlineComment = true
+          openInlineComment = opensComment
           i++
           continue
         }
@@ -3017,10 +3020,13 @@ export class ParseSession extends InlineParseSession {
         let end = i + 1
         while (line[end] === '`') end++
         const width = end - i
-        if (openInlineCode === 0) openInlineCode = width
-        else if (openInlineCode === width) openInlineCode = 0
+        if (openInlineCode === 0) {
+          openInlineCode = width
+          attributeHosts.noteCodeOpen(i)
+        } else if (openInlineCode === width) openInlineCode = 0
         i = end - 1
       }
+      attributeHosts.endLine()
     }
     let imageCaptionSlot = false
     let captionAtContentColumn = false
@@ -3267,3 +3273,27 @@ export function parseTransientForHtml(source: string, opts: ParseOptions): Docum
   return session.parse(source, opts)
 }
 
+/** Whether any inline node, at any depth, carries an attribute named `key`. */
+function inlinesCarryKey(nodes: readonly InlineNode[], key: string): boolean {
+  return nodes.some((node) => node.attrs?.keyValues?.[key] !== undefined ||
+    ('children' in node && Array.isArray(node.children) && inlinesCarryKey(node.children as InlineNode[], key)))
+}
+
+// Per lexer, the scanned stretches: every position in one maps to the stretch's last `%}` line.
+const commentCloserRuns = new WeakMap<Lexer, Map<number, { last: number }>>()
+
+/** The last line holding `%}` from the lexer's position up to a blank line or a visible block, or -1. */
+function commentCloserAhead(lexer: Lexer): number {
+  let runs = commentCloserRuns.get(lexer)
+  if (runs === undefined) commentCloserRuns.set(lexer, runs = new Map())
+  const known = runs.get(lexer.pos)
+  if (known !== undefined) return known.last
+  const run = { last: -1 }
+  for (let n = 0, ln = lexer.peek(0); ln !== undefined && !isBlankLine(ln); ln = lexer.peek(++n)) {
+    const text = stripLazyFrame(ln)
+    if (startsInterruptingBlock(lexer, text, true, true, false) || RE_FOOTNOTE_DEF.test(text.trimStart())) break
+    if (ln.includes('%}')) run.last = lexer.pos + n
+    runs.set(lexer.pos + n, run)
+  }
+  return run.last
+}

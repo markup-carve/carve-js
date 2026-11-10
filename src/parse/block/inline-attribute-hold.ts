@@ -1,37 +1,135 @@
 import { isValidAttrItem, isValidInlineAttrPayload } from '../../extension/attribute-parser.js'
 
-const SPAN_DELIMITERS = '*/_~='
-const BRACED_SPAN_MARKS = '+-/*_^,=~'
-const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\w-]/.test(ch)
+type Mark = [line: number, column: number]
+/** Whether inline pairing attaches an attribute written right after `prefix`. */
+export type InlineHostProbe = (prefix: string) => boolean
+
+const HOST_CLOSERS = '])`/*_~=}>:'
+const NOTED_MARKS = '[<{}/*_~=:'
 
 /**
- * Finds accepted inline attributes in one paragraph line (PART 9 §9 R3). Their payload is
- * opaque to code and comment pairing, so a backtick or `{%` inside holds no later brace
- * line (carve#5740). Every lookup is amortized linear over the line.
+ * The accepted inline attributes of one paragraph, line by line (PART 9 §9 R3). An accepted
+ * payload is opaque to code and comment pairing, so a backtick or `{%` inside holds no later
+ * brace line (carve#5740). Inline pairing itself decides whether a closer hosts the attribute.
  */
-export function inlineAttributeEnds(line: string): (at: number, closesLabel: boolean) => number {
-  const firstIndex = new Map<string, number>()
-  const first = (needle: string): number => {
-    let index = firstIndex.get(needle)
-    if (index === undefined) firstIndex.set(needle, index = line.indexOf(needle))
-    return index
-  }
-  let firstBracedOpen: number | undefined
-  const firstBracedSpanOpen = (): number => {
-    if (firstBracedOpen === undefined) {
-      firstBracedOpen = -1
-      for (let k = line.indexOf('{'); k !== -1; k = line.indexOf('{', k + 1)) {
-        if (BRACED_SPAN_MARKS.includes(line[k + 1] ?? '\n')) { firstBracedOpen = k; break }
-      }
+export class InlineAttributeHosts {
+  private readonly history: string[] = []
+  private readonly lastMarks = new Map<string, Mark>()
+  private previousMarks = new Map<string, Mark>()
+  private readonly bracketOpeners: Mark[] = []
+  private lastBracketMatch: Mark | undefined
+  private lastBracketClose: Mark | undefined
+  private readonly probes = new Map<string, boolean>()
+  // Openers on earlier lines that already hosted an attribute: inline pairing does not pair them again.
+  private readonly usedOpeners = new Set<string>()
+  private line = ''
+  private bracketStarts = new Int32Array(0)
+  private acceptedEnd = -1
+  private ends: (at: number) => number = () => -1
+
+  constructor(private readonly probe: InlineHostProbe) {}
+
+  /** Starts scanning the paragraph's next line. */
+  beginLine(line: string): void {
+    this.line = line
+    this.acceptedEnd = -1
+    this.previousMarks = new Map(this.lastMarks)
+    this.bracketStarts = new Int32Array(line.length).fill(-1)
+    const open: number[] = []
+    for (let k = 0; k < line.length; k++) {
+      if (line[k] === '[') open.push(k)
+      else if (line[k] === ']' && open.length > 0) this.bracketStarts[k] = open.pop()!
     }
-    return firstBracedOpen
+    this.ends = payloadEnds(line)
   }
+
+  endLine(): void {
+    this.history.push(this.line)
+  }
+
+  /** The `}` closing an accepted inline attribute that opens at `at`, or -1. */
+  acceptedAttributeEnd(at: number): number {
+    if (this.acceptedEnd !== at && !HOST_CLOSERS.includes(this.line[at - 1] ?? '\n')) return -1
+    const end = this.ends(at)
+    if (end === -1 || (this.acceptedEnd !== at && !this.hosts(at))) return -1
+    this.acceptedEnd = end + 1
+    return end
+  }
+
+  /** Records the code span a backtick run at `at` opens. */
+  noteCodeOpen(at: number): void {
+    this.lastMarks.set('`', [this.history.length, at])
+  }
+
+  /** Records a character the scan read as text. */
+  noteText(at: number): void {
+    const ch = this.line[at]!
+    if (ch === '[') this.bracketOpeners.push([this.history.length, at])
+    else if (ch === ']' && this.bracketOpeners.length > 0) {
+      this.lastBracketMatch = this.bracketOpeners.pop()
+      this.lastBracketClose = [this.history.length, at]
+    }
+    if (NOTED_MARKS.includes(ch)) this.lastMarks.set(ch, [this.history.length, at])
+  }
+
+  private hosts(at: number): boolean {
+    const line = this.line
+    const closer = line[at - 1]
+    if (closer === undefined || !HOST_CLOSERS.includes(closer)) return false
+    const start = this.hostStart(at)
+    if (start >= 0 && this.probed(line.slice(start, at))) return true
+    // The host may have opened on an earlier soft line: read from its latest opener there.
+    const marker = closer === ')' || closer === ']' ? '[' : closer === '>' ? '<' : closer === '}' ? '{' : closer
+    const bracketClose = closer === ']' ? at - 1 : closer === ')' ? line.lastIndexOf('](', at - 1) : -1
+    const paired = bracketClose >= 0 && this.lastBracketClose?.[0] === this.history.length &&
+      this.lastBracketClose[1] === bracketClose ? this.lastBracketMatch : undefined
+    const prior = paired ?? this.previousMarks.get(marker)
+    if (prior === undefined || prior[0] >= this.history.length) return false
+    const key = `${prior[0]}:${prior[1]}`
+    // A closed bracket pairs no later `]`.
+    if (this.usedOpeners.has(key) || (paired === undefined && marker === '[' &&
+      !this.bracketOpeners.some(([row, column]) => row === prior[0] && column === prior[1]))) return false
+    const prefix = [this.history[prior[0]]!.slice(Math.max(0, prior[1] - 1)),
+      ...this.history.slice(prior[0] + 1), line.slice(0, at)].join('\n')
+    if (!this.probed(prefix)) return false
+    this.usedOpeners.add(key)
+    return true
+  }
+
+  /** Where the inline host closing right before `at` opens on this line, one character early. */
+  private hostStart(at: number): number {
+    const line = this.line
+    const closer = line[at - 1]!
+    let open = -1
+    if (closer === ']') open = this.bracketStarts[at - 1]!
+    else if (closer === ')') {
+      const tail = line.lastIndexOf('](', at - 1)
+      if (tail >= 0) open = this.bracketStarts[tail]!
+    } else if (closer === '>') open = line.lastIndexOf('<', at - 2)
+    else if (closer === '}') open = line.lastIndexOf('{', at - 2)
+    else if (closer === '`') {
+      open = line.lastIndexOf('`', at - 2)
+      while (open > 0 && line[open - 1] === '`') open--
+    } else open = line.lastIndexOf(closer, at - 2)
+    return open < 0 ? -1 : Math.max(0, open - 1)
+  }
+
+  private probed(prefix: string): boolean {
+    let paired = this.probes.get(prefix)
+    if (paired === undefined) this.probes.set(prefix, paired = this.probe(prefix))
+    return paired
+  }
+}
+
+/**
+ * Per line, the `}` closing a valid inline attribute payload that opens at a `{`, or -1.
+ * Amortized linear over the line: scans are shared by every `{` they pass, and a quote-free
+ * payload that a whole token or a stray character already rejects skips the regex.
+ */
+function payloadEnds(line: string): (at: number) => number {
   const lastBrace = line.lastIndexOf('}')
-  // Skipping a payload without these characters pairs exactly as scanning it does, so it needs no validation.
-  const pairingMarks = countsOf(line, '`%[]\\')
   const quotes = countsOf(line, '"\'')
   const neverUnquoted = countsOf(line, '|\\\t')
-  // Per closing brace, the leftward token walk so far and the rightmost invalid whole token it found.
   const tails = new Map<number, { from: number, tokenEnd: number, invalidAt: number }>()
   // Whether a quote-free payload from `start` holds a whole token after a space that is no attribute item.
   const invalidTail = (start: number, end: number): boolean => {
@@ -46,43 +144,9 @@ export function inlineAttributeEnds(line: string): (at: number, closesLabel: boo
     }
     return tail.invalidAt > start
   }
-  const rejects = (start: number, end: number): boolean =>
-    pairingMarks(start, end) === 0 ||
-    (quotes(start, end) === 0 && (neverUnquoted(start, end) > 0 || invalidTail(start, end)))
   // Ends of payload scans, keyed by every `{` a scan passed outside quotes: a scan from there reaches the same `}`.
   const scanEnds = new Map<number, number>()
-
-  // `closesLabel`: the `]` before `at` closes a bracket the line opened, so a stray `]` hosts nothing.
-  const endsInHost = (at: number, closesLabel: boolean): boolean => {
-    const last = line[at - 1]
-    if (last === undefined) return false
-    const found = (k: number): boolean => k !== -1 && k < at - 1
-    switch (last) {
-      case ']': return closesLabel
-      case '`': return true
-      case ')': return closesBefore(at - 2, ')', k => line[k] === '(' && line[k - 1] === ']')
-      case '>': return closesBefore(at - 2, '>', k => line[k] === '<')
-      case ':': {
-        let k = at - 2
-        while (isWordChar(line[k])) k--
-        return k < at - 2 && line[k] === ':'
-      }
-      case '}': {
-        const open = firstBracedSpanOpen()
-        const tilde = first('~>')
-        return BRACED_SPAN_MARKS.includes(line[at - 2] ?? '\n') && open !== -1 && open <= at - 4 &&
-          (tilde === -1 || tilde > at - 2)
-      }
-      default: return SPAN_DELIMITERS.includes(last) && found(first(last))
-    }
-  }
-  // Whether some k below `from`, before any `stop`, satisfies `hit`.
-  const closesBefore = (from: number, stop: string, hit: (k: number) => boolean): boolean => {
-    for (let k = from; k >= 0 && line[k] !== stop; k--) if (hit(k)) return true
-    return false
-  }
-
-  const payloadEnd = (at: number): number => {
+  const scan = (at: number): number => {
     const known = scanEnds.get(at)
     if (known !== undefined) return known
     const passed: number[] = []
@@ -101,11 +165,12 @@ export function inlineAttributeEnds(line: string): (at: number, closesLabel: boo
     for (const k of passed) scanEnds.set(k, result)
     return result
   }
-
-  return (at: number, closesLabel: boolean): number => {
-    if (line[at] !== '{' || lastBrace < at || !endsInHost(at, closesLabel)) return -1
-    const end = payloadEnd(at)
-    return end !== -1 && !rejects(at + 1, end) && isValidInlineAttrPayload(line.slice(at + 1, end)) ? end : -1
+  return (at: number): number => {
+    if (line[at] !== '{' || lastBrace < at) return -1
+    const end = scan(at)
+    if (end === -1) return -1
+    if (quotes(at + 1, end) === 0 && (neverUnquoted(at + 1, end) > 0 || invalidTail(at + 1, end))) return -1
+    return isValidInlineAttrPayload(line.slice(at + 1, end)) ? end : -1
   }
 }
 
