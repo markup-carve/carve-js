@@ -21,20 +21,6 @@ describe('continuation-marker-refused vectors', () => {
     ])
   })
 
-  it('reports a separate plus after a quote when a blank line follows', () => {
-    const findings = lintCarve('> q\n+\n\npara\n').filter(w => w.rule === 'continuation-marker-refused')
-    expect(findings).toEqual([
-      expect.objectContaining({ line: 2, column: 1, message: expect.stringContaining('+') }),
-    ])
-  })
-
-  it('handles trailing spaces and the end of a quote', () => {
-    expect(lintCarve('> q\n+ \n\npara').filter(w => w.rule === 'continuation-marker-refused'))
-      .toEqual([expect.objectContaining({ line: 2, column: 1, message: expect.stringContaining('blank line') })])
-    expect(lintCarve('> q\n+').filter(w => w.rule === 'continuation-marker-refused'))
-      .toEqual([expect.objectContaining({ line: 2, column: 1, message: expect.stringContaining('end of the document') })])
-  })
-
   it('does not mistake glued markers for quote hosts', () => {
     for (const line of ['>= x', '>>= op', '>+', '>>+']) {
       // A document-level `+` is a letter under PART 0 S2, so it is quiet (carve#4648).

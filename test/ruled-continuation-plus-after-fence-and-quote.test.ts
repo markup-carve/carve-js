@@ -38,7 +38,7 @@ describe('ruled continuation markers', () => {
     expect(carveToHtml(carveToCarve(source))).toBe(html)
     const plusLines = source.split('\n')
     const firstPlus = plusLines.findIndex(line => line.trim() === '+')
-    expect(lintCarve(source).filter(w => w.rule === 'continuation-marker-refused')).toEqual([
+    expect(lintCarve(source).filter(w => w.rule === 'refused-continuation-marker')).toEqual([
       expect.objectContaining({ line: firstPlus + 1, column: plusLines[firstPlus]!.indexOf('+') + 1 }),
       expect.objectContaining({ line: firstPlus + 2, column: plusLines[firstPlus]!.indexOf('+') + 1 }),
     ])

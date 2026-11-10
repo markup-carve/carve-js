@@ -7,8 +7,6 @@ const refused = [
   ['surviving outer quote, end of input', '> > q\n> +\n', 3, 2],
   ['surviving outer quote, shifted follower', '> > q\n> +\n>   para\n', 3, 2],
   ['lazy quote inside list with no marker owner', '- x\n  > q\n  +\n', 3, 3],
-  ['nested quote with a same-column list follower', '> > q\n> > +\n> > - s\n', 5, 2],
-  ['quote with a same-column list follower', '> q\n> +\n> - s\n', 3, 2],
 ] as const
 
 const refusedInNote = [
@@ -67,7 +65,7 @@ const ruledHtml = new Map<string, string>([
 ])
 
 const refusalLocations = (source: string) => lintCarve(source)
-  .filter(warning => warning.rule === 'continuation-marker-refused')
+  .filter(warning => warning.rule === 'refused-continuation-marker')
   .map(warning => [warning.line, warning.column])
 
 describe('a refused marker at a surviving footnote or quote owner', () => {
@@ -77,6 +75,14 @@ describe('a refused marker at a surviving footnote or quote owner', () => {
   })
   it.each(refused)('reports %s', (_name, source, column, line) => {
     expect(refusalLocations(source)).toEqual([[line, column]])
+    expect(carveToHtml(source)).toBe(ruledHtml.get(source))
+  })
+
+  it.each([
+    '> > q\n> > +\n> > - s\n',
+    '> q\n> +\n> - s\n',
+  ])('keeps a visible plus quiet in %j', (source) => {
+    expect(refusalLocations(source)).toEqual([])
     expect(carveToHtml(source)).toBe(ruledHtml.get(source))
   })
 

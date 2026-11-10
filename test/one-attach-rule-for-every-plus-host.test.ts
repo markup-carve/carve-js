@@ -51,7 +51,7 @@ describe('one attach rule for every + host', () => {
   })
 
   it('reports a refused marker once, from the walk', () => {
-    const warnings = lintCarve('- a\n+\n\nx\n').filter((w) => w.rule === 'continuation-marker-refused')
+    const warnings = lintCarve('- a\n+\n\nx\n').filter((w) => w.rule === 'refused-continuation-marker')
     expect(warnings.map((w) => [w.line, w.column])).toEqual([[2, 1]])
   })
 })

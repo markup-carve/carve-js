@@ -55,7 +55,7 @@ describe('continuation-marker-refused for a plus no container takes', () => {
   }
 
   it('names the list item that keeps the plus as text', () => {
-    const [warning] = lintCarve('> - a\n> +\n>\n> b\n').filter((w) => w.rule === 'continuation-marker-refused')
+    const [warning] = lintCarve('> - a\n> +\n>\n> b\n').filter((w) => w.rule === 'refused-continuation-marker')
     expect(warning?.message).toContain('renders nothing')
   })
 })

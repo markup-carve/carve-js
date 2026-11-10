@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { lintCarve } from '../src/lint.js'
 
 const refused = (source: string) =>
-  lintCarve(source).filter(w => w.rule === 'continuation-marker-refused').map(w => [w.line, w.column])
+  lintCarve(source).filter(w => w.rule === 'refused-continuation-marker').map(w => [w.line, w.column])
 
 // A `> +` at an outer quote level attaches a deeper-quoted follower at its column,
 // and that attached quote nests (PART 9 §17 L4, corpus 646-8).
