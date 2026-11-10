@@ -85,6 +85,8 @@ interface Frame {
   plusBody?: boolean
   // The marker line a `+` on it was accepted on.
   plus?: number
+  // The note whose first-block `+` opened this item's list: a refused `+` ends the list there (carve#5601).
+  listNote?: Frame
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
   releasedFence?: { minimumFoldColumn: number }
@@ -432,6 +434,22 @@ function quotedMeasure(line: string): { col: number; rest: string } {
 }
 
 const quotedRest = (line: string): string => quotedMeasure(line).rest
+
+/** Remember the note whose first-block `+` opened this item's list, carried to its later items (carve#5601). */
+function markListNote(item: Frame, owner: Frame, sibling: Frame | undefined, plusFollower: boolean, at: number): void {
+  if (item === owner) return
+  const note = plusFollower && sibling?.kind === 'note' && sibling.plus === at - 1 ? sibling
+    : sibling?.kind === 'item' && sibling.markerCol === item.markerCol ? sibling.listNote : undefined
+  if (note) item.listNote = note
+}
+
+/** The list a note's `+` attached sits in that note, so a `+` at their shared marker column reaches the note. */
+function listNoteAt(frames: Frame[], k: number): Frame {
+  const f = frames[k]!
+  const note = f.listNote
+  if (note && note.markerCol === f.markerCol) frames[k] = note
+  return frames[k]!
+}
 
 /** Route only a block actually taken by a marker-line plus through its item's trace path. */
 function firstBlockTraceRoute(
@@ -890,8 +908,8 @@ export function ownLines(
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
       if (f.markerCol !== undefined && CONT_MARKER.test(m.rest) && standsAtMarker(f) && !partialQuotePlusIsLazy(frames, k, quotes)) {
-        plus = f
-        plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, f.kind, out, contentColumn(f))
+        plus = listNoteAt(frames, k)
+        plusReason = claimedMarkers.has(at) ? 'claimed' : refusal(at, docColumn(lines[at]!, m.rest), quotes, plus.kind, out, contentColumn(plus))
         break
       }
       if (f.kind === 'quote') {
@@ -976,8 +994,13 @@ export function ownLines(
         rewritten = true
         finish()
         if (trace) emit(at, 'S2', ownerPath(), 'CARVE-P9-067', 'plus', { cell: 'B-plus-start' })
+        // A marker an earlier accepted `+` claimed stays in that chain, so its follower still meets the host.
+        if (plusReason === 'claimed' && host.plus !== undefined) afterPlus = true
         // A refused second marker ends a marker-line `+` note; its item reads the next block (carve#5515).
-        if (host.kind === 'note' && host.plusBody && frames.at(-2)?.kind === 'item') frames.pop()
+        if (host.kind === 'note' && host.plusBody && frames.at(-2)?.kind === 'item') {
+          frames.pop()
+          if (attachedHost?.includes(host)) attachedHost = null
+        }
         return true
       }
       attachedHost = frames.slice()
@@ -1181,6 +1204,7 @@ export function ownLines(
       apply(owner, m.col, form, owner.canon, !leftLineBlockSpan)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
+    if (form.kind === 'item') markListNote(top(), owner, sibling, plusFollower, at)
     if (plusFollower) {
       markUnclosedAttachedFence(form)
       holdResumableHost(sibling, form, formColumn)
