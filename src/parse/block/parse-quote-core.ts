@@ -779,6 +779,7 @@ export interface BlockQuoteLazyState {
   attrRun: string | null
   attrColumn?: number
   attrShallow?: boolean
+  attrComment?: boolean
   refusedBraceRun?: boolean
   /**
    * Widths of the colon fences open in this quote, innermost last, so a bare
@@ -1587,11 +1588,14 @@ function closesAttributeBlock(run: string): boolean {
 export function continueWrappedAttributeBlock(
   collected: string,
   content: string,
+  comment?: boolean,
 ): { run: string; verdict: 'open' | 'attributes' | 'text' } {
   if (isBlankLine(content)) return { run: '', verdict: 'text' }
   const run = `${collected}\n${content}`
+  // `run` is a rope: reading it on a line that cannot close the run flattens it again, so N lines cost O(N^2) (carve#5859).
+  if (!content.includes('}')) return { run, verdict: 'open' }
   // A `{%` run is a comment that only `%}` closes, whatever braces it holds (CARVE-P2-035).
-  if (!content.includes('}') || !closesAttributeBlock(run) || run.startsWith('{%') && !content.includes('%}')) {
+  if ((comment ?? collected.startsWith('{%')) && !content.includes('%}') || !closesAttributeBlock(run)) {
     return { run, verdict: 'open' }
   }
 
@@ -1619,13 +1623,13 @@ export function continueWrappedAttributeBlock(
  * both have.
  */
 export function trackWrappedAttributeRun(
-  state: { attrRun: string | null; attrColumn?: number; attrShallow?: boolean; refusedBraceRun?: boolean },
+  state: { attrRun: string | null; attrColumn?: number; attrShallow?: boolean; attrComment?: boolean; refusedBraceRun?: boolean },
   content: string,
   column = indentColumns(content),
 ): boolean {
   if (state.attrRun !== null) {
     if (column <= (state.attrColumn ?? 0)) state.attrShallow = true
-    const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content)
+    const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content, wrappedRunIsComment(state))
     state.attrRun = verdict === 'open' ? run : null
     // A refused run claims no line, so the classifiers' reading stands (carve#5830 rule A).
     const refused = state.attrShallow === true
@@ -1636,9 +1640,17 @@ export function trackWrappedAttributeRun(
     state.attrRun = content
     state.attrColumn = column
     state.attrShallow = false
+    state.attrComment = content.startsWith('{%')
   }
 
   return false
+}
+
+/** Whether the open run is a `{%` comment, read once per run rather than from the growing run text (carve#5859). */
+export function wrappedRunIsComment(state: { attrRun: string | null; attrComment?: boolean }): boolean {
+  if (state.attrRun === null) return false
+  state.attrComment ??= state.attrRun.startsWith('{%')
+  return state.attrComment
 }
 
 /**
