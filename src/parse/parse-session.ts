@@ -343,15 +343,11 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
       return 0
     }
     const quoteLazyContinuation = lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))
-    if (n > 0 && comment && !lazyBrace && quoteLazyContinuation) {
-      memo.closerless = lexer.pos + n
-      return 0
-    }
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
     if (n > 0) {
       // A quote's lazy line retains its source column even when the opener was
       // a marked line. Ordinary list lines still use their local content column.
-      const sourceColumns = markerLineComment || lazyBrace || quoteLazyContinuation && !comment
+      const sourceColumns = markerLineComment || lazyBrace || quoteLazyContinuation
       if (sourceColumns
         ? authoredColumn(n) <= (markerLineComment || lazyBrace ? sourceOpenerColumn : authoredColumn(0))
         : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n))) shallow = true
