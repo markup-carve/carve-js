@@ -482,7 +482,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const opener = state.attrRun === null
     // A lazy line's column here is not its authored one, so only a run at the content column refuses a `{%` comment.
     state.attrRunLazy = !line.atContentColumn || !opener && state.attrRunLazy === true
-    const comment = (opener ? runText.trimStart() : state.attrRun!).startsWith('{%')
+    const comment = opener ? runText.trimStart().startsWith('{%') : (state.attrComment ??= state.attrRun!.startsWith('{%'))
     if (trackWrappedAttributeRun(state, runText, column)) return endsOnBlock(state)
     if (state.refusedBraceRun && comment && state.attrRunLazy) state.refusedBraceRun = false
     if (state.refusedBraceRun) {
@@ -538,6 +538,7 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
       const lead = markerLineState(description[2]!)
       if (lead.wrappedAttributeRun !== null) {
         state.attrRun = lead.wrappedAttributeRun
+        delete state.attrComment
         state.attrColumn = indentColumns(content) + state.descriptionColumn + lead.wrappedAttributeColumn
         state.attrShallow = false
       }

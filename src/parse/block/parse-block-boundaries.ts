@@ -224,6 +224,7 @@ export interface ItemLazyState {
   attrRun: string | null
   attrColumn?: number
   attrShallow?: boolean
+  attrComment?: boolean
   refusedBraceRun?: boolean
   attrRunLazy?: boolean
   /** Width of the inline code span the open paragraph holds, or 0 (pairs as parseParagraph does). */

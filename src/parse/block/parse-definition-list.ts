@@ -576,6 +576,7 @@ export function createDefinitionListParser(
         lazyState.quoteInner = firstState.quote
         // A run the marker line opens is measured from its `{` (CARVE-P2-035).
         lazyState.attrRun = firstState.wrappedAttributeRun
+        delete lazyState.attrComment
         lazyState.attrColumn = firstState.wrappedAttributeColumn
         // A FOOTNOTE DEFINITION ON THE MARKER LINE OPENS A BODY RUN, exactly as
         // one on a continuation line does through the tracker (§16, the arm at

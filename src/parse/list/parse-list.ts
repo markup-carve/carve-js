@@ -1861,7 +1861,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       return candidate === undefined || isBlankLine(candidate) || indentColumns(candidate) !== 0
     }
     let deepAttributeClosed = false
-    const wrappedAttribute: { attrRun: string | null; attrColumn?: number; attrShallow?: boolean; refusedBraceRun?: boolean } = { attrRun: null }
+    const wrappedAttribute: { attrRun: string | null; attrColumn?: number; attrShallow?: boolean; attrComment?: boolean; refusedBraceRun?: boolean } = { attrRun: null }
     let wrappedAttributeFence: string | null = null
     // Facts about the line being admitted. The phases below set each one before
     // any later phase reads it, so none carries over from the previous line.
