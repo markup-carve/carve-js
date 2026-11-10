@@ -182,18 +182,19 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
         sourceColumnAt(openerSource, openerQuoteAt) === sourceColumnAt(verseSource, verseQuoteAt)
       const comparableSource = !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
         (sameQuoteColumn || (openerQuoteAt < 0 && verseQuoteAt < 0))
-      const tabbedSources = openerSource.slice(0, openerAt).includes('\t') &&
-        verseSource.slice(0, verseAt).includes('\t')
+      const openerTabbed = openerSource.slice(0, openerAt).includes('\t')
+      const tabbedSources = openerTabbed && verseSource.slice(0, verseAt).includes('\t')
       const sourceGap = comparableSource && (tabbedSources || (!verseSource.includes('\t') && sameQuoteColumn))
         ? sourceColumnAt(verseSource, verseAt) - sourceColumnAt(openerSource, openerAt) : 0
       // Once an owner has consumed columns from a tab, its transformed spelling
       // cannot tell us how much of that tab is verse. A quoted list may also
       // remeasure the opener's tab at its own stop. Read both lines in their
       // common parent view, then strip the fence indent by columns there.
-      const rebaseTab = comparableSource && tabbedSources
-      const parentVerse = rebaseTab && lexer.hostBody === 'list' ? tabbedVerseInOwner(lexer, openLineIndex, lineIndex) : undefined
+      const quoteSpaceGap = comparableSource && sameQuoteColumn && openerTabbed && !verseSource.includes('\t')
+      const rebaseTab = comparableSource && (tabbedSources || quoteSpaceGap)
+      const parentVerse = rebaseTab && tabbedSources && lexer.hostBody === 'list' ? tabbedVerseInOwner(lexer, openLineIndex, lineIndex) : undefined
       const quoteBody = (text: string): string => text.slice(text.indexOf('>') + 1).replace(/^ /, '')
-      const quoteGap = rebaseTab && lexer.hostBody !== 'list' && openerQuoteAt >= 0
+      const quoteGap = rebaseTab && openerQuoteAt >= 0 && (quoteSpaceGap || lexer.hostBody !== 'list')
         ? (() => {
             const first = quoteBody(openerSource)
             const next = quoteBody(verseSource)

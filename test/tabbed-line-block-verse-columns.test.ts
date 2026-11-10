@@ -48,6 +48,19 @@ describe('tabbed line block verse columns after owner frames', () => {
 </blockquote>`)
   })
 
+  it('compares a quoted tabbed opener with a space-led verse inside the quote', () => {
+    expect(carveToHtml('> - b\n> \t::: |\n>       text\n>   ::: |\n')).toBe(`<blockquote>
+  <ul>
+    <li>b
+      <div class="line-block">
+        <p>&nbsp;&nbsp;text<br>
+::: |</p>
+      </div>
+    </li>
+  </ul>
+</blockquote>`)
+  })
+
   it('keeps source offsets on the authored verse words', () => {
     for (const source of [
       '* a\n  * a\n   \t::: |\n  \ty\n   \t:::\n',
