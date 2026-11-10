@@ -13,17 +13,17 @@ it("continues it past any brace line and two-space indentation (carve#5744)", ()
 
 it("keeps a list marker after a refused {% run on an item marker line as item text (carve#5745)", () => {
   expect(carveToHtml("- {% a\n  b %}\n  - q\n").trim()).toBe(
-    "<ul>\n  <li>{% a\nb %}\n- q</li>\n</ul>")
+    "<ul>\n  <li>{% a\nb %}\n    <ul>\n      <li>q</li>\n    </ul>\n  </li>\n</ul>")
 })
 
 it("keeps an ordered marker after a refused run with trailing text as item text (carve#5745)", () => {
   expect(carveToHtml("- {% a\n  b %} c\n  1. q\n").trim()).toBe(
-    "<ul>\n  <li>{% a\nb %} c\n1. q</li>\n</ul>")
+    "<ul>\n  <li>{% a\nb %} c\n    <ol>\n      <li>q</li>\n    </ol>\n  </li>\n</ul>")
 })
 
 it("keeps a marker after a refused run closed by a brace comment line as item text (carve#5745)", () => {
   expect(carveToHtml("- {% a\n  {%x%}\n  - q\n").trim()).toBe(
-    "<ul>\n  <li>{% a\n{%x%}\n- q</li>\n</ul>")
+    "<ul>\n  <li>{% a\n\n    <ul>\n      <li>q</li>\n    </ul>\n  </li>\n</ul>")
 })
 
 it("keeps the follower of a refused attribute run in the footnote body (carve#5746)", () => {

@@ -59,7 +59,6 @@ import {
   RE_DEFLIST_DEF,
   startsInterruptingBlock,
   trackBlockQuoteLazyState,
-  keepsRefusedRunLine,
   trackWrappedAttributeRun,
   walkMarkerOwnerPrefix,
 } from './parse-quote-core.js'
@@ -227,15 +226,8 @@ export interface ItemLazyState {
   attrShallow?: boolean
   refusedBraceRun?: boolean
   attrRunLazy?: boolean
-  refusedBraceFollower?: boolean
   /** Width of the inline code span the open paragraph holds, or 0 (pairs as parseParagraph does). */
   inlineCodeOpen?: number
-  /** The open wrapped run began inside a nested quote's open paragraph. */
-  attrRunInQuote?: boolean
-  /** See keepsRefusedRunLine. */
-  refusedRunKept?: RegExp | null | undefined
-  /** The line just tracked was one a refused brace run's paragraph keeps. */
-  keptRunLine?: boolean
   attrOwnerColumn?: number
   /**
    * The leading run a container INSIDE the item currently owns, or -1.
@@ -966,7 +958,6 @@ export const listStateHelpers = {
   quotedLineText,
   taskMatch,
   trackBlockQuoteLazyState,
-  keepsRefusedRunLine,
   trackWrappedAttributeRun,
   unorderedMatch,
   verbatimOnlyLazyState,

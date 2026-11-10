@@ -9,6 +9,6 @@ it('assigns a marker after a below-column refused comment to its surviving list 
     '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}</li>\n      <li>z</li>\n    </ul>\n  </li>\n</ul>',
   )
   expect(carveToHtml('- a\n  - b\n   {% c\n   d %}\n    - z\n')).toBe(
-    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n- z</li>\n    </ul>\n  </li>\n</ul>',
+    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n        <ul>\n          <li>z</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
   )
 })

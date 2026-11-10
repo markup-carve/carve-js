@@ -335,6 +335,8 @@ export class Lexer {
    * (markup-carve/carve-js#1630).
    */
   itemLazyLines: Set<number>
+  /** The `itemLazyLines` that reach no item at all, read by the outermost list. */
+  outerItemLazyLines: Set<number>
   hostContentColumn = 0
   /** The enclosing marker body's content column in the original source. */
   hostSourceContentColumn: number | undefined
@@ -496,6 +498,7 @@ export class Lexer {
     this.literalLazyLinkDefLines = inherited?.literalLazyLinkDefLines ?? new Set()
     this.quoteLazyMarkerLines = inherited?.quoteLazyMarkerLines ?? new Set()
     this.itemLazyLines = inherited?.itemLazyLines ?? new Set()
+    this.outerItemLazyLines = inherited?.outerItemLazyLines ?? new Set()
     this.hostedFootnoteLines = inherited?.hostedFootnoteLines ?? new Set()
     this.quoteLazyLines = inherited?.quoteLazyLines ?? new Set()
     this.literalCommentLineOpeners = inherited?.literalCommentLineOpeners ?? new Set()

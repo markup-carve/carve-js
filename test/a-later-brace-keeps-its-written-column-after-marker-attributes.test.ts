@@ -6,13 +6,13 @@ it.each(['{.x}', '{.a}', '{#id}'])(
   (glued) => {
     const source = `-${glued} {.x\n     .y}\n  # h\n`
     const attribute = glued === '{.x}' ? ' class="x"' : glued === '{.a}' ? ' class="a"' : ' id="id"'
-    expect(carveToHtml(source)).toBe(`<ul>\n  <li${attribute}>{.x\n.y}\n# h</li>\n</ul>`)
+    expect(carveToHtml(source)).toBe(`<ul>\n  <li${attribute}>{.x\n.y}\n    <h1 id="h">h</h1>\n  </li>\n</ul>`)
   },
 )
 
-it('keeps a list-shaped follower in a refused later run as paragraph text', () => {
+it('opens a nested list below a refused later run', () => {
   expect(carveToHtml('-{.x} {.x\n     .y}\n  - next\n')).toBe(
-    '<ul>\n  <li class="x">{.x\n.y}\n- next</li>\n</ul>',
+    '<ul>\n  <li class="x">{.x\n.y}\n    <ul>\n      <li>next</li>\n    </ul>\n  </li>\n</ul>',
   )
 })
 

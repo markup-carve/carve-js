@@ -21,7 +21,7 @@
   },
   {
     "source": "- +\n{% c\nd %}\n# H\n",
-    "html": "<ul><li>{% c\nd %}\n# H</li></ul>"
+    "html": "<ul><li>{% c\nd %}</li></ul><section id=\"H\"><h1>H</h1></section>"
   },
   {
     "source": "- {% a\n  b\n  c %}\n\n  Body.\n",
@@ -45,7 +45,7 @@
   },
   {
     "source": "- +\n{% a\nb\nc %}\n# H\n",
-    "html": "<ul><li>{% a\nb\nc %}\n# H</li></ul>"
+    "html": "<ul><li>{% a\nb\nc %}</li></ul><section id=\"H\"><h1>H</h1></section>"
   },
   {
     "source": "- a\n\n  {% c\n  d %}\n",

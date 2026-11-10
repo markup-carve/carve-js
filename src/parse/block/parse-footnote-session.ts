@@ -5,10 +5,10 @@ import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledParagraphBlockCut } from './pulled-paragraph.js'
 import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
-import { commentOnlyParagraphEnd, isRefusedBraceRun, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
+import { commentOnlyParagraphEnd, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
-import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, sourceQuoteRest, startsInterruptingBlock, stripLazyFrame, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
+import { FOOTNOTE_BODY_COLUMN, sourceQuoteLocalColumn, isBlockAttributeLine, LAZY_FRAME, markerContentColumn, markerFreeContent, opensCodeFence, opensWrappedAttributeBlock, Lexer, RE_ABBR_DEF, RE_ADMONITION_CLOSE, RE_CAPTION, RE_COMMENT_LINE, RE_DEFLIST_DEF, RE_DEFLIST_TERM, RE_FOOTNOTE_DEF, bodyHoldsClosableCommentSpan, commentBlockHasCloser, commentCloserAhead, commentFenceRun, fenceCloseRe, indentColumns, isBlankLine,  isContinuationMarker, isLinkDefLine, isListMarkerLine, isPhysicalContinuationMarker, isRetainableLineComment, leadingWhitespace, lineOpensItemBlock, markerDecision, matchedCommentFenceEnd, nestedSubLexer, newCommentSpanScan, openFenceScanner, quotePrefixDepth, restoreVerbatimBlanks,  sliceColumns, sourceColumn, sourceColumnAt, sourceQuoteBody, sourceQuoteRest, startsInterruptingBlock, trackItemLazyState, trimEndSpaceTab, verbatimOnlyLazyState } from '../parse-core.js'
 
 // A line-block payload run pairs with a later run of the body at any indent;
 // a failed search refutes every later opener of that character and width.
@@ -62,35 +62,6 @@ function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
   return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
 }
 
-/** Whether the line at the cursor closes a block brace run that its source columns refuse (CARVE-P2-035). */
-function closesRefusedRunAt(lexer: Lexer, floor: number): boolean {
-  const end = lexer.pos
-  if (!(lexer.lineAt(end) ?? '').includes('}')) return false
-  const authored = (index: number): string => {
-    const line = stripLazyFrame(lexer.lineAt(index)!)
-    return ' '.repeat(authoredColumnAt(lexer, index) ?? indentColumns(line)) + line.trimStart()
-  }
-  // An earlier `}` would have closed the run, so the scan stops there and stays linear.
-  for (let start = end - 1; start > floor; start--) {
-    const raw = lexer.lineAt(start)
-    const line = raw === undefined ? undefined : stripLazyFrame(raw)
-    if (line === undefined || isBlankLine(line)) return false
-    if (line.trimStart().startsWith('{'))
-      return isRefusedBraceRun((offset) => start + offset <= end ? authored(start + offset) : undefined, end - start + 1)
-    if (line.includes('}')) return false
-  }
-  return false
-}
-
-/** A refused run on lazy lines keeps its follower in the paragraph, as one at the body column does. */
-// A run that lazily continues a nested block's paragraph is that block's text, not the note's.
-function keepLazyRunFollower(lexer: Lexer, floor: number, state: ReturnType<typeof verbatimOnlyLazyState>): void {
-  if (state.quoteInner != null || state.deepest != null || !closesRefusedRunAt(lexer, floor)) return
-  state.refusedRunKept = null
-  state.refusedBraceFollower = true
-  state.lazyFoldable = true
-}
-
 const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
 
 /** The quote-local body column of the note `def`, the end of line `index`, where it was written; -1 without an open run on that line. */
@@ -107,16 +78,6 @@ function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attach
   if (at <= text.length - head.length) return sourceColumnAt(text, text.length - head.length) + FOOTNOTE_BODY_COLUMN
   const note = NOTE_HEAD_BEFORE_RUN.exec(text.slice(0, at))
   return note ? sourceColumnAt(text, note.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(text, at)
-}
-
-/** A refused run forces the fence line only; later blocks return to the note body base. */
-function endsRefusedFenceParagraph(
-  state: { refusedBraceFollower?: boolean; refusedRunKept?: RegExp | null | undefined },
-  previous: string, content: string, framedBelow: boolean,
-): boolean {
-  return state.refusedBraceFollower === true && state.refusedRunKept === undefined &&
-    opensCodeFence(previous.trimStart()) && lineOpensItemBlock(content.trimStart()) &&
-    content !== content.trimStart() && !framedBelow
 }
 
 /** A continuation the authored columns refuse is paragraph text, so its moved indentation is dropped. */
@@ -1278,8 +1239,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
       bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
         : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn))
-      if (endsRefusedFenceParagraph(lazyState, bodyLines.at(-2) ?? '', content, framedBelow))
-        bodyLines[bodyLines.length - 1] = content.trimStart()
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
@@ -1366,7 +1325,6 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       authoredAttributeShallow(lexer, lazyState, attrSource)
       trackItemLazyState(trackedLiteralLine(content, framedBelow), lazyState, false,
         (run) => commentBlockHasCloser(lexer, run))
-      keepLazyRunFollower(lexer, defLineIndex, lazyState)
       lexer.consume()
     } else {
       return 'stop'

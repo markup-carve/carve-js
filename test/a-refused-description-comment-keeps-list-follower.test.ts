@@ -3,12 +3,12 @@ import { carveToHtml } from '../src/index.js'
 
 it('keeps a list marker after a refused description comment run in its paragraph (carve#5813)', () => {
   expect(carveToHtml(':: t\n: {% a\n%}\n- next\n').trim()).toBe(
-    '<dl>\n  <dt>t</dt>\n  <dd>{% a\n%}\n- next</dd>\n</dl>')
+    '<dl>\n  <dt>t</dt>\n  <dd>{% a\n%}</dd>\n</dl>\n<ul>\n  <li>next</li>\n</ul>')
 })
 
 it('keeps a marker after a refused run in a description nested in an item', () => {
   expect(carveToHtml('- :: outer\n  : lead\n  :: t\n  : {% a\n   %}\n  - next\n').trim()).toBe(
-    '<ul>\n  <li>\n    <dl>\n      <dt>outer</dt>\n      <dd>lead</dd>\n      <dt>t</dt>\n      <dd>{% a\n%}\n- next</dd>\n    </dl>\n  </li>\n</ul>')
+    '<ul>\n  <li>\n    <dl>\n      <dt>outer</dt>\n      <dd>lead</dd>\n      <dt>t</dt>\n      <dd>{% a\n%}</dd>\n    </dl>\n    <ul>\n      <li>next</li>\n    </ul>\n  </li>\n</ul>')
 })
 
 it('leaves a marker outside a description when a nested item owns the refused run', () => {

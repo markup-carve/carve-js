@@ -3,7 +3,7 @@ import { classifyList } from './parse-list-marker.js'
 import { finishList } from './parse-list-finish.js'
 import type { BlockNode, List, ListItem, TaskState } from '../../ast.js'
 import { Lexer, indentColumns, isBlankLine, isQuoteBlankLine, sliceColumns } from '../parse-lexer.js'
-import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd, isRefusedBraceRun, parseBlockAttributeRun } from '../parse-prepass-core.js'
+import { RE_COMMENT_BLOCK, commentOnlyParagraphEnd } from '../parse-prepass-core.js'
 import { leadingCommentEnd, sourceColumnAt } from './parse-item-core.js'
 import { foldsFenceIntoFrame } from './parse-list-state-runs.js'
 import { ContainerBlankBuffer, nextContainerContent, runIndentationContainer, type ContainerAdmission } from '../block/parse-indentation-container.js'
@@ -14,7 +14,7 @@ import { wrappedAttributeLinesAt } from '../block/leading-attribute-run.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, sourceColumn, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { braceRunHolds } from '../block/brace-run-holds.js'
-import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
+import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
 /** One marker of a stacked marker chain, with its trailing space. */
@@ -803,7 +803,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
         }
         return index > 0 && (index === blockCut || indentColumns(line) === placement.contentCol &&
-          !(isListMarkerLine(text) && isRefusedBraceRun(at => lines[at], index)) && (isListMarkerLine(text) ||
+          (isListMarkerLine(text) ||
           !inFence && (isLinkDefLine(text) || RE_FOOTNOTE_DEF.test(text))))
       })
       if (cut > 0) {
@@ -952,6 +952,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     }
   }
 
+  // How far right of the content column the lead content was written; a marker-glued attribute moves it.
+  function leadContentShift(line: string | undefined, content: string, contentCol: number): number {
+    const at = line === undefined || content === '' ? -1 : line.lastIndexOf(content)
+    return at < 0 ? 0 : Math.max(0, sourceColumnAt(line!, at) - contentCol)
+  }
+
   function leadLazyState(
     lexer: Lexer, session: ParseSession, content: string, itemStartLineIndex: number, markerLineTerm: boolean, contentCol: number,
     boxWidth: number,
@@ -991,8 +997,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ? 'description'
           : false,
       attrRun: leadState.wrappedAttributeRun,
-      // A run behind a task box is measured from its `{`, past the box (CARVE-P2-035).
-      attrColumn: leadState.wrappedAttributeColumn + boxWidth,
+      // A run behind a task box or a marker-glued attribute is measured from its written `{` (CARVE-P2-035, carve#5788).
+      attrColumn: leadState.wrappedAttributeColumn + Math.max(boxWidth, leadContentShift(lexer.lineAt(itemStartLineIndex), content, contentCol)),
       attrOwnerColumn: contentCol,
       // A container may open on the marker line itself, which never reaches
       // `trackItemLazyState`, so the first line collected below it has to be
@@ -1596,17 +1602,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       return false
     }
-    // A line a refused brace run's paragraph keeps opens no fence (CARVE-P2-035).
-    const keptByRefusedRun = (): boolean => {
-      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
-        if (frame.refusedRunKept !== undefined) return true
-      return false
-    }
-    const lastLineKept = (): boolean => {
-      for (let frame: ItemLazyState | null | undefined = lazyState; frame; frame = frame.deepest)
-        if (frame.keptRunLine === true) return true
-      return false
-    }
     const braceHeld = braceRunHolds(lexer)
     braceHeld.open(itemStartLineIndex, content)
     const trackDescendantOpaque = (
@@ -1678,7 +1673,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         return
       }
       const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-      if (fence === null || keptByRefusedRun() || descendantOpaque === null && braceHeld.holds(lexer.pos)) return
+      if (fence === null || descendantOpaque === null && braceHeld.holds(lexer.pos)) return
       if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
@@ -2074,6 +2069,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             nestedSourceLines.push(line)
             nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
             lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+            if (lexer.hostBody !== 'list') lexer.outerItemLazyLines.add(lexer.lineNumber(lexer.pos))
             lexer.consume()
           }
           Object.assign(lazyState, before)
@@ -2623,7 +2619,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       // A run past an open quote's column is quoted text, not an item-ending break.
       if (!isBlankLine(l) && lw <= baseIndent && lazyState.literalColon === undefined &&
           !insideOpenFence(lazyState) &&
-          RE_HR.test((nested.at(-1) ?? '').trimStart()) && !lastLineKept() &&
+          RE_HR.test((nested.at(-1) ?? '').trimStart()) &&
           !(insideOpenQuoteParagraph(lazyState) &&
             indentColumns(nestedSourceLines.at(-1) ?? '') > contentCol)) return 'stop'
       if (markerNoteItem && lw < contentCol && !markerNoteClaimChecked && noteClaimEnds()) return 'stop'
@@ -3034,12 +3030,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
             ? placed.trimStart()
           : placed
       if (markerTermText) dedented = LAZY_FRAME + sourceEntry
-      // Rebase the first ordinary block after an unpaired forced fence line.
-      if (followingUnpairedFence && lazyState.opaque === null &&
-          opensCodeFence((nested.at(-1) ?? '').trimStart()) &&
-          lineOpensItemBlock(placed.trimStart()) && indentColumns(placed) > 0) {
-        dedented = placed.trimStart()
-      }
       if (pastDefinitionEntry && survivingItemParagraph &&
           definitionHostColumn === lexer.rootFrameColumn(itemStartLineIndex) + contentCol - baseIndent &&
           (startsInterruptingBlock(lexer, placed.trimStart()) ||
@@ -3321,7 +3311,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       }
       // Inside verbatim payload a `{%` line is payload, not a run.
       if (lazyState.opaque === null && descendantOpaque === null && !insideOpenFence(lazyState)) braceHeld.open(fenceLineIndex, trackedContent)
-      if (!skipConsumedCloser) withKeptFenceLookahead(lexer, fenceLineIndex, () => trackItemLazyState(
+      if (!skipConsumedCloser) trackItemLazyState(
         braceHeld.mask(fenceLineIndex, trackedContent),
         lazyState,
         true,
@@ -3365,7 +3355,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         tabOpenerText === trackedContent ? tabOpenerColumns : undefined,
         tabOpenerText === trackedContent ? leadingWhitespace(trackedContent) : undefined,
         authoredQuoteParagraphOpen,
-      ))
+      )
       if (captionAtItemColumn) {
         captionParagraphClaim = hadQuoteParagraph
         lazyState.quoteInner = null
@@ -3846,6 +3836,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if ((indentColumns(l, contentCol) < contentCol || ancestorTermBand) &&
           !descendantDefinitionReachesContent(l)) {
         lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
+        if (lexer.hostBody !== 'list') lexer.outerItemLazyLines.add(lexer.lineNumber(lexer.pos))
       }
       // BELOW THE CONTENT COLUMN, so an invisible line here adds no block: it
       // is the lazy continuation of the paragraph above it, which stays open
@@ -3875,72 +3866,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       lexer.consume()
     }
 
-    // A refused run's paragraph takes the next line only inside the item that
-    // holds it; a line below that column is read as after any paragraph.
-    const insideRefusedHolder = (l: string): boolean => {
-      let holderColumn = contentCol
-      for (let frame: ItemLazyState | null | undefined = lazyState; frame && frame.ownedColumn >= 0 && !frame.ownedAuthored;
-        frame = frame.deepest) holderColumn += frame.ownedColumn
-      return indentColumns(l) >= holderColumn
-    }
-    // A follower short of the content column of the nested item whose paragraph holds the run is not that run's follower (CARVE-P2-035).
-    const missesRunDescendant = (l: string): boolean => {
-      for (let at = nestedSourceLines.length - 1; at >= 0; at--) {
-        const line = nestedSourceLines[at]!
-        if (isBlankLine(line)) return false
-        if (!isListMarkerLine(line.trimStart())) continue
-        const markerBody = markerContentColumn(line.trimStart())
-        return markerBody >= 0 && indentColumns(l) < indentColumns(line) + markerBody
-      }
-      return false
-    }
-    const followsRefusedRunWithinHolder = (l: string, allowBelow = false): boolean => {
-      const last = nestedSourceLines.at(-1)
-      if (!last?.includes('}')) return false
-      const previous = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 2]
-      if (previous === undefined || isBlankLine(previous) || !allowBelow && !insideRefusedHolder(l)) return false
-      const run: string[] = []
-      for (let at = nestedSourceLines.length - 1; at >= -1; at--) {
-        const line = at < 0 ? content : nestedSourceLines[at]!
-        if (isBlankLine(line)) return false
-        run.unshift(line)
-        // A description marker can open the same brace run that a bare item line opens.
-        const opener = markerLineBottomBlock(line).trimStart().replace(/^:[ \t]+/, '')
-        if (!opener.startsWith('{')) continue
-        if (!opensWrappedAttributeBlock(opener)) return false
-        if (run.length < 2) return false
-        let nestedContentColumn: number | undefined
-        for (let earlier = at - 1; earlier >= 0; earlier--) {
-          const marker = nestedSourceLines[earlier]!
-          if (!isListMarkerLine(marker.trimStart())) continue
-          const markerBody = markerContentColumn(marker.trimStart())
-          if (markerBody >= 0) nestedContentColumn = indentColumns(marker) + markerBody
-          break
-        }
-        if (nestedContentColumn !== undefined && indentColumns(l) < nestedContentColumn) return false
-        // A nested reparse may rebase the brace run, erasing the authored
-        // difference between its opener and continuation. Refusal is decided
-        // at the source columns, before any item body has been rebased.
-        const root = lexer.rootLines
-        const sourceRunColumn = (index: number): number => index < 0
-          ? sourceColumnAt(itemSource, Math.max(0, itemSource.lastIndexOf(content)))
-          : root && nestedLineNumbers[index] !== undefined
-          ? sourceColumn(root[nestedLineNumbers[index]! - 1] ?? nestedSourceLines[index]!)
-          : indentColumns(nestedSourceLines[index]!)
-        const openerSource = at < 0 ? itemSource : root?.[nestedLineNumbers[at]! - 1] ?? line
-        const openerOffset = openerSource.lastIndexOf(opener)
-        // Measure the brace after its marker, including a glued attribute or a description prefix.
-        const sourceOpen = openerOffset >= 0
-          ? sourceColumnAt(openerSource, openerOffset) : sourceRunColumn(at)
-        if (!run.slice(1).some((_next, offset) => sourceRunColumn(at + offset + 1) <= sourceOpen)) return false
-        if (opener.startsWith('{%')) return last.includes('%}') &&
-          (indentColumns(last) >= indentColumns(l) || indentColumns(l) >= (nestedContentColumn ?? contentCol))
-        return parseBlockAttributeRun(run.map((part, index) => index === 0 ? opener : ' ' + part.trimStart()).join('\n')) !== null
-      }
-      return false
-    }
-    let unpairedFenceFollower = false
-    let followingUnpairedFence = false
     let retainedRefusalFollower = false
     const closeRefusedFence = (lineNumber: number): void => {
       if (lazyState.opaque?.kind !== 'code') return
@@ -3962,11 +3887,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       nestedLineNumbers.push(lineNumber)
       trackItemLazyState(run, lazyState)
     }
-    const shallowCommentCloser = (admission: ContainerAdmission): boolean =>
-      admission.kind === 'below' && lazyState.attrRun?.startsWith('{%') === true &&
-      content.trimStart().startsWith('{%') &&
-      !nested.some((line) => lineOpensBlock(line.trimStart()) && !line.trimStart().startsWith('{')) &&
-      admission.line.includes('%}') && !lineOpensBlock(admission.line.trimStart())
     const admitLine = (admission: ContainerAdmission): Decision => {
       const l = admission.line
       const refusedColumn = lexer.refusedItemMarkers.get(admission.lineNumber) ??
@@ -4000,7 +3920,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           return 'continue'
         }
       }
-      if (admission.kind === 'blank') lazyState.refusedBraceFollower = false
       if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
       const attached = admitAttachedLead(admission)
       if (attached !== undefined) return attached
@@ -4008,41 +3927,6 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       enclosingLazy = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       const held = admitHeldConstruct(l)
       if (held !== undefined) return held
-      // A closer below an open comment run's column refuses that whole run.
-      // Keep the closer in the paragraph even when a brace-shaped middle line
-      // made the item tracker temporarily report no open paragraph (carve#5806).
-      if (shallowCommentCloser(admission)) {
-        admitLazyLine(l)
-        return 'continue'
-      }
-      followingUnpairedFence = unpairedFenceFollower && lazyState.refusedRunKept === undefined
-      unpairedFenceFollower = false
-      // Only the line right after the run is its follower, a fence-shaped one included (CARVE-P2-035, carve#5610).
-      // A fence follower with a closer ahead keeps its lines through that closer.
-      const refusedFollower = lazyState.refusedBraceFollower === true && !isBlankLine(l)
-      if (refusedFollower) lazyState.refusedBraceFollower = false
-      unpairedFenceFollower = refusedFollower && opensCodeFence(l.trimStart())
-      // The closer itself takes the ordinary path, which ends the hold or a real fence.
-      const kept = lazyState.refusedRunKept
-      const keptThroughCloser = kept instanceof RegExp && !isBlankLine(l) && !kept.test(l.trimStart())
-      if ((refusedFollower &&
-          !/^(`{3,}|~{3,})/.test(l.trimStart()) && insideRefusedHolder(l) && !missesRunDescendant(l) ||
-          keptThroughCloser && insideRefusedHolder(l) ||
-          isListMarkerLine(l.trimStart()) && followsRefusedRunWithinHolder(l) ||
-          admission.kind === 'below' && content.trimStart().startsWith('{') &&
-            !lineOpensBlock(l.trimStart()) && !isContinuationMarker(l) &&
-            followsRefusedRunWithinHolder(l, true)) && !isBlankLine(l)) {
-        // The lazy paragraph drops residual indentation. Strip it before framing so
-        // the sub-lexer's source anchor still begins at the follower's first text.
-        const follower = LAZY_FRAME + sliceColumns(l, contentCol, true).replace(/^[ \t]+/, '')
-        nested.push(follower)
-        nestedSourceLines.push(l)
-        nestedLineNumbers.push(lexer.lineNumber(lexer.pos))
-        lexer.itemLazyLines.add(lexer.lineNumber(lexer.pos))
-        trackItemLazyState(follower, lazyState, false)
-        lexer.consume()
-        return 'continue'
-      }
       readNoteFacts(l)
       if (admission.kind === 'blank') return admitBlank(l)
       const decision = admitContinuationMarker(l) ?? stopsBeforeBody(l) ?? readQuoteFacts(l) ??

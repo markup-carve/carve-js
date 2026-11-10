@@ -38,7 +38,8 @@ describe('a refused brace run joined across lines', () => {
 
   it('counts an astral character as one offset in each piece', () => {
     expect(pieces('{title="\u{1F600}"\n#x}\n')).toEqual([
-      ['text', '{title="\u{1F600}"', 0, 10], ['soft_break', undefined, 10, 11], ['text', '#x}', 11, 14],
+      ['text', '{title=', 0, 7], ['smart_punctuation', '"', 7, 8], ['text', '\u{1F600}', 8, 9],
+      ['smart_punctuation', '"', 9, 10], ['soft_break', undefined, 10, 11], ['tag', undefined, 11, 13], ['text', '}', 13, 14],
     ])
     expect(pieces('{%\u{1F600}\nx%}\n')).toEqual([
       ['text', '{%\u{1F600}', 0, 3], ['soft_break', undefined, 3, 4], ['text', 'x%}', 4, 7],

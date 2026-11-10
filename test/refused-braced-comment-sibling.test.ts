@@ -9,12 +9,12 @@ it('opens a sibling after a refused multiline comment in a nested item', () => {
 
 it('keeps a marker inside the refused comment holder as paragraph text', () => {
   expect(carveToHtml('- a\n  - b\n    {% c\n    d %}\n    - z\n')).toBe(
-    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n- z</li>\n    </ul>\n  </li>\n</ul>',
+    '<ul>\n  <li>a\n    <ul>\n      <li>b\n{% c\nd %}\n        <ul>\n          <li>z</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
   )
 })
 
 it('keeps the paragraph open when a refused comment closer has trailing text', () => {
   expect(carveToHtml('- a\n  {% c\n  d %} tail\n  - z\n')).toBe(
-    '<ul>\n  <li>a\n{% c\nd %} tail\n- z</li>\n</ul>',
+    '<ul>\n  <li>a\n{% c\nd %} tail\n    <ul>\n      <li>z</li>\n    </ul>\n  </li>\n</ul>',
   )
 })

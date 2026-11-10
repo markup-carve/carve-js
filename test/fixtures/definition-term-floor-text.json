@@ -992,22 +992,22 @@
   {
     "id": "term-wrapped-attribute-item-False-heading",
     "source": "- lead\n\n  :: term\n  {.a\n  .b}\n     # heading\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n# heading</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-False-code",
     "source": "- lead\n\n  :: term\n  {.a\n  .b}\n     ```\n     code\n     ```\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n<code>\ncode\n</code></p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><pre><code>code\n</code></pre></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-False-quote",
     "source": "- lead\n\n  :: term\n  {.a\n  .b}\n     > quoted\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n&gt; quoted</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-False-table",
     "source": "- lead\n\n  :: term\n  {.a\n  .b}\n     | a | b |\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n| a | b |</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-False-div",
@@ -1017,27 +1017,27 @@
   {
     "id": "term-wrapped-attribute-item-False-term",
     "source": "- lead\n\n  :: term\n  {.a\n  .b}\n     :: next\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n:: next</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><dl><dt>next</dt></dl></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-True-heading",
     "source": "- lead\n\n  :: term\n  floor text\n  {.a\n  .b}\n     # heading\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n# heading</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-True-code",
     "source": "- lead\n\n  :: term\n  floor text\n  {.a\n  .b}\n     ```\n     code\n     ```\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n<code>\ncode\n</code></p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><pre><code>code\n</code></pre></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-True-quote",
     "source": "- lead\n\n  :: term\n  floor text\n  {.a\n  .b}\n     > quoted\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n&gt; quoted</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-True-table",
     "source": "- lead\n\n  :: term\n  floor text\n  {.a\n  .b}\n     | a | b |\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n| a | b |</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-item-True-div",
@@ -1047,27 +1047,27 @@
   {
     "id": "term-wrapped-attribute-item-True-term",
     "source": "- lead\n\n  :: term\n  floor text\n  {.a\n  .b}\n     :: next\n",
-    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n:: next</p></li></ul>"
+    "html": "<ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><dl><dt>next</dt></dl></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-False-heading",
     "source": "> - lead\n> \n>   :: term\n>   {.a\n>   .b}\n>      # heading\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n# heading</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-False-code",
     "source": "> - lead\n> \n>   :: term\n>   {.a\n>   .b}\n>      ```\n>      code\n>      ```\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n<code>\ncode\n</code></p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><pre><code>code\n</code></pre></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-False-quote",
     "source": "> - lead\n> \n>   :: term\n>   {.a\n>   .b}\n>      > quoted\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n&gt; quoted</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-False-table",
     "source": "> - lead\n> \n>   :: term\n>   {.a\n>   .b}\n>      | a | b |\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n| a | b |</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-False-div",
@@ -1077,27 +1077,27 @@
   {
     "id": "term-wrapped-attribute-quoted-item-False-term",
     "source": "> - lead\n> \n>   :: term\n>   {.a\n>   .b}\n>      :: next\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n:: next</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><dl><dt>next</dt></dl></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-True-heading",
     "source": "> - lead\n> \n>   :: term\n>   floor text\n>   {.a\n>   .b}\n>      # heading\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n# heading</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-True-code",
     "source": "> - lead\n> \n>   :: term\n>   floor text\n>   {.a\n>   .b}\n>      ```\n>      code\n>      ```\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n<code>\ncode\n</code></p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><pre><code>code\n</code></pre></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-True-quote",
     "source": "> - lead\n> \n>   :: term\n>   floor text\n>   {.a\n>   .b}\n>      > quoted\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n&gt; quoted</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-True-table",
     "source": "> - lead\n> \n>   :: term\n>   floor text\n>   {.a\n>   .b}\n>      | a | b |\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n| a | b |</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-quoted-item-True-div",
@@ -1107,27 +1107,27 @@
   {
     "id": "term-wrapped-attribute-quoted-item-True-term",
     "source": "> - lead\n> \n>   :: term\n>   floor text\n>   {.a\n>   .b}\n>      :: next\n",
-    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n:: next</p></li></ul></blockquote>"
+    "html": "<blockquote><ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><dl><dt>next</dt></dl></li></ul></blockquote>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-False-heading",
     "source": "- outer\n  - lead\n  \n    :: term\n    {.a\n    .b}\n       # heading\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n# heading</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-False-code",
     "source": "- outer\n  - lead\n  \n    :: term\n    {.a\n    .b}\n       ```\n       code\n       ```\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n<code>\ncode\n</code></p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><pre><code>code\n</code></pre></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-False-quote",
     "source": "- outer\n  - lead\n  \n    :: term\n    {.a\n    .b}\n       > quoted\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n&gt; quoted</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-False-table",
     "source": "- outer\n  - lead\n  \n    :: term\n    {.a\n    .b}\n       | a | b |\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n| a | b |</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-False-div",
@@ -1137,27 +1137,27 @@
   {
     "id": "term-wrapped-attribute-nested-item-False-term",
     "source": "- outer\n  - lead\n  \n    :: term\n    {.a\n    .b}\n       :: next\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}\n:: next</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>{.a\n.b}</p><dl><dt>next</dt></dl></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-True-heading",
     "source": "- outer\n  - lead\n  \n    :: term\n    floor text\n    {.a\n    .b}\n       # heading\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n# heading</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><h1 id=\"heading\">heading</h1></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-True-code",
     "source": "- outer\n  - lead\n  \n    :: term\n    floor text\n    {.a\n    .b}\n       ```\n       code\n       ```\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n<code>\ncode\n</code></p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><pre><code>code\n</code></pre></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-True-quote",
     "source": "- outer\n  - lead\n  \n    :: term\n    floor text\n    {.a\n    .b}\n       > quoted\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n&gt; quoted</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><blockquote><p>quoted</p></blockquote></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-True-table",
     "source": "- outer\n  - lead\n  \n    :: term\n    floor text\n    {.a\n    .b}\n       | a | b |\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n| a | b |</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><table><tbody><tr><td>a</td><td>b</td></tr></tbody></table></li></ul></li></ul>"
   },
   {
     "id": "term-wrapped-attribute-nested-item-True-div",
@@ -1167,6 +1167,6 @@
   {
     "id": "term-wrapped-attribute-nested-item-True-term",
     "source": "- outer\n  - lead\n  \n    :: term\n    floor text\n    {.a\n    .b}\n       :: next\n",
-    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}\n:: next</p></li></ul></li></ul>"
+    "html": "<ul><li>outer\n    <ul><li><p>lead</p><dl><dt>term</dt></dl><p>floor text\n{.a\n.b}</p><dl><dt>next</dt></dl></li></ul></li></ul>"
   }
 ]
