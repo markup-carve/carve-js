@@ -767,8 +767,9 @@ function descriptionLeadOpens(entries: Array<[number, DefinitionEntry]>, column:
 /** `lead`: an item's marker-line content, which the scan never walks; a term on it is the first entry. */
 export function newCommentSpanScan(lead?: string): CommentSpanScan {
   const scan: CommentSpanScan = { index: 0, opaque: null, atBlockStart: true }
-  const body = lead === undefined ? '' : markerFreeContent(lead)
-  if (lead !== undefined && RE_TERM_LEAD.test(body))
+  if (lead === undefined || !lead.includes(':: ')) return scan
+  const body = markerFreeContent(lead)
+  if (RE_TERM_LEAD.test(body))
     scan.entries = [[body === lead.trimStart() ? indentColumns(lead) : stackedItemContentColumn(lead), 'term']]
   return scan
 }
