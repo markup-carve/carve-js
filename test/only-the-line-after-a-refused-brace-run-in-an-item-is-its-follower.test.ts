@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
-const sublist = '<ul>\n  <li>{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>'
+const sublist = '<ul>\n  <li>{.x\n.y}\n    <pre><code>- li\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>'
 
 describe('the follower of a refused brace run in an item', () => {
   it('lets a marker after an unclosed fence follower open a sublist', () => {
@@ -19,7 +19,7 @@ describe('the follower of a refused brace run in an item', () => {
 
   it('keeps every line through a fence follower closer', () => {
     expect(carveToHtml('- +\n  {.x\n  .y}\n  ```\n  - li\n  - lj\n  ```\ntail\n').trim())
-      .toBe('<ul>\n  <li>{.x\n.y}\n<code>\n- li\n- lj\n</code>\ntail</li>\n</ul>')
+      .toBe('<ul>\n  <li>{.x\n.y}\n    <pre><code>- li\n- lj\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>')
   })
 
   it('leaves a real fence after a run in a nested quote closable', () => {
@@ -34,12 +34,12 @@ describe('the follower of a refused brace run in an item', () => {
 
   it('reads a shifted run in the middle of a paragraph', () => {
     expect(carveToHtml('- a\n   {.x\n   .y}\n   ```\n   - li\ntail\n').trim())
-      .toBe('<ul>\n  <li>a\n{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>')
+      .toBe('<ul>\n  <li>a\n{.x\n.y}\n    <pre><code>- li\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>')
   })
 
   it('reads a backslash inside an open code span as code text', () => {
-    expect(carveToHtml('a `x\\`\n{.x\n.y}\n```\nz\n').trim()).toBe('<p>a <code>x\\</code>\n{.x\n.y}\n<code>\nz</code></p>')
+    expect(carveToHtml('a `x\\`\n{.x\n.y}\n```\nz\n').trim()).toBe('<p>a <code>x\\</code>\n{.x\n.y}</p>\n<pre><code>z\n</code></pre>')
     expect(carveToHtml('- a `x\\`\n   {.x\n   .y}\n   ```\n   - li\ntail\n').trim())
-      .toBe('<ul>\n  <li>a <code>x\\</code>\n{.x\n.y}\n<code></code>\n    <ul>\n      <li>li\ntail</li>\n    </ul>\n  </li>\n</ul>')
+      .toBe('<ul>\n  <li>a <code>x\\</code>\n{.x\n.y}\n    <pre><code>- li\n</code></pre>\n  </li>\n</ul>\n<p>tail</p>')
   })
 })

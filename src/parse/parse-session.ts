@@ -2,6 +2,7 @@ import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
 import { braceRunHolds, type BraceRunHolds } from './block/brace-run-holds.js'
 import { destinationSlotEnds } from '../link-destination.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
+import { mergeRun } from '../coalesce-text-runs.js'
 import { commentOnlyParagraphEnd } from './parse-prepass-core.js'
 import { markDirectiveLine } from './block/paragraph-indent.js'
 import { endsAtConsumedMarker, entriesToWire } from '../ast/definition-list-wire.js'
@@ -3277,6 +3278,8 @@ export class ParseSession extends InlineParseSession {
         at = from + 1
       }
       if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
+      const merged = mergeRun(paragraphNode.children as unknown as Array<Record<string, unknown>>)
+      if (merged !== null) paragraphNode.children = merged as unknown as Paragraph['children']
     }
     if (codeIncludeLiteral) {
       const startOffset = firstBoundary.offset

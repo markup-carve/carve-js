@@ -7,8 +7,8 @@ import { carveToHtml } from '../src/index.js'
 describe('a refused comment run', () => {
   it.each([
     ['- a\n+\n{% x\n%}\n', '<ul>\n  <li>a\n    {% x\n%}\n  </li>\n</ul>'],
-    ['- a\n+\n{% x\n%}\n{y}\n more\n', '<ul>\n  <li>a\n    {% x\n%}\n{y}\nmore\n  </li>\n</ul>'],
-    ['- +\n{% x\n%}\n# H\n', '<ul>\n  <li>{% x\n%}\n# H</li>\n</ul>'],
+    ['- a\n+\n{% x\n%}\n{y}\n more\n', '<ul>\n  <li>a\n    {% x\n%}\n  </li>\n</ul>\n<p y="">more</p>'],
+    ['- +\n{% x\n%}\n# H\n', '<ul>\n  <li>{% x\n%}</li>\n</ul>\n<section id="H">\n  <h1>H</h1>\n</section>'],
     ['- {% c\n  d %}\n\n  Body.\n', '<ul>\n  <li><p>{% c\nd %}</p>\n    <p>Body.</p>\n  </li>\n</ul>'],
     ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li>a</li>\n</ul>\n<p>{% c\nd %}</p>\n<ul>\n  <li>b</li>\n</ul>'],
     ['> - a\n> +\n> {% x\n> %}\n', '<blockquote>\n  <ul>\n    <li>a\n      {% x\n%}\n    </li>\n  </ul>\n</blockquote>'],

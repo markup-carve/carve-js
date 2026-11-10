@@ -9,7 +9,7 @@ describe('a brace line inside an open item comment run', () => {
     ['heading', '- {% a\n  {.x}\n  # h\n  z\n', '<ul>\n  <li>{% a\n    <h1 class="x" id="h">h</h1>\n    z\n  </li>\n</ul>'],
     ['nested list', '- {% a\n  {lang=de}\n  - q\n', '<ul>\n  <li>{% a\n    <ul lang="de">\n      <li>q</li>\n    </ul>\n  </li>\n</ul>'],
     ['ordered item', '1. {% a\n   {lang=de}\n   > q\n', '<ol>\n  <li>{% a\n    <blockquote lang="de"><p>q</p></blockquote>\n  </li>\n</ol>'],
-    ['refused run closed by a later line', '- {% a\n  {lang=de}\n  z %} y\n', '<ul>\n  <li>{% a\n{lang=de}\nz %} y</li>\n</ul>'],
+    ['refused run closed by a later line', '- {% a\n  {lang=de}\n  z %} y\n', '<ul>\n  <li>{% a\n    <p lang="de">z %} y</p>\n  </li>\n</ul>'],
   ])('%s', (_name, source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })

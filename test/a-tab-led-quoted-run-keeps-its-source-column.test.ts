@@ -1,19 +1,22 @@
 import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
+it('closes a tab-led quoted attribute run with a prefixed continuation (carve#5796)', () => {
+  expect(carveToHtml('> \t{.x\n>      .y}\nplain\n')).toBe('<blockquote>\n\n</blockquote>\n<p>plain</p>')
+})
+
 it.each([
   ['an unprefixed continuation', '> \t{.x\n     .y}\nplain\n'],
-  ['a prefixed continuation', '> \t{.x\n>      .y}\nplain\n'],
   ['a padded opener', '>  {.x\n     .y}\nplain\n'],
-])('closes a tab-led or padded quoted attribute run with %s (carve#5796)', (_name, source) => {
-  expect(carveToHtml(source)).toBe('<blockquote>\n\n</blockquote>\n<p>plain</p>')
+])('refuses a tab-led or padded quoted attribute run on a lazy line with %s (carve#5830)', (_name, source) => {
+  expect(carveToHtml(source)).toBe('<blockquote><p>{.x\n.y}\nplain</p></blockquote>')
 })
 
 it.each([
   ['', '> > {.x\n>    .y}\n'],
   [' behind padding', '> >  {.x\n>     .y}\n'],
 ])('closes a nested run%s through a continuation under fewer quote markers', (_name, source) => {
-  expect(carveToHtml(source)).toBe('<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>')
+  expect(carveToHtml(source)).toBe('<blockquote>\n  <blockquote><p>{.x\n.y}</p></blockquote>\n</blockquote>')
 })
 
 it('keeps a padded nested run continued at its brace column as paragraph text', () => {

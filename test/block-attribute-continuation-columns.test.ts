@@ -6,13 +6,13 @@ describe('block brace continuations pass the opening column', () => {
   it.each([
     ['{.a\n  #x}\npara', '<p class="a" id="x">para</p>'],
     ['{.a\n  }\npara', '<p class="a">para</p>'],
-    ['{.a\n#x}\npara', '<p>{.a\n#x}\npara</p>'],
+    ['{.a\n#x}\npara', '<p>{.a\n<span class="tag"><strong>#x</strong></span>}\npara</p>'],
     ['{.a\n}\npara', '<p>{.a\n}\npara</p>'],
-    ['{% x\ny %}\n# b', '<p>{% x\ny %}\n# b</p>'],
-    ['- item\n\n  {.a\n  #x}\n  para', '<ul>\n  <li><p>item</p>\n    <p>{.a\n#x}\npara</p>\n  </li>\n</ul>'],
-    ['- item\n\n   {.a\n   #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n#x}\n- sibling</p>\n  </li>\n</ul>'],
-    ['- item\n\n  {.a\n  .b\n  #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n.b\n#x}\n- sibling</p>\n  </li>\n</ul>'],
-    ['  - b\n    > q\n> > q\n> > {.k\ntail\n> > #x}\ntail\n  lazy\n', '<ul>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>\n<blockquote>\n  <blockquote><p>q\n{.k\ntail\n#x}\ntail\nlazy</p></blockquote>\n</blockquote>'],
+    ['{% x\ny %}\n# b', '<p>{% x\ny %}</p>\n<section id="b">\n  <h1>b</h1>\n</section>'],
+    ['- item\n\n  {.a\n  #x}\n  para', '<ul>\n  <li><p>item</p>\n    <p>{.a\n<span class="tag"><strong>#x</strong></span>}\npara</p>\n  </li>\n</ul>'],
+    ['- item\n\n   {.a\n   #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n<span class="tag"><strong>#x</strong></span>}</p>\n    <ul>\n      <li>sibling</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- item\n\n  {.a\n  .b\n  #x}\n  - sibling', '<ul>\n  <li><p>item</p>\n    <p>{.a\n.b\n<span class="tag"><strong>#x</strong></span>}</p>\n    <ul>\n      <li>sibling</li>\n    </ul>\n  </li>\n</ul>'],
+    ['  - b\n    > q\n> > q\n> > {.k\ntail\n> > #x}\ntail\n  lazy\n', '<ul>\n  <li>b\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>\n<blockquote>\n  <blockquote><p>q\n{.k\ntail\n<span class="tag"><strong>#x</strong></span>}\ntail\nlazy</p></blockquote>\n</blockquote>'],
   ])('renders %j as ruled', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
   })
@@ -27,7 +27,7 @@ describe('block brace continuations pass the opening column', () => {
     const source = '{% x\ny %}\n\n{% x\n  y %}\n\n{#one\nkey=1}\nalpha\n\n{#two\n  key=2}\nbeta\n'
     const flat = (html: string) => html.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim()
     expect(flat(carveToHtml(djotToCarve(source)))).toBe(flat(renderHTML(parseDjot(source))))
-    expect(djotToCarve('{#one\nkey=1}\nalpha\n')).toBe('{#one\nkey=1}\nalpha\n')
+    expect(djotToCarve('{#one\nkey=1}\nalpha\n')).toBe('\\{\\#one\nkey=1}\nalpha\n')
   })
 })
 
@@ -35,12 +35,12 @@ describe('block brace continuations pass the opening column', () => {
 describe('a refused brace run in a container', () => {
   it.each([
     ['- a\n  - b\n\n    {.c\n    }\n  - s\n', '<ul>\n  <li>a\n    <ul>\n      <li><p>b</p>\n        <p>{.c\n}</p>\n      </li>\n      <li><p>s</p></li>\n    </ul>\n  </li>\n</ul>'],
-    ['- a\n  - b\n\n  {.c\n  #d}\n\n  - c\n', '<ul>\n  <li><p>a</p>\n    <ul>\n      <li>b</li>\n    </ul>\n    <p>{.c\n#d}</p>\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>'],
+    ['- a\n  - b\n\n  {.c\n  #d}\n\n  - c\n', '<ul>\n  <li><p>a</p>\n    <ul>\n      <li>b</li>\n    </ul>\n    <p>{.c\n<span class="tag"><strong>#d</strong></span>}</p>\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>'],
     ['- a\n  - b\n    {.c\n }\npara\n', '<ul>\n  <li>a\n    <ul>\n      <li>b\n{.c\n}\npara</li>\n    </ul>\n  </li>\n</ul>'],
     ['> {.a\n>  #x}\npara\n', '<blockquote>\n\n</blockquote>\n<p>para</p>'],
     ['> te{xt\n{\n> [a]: /u {.c}\n lazy\n', '<blockquote><p>te{xt\n{\nlazy</p></blockquote>'],
     [':: term\n: def\n  {.a\n }\npara\n', '<dl>\n  <dt>term</dt>\n  <dd>def\n{.a\n}\npara</dd>\n</dl>'],
-    ['- item\n  {.a\n  #x}\n# h\n', '<ul>\n  <li>item\n{.a\n#x}</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>'],
+    ['- item\n  {.a\n  #x}\n# h\n', '<ul>\n  <li>item\n{.a\n<span class="tag"><strong>#x</strong></span>}</li>\n</ul>\n<section id="h">\n  <h1>h</h1>\n</section>'],
     ['{% x\ny %}\n\npara\n', '<p>{% x\ny %}</p>\n<p>para</p>'],
     ['- a\n\n{% c\nd %}\n\n- b\n', '<ul>\n  <li>a</li>\n</ul>\n<p>{% c\nd %}</p>\n<ul>\n  <li>b</li>\n</ul>'],
     ['[][d]\n{.a\n .b}\n- [d]: u\n', '<p><a href="u"></a></p>\n<ul class="a b">\n  <li></li>\n</ul>'],

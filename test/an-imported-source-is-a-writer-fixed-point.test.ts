@@ -75,8 +75,6 @@ const REFUSED = new Set<string>(['182-openers-past-the-nesting-cap-are-one-parag
 const UNSPELLABLE = new Set<string>([
   '561-a-line-block-payload-span-pairs-past-the-content-column',
   '561-a-line-block-payload-span-pairs-past-the-content-column-2',
-  // The quoted middle line cannot stay inside this paragraph's code value (CARVE-P11-078).
-  '1014-an-indented-closer-protects-a-refused-run-s-fence-follower',
 ])
 
 describe('an imported source is a carve fmt fixed point', () => {

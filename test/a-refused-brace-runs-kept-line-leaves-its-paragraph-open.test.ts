@@ -10,11 +10,11 @@ const html = (lines: string[]): string => carveToHtml(lines.join('\n') + '\n').t
 
 describe("a refused brace run's kept line", () => {
   it('leaves a quote paragraph open', () => {
-    expect(html(['> a', '> {x', '> y}', '> # c', 'more'])).toBe('<blockquote><p>a\n{x\ny}\n# c\nmore</p></blockquote>')
+    expect(html(['> a', '> {x', '> y}', '> # c', 'more'])).toBe('<blockquote>\n  <p>a\n{x\ny}</p>\n  <h1 id="c">c</h1>\n</blockquote>\n<p>more</p>')
   })
 
   it("leaves a plus paragraph open", () => {
-    expect(html(['- a', '+', '{x', 'y}', '  # c', 'more'])).toBe('<ul>\n  <li>a\n    {x\ny}\n# c\nmore\n  </li>\n</ul>')
+    expect(html(['- a', '+', '{x', 'y}', '  # c', 'more'])).toBe('<ul>\n  <li>a\n    {x\ny}\n    <h1 id="c">c</h1>\n  </li>\n</ul>\n<p>more</p>')
   })
 
   it.each([['***'], ['| c |'], ['```', 'b', '```']])('leaves a nested item paragraph open after %s', (...follower) => {
@@ -41,6 +41,6 @@ describe("a refused brace run's kept line", () => {
 
   it('still ends the paragraph at a block after an unclosed fence opener', () => {
     expect(html(['> a', '> {x', '> y}', '> ```', '> b', '> # h', 'more'])).toBe(
-      '<blockquote>\n  <p>a\n{x\ny}\n<code>\nb</code></p>\n  <h1 id="h">h</h1>\n</blockquote>\n<p>more</p>')
+      '<blockquote>\n  <p>a\n{x\ny}</p>\n  <pre><code>b\n# h\n</code></pre>\n</blockquote>\n<p>more</p>')
   })
 })

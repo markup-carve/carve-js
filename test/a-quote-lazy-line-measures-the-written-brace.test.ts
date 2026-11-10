@@ -15,17 +15,17 @@ const note = (body: string): string =>
 
 const CASES: Array<[string, string]> = [
   // Row 1029: the `{` is written at column 2, the lazy line at 1.
-  ['> [^a]: +\n> {#i\n .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{#i\n.y}')],
+  ['> [^a]: +\n> {#i\n .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{<span class="tag"><strong>#i</strong></span>\n.y}')],
   ['> [^a]: +\n> {.x\n  .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{.x\n.y}')],
   // A tab before the quote marker counts to the next tab stop: the `{` is at 6.
-  ['\t> [^a]: +\n\t> {#i\n      .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{#i\n.y}')],
-  // Past the written `{` the run continues and attaches to nothing.
-  ['> [^a]: +\n> {.x\n   .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>')],
+  ['\t> [^a]: +\n\t> {#i\n      .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{<span class="tag"><strong>#i</strong></span>\n.y}')],
+  // Past the written `{` the continuation is still a lazy line, which refuses the run (carve#5830 rule B).
+  ['> [^a]: +\n> {.x\n   .y}\n\nsee[^a]\n', '<blockquote>\n\n</blockquote>\n' + note('      <p>{.x\n.y}')],
   ['> > [^a]: +\n> > {.x\n    .y}\n\nsee[^a]\n', '<blockquote>\n  <blockquote>\n\n  </blockquote>\n</blockquote>\n' + note('      <p>{.x\n.y}')],
-  // A refused quoted run on a lazy line is literal text, so `#i` is no tag.
-  ['> {#i\n .y}\n', '<blockquote><p>{#i\n.y}</p></blockquote>'],
-  ['> > {#i\n   .y}\n', '<blockquote>\n  <blockquote><p>{#i\n.y}</p></blockquote>\n</blockquote>'],
-  ['> {.x\n   .y}\n', '<blockquote>\n\n</blockquote>'],
+  // A refused run is paragraph text read by the inline rules, so `#i` is a tag (carve#5830 rule A).
+  ['> {#i\n .y}\n', '<blockquote><p>{<span class="tag"><strong>#i</strong></span>\n.y}</p></blockquote>'],
+  ['> > {#i\n   .y}\n', '<blockquote>\n  <blockquote><p>{<span class="tag"><strong>#i</strong></span>\n.y}</p></blockquote>\n</blockquote>'],
+  ['> {.x\n   .y}\n', '<blockquote><p>{.x\n.y}</p></blockquote>'],
 ]
 
 describe('a quote lazy line measures the written brace (carve#5820)', () => {

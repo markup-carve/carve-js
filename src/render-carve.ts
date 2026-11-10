@@ -1898,26 +1898,6 @@ export function renderCarrierAttributeBlock(attrs: Attrs | undefined): string {
   return renderAttrs(attrs, '>')
 }
 
-/** The end of a wrapped brace run that opens this text and has a continuation at its `{` column, or 0. */
-function refusedBraceTextEnd(value: string): number {
-  let depth = 0
-  let refused = false
-  let lineStart = true
-  for (let at = 0; at < value.length; at++) {
-    const char = value[at]!
-    if (lineStart && at > 0 && char !== ' ' && char !== '\t') refused = true
-    lineStart = char === '\n'
-    depth += char === '{' ? 1 : char === '}' ? -1 : 0
-    if (depth > 0) continue
-    let next = at + 1
-    while (value[next] === ' ' || value[next] === '\t') next++
-    // A glued block continues the run; anything else on the closing line makes it prose.
-    if (value[next] === '{') { at = next - 1; continue }
-    return refused && (next === value.length || value[next] === '\n') ? at + 1 : 0
-  }
-  return 0
-}
-
 function renderBlockAttrs(attrs: Attrs | undefined): string {
   const rendered = renderAttrs(attrs)
   return rendered.replace(/\n/g, '\n ')
@@ -5265,43 +5245,6 @@ class CarveRenderSession {
     }
   }
 
-  /**
-   * A refused wrapped attribute is already literal paragraph text, split at its
-   * line endings into `text` and `soft_break`. Its shallow closer keeps the brace
-   * from opening an attribute on reparse, so its pieces are written verbatim.
-   * Braced comments need the usual escape probe because they can vanish.
-   */
-  private refusedBraceOverrides(nodes: InlineNode[], overrides: Map<number, { text: string; ranges: LiteralRange[] }>, captionCanOpen: boolean): void {
-    for (let i = 0; i < nodes.length; i++) {
-      const first = nodes[i]!
-      if (first.type !== 'text' || !first.value.startsWith('{') || first.value.startsWith('{%')) continue
-      if (i > 0 && nodes[i - 1]!.type !== 'soft_break') continue
-      let last = i
-      let joined = first.value
-      while (nodes[last + 1]?.type === 'soft_break' && nodes[last + 2]?.type === 'text') {
-        last += 2
-        joined += '\n' + (nodes[last] as Text).value
-      }
-      const end = refusedBraceTextEnd(joined)
-      let directive = false
-      for (let k = i; k <= last; k += 2) directive ||= overrides.has(k)
-      if (end === 0 || directive) continue
-      let offset = 0
-      for (let k = i; k <= last; k += 2) {
-        const node = nodes[k] as Text
-        const cut = end - offset
-        if (cut >= node.value.length) overrides.set(k, { text: node.value, ranges: [] })
-        else {
-          const rest = cleanEscapedText(node).slice(cut)
-          overrides.set(k, { text: node.value.slice(0, cut) + (rest === '' ? '' : this.escapeText(rest, captionCanOpen, opensBacktickRun(nodes[k + 1]))), ranges: [] })
-        }
-        offset += node.value.length + 1
-        if (offset > end) break
-      }
-      i = last
-    }
-  }
-
   private directiveOverrides(nodes: InlineNode[]): Map<number, { text: string; ranges: LiteralRange[] }> {
     const overrides = new Map<number, { text: string; ranges: LiteralRange[] }>()
     let i = 0
@@ -5414,7 +5357,6 @@ class CarveRenderSession {
           ? { text: out, offset: 0 }
           : { text: outTail, offset: out.length - outTail.length }
       const overrides = this.directiveOverrides(nodes)
-      this.refusedBraceOverrides(nodes, overrides, captionCanOpen)
       // `%%%` pairs after a stanza's last line leave its last break the last one.
       let stanzaEnd = nodes.length
       while (isStanza && stanzaEnd > 0 && nodes[stanzaEnd - 1]!.type === 'comment' && (nodes[stanzaEnd - 1] as Comment).block) stanzaEnd--
@@ -5694,14 +5636,6 @@ class CarveRenderSession {
     function renderInlineDispatch(): string {
     switch (node.type) {
       case 'text':
-        // A joined refused run from a tree built elsewhere; parsed ones are split (refusedBraceOverrides).
-        if (node.value.startsWith('{') && !node.value.startsWith('{%')) {
-          const end = refusedBraceTextEnd(node.value)
-          if (end > 0) {
-            const rest = cleanEscapedText(node).slice(end)
-            return node.value.slice(0, end) + (rest === '' ? '' : renderSession.escapeText(rest, captionCanOpen, nextOpensBacktickRun))
-          }
-        }
         return renderSession.escapeText(cleanEscapedText(node), captionCanOpen, nextOpensBacktickRun)
       case 'escaped_text':
         // The author escaped this character; the writer says so again. No

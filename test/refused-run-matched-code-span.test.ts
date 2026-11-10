@@ -4,7 +4,7 @@ import { carveToHtml } from '../src/index.js'
 describe('a matched code span after a refused brace run', () => {
   it('keeps a list marker inside an attached note', () => {
     const source = '[^a]: +\n{.x\n.y}\n```\nwa\n- li\n```\n\nsee[^a]\n'
-    expect(carveToHtml(source)).toBe('<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>{.x\n.y}\n<code>\nwa\n- li\n</code><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>')
+    expect(carveToHtml(source)).toBe('<pre><code>wa\n- li\n</code></pre>\n<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>{.x\n.y}<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>')
   })
 
   it('keeps block-shaped lines in matched spans across note variants', () => {

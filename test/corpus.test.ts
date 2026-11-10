@@ -1674,7 +1674,6 @@ const behindSpec = new Map<string, string>([
   ["1051-a-fence-shaped-line-continues-an-item-comment", "<ul>\n  <li></li>\n</ul>\n<p>plain</p>"],
   // A prefixed quoted run behind an item marker; follow-up to the carve#5830 port.
   ["1059-a-partially-prefixed-quoted-run-continuation-keeps-its-source-column-3", "<ul>\n  <li>\n    <blockquote><p>{.x\n.y}</p></blockquote>\n  </li>\n</ul>\n<p>plain</p>"],
-  ["1061-a-quoted-item-s-inner-quoted-run-continues-under-the-outer-prefix", "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>{.x\n.y}</p></blockquote>\n    </li>\n  </ul>\n  <p>plain</p>\n</blockquote>"],
   // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
   ["964-a-lazy-line-after-a-comment-keeps-the-deepest-list-open", "<ul>\n  <li>a\n    <ul>\n      <li><p>b\n{% c\nd %}\ntail</p></li>\n      <li><p>z</p></li>\n    </ul>\n  </li>\n</ul>"],
   ["1044-a-lazy-comment-run-lets-a-quote-open-in-its-note", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p\n{% a\n%}</p>\n      <blockquote><p>q\nafter</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],

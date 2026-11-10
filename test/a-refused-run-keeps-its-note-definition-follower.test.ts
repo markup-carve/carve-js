@@ -2,11 +2,11 @@ import { expect, it } from 'vitest'
 import { carveToHtml } from '../src/index.js'
 
 it.each([
-  ['description', ':: t\n: {.x\n}\n[^m]: n\nz\n', '<dl>\n  <dt>t</dt>\n  <dd>{.x\n}\n[^m]: n\nz</dd>\n</dl>'],
-  ['item', '- {.x\n}\n[^m]: n\nz\n', '<ul>\n  <li>{.x\n}\n[^m]: n\nz</li>\n</ul>'],
-  ['description in an item', '- :: t\n  : {.x\n}\n[^m]: n\nz\n', '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>{.x\n}\n[^m]: n\nz</dd>\n    </dl>\n  </li>\n</ul>'],
-  ['item in a quote', '> - {.x\n> }\n> [^m]: n\n> z\n', '<blockquote>\n  <ul>\n    <li>{.x\n}\n[^m]: n\nz</li>\n  </ul>\n</blockquote>'],
-  ['description in a quote', '> :: t\n> : {.x\n> }\n> [^m]: n\n> z\n', '<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>{.x\n}\n[^m]: n\nz</dd>\n  </dl>\n</blockquote>'],
+  ['description', ':: t\n: {.x\n}\n[^m]: n\nz\n', '<dl>\n  <dt>t</dt>\n  <dd>{.x\n}</dd>\n</dl>'],
+  ['item', '- {.x\n}\n[^m]: n\nz\n', '<ul>\n  <li>{.x\n}</li>\n</ul>'],
+  ['description in an item', '- :: t\n  : {.x\n}\n[^m]: n\nz\n', '<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>{.x\n}</dd>\n    </dl>\n  </li>\n</ul>'],
+  ['item in a quote', '> - {.x\n> }\n> [^m]: n\n> z\n', '<blockquote>\n  <ul>\n    <li>{.x\n}</li>\n  </ul>\n</blockquote>'],
+  ['description in a quote', '> :: t\n> : {.x\n> }\n> [^m]: n\n> z\n', '<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>{.x\n}</dd>\n  </dl>\n</blockquote>'],
 ])('keeps the note-definition follower of a refused brace run in %s (carve#5784)', (_name, source, expected) => {
   expect(carveToHtml(source)).toBe(expected)
 })

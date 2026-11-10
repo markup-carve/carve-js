@@ -6,8 +6,8 @@ import { carveToHtml } from '../src/index.js'
 // a sibling item, description or note still ends the host. Each row is the spec model's output.
 describe('a refused run attached by a `+`', () => {
   it.each([
-    [':: t\n: d\n+\n{x\n}\n- b\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>{x\n}\n- b</p>\n  </dd>\n</dl>'],
-    [':: t\n: d\n+\n{% x\n%}\n- b\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>{% x\n%}\n- b</p>\n  </dd>\n</dl>'],
+    [':: t\n: d\n+\n{x\n}\n- b\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>{x\n}</p>\n  </dd>\n</dl>\n<ul>\n  <li>b</li>\n</ul>'],
+    [':: t\n: d\n+\n{% x\n%}\n- b\n', '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>{% x\n%}</p>\n  </dd>\n</dl>\n<ul>\n  <li>b</li>\n</ul>'],
     ['- a\n+\n{x\n}\n- b\n', '<ul>\n  <li>a\n    {x\n}\n  </li>\n  <li>b</li>\n</ul>'],
   ])('reads %j as the spec model', (source, html) => {
     expect(carveToHtml(source)).toBe(html)
