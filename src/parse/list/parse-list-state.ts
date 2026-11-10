@@ -542,6 +542,13 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     const description = RE_DEFLIST_DEF.exec(content)
     if (description) {
       state.descriptionColumn = 1 + description[1]!.length
+      // A run the marker line opens is measured from its `{` (CARVE-P2-035).
+      const lead = markerLineState(description[2]!)
+      if (lead.wrappedAttributeRun !== null) {
+        state.attrRun = lead.wrappedAttributeRun
+        state.attrColumn = indentColumns(content) + state.descriptionColumn + lead.wrappedAttributeColumn
+        state.attrShallow = false
+      }
       if (RE_LINE_BLOCK_OPEN.test(description[2]!)) {
         state.divDepth++
         state.literalColon = { width: colonFenceOpenerLen(description[2]!)!, column: state.descriptionColumn }
@@ -821,6 +828,12 @@ export function createListStateTracker(helpers: typeof listStateHelpers) {
     // The helper unwraps the marker itself, so `- - # H` and `- # H` are one
     // question asked once.
     const nested = markerLineState(content, facts?.prefixMemo)
+    // A run the marker line opens is measured from its `{`, as on the item's own lead (CARVE-P2-035).
+    if (nested.wrappedAttributeRun !== null) {
+      state.attrRun = nested.wrappedAttributeRun
+      state.attrColumn = nested.wrappedAttributeColumn
+      state.attrShallow = false
+    }
     state.lazyFoldable = nested.leavesParagraphOpen
     state.inTable = nested.endsOnTableRow
     state.quoteInner = nested.quote
