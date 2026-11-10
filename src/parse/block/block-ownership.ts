@@ -2,7 +2,7 @@ import { isValidAttrPayload } from '../../extension/attribute-parser.js'
 import { trimEndSpaceTab, trimNonNbsp } from '../../trim-non-nbsp.js'
 import { occupiedPrivateUse, pickSentinelRun } from '../inline/sentinel-run.js'
 import type { RefusedContinuationMarker } from './parse-block-scan-core.js'
-import { CAPTION_COMMENT_ONLY, fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
+import { CAPTION_COMMENT_ONLY, fenceCloseRe, markerLineBottomBlock, opensCodeFence } from './parse-quote-core.js'
 import { FOOTNOTE_BODY_COLUMN } from './parse-block-boundaries.js'
 import {
   commentOnlyParagraphEnd,
@@ -176,7 +176,7 @@ const ORDERED = new RegExp(`^([0-9]+|[a-z]+|[A-Z]+|(?=\\.))([.)])(${ATTR_BLOCK})
 const MAX_FRAMES = 200
 const STAND_IN_BASE = 0xf8f0
 // What the walk can spell as a letter: a lone `+`, and the marker character of a line it folds.
-const STANDS_FOR = '+-*.)'
+const STANDS_FOR = '+-*.)['
 const TRAILING_PLUS = /^(?:(?:[-*](?:\{[^}]*\})?|[0-9]+[.)]|[A-Za-z]+[.)]|\.|:|\[\^[^\]]+\]:) +(?:\[.\] +)?)+\+[ \t]*$/
 // A line that cannot start any opener: no leading punctuation an opener uses and no ordered marker.
 const OPENER_LEAD = /^[>:`~%[\-*#_|{^+.0-9]|^[A-Za-z]+[.)] /
@@ -586,6 +586,7 @@ export function ownLines(
   }
   let attachedInlineCode = 0
   let braceRunStart = -1
+  let braceRunOpener = ''
   let shiftedAttachedFence: { column: number; run: string } | null = null
   // A fence that ended a description's `+` block at the document; a later description closes it (carve#4408, carve#5592).
   let ddBlockFence: { host: Frame[]; at: number } | null = null
@@ -732,14 +733,30 @@ export function ownLines(
     // A refused brace run protects its immediate follower from marker
     // interpretation (CARVE-P2-035, carve#5658 R03).
     const rawLine = lines[at]!
-    const protectedPlus = attachedInlineCode === 0 && braceRunStart >= 0 && CONT_MARKER.test(rawLine.trimStart()) &&
-      isRefusedBraceRun((index) => lines[braceRunStart + index], at - braceRunStart)
+    const candidatePlus = CONT_MARKER.test(rawLine.trimStart())
+    const candidateNote = /^\[\^[^\]]+\]:/.test(rawLine.trimStart())
+    const refusedFollower = (candidatePlus || candidateNote) && attachedInlineCode === 0 && braceRunStart >= 0 &&
+      isRefusedBraceRun((index) => index === 0 ? braceRunOpener : lines[braceRunStart + index], at - braceRunStart)
+    const protectedPlus = refusedFollower && candidatePlus
+    const protectedNote = refusedFollower && candidateNote
     if (protectedPlus) {
       src = src.replace(/\+([ \t]*)$/, `${standIn('+')}$1`)
       rewritten = true
     }
-    if (rawLine.trim() === '' || protectedPlus) braceRunStart = -1
-    else if (rawLine.trimStart().startsWith('{')) braceRunStart = at
+    if (protectedNote) {
+      src = src.replace('[^', `${standIn('[')}^`)
+      rewritten = true
+    }
+    if (rawLine.trim() === '' || protectedPlus || candidateNote) braceRunStart = -1
+    else if (rawLine.includes('{')) {
+      const bottom = markerLineBottomBlock(rawLine.trimStart())
+      const opener = bottom.startsWith(': ') ? bottom.slice(2).trimStart() : bottom
+      if (opener.startsWith('{')) {
+        braceRunStart = at
+        const brace = rawLine.indexOf(opener)
+        braceRunOpener = ' '.repeat(docColumn(rawLine, rawLine.slice(brace))) + opener
+      }
+    }
     return { src, shiftedCut }
   }
 
