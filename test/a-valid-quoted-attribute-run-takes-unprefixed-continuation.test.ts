@@ -17,3 +17,7 @@ it('keeps a shallow unprefixed continuation as paragraph text', () => {
 it('leaves a heading outside the quote when the attribute run never closes', () => {
   expect(carveToHtml('> {.x\n   # h\nplain\n')).toBe('<blockquote><p>{.x</p></blockquote>\n<section id="h">\n  <h1>h</h1>\n  <p>plain</p>\n</section>')
 })
+
+it('does not let a later same-column quoted opener close an earlier run', () => {
+  expect(carveToHtml('> {.x\n   .y\n> {.a\n   .b}\nplain\n')).toContain('<p>{.x\n.y</p>')
+})

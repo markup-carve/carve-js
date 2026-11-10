@@ -2372,32 +2372,37 @@ export class ParseSession extends InlineParseSession {
   /** Confirm a pending run before it claims unprefixed lines that could instead open blocks. */
   private quotedAttributeCloses(q: QuoteCollect, pending: NonNullable<QuoteCollect['pendingAttribute']>, run: string): boolean {
     const { lexer } = q
+    const root = lexer.documentRoot ?? lexer
     // Most failed probes have no closer anywhere in the remaining document.
-    // Record the last possible closer once per lexer so each later run can
-    // reject that suffix without walking it again.
-    let lastCloser = this.lastAttributeCloserLine.get(lexer)
+    // The quote may get a fresh nested lexer on every run, so cache this on
+    // the document root rather than rescanning the same suffix in each one.
+    let lastCloser = this.lastAttributeCloserLine.get(root)
     if (lastCloser === undefined) {
       lastCloser = -1
-      for (let i = lexer.lineCount - 1; i >= 0; i--) {
-        if (lexer.lineAt(i)?.includes('}')) {
+      for (let i = root.lineCount - 1; i >= 0; i--) {
+        if (root.lineAt(i)?.includes('}')) {
           lastCloser = i
           break
         }
       }
-      this.lastAttributeCloserLine.set(lexer, lastCloser)
+      this.lastAttributeCloserLine.set(root, lastCloser)
     }
-    if (lastCloser < lexer.pos) return false
+    if (lastCloser < lexer.lineNumber(lexer.pos) - 1) return false
     const collected = [run]
-    const root = lexer.documentRoot ?? lexer
     const authoredLines = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
     for (let offset = 0; ; offset++) {
       const line = lexer.peek(offset)
       if (line === undefined || isBlankLine(line)) return false
       const quoted = quotedLineText(line, lexer.lineTerminatorFree(lexer.pos + offset))
-      if (quoted === null) {
-        const authored = authoredLines[lexer.lineNumber(lexer.pos + offset) - 1] ?? line
-        if (quotePrefixDepth(authored) > 0 || sourceColumn(authored) <= pending.sourceColumn) return false
-      }
+      const authored = authoredLines[lexer.lineNumber(lexer.pos + offset) - 1] ?? line
+      const depth = quotePrefixDepth(authored)
+      if (quoted === null && depth > 0) return false
+      const rest = sourceQuoteRest(authored, depth) ?? authored
+      const writtenColumn = sourceColumnAt(authored, authored.length - rest.length + leadingWhitespace(rest))
+      // The next quoted opener at the same column cannot be a continuation.
+      // This also bounds failed probes when many unclosed runs precede one
+      // distant, unusable closer.
+      if (writtenColumn <= pending.sourceColumn) return false
       const content = quoted === null ? line : quoted
       const continuation = ' ' + content.trimStart()
       if (content.includes('}')) {
