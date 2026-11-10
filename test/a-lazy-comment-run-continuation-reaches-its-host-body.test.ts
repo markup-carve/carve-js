@@ -23,6 +23,12 @@ describe('a lazy comment run continuation must reach its host body column', () =
     expect(carveToHtml('\t:: t\n\t: pre\n{% x\n  %}\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>pre\n{% x\n%}</dd>\n</dl>')
   })
 
+  it('keeps tracking the lazy opener across a nested opener line', () => {
+    expect(carveToHtml('- a\n  :: t\n  : pre\n  {% a\n    {% b\n   z %}\n')).toBe(
+      '<ul>\n  <li>a\n    <dl>\n      <dt>t</dt>\n      <dd>pre\n{% a\n{% b\nz %}</dd>\n    </dl>\n  </li>\n</ul>',
+    )
+  })
+
   it('keeps a run whose closer reaches the body column with text after it', () => {
     expect(carveToHtml(':: t\n: pre\n {% x\n  %} tail\n')).toBe('<dl>\n  <dt>t</dt>\n  <dd>pre\n tail</dd>\n</dl>')
   })

@@ -380,8 +380,9 @@ export function createDefinitionListParser(
        */
       const track = (content: string, atContentColumn = true): void => {
         const runText = stripLazyFrame(content).trimStart()
-        if (runText.startsWith('{%')) lazyCommentRun = (!atContentColumn || content.startsWith(LAZY_FRAME)) && !runText.includes('%}', 2)
-        else if (runText === '' || runText.includes('%}')) lazyCommentRun = false
+        // A `{%` payload line inside the run opens no run of its own.
+        if (runText === '' || runText.includes('%}')) lazyCommentRun = false
+        else if (runText.startsWith('{%') && !lazyCommentRun) lazyCommentRun = !atContentColumn || content.startsWith(LAZY_FRAME)
         // Keep payload classification separate from the actual span state.
         // An unfinished prefix can leave a paragraph open for S4, but blocks
         // inside a completed comment must not change the surrounding state.
