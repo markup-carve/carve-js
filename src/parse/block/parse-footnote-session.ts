@@ -86,8 +86,6 @@ function closesRefusedRunAt(lexer: Lexer, floor: number): boolean {
 // A run that lazily continues a nested block's paragraph is that block's text, not the note's.
 function keepLazyRunFollower(lexer: Lexer, floor: number, state: ReturnType<typeof verbatimOnlyLazyState>): void {
   if (state.quoteInner != null || state.deepest != null || !closesRefusedRunAt(lexer, floor)) return
-  state.refusedRunKept = null
-  state.refusedBraceFollower = true
   state.lazyFoldable = true
 }
 

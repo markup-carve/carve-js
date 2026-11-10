@@ -1003,11 +1003,9 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
   for (;;) {
     const line = lexer.peek(count)
     if (line === undefined || (count > 0 && isBlankLine(line))) return null
-    // A quoted note's first-block attribute run keeps a lazy continuation
-    // at its written column (PART 0 S4, carve#5619).
-    if (count > 0 && lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count)) &&
-      (!lexer.inFootnoteBody || !lazyLinePassesWrittenBrace(lexer, count))) return null
-    if (count > 0 && lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + count))) return null
+    // A multi-line run takes no lazy line (carve#5830 rule B).
+    if (count > 0 && (line.startsWith(LAZY_FRAME) || lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count)) ||
+      lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + count)))) return null
     if (count > 0 && columns(line) <= openingColumn) return null
     const closed = line.includes('}')
     // A continuation is a complete attribute fragment: quoted values cannot
@@ -1026,22 +1024,6 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     }
     if (!continueOpenRunScan(scan, count === 1 ? line : '\n' + line)) return null
   }
-}
-
-/**
- * A quote's lazy line continues a run only past the document column its `{`
- * is written at (CARVE-P2-035, carve#5820), not the brace's column in the note.
- */
-function lazyLinePassesWrittenBrace(lexer: Lexer, offset: number): boolean {
-  const root = lexer.documentRoot ?? lexer
-  const authored = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
-  const at = (index: number): number => {
-    const text = lexer.lineAt(index)!
-    const { column } = lexer.sourceBoundary(index, text.length - text.trimStart().length)
-    const source = authored[lexer.lineNumber(index) - 1]
-    return source === undefined ? column : indentColumns(source.slice(0, column - 1).replace(/[^\t]/g, ' ') + 'x')
-  }
-  return at(lexer.pos + offset) > at(lexer.pos)
 }
 
 interface OpenRunScan {

@@ -10,7 +10,6 @@ import {
   isLinkDefLine,
   isTableRow,
   parseBlockAttributeRun,
-  isRefusedBraceRun,
   RE_ABBR_DEF,
   RE_FENCE,
   RE_HR,
@@ -589,8 +588,6 @@ export function ownLines(
   }
   let attachedInlineCode = 0
   let braceRunStart = -1
-  let braceRunOpener = ''
-  let braceRunDepth = 0
   let shiftedAttachedFence: { column: number; run: string } | null = null
   // A fence that ended a description's `+` block at the document; a later description closes it (carve#4408, carve#5592).
   let ddBlockFence: { host: Frame[]; at: number } | null = null
@@ -734,38 +731,13 @@ export function ownLines(
       src = indentCols(src).rest
       rewritten = true
     }
-    // A refused brace run protects its immediate follower from marker
-    // interpretation (CARVE-P2-035, carve#5658 R03).
     const rawLine = lines[at]!
-    // A quoted line is read after its quote prefixes (carve#5770).
     let unquoted = rawLine
     for (let quoted = indentCols(unquoted).rest; isQuoteLine(quoted); quoted = indentCols(unquoted).rest) {
       unquoted = quoteRest(quoted)
     }
-    const candidatePlus = CONT_MARKER.test(unquoted.trimStart())
-    const noteRest = unquoted
-    const candidateNote = FOOTNOTE_DEF.test(noteRest.trimStart())
-    const refusedFollower = (candidatePlus || candidateNote) && attachedInlineCode === 0 && braceRunStart >= 0 &&
-      isRefusedBraceRun((index) => {
-        if (index === 0) return braceRunOpener
-        // Read in the opener's quote frame; a lazy line keeps its written column (carve#5619).
-        const authored = lines[braceRunStart + index]!
-        const rest = quoteBody(authored, braceRunDepth) ?? authored
-        const text = rest.trimStart()
-        return ' '.repeat(docColumn(rest, text)) + text
-      }, at - braceRunStart)
-    const protectedPlus = refusedFollower && candidatePlus
-    const protectedNote = refusedFollower && candidateNote
-    if (protectedPlus) {
-      src = src.replace(/\+([ \t]*)$/, `${standIn('+')}$1`)
-      rewritten = true
-    }
-    if (protectedNote) {
-      src = src.replace('[^', `${standIn('[')}^`)
-      rewritten = true
-    }
-    if (rawLine.trim() === '' || protectedPlus || candidateNote) braceRunStart = -1
-    if (rawLine.trim() !== '' && !protectedPlus && !protectedNote && rawLine.includes('{')) {
+    if (rawLine.trim() === '' || FOOTNOTE_DEF.test(unquoted.trimStart())) braceRunStart = -1
+    if (rawLine.trim() !== '' && rawLine.includes('{')) {
       const stripped = markerLineBottomBlock(rawLine.trimStart())
       const heads = NOTE_HEADS_LEAD.exec(stripped)
       const noteBody = heads ? stripped.slice(heads[0].length) : stripped
@@ -773,22 +745,7 @@ export function ownLines(
       // Item markers only: a quote in the note reads its own lines.
       const bottom = noteBody.slice(0, noteBody.length - walked.length).includes('>') ? noteBody : walked
       const opener = bottom.startsWith(': ') ? bottom.slice(2).trimStart() : bottom
-      if (opener.startsWith('{')) {
-        braceRunStart = at
-        braceRunDepth = 0
-        let body = rawLine
-        for (let quoted = indentCols(body).rest; isQuoteLine(quoted); quoted = indentCols(body).rest) {
-          body = quoteRest(quoted)
-          braceRunDepth++
-        }
-        if (!body.includes(stripped)) body = rawLine
-        // A run on a note head is measured from the note's body column (CARVE-P2-035).
-        // Behind a marker in the note's body it is measured from its `{`.
-        const column = heads && bottom === noteBody
-          ? docColumn(body, body.slice(body.indexOf(stripped) + heads[1]!.length)) + FOOTNOTE_BODY_COLUMN
-          : docColumn(body, body.slice(body.indexOf(opener)))
-        braceRunOpener = ' '.repeat(column) + opener
-      }
+      if (opener.startsWith('{')) braceRunStart = at
     }
     return { src, shiftedCut }
   }
@@ -2158,16 +2115,6 @@ export function ownLines(
   }
 
   // The document column where `rest`, a suffix of `line`, starts.
-  // `line` after `depth` quote prefixes; null when it has fewer.
-  function quoteBody(line: string, depth: number): string | null {
-    let rest = line
-    for (let d = 0; d < depth; d++) {
-      const quoted = indentCols(rest).rest
-      if (!isQuoteLine(quoted)) return null
-      rest = quoteRest(quoted)
-    }
-    return rest
-  }
 
   function docColumn(line: string, rest: string): number {
     let col = 0

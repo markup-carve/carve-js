@@ -397,11 +397,7 @@ export function createDefinitionListParser(
           const lineNumber = bodyLineNumbers.at(-1)
           const source = lineNumber === undefined ? content :
             (lexer.rootLines ?? lexer.lines)[lineNumber - 1] ?? content
-          if (sourceColumn(source, quotePrefixDepth(markerSource)) <= markerLineBraceColumn!) {
-            lazyState.refusedRunKept = null
-            lazyState.refusedBraceFollower = true
-            lazyState.lazyFoldable = true
-          }
+          if (sourceColumn(source, quotePrefixDepth(markerSource)) <= markerLineBraceColumn!) lazyState.lazyFoldable = true
           markerLineBraceColumn = null
         }
         if (markerRun !== null && lazyState.attrRun === null) markerLineBraceColumn = null
@@ -1419,38 +1415,6 @@ export function createDefinitionListParser(
         }
         return admitLazyLine(ln)
       })
-      // Decide a marker-line comment from its complete authored run before the
-      // body is reparsed. If a later shallow closer refuses it, block-shaped
-      // middle lines remain paragraph text in the description (carve#5806).
-      if (first.trimStart().startsWith('{%') && lazyState.attrRun?.startsWith('{%') && bodyLines.length > 1) {
-        const openerOffset = markerSource.lastIndexOf(first.trimStart())
-        if (openerOffset >= 0) {
-          const openerColumn = sourceColumnAt(markerSource, openerOffset)
-          const authored = (lexer.documentRoot ?? lexer).authoredRootLines ??
-            (lexer.documentRoot ?? lexer).authoredLines ?? lexer.rootLines ?? lexer.lines
-          const depth = quotePrefixDepth(markerSource)
-          let shallow = false
-          let closerLine = -1
-          for (let lineNumber = bodyLineNumbers[0]! + 1; lineNumber <= authored.length; lineNumber++) {
-            const sourceLine = authored[lineNumber - 1]!
-            if (isBlankLine(sourceLine)) break
-            const sourceBody = sourceQuoteBody(sourceLine).trimStart()
-            if (sourceColumn(sourceLine, depth) <= sourceColumn(markerSource, depth) &&
-                (RE_DEFLIST_DEF.test(sourceBody) || RE_DEFLIST_TERM.test(sourceBody))) {
-              shallow = true
-              closerLine = lineNumber
-              break
-            }
-            if (lineOpensBlock(sourceBody) && !sourceBody.startsWith('{')) break
-            if (sourceColumn(sourceLine, depth) <= openerColumn) shallow = true
-            if (sourceLine.includes('%}')) { closerLine = lineNumber; break }
-          }
-          if (shallow && closerLine > 0) for (let index = 1; index < bodyLines.length; index++) {
-            if (bodyLineNumbers[index]! > closerLine) break
-            bodyLines[index] = LAZY_FRAME + stripLazyFrame(bodyLines[index]!).trimStart()
-          }
-        }
-      }
       // A refused first-block marker owns no list child. The description's
       // marker-line item starts at its authored source column, while its body
       // sublexer starts at column zero. Rebase equal-source-column list markers

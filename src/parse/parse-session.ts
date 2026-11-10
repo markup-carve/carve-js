@@ -86,7 +86,6 @@ import {
   commentBlockHasCloser,
   commentCloserLookup,
   commentLineContent,
-  continueWrappedAttributeBlock,
   consumeLooseKey,
   deflistMarkerLine,
   delimitedTable,
@@ -132,7 +131,6 @@ import {
   normalizedSourceLines,
   opaqueGroupCloser,
   orderedMatch,
-  opensWrappedAttributeBlock,
   parseAbbrDef,
   parseAttrs,
   parseCommentBlock,
@@ -212,7 +210,6 @@ interface QuoteCollect {
   quoteMarkerColumn: number
   physicalQuoteColumn: number
   /** Authored brace and quote-inner columns of an open quoted attribute run. */
-  pendingAttribute: { sourceColumn: number; innerColumn: number; prefix: string; prefixColumn: number; quoteDepth: number; confirmed?: boolean } | undefined
   // Where the last column-0 follower of a stacked `> - > +` ended in `inner`.
   // What `inner` leaves open before a line, scanned once as it grows: a fence, and a paragraph
   // that an item line started (`> - a` / `> b`), which a sibling item's stacked opener closes.
@@ -310,17 +307,16 @@ function authoredRunColumn(lexer: Lexer, offset: number, openerDepth = Infinity)
   return sourceQuoteLocalColumn(source, Math.min(quotePrefixDepth(source), openerDepth))
 }
 
+function documentRunColumn(lexer: Lexer, offset: number): number {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos + offset) - 1]
+  return source === undefined ? indentColumns(stripLazyFrame(lexer.peek(offset) ?? '')) : sourceColumn(source)
+}
+
 function authoredRunDepth(lexer: Lexer): number {
   const root = lexer.documentRoot ?? lexer
   const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
   return source === undefined ? Infinity : quotePrefixDepth(source)
-}
-
-/** The document column `lexer`'s line `offset` starts at, quote prefixes included. */
-function authoredSourceColumn(lexer: Lexer, offset: number): number {
-  const root = lexer.documentRoot ?? lexer
-  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos + offset) - 1]
-  return source === undefined ? indentColumns(stripLazyFrame(lexer.peek(offset) ?? '')) : sourceColumn(source)
 }
 
 const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
@@ -330,6 +326,17 @@ const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
  * run opened behind a marker must pass (CARVE-P2-035): its `{`, or the body
  * column of a note head it follows. Null when the run starts its source line.
  */
+/** The document column of a marker-line run's `{` when a quote opens on that line after the marker, else null. */
+function quotedMarkerRunColumn(lexer: Lexer, first: string): number | null {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
+  const rest = source === undefined ? null : sourceQuoteRest(source, quotePrefixDepth(source))
+  if (rest == null) return null
+  const at = rest.lastIndexOf(first.trimStart())
+  if (at <= leadingWhitespace(rest) || !rest.slice(0, at).includes('>')) return null
+  return sourceColumnAt(source!, source!.length - rest.length + at)
+}
+
 function markerLineRunColumn(lexer: Lexer, first: string): number | null {
   const root = lexer.documentRoot ?? lexer
   const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
@@ -369,16 +376,16 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
   if (!firstRaw?.startsWith(LAZY_FRAME) && first.trimStart().startsWith('{%') && commentBetweenListSiblings(lexer)) return 0
   const openerColumn = indentColumns(first)
   const comment = first.trimStart().startsWith('{%')
-  const lazyBrace = firstRaw?.startsWith(LAZY_FRAME) ||
-    lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
-    lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
+  const lazyAt = (n: number): boolean => lexer.peek(n)!.startsWith(LAZY_FRAME) ||
+    lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n)) || lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))
   const openerDepth = authoredRunDepth(lexer)
-  const authoredColumn = (offset: number): number => authoredRunColumn(lexer, offset, openerDepth)
   // A marker-line opener is rebased to the host's content column. Compare its
   // continuation with the brace's written column, not the rebased zero.
-  const markerColumn = markerLineRunColumn(lexer, first)
-  const markerLineComment = markerColumn !== null
-  const sourceOpenerColumn = markerColumn ?? (lazyBrace ? authoredColumn(0) : openerColumn)
+  // A lazy opener is rebased too, so it is measured where it is written.
+  // A quote opened after the marker is measured in document columns, past every prefix.
+  const quotedMarkerColumn = quotedMarkerRunColumn(lexer, first)
+  const sourceOpenerColumn = markerLineRunColumn(lexer, first) ??
+    (lazyAt(0) ? authoredRunColumn(lexer, 0, openerDepth) : null)
   const lines: string[] = []
   let shallow = false
   let quoted: string | null = null
@@ -390,20 +397,18 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
       if (comment) memo.closerless = lexer.pos + n
       return 0
     }
-    const quoteLazyContinuation = lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n))
     if (n > 0 && !comment && line.trimStart().startsWith('{')) return 0
-    if (n > 0) {
-      // A quote's lazy line retains its source column even when the opener was
-      // a marked line. Ordinary list lines still use their local content column.
-      const sourceColumns = markerLineComment || lazyBrace || quoteLazyContinuation
-      // A lazy line has no quote prefix, so it is compared with the `{` where it is written (carve#5820).
-      const lazyAgainstWrittenBrace = quoteLazyContinuation && !markerLineComment && !lazyBrace
-      if (sourceColumns
-        ? lazyAgainstWrittenBrace
-          ? authoredSourceColumn(lexer, n) <= authoredSourceColumn(lexer, 0)
-          : authoredColumn(n) <= (markerLineComment || lazyBrace ? sourceOpenerColumn : authoredColumn(0))
-        : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n))) shallow = true
-    }
+    // A continuation takes no lazy line (carve#5830 rule B). A lazy opener's
+    // continuation only has to reach a container the opener does not.
+    const lazy = lazyAt(0)
+      ? lexer.peek(n)!.startsWith(LAZY_FRAME) || lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + n)) ||
+        lexer.outerItemLazyLines.has(lexer.lineNumber(lexer.pos + n))
+      : lazyAt(n)
+    if (n > 0 && (lazy || (quotedMarkerColumn !== null
+      ? documentRunColumn(lexer, n) <= quotedMarkerColumn
+      : sourceOpenerColumn !== null
+      ? authoredRunColumn(lexer, n, openerDepth) <= sourceOpenerColumn
+      : indentColumns(line) <= openerColumn))) shallow = true
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
     if (comment) {
       if (line.includes('%}')) return shallow ? n + 1 : 0
@@ -586,7 +591,6 @@ function quoteAttachedBoundary(lexer: Lexer): (line: string) => boolean {
 }
 
 export class ParseSession extends InlineParseSession {
-  private readonly lastAttributeCloserLine = new WeakMap<Lexer, number>()
 
   /**
    * `text` with a trailing comment and its whole separating run removed, for a
@@ -2019,7 +2023,6 @@ export class ParseSession extends InlineParseSession {
       quoteRootLine,
       quoteMarkerColumn,
       physicalQuoteColumn,
-      pendingAttribute: undefined,
     }
   }
 
@@ -2176,21 +2179,6 @@ export class ParseSession extends InlineParseSession {
     q.inner.push(content)
     q.untracked.push([content, lineIndex])
     q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
-    const body = content.includes('{') ? sourceQuoteBody(content).trimStart() : ''
-    if (opensWrappedAttributeBlock(body) && !body.startsWith('{%')) {
-      const root = lexer.documentRoot ?? lexer
-      const authored = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lineIndex) - 1] ?? ln
-      const authoredBrace = authored.indexOf(body)
-      const innerRest = sourceQuoteRest(content, quotePrefixDepth(content)) ?? content
-      const prefix = content.slice(0, content.length - innerRest.length)
-      if (authoredBrace >= 0) q.pendingAttribute = {
-        sourceColumn: sourceColumnAt(authored, authoredBrace),
-        innerColumn: sourceColumnAt(content, content.indexOf(body)),
-        prefix,
-        prefixColumn: sourceColumnAt(content, prefix.length),
-        quoteDepth: quotePrefixDepth(authored),
-      }
-    }
   }
 
   // Continuation marker (Carve, PART 9 §17): a lone `+` at column 0 after a
@@ -2399,79 +2387,9 @@ export class ParseSession extends InlineParseSession {
     return true
   }
 
-  /** Confirm a pending run before it claims unprefixed lines that could instead open blocks. */
-  private quotedAttributeCloses(q: QuoteCollect, pending: NonNullable<QuoteCollect['pendingAttribute']>, run: string): boolean {
-    const { lexer } = q
-    const root = lexer.documentRoot ?? lexer
-    // Most failed probes have no closer anywhere in the remaining document.
-    // The quote may get a fresh nested lexer on every run, so cache this on
-    // the document root rather than rescanning the same suffix in each one.
-    let lastCloser = this.lastAttributeCloserLine.get(root)
-    if (lastCloser === undefined) {
-      lastCloser = -1
-      for (let i = root.lineCount - 1; i >= 0; i--) {
-        if (root.lineAt(i)?.includes('}')) {
-          lastCloser = i
-          break
-        }
-      }
-      this.lastAttributeCloserLine.set(root, lastCloser)
-    }
-    if (lastCloser < lexer.lineNumber(lexer.pos) - 1) return false
-    const collected = [run]
-    const authoredLines = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
-    for (let offset = 0; ; offset++) {
-      const line = lexer.peek(offset)
-      if (line === undefined || isBlankLine(line)) return false
-      const quoted = quotedLineText(line, lexer.lineTerminatorFree(lexer.pos + offset))
-      const authored = authoredLines[lexer.lineNumber(lexer.pos + offset) - 1] ?? line
-      const depth = quotePrefixDepth(authored)
-      // A line under fewer `>` than the run's own is lazy to the run's quote.
-      if (quoted === null && depth > 0 && depth >= pending.quoteDepth) return false
-      const rest = sourceQuoteRest(authored, depth) ?? authored
-      const writtenColumn = sourceColumnAt(authored, authored.length - rest.length + leadingWhitespace(rest))
-      // The next quoted opener at the same column cannot be a continuation.
-      // This also bounds failed probes when many unclosed runs precede one
-      // distant, unusable closer.
-      if (writtenColumn <= pending.sourceColumn) return false
-      const content = quoted === null ? line : quoted
-      const continuation = ' ' + content.trimStart()
-      if (content.includes('}')) {
-        const next = continueWrappedAttributeBlock(collected.join('\n'), continuation)
-        if (next.verdict === 'attributes') return true
-        if (next.verdict === 'text') return false
-      }
-      collected.push(continuation)
-    }
-  }
-
   // False when the unmarked line ends the quote instead of continuing it.
   private takeLazyQuoteLine(q: QuoteCollect, ln: string): boolean {
     const { lexer, state } = q
-    const pending = q.pendingAttribute
-    if (pending !== undefined && !isBlankLine(ln)) {
-      this.trackUntrackedQuoteLines(q)
-      let leaf = state
-      while (leaf.mode.kind === 'quote') leaf = leaf.mode.inner
-      const root = lexer.documentRoot ?? lexer
-      const authored = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1] ?? ln
-      const writtenColumn = sourceColumn(authored)
-      if (leaf.attrRun !== null && writtenColumn > pending.sourceColumn &&
-          (quotePrefixDepth(authored) === 0 || quotePrefixDepth(authored) < pending.quoteDepth) &&
-          (pending.confirmed || this.quotedAttributeCloses(q, pending, leaf.attrRun))) {
-        pending.confirmed = true
-        const column = pending.innerColumn + writtenColumn - pending.sourceColumn
-        const content = pending.prefix + ' '.repeat(Math.max(0, column - pending.prefixColumn)) + ln.trimStart()
-        const lineIndex = lexer.pos
-        lexer.consume()
-        q.inner.push(content)
-        q.innerLineNumbers.push(lexer.lineNumber(lineIndex))
-        this.trackQuoteLine(q, content, lineIndex)
-        if (leaf.attrRun === null) q.pendingAttribute = undefined
-        return true
-      }
-      q.pendingAttribute = undefined
-    }
     const rootLine = lexer.rootLines?.[lexer.lineNumber(lexer.pos) - 1] ?? ln
     // A line that writes a `>` is inside the quote that marker reaches, not below this quote's column.
     const lazyFootnote = RE_FOOTNOTE_DEF.test(stripLazyFrame(ln).trimStart()) &&
@@ -3105,10 +3023,9 @@ export class ParseSession extends InlineParseSession {
    */
   private parseParagraph(lexer: Lexer, flattened = false): Paragraph {
     const lines: string[] = []
-    const literalLines: Array<[number, number]> = []
-    let afterRefusal = false
+    // Lines whose leading `{` is a refused run's literal opener (CARVE-P2-035, carve#5830).
+    const literalBraces: number[] = []
     const braceScan: { closerless?: number } = {}
-    let refusedFence: RegExp | null = null
     let openInlineCode = 0
     let openInlineComment = false
     // A `{%` holds later lines only when its `%}` follows before a blank line or a block that interrupts (carve#5740).
@@ -3210,18 +3127,6 @@ export class ParseSession extends InlineParseSession {
     while (!lexer.eof()) {
       const ln = lexer.peek()!
       if (isBlankLine(ln)) break
-      let openedRefusedFence = false
-      if (afterRefusal && refusedFence === null) {
-        // Any fence opener keeps its closer, whatever info string it carries (CARVE-P2-035).
-        const text = ln.trimStart()
-        const opener = RE_FENCE.exec(text)?.[2] ?? RE_RAW_FENCE.exec(text)?.[1]
-        if (opener) {
-          const closer = new RegExp(`^[ \\t]*${opener[0]}{${opener.length},}[ \\t]*$`)
-          for (let n = 1; lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!); n++) {
-            if (closer.test(lexer.peek(n)!)) { refusedFence = closer; openedRefusedFence = true; break }
-          }
-        }
-      }
       // Every line start is block position, a continuation line included (carve#5189).
       if (codeInclude && lines.length > 0) break
       const refusedLines = flattened || openInlineCode !== 0 || openInlineComment ? 0 : refusedBraceLines(lexer, braceScan)
@@ -3232,13 +3137,9 @@ export class ParseSession extends InlineParseSession {
           heldThrough = end
         }
       }
-      if (refusedLines > 0) {
-        const start = lines.length
-        for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
-        literalLines.push([start, lines.length])
-        afterRefusal = true
-        continue
-      }
+      // A refused run claims no line: only its opening `{` is literal, and the
+      // next line is read as if that brace were escaped (carve#5830 rule A).
+      const refusedOpener = refusedLines > 0
       // A reference image can remain literal after resolution. Its first
       // caption marker still occupies a slot; a second marker starts a block.
       if (imageCaptionSlot && RE_CAPTION.test(ln)) break
@@ -3272,7 +3173,7 @@ export class ParseSession extends InlineParseSession {
       // looping forever on the same line.
       if (
         !flattened &&
-        lines.length > 0 && !afterRefusal && !(lexer.pos > heldOpener && lexer.pos <= heldThrough) &&
+        lines.length > 0 && !refusedOpener && !(lexer.pos > heldOpener && lexer.pos <= heldThrough) &&
         !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
         ((((!ln.startsWith(LAZY_FRAME) || (lexer.hostBody === 'list' &&
           !RE_FOOTNOTE_DEF.test(stripLazyFrame(ln)))) && (lexer.consumesHostedLinkDefs === 'all' ||
@@ -3291,13 +3192,10 @@ export class ParseSession extends InlineParseSession {
       // The frame did its work in the interruption test above; a paragraph is
       // where a framed line becomes text, so it comes off here.
       const received = stripLazyFrame(ln)
+      if (refusedOpener) literalBraces.push(lines.length)
       lines.push(received)
-      scanInlineCode(received)
-      if (openedRefusedFence) afterRefusal = true
-      else if (refusedFence !== null) {
-        if (refusedFence.test(received)) { refusedFence = null; afterRefusal = false }
-        else afterRefusal = true
-      } else afterRefusal = false
+      // The literal brace opens no comment or attribute span.
+      scanInlineCode(refusedOpener ? received.replace('{', 'a') : received)
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first
@@ -3341,7 +3239,7 @@ export class ParseSession extends InlineParseSession {
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
-    if (literalLines.length > 0) {
+    if (literalBraces.length > 0) {
       const normalizedLines = text.split('\n')
       const offsets = [0]
       for (const line of normalizedLines) offsets.push(offsets.at(-1)! + line.length + 1)
@@ -3392,25 +3290,11 @@ export class ParseSession extends InlineParseSession {
           } } : {}),
         })
       }
-      for (const [start, end] of literalLines) {
-        const from = offsets[start]!
-        const to = offsets[end]! - 1
+      for (const line of literalBraces) {
+        const from = offsets[line]! + (normalizedLines[line]!.length - normalizedLines[line]!.trimStart().length)
         if (from > at) paragraphNode.children.push(...parseSegment(at, from))
-        // Every line ending in a refused run is a soft_break, attribute runs too (carve-js#4430).
-        let lineStart = from
-        for (let i = from; i < to; i++) if (text[i] === '\n') {
-          addLiteralText(lineStart, i)
-          const before = positionAt(i), after = positionAt(i + 1)
-          paragraphNode.children.push({ type: 'soft_break',
-            ...(lexer.hasDocumentOffsets ? { pos: {
-              startLine: before.line, startColumn: before.column, startOffset: before.offset,
-              endLine: after.line, endColumn: after.column, endOffset: after.offset,
-            } } : {}),
-          })
-          lineStart = i + 1
-        }
-        addLiteralText(lineStart, to)
-        at = to
+        addLiteralText(from, from + 1)
+        at = from + 1
       }
       if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
     }

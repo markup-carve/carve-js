@@ -1698,15 +1698,12 @@ export function trackWrappedAttributeRun(
 ): boolean {
   if (state.attrRun !== null) {
     if (column <= (state.attrColumn ?? 0)) state.attrShallow = true
-    // A `{%` run closed at its `%}` is refused like an attribute run (CARVE-P2-035).
-    const comment = state.attrRun.startsWith('{%')
     const { run, verdict } = continueWrappedAttributeBlock(state.attrRun, content)
     state.attrRun = verdict === 'open' ? run : null
-    if (verdict !== 'open') {
-      state.refusedBraceRun = state.attrShallow === true && (verdict === 'attributes' || comment && content.includes('%}'))
-      state.attrShallow = false
-    }
-    return verdict === 'attributes' && state.refusedBraceRun !== true
+    // A refused run claims no line, so the classifiers' reading stands (carve#5830 rule A).
+    const refused = state.attrShallow === true
+    if (verdict !== 'open') state.attrShallow = false
+    return verdict === 'attributes' && !refused
   }
   if (opensWrappedAttributeBlock(content)) {
     state.attrRun = content

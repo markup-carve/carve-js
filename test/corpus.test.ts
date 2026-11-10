@@ -42,6 +42,46 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // New categories at the #5845 spec pin.
+  'a-brace-line-continues-a-marker-comment',
+  'a-closed-inline-comment-holds-a-brace-line',
+  'a-comment-continuation-past-the-brace-after-an-outer-quote-prefix-is-hidden',
+  'a-description-item-measures-its-verse-lead-in-both-frames',
+  'a-description-keeps-a-note-follower-after-a-refused-run',
+  'a-description-keeps-lazy-text-after-a-refused-fence',
+  'a-description-sibling-bounds-an-unclosed-comment-run',
+  'a-fence-shaped-line-continues-an-item-comment',
+  'a-heading-shaped-line-continues-an-item-comment',
+  'a-lazy-attribute-run-in-a-note-keeps-its-follower',
+  'a-lazy-comment-run-lets-a-quote-open-in-its-note',
+  'a-lazy-refused-comment-keeps-its-note-definition-follower',
+  'a-literal-brace-group-leaves-its-backtick-open',
+  'a-marker-glued-attribute-preserves-a-later-brace-s-source-column',
+  'a-nested-code-body-keeps-its-literal-content-after-frame-stripping',
+  'a-nested-item-without-a-quote-keeps-three-verse-spaces',
+  'a-note-marker-comment-run-uses-its-body-column',
+  'a-note-marker-line-brace-run-measures-from-the-note-body-column',
+  'a-partially-prefixed-quoted-run-continuation-keeps-its-source-column',
+  'a-prefixed-quote-run-remains-wrapped',
+  'a-quote-marker-continues-a-comment',
+  'a-quote-on-a-marker-line-measures-its-written-brace',
+  'a-quote-prefix-on-a-comment-continuation-counts-at-its-marker',
+  'a-quoted-item-run-measures-its-written-brace',
+  'a-quoted-item-s-inner-quoted-run-continues-under-the-outer-prefix',
+  'a-quoted-marker-comment-at-the-opener-column-stays-text',
+  'a-quoted-marker-comment-keeps-source-columns',
+  'a-quoted-nested-item-keeps-three-verse-spaces',
+  'a-quoted-unprefixed-run-keeps-its-source-column',
+  'a-refused-attribute-run-keeps-its-marker-follower',
+  'a-refused-marker-head-brace-run-stays-literal',
+  'a-refused-quoted-run-with-a-lazy-continuation-stays-literal',
+  'a-refused-root-run-releases-a-heading',
+  'a-refused-tab-led-quoted-run-keeps-its-lazy-continuation',
+  'a-second-tab-keeps-two-verse-spaces',
+  'an-inline-attribute-hides-its-backtick',
+  'an-item-marker-line-brace-run-measures-from-its-written-brace',
+  'an-outer-quote-prefix-width-does-not-move-a-comment-continuation',
+  'an-unclosed-inline-comment-holds-no-brace-line',
   // New categories at the #5735 spec pin; layout lag is declared below.
   'a-nested-refused-plus-keeps-its-item',
   'a-quote-attached-colon-keeps-a-later-plus',
@@ -1625,6 +1665,19 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 ])
 // Layout rewrite #5731 remains pending; the alias pin exposes these existing engine outputs.
 const behindSpec = new Map<string, string>([
+  // carve#5755 (nested tab payloads per frame) is not ported yet.
+  ["1042-a-quoted-nested-item-keeps-three-verse-spaces", "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>a\n          <div class=\"line-block\">\n            <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"],
+  ["1043-a-second-tab-keeps-two-verse-spaces", "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>a\n          <div class=\"line-block\">\n            <p>&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"],
+  ["1044-a-nested-item-without-a-quote-keeps-three-verse-spaces", "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <div class=\"line-block\">\n          <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"],
+  ["1045-a-nested-code-body-keeps-its-literal-content-after-frame-stripping", "<ul>\n  <li>a\n    <ul>\n      <li>a\n<code>\nz\n</code></li>\n    </ul>\n  </li>\n</ul>"],
+  // carve#5756 (block-shaped continuations of a valid comment run) is not ported yet.
+  ["1051-a-fence-shaped-line-continues-an-item-comment", "<ul>\n  <li></li>\n</ul>\n<p>plain</p>"],
+  // A prefixed quoted run behind an item marker; follow-up to the carve#5830 port.
+  ["1059-a-partially-prefixed-quoted-run-continuation-keeps-its-source-column-3", "<ul>\n  <li>\n    <blockquote><p>{.x\n.y}</p></blockquote>\n  </li>\n</ul>\n<p>plain</p>"],
+  ["1061-a-quoted-item-s-inner-quoted-run-continues-under-the-outer-prefix", "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>{.x\n.y}</p></blockquote>\n    </li>\n  </ul>\n  <p>plain</p>\n</blockquote>"],
+  // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
+  ["964-a-lazy-line-after-a-comment-keeps-the-deepest-list-open", "<ul>\n  <li>a\n    <ul>\n      <li><p>b\n{% c\nd %}\ntail</p></li>\n      <li><p>z</p></li>\n    </ul>\n  </li>\n</ul>"],
+  ["1044-a-lazy-comment-run-lets-a-quote-open-in-its-note", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p\n{% a\n%}</p>\n      <blockquote><p>q\nafter</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
   ['1033-a-quote-attached-colon-keeps-a-later-plus', "<blockquote>\n  <aside class=\"admonition note\" aria-label=\"Note\">\n    <p>x</p>\n    <p>zq</p>\n  </aside>\n</blockquote>"],
   ['1034-an-item-attached-colon-keeps-a-later-plus', "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>x</p>\n      <p>zq</p>\n    </aside>\n  </li>\n</ul>"],
   ['1037-a-tab-led-quote-under-nested-descriptions-opens-in-the-inner-description', "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <dl>\n      <dt>t</dt>\n      <dd>a\n&gt; b</dd>\n    </dl>\n  </dd>\n</dl>"],
