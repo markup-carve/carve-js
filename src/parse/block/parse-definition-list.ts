@@ -110,6 +110,17 @@ function sourceLineAt(lexer: Lexer, index: number, fallback: string): string {
   return (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(index) - 1] ?? fallback
 }
 
+function closesMarkerLineBraceRun(run: string | null, content: string): boolean {
+  if (run === null) return false
+  if (run.startsWith('{%')) return content.includes('%}')
+  return continueWrappedAttributeBlock(run, content).verdict === 'attributes'
+}
+
+function directMarkerLineBraceColumn(first: string, run: string | null, bodyColumn: number, runColumn: number): number | null {
+  if (run === null || !first.trimStart().startsWith('{')) return null
+  return bodyColumn + runColumn
+}
+
 function isBelowColumnListAfterTerm(state: ItemLazyState, atDocumentColumn: boolean, line: string,
   isListMarker: (line: string) => boolean): boolean {
   return state.inDefList === 'term' && state.opaque === null && !atDocumentColumn && isListMarker(line)
@@ -271,6 +282,8 @@ export function createDefinitionListParser(
       const bodyFenceClosers = openFenceScanner()
       const bodyLineNumbers: number[] = []
       const bodySourceLines: (string | undefined)[] = []
+      // A marker-line run's opener keeps its authored column even when a shallow closer is read lazily.
+      let markerLineBraceColumn: number | null = null
       const bufferedBlanks = new Set<number>()
       const lazyState: ItemLazyState = {
         definitionBody: true,
@@ -373,11 +386,26 @@ export function createDefinitionListParser(
         }
         // A marker at the body's column 0 opens a sub-item frame, as in a note body (PART 0 S3, carve#4860).
         const framed = atContentColumn && !content.startsWith(LAZY_FRAME)
+        const markerRun = markerLineBraceColumn !== null ? lazyState.attrRun : null
+        const closedMarkerRun = closesMarkerLineBraceRun(markerRun, content)
         trackItemLazyState(content, lazyState, atContentColumn, () => true, {
           terminatorFree: true,
           payloadFenceCloser: marker => payloadFenceHasCloser(lexer, marker),
           ...(framed ? { whitespace: leadingWhitespace(content), descendantFrames: true } : {}),
         })
+        if (closedMarkerRun && lazyState.attrRun === null) {
+          const lineNumber = bodyLineNumbers.at(-1)
+          const source = lineNumber === undefined ? content :
+            (lexer.rootLines ?? lexer.lines)[lineNumber - 1] ?? content
+          if (sourceColumn(source, quotePrefixDepth(markerSource)) <= markerLineBraceColumn!) {
+            lazyState.refusedRunKept = null
+            lazyState.refusedBraceFollower = true
+            lazyState.lazyFoldable = true
+          }
+          markerLineBraceColumn = null
+        }
+        if (markerRun !== null && lazyState.attrRun === null) markerLineBraceColumn = null
+        if (isBlankLine(content)) markerLineBraceColumn = null
         seedMarkerLineBlock(content)
         if (opensCodeFence(content.trimStart()) && lazyState.lazyFoldable && lazyState.opaque === null) {
           paragraphFenceLines.add(bodyLines.length - 1)
@@ -528,6 +556,8 @@ export function createDefinitionListParser(
         // on the `:  ` marker leaves no paragraph open for exactly the reason it
         // leaves none on a `- ` marker.
         const firstState = markerLineState(first, parseSession.markerPrefixMemo(lexer, firstLineIndex))
+        markerLineBraceColumn = directMarkerLineBraceColumn(first, firstState.wrappedAttributeRun,
+          bodySourceColumn, firstState.wrappedAttributeColumn)
         const firstIsColonContainer = colonFenceShapeEndsLazyContinuation(first)
         lazyState.lazyFoldable = firstIsColonContainer ? false : firstState.leavesParagraphOpen
         nestedItemColumn = markerContentColumn(first)
@@ -1172,7 +1202,10 @@ export function createDefinitionListParser(
             entryColumn() < bodySourceColumn) return 'stop'
         const below = ln.replace(/^[ \t]+/, '')
         // A list marker that misses a marker body closes it (PART 0 S3, carve#4860).
-        if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below)) return 'stop'
+        if (indentColumns(ln, contentCol) < contentCol && isListMarkerLine(below) &&
+            (lazyState.refusedRunKept === undefined || markerContentColumn(first) >= 0 ||
+              RE_BLOCKQUOTE.test(first) || nestedItemColumn >= 0 ||
+              lazyState.quoteInner !== null)) return 'stop'
         if (lazyState.opaque === null && /^:{3,}[ \t]*$/.test(below) &&
             indentColumns(ln, contentCol) < contentCol) return 'stop'
         // A span in verse leaves nothing, so the stanza it interrupted still takes the line (carve#4956).
