@@ -73,11 +73,15 @@ function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attach
   const text = trimEndSpaceTab(sourceQuoteRest(source, quotePrefixDepth(source)) ?? source)
   const head = trimEndSpaceTab(def.trimStart())
   if (!text.endsWith(head)) return -1
+  // A quote opened on the marker line is a prefix its continuations carry, so columns start after it (carve#5787).
+  let quoteEnd = 0
+  for (const m of text.slice(0, text.length - head.length).matchAll(/(?<=^|[ \t])> ?/g)) quoteEnd = m.index + m[0].length
+  const base = sourceColumnAt(text, quoteEnd)
   // A run behind a marker is measured from its own `{`, one behind a note head from that note's body (CARVE-P2-035).
   const at = text.lastIndexOf(state.attrRun.trimStart())
-  if (at <= text.length - head.length) return sourceColumnAt(text, text.length - head.length) + FOOTNOTE_BODY_COLUMN
+  if (at <= text.length - head.length) return sourceColumnAt(text, text.length - head.length) - base + FOOTNOTE_BODY_COLUMN
   const note = NOTE_HEAD_BEFORE_RUN.exec(text.slice(0, at))
-  return note ? sourceColumnAt(text, note.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(text, at)
+  return (note ? sourceColumnAt(text, note.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(text, at)) - base
 }
 
 /** A continuation the authored columns refuse is paragraph text, so its moved indentation is dropped. */
@@ -493,6 +497,17 @@ function nestedSourceBodyLeft(
   return lexer.hostBody === 'list' && defLineIndex === 0 && nestedSourceBodyColumn !== undefined &&
     sourceLine !== undefined && !isBlankLine(sourceQuoteBody(sourceLine)) &&
     sourceColumn(sourceLine) < nestedSourceBodyColumn
+}
+
+// A quote opened on a list marker line before the note head frames the note's
+// continuation lines too, as a quote at the line start would (carve#5787).
+function noteQuoteDepth(authoredLine: string | undefined, defLineRaw: string): number {
+  if (authoredLine === undefined) return quotePrefixDepth(defLineRaw)
+  const depth = quotePrefixDepth(authoredLine)
+  const rest = sourceQuoteRest(authoredLine, depth)
+  const at = rest === null ? -1 : rest.lastIndexOf(defLineRaw.trimStart())
+  if (at <= 0) return depth
+  return depth + [...rest!.slice(0, at).matchAll(/(?<=^|[ \t])>(?=[ \t]|$)/g)].length
 }
 
 function framesBelowNoteLine(
@@ -1110,7 +1125,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     return true
   }
   runIndentationContainer(
-    lexer, 'footnote', markerColumn, bodyColumn, quotePrefixDepth(authoredLine ?? defLineRaw), (admission) => {
+    lexer, 'footnote', markerColumn, bodyColumn, noteQuoteDepth(authoredLine, defLineRaw), (admission) => {
     const ln = admission.line
     if (keepRefusedQuoteFollower(ln)) return 'continue'
     if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'

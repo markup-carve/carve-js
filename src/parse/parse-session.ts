@@ -335,7 +335,9 @@ function quotedMarkerRunColumn(lexer: Lexer, first: string): number | null {
   if (rest == null) return null
   const at = rest.lastIndexOf(first.trimStart())
   if (at <= leadingWhitespace(rest) || !rest.slice(0, at).includes('>')) return null
-  return sourceColumnAt(source!, source!.length - rest.length + at)
+  const head = NOTE_HEAD_BEFORE_RUN.exec(rest.slice(0, at))
+  const offset = source!.length - rest.length
+  return head ? sourceColumnAt(source!, offset + head.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(source!, offset + at)
 }
 
 function markerLineRunColumn(lexer: Lexer, first: string): number | null {
@@ -355,6 +357,11 @@ function markerLineRunColumn(lexer: Lexer, first: string): number | null {
 function markerLineRunShallow(lexer: Lexer, count: number): boolean {
   const first = lexer.peek()
   if (count < 2 || first === undefined) return false
+  const quoted = quotedMarkerRunColumn(lexer, stripLazyFrame(first))
+  if (quoted !== null) {
+    for (let n = 1; n < count; n++) if (documentRunColumn(lexer, n) <= quoted) return true
+    return false
+  }
   const column = markerLineRunColumn(lexer, stripLazyFrame(first))
   if (column === null) return false
   const depth = authoredRunDepth(lexer)
