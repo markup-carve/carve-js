@@ -13,6 +13,7 @@ import { pulledParagraphBlockCut } from '../block/pulled-paragraph.js'
 import { wrappedAttributeLinesAt } from '../block/leading-attribute-run.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
 import { bodyEndsInOpenCodeFence, sourceColumn, verseStanzaOpen } from '../block/parse-block-boundaries.js'
+import { braceRunHolds } from '../block/brace-run-holds.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
@@ -1606,6 +1607,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         if (frame.keptRunLine === true) return true
       return false
     }
+    const braceHeld = braceRunHolds(lexer)
+    braceHeld.open(itemStartLineIndex, content)
     const trackDescendantOpaque = (
       line: string,
       opener: string,
@@ -1675,7 +1678,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         return
       }
       const fence = RE_FENCE.exec(opener) ?? RE_RAW_FENCE.exec(opener)
-      if (fence === null || keptByRefusedRun()) return
+      if (fence === null || keptByRefusedRun() || descendantOpaque === null && braceHeld.holds(lexer.pos)) return
       if (foldsFenceIntoFrame(lazyState.deepest, indentColumns(line), line.trimStart())) return
       // The child's own frame already holds a fence, so this line is its payload or closer.
       if (lazyState.deepest?.opaque?.kind === 'code') return
@@ -3316,8 +3319,10 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) {
         lazyState.quoteInner = null
       }
+      // Inside verbatim payload a `{%` line is payload, not a run.
+      if (lazyState.opaque === null && descendantOpaque === null && !insideOpenFence(lazyState)) braceHeld.open(fenceLineIndex, trackedContent)
       if (!skipConsumedCloser) withKeptFenceLookahead(lexer, fenceLineIndex, () => trackItemLazyState(
-        trackedContent,
+        braceHeld.mask(fenceLineIndex, trackedContent),
         lazyState,
         true,
         // Classify the span before applying the item's column boundary.

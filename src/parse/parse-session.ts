@@ -1,4 +1,5 @@
 import { anchorListsAtOwnerColumns } from '../source/list-owner-columns.js'
+import { braceRunHolds, type BraceRunHolds } from './block/brace-run-holds.js'
 import { destinationSlotEnds } from '../link-destination.js'
 import { recordUnboundCaption } from './block/caption-fallback.js'
 import { commentOnlyParagraphEnd, isRefusedBraceRun } from './parse-prepass-core.js'
@@ -187,6 +188,7 @@ import { isQuoteBlankLine } from './parse-lexer.js'
 // state its unmarked lines are judged against.
 interface QuoteCollect {
   lexer: Lexer
+  braceHeld?: BraceRunHolds
   firstLineIndex: number
   inner: string[]
   origins: Map<number, StrippedLineOrigin>
@@ -2045,8 +2047,13 @@ export class ParseSession extends InlineParseSession {
   private trackQuoteLine(q: QuoteCollect, content: string, lineIndex: number): void {
     const { lexer, state, descent } = q
     q.paragraphOpen = undefined
+    const held = q.braceHeld ??= braceRunHolds(lexer)
+    let level = state
+    while (level.mode.kind === 'quote') level = level.mode.inner
+    // Inside verbatim payload a `{%` line is payload, not a run.
+    if (level.mode.kind !== 'code_fence' && level.mode.kind !== 'comment_fence') held.open(lineIndex, content)
     withKeptFenceLookahead(lexer, lineIndex, () => trackBlockQuoteLazyState(
-      content,
+      held.mask(lineIndex, content),
       state,
       (fence) => quotedCommentHasCloser(lexer, fence, lineIndex),
       !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)),
