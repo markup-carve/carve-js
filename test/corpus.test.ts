@@ -1670,8 +1670,6 @@ const behindSpec = new Map<string, string>([
   ["1043-a-second-tab-keeps-two-verse-spaces", "<blockquote>\n  <ul>\n    <li>a\n      <ul>\n        <li>a\n          <div class=\"line-block\">\n            <p>&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n</blockquote>"],
   ["1044-a-nested-item-without-a-quote-keeps-three-verse-spaces", "<ul>\n  <li>a\n    <ul>\n      <li>a\n        <div class=\"line-block\">\n          <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;z</p>\n        </div>\n      </li>\n    </ul>\n  </li>\n</ul>"],
   ["1045-a-nested-code-body-keeps-its-literal-content-after-frame-stripping", "<ul>\n  <li>a\n    <ul>\n      <li>a\n<code>\nz\n</code></li>\n    </ul>\n  </li>\n</ul>"],
-  // carve#5756 (block-shaped continuations of a valid comment run) is not ported yet.
-  ["1051-a-fence-shaped-line-continues-an-item-comment", "<ul>\n  <li></li>\n</ul>\n<p>plain</p>"],
   // A prefixed quoted run behind an item marker; follow-up to the carve#5830 port.
   ["1059-a-partially-prefixed-quoted-run-continuation-keeps-its-source-column-3", "<ul>\n  <li>\n    <blockquote><p>{.x\n.y}</p></blockquote>\n  </li>\n</ul>\n<p>plain</p>"],
   // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
