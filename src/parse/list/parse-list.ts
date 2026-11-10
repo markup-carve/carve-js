@@ -883,6 +883,11 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
   function taskBoxLeadShift(head: ItemHead, content: string, terminatorFree: boolean, boxColumn: number): number {
     if (unorderedMatch(content, terminatorFree) === null && orderedMatch(content, terminatorFree) === null &&
       taskMatch(content, terminatorFree) === null) return 0
+    return taskBoxWidth(head, boxColumn)
+  }
+
+  /** The columns from a task item's box to its lead content. */
+  function taskBoxWidth(head: ItemHead, boxColumn: number): number {
     return Math.max(0, head.markerLine.length - leadingWhitespace(head.markerLine) - head.markerContentLength - boxColumn)
   }
 
@@ -908,6 +913,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
 
   function leadLazyState(
     lexer: Lexer, session: ParseSession, content: string, itemStartLineIndex: number, markerLineTerm: boolean, contentCol: number,
+    boxWidth: number,
   ): { leadState: ReturnType<typeof markerLineState>; lazyState: ItemLazyState } {
     // Track whether the item's collected content currently ends in an open
     // paragraph (family-D lazy continuation). The lead text opens one.
@@ -944,7 +950,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           ? 'description'
           : false,
       attrRun: leadState.wrappedAttributeRun,
-      attrColumn: leadState.wrappedAttributeColumn,
+      // A run behind a task box is measured from its `{`, past the box (CARVE-P2-035).
+      attrColumn: leadState.wrappedAttributeColumn + boxWidth,
       attrOwnerColumn: contentCol,
       // A container may open on the marker line itself, which never reaches
       // `trackItemLazyState`, so the first line collected below it has to be
@@ -1673,7 +1680,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     let blankBeforeNestedContinuation = false
     const continuationFenceBreaks = new Set<number>()
     let authoredDescendantFenceBlanks = 0
-    const { leadState, lazyState } = leadLazyState(lexer, session, content, itemStartLineIndex, markerLineTerm, contentCol)
+    const { leadState, lazyState } = leadLazyState(lexer, session, content, itemStartLineIndex, markerLineTerm, contentCol,
+      isTask ? taskBoxWidth(head, contentCol - baseIndent) : 0)
     const closeDescendantParagraphClaim = (): void => {
       if (descendantOpaque === null) return
       // A description under another list item can leave that ancestor's
