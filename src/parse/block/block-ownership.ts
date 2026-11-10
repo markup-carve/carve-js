@@ -766,7 +766,10 @@ export function ownLines(
     if (rawLine.trim() !== '' && !protectedPlus && !protectedNote && rawLine.includes('{')) {
       const stripped = markerLineBottomBlock(rawLine.trimStart())
       const heads = NOTE_HEADS_LEAD.exec(stripped)
-      const bottom = heads ? stripped.slice(heads[0].length) : stripped
+      const noteBody = heads ? stripped.slice(heads[0].length) : stripped
+      const walked = heads ? markerLineBottomBlock(noteBody) : noteBody
+      // Item markers only: a quote in the note reads its own lines.
+      const bottom = noteBody.slice(0, noteBody.length - walked.length).includes('>') ? noteBody : walked
       const opener = bottom.startsWith(': ') ? bottom.slice(2).trimStart() : bottom
       if (opener.startsWith('{')) {
         braceRunStart = at
@@ -778,7 +781,8 @@ export function ownLines(
         }
         if (!body.includes(stripped)) body = rawLine
         // A run on a note head is measured from the note's body column (CARVE-P2-035).
-        const column = heads
+        // Behind a marker in the note's body it is measured from its `{`.
+        const column = heads && bottom === noteBody
           ? docColumn(body, body.slice(body.indexOf(stripped) + heads[1]!.length)) + FOOTNOTE_BODY_COLUMN
           : docColumn(body, body.slice(body.indexOf(opener)))
         braceRunOpener = ' '.repeat(column) + opener

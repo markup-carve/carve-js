@@ -2514,6 +2514,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       const claim = verbatimOnlyLazyState()
       trackItemLazyState(content, claim, true, () => false,
         { whitespace: 0, descendantFrames: true, terminatorFree: true })
+      // The note's body column sits past a task box, as in the item's own frame.
+      if (lazyState.footnoteBodyColumn !== undefined) claim.footnoteBodyColumn = lazyState.footnoteBodyColumn
       for (const text of nested) {
         trackItemLazyState(text, claim, true, () => false,
           { whitespace: leadingWhitespace(text), descendantFrames: true, terminatorFree: true })
