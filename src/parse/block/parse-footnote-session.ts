@@ -57,10 +57,24 @@ function cutShiftedNoteFence(lexer: Lexer, attached: string[], numbers: number[]
 }
 
 /** The column `lexer`'s line `index` was written at, before the ownership walk moved it. */
-function authoredColumnAt(lexer: Lexer, index: number): number | undefined {
+function authoredRunLine(lexer: Lexer, index: number): string | undefined {
   const root = lexer.documentRoot ?? lexer
-  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
-  return source === undefined ? undefined : sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+  return (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(index) - 1]
+}
+
+/** The quote-local column of line `index`; a `>` past the run opener's own quote levels is run text, not a prefix. */
+function authoredColumnAt(lexer: Lexer, index: number, openerDepth = Infinity): number | undefined {
+  const source = authoredRunLine(lexer, index)
+  return source === undefined ? undefined : sourceQuoteLocalColumn(source, Math.min(openerDepth, quotePrefixDepth(source)))
+}
+
+type RunSource = { column: number; depth: number }
+
+const RE_MARKER_PREFIX = /^[ \t]*(?:(?:>|(?:[-*+]|\d+[.)])[ \t]+(?:\[[^\]]\][ \t]+)?)[ \t]*)*/
+
+/** The quote levels in effect where a run opens on line `index`, quotes behind list markers included. */
+function runQuoteDepth(lexer: Lexer, index: number): number {
+  return (RE_MARKER_PREFIX.exec(authoredRunLine(lexer, index) ?? '')?.[0].match(/>/g) ?? []).length
 }
 
 const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
@@ -86,27 +100,36 @@ function authoredNoteBodyColumn(lexer: Lexer, index: number, def: string, attach
 }
 
 /** A continuation the authored columns refuse is paragraph text, so its moved indentation is dropped. */
-function rebasedRunContent(lexer: Lexer, state: { attrRun?: string | null }, attrSource: { column: number },
-  content: string, sourceColumn: number, authoredBodyColumn: number | undefined): string {
-  const column = state.attrRun == null || attrSource.column < 0 ? undefined : authoredColumnAt(lexer, lexer.pos)
+function rebasedRunContent(lexer: Lexer, state: { attrRun?: string | null }, attrSource: RunSource,
+  content: string, sourceColumn: number, authoredBodyColumn: number | undefined, sourceLine: string): string {
+  const column = state.attrRun == null || attrSource.column < 0 ? undefined : authoredColumnAt(lexer, lexer.pos, attrSource.depth)
   if (column !== undefined && column <= attrSource.column) return content.trimStart()
-  return rebasedFootnoteContent(lexer, content, sourceColumn, authoredBodyColumn)
+  // The ownership walk can move a quote-shaped line to its owner's column; a comment run, whose
+  // text any line can be, keeps the authored one (CARVE-P2-035).
+  const moved = column === undefined || state.attrRun?.startsWith('{%') !== true ? 0
+    : column - sourceQuoteLocalColumn(sourceLine, Math.min(attrSource.depth, quotePrefixDepth(sourceLine)))
+  return moved > 0
+    ? rebasedFootnoteContent(lexer, ' '.repeat(moved) + content, sourceColumn + moved, authoredBodyColumn)
+    : rebasedFootnoteContent(lexer, content, sourceColumn, authoredBodyColumn)
 }
 
 /** Tracks a body line, recording where a run it opens was written. */
 function trackAuthoredAttributeRun(lexer: Lexer, state: { attrRun?: string | null; attrShallow?: boolean },
-  attrSource: { column: number }, track: () => void): void {
+  attrSource: RunSource, track: () => void): void {
   const open = authoredAttributeShallow(lexer, state, attrSource)
   track()
-  if (!open && state.attrRun != null) attrSource.column = authoredColumnAt(lexer, lexer.pos) ?? -1
+  if (!open && state.attrRun != null) {
+    attrSource.column = authoredColumnAt(lexer, lexer.pos) ?? -1
+    attrSource.depth = runQuoteDepth(lexer, lexer.pos)
+  }
 }
 
 // A run's continuation must sit past its `{` where the author wrote it (CARVE-P2-035); the walk
 // can move an opener to the body column without its lines. Returns whether a run was open.
 function authoredAttributeShallow(lexer: Lexer, state: { attrRun?: string | null; attrShallow?: boolean },
-  attrSource: { column: number }): boolean {
+  attrSource: RunSource): boolean {
   if (state.attrRun == null) return false
-  const column = authoredColumnAt(lexer, lexer.pos)
+  const column = authoredColumnAt(lexer, lexer.pos, attrSource.depth)
   if (column !== undefined && attrSource.column >= 0 && column <= attrSource.column) state.attrShallow = true
   return true
 }
@@ -1106,7 +1129,10 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
   const nestedMarkerHasText = RE_FOOTNOTE_DEF.exec(m[2]!)?.[2]?.trim() !== '' && RE_FOOTNOTE_DEF.test(m[2]!)
   const wrappedAttributeAtBody = { value: false, until: -1 }
   // A run opened on the note's line is measured from the body column of the note that holds it (CARVE-P2-035).
-  const attrSource = { column: authoredNoteBodyColumn(lexer, defLineIndex, innermostDef, firstBlockAttached, lazyState) }
+  const attrSource: RunSource = {
+    column: authoredNoteBodyColumn(lexer, defLineIndex, innermostDef, firstBlockAttached, lazyState),
+    depth: runQuoteDepth(lexer, defLineIndex),
+  }
   const belowColumnCommentFence = new Set<number>()
   let commentFenceUntil = 0
   const keepRefusedQuoteFollower = (ln: string): boolean => {
@@ -1257,7 +1283,8 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const framedBelow = framesBelowNoteLine(admission, sourceLine, authoredBodyColumn, content)
       const captionFollower = attachedCaptionKeepsIndent(lexer, bodyLines, firstBlockAttached, ln)
       bodyLines.push(captionHostBlock ? content : captionFollower ? ln : framedBelow ? LAZY_FRAME + content.trimStart()
-        : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn))
+        : rebasedRunContent(lexer, lazyState, attrSource, content, admission.sourceColumn, authoredBodyColumn,
+          admission.sourceLine))
       // The tracker reads an overindented opener at its local zero; a line-block line keeps its column for the closer.
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
