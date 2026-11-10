@@ -1468,10 +1468,18 @@ const RE_COMMENT_ONLY_PARAGRAPH = new RegExp(String.raw`^(?:\{%(?![\p{Mn}\p{Mc}\
 // `columnAt` measures a line whose indentation `lineAt` strips (CARVE-P2-035).
 export function commentOnlyParagraphEnd(lineAt: (index: number) => string | undefined, k: number, markerEnds = false,
   columnAt = (index: number): number => indentColumns(lineAt(index)!)): number {
-  if (!(lineAt(k) ?? '').trimStart().startsWith('{%')) return -1
+  const first = lineAt(k) ?? ''
+  if (!first.trimStart().startsWith('{%')) return -1
   let end = k + 1
+  // A block run holds its lines past its `{` through `%}`, block-shaped ones included (CARVE-P2-035).
+  let held: number | null = first.includes('%}', first.indexOf('{%') + 2) ? null : columnAt(k)
   for (let line = lineAt(end); line !== undefined && !isBlankLine(line); line = lineAt(++end)) {
     const rest = line.trimStart()
+    if (held !== null && columnAt(end) > held) {
+      if (line.includes('%}')) held = null
+      continue
+    }
+    held = null
     if (isListMarkerLine(rest)) {
       if (markerEnds) break
       return -1

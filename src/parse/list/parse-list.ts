@@ -4239,6 +4239,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           noteDefinitionOf.set(m, j)
         }
       }
+      // Lines of a comment-only `{%` paragraph are comment text, fence-shaped ones too.
+      const braceCommentLines = new Set<number>()
       for (let k = nested.length - 1; k >= 0; k--) {
         const ln = nested[k]!
         if (hiddenByComment[k + 1] === true || degradedOpeners.has(k)) continue
@@ -4257,7 +4259,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
           if (k === nested.length - 1 || plusSeparators.has(k) || k <= markerNoteRunEnd) return false
           const body = [content, ...nested]
           return !body.some((line) => line.includes('```') || line.includes('~~~')) ||
-            !bodyEndsInOpenCodeFence(body.map((line, index) => hiddenByComment[index] === true ? line.replace(/\S.*$/, '%%') : line))
+            !bodyEndsInOpenCodeFence(body.map((line, index) =>
+              hiddenByComment[index] === true || braceCommentLines.has(index - 1) ? line.replace(/\S.*$/, '%%') : line))
         }
         if (invisibleNested(k) || definitionAtDescendantBody(k)) continue
         // A wrapped attribute block is one construct, as invisible as its one-line form (carve#3421).
@@ -4270,6 +4273,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         let start = k
         while (start > 0 && !isBlankLine(nested[start - 1]!)) start--
         if (commentOnlyParagraphEnd((index) => nested[index], start) !== k + 1) break
+        for (let j = start; j <= k; j++) braceCommentLines.add(j)
         k = start
       }
       return false
