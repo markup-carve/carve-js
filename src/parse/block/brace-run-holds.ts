@@ -25,7 +25,7 @@ export function braceRunHolds(lexer: Lexer): BraceRunHolds {
   let depth = 0
   return {
     open(index, text) {
-      if (index <= through) return
+      if (index <= through || !text.includes('{%')) return
       const run = text.replace(RE_RUN_MARKERS, '')
       if (!run.startsWith('{%') || run.includes('%}', 2)) return
       const opener = source(index)
