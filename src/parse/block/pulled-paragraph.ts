@@ -1,5 +1,5 @@
 import { indentColumns, sliceColumns } from '../parse-lexer.js'
-import { RE_FOOTNOTE_DEF, isBlockAttributeLine, isLinkDefLine, isListMarkerLine, lineOpensBlock } from '../parse-prepass-core.js'
+import { RE_FOOTNOTE_DEF, commentOnlyParagraphEnd, isBlockAttributeLine, isLinkDefLine, isListMarkerLine, lineOpensBlock } from '../parse-prepass-core.js'
 import { fenceCloseRe, opensCodeFence } from './parse-quote-core.js'
 import { afterAttributeLines } from './leading-attribute-run.js'
 
@@ -25,4 +25,15 @@ export function pulledParagraphBlockCut(lines: readonly string[], contentCol: nu
     if (opensCodeFence(text)) fenceRun = /^(`{3,}|~{3,})/.exec(text)?.[1]
   }
   return -1
+}
+
+/**
+ * Where a description or note body cuts a first-block pull. A comment-only paragraph reads as a
+ * `%%` line (carve#4799), so a list marker past the `+` column after it is a body line.
+ */
+export function pulledBodyBlockCut(lines: readonly string[], contentCol: number): number {
+  const end = commentOnlyParagraphEnd((index) => lines[index], 0, true)
+  const marker = lines[end]
+  if (end > 0 && marker !== undefined && indentColumns(marker) > 0 && isListMarkerLine(marker.trimStart())) return end
+  return pulledParagraphBlockCut(lines, contentCol)
 }
