@@ -319,7 +319,17 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
     if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
     return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
   }
-  const sourceOpenerColumn = lazyBrace ? authoredColumn(0) : openerColumn
+  const root = lexer.documentRoot ?? lexer
+  const openerSource = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
+  const quoteLocalSource = openerSource === undefined ? undefined : sourceQuoteRest(openerSource, quotePrefixDepth(openerSource))
+  const authoredOpenerAt = comment && quoteLocalSource != null
+    ? quoteLocalSource.indexOf(first.trimStart()) : -1
+  // A marker-line opener is rebased to the host's content column. Compare its
+  // continuation with the brace's written column, not the rebased zero.
+  const markerLineComment = authoredOpenerAt > 0 && quoteLocalSource != null &&
+    authoredOpenerAt > leadingWhitespace(quoteLocalSource)
+  const sourceOpenerColumn = markerLineComment
+    ? sourceColumnAt(quoteLocalSource, authoredOpenerAt) : lazyBrace ? authoredColumn(0) : openerColumn
   const lines: string[] = []
   let shallow = false
   let quoted: string | null = null
@@ -340,9 +350,9 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
     if (n > 0) {
       // A quote's lazy line retains its source column even when the opener was
       // a marked line. Ordinary list lines still use their local content column.
-      const sourceColumns = lazyBrace || quoteLazyContinuation && !comment
+      const sourceColumns = markerLineComment || lazyBrace || quoteLazyContinuation && !comment
       if (sourceColumns
-        ? authoredColumn(n) <= (lazyBrace ? sourceOpenerColumn : authoredColumn(0))
+        ? authoredColumn(n) <= (markerLineComment || lazyBrace ? sourceOpenerColumn : authoredColumn(0))
         : indentColumns(line) <= openerColumn || lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + n))) shallow = true
     }
     lines.push(n === 0 ? line.trimStart() : ' ' + line.trimStart())
