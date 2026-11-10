@@ -70,3 +70,9 @@ it('opens no description span after deeper text ends a term in the body', () => 
     '<ul><li>a<dl><dt>t</dt></dl> x :</li></ul>',
   ))
 })
+
+it('keeps a description span under a marker-line term with a tab before its text', () => {
+  expect(normalize(carveToHtml('- :: \tt\n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
+  ))
+})

@@ -754,7 +754,7 @@ export interface CommentSpanScan {
 
 const RE_NOTE_LEAD = /^\[\^[^\]]+\]: +(?=[^ \t])/
 const RE_DESCRIPTION_LEAD = /^: +(?=[^ \t])/
-const RE_TERM_LEAD = /^::(?!:) +(?=[^ \t])/
+const RE_TERM_LEAD = /^::(?!:) +(?=[ \t]*[^ \t])/
 
 type DefinitionEntry = 'term' | 'description' | false
 
