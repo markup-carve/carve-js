@@ -30,3 +30,49 @@ it('keeps a description span under a term', () => {
     '<ul><li>a<dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
   ))
 })
+
+it('keeps a description span under a term on the item marker line', () => {
+  expect(normalize(carveToHtml('- :: t\n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
+  ))
+})
+
+it('keeps a description span under a term behind two markers', () => {
+  expect(normalize(carveToHtml('- - :: t\n    : x\n    : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul></li></ul><p>c</p>',
+  ))
+})
+
+it('keeps a description span under a term on a child marker line', () => {
+  expect(normalize(carveToHtml('- a\n  - :: t\n    : x\n    : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li>a<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul></li></ul><p>c</p>',
+  ))
+})
+
+it('reads an empty colon line under a term on the item marker line as text', () => {
+  expect(normalize(carveToHtml('- :: t\n  : \n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt></dl> : :</li></ul>',
+  ))
+})
+
+it('opens no description span under a marker-line term with no text', () => {
+  expect(normalize(carveToHtml('- :: \n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize('<ul><li>:: : x :</li></ul>'))
+})
+
+it('opens no description span after deeper text ends a marker-line term', () => {
+  expect(normalize(carveToHtml('- :: t\n    x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt></dl> x :</li></ul>',
+  ))
+})
+
+it('opens no description span after deeper text ends a term in the body', () => {
+  expect(normalize(carveToHtml('- a\n  :: t\n    x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li>a<dl><dt>t</dt></dl> x :</li></ul>',
+  ))
+})
+
+it('keeps a description span under a marker-line term with a tab before its text', () => {
+  expect(normalize(carveToHtml('- :: \tt\n  : x\n  : %%%\n%%%\nc\n'))).toBe(normalize(
+    '<ul><li><dl><dt>t</dt><dd>x</dd><dd></dd></dl></li></ul><p>c</p>',
+  ))
+})

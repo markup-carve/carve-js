@@ -747,21 +747,32 @@ export interface CommentSpanScan {
   /** The last body line of each delimiter width, for `bodyHoldsClosableCommentSpan`. */
   runs?: { indexed: number; last: Map<number, number> }
   /** Columns of the lines read so far, nearest last, each with whether it is a `::`/`:` entry line. */
-  entries?: Array<[number, boolean]>
+  entries?: Array<[number, DefinitionEntry]>
   /** Whether a span opened behind list markers is owned by the bottom item, so a line below its column ends it. */
   markerOwners?: boolean
 }
 
 const RE_NOTE_LEAD = /^\[\^[^\]]+\]: +(?=[^ \t])/
 const RE_DESCRIPTION_LEAD = /^: +(?=[^ \t])/
+const RE_TERM_LEAD = /^::(?!:) +(?=[ \t]*[^ \t])/
+
+type DefinitionEntry = 'term' | 'description' | false
 
 // A `: ` lead opens a description only under an entry at its column (`::` or `:` above).
-function descriptionLeadOpens(entries: Array<[number, boolean]>, column: number): boolean {
-  for (let k = entries.length - 1; k >= 0; k--) if (entries[k]![0] <= column) return entries[k]![0] === column && entries[k]![1]
+function descriptionLeadOpens(entries: Array<[number, DefinitionEntry]>, column: number): boolean {
+  for (let k = entries.length - 1; k >= 0; k--) if (entries[k]![0] <= column) return entries[k]![0] === column && entries[k]![1] !== false
   return false
 }
 
-export const newCommentSpanScan = (): CommentSpanScan => ({ index: 0, opaque: null, atBlockStart: true })
+/** `lead`: an item's marker-line content, which the scan never walks; a term on it is the first entry. */
+export function newCommentSpanScan(lead?: string): CommentSpanScan {
+  const scan: CommentSpanScan = { index: 0, opaque: null, atBlockStart: true }
+  if (lead === undefined || !lead.includes(':: ')) return scan
+  const body = markerFreeContent(lead)
+  if (RE_TERM_LEAD.test(body))
+    scan.entries = [[body === lead.trimStart() ? indentColumns(lead) : stackedItemContentColumn(lead), 'term']]
+  return scan
+}
 
 export function bodyHoldsOpenCommentSpan(
   lines: readonly string[],
@@ -786,9 +797,18 @@ export function bodyHoldsOpenCommentSpan(
       : null
     if (line !== '') {
       // A `: ` line with no entry above is paragraph text, so it starts no list either (PART 0 S3).
-      const entry = /^:: /.test(line) || line.startsWith(': ') && descriptionLeadOpens(entries, column)
+      const entry: DefinitionEntry = RE_TERM_LEAD.test(line) ? 'term'
+        : RE_DESCRIPTION_LEAD.test(line) && descriptionLeadOpens(entries, column) ? 'description' : false
       while (entries.length > 0 && entries.at(-1)![0] >= column) entries.pop()
+      // A term is one line: deeper text below it ends the list, a comment line does not.
+      const above = entries.at(-1)
+      if (entry === false && above?.[1] === 'term' && scan.opaque === null && !line.startsWith('%%')) above[1] = false
       entries.push([column, entry])
+      // A term behind list markers opens its list at the bottom item's content column.
+      if (line.includes(':: ') && isListMarkerLine(line) && RE_TERM_LEAD.test(markerFreeContent(line))) {
+        const body = stackedItemContentColumn(raw)
+        if (body > column) entries.push([body, 'term'])
+      }
     }
     const open = scan.opaque
     if (open !== null) {
