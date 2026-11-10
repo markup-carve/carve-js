@@ -116,6 +116,8 @@ interface Form {
   table?: boolean
   // The continuation lines of a wrapped attribute block.
   attrLines?: number
+  // A `{%` run is paragraph text, so a lazy line after it continues that paragraph (PART 9 §21a).
+  para?: boolean
 }
 
 function colonAtDefinitionItem(rest: string, column: number, frames: Frame[]): boolean {
@@ -1421,7 +1423,7 @@ export function ownLines(
 
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon, inHost = false): void {
       // A caption folds its next lines like a paragraph, list marker shapes too (CARVE-P2-021).
-      owner.para = form.caption === true
+      owner.para = form.caption === true || form.para === true
       const invisibleLeaf = form.kind === 'leaf' &&
         (COMMENT_LINE.test(m.rest) || isLinkDefLine(m.rest) || RE_ABBR_DEF.test(m.rest))
       // A matched `%%%` span in an entry closes neither term nor description (CARVE-P9-013, carve#4901).
@@ -2233,7 +2235,7 @@ export function ownLines(
       // A `{%` run continues past its `{` to its `%}`, brace lines included (CARVE-P2-035).
       if (rest.startsWith('{%') && !rest.includes('%}')) {
         const commentLines = wrappedCommentLines(rest, owner, at)
-        if (commentLines !== null) return { kind: 'leaf', interrupts: true, attrLines: commentLines }
+        if (commentLines !== null) return { kind: 'leaf', interrupts: true, attrLines: commentLines, para: true }
       }
       const attrLines = wrappedAttrLines(rest, owner, at, col)
       if (attrLines !== null) return { kind: 'leaf', interrupts: true, attrLines }
@@ -2296,8 +2298,11 @@ export function ownLines(
     for (let end = at + 1; end < lines.length; end++) {
       const body = quotedMeasure(end, depth)
       if (body === null || body.rest === '' || body.col <= col) return null
-      // A comment-only run is invisible and takes the lazy path as a `%%` line would (CARVE-P9-013).
-      if (body.rest.includes('%}')) return trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) === '' ? null : end - at
+      // A comment-only run below an open paragraph's frame stays an invisible lazy line (CARVE-P9-013).
+      if (body.rest.includes('%}')) {
+        const commentOnly = trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) === ''
+        return commentOnly && owner !== top() && top().para ? null : end - at
+      }
     }
     return null
   }

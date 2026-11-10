@@ -300,11 +300,18 @@ function commentBetweenListSiblings(lexer: Lexer): boolean {
 
 // A lazy paragraph line has already been folded into its owner. Its
 // authored column, after quote prefixes, is the P2-035 comparison frame.
-function authoredRunColumn(lexer: Lexer, offset: number): number {
+// A `>` deeper than the opener's own quotes is run text, not a prefix (CARVE-P2-035).
+function authoredRunColumn(lexer: Lexer, offset: number, openerDepth = Infinity): number {
   const root = lexer.documentRoot ?? lexer
   const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos + offset) - 1]
   if (source === undefined) return indentColumns(stripLazyFrame(lexer.peek(offset) ?? ''))
-  return sourceQuoteLocalColumn(source, quotePrefixDepth(source))
+  return sourceQuoteLocalColumn(source, Math.min(quotePrefixDepth(source), openerDepth))
+}
+
+function authoredRunDepth(lexer: Lexer): number {
+  const root = lexer.documentRoot ?? lexer
+  const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
+  return source === undefined ? Infinity : quotePrefixDepth(source)
 }
 
 const NOTE_HEAD_BEFORE_RUN = /\[\^[^\]]+\]:[ \t]+$/
@@ -333,7 +340,8 @@ function markerLineRunShallow(lexer: Lexer, count: number): boolean {
   if (count < 2 || first === undefined) return false
   const column = markerLineRunColumn(lexer, stripLazyFrame(first))
   if (column === null) return false
-  for (let n = 1; n < count; n++) if (authoredRunColumn(lexer, n) <= column) return true
+  const depth = authoredRunDepth(lexer)
+  for (let n = 1; n < count; n++) if (authoredRunColumn(lexer, n, depth) <= column) return true
   return false
 }
 
@@ -355,7 +363,8 @@ function refusedBraceLines(lexer: Lexer, memo: { closerless?: number } = {}): nu
   const lazyBrace = firstRaw?.startsWith(LAZY_FRAME) ||
     lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos)) ||
     lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))
-  const authoredColumn = (offset: number): number => authoredRunColumn(lexer, offset)
+  const openerDepth = authoredRunDepth(lexer)
+  const authoredColumn = (offset: number): number => authoredRunColumn(lexer, offset, openerDepth)
   // A marker-line opener is rebased to the host's content column. Compare its
   // continuation with the brace's written column, not the rebased zero.
   const markerColumn = markerLineRunColumn(lexer, first)
@@ -3090,6 +3099,28 @@ export class ParseSession extends InlineParseSession {
       lastCommentCloser ??= commentCloserAhead(lexer)
       return lastCommentCloser >= lexer.pos
     }
+    // A valid block `{%` run holds its lines through `%}`, block-shaped ones included (CARVE-P2-035).
+    let heldOpener = -1
+    let heldThrough = -1
+    // The next `%}` line before a blank, with suffix minima of the columns up to it, so each opener costs O(1).
+    let closerScan: { base: number; closer: number; minColumn: number[] } | null = null
+    const blockCommentEnd = (): number => {
+      const text = stripLazyFrame(lexer.peek()!)
+      if (!text.trimStart().startsWith('{%') || text.includes('%}')) return -1
+      if (closerScan === null || lexer.pos >= closerScan.closer) {
+        let n = 1
+        while (lexer.peek(n) !== undefined && !isBlankLine(lexer.peek(n)!) && !stripLazyFrame(lexer.peek(n)!).includes('%}')) n++
+        const last = lexer.peek(n)
+        const minColumn: number[] = []
+        if (last !== undefined && !isBlankLine(last)) {
+          let min = Infinity
+          for (let k = n; k >= 1; k--) minColumn[k] = min = Math.min(min, indentColumns(stripLazyFrame(lexer.peek(k)!)))
+        }
+        closerScan = { base: lexer.pos, closer: lexer.pos + n, minColumn }
+      }
+      const min = closerScan.minColumn[lexer.pos + 1 - closerScan.base]
+      return min !== undefined && min > indentColumns(text) ? closerScan.closer : -1
+    }
     const attributeHosts = new InlineAttributeHosts((prefix) => {
       let marker = 'data-carve-host-probe'
       while (prefix.includes(marker)) marker += 'x'
@@ -3119,7 +3150,8 @@ export class ParseSession extends InlineParseSession {
         // A backslash inside an open code span is code text, not an escape.
         if (line[i] === '\\' && openInlineCode === 0) { i++; continue }
         const opensComment = openInlineCode === 0 && line[i] === '{' && line[i + 1] === '%' &&
-          (lastCommentCloserOnLine > i + 1 || commentClosesAhead())
+          (lastCommentCloserOnLine > i + 1 || heldOpener === lexer.pos - 1 && i === line.length - line.trimStart().length ||
+            commentClosesAhead())
         if (line[i] !== '`' && !opensComment) attributeHosts.noteText(i)
         if (openInlineCode === 0) {
           if (line[i] === '[') bracketDepth++
@@ -3175,6 +3207,13 @@ export class ParseSession extends InlineParseSession {
       // Every line start is block position, a continuation line included (carve#5189).
       if (codeInclude && lines.length > 0) break
       const refusedLines = flattened || openInlineCode !== 0 || openInlineComment ? 0 : refusedBraceLines(lexer, braceScan)
+      if (refusedLines === 0 && !flattened && openInlineCode === 0 && !openInlineComment && lexer.pos > heldThrough) {
+        const end = blockCommentEnd()
+        if (end >= 0) {
+          heldOpener = lexer.pos
+          heldThrough = end
+        }
+      }
       if (refusedLines > 0) {
         const start = lines.length
         for (let n = 0; n < refusedLines; n++) lines.push(stripLazyFrame(lexer.consume()!))
@@ -3215,7 +3254,7 @@ export class ParseSession extends InlineParseSession {
       // looping forever on the same line.
       if (
         !flattened &&
-        lines.length > 0 && !afterRefusal &&
+        lines.length > 0 && !afterRefusal && !(lexer.pos > heldOpener && lexer.pos <= heldThrough) &&
         !lexer.literalLazyLinkDefLines.has(lexer.lineNumber(lexer.pos)) &&
         ((((!ln.startsWith(LAZY_FRAME) || (lexer.hostBody === 'list' &&
           !RE_FOOTNOTE_DEF.test(stripLazyFrame(ln)))) && (lexer.consumesHostedLinkDefs === 'all' ||
