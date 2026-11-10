@@ -3105,6 +3105,10 @@ export class ParseSession extends InlineParseSession {
     const text = dropTrailingWhitespace(lines.length === 1
       ? lines[0]!.slice(firstLead)
       : lines.map((ln, i) => i === 0 ? ln.slice(firstLead) : ln.replace(/^[ \t]+/, '')).join('\n'))
+    // The ownership walk can insert or remove indentation inside a line. Map
+    // the first kept character through its cuts, not just the line's origin.
+    const paragraphBoundary = (line: number, lead: number) =>
+      lexer.sourceBoundary(startLineIndex + line, lead)
     // Each line contributes its OWN leading whitespace on top of whatever prefix
     // the container stripped, so a continuation line needs its own origin rather
     // than a single base offset plus a local one (#444).
@@ -3112,20 +3116,22 @@ export class ParseSession extends InlineParseSession {
       lines.length > 1
         ? lines.map((ln, i) => {
             const lead = i === 0 ? firstLead : ln.match(/^[ \t]+/)?.[0].length ?? 0
+            const boundary = paragraphBoundary(i, lead)
             return {
-              offset: lexer.lineOffset(startLineIndex + i) + lead,
-              column: lexer.lineStartColumn(startLineIndex + i) + lead,
+              offset: boundary.offset,
+              column: boundary.column,
               line: lexer.lineNumber(startLineIndex + i),
             }
           })
         : undefined
+    const firstBoundary = paragraphBoundary(0, firstLead)
     const paragraphNode: Paragraph = {
       type: 'paragraph',
       children: (codeIncludeLiteral || this.skipParagraphInlines && !this.inMatcherRequest) ? [] : this.parseInline(text, lexer.abbrDefs, lexer.linkDefs, {
         anchored: lexer.hasDocumentOffsets,
-        baseOffset: lexer.lineOffset(startLineIndex) + firstLead,
+        baseOffset: firstBoundary.offset,
         startLine: lexer.lineNumber(startLineIndex),
-        startColumn: lexer.lineStartColumn(startLineIndex) + firstLead,
+        startColumn: firstBoundary.column,
         ...(anchors ? { lineAnchors: anchors } : {}),
       }),
     }
@@ -3137,8 +3143,7 @@ export class ParseSession extends InlineParseSession {
         let line = 0
         while (line + 1 < offsets.length && offsets[line + 1]! <= offset) line++
         const point = anchors?.[line] ?? {
-          offset: lexer.lineOffset(startLineIndex + line) + (line === 0 ? firstLead : 0),
-          column: lexer.lineStartColumn(startLineIndex + line) + (line === 0 ? firstLead : 0),
+          ...paragraphBoundary(line, line === 0 ? firstLead : 0),
           line: lexer.lineNumber(startLineIndex + line),
         }
         const delta = offset - offsets[line]!
@@ -3204,8 +3209,8 @@ export class ParseSession extends InlineParseSession {
       if (at < text.length) paragraphNode.children.push(...parseSegment(at, text.length))
     }
     if (codeIncludeLiteral) {
-      const startOffset = lexer.lineOffset(startLineIndex) + firstLead
-      const startColumn = lexer.lineStartColumn(startLineIndex) + firstLead
+      const startOffset = firstBoundary.offset
+      const startColumn = firstBoundary.column
       paragraphNode.children = [{ type: 'text', value: text,
         ...(lexer.hasDocumentOffsets ? { pos: {
           startLine: lexer.lineNumber(startLineIndex), endLine: lexer.lineNumber(startLineIndex),
