@@ -19,3 +19,11 @@ it.each([
   }).join('')
   expect(carveToHtml(source)).toBe(`<p>z</p>\n<p>x${refs}</p>\n${endnotes(count)}`)
 })
+
+it('lets a paragraph after a nested comment-span closer take its lazy line', () => {
+  const source = 'x[^q]\n\n[^q]: [^r]: %%%\n  %%%\n  n\nz\n'
+  expect(carveToHtml(source)).toBe('<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n' +
+    '<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n' +
+    '    <li id="fn1">\n      <p>n\nz<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n' +
+    '  </ol>\n</section>')
+})
