@@ -9,7 +9,7 @@ const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\w
  * opaque to code and comment pairing, so a backtick or `{%` inside holds no later brace
  * line (carve#5740). Every lookup is amortized linear over the line.
  */
-export function inlineAttributeEnds(line: string): (at: number) => number {
+export function inlineAttributeEnds(line: string): (at: number, closesLabel: boolean) => number {
   const firstIndex = new Map<string, number>()
   const first = (needle: string): number => {
     let index = firstIndex.get(needle)
@@ -52,12 +52,13 @@ export function inlineAttributeEnds(line: string): (at: number) => number {
   // Ends of payload scans, keyed by every `{` a scan passed outside quotes: a scan from there reaches the same `}`.
   const scanEnds = new Map<number, number>()
 
-  const endsInHost = (at: number): boolean => {
+  // `closesLabel`: the `]` before `at` closes a bracket the line opened, so a stray `]` hosts nothing.
+  const endsInHost = (at: number, closesLabel: boolean): boolean => {
     const last = line[at - 1]
     if (last === undefined) return false
     const found = (k: number): boolean => k !== -1 && k < at - 1
     switch (last) {
-      case ']': return found(first('['))
+      case ']': return closesLabel
       case '`': return true
       case ')': return closesBefore(at - 2, ')', k => line[k] === '(' && line[k - 1] === ']')
       case '>': return closesBefore(at - 2, '>', k => line[k] === '<')
@@ -101,8 +102,8 @@ export function inlineAttributeEnds(line: string): (at: number) => number {
     return result
   }
 
-  return (at: number): number => {
-    if (line[at] !== '{' || lastBrace < at || !endsInHost(at)) return -1
+  return (at: number, closesLabel: boolean): number => {
+    if (line[at] !== '{' || lastBrace < at || !endsInHost(at, closesLabel)) return -1
     const end = payloadEnd(at)
     return end !== -1 && !rejects(at + 1, end) && isValidInlineAttrPayload(line.slice(at + 1, end)) ? end : -1
   }

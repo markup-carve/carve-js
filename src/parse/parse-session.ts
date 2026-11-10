@@ -3000,9 +3000,10 @@ export class ParseSession extends InlineParseSession {
           if (line[i] === '[') bracketDepth++
           else if (line[i] === ']' && bracketDepth > 0) { bracketDepth--; closedLabel = true; continue }
         }
+        const afterLabel = closedLabel
         closedLabel = false
         if (openInlineCode === 0) {
-          const attributeEnd = attributeEndAt(i)
+          const attributeEnd = attributeEndAt(i, afterLabel)
           if (attributeEnd !== -1) { i = attributeEnd; continue }
         }
         // A backslash inside an open code span is code text, not an escape.
