@@ -2028,7 +2028,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         // Not a run: the line reads as text.
       } else if (wrappedAttributeFence === null && lazyState.opaque === null && descendantOpaque === null &&
           (wrappedAttribute.attrRun !== null || stripLazyFrame(l).trimStart().startsWith('{')) &&
-          trackWrappedAttributeRun(wrappedAttribute, stripLazyFrame(l).trimStart(), indentColumns(stripLazyFrame(l)))) deepAttributeClosed = true
+          // Written columns: an enclosing item may hand a lazy line over at its own column.
+          trackWrappedAttributeRun(wrappedAttribute, stripLazyFrame(l).trimStart(), sourceColumn(physicalAttributeLine))) deepAttributeClosed = true
       if (wrappedAttribute.refusedBraceRun) {
         wrappedAttribute.refusedBraceRun = false
         lazyState.lazyFoldable = true

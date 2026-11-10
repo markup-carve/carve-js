@@ -290,6 +290,8 @@ interface QuoteHostBody {
   insideItem: boolean
   colons: NonNullable<QuoteFenceHosts['colons']>
   floor: number
+  /** The floor a brace run is measured against: a lazy line keeps its host but sits in an outer body. */
+  runFloor: number
   pendingColonBody: boolean
 }
 
@@ -466,9 +468,10 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   const sibling = host.markers.some((col, i) => col === column && host.kinds[i] === 'item')
   const leftOfOutermost = host.markers.length > 0 && column < host.markers[0]!
   // A marker that misses a marker body closes it (PART 0 S3, carve#4860), so only text is a lazy item line.
+  // A brace opener is text until its run proves valid, so it keeps the item too (carve#5830 rule A).
   const lazyItem = paragraph && !host.kinds.includes('note') && host.kinds.at(-1) === 'item' && column < host.columns.at(-1)! &&
     markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 &&
-    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
   // A quoted prose line below a note's body column can continue its open
   // paragraph. Keep that note in the tracker so a later unprefixed marker
   // cannot be mistaken for lazy text of the quote (CARVE-P2-008).
@@ -496,6 +499,8 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
       const markerWidth = width - (inner.length - markerText.length)
       // A task item's column is its box; the text behind the box is still written past it.
       if (RE_TASK.test(markerText)) writtenShift += markerWidth - 2
+      // Glued attributes add no content column but are still written (CARVE-P9-083, carve#5788).
+      writtenShift += inner.length - markerText.length
       at += RE_TASK.test(markerText) ? 2 : markerWidth
       host.columns.push(at)
       host.kinds.push('item')
@@ -542,6 +547,7 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
   return {
     inner, at, written: at + writtenShift, blockStart, paragraph, insideItem, colons,
     floor: host.columns.at(-1)!,
+    runFloor: lazyItem || lazyNote ? host.columns.filter(col => col <= column).at(-1)! : host.columns.at(-1)!,
     pendingColonBody: colons.at(-1)?.awaitingBody === true,
   }
 }
@@ -724,7 +730,7 @@ export function trackQuoteHostFence(
     closeBlockQuoteParagraph(state)
     return true
   }
-  if (state.attrRun !== null || (b.floor > 0 && b.at >= b.floor && opensWrappedAttributeBlock(b.inner))) {
+  if (state.attrRun !== null || (b.runFloor > 0 && b.at >= b.runFloor && opensWrappedAttributeBlock(b.inner))) {
     // A run behind a marker is measured from its written `{` (CARVE-P2-035).
     const closed = trackWrappedAttributeRun(state, b.inner, state.attrRun === null ? b.written : b.at)
     if (state.refusedBraceRun) {
