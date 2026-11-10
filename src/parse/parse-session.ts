@@ -319,7 +319,9 @@ function markerLineRunColumn(lexer: Lexer, first: string): number | null {
   const source = (root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines)[lexer.lineNumber(lexer.pos) - 1]
   const rest = source === undefined ? null : sourceQuoteRest(source, quotePrefixDepth(source))
   if (rest == null) return null
-  const at = rest.indexOf(first.trimStart())
+  // The local opener is the final occurrence on the marker line. An earlier
+  // marker-glued attribute can start with the same bytes (carve#5788).
+  const at = rest.lastIndexOf(first.trimStart())
   if (at <= leadingWhitespace(rest)) return null
   const head = NOTE_HEAD_BEFORE_RUN.exec(rest.slice(0, at))
   return head ? sourceColumnAt(rest, head.index) + FOOTNOTE_BODY_COLUMN : sourceColumnAt(rest, at)
