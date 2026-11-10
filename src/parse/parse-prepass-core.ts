@@ -1033,10 +1033,15 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
  * is written at (CARVE-P2-035, carve#5820), not the brace's column in the note.
  */
 function lazyLinePassesWrittenBrace(lexer: Lexer, offset: number): boolean {
-  const opener = lexer.peek()!
-  const line = lexer.peek(offset)!
-  const at = (index: number, text: string): number => lexer.sourceBoundary(index, text.length - text.trimStart().length).column
-  return at(lexer.pos + offset, line) > at(lexer.pos, opener)
+  const root = lexer.documentRoot ?? lexer
+  const authored = root.authoredRootLines ?? root.rootLines ?? root.authoredLines ?? root.lines
+  const at = (index: number): number => {
+    const text = lexer.lineAt(index)!
+    const { column } = lexer.sourceBoundary(index, text.length - text.trimStart().length)
+    const source = authored[lexer.lineNumber(index) - 1]
+    return source === undefined ? column : indentColumns(source.slice(0, column - 1).replace(/[^\t]/g, ' ') + 'x')
+  }
+  return at(lexer.pos + offset) > at(lexer.pos)
 }
 
 interface OpenRunScan {
