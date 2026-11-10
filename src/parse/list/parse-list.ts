@@ -12,7 +12,7 @@ import { isDirectiveLine } from '../block/paragraph-indent.js'
 import { pulledParagraphBlockCut } from '../block/pulled-paragraph.js'
 import { wrappedAttributeLinesAt } from '../block/leading-attribute-run.js'
 import type { CommentFenceOpenerScan, FenceReachScan } from '../block/parse-block-boundaries.js'
-import { bodyEndsInOpenCodeFence, verseStanzaOpen } from '../block/parse-block-boundaries.js'
+import { bodyEndsInOpenCodeFence, sourceColumn, verseStanzaOpen } from '../block/parse-block-boundaries.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, withKeptFenceLookahead, type PayloadMisses } from '../block/parse-quote-core.js'
 import type { ParseSession, listHelpers, BlockQuoteLazyState, DescendantOpaque, ItemLazyState, ItemLineFacts, PendingAttrCarry, StrippedLineOrigin } from '../../parse.js'
 
@@ -25,6 +25,46 @@ const STAND_IN_COMMENT = /^[ \t]*%%(?!%)/
 function noteFenceOpen(state: ItemLazyState): boolean {
   for (let frame = state.noteFrame; frame !== undefined; frame = frame.noteFrame) if (frame.opaque !== null) return true
   return false
+}
+
+/** Lines a valid block `{%` run holds: each one past its `{` source column, through the line with `%}` (CARVE-P2-035). */
+function braceCommentHeldLines(lines: readonly string[], columnAt: (index: number) => number): Set<number> {
+  const held = new Set<number>()
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i]!.trimStart()
+    if (!text.startsWith('{%') || text.includes('%}', 2)) continue
+    const column = columnAt(i)
+    let end = i + 1
+    while (end < lines.length && !isBlankLine(lines[end]!) && columnAt(end) > column && !lines[end]!.includes('%}')) end++
+    // No later opener can close before this line either, so the scan resumes here.
+    if (end >= lines.length || isBlankLine(lines[end]!) || columnAt(end) <= column) {
+      i = end - 1
+      continue
+    }
+    for (let k = i + 1; k <= end; k++) held.add(k)
+    i = end
+  }
+  return held
+}
+
+/**
+ * The first sublist marker the item's lead stream splits at. A marker inside a
+ * valid `{%` run is comment text, measured at authored source columns because
+ * collection and the ownership walk may have moved these lines.
+ */
+function firstSublistSplit(
+  lexer: Lexer, markers: ReadonlySet<number>, content: string, nested: readonly string[],
+  itemStartLineIndex: number, itemSource: string, nestedLineNumbers: readonly number[],
+): number {
+  if (markers.size === 0) return -1
+  const authored = lexer.authoredRootLines ?? lexer.rootLines ?? lexer.authoredLines ?? lexer.lines
+  const authoredLead = authored[lexer.lineNumber(itemStartLineIndex) - 1] ?? itemSource
+  const leadOffset = authoredLead.lastIndexOf(content)
+  const held = leadOffset < 0 ? null : braceCommentHeldLines([content, ...nested], index => index === 0
+    ? sourceColumnAt(authoredLead, leadOffset)
+    : sourceColumn(authored[nestedLineNumbers[index - 1]! - 1] ?? nested[index - 1]!))
+  for (const marker of markers) if (!held?.has(marker + 1)) return marker
+  return -1
 }
 
 /** A blank carried by an open fence in a child list is not an item separator. */
@@ -4121,7 +4161,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       rebaseTaskNote(nested, taskNoteShift)
     }
     if (taskLeadShift > 0) dedentTaskLead(nested, taskLeadShift)
-    const firstBlockIdx = subListMarkers.values().next().value ?? -1
+    const firstBlockIdx = firstSublistSplit(lexer, subListMarkers, content, nested, itemStartLineIndex, itemSource, nestedLineNumbers)
     // THE BLANK IS STILL REMEMBERED (§17 L1, carve#621). An invisible line does
     // not loosen the item on its own - it is not a second paragraph - but it
     // does not FILL the gap either. So when the item's tail after its last
