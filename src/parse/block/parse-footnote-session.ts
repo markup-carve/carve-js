@@ -5,6 +5,7 @@ import type { StrippedLineOrigin } from './parse-block-scan-core.js'
 import { attachedQuoteEnd, quotedPayloadCloserAhead, type PayloadMisses } from './parse-quote-core.js'
 import { pulledBodyBlockCut } from './pulled-paragraph.js'
 import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
+import { braceRunHolds } from './brace-run-holds.js'
 import { commentOnlyParagraphEnd, RE_LINE_BLOCK_OPEN } from '../parse-prepass-core.js'
 import { ContainerBlankBuffer, runIndentationContainer, type ContainerAdmission } from './parse-indentation-container.js'
 import { probeBlockAttributes, subLexer } from '../parse-core.js'
@@ -934,9 +935,11 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     nestedOpenMemo = { index: nestedDefBodyIndex, length: bodyLines.length, open: nestedNoteParagraphOpen(bodyLines, nestedDefBodyIndex) }
     return nestedOpenMemo.open
   }
-  const noteSpanScan = { ...newCommentSpanScan(), markerOwners: true }
+  const heldBodyLines = new Set<number>()
+  const noteSpanScan = { ...newCommentSpanScan(), markerOwners: true, held: heldBodyLines }
   let nestedNoteSpan: { run: number, column: number, state: object } | undefined
   const lazyState = verbatimOnlyLazyState()
+  const braceHeld = braceRunHolds(lexer)
   // A fence an attached block left open still holds its payload.
   const trackAttached = (attached: string[]): void => {
     const lastRun = new Map<number, number>()
@@ -1072,6 +1075,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       const behindMarker = markerFreeContent(lead)
       if (behindMarker !== lead.trimStart() && opensCodeFence(behindMarker)) trackItemLazyState(behindMarker, lazyState)
     }
+    braceHeld.open(defLineIndex, m[2]!)
     trackLead(m[2]!)
     // A span on a nested note's marker line is that note's, so a line below its body ends it (PART 0 S1).
     // trackLead recursively tracks every nested note body. Replaying one here
@@ -1243,7 +1247,9 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       // A line in a body item's frame keeps its indentation, so the item's own blocks open there.
       const tracked = framedBelow ? 'text' : lazyState.ownedColumn >= 0 && indentColumns(content) >= lazyState.ownedColumn
         ? content : lazyState.literalColon !== undefined ? content : trackedFootnoteContent(content)
-      trackAuthoredAttributeRun(lexer, lazyState, attrSource, () => trackItemLazyState(tracked, lazyState, true, (run) => commentBlockHasCloser(lexer, run),
+      if (lazyState.opaque === null) braceHeld.open(lexer.pos, tracked)
+      if (braceHeld.holds(lexer.pos)) heldBodyLines.add(bodyLines.length - 1)
+      trackAuthoredAttributeRun(lexer, lazyState, attrSource, () => trackItemLazyState(braceHeld.mask(lexer.pos, tracked), lazyState, true, (run) => commentBlockHasCloser(lexer, run),
         framedBelow ? undefined : { whitespace: leadingWhitespace(tracked), descendantFrames: true, terminatorFree: false,
           payloadFenceCloser: marker => payloadCloserInBody(lexer, marker, bodyColumn),
           quotePayloadFenceCloser: marker => quotedPayloadCloserAhead(lexer, marker, lexer.pos, quoteMissesOf(lexer)) }))

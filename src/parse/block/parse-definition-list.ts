@@ -20,6 +20,7 @@ import { sourceQuoteBody } from '../parse-core.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
+import { braceRunHolds } from './brace-run-holds.js'
 import { taskBoxColumns } from './task-box-frame.js'
 import { pulledBodyBlockCut } from './pulled-paragraph.js'
 import {
@@ -430,7 +431,9 @@ export function createDefinitionListParser(
       // definition registers, an attribute attaches - and the fold §10 I5 asks for
       // has not happened (markup-carve/carve-js#1550).
       const bodyBaseEligible = new Set<number>()
-      const bodySpanScan = { ...newCommentSpanScan(), markerOwners: true }
+      const heldBodyLines = new Set<number>()
+      const bodySpanScan = { ...newCommentSpanScan(), markerOwners: true, held: heldBodyLines }
+      const braceHeld = braceRunHolds(lexer)
       // Has any line of this body been a block QUOTE?
       //
       // Once one has, the body's paragraph is no longer necessarily the innermost
@@ -542,6 +545,7 @@ export function createDefinitionListParser(
         bodyLines.push(first)
         bodySourceLines.push(first)
         bodyLineNumbers.push(lexer.lineNumber(firstLineIndex))
+        braceHeld.open(firstLineIndex, first)
         // The MARKER LINE never goes through the tracker in the list either, and
         // for the same reason it is seeded by hand here: nothing precedes it, so
         // no closer lookahead applies and a fence on it opens unconditionally
@@ -906,7 +910,12 @@ export function createDefinitionListParser(
         }
         if (foldedMarker) foldedMarkerContentColumn = markerContentColumn(dedented)
         else if (bodyReadsFlush || !lazyState.lazyFoldable) foldedMarkerContentColumn = -1
-        if (!foldedMarker) track(bodyReadsFlush ? flush : dedented)
+        if (!foldedMarker) {
+          const tracked = bodyReadsFlush ? flush : dedented
+          if (lazyState.opaque === null) braceHeld.open(lexer.pos, tracked)
+          if (braceHeld.holds(lexer.pos)) heldBodyLines.add(bodyLines.length - 1)
+          track(braceHeld.mask(lexer.pos, tracked))
+        }
         if (closedNestedAttribute) lazyState.lazyFoldable = false
         if (!foldedMarker && !wasVerbatim && (flush === dedented || (bodyReadsFlush && leadListIsQuoteHeld))) {
           nestedItemColumn = markerContentColumn(flush)

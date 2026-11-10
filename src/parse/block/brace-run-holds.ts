@@ -1,8 +1,8 @@
 import { isBlankLine, type Lexer } from '../parse-lexer.js'
 import { quotePrefixDepth, sourceColumn, sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 
-// List and quote markers before a run hold no `{%` of their own.
-const RE_RUN_MARKERS = /^[ \t]*(?:(?:>|(?:[-*+]|\d+[.)])[ \t]+(?:\[[^\]]\][ \t]+)?)[ \t]*)*/
+// List, quote and note markers before a run hold no `{%` of their own.
+const RE_RUN_MARKERS = /^[ \t]*(?:(?:>|(?:[-*+]|\d+[.)])[ \t]+(?:\[[^\]]\][ \t]+)?|\[\^[^\]]+\]:[ \t]+)[ \t]*)*/
 
 export interface BraceRunHolds {
   /** Registers line `index` as an opener when `text` starts a block `{%` run that closes validly ahead. */
@@ -58,8 +58,6 @@ export function braceRunHolds(lexer: Lexer): BraceRunHolds {
       }
       while (text[offset] === ' ' || text[offset] === '\t') offset++
       const rest = text.slice(offset)
-      // A `%%%` line keeps its comment reading until carve#5853 rules it.
-      if (rest.startsWith('%%%')) return text
       const close = index === through ? rest.indexOf('%}') : -1
       return text.slice(0, offset) + (close < 0 ? 'x' : 'x ' + rest.slice(close))
     },

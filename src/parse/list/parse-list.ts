@@ -2096,7 +2096,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (hostedNoteBodyColumn !== undefined && lexer.hostBody !== null &&
           !isBlankLine(l) && indentColumns(l, hostedNoteBodyColumn) < hostedNoteBodyColumn) return 'stop'
       const noteCommentEnd = markerNoteItem && !markerNoteLeft ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
-      if (noteCommentEnd >= 0 && lazyState.opaque === null && !insideOpenFence(lazyState)) {
+      if (noteCommentEnd >= 0 && lazyState.opaque === null && !insideOpenFence(lazyState) && !braceHeld.holds(lexer.pos)) {
         for (let at = lexer.pos; at <= noteCommentEnd; at++) {
           pendingNoteComments.add(pendingBlankRun.lines.length)
           pendingBlankRun.lineNumbers.push(lexer.lineNumber(lexer.pos))
