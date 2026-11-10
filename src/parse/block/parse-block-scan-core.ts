@@ -785,8 +785,10 @@ export function bodyHoldsOpenCommentSpan(
       ? RE_NOTE_LEAD.exec(line) ?? (descriptionLeadOpens(entries, column) ? RE_DESCRIPTION_LEAD.exec(line) : null)
       : null
     if (line !== '') {
+      // A `: ` line with no entry above is paragraph text, so it starts no list either (PART 0 S3).
+      const entry = /^:: /.test(line) || line.startsWith(': ') && descriptionLeadOpens(entries, column)
       while (entries.length > 0 && entries.at(-1)![0] >= column) entries.pop()
-      entries.push([column, /^::? /.test(line)])
+      entries.push([column, entry])
     }
     const open = scan.opaque
     if (open !== null) {
