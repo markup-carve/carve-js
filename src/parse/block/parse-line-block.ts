@@ -34,7 +34,9 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const openBoundary = view.sourceBoundaries?.[opener]
       const lineBoundary = view.sourceBoundaries?.[line]
       if (!openBoundary || !lineBoundary || openBoundary.parent !== lineBoundary.parent) return undefined
-      cuts.push(openBoundary.start)
+      // A source boundary counts the marker's literal bytes. A tab before a
+      // nested marker may make that wider than the columns this frame owns.
+      cuts.push(Math.min(openBoundary.start, Math.max(0, view.hostContentColumn - openBoundary.parent.hostContentColumn)))
       view = openBoundary.parent
       opener = openBoundary.line
       line = lineBoundary.line
