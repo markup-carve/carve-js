@@ -1499,18 +1499,15 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
       let lastIndex = Math.max(defLineIndex, lexer.pos - 1)
       while (lastIndex > defLineIndex && isBlankLine(lexer.lineAt(lastIndex) ?? '')) lastIndex--
       const lastLine = lexer.lineAt(lastIndex) ?? ''
-      // A span begins at the `[^label]:` marker, not at the line start. When
-      // this definition is nested one column shy of its parent's body margin,
-      // the sub-lexer strips a fixed margin and leaves a residual space ahead
-      // of the marker; the start must skip it (PART 12 §4, carve#1963).
+      // A container's span takes the leading indentation from its parent's content column (CARVE-P12-013).
       const defLine = lexer.lineAt(defLineIndex) ?? ''
-      const defLead = defLine.length - defLine.replace(/^[ \t]+/, '').length
+      const start = lexer.containerStart(defLineIndex)
       const pos: Position = {
         startLine: lexer.lineNumber(defLineIndex),
         endLine: lexer.lineNumber(lastIndex),
-        startColumn: lexer.lineStartColumn(defLineIndex) + defLead,
+        startColumn: start.column,
         endColumn: lexer.lineStartColumn(lastIndex) + lastLine.length,
-        startOffset: lexer.lineOffset(defLineIndex) + defLead,
+        startOffset: start.offset,
         endOffset: lexer.lineOffset(lastIndex) + lastLine.length,
       }
       const lastOwned = [...(lexer.footnoteDefs.get(label) ?? [])]
