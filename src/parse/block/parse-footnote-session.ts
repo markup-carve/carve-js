@@ -229,6 +229,7 @@ interface FootnoteHooks {
   parseBlocks: (lexer: Lexer, baseIndent: number) => BlockNode[]
   isConsumedMarker: (line: number) => boolean
   isClaimedMarker: (line: number) => boolean
+  isNoteListBreak: (line: number, markerColumn: number) => boolean
 }
 
 interface PassedNote {
@@ -531,6 +532,19 @@ function nestedSourceBodyLeft(
 
 // A quote opened on a list marker line before the note head frames the note's
 // continuation lines too, as a quote at the line start would (carve#5787).
+/** A refused `+` this note kept ends the attached block (carve#5890). */
+function cutAtKeptRefusal(cut: number, lineNumbers: number[], kept: (line: number) => boolean): number {
+  const at = lineNumbers.findIndex(kept)
+  return at > 0 && (cut < 0 || at < cut) ? at : cut
+}
+
+/** The first line after the current one that is not blank. */
+function pastBlankRun(lexer: Lexer): number {
+  let offset = 1
+  while (lexer.peek(offset) !== undefined && isBlankLine(lexer.peek(offset)!)) offset++
+  return lexer.pos + offset
+}
+
 function noteQuoteDepth(authoredLine: string | undefined, defLineRaw: string): number {
   if (authoredLine === undefined) return quotePrefixDepth(defLineRaw)
   const depth = quotePrefixDepth(authoredLine)
@@ -1067,6 +1081,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
           }
         }
       }
+      cut = cutAtKeptRefusal(cut, attachedLineNumbers, (line) => hooks.isNoteListBreak(line, lexer.rootFrameColumn(defLineIndex) + markerColumn))
       if (cut > 0) {
         lexer.pos -= attached.length - cut
         attached.length = cut
@@ -1146,12 +1161,20 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     const root = lexer.documentRoot ?? lexer
     const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
     const written = authored[lexer.lineNumber(lexer.pos) - 1]
-    const nextWritten = authored[lexer.lineNumber(lexer.pos + 1) - 1]
-    if (written === undefined || !isContinuationMarker(written.trimStart()) ||
+    // A note that keeps its refused marker reads its follower past a blank run too (carve#5890).
+    const listBreak = hooks.isNoteListBreak(lexer.lineNumber(lexer.pos), lexer.rootFrameColumn(defLineIndex) + markerColumn)
+    const nextWritten = authored[lexer.lineNumber(listBreak ? pastBlankRun(lexer) : lexer.pos + 1) - 1]
+    if (written === undefined || !(listBreak || isContinuationMarker(written.trimStart())) ||
         nextWritten === undefined || sourceColumn(nextWritten) < bodyColumn) return false
     // A refused marker after a note's attached block is invisible, but ends
     // that block before the note reads its body-column follower (PART 0 S2).
-    if (m[2]?.trim() === '+' && bodyLines.at(-1) !== '' && !bodyEndsInOpenCodeFence(bodyLines)) {
+    // Kept in the body, the placeholder ends the note's list there (carve#5890).
+    if (listBreak) {
+      bodyLines.push('%%')
+      bodySourceLines.push(ln)
+      bodyLineNumbers.push(lexer.lineNumber(lexer.pos))
+      trackItemLazyState('%%', lazyState)
+    } else if (m[2]?.trim() === '+' && bodyLines.at(-1) !== '' && !bodyEndsInOpenCodeFence(bodyLines)) {
       bodyLines.push('')
       bodySourceLines.push(undefined)
       bodyLineNumbers.push(lexer.lineNumber(lexer.pos))

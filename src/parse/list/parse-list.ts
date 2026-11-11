@@ -3928,6 +3928,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         }
       }
       if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
+      if (session.isNoteListBreak(admission.lineNumber, physicalItemMarkerColumn)) return 'stop'
       const attached = admitAttachedLead(admission)
       if (attached !== undefined) return attached
       // An enclosing item already took this line as lazy text: it reached no column.
@@ -4243,6 +4244,7 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     // authored empty line. Ownership keeps its comment stand-in so the quote
     // stays open; the marker still separates the siblings at this list level.
     if (nextIsSibling() && session.isQuoteSiblingSeparator(lexer.lineNumber(lexer.pos) - 1)) flags.loose = true
+    if (lexer.peek() !== undefined && session.isNoteListBreak(lexer.lineNumber(lexer.pos), physicalItemMarkerColumn)) flags.hardBoundary = true
 
     // Child spans identify which authored blank lines separate blocks.
     // Blanks within a fence or nested item remain inside that child's span.

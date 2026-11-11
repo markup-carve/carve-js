@@ -85,7 +85,7 @@ interface Frame {
   plusBody?: boolean
   // The marker line a `+` on it was accepted on.
   plus?: number
-  // The note whose first-block `+` opened this item's list: a refused `+` ends the list there (carve#5601).
+  // The note whose first-block `+` opened this item's list or quote: a refused `+` ends it there (carve#5601).
   listNote?: Frame
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
@@ -567,7 +567,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; lazyLines: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -627,6 +627,8 @@ export function ownLines(
   // Lines whose consumed `+` now reads as a `%%` stand-in: container markup, not a comment.
   const consumedMarkers = new Set<number>()
   const quoteSiblingSeparators = new Set<number>()
+  // Refused markers a note keeps, by the note's marker column: each ends the note's list there (carve#5890).
+  const noteListBreaks = new Map<number, number>()
   const lazyLines = new Set<number>()
   const pairedCodeClosers = new Set<number>()
   // A later marker cannot take the block offered by an earlier marker.
@@ -1003,10 +1005,12 @@ export function ownLines(
         // A marker an earlier accepted `+` claimed stays in that chain, so its follower still meets the host.
         if (plusReason === 'claimed' && host.plus !== undefined) afterPlus = true
         // A refused second marker ends a marker-line `+` note; its item reads the next block (carve#5515).
-        if (host.kind === 'note' && host.plusBody && frames.at(-2)?.kind === 'item') {
+        // A note whose `+` attached a block keeps the next line (carve#5890).
+        if (host.kind === 'note' && host.plusBody && frames.at(-2)?.kind === 'item' &&
+            !lines.slice((host.line ?? at) + 1, at).some((line) => line.trim() !== '')) {
           frames.pop()
           if (attachedHost?.includes(host)) attachedHost = null
-        }
+        } else if (host.kind === 'note') noteListBreaks.set(at, host.docMarker ?? 0)
         return true
       }
       attachedHost = frames.slice()
@@ -1400,6 +1404,8 @@ export function ownLines(
       if ((host?.kind !== 'item' && host?.kind !== 'dd' && host?.kind !== 'note') || host.plus !== at - 1) return
       const quote = frames.find((f) => f.kind === 'quote' && f.line === at)
       if (quote) quote.firstBlockQuote = true
+      // Like a list, a note's first-block quote leaves a `+` at their shared marker column to the note (carve#5890).
+      if (quote && host.kind === 'note') quote.listNote = host
     }
 
     function apply(owner: Frame, col: number, form: Form, canon = owner.canon, inHost = false): void {
@@ -1741,7 +1747,7 @@ export function ownLines(
       return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, lazyLines, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)

@@ -726,10 +726,17 @@ export class ParseSession extends InlineParseSession {
   // Marker lines whose `+` an earlier marker's pending claim refused.
   private claimedMarkerLines = new Set<number>()
   private quoteSiblingSeparators = new Set<number>()
+  private noteListBreaks = new Map<number, number>()
   private walkLazyLines = new Set<number>()
 
   isQuoteSiblingSeparator(line: number): boolean {
     return this.quoteSiblingSeparators.has(line)
+  }
+
+  /** Whether a refused `+` a note kept ends a list at this marker column on this document line (carve#5890). */
+  isNoteListBreak(line: number, markerColumn: number): boolean {
+    const noteColumn = this.noteListBreaks.get(line)
+    return noteColumn !== undefined && markerColumn >= noteColumn
   }
 
   /** Whether the ownership walk folded this document line lazily (PART 0 S4). */
@@ -874,6 +881,7 @@ export class ParseSession extends InlineParseSession {
     this.consumedMarkerLines = new Set([...ownership.consumedMarkers].map((index) => lexer.lineNumber(index)))
     this.claimedMarkerLines = new Set(ownership.refusedPlus.filter((plus) => plus.reason === 'claimed').map((plus) => lexer.lineNumber(plus.index)))
     this.quoteSiblingSeparators = new Set([...ownership.quoteSiblingSeparators].map((index) => lexer.lineNumber(index)))
+    this.noteListBreaks = new Map([...ownership.noteListBreaks].map(([index, column]) => [lexer.lineNumber(index), column]))
     this.walkLazyLines = new Set([...ownership.lazyLines].map((index) => lexer.lineNumber(index)))
     this.activeDocument = strippedBom ? '﻿' + source : source
     // ACTIVATED BEFORE THE DEFINITION PREPASS, not after. The pass itself calls
@@ -1027,6 +1035,7 @@ export class ParseSession extends InlineParseSession {
     for (const index of ownership.consumedMarkers) this.consumedMarkerLines.add(sub.lineNumber(index))
     for (const plus of ownership.refusedPlus) if (plus.reason === 'claimed') this.claimedMarkerLines.add(sub.lineNumber(plus.index))
     for (const index of ownership.quoteSiblingSeparators) this.quoteSiblingSeparators.add(sub.lineNumber(index))
+    for (const [index, column] of ownership.noteListBreaks) this.noteListBreaks.set(sub.lineNumber(index), column)
     for (const index of ownership.lazyLines) this.walkLazyLines.add(sub.lineNumber(index))
     this.collectLinkDefs(sub)
     if (!this.activeMatchers.length) return restoringLetters(this.parseBlocks(sub, 0), ownership.letters)
@@ -1746,6 +1755,7 @@ export class ParseSession extends InlineParseSession {
       parseBlocks: this.parseBlocks.bind(this),
       isConsumedMarker: (line) => this.consumedMarkerLines.has(line),
       isClaimedMarker: (line) => this.claimedMarkerLines.has(line),
+      isNoteListBreak: (line, markerColumn) => this.isNoteListBreak(line, markerColumn),
     })
   }
 
