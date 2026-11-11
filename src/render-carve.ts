@@ -931,6 +931,7 @@ function regionMarkerAtItemMarkerColumn(
 
 // A quote or bare div of structural-only lines holds nothing, so it hosts no caption (carve#4600).
 function holdsNothing(block: BlockNode): boolean {
+  if (block.type === 'comment') return true
   if (block.type === 'block_quote') return block.fenced !== true && block.children.every(holdsNothing)
   return block.type === 'div' && block.label === undefined && block.children.every(holdsNothing)
 }
@@ -4131,11 +4132,10 @@ class CarveRenderSession {
     }
     // At block level `%%` plus percent-leading content needs a separator:
     // `%%%` would open a comment fence instead (carve-js#1674).
-    return node.block
-      ? this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
-      : node.delimited
-        ? `{% ${node.content} %}`
-        : `%% ${node.content}`
+    if (node.block) return this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
+    // A later line of a block-position run passes the opening `{` (CARVE-P2-035).
+    if (node.delimited) return `{% ${node.content.replaceAll('\n', '\n ')} %}`
+    return `%% ${node.content}`
   }
 
   private renderTableWithColumns(node: Table, ctx: CarveContext): string {

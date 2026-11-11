@@ -16,6 +16,7 @@ describe('a paragraph holding only braced comments', () => {
   })
 
   it('does not create a paragraph node for an orphaned commented line', () => {
-    expect(parse('{% c %}').children).toEqual([])
+    // The comment itself stays in the tree (PART 0 L1, carve#5929).
+    expect(parse('{% c %}').children.map(child => child.type)).toEqual(['comment'])
   })
 })

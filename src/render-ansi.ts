@@ -380,7 +380,8 @@ function renderList(node: List, ctx: AnsiContext): string {
       } else {
         marker = style('•', FG_CYAN)
       }
-      const [first, ...rest] = item.children
+      // A comment renders nothing, so it does not take the marker line from the first visible block.
+      const [first, ...rest] = item.children.filter((block) => block.type !== 'comment')
       let content = first ? renderBlocks([first], ctx) : ''
       for (const block of rest) {
         if (block.type === 'list') {

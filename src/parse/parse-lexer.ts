@@ -290,6 +290,8 @@ export class Lexer {
   /** This container consumes indented link definitions on its host's behalf. */
   consumesHostedLinkDefs: false | 'all' | 'lazy' = false
   suppressPositions = false
+  /** The comments of a comment-only paragraph, kept as blocks where it renders nothing (PART 0 L1). */
+  heldComments: BlockNode[] | null = null
   pos = 0
   // Block-container nesting depth of this (sub-)lexer; 0 at the document top.
   depth = 0
