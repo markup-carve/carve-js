@@ -2706,7 +2706,8 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
     const readDefinitionSource = (l: string): Decision | undefined => {
       const sourceLine = (lexer.rootLines ?? lexer.lines)[lexer.lineNumber(lexer.pos) - 1] ?? l
       sourceDepth = quotePrefixDepth(sourceLine)
-      sourceMarkerColumn = sourceColumn(sourceLine, sourceDepth)
+      // In the frame of physicalItemMarkerColumn: the ownership walk may have cut the item's lead from `rootLines`.
+      sourceMarkerColumn = sourceColumn(sourceLine, sourceDepth) + physicalItemMarkerColumn - itemMarkerColumn
       sourceEntry = l.trimStart()
       ancestorTermBand = markerLineTerm && lazyState.inDefList === 'term' &&
         sourceMarkerColumn > lexer.hostContentColumn && sourceMarkerColumn < physicalItemMarkerColumn &&
