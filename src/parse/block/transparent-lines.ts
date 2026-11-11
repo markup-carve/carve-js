@@ -791,7 +791,7 @@ export function hydrateTransparentDefinitionGaps(document: Document): void {
         block.transparentSource = authoredSource(block, quoteBases, opensQuote, descriptionColumn)
         block.transparentOriginalValue = block.content
       }
-      if ((block.type === 'comment' && !block.block && !onMarkerLine || block.type === 'abbreviation_def') &&
+      if ((block.type === 'comment' && !block.block && !block.delimited && !onMarkerLine || block.type === 'abbreviation_def') &&
           !block.transparentInDefinitionList && !block.transparentInParagraph && !block.transparentInList &&
           block.pos?.startOffset !== undefined && block.pos.startLine !== undefined) {
         const originalValue = block.type === 'comment' ? block.content : `${block.abbr}\0${block.expansion}`

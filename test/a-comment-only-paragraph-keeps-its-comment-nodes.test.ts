@@ -18,6 +18,8 @@ describe('a comment-only paragraph keeps its comment nodes', () => {
     ['> {% a\n>  b\n>  z %}\n', '> {% a\n>  b\n>  z %}\n'],
     ['{% a\n b\n z %}\n', '{% a\n b\n z %}\n'],
     ['p\n\n> {% a %}\n', 'p\n\n> {% a %}\n'],
+    [':: t\n: x\n\n  {% b %}\n', ':: t\n: x\n\n  {% b %}\n'],
+    [':: t\n: {% a %} {% b %}\n', ':: t\n: {% a %}\n\n  {% b %}\n'],
   ])('writes %j back', (source, expected) => {
     expect(fmt(source)).toBe(expected)
   })
