@@ -994,7 +994,7 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
   let collected = ''
   let count = 0
   let openingColumn = 0
-  const scan: OpenRunScan = { open: false, quote: null, escape: false, broken: false }
+  const scan: OpenRunScan = { open: false, quote: null, escape: false, broken: false, column: 0, blockColumn: 0 }
   const columns = (value: string): number => {
     let column = 0
     for (const char of /^[ \t]*/.exec(value)![0]) column = char === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
@@ -1006,7 +1006,8 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     // A multi-line run takes no lazy line (carve#5830 rule B).
     if (count > 0 && (line.startsWith(LAZY_FRAME) || lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos + count)) ||
       lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos + count)))) return null
-    if (count > 0 && columns(line) <= openingColumn) return null
+    // A continuation passes the `{` of the block it continues, not only the run's first one.
+    if (count > 0 && columns(line) <= scan.blockColumn) return null
     const closed = line.includes('}')
     // A continuation is a complete attribute fragment: quoted values cannot
     // cross a newline. Reject a later opener before re-reading its whole tail.
@@ -1016,13 +1017,14 @@ export function probeBlockAttributes(lexer: Lexer, firstLine?: string): { attrs:
     // source line, including any padding before that brace.
     if (count === 0) openingColumn = columns(firstLine ?? line)
     count++
+    if (count === 1) scan.column = openingColumn
     // Only a line holding `}` can close the run; rescanning the whole run on
     // every other line made an unclosed run quadratic (carve-js#4750).
     if (closed) {
       const attrs = parseBlockAttributeRun(collected)
       if (attrs) return { attrs, count }
     }
-    if (!continueOpenRunScan(scan, count === 1 ? line : '\n' + line)) return null
+    if (!continueOpenRunScan(scan, count === 1 ? line.replace(/^[ \t]*/, '') : '\n' + line)) return null
   }
 }
 
@@ -1031,6 +1033,9 @@ interface OpenRunScan {
   quote: '"' | "'" | null
   escape: boolean
   broken: boolean
+  /** Source column of the next character, and of the open block's `{`. */
+  column: number
+  blockColumn: number
 }
 
 /** Incremental hasOpenAttributeBlock: feeds one more segment of the run. */
@@ -1038,6 +1043,8 @@ function continueOpenRunScan(scan: OpenRunScan, segment: string): boolean {
   if (scan.broken) return false
   for (let i = 0; i < segment.length; i++) {
     const ch = segment[i]!
+    const column = scan.column
+    scan.column = ch === '\n' ? 0 : ch === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
     if (scan.escape) {
       scan.escape = false
       continue
@@ -1052,6 +1059,7 @@ function continueOpenRunScan(scan: OpenRunScan, segment: string): boolean {
         return false
       }
       scan.open = ch === '{'
+      if (scan.open) scan.blockColumn = column
     }
   }
   return scan.open
