@@ -474,10 +474,11 @@ function openQuoteHosts(q: QuoteHostLine, paragraph: boolean): QuoteHostBody {
     bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text)
   // A quoted prose line below a note's body column can continue its open
   // paragraph. Keep that note in the tracker so a later unprefixed marker
-  // cannot be mistaken for lazy text of the quote (CARVE-P2-008).
+  // cannot be mistaken for lazy text of the quote (CARVE-P2-008). An attribute opener is
+  // prose until its run proves valid (carve#5830 rule A).
   const lazyNote = paragraph && host.kinds.at(-1) === 'note' && column < host.columns.at(-1)! &&
     markerPrefixLength(text, 0, prefixWalkBound(text)) === 0 &&
-    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !opensWrappedAttributeBlock(text)
+    bottomBlockLeavesParagraphOpen(text) && !lineOpensBlock(text) && !(opensWrappedAttributeBlock(text) && text.startsWith('{%'))
   if (lazyItem && host.colons) host.colons = host.colons.filter(open => !open.awaitingBody || open.markerBody === true)
   while (!lazyItem && !lazyNote && host.columns.length > 1 && host.columns.at(-1)! > column) popQuoteHost(host)
   const colons = host.colons ??= []
