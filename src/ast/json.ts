@@ -25,7 +25,7 @@ import { OWNED_CHILD_FIELDS, OWNED_SINGLE_CHILD_FIELDS } from './owned-child-fie
  * `parse()` directly.
  */
 
-import type { BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from '../ast.js'
+import type { Attrs, BlockNode, DefinitionItem, Document, Image, InlineNode, Paragraph, Position, TableRow } from '../ast.js'
 import { resolveTableSpans } from '../table/table-spans.js'
 import { isUnresolvedReference } from '../parse/inline/unresolved-reference.js'
 import { isResolvedEmptyReference, markResolvedEmptyReference } from '../parse/inline/reference-state.js'
@@ -53,7 +53,7 @@ import {
 import { ownValue, setOwn } from '../own-property.js'
 import { recordIngestPayloadLength, utf8ByteLength } from '../extension/abbr-budget.js'
 import { replaceLoneSurrogates } from '../well-formed.js'
-import { promotedImageAttrs } from '../extension/attribute-merge.js'
+import { attrsFromWireOrder, promotedImageAttrs, wireAttrOrder } from '../extension/attribute-merge.js'
 import { omitSpansAcrossErasedLines } from './erased-line-spans.js'
 
 /** Frontmatter as a block node (PART 12 §7): raw text plus its fence token. */
@@ -524,6 +524,9 @@ const TRANSPARENT_SOURCE_FIELDS = new Set([
   'transparentSource', 'transparentOriginalValue',
 ])
 
+const isAttrs = (value: unknown): value is Attrs =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
 /** Writer placement records are runtime data, never PART 12 wire fields. */
 function withoutTransparentSourceMetadata<T>(value: T): T {
   if (Array.isArray(value)) return value.map(withoutTransparentSourceMetadata) as T
@@ -532,6 +535,10 @@ function withoutTransparentSourceMetadata<T>(value: T): T {
   const copy: Record<string, unknown> = {}
   for (const [key, child] of Object.entries(original)) {
     if (!TRANSPARENT_SOURCE_FIELDS.has(key)) copy[key] = withoutTransparentSourceMetadata(child)
+  }
+  if (isAttrs(original.attrs)) {
+    const order = wireAttrOrder(original.attrs)
+    if (order !== undefined && order !== original.attrs.order) (copy.attrs as Attrs).order = order
   }
   return copy as T
 }
@@ -1548,7 +1555,8 @@ function normalizeIngestedValues<T>(node: T): T {
   let out: Record<string, unknown> | undefined
   for (const key of Object.keys(record)) {
     const value = ownValue(record, key)
-    const next = normalizeIngestedValues(value)
+    let next = normalizeIngestedValues(value)
+    if (key === 'attrs' && isAttrs(next)) next = attrsFromWireOrder(next)
     if (next === value) continue
     // OWN-PROPERTY WRITE, for the reason `own-property.ts` gives: a payload
     // naming `__proto__` reaches the prototype setter through plain assignment.
