@@ -95,6 +95,8 @@ interface Frame {
   listNote?: Frame
   // An unclosed block attached by `+` ends at its first blank (§17 L3).
   endsAtBlank?: boolean
+  // A colon block a `+` attached: a later `+` is its text until the colon ends (carve#5658 ruling A).
+  attachedColon?: boolean
   releasedFence?: { minimumFoldColumn: number }
   // A list keeps its first marker's column and shift (PART 0 S3).
   listCol?: number
@@ -625,27 +627,6 @@ export function ownLines(
   // The frames of the host a `+` last attached through. The attached block stands outside
   // the host's columns and closes it here, and a further `+` still reaches it (§17 L3).
   let attachedHost: Frame[] | null = null
-  const sourceCloserPositions = new Map<string, number[]>()
-  const laterSourceCloser = (at: number, run: string, column: number, depth: number): boolean => {
-    const key = `${run}:${column}:${depth}`
-    let positions = sourceCloserPositions.get(key)
-    if (positions === undefined) {
-      positions = []
-      const closes = fenceCloseRe(run)
-      for (let index = 0; index < lines.length; index++) {
-        const measured = quotedMeasure(index, depth)
-        if (measured?.col === column && closes.test(measured.rest)) positions.push(index)
-      }
-      sourceCloserPositions.set(key, positions)
-    }
-    let low = 0, high = positions.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (positions[middle]! <= at) low = middle + 1
-      else high = middle
-    }
-    return low < positions.length
-  }
   let attachedInlineCode = 0
   let braceRunStart = -1
   let shiftedAttachedFence: { column: number; run: string } | null = null
@@ -733,10 +714,9 @@ export function ownLines(
       const run = /^(`{3,}|~{3,})/.exec(opener?.rest ?? '')?.[1]
       if (measured && run && measured.col < ownHost.col &&
           !(measured.col === ownHost.markerCol && CONT_MARKER.test(measured.rest)) &&
-          !fenceCloseRe(run).test(measured.rest) &&
-          !laterSourceCloser(at, run, ownHost.markerCol!, depth)) {
-        // An own-line fence ends when the next nonblank line misses its host
-        // and no source-column closer can still finish it (PART 0 S1).
+          !fenceCloseRe(run).test(measured.rest)) {
+        // An own-line fence ends when the next nonblank line misses its host,
+        // even with a later closer in the source (PART 0 S1 step 2, F06).
         frames.length = attachedHost!.length - 1
         attachedHost = null
         attachedInlineCode = 0
@@ -1609,6 +1589,8 @@ export function ownLines(
     // Measured through the quotes that hold the fence, as the frame walk reads them.
     function plusInCodePayload(): boolean {
       const fence = top()
+      // So is one in an attached colon body that has not ended.
+      if (fence.attachedColon) return true
       if (fence.kind !== 'fence' || fence.family !== 'code') return false
       let n = indentCols(src)
       for (let k = 1; k < frames.length - 1; k++) {
@@ -1637,6 +1619,7 @@ export function ownLines(
 
     function markUnclosedAttachedFence(form: Form): void {
       if (top().opened !== at) return
+      if (form.kind === 'colon' && top().kind === 'colon') top().attachedColon = true
       const host = attachedHost?.at(-1)
       const markerLine = host?.plus === host?.line
       if (form.family === 'code') {

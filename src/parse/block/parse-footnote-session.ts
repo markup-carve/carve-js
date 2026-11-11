@@ -40,13 +40,19 @@ function cutShiftedNoteFence(lexer: Lexer, attached: string[], numbers: number[]
   if (run === undefined) return
   const root = lexer.documentRoot ?? lexer
   const authored = root.authoredRootLines ?? root.authoredLines ?? root.rootLines ?? root.lines
+  const depth = quotePrefixDepth(authored[numbers[0]! - 1] ?? '')
   let pastBlank = false
   for (let index = 1; index < attached.length; index++) {
     pastBlank ||= isBlankLine(attached[index]!)
     const source = authored[numbers[index]! - 1]
     if (!pastBlank || source === undefined || isBlankLine(source)) continue
-    const column = sourceColumn(source)
-    if (column > markerColumn && column < bodyColumn && fenceCloseRe(run).test(source.trimStart())) {
+    const column = sourceColumn(source, depth)
+    const text = sourceQuoteRest(source, depth)?.trimStart() ?? ''
+    const closer = fenceCloseRe(run).test(text)
+    const shiftedFence = column > markerColumn && column < bodyColumn && closer
+    if (!shiftedFence && closer) break
+    // After its retained blank, a line that misses the note ends the fence (S1, F06).
+    if (shiftedFence || column < bodyColumn && !(column === markerColumn && isContinuationMarker(text))) {
       lexer.pos -= attached.length - index
       attached.length = index
       numbers.length = index

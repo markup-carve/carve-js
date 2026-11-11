@@ -82,7 +82,9 @@ describe('a continuation marker attaches one block', () => {
     // A self-delimiting block never reaches the probe: its extent is read from
     // its closer. A change that measured it by parsing would still pass, but a
     // change that let the boundary scan reach inside it would not.
-    expect(carveToHtml('- a\n+\n```\nb\n\nc\n```\n')).toContain('<pre><code>b\n\nc\n</code></pre>')
+    // A line after its blank that misses the item ends an own-line fence (#5658 F06).
+    expect(carveToHtml('- a\n+\n```\nb\n\nc\n```\n')).toContain('<pre><code>b\n\n</code></pre>')
+    expect(carveToHtml('- a\n+\n```\nb\n\n  c\n```\n')).toContain('<pre><code>b\n\n  c\n</code></pre>')
   })
 
   it('a nested marker is measured, not spliced', () => {

@@ -16,7 +16,7 @@ import {
   sliceColumns,
 } from '../parse-lexer.js'
 import { nextContainerContent, runIndentationContainer } from './parse-indentation-container.js'
-import { sourceQuoteBody } from '../parse-core.js'
+import { sourceQuoteBody, sourceQuoteRest } from '../parse-core.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
 import { attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
@@ -665,8 +665,13 @@ export function createDefinitionListParser(
               const source = authored[attachedLineNumbers[index]! - 1]
               if (!pastBlank || source === undefined || isBlankLine(source)) continue
               const column = sourceColumn(source, quotePrefixDepth(markerSource))
-              if (column > bodySourceColumn - contentCol && column < bodySourceColumn &&
-                  fenceCloseRe(attachedRun).test(source.trimStart())) {
+              const text = sourceQuoteRest(source, quotePrefixDepth(markerSource))?.trimStart() ?? ''
+              const closer = fenceCloseRe(attachedRun).test(text)
+              const shiftedFence = column > bodySourceColumn - contentCol && column < bodySourceColumn && closer
+              if (!shiftedFence && closer) break
+              // After its retained blank, a line that misses the description ends the fence (S1, F06).
+              if (shiftedFence || column < bodySourceColumn && !(column === bodySourceColumn - contentCol &&
+                  isContinuationMarker(text))) {
                 lexer.pos -= attached.length - index
                 attached.length = index
                 attachedLineNumbers.length = index
