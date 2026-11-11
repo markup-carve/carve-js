@@ -1209,6 +1209,7 @@ export class ParseSession extends InlineParseSession {
       const startLine = lexer.pos
       let node = this.parseBlockInner(lexer)
       if (node) attachBlockPos(lexer, node, startLine, lexer.pos)
+      else this.takeHeldComments(lexer, out)
       // A2a AN INVISIBLE CONSTRUCT IS NOT THE NEXT BLOCK (§15, carve#529):
       // `pending` floats PAST anything that renders nothing and attaches to the
       // next VISIBLE block, so
@@ -1322,14 +1323,22 @@ export class ParseSession extends InlineParseSession {
       if (node) {
         attachBlockPos(lexer, node, startLine, lexer.pos)
         out.push(node)
-      }
+      } else this.takeHeldComments(lexer, out)
     }
     return out
   }
 
+  private takeHeldComments(lexer: Lexer, out: BlockNode[]): void {
+    if (lexer.heldComments === null) return
+    out.push(...lexer.heldComments)
+    lexer.heldComments = null
+  }
+
   private dropsCommentOnlyParagraph(lexer: Lexer, paragraph: Paragraph): boolean {
     if (!commentOnlyParagraph(paragraph)) return false
-    for (const child of paragraph.children) if (child.type === 'comment') lexer.parseOptions.onDroppedComment?.(child)
+    const comments = paragraph.children.filter((child): child is Comment => child.type === 'comment')
+    for (const comment of comments) lexer.parseOptions.onDroppedComment?.(comment)
+    lexer.heldComments = comments
     return true
   }
 
@@ -2720,6 +2729,7 @@ export class ParseSession extends InlineParseSession {
         const startLine = probe.pos
         const node = this.parseBlockInner(probe)
         if (node) attachBlockPos(probe, node, startLine, probe.pos)
+        probe.heldComments = null
         const invisible =
           node === null || node.type === 'abbreviation_def' || node.type === 'comment'
         if (!invisible || probe.eof()) break

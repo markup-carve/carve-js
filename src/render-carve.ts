@@ -4131,11 +4131,10 @@ class CarveRenderSession {
     }
     // At block level `%%` plus percent-leading content needs a separator:
     // `%%%` would open a comment fence instead (carve-js#1674).
-    return node.block
-      ? this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
-      : node.delimited
-        ? `{% ${node.content} %}`
-        : `%% ${node.content}`
+    if (node.block) return this.renderBlockComment(node.content, ctx.lineBlockDepth > 0 ? this.verseCommentFence : 3)
+    // A later line of a block-position run passes the opening `{` (CARVE-P2-035).
+    if (node.delimited) return `{% ${node.content.replaceAll('\n', '\n ')} %}`
+    return `%% ${node.content}`
   }
 
   private renderTableWithColumns(node: Table, ctx: CarveContext): string {
