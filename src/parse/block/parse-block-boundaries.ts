@@ -5,6 +5,7 @@ import {
   unorderedMatch,
 } from './parse-block-scan-core.js'
 import { indentColumns, isBlankLine, Lexer, sliceColumns } from '../parse-lexer.js'
+import { wrappedAttributeLinesAt } from './leading-attribute-run.js'
 import { createListStateTracker } from '../list/parse-list-state.js'
 import {
   RE_ABBR_DEF,
@@ -396,7 +397,8 @@ export function attachedStartsWithVerbatimBlock(lines: readonly string[]): boole
 
 function firstAttachedBlockLine(lines: readonly string[]): string | undefined {
   let comment: number | undefined
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!
     const text = line.trimStart()
     if (comment !== undefined) {
       if (commentFenceRun(text) === comment) comment = undefined
@@ -405,6 +407,8 @@ function firstAttachedBlockLine(lines: readonly string[]): string | undefined {
     if (isBlankLine(line)) continue
     const run = commentFenceRun(text)
     if (run !== undefined) { comment = run; continue }
+    const wrapped = wrappedAttributeLinesAt(offset => lines[index + offset])
+    if (wrapped > 0) { index += wrapped - 1; continue }
     if (RE_COMMENT_LINE.test(text) || isBlockAttributeLine(text) || RE_ABBR_DEF.test(text) ||
         RE_FOOTNOTE_DEF.test(text) || isLinkDefLine(text)) continue
     return text
