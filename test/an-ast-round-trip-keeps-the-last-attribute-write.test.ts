@@ -57,3 +57,14 @@ describe('an AST round trip keeps the last attribute write', () => {
     expect(renderHtml(parse('{#a #c ID=b}\n# H\n'))).toContain('<section id="b">')
   })
 })
+
+describe('a heading extension', () => {
+  it('sees the id the section carries, parsed or decoded', () => {
+    const seen: Array<string | undefined> = []
+    const extensions = [{ name: 'probe', blockRenderers: { heading: (node: { attrs?: { id?: string } }) => { seen.push(node.attrs?.id); return undefined } } }]
+    const source = '{#a #c ID=b}\n# H\n'
+    renderHtml(parse(source), { extensions } as never)
+    renderHtml(fromAstJson(JSON.parse(wire(source))), { extensions } as never)
+    expect(seen).toEqual(['b', 'b'])
+  })
+})
