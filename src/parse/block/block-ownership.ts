@@ -344,8 +344,10 @@ function framePayload(inner: Frame, pairedCloser: boolean, src: string, m: { col
   return inner.frameVerse === true
 }
 
-function nestedVerseFrames(frames: readonly Frame[], segment: number): boolean {
-  return frames.slice(segment).filter((f) => BODY_FRAME.has(f.kind)).length > 1
+// An opener past its body frame's column is no frame, so the line walks from that frame's column (carve#5885).
+function nestedVerseFrames(frames: readonly Frame[], segment: number, column: number): boolean {
+  const bodies = frames.slice(segment).filter((f) => BODY_FRAME.has(f.kind))
+  return bodies.length > 1 || bodies.length === 1 && column > bodies[0]!.col
 }
 
 // A marker at an unchanged column is still respelled, so the list reader measures no tab.
@@ -366,7 +368,7 @@ function tabColumnInFrames(line: string, frames: readonly Frame[], segment: numb
 function openerFrame(form: Form, src: string, m: { col: number; rest: string }, frames: readonly Frame[], segment: number) {
   const perFrame = hasLeadingTab(src, m.rest) && FRAME_OPENER.has(form.kind)
   const from = perFrame ? tabColumnInFrames(src, frames, segment) : m.col
-  const frameVerse = !!form.lineBlock && (from !== m.col || nestedVerseFrames(frames, segment))
+  const frameVerse = !!form.lineBlock && (from !== m.col || nestedVerseFrames(frames, segment, m.col))
   return { perFrame, from, shift: from - m.col, frameVerse, readsVerse: frameVerse && perFrame, spaces: perFrame || SPACED_LEAD.has(form.kind) }
 }
 const FRAME_OPENER = new Set<Form['kind']>(['quote', 'leaf', 'fence', 'colon', 'item'])
