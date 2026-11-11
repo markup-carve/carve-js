@@ -516,14 +516,14 @@ function firstBlockTraceRoute(
 
 function invisibleFollowerLine(
   at: number, movedSpanEnd: number, lines: string[], abbreviations: Map<number, [string, string]>,
-  separatingAbbreviations: Set<number>, separatingLinks: Set<number>, comments: Map<number, string>, notes: Set<number>,
+  separatingAbbreviations: Set<number>, separatingLinks: Set<number>, comments: Map<number, string>, notes: Map<number, string>,
 ): string | null {
   // A moved `%%%` span's body stays its payload.
   if (at <= movedSpanEnd) return null
   if (abbreviations.has(at)) return separatingAbbreviations.has(at) ? '' : `${/^[ \t]*/.exec(lines[at]!)?.[0] ?? ''}%%`
   if (separatingLinks.has(at)) return lines[at]!
   if (comments.has(at)) return comments.get(at)!
-  if (notes.has(at)) return lines[at]!
+  if (notes.has(at)) return notes.get(at)!
   return null
 }
 
@@ -661,7 +661,8 @@ export function ownLines(
   const skippedFences = new Map<number, { closer: number; content: string }>()
   // A skipped `%%%` span's lines, which stand where the block after them does.
   const skippedSpanLines = new Set<number>()
-  const skippedNotes = new Set<number>()
+  // A skipped note's lines, as the walk reads them.
+  const skippedNotes = new Map<number, string>()
   const refusedInvisibleFollowers = new Set<number>()
   const tabQuoteFollower: { value: PendingTabQuoteFollower | null } = { value: null }
   const payloadLines = new Set<number>()
@@ -1829,6 +1830,8 @@ export function ownLines(
     const missedSpans = new Set<number>()
     const closers = new Set<number>()
     const notes: number[] = []
+    // A skipped note's attribute line past its body column, moved there as the walk moves an opener (Rule A).
+    const noteOpeners = new Map<number, { line: string; cut: OwnershipCut }>()
     const chained: number[] = []
     const runOpeners = new Map<number, number>()
     const shifts = new Map<number, number>()
@@ -1903,7 +1906,11 @@ export function ownLines(
         skippedComments.set(index, prefix + (!fenced.has(index) ? rest : closers.has(index) ? '%% '.padEnd(rest.length, 'x') : '%%'))
         if (fenced.has(index)) skippedSpanLines.add(index)
       }
-      for (const index of notes) skippedNotes.add(index)
+      for (const index of notes) {
+        const moved = noteOpeners.get(index)
+        if (moved !== undefined) cuts.set(index, [...cuts.get(index) ?? [], moved.cut])
+        skippedNotes.set(index, moved?.line ?? lines[index]!)
+      }
       return reason
     }
     function dropKept(): void {
@@ -2005,15 +2012,26 @@ export function ownLines(
           notes.push(opener)
           continue
         }
+        let afterAttr = false
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))
           if (body.rest.startsWith('{') &&
               (isAttrLine(trimEndSpaceTab(body.rest)) || wrappedAttrRun(trimEndSpaceTab(body.rest), quotes, k) !== null) &&
               docColumn(lines[k]!, body.rest) < noteBodyColumn) break
-          // An attribute line folds into the note's paragraph like text (CARVE-P9-013).
-          if (body.rest === '' || /^::? /.test(body.rest) ||
-              classify(body.rest, frames[0]!, k, body.col).kind !== 'text' && !isAttrLine(trimEndSpaceTab(body.rest))) break
+          if (body.rest === '' || /^::? /.test(body.rest)) break
+          // An attribute line ends the note's paragraph (PART 9 §15 A1); a line left of the body column then is no longer the note's.
+          if (afterAttr && docColumn(lines[k]!, body.rest) < noteBodyColumn) break
+          afterAttr = isAttrLine(trimEndSpaceTab(body.rest))
+          if (!afterAttr && classify(body.rest, frames[0]!, k, body.col).kind !== 'text') break
+          const past = docColumn(lines[k]!, body.rest) - noteBodyColumn
+          if (afterAttr && past > 0) {
+            const prefix = lines[k]!.slice(0, lines[k]!.length - body.rest.length)
+            const kept = prefix.length - /[ \t]*$/.exec(prefix)![0].length
+            const pad = noteBodyColumn - docColumn(lines[k]!, lines[k]!.slice(kept))
+            if (pad >= 0) noteOpeners.set(k, { line: prefix.slice(0, kept) + ' '.repeat(pad) + body.rest,
+              cut: { at: kept, removed: prefix.length - kept - pad } })
+          }
         }
         for (let line = opener; line < k; line++) notes.push(line)
         k--

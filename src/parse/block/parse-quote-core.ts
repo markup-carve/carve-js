@@ -400,7 +400,8 @@ function trackLineBlockPayload(q: QuoteHostLine): QuoteHostVerdict {
 
 function trackHostCommentLine(q: QuoteHostLine): boolean {
   const { host, state, column, text } = q
-  if (!blockQuoteParagraphOpen(state) && host.markers.length > 0 && column < host.columns.at(-1)!) {
+  // A span opener ends an open paragraph, so it is measured against the hosts too (PART 0 S1).
+  if ((!blockQuoteParagraphOpen(state) || commentFenceRun(text) !== undefined) && host.markers.length > 0 && column < host.columns.at(-1)!) {
     while (host.markers.length > 0 && host.markers.at(-1)! >= column) popQuoteHost(host)
     if (host.colons) host.colons = host.colons.filter(open => open.floor <= host.columns.at(-1)!)
     if (host.markers.length === 0) {
