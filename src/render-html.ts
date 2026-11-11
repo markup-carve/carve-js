@@ -1516,6 +1516,9 @@ function renderHeadingElement(
   level: number,
 ): string | undefined {
   if (!opts.extensions?.length) return undefined
+  // The extension sees the id written last, the one the wrapper carries.
+  const id = authoredIdOf(node.attrs)
+  if (id !== undefined && id !== node.attrs?.id) node = { ...node, attrs: { ...node.attrs, id } }
   const isStatic = opts.mode === 'static'
   const ctx = blockCtx(opts, level)
   for (const e of opts.extensions) {
