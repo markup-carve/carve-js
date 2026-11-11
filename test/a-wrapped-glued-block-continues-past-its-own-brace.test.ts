@@ -19,6 +19,11 @@ describe('a wrapped glued block continues past its own brace (carve-js#4958)', (
   ])('reads the run as attributes %s', (_name, src) => {
     expect(html(src)).toBe('<p class="a b c">p</p>')
   })
+
+  it('counts an astral character before the brace as one column', () => {
+    expect(html('{title="\u{1F600}"}{.b\n            .c}\np\n')).toBe('<p title="\u{1F600}" class="b c">p</p>')
+    expect(html('{title="\u{1F600}"}{.b\n           .c}\np\n')).toBe('<p>{title=“\u{1F600}”}{.b\n.c}\np</p>')
+  })
 })
 
 describe('an attached fence under a wrapped attribute line ends at its first blank (carve-js#4959)', () => {
