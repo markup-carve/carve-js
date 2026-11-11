@@ -52,7 +52,7 @@ describe('a consumed plus keeps an empty host span; a refused tail stops at the 
   it('places an emptied description from the source', () => {
     const description = [...walk(wire(':: t\n : +\nl\n: b\n'))].find(([node]) => node.type === 'definition_description')?.[0]
     expect(description?.children).toEqual([])
-    expect(description?.pos && [description.pos.startOffset, description.pos.endOffset]).toEqual([6, 9])
+    expect(description?.pos && [description.pos.startOffset, description.pos.endOffset]).toEqual([5, 9])
   })
 
   it.each([

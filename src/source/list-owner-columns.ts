@@ -5,8 +5,8 @@ const ITEM_MARKER = /([ \t]*)([-*.]|[0-9]+[.)]|[a-zA-Z]+[.)])(?:\{[^}]*\})?( +)/
 const DESCRIPTION_MARKER = /: +/y
 
 /**
- * Start each list and list item at its owner's content column (CARVE-P12-013,
- * carve#5063): the leading indentation on its opening line is inside the span,
+ * Start each list, list item and description at its owner's content column
+ * (CARVE-P12-013, carve#5063, carve#5976): the leading indentation on its opening line is inside the span,
  * from the column where the owning item, description, footnote or fence puts
  * its content. Runs on codepoint offsets, after `toCodepointPositions`.
  * Per-line tables keep it linear in deeply nested lines.
@@ -142,6 +142,8 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
           ;(item.definitions ?? []).forEach((definition, index) => {
             const span = item.definitionSpans?.[index] ?? (definition[0] as { pos?: Position } | undefined)?.pos
             walk(definition, descriptionColumn(span))
+            // A description is a container too (carve#5976).
+            if (item.definitionSpans?.[index]) anchor(item.definitionSpans[index], owner)
           })
         }
         return
