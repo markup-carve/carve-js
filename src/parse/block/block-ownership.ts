@@ -2026,18 +2026,22 @@ export function ownLines(
           continue
         }
         let afterAttr = false
+        // A tab in a body line restarts its stop at the frame columns the note sits in (PART 9 §24 C5).
+        const origins = quotes === 0 ? frames.filter((f) => f.kind !== 'quote' && f.col <= col).map((f) => f.col) : null
+        const bodyColumn = (index: number, rest: string): number =>
+          origins !== null && hasLeadingTab(lines[index]!, rest) ? strippedColumn(lines[index]!, origins) : docColumn(lines[index]!, rest)
         for (k++; k < lines.length; k++) {
           let body = indentCols(lines[k]!)
           for (let q = 0; q < quotes && isQuoteLine(body.rest); q++) body = indentCols(quoteRest(body.rest))
           if (body.rest.startsWith('{') &&
               (isAttrLine(trimEndSpaceTab(body.rest)) || wrappedAttrRun(trimEndSpaceTab(body.rest), quotes, k) !== null) &&
-              docColumn(lines[k]!, body.rest) < noteBodyColumn) break
+              bodyColumn(k, body.rest) < noteBodyColumn) break
           if (body.rest === '' || /^::? /.test(body.rest)) break
           // An attribute line ends the note's paragraph (PART 9 §15 A1); a line left of the body column then is no longer the note's.
-          if (afterAttr && docColumn(lines[k]!, body.rest) < noteBodyColumn) break
+          if (afterAttr && bodyColumn(k, body.rest) < noteBodyColumn) break
           afterAttr = isAttrLine(trimEndSpaceTab(body.rest))
           if (!afterAttr && classify(body.rest, frames[0]!, k, body.col).kind !== 'text') break
-          const past = docColumn(lines[k]!, body.rest) - noteBodyColumn
+          const past = bodyColumn(k, body.rest) - noteBodyColumn
           if (afterAttr && past > 0) {
             const prefix = lines[k]!.slice(0, lines[k]!.length - body.rest.length)
             const kept = prefix.length - /[ \t]*$/.exec(prefix)![0].length
