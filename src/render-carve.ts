@@ -4224,10 +4224,19 @@ class CarveRenderSession {
           const first = (lines.shift() ?? '').replace(this.markerColumnTag(), '')
           let source = `${indent}${prefix}${first || EMPTY_BODY_SENTINEL}\n`
           const continuation = ' '.repeat(continuationWidth)
-          for (const line of lines) {
+          const firstBlock = item.children[0]
+          const firstComment = firstBlock?.type === 'comment' ? firstBlock :
+            firstBlock?.type === 'paragraph' && firstBlock.children[0]?.type === 'comment' ? firstBlock.children[0] : undefined
+          const commentLines = firstComment?.delimited && first.startsWith('{%')
+            ? firstComment.content.split('\n').length - 1 : 0
+          // A brace run on the marker line is measured from its written brace,
+          // which can be farther right than the item's content column after
+          // attributes or a task box (CARVE-P2-035).
+          const braceIndent = prefix.length + first.indexOf('{%') + 1
+          for (const [index, line] of lines.entries()) {
             source += line.startsWith(this.markerColumnTag())
               ? `${indent}${line.slice(this.markerColumnTag().length)}\n`
-              : line ? `${indent}${continuation}${line}\n` : '\n'
+              : line ? `${indent}${index < commentLines ? ' '.repeat(Math.max(continuationWidth, braceIndent - (line.match(/^ */)?.[0].length ?? 0))) : continuation}${line}\n` : '\n'
           }
           return source
         }
