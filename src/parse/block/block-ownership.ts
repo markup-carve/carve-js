@@ -456,17 +456,17 @@ function listNoteAt(frames: Frame[], k: number): Frame {
   return frames[k]!
 }
 
-/** Route only a block actually taken by a marker-line plus through its item's trace path. */
+/** Route only a block actually taken by a marker-line plus through its host's trace path. */
 function firstBlockTraceRoute(
   parent: string, sibling: Frame | undefined, plusFollower: boolean, at: number, form: Form,
   walkPath: string, opened: boolean, closed: number, reached: string | undefined,
 ): { path: string; alias?: { from: string; to: string }; closed: number; reached?: string | undefined } {
-  if (!plusFollower || sibling?.kind !== 'item' || sibling.plus !== at - 1 ||
+  if (!plusFollower || sibling === undefined || !RESUMING_HOSTS.has(sibling.kind) || sibling.plus !== at - 1 ||
       ['item', 'text', 'blank'].includes(form.kind) || form.family === 'comment' ||
       !(walkPath === parent || walkPath.startsWith(`${parent}/`))) {
     return { path: walkPath, closed, reached }
   }
-  const itemPath = `${parent}/item:${(sibling.line ?? sibling.opened!) + 1}`
+  const itemPath = `${parent}/${TRACE_FRAME[sibling.kind]}:${(sibling.line ?? sibling.opened!) + 1}`
   const readPath = itemPath + walkPath.slice(parent.length)
   return opened
     ? { path: walkPath, alias: { from: walkPath, to: readPath }, closed: 0 }
