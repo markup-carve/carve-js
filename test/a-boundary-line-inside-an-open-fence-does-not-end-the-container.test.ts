@@ -49,6 +49,8 @@ const html = (src: string): string =>
     .trim()
 
 const CODE_HTML = '<pre><code>a b </code></pre>'
+// An own-line `+` fence ends at `b`, which misses its host, and keeps its blank (#5658 F06).
+const MISSED_CODE_HTML = '<pre><code>a </code></pre>'
 const COLON_HTML = '<aside class="admonition note" aria-label="Note"><p>a</p><p>b</p></aside>'
 
 const REF = '<p>see<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>'
@@ -58,9 +60,9 @@ const note = (body: string): string =>
 
 describe('a boundary line inside an open fence does not end the container', () => {
   describe('the list item `+` collector', () => {
-    it('keeps a code fence whole', () => {
+    it('ends an own-line code fence at a line that misses the item (F06)', () => {
       expect(html(doc('- x', '+', ...CODE, '', 'z'))).toBe(
-        `<ul><li>x ${CODE_HTML}</li></ul><p>z</p>`,
+        `<ul><li>x ${MISSED_CODE_HTML}</li></ul><p>b</p><pre><code> z </code></pre>`,
       )
     })
 
@@ -111,8 +113,8 @@ describe('a boundary line inside an open fence does not end the container', () =
   })
 
   describe('the footnote body `+` collector', () => {
-    it('keeps a code fence whole', () => {
-      expect(html(doc('[^f]: n', '+', ...CODE, '', 'see[^f]'))).toBe(note(CODE_HTML))
+    it('ends an own-line code fence at a line that misses the note (F06)', () => {
+      expect(html(doc('[^f]: n', '+', ...CODE, '', 'see[^f]'))).toBe('<p>b</p><pre><code> see[^f] </code></pre>')
     })
 
     it('keeps a colon fence whole', () => {
@@ -136,9 +138,9 @@ describe('a boundary line inside an open fence does not end the container', () =
   })
 
   describe('the definition body `+` collector', () => {
-    it('keeps a code fence whole', () => {
+    it('ends an own-line code fence at a line that misses the description (F06)', () => {
       expect(html(doc(':: t', ':  d', '+', ...CODE, '', 'z'))).toBe(
-        `<dl><dt>t</dt><dd><p>d</p>${CODE_HTML}</dd></dl><p>z</p>`,
+        `<dl><dt>t</dt><dd><p>d</p>${MISSED_CODE_HTML}</dd></dl><p>b</p><pre><code> z </code></pre>`,
       )
     })
 

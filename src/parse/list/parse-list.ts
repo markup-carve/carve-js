@@ -2285,8 +2285,12 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const closer = fenceCloseRe(run).test(sourceQuoteBody(source).trimStart())
         const shiftedFence = column > sourceColumnOfOpener && column < sourceContentColumn && closer
         if (!shiftedFence && closer) break
+        // A `+` at the marker column, or any line in a quoted item, stays payload while a
+        // closer follows, as the spec model reads it (#5658 F06).
+        const keepsCloser = itemQuoteDepth > 0 ||
+          column === authoredItemMarkerColumn && isContinuationMarker(sourceQuoteBody(source).trimStart())
         const blankMiss = pastBlank && column < sourceContentColumn && !closer &&
-          !hasLaterSourceCloser(attachedLineNumbers[index]!)
+          !(keepsCloser && hasLaterSourceCloser(attachedLineNumbers[index]!))
         if (shiftedFence || blankMiss) {
           // After its retained blank, a nonblank line below the own-line
           // fence's host column belongs to the parent (S1, F06).
@@ -2306,7 +2310,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
         const next = lexer.peek()!
         if (!isBlankLine(next) && sawBlank && indentColumns(next) < contentCol) {
           const closes = fenceCloseRe(run).test(next.trimStart()) && indentColumns(next) === indentColumns(attachedLines[0]!)
-          if (!closes && !hasLaterSourceCloser(lexer.lineNumber(lexer.pos))) break
+          const keepsCloser = itemQuoteDepth > 0 ||
+            indentColumns(next) === authoredItemMarkerColumn - baseIndent && isContinuationMarker(next.trimStart())
+          if (!closes && !(keepsCloser && hasLaterSourceCloser(lexer.lineNumber(lexer.pos)))) break
         }
         sawBlank ||= isBlankLine(next)
         attachedLines.push(next)

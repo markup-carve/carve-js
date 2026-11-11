@@ -1670,11 +1670,6 @@ const behindSpec = new Map<string, string>([
   // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
   ["964-a-lazy-line-after-a-comment-keeps-the-deepest-list-open", "<ul>\n  <li>a\n    <ul>\n      <li><p>b\n{% c\nd %}\ntail</p></li>\n      <li><p>z</p></li>\n    </ul>\n  </li>\n</ul>"],
   ["1044-a-lazy-comment-run-lets-a-quote-open-in-its-note", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p\n{% a\n%}</p>\n      <blockquote><p>q\nafter</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
-  ['1033-a-quote-attached-colon-keeps-a-later-plus', "<blockquote>\n  <aside class=\"admonition note\" aria-label=\"Note\">\n    <p>x</p>\n    <p>zq</p>\n  </aside>\n</blockquote>"],
-  ['1034-an-item-attached-colon-keeps-a-later-plus', "<ul>\n  <li>\n    <aside class=\"admonition note\" aria-label=\"Note\">\n      <p>x</p>\n      <p>zq</p>\n    </aside>\n  </li>\n</ul>"],
-  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-2', "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n</p>\n      <pre><code>a\n\nb\n</code></pre>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
-  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-3', "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <pre><code>a\n\nb\n</code></pre>\n  </dd>\n</dl>"],
-  ['279-a-boundary-line-inside-an-open-fence-does-not-end-the-container-7', "<ul>\n  <li>x\n    <pre><code>a\n\nb\n</code></pre>\n  </li>\n</ul>\n<p>z</p>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
