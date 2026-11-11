@@ -54,6 +54,9 @@ export function isQuoteBlankLine(line: string): boolean {
   return markers > 0
 }
 
+/** A fence's closer line the container wrote, not the author: it owns no source (CARVE-P12-014). */
+export const syntheticFenceClosers = new WeakMap<object, number>()
+
 /**
  * COUNTED instrumentation for the container-layout work (markup-carve/carve#752).
  *

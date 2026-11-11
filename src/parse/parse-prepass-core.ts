@@ -1,7 +1,7 @@
 import { buildBracketMap } from './inline/parse-brackets.js'
 import { type Attrs, type BlockNode, type CodeBlock, type DefinitionItem, type Position, type Table } from '../ast.js'
 import { isEmptyAttrs, isValidAttrPayload, isValidInlineAttrPayload, parseAttrs } from '../extension/attribute-parser.js'
-import { indentColumns, isBlankLine, layoutWork, Lexer, TRAILING_WS } from './parse-lexer.js'
+import { indentColumns, isBlankLine, layoutWork, Lexer, syntheticFenceClosers, TRAILING_WS } from './parse-lexer.js'
 import { isCarveWhitespace, trimEndSpaceTab, trimNonNbsp } from '../trim-non-nbsp.js'
 import { linkDestinationValue } from '../link-destination.js'
 import { utf8ByteLength } from '../extension/abbr-budget.js'
@@ -1230,6 +1230,8 @@ export function attachBlockPos(
   endLineIndexExclusive: number,
 ): void {
   if (lexer.suppressPositions || lexer.parseOptions.positions === false) return
+  const synthetic = syntheticFenceClosers.get(node)
+  if (synthetic !== undefined && synthetic < endLineIndexExclusive) endLineIndexExclusive = synthetic
   const endLineIndex = Math.max(startLineIndex, endLineIndexExclusive - 1)
   // A LAZY-FRAMED end line carries three codepoints the source never held (the
   // #1630 frame that keeps a container-folded closer from closing an

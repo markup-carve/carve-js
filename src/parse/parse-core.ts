@@ -85,7 +85,7 @@ import { applyAbbreviations, applyLinkDefs } from './inline/inline-resolution.js
 import { normalizeRefLabel } from '../label-key.js'
 import { completeDestinationOpeners, destinationSlotEnds, linkDestinationValue } from '../link-destination.js'
 import { markAboveContentColumn, markCaptionAtContentColumn, markSecondLineLazy } from './block/paragraph-indent.js'
-import { Lexer, indentColumns, isBlankLine, layoutWork, normalizeNewlines, sliceColumns } from './parse-lexer.js'
+import { Lexer, indentColumns, isBlankLine, layoutWork, normalizeNewlines, sliceColumns, syntheticFenceClosers } from './parse-lexer.js'
 import { createListParser } from './list/parse-list.js'
 import { referenceImage, referenceLink } from './inline/reference-resolution.js'
 import { definitionLinePosition, dropPositions, toCodepointPositions } from '../source/source-positions.js'
@@ -333,7 +333,9 @@ export function parseRawBlock(lexer: Lexer, report = true): RawBlock {
   }
   if (report && (!closed || syntheticCloser !== undefined)) lexer.reportUnclosedCodeFence(start, marker, 0, syntheticCloser)
   const terminated = !lexer.documentLacksFinalBreak || lastPayloadLineIndex < 0 || lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
-  return { type: 'raw_block', format, content: codeContent(lines, terminated) }
+  const raw: RawBlock = { type: 'raw_block', format, content: codeContent(lines, terminated) }
+  if (syntheticCloser !== undefined) syntheticFenceClosers.set(raw, syntheticCloser)
+  return raw
 }
 
 export const definitionListHelpers = { ...listHelpers,

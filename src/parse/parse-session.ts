@@ -180,7 +180,7 @@ import { authoredAbbreviations, directCommentNodes, erasedLineNodes, erasedLines
 import { isValidInlineAttrPayload } from '../extension/attribute-parser.js'
 import { InlineAttributeHosts } from './block/inline-attribute-hold.js'
 import { leadingAttributeRun, wrappedAttributeLinesAt } from './block/leading-attribute-run.js'
-import { isQuoteBlankLine } from './parse-lexer.js'
+import { isQuoteBlankLine, syntheticFenceClosers } from './parse-lexer.js'
 
 // One block quote being collected: the lines it takes so far and the lazy
 // state its unmarked lines are judged against.
@@ -497,8 +497,17 @@ const STAND_IN_FREE = new Set(['paragraph', 'heading', 'code_block', 'raw_block'
 // A consumed `+`'s `%%` stand-in is wider than the `+`. Its span is dropped, since the source
 // holds no comment there (CARVE-P12-022), and every span that ended where the stand-in ended,
 // its own containers and their side tables alike, ends at the authored `+` (CARVE-P12-020).
-function dropStandInPositions(doc: Document, plusEnd: (line: number) => { offset: number; column: number }): WeakSet<object> {
+function dropStandInPositions(
+  doc: Document,
+  plusEnd: (line: number) => { offset: number; column: number },
+  streamLineEnds: Array<{ line: number; offset: number }>,
+): WeakSet<object> {
   const ends = new Map<string, { line: number; offset: number; column: number }>()
+  // A host measured to its line's end ends where the stand-in ends, with or without a stand-in node.
+  for (const { line, offset } of streamLineEnds) {
+    const end = plusEnd(line)
+    if (offset > end.offset) ends.set(`${line}:${offset}`, { line, ...end })
+  }
   const spans: Span[] = []
   const remapped = new WeakSet<object>()
   const endOf = (node: { pos?: Span }): Span | undefined => {
@@ -934,7 +943,8 @@ export class ParseSession extends InlineParseSession {
         const plus = sourceLines[line - 1]!.lastIndexOf('+')
         // `line` numbers the source, not the stream with erased lines removed.
         return { offset: (originalLexer ?? lexer).lineOffsets[line - 1]! + bom + plus + 1, column: (line === 1 ? bom : 0) + plus + 2 }
-      })
+      }, lexer.lines.flatMap((text, index) => this.consumedMarkerLines.has(lexer.lineNumber(index))
+        ? [{ line: lexer.lineNumber(index), offset: lexer.lineOffset(index) + text.length }] : []))
       dropStandIns(doc)
       stopRemappedHostsAtChildren(doc, remapped)
     }
@@ -1726,6 +1736,7 @@ export class ParseSession extends InlineParseSession {
       lastPayloadLineIndex < 0 ||
       lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
     const cb: CodeBlock = { type: 'code_block', content: codeContent(lines, terminated) }
+    if (syntheticCloser !== undefined) syntheticFenceClosers.set(cb, syntheticCloser)
     if ((lang === 'csv' || lang === 'tsv') && payloadPositions.length === lines.length) {
       setDelimitedPayloadLines(cb, payloadPositions)
     }
