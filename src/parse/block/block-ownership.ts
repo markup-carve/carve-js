@@ -327,11 +327,16 @@ function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Fr
     hasNestedItemFrame(frames)
 }
 
-function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number): number {
+function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number, quote = false): number {
   const origins: number[] = []
   for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
-  const canonicalChild = hasNestedItemFrame(frames)
+  const canonicalChild = quote || hasNestedItemFrame(frames)
   return strippedColumn(line, origins, canonicalChild)
+}
+
+// A quote opener is read where its frames put it, so it reaches an item's note body by its per-frame column (carve#5877).
+function tabbedItemNoteQuote(rest: string, frames: readonly Frame[], k: number): boolean {
+  return frames[k]!.kind === 'note' && frames[k - 1]?.kind === 'item' && isQuoteLine(rest)
 }
 
 // Character checks: a regex capturing the rest at every quote level is quadratic in nesting depth.
@@ -941,9 +946,10 @@ export function ownLines(
         continue
       }
       const tabLead = hasLeadingTab(src, m.rest)
-      const markerWithTab = tabLead && tabbedMarkerOutsideCode(m.rest, top(), frames)
+      const noteQuote = tabLead && tabbedItemNoteQuote(m.rest, frames, k)
+      const markerWithTab = tabLead && (tabbedMarkerOutsideCode(m.rest, top(), frames) || noteQuote)
       if (tabLead && (m.col < f.col || markerWithTab)) {
-        if (stripped === null) stripped = tabColumnInFrames(src, frames, segment)
+        if (stripped === null) stripped = tabColumnInFrames(src, frames, segment, noteQuote)
         // Normalize before deciding reach. An identical later marker must not gain
         // a new column merely because the first one opened a child frame.
         if (markerWithTab && stripped !== m.col) {
