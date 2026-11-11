@@ -319,6 +319,13 @@ function registerPassedNoteBodies(lexer: Lexer, notes: PassedNote[], defLineInde
   }
 }
 
+// A run in a container takes no lazy lines, so an unprefixed line refuses it (carve#5830 rule B).
+function refuseRunAtQuoteLazyLine(lexer: Lexer, state: ReturnType<typeof verbatimOnlyLazyState>): void {
+  if (state.attrRun == null || !lexer.quoteLazyLines.has(lexer.lineNumber(lexer.pos))) return
+  state.attrRun = null
+  state.lazyFoldable = true
+}
+
 function canTakePlainLazyLine(state: ReturnType<typeof verbatimOnlyLazyState>): boolean {
   return state.lazyFoldable && state.deepest?.lazyFoldable !== false && state.opaque === null &&
     state.deepest?.opaque == null && (!state.deepest?.divDepth || state.deepest.literalLayout === true)
@@ -1157,6 +1164,7 @@ export function parseFootnoteDef(lexer: Lexer, hooks: FootnoteHooks): null {
     lexer, 'footnote', markerColumn, bodyColumn, noteQuoteDepth(authoredLine, defLineRaw), (admission) => {
     const ln = admission.line
     if (keepRefusedQuoteFollower(ln)) return 'continue'
+    refuseRunAtQuoteLazyLine(lexer, lazyState)
     if (collectPassedNoteLine(lexer, admission, passedNotes, passedNoteState, bodyColumn)) return 'continue'
     if (refusedMarkerEndsAtBelowColumn(refusedMarker, admission.kind)) return 'stop'
     if (lexer.separatingAbbreviations?.has(lexer.pos)) return 'stop'
