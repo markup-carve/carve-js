@@ -931,6 +931,7 @@ function regionMarkerAtItemMarkerColumn(
 
 // A quote or bare div of structural-only lines holds nothing, so it hosts no caption (carve#4600).
 function holdsNothing(block: BlockNode): boolean {
+  if (block.type === 'comment') return true
   if (block.type === 'block_quote') return block.fenced !== true && block.children.every(holdsNothing)
   return block.type === 'div' && block.label === undefined && block.children.every(holdsNothing)
 }

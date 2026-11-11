@@ -1338,7 +1338,8 @@ export class ParseSession extends InlineParseSession {
     if (!commentOnlyParagraph(paragraph)) return false
     const comments = paragraph.children.filter((child): child is Comment => child.type === 'comment')
     for (const comment of comments) lexer.parseOptions.onDroppedComment?.(comment)
-    lexer.heldComments = comments
+    // A `%%` sharing the line has no block spelling of its own there, so that paragraph stays dropped.
+    if (comments.every(comment => comment.delimited)) lexer.heldComments = comments
     return true
   }
 
