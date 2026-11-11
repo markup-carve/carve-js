@@ -860,11 +860,47 @@ function insertAfterParagraph(siblings: BlockNode[], paragraph: Paragraph, node:
   siblings.splice(at, 0, node)
 }
 
+/** `insertAfterParagraph` for every pending node at once, in one pass over `siblings` (carve-js#4953). */
+function insertAfterParagraphs(siblings: BlockNode[], pending: ReadonlyArray<readonly [Paragraph, Comment]>): void {
+  const byParagraph = new Map<BlockNode, Comment[]>()
+  for (const [paragraph, node] of pending) {
+    const nodes = byParagraph.get(paragraph)
+    if (nodes && (nodes.at(-1)!.pos?.startOffset ?? -1) > (node.pos?.startOffset ?? -1)) {
+      for (const [later, laterNode] of pending) insertAfterParagraph(siblings, later, laterNode)
+      return
+    }
+    if (nodes) nodes.push(node)
+    else byParagraph.set(paragraph, [node])
+  }
+  const merged: BlockNode[] = []
+  let next = 0
+  while (next < siblings.length) {
+    const block = siblings[next++]!
+    merged.push(block)
+    const nodes = byParagraph.get(block)
+    if (!nodes) continue
+    byParagraph.delete(block)
+    for (const node of nodes) {
+      while (next < siblings.length &&
+             (siblings[next]!.type === 'comment' || siblings[next]!.type === 'abbreviation_def') &&
+             (siblings[next]!.pos?.startOffset ?? Infinity) <= (node.pos?.startOffset ?? -1)) merged.push(siblings[next++]!)
+      merged.push(node)
+    }
+  }
+  siblings.length = 0
+  for (const block of merged) siblings.push(block)
+  for (const [paragraph, nodes] of byParagraph) for (const node of nodes) insertAfterParagraph(siblings, paragraph as Paragraph, node)
+}
+
+const erasedLineSets = new WeakMap<readonly number[], Set<number>>()
+
 function visibleParagraphLines(paragraph: Paragraph, stream: TransparentLineStream): number[] {
   const first = paragraph.pos?.startLine
   const last = paragraph.pos?.endLine
   if (first === undefined || last === undefined) return []
-  const erased = new Set(stream.erased.map((index) => index + 1))
+  // Built once per stream, not per paragraph (carve-js#4953).
+  let erased = erasedLineSets.get(stream.erased)
+  if (!erased) erasedLineSets.set(stream.erased, erased = new Set(stream.erased.map((index) => index + 1)))
   const visible: number[] = []
   for (let line = first; line <= last; line++) if (!erased.has(line)) visible.push(line)
   return visible
@@ -955,9 +991,20 @@ export function restoreTransparentComments(document: Document, authored: Documen
   // (carve-js#4392). The lookups never match a comment; only insertAfterParagraph reads placed ones.
   const hoisted = new Map<BlockNode[], Comment[]>()
   const splitFootnotes = new Map<string, Comment[]>()
+  // Comments after a paragraph wait too: a splice per line would rebuild the sibling index per line
+  // (carve-js#4953). Only the hoisted merge and the non-paragraph lookups read them.
+  const afterParagraphs = new Map<BlockNode[], Array<[Paragraph, Comment]>>()
+  const placeAfterParagraphs = (only?: BlockNode[]): void => {
+    for (const [siblings, pending] of afterParagraphs) {
+      if (only && siblings !== only) continue
+      insertAfterParagraphs(siblings, pending)
+      afterParagraphs.delete(siblings)
+    }
+  }
   const placeHoisted = (only?: BlockNode[]): void => {
     for (const [siblings, pending] of hoisted) {
       if (only && siblings !== only) continue
+      placeAfterParagraphs(siblings)
       const merged: BlockNode[] = []
       let next = 0
       for (const comment of pending) {
@@ -1019,8 +1066,10 @@ export function restoreTransparentComments(document: Document, authored: Documen
       const paragraphOwner = ownerOf.get(match.siblings)
       const reached = owner === undefined ? undefined : owner === 'doc' ? footnote ? undefined : document.children : ownedBlocks.get(owner)?.blocks
       if (reached && paragraphOwner?.startsWith(`${owner}/`)) hoisted.set(reached, [...hoisted.get(reached) ?? [], comment])
-      else insertAfterParagraph(match.siblings, match.paragraph, comment)
+      else if (afterParagraphs.has(match.siblings)) afterParagraphs.get(match.siblings)!.push([match.paragraph, comment])
+      else afterParagraphs.set(match.siblings, [[match.paragraph, comment]])
     } else {
+      placeAfterParagraphs()
       const descriptionGap = betweenDescriptions(blocks, comment.pos.startOffset, index + 1)
       if (descriptionGap && placeInDescription(descriptionGap, comment)) continue
       const owned = owner === undefined ? undefined : ownedBlocks.get(owner)
@@ -1075,6 +1124,7 @@ export function restoreTransparentComments(document: Document, authored: Documen
       }
     }
   }
+  placeAfterParagraphs()
   placeHoisted()
   // Writers fall back to map order when any definition has no position. Restore
   // authored order before omitting a split span; nested notes finish first.
@@ -1116,10 +1166,19 @@ export function restoreTransparentAbbreviations(document: Document, definitions:
         definition.transparentInList = true
       }
     }
-    // Abbreviations register document-wide and their AST nodes hoist beside
-    // the host block, even when a paragraph or list writes the source line.
-    const at = document.children.findIndex((block) => (block.pos?.startOffset ?? Infinity) > definition.pos!.startOffset!)
-    document.children.splice(at < 0 ? document.children.length : at, 0, definition)
   }
+  // Abbreviations register document-wide and their AST nodes hoist beside
+  // the host block, even when a paragraph or list writes the source line.
+  // One merge after the lookups, which never match a definition (carve-js#4953).
+  const merged: BlockNode[] = []
+  let next = 0
+  for (const definition of definitions) {
+    while (next < document.children.length &&
+           (document.children[next]!.pos?.startOffset ?? Infinity) <= definition.pos!.startOffset!) merged.push(document.children[next++]!)
+    merged.push(definition)
+  }
+  while (next < document.children.length) merged.push(document.children[next++]!)
+  document.children.length = 0
+  for (const block of merged) document.children.push(block)
 }
 
