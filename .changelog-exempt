@@ -55,3 +55,32 @@
 3527: Moves the spec corpus pin used by tests; runtime source changes only to accommodate the pinned fixtures.
 3531: Refactors parser and importer paths without changing public output.
 3535: Splits complex TypeScript paths to satisfy the complexity gate without changing public output.
+
+# 0.1.16. Each fixes a regression introduced after 0.1.15 and fixed before this release, so no released behavior moves.
+
+4701: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4702: fixes an unreleased regression; its fixture rows render the same on 0.1.15 as after the fix.
+4705: fixes an unreleased regression; its added test passes on the 0.1.15 tree.
+4709: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4722: fixes an unreleased regression; its added test passes on the 0.1.15 tree.
+4740: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4742: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4754: fixes an unreleased regression; fixes a quadratic brace-run scan that 0.1.15 did not have (#4750: 0.1.15 is linear).
+4759: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4764: fixes an unreleased regression; its added test passes on the 0.1.15 tree.
+4769: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4777: fixes an unreleased regression; its added test passes on the 0.1.15 tree.
+4788: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4792: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4798: fixes an unreleased regression; fixes a footnote rescan added by #4735, after 0.1.15.
+4806: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4808: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4816: fixes an unreleased regression; fixes ownership regressions #4814 introduced in this release window.
+4832: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4837: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4840: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4873: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4879: fixes an unreleased regression; fixes a scan in inline-attribute-hold.ts, which #4849 added after 0.1.15.
+4935: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4939: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4946: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
