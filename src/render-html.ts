@@ -788,7 +788,7 @@ function renderDocumentBody(ast: Document, opts: RenderOptions): string {
       if (wrapSections) {
         // The id moves to <section>; any other heading attrs (classes,
         // key-values) stay on the <h*>.
-        const id = node.attrs?.id
+        const id = authoredIdOf(node.attrs)
         // `!== undefined` so an explicit empty `id=""` renders `id=""` on the
         // <section> (it already suppressed the auto-slug in resolveHeadingIds).
         const sectionId = id !== undefined ? ` id="${escapeAttr(id)}"` : ''

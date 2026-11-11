@@ -675,7 +675,8 @@ function resolveHeadingIdsImpl(
       // (`{id=""}` then `# T` -> `<section id="">`): it suppresses the auto
       // slug rather than being treated as absent.
       id = authored
-      if (heading.attrs!.id !== id) heading.attrs = { ...heading.attrs, id }
+      // An ingested tree keeps its slots as sent: the wire `order` already names the winning write.
+      if (!ingested && heading.attrs!.id !== id) heading.attrs = { ...heading.attrs, id }
       used.reserve(id)
     } else {
       const base = slugify(inlineText(heading.children), opts)

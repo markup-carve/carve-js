@@ -105,6 +105,73 @@ export function slotsByWriteOrder(a: Attrs): { id?: string | undefined; classes?
   return { ...(idHolds ? { id } : {}), ...(classesHold && classes.length ? { classes } : {}) }
 }
 
+const nameOf = (slot: string): string => (slot === '#id' ? 'id' : slot.toLowerCase())
+
+/**
+ * The wire `order` (carve#5988): `order` lists each slot once, so where a folded
+ * name did not end on the slot written last, that slot is listed again.
+ */
+export function wireAttrOrder(a: Attrs): string[] | undefined {
+  const order = a.order
+  if (!order || !a.keyValues) return order
+  const last = new Map<string, string>()
+  for (const key of Object.keys(a.keyValues)) {
+    const name = key.toLowerCase()
+    if (name !== 'id' && name !== 'class') last.set(name, key)
+  }
+  const writes = (a as LoggedAttrs)[SLOT_WRITES]
+  if (writes && Object.hasOwn(slotsByWriteOrder(a)!, 'id')) {
+    for (const [slot] of writes) if (slot !== '.class' && nameOf(slot) === 'id') last.set('id', slot)
+  }
+  const tail = new Map<string, string>()
+  for (const slot of order) if (slot !== '.class') tail.set(nameOf(slot), slot)
+  const out = [...order]
+  for (const [name, slot] of tail) {
+    const written = last.get(name)
+    if (written !== undefined && written !== slot && order.includes(written)) out.push(written)
+  }
+  return out.length === order.length ? order : out
+}
+
+/**
+ * The inverse of {@link wireAttrOrder}: `order` is the write sequence. A name's
+ * first slot keeps its position and spelling, its last slot gives the value.
+ */
+export function attrsFromWireOrder(a: Attrs): Attrs {
+  const { order, keyValues } = a
+  if (!order || !keyValues) return a
+  const keys = Object.keys(keyValues)
+  const names = keys.map((k) => k.toLowerCase())
+  const collides = names.some((n, i) => n === 'id' || n === 'class' || names.indexOf(n) !== i)
+  if (!collides && new Set(order).size === order.length) return a
+  const lastAt = new Map<string, number>()
+  order.forEach((slot, i) => lastAt.set(slot, i))
+  const values: Record<string, string> = { ...keyValues }
+  for (const name of new Set(names)) {
+    if (name === 'id' || name === 'class') continue
+    const group = keys.filter((_, i) => names[i] === name)
+    if (group.length < 2) continue
+    const written = group.reduce((best, k) => ((lastAt.get(k) ?? -1) > (lastAt.get(best) ?? -1) ? k : best))
+    if (written !== group[group.length - 1]) {
+      const value = values[written]!
+      delete values[written]
+      setOwn(values, written, value)
+    }
+  }
+  const writes: SlotWrite[] = []
+  const seen = new Set<string>()
+  for (const slot of order) {
+    const repeat = seen.has(slot)
+    seen.add(slot)
+    if (slot === '#id') { if (a.id !== undefined) writes.push(['#id', a.id]) }
+    else if (slot === '.class') { if (!repeat && a.classes?.length) writes.push(['.class', [...a.classes]]) }
+    else if (foldsToSlot(slot) && values[slot] !== undefined && (!repeat || nameOf(slot) === 'id')) writes.push([slot, values[slot]!])
+  }
+  const out: Attrs = { ...a, keyValues: values, order: [...seen] }
+  recordSlotWrites(out, writes)
+  return out
+}
+
 export function mergeAttrs(a: Attrs | undefined, b: Attrs): Attrs {
   if (!a) return b
   const out: Attrs = { ...a }
