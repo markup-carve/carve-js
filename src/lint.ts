@@ -2185,7 +2185,8 @@ function collectListItemIndentWarnings(
           if (!span) return
           const markerLine = lines[span.startLine - 1] ?? ''
           const at = utf16IndexOfColumn(markerLine, Math.max(0, (span.startColumn ?? 1) - 1))
-          const marker = /^:[ \t]+/.exec(markerLine.slice(at))
+          // The span can start in the leading indentation before the `:` (CARVE-P12-013).
+          const marker = /^[ \t]*:[ \t]+/.exec(markerLine.slice(at))
           if (!marker) return
           const endLine = Math.max(span.endLine ?? span.startLine,
             ...(entry.definitions[k] ?? []).map((block) => (block as Positioned).pos?.endLine ?? 0))

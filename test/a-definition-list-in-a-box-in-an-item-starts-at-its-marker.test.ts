@@ -25,7 +25,8 @@ it('closed box: list, term and description begin at their markers', () => {
   expect(startsOf('- a\n  ::: box\n   :: sub\n   : def\n  :::\n')).toEqual([
     'definition_list :: sub\n   : def',
     'definition_term :: sub',
-    'definition_description : def',
+    // carve#5976: a description starts at its owner's (the box's) content column.
+    'definition_description  : def',
   ])
 })
 
