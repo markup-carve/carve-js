@@ -488,13 +488,20 @@ function markerLinePlusEndsAtBlank(firstBlockAttached: boolean, attachmentEnd: n
   return firstBlockAttached && attachmentEnd === bodyLength && !nestedFenceOpen()
 }
 
+// A note a `+` skips leads the item body but stands on its own line, not on the marker line (carve#5963).
+function noteOpensAuthoredLine(lexer: Lexer, defLineIndex: number): boolean {
+  const number = lexer.lineNumber(defLineIndex)
+  const authored = authoredSourceLine(lexer, number) ?? (lexer.rootLines ?? lexer.lines)[number - 1]
+  return authored !== undefined && RE_FOOTNOTE_DEF.test(sourceQuoteBody(authored).trimStart())
+}
+
 function reachesAuthoredNoteBody(
   lexer: Lexer, admission: ContainerAdmission, authoredBodyColumn: number | undefined,
   defLineIndex: number,
 ): boolean {
   // A note on a list marker uses that item's lazy admission instead.
   return admission.kind === 'content' || lexer.hostBody !== 'description' &&
-    (lexer.hostBody !== 'list' || defLineIndex > 0) &&
+    (lexer.hostBody !== 'list' || defLineIndex > 0 || noteOpensAuthoredLine(lexer, defLineIndex)) &&
     admission.kind === 'below' && authoredBodyColumn !== undefined &&
     Number.isFinite(admission.sourceColumn) &&
     admission.sourceColumn >= authoredBodyColumn
