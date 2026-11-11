@@ -153,6 +153,8 @@ export class Lexer {
   /** Root lines whose quote first-block `+` the walk refused by its follower's raw column. */
   /** Columns a mid-line ownership cut removed, keyed by root line (carve#3885). */
   private ownershipCuts?: Map<number, OwnershipCut[]>
+  /** The same mid-line cuts, keyed by document line number. */
+  private ownershipCutsByLine?: Map<number, OwnershipCut[]>
   /** Columns a leading cut removed; `lineOffset` and `lineStartColumn` both include it. */
   private ownershipLeads?: Map<number, number>
   /** The same leading cuts, keyed by document line number. */
@@ -188,6 +190,7 @@ export class Lexer {
         this.ownershipLeadsByLine.set(this.lineNumber(index), removed)
       }
       if (!lineCuts.length) cuts.delete(index)
+      else (this.ownershipCutsByLine ??= new Map()).set(this.lineNumber(index), lineCuts)
     }
     this.sourceOffsetMap = offsets
     if (cuts.size) this.ownershipCuts = cuts
@@ -667,6 +670,25 @@ export class Lexer {
     if (box === undefined) root.taskBoxes.set(lineNumber, box = markerLineTaskBox(rootLine))
     const boxColumns = taskBoxColumns(rootLine, column, box)
     return Math.max(0, column - boxColumns - (root.ownershipLeadsByLine?.get(lineNumber) ?? 0))
+  }
+
+  /** Where a container opening on this line begins: before the ownership walk's cut of its lead (CARVE-P12-013). */
+  containerStart(lineIndex: number): { offset: number; column: number } {
+    const root = this.documentRoot ?? this
+    const lineNumber = this.lineNumber(lineIndex)
+    const lead = root.ownershipLeadsByLine?.get(lineNumber) ?? 0
+    // A cut that ends where the content starts took leading indentation behind a prefix (`>   [^f]:`).
+    let back = 0
+    let shift = lead
+    const content = this.lineStartColumn(lineIndex) - 1
+    const ends = (root.ownershipCutsByLine?.get(lineNumber) ?? []).map((cut) => {
+      const end = cut.at + shift + cut.removed
+      shift += cut.removed
+      return { end, removed: cut.removed }
+    })
+    for (let at = content, i = ends.length - 1; i >= 0 && ends[i]!.end === at; at -= ends[i]!.removed, i--) back += ends[i]!.removed
+    if (back === 0) back = lead
+    return { offset: this.lineOffset(lineIndex) - back, column: this.lineStartColumn(lineIndex) - back }
   }
 
   /** 1-based column, in the DOCUMENT line, where this line's content starts. */
