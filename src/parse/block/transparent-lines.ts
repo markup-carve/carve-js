@@ -511,18 +511,17 @@ function containingBlocks(blocks: BlockNode[], offset: number): BlockNode[] {
   return blocks
 }
 
+// Only the chain of last items is still open; the deepest one whose content column the line reaches owns it.
 function trailingListOwner(blocks: BlockNode[], column: number):
   { blocks: BlockNode[]; containers: Array<List | ListItem> } | null {
-  for (const block of blocks) {
-    if (block.type !== 'list') continue
-    for (const item of [...block.items].reverse()) {
-      const nested = trailingListOwner(item.children, column)
-      if (nested) return { blocks: nested.blocks, containers: [block, item, ...nested.containers] }
-      if (item.children[0]?.pos?.startColumn === column)
-        return { blocks: item.children, containers: [block, item] }
-    }
-  }
-  return null
+  const list = blocks.at(-1)
+  if (list?.type !== 'list') return null
+  const item = list.items.at(-1)
+  const content = item === undefined ? undefined : itemContentColumn(item)
+  if (item === undefined || content === undefined || column < content) return null
+  const nested = trailingListOwner(item.children, column)
+  if (nested) return { blocks: nested.blocks, containers: [list, item, ...nested.containers] }
+  return { blocks: item.children, containers: [list, item] }
 }
 
 function betweenListItems(blocks: BlockNode[], offset: number, settle: (blocks: BlockNode[]) => void = () => {}):
