@@ -4565,6 +4565,15 @@ class CarveRenderSession {
         if (b.type === 'paragraph' && rendered === '+') rendered = '\\+'
         if (b.type === 'paragraph' && !separated) rendered = guardLeadingPlusBelowList(rendered, previousEmitted, true)
         if (rendered.length === 0) return
+        // A retained comment-only paragraph can border an authored blank even
+        // when the list itself is tight. Its empty rendering does not loosen
+        // the list, but removing that blank changes how adjacent paragraphs end
+        // when the formatted source is read again.
+        if ((b.type === 'comment' && b.delimited || previousEmitted?.type === 'comment' && previousEmitted.delimited) &&
+            previousEmitted?.pos?.endLine !== undefined &&
+            b.pos?.startLine !== undefined && b.pos.startLine > previousEmitted.pos.endLine + 1) {
+          parts.push('')
+        }
         // An authored blank run ends the nested list before this comment.
         // Keep that boundary or readback assigns the comment to the last
         // nested item and joins the following list to it.
