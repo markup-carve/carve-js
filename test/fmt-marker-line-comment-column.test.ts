@@ -16,6 +16,7 @@ describe('fmt keeps a marker-line comment run past its brace', () => {
     '-{.g} {% first\n       second\n       third %}\n',
     '- [x] {% first\n        second %}\n',
     '> -{.g} {% first\n>        second %}\n',
+    '-{.g} {% first\n       second %}\n  after\n',
   ])('keeps the rendered meaning and fixed point of %j', (source) => {
     const formatted = fmt(source)
     expect(carveToHtml(formatted)).toBe(carveToHtml(source))
