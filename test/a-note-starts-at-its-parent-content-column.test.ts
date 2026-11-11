@@ -11,6 +11,8 @@ test('an indented note starts at its parent content column', () => {
   expect(note(wire(' Note[^fn].\n\n [^fn]: body.\n'), 'fn')?.pos).toMatchObject({ startLine: 3, startColumn: 1, startOffset: 13 })
   expect(note(wire('> - t\n^ p\n>   [^f]: n\nl\n\nr[^f]\n'), 'f')?.pos).toMatchObject({ startLine: 3, startColumn: 3, startOffset: 12 })
   expect(note(wire('1. a\n\n    [^f]: b\n\n   x[^f]\n'), 'f')?.pos).toMatchObject({ startLine: 3, startColumn: 4, startOffset: 9 })
+  // The lead before an indented quote marker is the quote's, not the note's.
+  expect(note(wire('  > [^f]: n\n\nx[^f]\n'), 'f')?.pos).toMatchObject({ startLine: 1, startColumn: 5, startOffset: 4 })
 })
 
 test('a list in an indented note anchors at the note content column', () => {

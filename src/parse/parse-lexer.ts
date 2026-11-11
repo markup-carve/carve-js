@@ -690,7 +690,9 @@ export class Lexer {
       return { end, removed: cut.removed }
     })
     for (let at = content, i = ends.length - 1; i >= 0 && ends[i]!.end === at; at -= ends[i]!.removed, i--) back += ends[i]!.removed
-    if (back === 0) back = lead
+    // A leading cut is this line's indentation only when no container prefix stands before the content.
+    const source = (root.authoredRootLines ?? root.authoredLines ?? root.lines)[lineNumber - 1] ?? ''
+    if (back === 0 && !/\S/.test(source.slice(0, content))) back = lead
     return { offset: this.lineOffset(lineIndex) - back, column: this.lineStartColumn(lineIndex) - back }
   }
 
