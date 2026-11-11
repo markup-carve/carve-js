@@ -30,10 +30,11 @@ it('keeps a claimed second plus in the note chain', () => {
   ])
 })
 
-it('ends a marker-line note at its refused plus, so the item reads the next block (carve#5515)', () => {
+// carve#5890 ruling B: a marker-line note whose `+` attached a block keeps the line after its refused plus.
+it('keeps the next block in a marker-line note whose plus attached a list (carve#5890)', () => {
   expect(owners('- [^a]: +\n  - li\n    ```\n  +\n    p\n\nsee[^a]\n').slice(3, 5)).toEqual([
     [4, 'doc/item:1/footnote:1', 'plus'],
-    [5, 'doc/item:1', 'text'],
+    [5, 'doc/item:1/footnote:1', 'text'],
   ])
-  expect(owners('- [^a]: +\n  - li\n    ```\n  +\n  +\n    p\n\nsee[^a]\n')[4]).toEqual([5, 'doc/item:1', 'text'])
+  expect(owners('- [^a]: +\n  - li\n    ```\n  +\n  +\n    p\n\nsee[^a]\n')[4]).toEqual([5, 'doc/item:1/footnote:1', 'plus'])
 })
