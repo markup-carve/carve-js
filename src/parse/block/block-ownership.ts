@@ -562,13 +562,13 @@ function normalizeMarkerFollower(
 function skippedNoteMarker(
   line: string, noteLine: boolean, markerColumn: number | undefined, markerCanon: number | undefined,
   columnOfPlus: (text: string) => number, standInPlus: () => string,
-): { line: string; column: number | null } {
+): { line: string; column: number | null; markerLine?: boolean } {
   const note = noteLine ? FOOTNOTE_DEF.exec(line.trimStart().replace(/^(?:>[ \t]*)*/, '')) : null
   if (note && CONT_MARKER.test(note[2]!)) {
     const plusAt = line.lastIndexOf('+')
     const quotes = (line.slice(0, line.indexOf('[^')).match(/>/g) ?? []).length
     const prefix = '> '.repeat(quotes) + ' '.repeat(markerCanon ?? 0)
-    return { line: prefix + line.slice(line.indexOf('[^'), plusAt) + '%%', column: columnOfPlus(line.slice(plusAt)) + 1 }
+    return { line: prefix + line.slice(line.indexOf('[^'), plusAt) + '%%', column: columnOfPlus(line.slice(plusAt)) + 1, markerLine: true }
   }
   // A skipped definition with text stands at the marker column, as a `+` one does.
   if (note && markerCanon !== undefined && line.indexOf('[^') > 0 && !/^[ \t]*>/.test(line) &&
@@ -808,7 +808,7 @@ export function ownLines(
       result.push(skipped.line)
       if (skipped.column !== null) consumedMarkers.add(at)
       if (skipped.column !== null) refusedPlus.push({ index: at, column: skipped.column,
-        host: LINT_HOST[top().kind] ?? 'document', reason: 'claimed', firstBlock: false })
+        host: LINT_HOST[top().kind] ?? 'document', reason: 'claimed', firstBlock: skipped.markerLine === true })
       if (skipped.line !== line) rewritten = true
       if (trace) emit(at, 'S5', ownerPath(), 'CARVE-P0-024', 'leaf', { plus: at })
     }
