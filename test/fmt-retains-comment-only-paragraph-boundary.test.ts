@@ -15,4 +15,11 @@ describe('fmt keeps the blank before a comment-only paragraph in an item', () =>
     expect(carveToHtml(formatted)).toBe(carveToHtml(source))
     expect(fmt(formatted)).toBe(formatted)
   })
+
+  it('does not add a blank between consecutive retained comments', () => {
+    const source = '- {% first %}\n\n  {% a %}\n\n  more\n'
+    const formatted = fmt(source)
+    expect(carveToHtml(formatted)).toBe(carveToHtml(source))
+    expect(fmt(formatted)).toBe(formatted)
+  })
 })
