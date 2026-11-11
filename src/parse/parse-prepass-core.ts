@@ -1044,7 +1044,9 @@ function continueOpenRunScan(scan: OpenRunScan, segment: string): boolean {
   for (let i = 0; i < segment.length; i++) {
     const ch = segment[i]!
     const column = scan.column
-    scan.column = ch === '\n' ? 0 : ch === '\t' ? (Math.floor(column / 4) + 1) * 4 : column + 1
+    // Columns count code points (CARVE-P7-001), so a surrogate pair's low half adds none.
+    const lowHalf = ch >= '\uDC00' && ch <= '\uDFFF' && i > 0 && segment[i - 1]! >= '\uD800' && segment[i - 1]! <= '\uDBFF'
+    scan.column = ch === '\n' ? 0 : ch === '\t' ? (Math.floor(column / 4) + 1) * 4 : lowHalf ? column : column + 1
     if (scan.escape) {
       scan.escape = false
       continue
