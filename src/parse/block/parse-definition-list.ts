@@ -19,7 +19,7 @@ import { nextContainerContent, runIndentationContainer } from './parse-indentati
 import { sourceQuoteBody, sourceQuoteRest } from '../parse-core.js'
 import { sourceQuotePrefixEnd } from './parse-block-boundaries.js'
 import { firstBlockOpenerContent } from '../list/parse-item-core.js'
-import { attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
+import { attachedLeadIsColon, attachedLeadIsList, attachedListFenceBoundary } from './parse-footnote-session.js'
 import { braceRunHolds } from './brace-run-holds.js'
 import { taskBoxColumns } from './task-box-frame.js'
 import { pulledBodyBlockCut } from './pulled-paragraph.js'
@@ -496,6 +496,7 @@ export function createDefinitionListParser(
         RE_DEFLIST_DEF.test(a)
       // A list marker ends an attached block that is no list; the body then opens or closes at it (PART 0 S3, carve#4860).
       const attachedBoundary = (): ((a: string, offset?: number) => boolean) => {
+        if (attachedLeadIsColon(lexer)) return isDefBodyBoundary
         if (!attachedLeadIsList(lexer)) return (a) => isDefBodyBoundary(a) || isListMarkerLine(a.trimStart())
         const listFence = attachedListFenceBoundary(indentColumns(lexer.peek() ?? ''))
         const first = (lexer.peek() ?? '').trimStart()
