@@ -9,16 +9,18 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-### Breaking
+## [0.1.16] - 2026-11-11
 
-- Plain text writes nothing for a cell a span covers: `| Summe netto | < |` is `Summe netto`, not `Summe netto |` (markup-carve/carve#5546, CARVE-P11-082).
-
-## [0.1.16] - 2026-11-08
-
-This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, native table headers in the writer, and a large authoring lint set.
+This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, refused brace runs read as text, native table headers in the writer, and a large authoring lint set.
 
 ### Breaking
 
+- A refused block-position `{` or `{%` run claims no lines: its opener is text and later lines read normally. A multi-line run inside a container takes no lazy lines, and the writer and Djot import escape a refused run as ordinary text (#4888, markup-carve/carve#5830).
+- `+` attachment follows the merged ownership table, and a `+` inside a `+`-attached colon block is text (#4814, #4828, #4927, markup-carve/carve#5700, markup-carve/carve#5923).
+- A colon line without a term opens no description span, and a term on a list marker line counts as a definition entry (#4882, #4884, markup-carve/carve#5841).
+- The November 9 rulings apply to rendered abbreviation boundaries, region markers between list items and editorial comments before failed bracket attribute tails (#4813).
+- The HTML importer reads only `data-carve-*` carriers; `data-djot-*` names are ordinary attributes, and the old lint input aliases are gone (#4844, markup-carve/carve#5735).
+- Plain text writes nothing for a cell a span covers: `| Summe netto | < |` is `Summe netto`, not `Summe netto |` (#4732, markup-carve/carve#5546, CARVE-P11-082).
 - `+` follows one attach rule in every host. A refused `+` is a literal character, continuation markers attach forward only, and a consumed `+` leaves no node (#4035, #4362, #4396, markup-carve/carve#4409).
 - A list item or description emptied by its `+` is written with the `{empty}` sentinel (#4387, #4390).
 - Single-line comments and other invisible lines are erased before layout, and a paragraph made only of braced comments is dropped (#4364, #4190, markup-carve/carve#5012).
@@ -37,6 +39,18 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 - The `raw-block-syntax` lint rule is retired (#4200).
 
 ### Fixes
+
+- Semantic values pass the authored-value scheme probe before they become HTML `title` or `datetime` attributes (#4812, markup-carve/carve#5663).
+- Brace and comment runs are measured from their written columns in every host, stay in their container, and hold block-shaped and `%%%` lines only while the run is valid (#4749, #4751, #4752, #4766, #4774, #4775, #4776, #4778, #4793, #4843, #4849, #4851, #4852, #4855, #4856, #4859, #4861, #4862, #4863, #4864, #4865, #4866, #4868, #4869, #4870, #4871, #4876, #4883, #4885, #4887, #4893, #4897, #4900, #4901, #4902, #4903, #4906, #4908, #4910, #4918, #4921, #4940).
+- Footnote and note `+` lines, losing duplicates, refused followers and quoted note bodies keep their authored owner (#4690, #4699, #4703, #4704, #4706, #4707, #4711, #4712, #4720, #4725, #4726, #4728, #4730, #4731, #4743, #4744, #4746, #4748, #4785, #4789, #4791, #4797, #4819, #4839, #4875, #4894, #4915, #4924).
+- Lists, descriptions and quotes keep their items, siblings, looseness and trailing comments across refused `+`, open fences and comment-only runs (#4698, #4710, #4716, #4723, #4737, #4739, #4757, #4758, #4767, #4773, #4780, #4781, #4782, #4783, #4889, #4891, #4933, #4936).
+- Attached fences, line blocks and verse close at their own closers and keep their payload (#4714, #4734, #4735, #4738, #4762, #4763, #4770, #4771, #4794, #4822, #4825, #4827).
+- Tab-led lines are measured per frame in markers, ownership, code and verse (#4075, #4833, #4854, #4922, #4925, #4948).
+- AST round trips keep erased comment lines, quote markers, transparent hosts and paragraph positions (#4691, #4692, #4694, #4695, #4696, #4697, #4831, #4841).
+- Inline parsing keeps link tails, attribute runs after references and raw syntax, hard breaks after comments, smart quotes after attributed symbols and nested link attributes in their place (#4784, #4799, #4800, #4803, #4809, #4817).
+- Body admonitions and figure note references are numbered in document order (#4801, #4811).
+- HTML import reports authored attributes an endnote item cannot keep (#4850, markup-carve/carve#5747).
+- Lint reports a refused own-line `+` with the new `refused-continuation-marker` hint, and an unclosed code fence a host ends at its opener (#4845, #4942).
 
 - Lists, descriptions, quotes and attached blocks keep their intended owner and boundaries across nested fences, blank lines, lazy text and continuation markers (#4522, #4523, #4525, #4548, #4571, #4576, #4577, #4581, #4583, #4587, #4591, #4598, #4599, #4603, #4605, #4609, #4610, #4611, #4612, #4616, #4617, #4618, #4619, #4621, #4622, #4625, #4630, #4631, #4634, #4636, #4637, #4640, #4641, #4642, #4643, #4644, #4645, #4646, #4651, #4652, #4653, #4655, #4657, #4662, #4667, #4668, #4670, #4674, #4676, #4677).
 - Footnote and definition bodies keep later content, attachments and sibling blocks at their authored boundaries (#4503, #4510, #4514, #4538, #4542, #4544, #4549, #4550, #4556, #4564, #4565, #4568, #4573, #4584, #4590, #4592, #4593, #4632, #4633, #4638, #4654, #4659, #4669, #4678).
@@ -67,6 +81,8 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 - Lint: BBCode wrappers, table marker padding, pending block attributes, heading targets, emphasis false positives, wrong-column `+`, overindented openers (#3634, #3642, #3648, #3854, #3870, #3872, #3962, #3965, #4051, #4175, #4236, #4318, #4349).
 
 ### Improvements
+
+- A paragraph of lazy `{%` opener lines and a container's comment run parse in linear time (#4898, #4914).
 
 - Parsing and formatting avoid repeated ownership walks, blank lookahead and escape readbacks (#4531, #4532, #4582, #4647, #4648, #4650, #4679).
 
