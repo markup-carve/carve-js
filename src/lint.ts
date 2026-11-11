@@ -2037,6 +2037,75 @@ function listBlockGroupKind(
 }
 
 /**
+ * The earlier items a marker opening an item on a line sits below. A sibling is the latest
+ * earlier item of its list; otherwise the host is the widest item ending in the blank run
+ * right above. Indexed, since scanning every item per marker line was quadratic (carve-js#4962).
+ */
+function indexMarkerItems(items: readonly LintItemColumn[], blankAt: (line: string, depth: number) => boolean): {
+  below: (lineNo: number, lines: readonly string[]) => { sibling?: LintItemColumn; host?: LintItemColumn }
+} {
+  const byStart = new Map<number, LintItemColumn[]>()
+  const byEnd = new Map<number, number[]>()
+  const listGroups = new Map<unknown, Map<string, number[]>>()
+  const push = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
+    const values = map.get(key)
+    if (values) values.push(value)
+    else map.set(key, [value])
+  }
+  let maxQuoteDepth = 0
+  items.forEach((item, k) => {
+    push(byStart, item.startLine, item)
+    push(byEnd, item.endLine, k)
+    const groups = listGroups.get(item.list) ?? new Map<string, number[]>()
+    listGroups.set(item.list, groups)
+    push(groups, `${item.quoteDepth}:${item.baseColumn}:${item.contentColumn}`, k)
+    maxQuoteDepth = Math.max(maxQuoteDepth, item.quoteDepth)
+  })
+  // A line blank at one quote depth is blank at every deeper one.
+  const blankDepth = (line: string): number => {
+    for (let depth = 0; depth <= maxQuoteDepth; depth++) if (blankAt(line, depth)) return depth
+    return Infinity
+  }
+  const latestBefore = (group: readonly number[], lineNo: number): number => {
+    let low = 0
+    let high = group.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (items[group[middle]!]!.startLine < lineNo) low = middle + 1
+      else high = middle
+    }
+    return low > 0 ? group[low - 1]! : -1
+  }
+  return {
+    below(lineNo, lines) {
+      const opened = [...(byStart.get(lineNo) ?? [])].sort((a, b) => a.baseColumn - b.baseColumn)[0]
+      if (!opened) return {}
+      const inGap = (item: LintItemColumn) => item.startLine < lineNo && item.quoteDepth === opened.quoteDepth &&
+        item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn
+      // A sibling measures against any earlier item of its list, the nearest one named (carve#4835).
+      let siblingIndex = -1
+      for (const group of listGroups.get(opened.list)?.values() ?? []) {
+        if (inGap(items[group[0]!]!)) siblingIndex = Math.max(siblingIndex, latestBefore(group, lineNo))
+      }
+      if (siblingIndex >= 0) return { sibling: items[siblingIndex]!, host: items[siblingIndex]! }
+      // An item passes only when every line between its end and the marker is blank at its depth.
+      let hostIndex = -1
+      let runDepth = 0
+      for (let end = lineNo - 1; end >= 1 && runDepth <= maxQuoteDepth; end--) {
+        for (const k of byEnd.get(end) ?? []) {
+          const item = items[k]!
+          if (item.quoteDepth < runDepth || !inGap(item)) continue
+          const best = hostIndex < 0 ? undefined : items[hostIndex]!
+          if (!best || item.contentColumn > best.contentColumn || (item.contentColumn === best.contentColumn && k < hostIndex)) hostIndex = k
+        }
+        runDepth = Math.max(runDepth, blankDepth(lines[end - 1]!))
+      }
+      return hostIndex < 0 ? {} : { host: items[hostIndex]! }
+    },
+  }
+}
+
+/**
  * Report block-shaped lines below an item's minimum column, and compatibility
  * spellings authored past its canonical column. The AST supplies item ownership/ranges; source is read only for the
  * marker width and the authored indentation. That keeps this diagnostic in
@@ -2187,7 +2256,7 @@ function collectListItemIndentWarnings(
     })
   })
   items.sort((a, b) => a.startLine - b.startLine || b.contentColumn - a.contentColumn)
-
+  const markerItems = indexMarkerItems(items, (line, depth) => blockView(line, depth).rest.trim() === '')
   const reported = new Set<number>()
   const active: LintItemColumn[] = []
   const ambiguousFences = new Map<LintItemColumn, { kind: 'code' | 'colon'; run: string }>()
@@ -2218,14 +2287,7 @@ function collectListItemIndentWarnings(
     const owner = containing ?? lastEnded
     const authored = blockView(lines[index]!, owner?.quoteDepth ?? 0)
     if (!_unrendered.has(lineNo) && LINT_MARKER_SHAPED.test(authored.rest)) {
-      const opened = items.filter((item) => item.startLine === lineNo)
-        .sort((a, b) => a.baseColumn - b.baseColumn)[0]
-      const inGap = (item: LintItemColumn) => opened !== undefined && item.startLine < lineNo &&
-        item.quoteDepth === opened.quoteDepth && item.baseColumn < opened.baseColumn && opened.baseColumn < item.contentColumn
-      // A sibling measures against any earlier item of its list, the nearest one named (carve#4835).
-      const sibling = items.filter((item) => inGap(item) && item.list === opened!.list).at(-1)
-      const host = sibling ?? items.filter((item) => inGap(item) && item.endLine < lineNo && blankSince(item, index))
-        .sort((a, b) => b.contentColumn - a.contentColumn)[0]
+      const { sibling, host } = markerItems.below(lineNo, lines)
       if (host) {
         const start = (starts[index] ?? 0) + authored.chars
         const afterBlank = index > 0 && blockView(lines[index - 1]!, host.quoteDepth).rest.trim() === ''
