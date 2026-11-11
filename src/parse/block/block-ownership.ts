@@ -545,8 +545,15 @@ function normalizeMarkerFollower(
     line = '> '.repeat(tab.depth) + line.trimStart()
   }
   let notePrefix: string | null = null
-  const quoteColumns = (text: string): number[] =>
-    [...(text.match(/^(?:[ \t]*> ?)+/)?.[0] ?? '')].flatMap((ch, col) => ch === '>' ? [col] : [])
+  const quoteColumns = (text: string): number[] => {
+    const columns: number[] = []
+    let col = 0
+    for (const ch of text.match(/^(?:[ \t]*> ?)+/)?.[0] ?? '') {
+      if (ch === '>') columns.push(col)
+      col = ch === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1
+    }
+    return columns
+  }
   // A quoted follower stays in the note only within the note's own quotes, none left of their columns.
   const insideNoteQuotes = (): boolean => {
     const own = [...note!.prefix].flatMap((ch, col) => ch === '>' ? [col] : [])

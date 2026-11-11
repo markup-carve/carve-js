@@ -19,3 +19,7 @@ test("a quote left of the note's own quote column is not the note's follower", (
 test("a quote right of the note's own quote column still follows the note", () => {
   expect(html('> [^b]: +\n  > para\n\nr[^b]\n')).toMatch(/<li id="fn1">\s*<p>para<a /)
 })
+
+test("a tab before a follower's quote marker counts as the columns it reaches", () => {
+  expect(html('- a\n  > [^q]: +\n\t> z\n\nr[^q]\n')).toMatch(/<li id="fn1">\s*<p>z<a /)
+})
