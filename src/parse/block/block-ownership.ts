@@ -545,10 +545,23 @@ function normalizeMarkerFollower(
     line = '> '.repeat(tab.depth) + line.trimStart()
   }
   let notePrefix: string | null = null
-  const quoteDepth = (text: string): number =>
-    (text.match(/^(?:[ \t]*> ?)+/)?.[0].match(/>/g) ?? []).length
+  const quoteColumns = (text: string): number[] => {
+    const columns: number[] = []
+    let col = 0
+    for (const ch of text.match(/^(?:[ \t]*> ?)+/)?.[0] ?? '') {
+      if (ch === '>') columns.push(col)
+      col = ch === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1
+    }
+    return columns
+  }
+  // A quoted follower stays in the note only within the note's own quotes, none left of their columns.
+  const insideNoteQuotes = (): boolean => {
+    const own = [...note!.prefix].flatMap((ch, col) => ch === '>' ? [col] : [])
+    const follower = quoteColumns(line)
+    return follower.length <= own.length && follower.every((col, i) => col >= own[i]!)
+  }
   if (note && at === note.at + 1 && line.trim() !== '' &&
-      !(isQuoteLine(indentCols(line).rest) && quoteDepth(line) > quoteDepth(note.prefix))) {
+      !(isQuoteLine(indentCols(line).rest) && !insideNoteQuotes())) {
     const body = note.item ? line.trimStart() : line.replace(/^[ \t]*(?:> )?/, '')
     if (!CONT_MARKER.test(body.trimStart()) && (!note.item || indentCols(line).col < 2) &&
         isText(indentCols(body).rest, at) && (line !== body || note.prefix.includes('> ') || note.prefix.length > 2)) {
@@ -1793,7 +1806,7 @@ export function ownLines(
     }
     function noteReaderPrefix(): string {
       const before = out.slice(0, out.lastIndexOf('[^'))
-      return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
+      return before.replace(/(?:[-*:]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
   return { lines: result, cuts, letters, refusedPlus, payloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
