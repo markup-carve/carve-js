@@ -72,6 +72,12 @@ interface Frame {
   family?: 'code' | 'comment' | 'div'
   /** The code opener's authored indent includes a tab, so its closer uses that same measured base. */
   tabbedCodeOpener?: boolean
+  /** Columns a code opener moved when it was read at its per-frame column (carve#5755). */
+  tabShift?: number
+  /** A verse opener's per-frame column less its line-start one; its payload is read per frame (carve#5755). */
+  verseShift?: number
+  /** A verse whose payload ownership reads per frame: its opener moved, or it sits in nested body frames. */
+  frameVerse?: boolean
   // The owner's last block a `%%%` span in an entry restores at its closer.
   entryLast?: string | undefined
   axes?: string | undefined
@@ -148,7 +154,7 @@ function payloadColumn(rest: string, column: number, inner: Frame, lazyMissed: b
     }
     return column
   }
-  return Math.max(column - inner.cut, inner.canon)
+  return Math.max(column - inner.cut + (inner.tabShift ?? 0), inner.canon)
 }
 
 function recordDefinitionTerm(frames: Frame[], owner: Frame, column: number): void {
@@ -298,7 +304,7 @@ function indentCols(line: string): { col: number; rest: string } {
 }
 
 // A leading run's column as nested frames strip it (PART 9 §24 C5): tab stops restart at every frame column the run reaches.
-function strippedColumn(line: string, origins: readonly number[], canonicalChild: boolean): number {
+function strippedColumn(line: string, origins: readonly number[]): number {
   let col = 0
   let origin = 0
   let o = 0
@@ -308,7 +314,7 @@ function strippedColumn(line: string, origins: readonly number[], canonicalChild
     else break
     // A tab beginning exactly at a frame boundary still belongs to the
     // frame it just reached. Reset the stop only after advancing past it.
-    while (o < origins.length && (canonicalChild ? origins[o]! <= col : origins[o]! < col)) origin = origins[o++]!
+    while (o < origins.length && origins[o]! <= col) origin = origins[o++]!
   }
   return col
 }
@@ -322,17 +328,48 @@ function hasNestedItemFrame(frames: readonly Frame[]): boolean {
       frames[index - 1]?.kind === 'item' && child.markerCol === frames[index - 1]?.col)
 }
 
-function tabbedMarkerOutsideCode(rest: string, frame: Frame, frames: readonly Frame[]): boolean {
-  return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null &&
-    hasNestedItemFrame(frames)
+function tabbedMarkerOutsideCode(rest: string, frame: Frame): boolean {
+  return !(frame.kind === 'fence' && frame.family === 'code') && matchMarker(rest) !== null
 }
 
-function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number, quote = false): number {
+// A tab-led code or verse payload line is measured per frame; a verse closer keeps its authored lead.
+// One body frame's reader already strips its columns from the tab, so a verse line is respelled
+// only under a shifted opener or nested frames, and its other tabs keep their source positions.
+function framePayload(inner: Frame, pairedCloser: boolean, src: string, m: { col: number; rest: string }, closerColumn: number): boolean {
+  if (pairedCloser || !hasLeadingTab(src, m.rest)) return false
+  if (inner.family === 'code') return true
+  if (!inner.lineBlock || m.rest !== '' && !inner.span && inner.closes?.(m.rest, closerColumn)) return false
+  return inner.frameVerse === true
+}
+
+function nestedVerseFrames(frames: readonly Frame[], segment: number): boolean {
+  return frames.slice(segment).filter((f) => BODY_FRAME.has(f.kind)).length > 1
+}
+
+// A marker at an unchanged column is still respelled, so the list reader measures no tab.
+function respellsFrameTab(deepest: Frame, stripped: number, m: { col: number; rest: string }): boolean {
+  if (deepest.kind === 'fence' && deepest.family === 'code') return false
+  return stripped !== m.col || tabbedMarkerOutsideCode(m.rest, deepest)
+}
+
+function tabColumnInFrames(line: string, frames: readonly Frame[], segment: number): number {
   const origins: number[] = []
   for (let q = segment; q < frames.length && frames[q]!.kind !== 'quote'; q++) origins.push(frames[q]!.col)
-  const canonicalChild = quote || hasNestedItemFrame(frames)
-  return strippedColumn(line, origins, canonicalChild)
+  return strippedColumn(line, origins)
 }
+
+// A tab-led block opener is written at its per-frame column, so a nested reader cannot
+// remeasure the tab from the line start (§24 C5, carve#5755). A verse opener records how far
+// that moved it, and whether its payload is read per frame here instead of by the line-block reader.
+function openerFrame(form: Form, src: string, m: { col: number; rest: string }, frames: readonly Frame[], segment: number) {
+  const perFrame = hasLeadingTab(src, m.rest) && FRAME_OPENER.has(form.kind)
+  const from = perFrame ? tabColumnInFrames(src, frames, segment) : m.col
+  const frameVerse = !!form.lineBlock && (from !== m.col || nestedVerseFrames(frames, segment))
+  return { perFrame, from, shift: from - m.col, frameVerse, readsVerse: frameVerse && perFrame, spaces: perFrame || SPACED_LEAD.has(form.kind) }
+}
+const FRAME_OPENER = new Set<Form['kind']>(['quote', 'leaf', 'fence', 'colon', 'item'])
+// A term and its body read alike in both spellings.
+const SPACED_LEAD = new Set<Form['kind']>(['term', 'dd'])
 
 // A quote opener is read where its frames put it, so it reaches an item's note body by its per-frame column (carve#5877).
 function tabbedItemNoteQuote(rest: string, frames: readonly Frame[], k: number): boolean {
@@ -567,7 +604,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; frameVerseOpeners: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -645,6 +682,8 @@ export function ownLines(
   const refusedInvisibleFollowers = new Set<number>()
   const tabQuoteFollower: { value: PendingTabQuoteFollower | null } = { value: null }
   const payloadLines = new Set<number>()
+  // Verse openers written at their per-frame column; the line-block reader takes them as written.
+  const frameVerseOpeners = new Set<number>()
   const lazyCaptions = new Set<number>()
   const overindented: OverindentedOpener[] = []
   // A line the walk rewrote without removing anything, so it records no cut.
@@ -832,10 +871,12 @@ export function ownLines(
     const lineCuts: OwnershipCut[] = []
     if (shiftedCut) lineCuts.push({ at: 0, removed: shiftedCut })
     // `spaces` writes a leading tab as the columns it reaches, so a term and its body read alike in both spellings.
-    const lead = (target: number, spaces = false): void => {
-      const col = Math.min(target, m.col)
+    // `from` is a tab lead's per-frame column (§24 C5), where its spaces stand.
+    const lead = (target: number, spaces = false, anywhere = false, from = m.col): void => {
+      const col = Math.min(target, from)
       const run = src.length - m.rest.length
-      if (col === m.col && !(spaces && out === '' && src.slice(0, run).includes('\t'))) out += src.slice(0, run)
+      const tabbed = spaces && (anywhere || out === '') && src.slice(0, run).includes('\t')
+      if (col === m.col && !tabbed) out += src.slice(0, run)
       else {
         const last = lineCuts.at(-1)
         if (last?.at === out.length) last.removed += run - col
@@ -911,6 +952,9 @@ export function ownLines(
     let stripped: number | null = null
     let segment = 1
     let frameReach = false
+    let frameShift = 0
+    let verseShift = 0
+    let frameVerse = false
     for (let k = 1; k < frames.length; k++) {
       const f = frames[k]!
       // A lone `+` reaches the marker column of an open marker container.
@@ -948,10 +992,9 @@ export function ownLines(
         continue
       }
       const tabLead = hasLeadingTab(src, m.rest)
-      const noteQuote = tabLead && tabbedItemNoteQuote(m.rest, frames, k)
-      const markerWithTab = tabLead && (tabbedMarkerOutsideCode(m.rest, top(), frames) || noteQuote)
-      if (tabLead && (m.col < f.col || markerWithTab)) {
-        if (stripped === null) stripped = tabColumnInFrames(src, frames, segment, noteQuote)
+      const markerWithTab = tabLead && (tabbedMarkerOutsideCode(m.rest, top()) || tabbedItemNoteQuote(m.rest, frames, k))
+      if (tabLead) {
+        stripped ??= tabColumnInFrames(src, frames, segment)
         // Normalize before deciding reach. An identical later marker must not gain
         // a new column merely because the first one opened a child frame.
         if (markerWithTab && stripped !== m.col) {
@@ -960,14 +1003,17 @@ export function ownLines(
           m = indentCols(src)
         }
       }
-      if (m.rest !== '' && m.col < f.col) {
+      // A tab-led line reaches a frame by its per-frame column, also when its line-start column does (carve#5755).
+      if (m.rest !== '' && (m.col < f.col || tabLead)) {
         if (stripped === null || stripped < f.col) break
-        frameReach = true
+        frameReach ||= m.col < f.col || markerWithTab
       }
       reached = k
     }
-    // The frame columns decided the reach, so the readers see that run as spaces.
-    if (frameReach && stripped !== null && stripped !== m.col) {
+    // The frame columns decided the reach, so the readers see that run as spaces. A code
+    // payload line keeps its authored lead: the payload reader measures it (carve#5755).
+    if (frameReach && stripped !== null && respellsFrameTab(top(), stripped, m)) {
+      frameShift = stripped - m.col
       lineCuts.push({ at: out.length, removed: src.length - m.rest.length - stripped })
       src = ' '.repeat(stripped) + m.rest
       m = indentCols(src)
@@ -1210,7 +1256,11 @@ export function ownLines(
       apply(owner, m.col, form, plusLanding)
     } else {
       noteOpener(owner, form, owner.col, plusFollower)
-      lead(owner.canon, form.kind === 'term' || form.kind === 'dd')
+      const opener = openerFrame(form, src, m, frames, segment)
+      verseShift = opener.shift
+      frameVerse = opener.frameVerse
+      if (opener.readsVerse) frameVerseOpeners.add(at)
+      lead(owner.canon, opener.spaces, opener.perFrame, opener.from)
       apply(owner, m.col, form, owner.canon, !leftLineBlockSpan)
     }
     if (form.kind === 'quote' && plusFollower) markFirstBlockQuote(sibling)
@@ -1277,11 +1327,21 @@ export function ownLines(
       let payloadForm = 'payload'
       const nestedCodeTab = inner.family === 'code' && !inner.tabbedCodeOpener &&
         hasNestedItemFrame(frames) && hasLeadingTab(src, m.rest)
-      const closerColumn = nestedCodeTab
+      const closerColumn = nestedCodeTab || inner.tabShift !== undefined && hasLeadingTab(src, m.rest)
         ? tabColumnInFrames(src, frames, segment) : m.col
       const pairedCloser = inner.family === 'code' && pairedCodeClosers.has(at) &&
         (!nestedCodeTab || closerColumn <= inner.canon + inner.cut)
-      lead(pairedCloser ? inner.canon : payloadColumn(m.rest, m.col, inner, lazyMissed, inCommentSpan, frames))
+      // A closer under a code opener read per frame is written as spaces, like its opener.
+      const tabbedCloser = (inner.tabShift !== undefined && closerColumn !== m.col || inner.verseShift !== undefined && hasLeadingTab(src, m.rest)) &&
+        m.rest !== '' && !inner.span && inner.closes!(m.rest, closerColumn)
+      // A tab lead is measured per frame, so the payload keeps the columns its space spelling keeps (carve#5755).
+      const perFramePayload = !tabbedCloser && framePayload(inner, pairedCloser, src, m, closerColumn)
+      const frameColumn = tabbedCloser ? closerColumn
+        : perFramePayload ? stripped ?? tabColumnInFrames(src, frames, segment) : m.col
+      // A tabbed verse keeps its per-frame column less the opener's (§23, carve#5755).
+      const verseColumn = inner.lineBlock && !lazyMissed && !tabbedCloser ? frameColumn - (inner.verseShift ?? 0) : m.col
+      lead(pairedCloser || tabbedCloser && inner.lineBlock ? inner.canon : payloadColumn(m.rest, verseColumn, inner, lazyMissed, inCommentSpan, frames),
+        tabbedCloser || frameColumn !== m.col, tabbedCloser || frameColumn !== m.col, frameColumn)
       const inComment = inner.span?.[0] === '%'
       if (m.rest !== '' && inner.span) {
         const c = inner.span[0] === '%' ? COMMENT_FENCE.exec(m.rest) : PURE_FENCE.exec(m.rest)
@@ -1426,6 +1486,9 @@ export function ownLines(
         frames.push({ kind: form.kind, family: form.family ?? 'div', opened: at, col: owner.col, canon: owner.canon, cut,
           closes: form.closes, run: form.run, lineBlock: form.lineBlock, span: null, para: false, last: null,
           tabbedCodeOpener: form.family === 'code' && hasLeadingTab(lines[at]!, lines[at]!.trimStart()),
+          ...(form.family === 'code' && frameShift !== 0 ? { tabShift: frameShift } : {}),
+          ...(form.lineBlock && verseShift !== 0 ? { verseShift } : {}),
+          ...(frameVerse ? { frameVerse } : {}),
           entryLast: spanInEntry ? owner.last! : undefined })
         return
       }
@@ -1747,7 +1810,7 @@ export function ownLines(
       return before.replace(/(?:[-*]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)

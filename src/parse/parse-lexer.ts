@@ -161,7 +161,7 @@ export class Lexer {
   private taskBoxes: Map<number, [number, number] | null> | undefined
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, letters, refusedPlus, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
+  applyOwnership({ lines, cuts, letters, refusedPlus, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; frameVerseOpeners?: Set<number>; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
     this.skippedAbbreviations = skippedAbbreviations
     this.separatingAbbreviations = separatingAbbreviations
     for (const { index, column, host, reason } of refusedPlus) {
@@ -170,6 +170,7 @@ export class Lexer {
     }
     for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
     for (const index of lazyCaptions ?? []) this.itemLazyLines.add(this.lineNumber(index))
+    for (const index of frameVerseOpeners ?? []) (this.frameVerseOpeners ??= new Set()).add(this.lineNumber(index))
     for (const o of overindented) {
       this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
         column: (this.linePrefixWidths?.[o.index] ?? 0) + Array.from(this.lines[o.index]!.slice(0, o.char)).length + 1,
@@ -335,6 +336,8 @@ export class Lexer {
    * (markup-carve/carve-js#1630).
    */
   itemLazyLines: Set<number>
+  /** Verse opener lines ownership wrote at their per-frame column (carve#5755), by line number. */
+  frameVerseOpeners?: Set<number>
   /** The `itemLazyLines` that reach no item at all, read by the outermost list. */
   outerItemLazyLines: Set<number>
   hostContentColumn = 0

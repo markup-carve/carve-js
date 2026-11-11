@@ -7,6 +7,6 @@ it('opens and closes a tabbed fence in the innermost item frame (carve-js#4830)'
     '<ul>\n  <li>a\n    <ul>\n      <li>a\n        <ul>\n          <li>a\n            <pre><code>c\n</code></pre>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>',
   )
   expect(carveToHtml(source.replace('  \t  c\n', '  \t  \tdeep\n'))).toContain(
-    '<pre><code>\tdeep\n</code></pre>',
+    '<pre><code>  deep\n</code></pre>',
   )
 })

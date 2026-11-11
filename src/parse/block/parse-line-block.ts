@@ -186,7 +186,9 @@ export function createLineBlockParser(helpers: typeof import('../../parse.js').l
       const verseQuoteAt = verseSource.indexOf('>')
       const sameQuoteColumn = openerQuoteAt >= 0 && verseQuoteAt >= 0 &&
         sourceColumnAt(openerSource, openerQuoteAt) === sourceColumnAt(verseSource, verseQuoteAt)
-      const comparableSource = !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
+      // Ownership already wrote a per-frame verse opener's lines in their frame columns (carve#5755).
+      const comparableSource = !root.frameVerseOpeners?.has(lexer.lineNumber(openLineIndex)) &&
+        !lexer.quoteLazyLines.has(lexer.lineNumber(lineIndex)) &&
         (sameQuoteColumn || (openerQuoteAt < 0 && verseQuoteAt < 0))
       const openerTabbed = openerSource.slice(0, openerAt).includes('\t')
       const tabbedSources = openerTabbed && verseSource.slice(0, verseAt).includes('\t')
