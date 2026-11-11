@@ -1882,10 +1882,17 @@ export function ownLines(
         }
         // A line skipped past the marker column stands at it, so its indentation maps to no column.
         const opener = runOpeners.get(index)
-        const shift = opener === undefined ? docColumn(lines[index]!, indentCols(rest).rest) - marker : shifts.get(opener) ?? 0
-        const past = index >= firstKept ? Math.min(shift, /^ */.exec(rest)![0].length) : 0
+        const lead = indentCols(rest).rest
+        const shift = opener === undefined ? lookaheadColumn(lines[index]!, lead) - marker : shifts.get(opener) ?? 0
+        // A tab lead is written as the spaces of its per-frame column, so no reader remeasures it from the line start.
+        const tabbed = hasLeadingTab(rest, lead)
+        const past = index >= firstKept ? Math.min(shift, tabbed ? shift : /^ */.exec(rest)![0].length) : 0
         shifts.set(index, past)
-        if (past > 0) {
+        if (tabbed) {
+          const pad = Math.max(0, lookaheadColumn(lines[index]!, lead) - past - docColumn(lines[index]!, rest))
+          cuts.set(index, [...cuts.get(index) ?? [], { at: prefix.length, removed: rest.length - lead.length - pad }])
+          rest = ' '.repeat(pad) + lead
+        } else if (past > 0) {
           cuts.set(index, [...cuts.get(index) ?? [], { at: prefix.length, removed: past }])
           rest = rest.slice(past)
         }
@@ -1945,21 +1952,37 @@ export function ownLines(
         floor = 0
       }
     }
+    // Tab stops restart at every open frame's column (PART 9 §24 C5); under a quote or fence the line-start stops hold.
+    const frameOrigins = frames.some((f) => f.kind === 'quote' || f.kind === 'fence') ? null
+      : frames.slice(1).map((f) => f.col + (f.tabShift ?? 0))
+    const lookaheadColumn = (line: string, rest: string): number =>
+      frameOrigins !== null && /^[ \t]*\t/.test(line) ? strippedColumn(line, frameOrigins) : docColumn(line, rest)
+    // An attribute line the skip stops at, at the marker column by line-start stops, holds the block (PART 9 §17 L3).
+    let held = false
+    const stop = (reason: RefusedPlus['reason']): RefusedPlus['reason'] | null => decide(held ? null : reason)
     for (let k = at + 1; ; k++) {
       nextVisible = k
       const next = lines[k]
-      if (next === undefined) return decide('document')
+      if (next === undefined) return stop('document')
       let n = indentCols(next)
       for (let q = 0; q < quotes; q++) {
-        if (!isQuoteLine(n.rest) || n.col < (floors[q] ?? 0)) return decide('left')
+        if (!isQuoteLine(n.rest) || n.col < (floors[q] ?? 0)) return stop('left')
         n = indentCols(quoteRest(n.rest))
       }
       // A line of nothing but quote markers is blank at its own level (CARVE-P9-085).
-      if (/^(?:>[ \t]*)*$/.test(n.rest)) return decide('blank')
+      if (/^(?:>[ \t]*)*$/.test(n.rest)) return stop('blank')
       const rest = trimEndSpaceTab(n.rest)
-      const col = docColumn(next, n.rest)
+      const frameCol = lookaheadColumn(next, n.rest)
+      const stops = frameCol !== marker && frameCol < content && docColumn(next, n.rest) === marker
+      const col = stops ? marker : frameCol
       const kept = col !== marker && col >= content
+      // The attribute run of the held block still moves to the marker column.
+      if (held && !(kept && isAttrLine(rest))) return decide(null)
       if (col !== marker && !kept) return decide(col < marker ? 'left' : 'right')
+      if (stops && isAttrLine(rest)) {
+        held = true
+        continue
+      }
       if (kept) firstKept = Math.min(firstKept, k)
       // Invisible definitions at the marker column defer the attachment
       // decision to the next visible line.
