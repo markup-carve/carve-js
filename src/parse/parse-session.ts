@@ -1360,7 +1360,7 @@ export class ParseSession extends InlineParseSession {
     }
 
     // Block-level constructs in priority order
-    if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer)
+    if (RE_RAW_FENCE.test(line)) return parseRawBlock(lexer, !this.measuringAttachedBlock)
     if (RE_FENCE.test(line)) return this.parseFence(lexer)
     // Comments (not rendered). Block (`%%%`) before line (`%%`). A `%%%` opener
     // with NO matching closer ahead does not open a block (PART 9 §28) — it falls
@@ -1680,11 +1680,13 @@ export class ParseSession extends InlineParseSession {
     const payloadPositions: { offset: number; line: number; column: number; text: string }[] = []
     let lastPayloadLineIndex = -1
     let closed = false
+    let syntheticCloser: number | undefined
     while (!lexer.eof()) {
       if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
       const ln = lexer.peek()!
       const folded = lexer.itemLazyLines.has(lexer.lineNumber(lexer.pos))
       if (!folded && closeRe.test(ln) && ln.length - ln.trimStart().length <= 3) {
+        if (!lexer.authorsFenceCloser(lexer.pos, fenceStartIndex, marker)) syntheticCloser = lexer.pos
         lexer.consume()
         closed = true
         break
@@ -1710,7 +1712,10 @@ export class ParseSession extends InlineParseSession {
         })
       }
     }
-    if (!closed) lexer.reportUnclosedCodeFence(fenceStartIndex, marker, indent)
+    // The measuring probe's lines are not in source coordinates (carve-js#4942).
+    if (!this.measuringAttachedBlock && (!closed || syntheticCloser !== undefined)) {
+      lexer.reportUnclosedCodeFence(fenceStartIndex, marker, indent, syntheticCloser)
+    }
     const fenceEndIndex = lexer.pos
     // CARVE-P12-064: `content` is the payload's LITERAL text. Every line carries
     // its own break, so a zero-line payload is `""` whether the fence closed or

@@ -302,7 +302,7 @@ export function insertSkippedAbbreviationDefinitions(
 
 // Raw passthrough block: ```=FORMAT … ``` . Content is verbatim; the
 // renderer emits it only when FORMAT matches the output (html).
-export function parseRawBlock(lexer: Lexer): RawBlock {
+export function parseRawBlock(lexer: Lexer, report = true): RawBlock {
   const start = lexer.pos
   const m = RE_RAW_FENCE.exec(lexer.consume())!
   const marker = m[1]!
@@ -311,10 +311,12 @@ export function parseRawBlock(lexer: Lexer): RawBlock {
   const lines: string[] = []
   let lastPayloadLineIndex = -1
   let closed = false
+  let syntheticCloser: number | undefined
   while (!lexer.eof()) {
     if (lexer.attachmentBoundaries.has(lexer.lineNumber(lexer.pos))) break
     const ln = lexer.peek()!
     if (closeRe.test(ln)) {
+      if (!lexer.authorsFenceCloser(lexer.pos, start, marker)) syntheticCloser = lexer.pos
       lexer.consume()
       closed = true
       break
@@ -329,7 +331,7 @@ export function parseRawBlock(lexer: Lexer): RawBlock {
     // collector frames its folded lines exactly as it does a code fence's.
     lines.push(stripLazyFrame(ln))
   }
-  if (!closed) lexer.reportUnclosedCodeFence(start, marker, 0)
+  if (report && (!closed || syntheticCloser !== undefined)) lexer.reportUnclosedCodeFence(start, marker, 0, syntheticCloser)
   const terminated = !lexer.documentLacksFinalBreak || lastPayloadLineIndex < 0 || lexer.lineNumber(lastPayloadLineIndex) < lexer.documentLineCount
   return { type: 'raw_block', format, content: codeContent(lines, terminated) }
 }

@@ -717,12 +717,27 @@ export class Lexer {
     this.parseOptions.onUnclosedContainer?.(container)
   }
 
-  reportUnclosedCodeFence(start: number, marker: string, indent: number): void {
+  /** A collector may synthesize a closer where a `+` or blank ends a fence; only an authored root line closes it. */
+  authorsFenceCloser(index: number, opener: number, marker: string): boolean {
+    if (!this.nested) return true
+    const lineNumber = this.lineNumber(index)
+    if (lineNumber <= this.lineNumber(opener)) return false
+    const root = this.documentRoot ?? this
+    const authored = root.authoredRootLines ?? root.authoredLines ?? this.rootLines
+    const line = authored?.[lineNumber - 1]
+    if (line === undefined) return true
+    return new RegExp(`(?:^|[ \\t>])${marker[0] === '~' ? '~' : '`'}{${marker.length},}[ \\t]*$`).test(line)
+  }
+
+  reportUnclosedCodeFence(start: number, marker: string, indent: number, endIndex = this.pos): void {
     if (!this.parseOptions.onUnclosedCodeFence) return
     const line = this.lineNumber(start)
-    const endLine = this.lineNumber(this.pos)
+    const endLine = this.lineNumber(endIndex)
     const rootLine = this.rootLines?.[endLine - 1]
-    const reason = this.attachmentBoundaries.has(endLine) && rootLine?.trim() === '+'
+    const root = this.documentRoot ?? this
+    const authoredLine = (root.authoredRootLines ?? root.authoredLines)?.[endLine - 1]
+    const reason = (this.attachmentBoundaries.has(endLine) && rootLine?.trim() === '+') ||
+      (endIndex !== this.pos && (authoredLine ?? rootLine)?.trim() === '+')
       ? 'continuation' : endLine > this.documentLineCount ? 'document' : 'container'
     this.parseOptions.onUnclosedCodeFence({ line, column: this.lineStartColumn(start) + indent,
       marker, endLine, reason })
