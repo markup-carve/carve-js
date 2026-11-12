@@ -9,12 +9,16 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-11-12
+
+This patch release restores the 0.1.15 speed of `carveToHtml` on nested lists after a blank line and fixes the position-free writer around comments in list items.
+
 ### Fixes
 
-- `renderCarve` keeps the blank line between a delimited comment and a paragraph in a list item when the AST carries no source positions, so the comment no longer joins the paragraph on readback (#5012).
+- `renderCarve` keeps the blank line between a delimited comment and a paragraph in a list item when the AST carries no source positions, so the comment no longer joins the paragraph on readback (#5012, #5013).
 - A tab-led `{%` or `{` run is measured at its per-frame column in every container, so a run whose continuation misses that column is refused and kept as text instead of dropped (#5008, markup-carve/carve#5874).
-- `carveToHtml` renders a list with a blank line before a nested list on its fast path again, as a loose list, instead of sending the document through the full parser; that shape was up to 25x slower in 0.1.16 (markup-carve/carve#6026).
-- `renderCarve` writes an erased `%%` line under the container prefix it wrote for the line's host, so a comment after a re-indented nested list (a task item, a shifted quote) stays in the item that owns it (#5014).
+- `carveToHtml` renders a list with a blank line before a nested list on its fast path again, as a loose list, instead of sending the document through the full parser; that shape was up to 25x slower in 0.1.16 (#5016, markup-carve/carve#6026).
+- `renderCarve` writes an erased `%%` line under the container prefix it wrote for the line's host, so a comment after a re-indented nested list (a task item, a shifted quote) stays in the item that owns it, and an authored comment column no open item takes is kept (#5014, #5017, #5018, #5019).
 
 ## [0.1.16] - 2026-11-12
 
@@ -761,7 +765,9 @@ references and external fragment links need manual review. See the
 - Two touching backtick runs, such as adjacent code spans, are separated by an empty comment `{%  %}` (#1818, #1833) in the Carve writer and the HTML importer, instead of merging into one span.
 - The Markdown importer ends a fence in a list item where the item ends (#1823), measures a fence's indent from its item's content column (#1825), and writes a fence on an item's first line as code without converting its body (#1836).
 
-[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.15...HEAD
+[Unreleased]: https://github.com/markup-carve/carve-js/compare/0.1.17...HEAD
+[0.1.17]: https://github.com/markup-carve/carve-js/compare/0.1.16...0.1.17
+[0.1.16]: https://github.com/markup-carve/carve-js/compare/0.1.15...0.1.16
 [0.1.15]: https://github.com/markup-carve/carve-js/compare/0.1.14...0.1.15
 [0.1.14]: https://github.com/markup-carve/carve-js/compare/0.1.13...0.1.14
 [0.1.13]: https://github.com/markup-carve/carve-js/compare/0.1.12...0.1.13
