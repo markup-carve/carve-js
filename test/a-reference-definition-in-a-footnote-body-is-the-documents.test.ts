@@ -19,4 +19,11 @@ describe('a reference definition in a footnote body', () => {
     expect(markdownToCarve('a[^1]\n\n[^1]: [x][r]\n\n    [r]: <https://e>\n'))
       .toBe('a[^1]\n\n[^1]: [x][r]\n\n[r]: https://e\n')
   })
+
+  it.each([
+    ['a footnote body', 'a[^1]\n\n[^1]: [x][r]\n\n    [r]: https://e\n    tail\n', 'a[^1]\n\n[^1]: [x][r]\n\n  tail\n\n[r]: https://e\n'],
+    ['a list item', '- a\n\n  [r]: https://e\n    tail\n\n[x][r]\n', '- a\n\n  tail\n\n[x][r]\n\n[r]: https://e\n'],
+  ])('keeps the text after a definition in %s', (_name, markdown, carve) => {
+    expect(markdownToCarve(markdown)).toBe(carve)
+  })
 })
