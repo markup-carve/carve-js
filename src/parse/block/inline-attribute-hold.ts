@@ -6,6 +6,8 @@ export type InlineHostProbe = (prefix: string) => boolean
 
 const HOST_CLOSERS = '])`/*_~=}>:'
 const NOTED_MARKS = '[<{}/*_~=:'
+const NOTED = new Uint8Array(128)
+for (const ch of NOTED_MARKS + ']') NOTED[ch.charCodeAt(0)] = 1
 
 /**
  * The accepted inline attributes of one paragraph, line by line (PART 9 §9 R3). An accepted
@@ -15,7 +17,8 @@ const NOTED_MARKS = '[<{}/*_~=:'
 export class InlineAttributeHosts {
   private readonly history: string[] = []
   private readonly lastMarks = new Map<string, Mark>()
-  private previousMarks = new Map<string, Mark>()
+  // The marks this line replaced, as they stood when it began.
+  private readonly replacedMarks = new Map<string, Mark | undefined>()
   private readonly bracketOpeners: Mark[] = []
   private lastBracketMatch: Mark | undefined
   private lastBracketClose: Mark | undefined
@@ -25,8 +28,6 @@ export class InlineAttributeHosts {
   private line = ''
   // Built on first use: most lines hold no `{` an attribute could open at.
   private bracketStartsOfLine: Int32Array | undefined
-  // Whether `previousMarks` is still `lastMarks` as it stood when the line began.
-  private marksUnchanged = true
   private acceptedEnd = -1
   private endsOfLine: ((at: number) => number) | undefined
 
@@ -36,7 +37,7 @@ export class InlineAttributeHosts {
   beginLine(line: string): void {
     this.line = line
     this.acceptedEnd = -1
-    this.marksUnchanged = true
+    this.replacedMarks.clear()
     this.bracketStartsOfLine = undefined
     this.endsOfLine = undefined
   }
@@ -58,10 +59,7 @@ export class InlineAttributeHosts {
   }
 
   private markAt(ch: string, mark: Mark): void {
-    if (this.marksUnchanged) {
-      this.previousMarks = new Map(this.lastMarks)
-      this.marksUnchanged = false
-    }
+    if (!this.replacedMarks.has(ch)) this.replacedMarks.set(ch, this.lastMarks.get(ch))
     this.lastMarks.set(ch, mark)
   }
 
@@ -86,6 +84,8 @@ export class InlineAttributeHosts {
 
   /** Records a character the scan read as text. */
   noteText(at: number): void {
+    const code = this.line.charCodeAt(at)
+    if (code >= 128 || NOTED[code] === 0) return
     const ch = this.line[at]!
     if (ch === '[') this.bracketOpeners.push([this.history.length, at])
     else if (ch === ']' && this.bracketOpeners.length > 0) {
@@ -106,7 +106,7 @@ export class InlineAttributeHosts {
     const bracketClose = closer === ']' ? at - 1 : closer === ')' ? line.lastIndexOf('](', at - 1) : -1
     const paired = bracketClose >= 0 && this.lastBracketClose?.[0] === this.history.length &&
       this.lastBracketClose[1] === bracketClose ? this.lastBracketMatch : undefined
-    const prior = paired ?? (this.marksUnchanged ? this.lastMarks : this.previousMarks).get(marker)
+    const prior = paired ?? (this.replacedMarks.has(marker) ? this.replacedMarks.get(marker) : this.lastMarks.get(marker))
     if (prior === undefined || prior[0] >= this.history.length) return false
     const key = `${prior[0]}:${prior[1]}`
     // A closed bracket pairs no later `]`.

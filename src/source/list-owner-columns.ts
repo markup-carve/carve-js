@@ -57,7 +57,10 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
     }
     return low
   }
-  interface Line { start: number; columns: number[]; prefixEnds: number[] }
+  // `columns` is null on a line without a tab, where a column is its offset from the line start.
+  interface Line { start: number; width: number; columns: number[] | null; prefixEnds: number[] }
+  const columnAt = (entry: Line, index: number): number =>
+    entry.columns ? entry.columns[index] ?? 0 : index >= 0 && index <= entry.width ? index : 0
   const lines = new Map<number, Line>()
   const line = (offset: number): Line => {
     const index = lineOf(offset)
@@ -65,24 +68,29 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
     if (entry) return entry
     const start = lineStarts[index]!
     const end = index + 1 < lineStarts.length ? lineStarts[index + 1]! : length
-    const columns = [0]
-    for (let at = start, column = 0; at < end; at++) {
-      column = charAt(at) === '\t' ? column + (4 - column % 4) : column + 1
-      columns.push(column)
+    let columns: number[] | null = null
+    for (let at = start; at < end; at++) {
+      if (charAt(at) !== '\t') continue
+      columns = [0]
+      for (let k = start, column = 0; k < end; k++) {
+        column = charAt(k) === '\t' ? column + (4 - column % 4) : column + 1
+        columns.push(column)
+      }
+      break
     }
     const prefixEnds = [start]
     PREFIX.lastIndex = unitOf(start)
     for (let match = PREFIX.exec(source); match && match[0] !== ''; match = PREFIX.exec(source)) {
       prefixEnds.push(pointOf(PREFIX.lastIndex))
     }
-    entry = { start, columns, prefixEnds }
+    entry = { start, width: end - start, columns, prefixEnds }
     lines.set(index, entry)
     return entry
   }
   const visualColumn = (offset: number): number => {
     if (!built) build()
-    const { start, columns } = line(offset)
-    return columns[offset - start] ?? 0
+    const entry = line(offset)
+    return columnAt(entry, offset - entry.start)
   }
   const openerColumn = (pos: Position | undefined): number | null => {
     if (typeof pos?.startOffset !== 'number') return null
@@ -108,7 +116,8 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
     if (typeof pos?.startOffset !== 'number' || pos.startOffset > length) return
     let at = pos.startOffset
     while (at < length && isBlank(at)) at++
-    const { start, columns, prefixEnds } = line(pos.startOffset)
+    const entry = line(pos.startOffset)
+    const { start, prefixEnds } = entry
     let runStart = at
     while (runStart > start && isBlank(runStart - 1)) runStart--
     // The prefixes the line opens with, cut at the marker: text past them is content, not indentation.
@@ -116,9 +125,9 @@ export function anchorListsAtOwnerColumns(doc: Document, source: string): void {
     for (const end of prefixEnds) if (end <= at) prefixEnd = end
     if (prefixEnd < runStart) return
     const column = owner ?? 0
-    if ((columns[at - start] ?? 0) < column) return
+    if (columnAt(entry, at - start) < column) return
     let offset = prefixEnd
-    while (offset < at && (columns[offset + 1 - start] ?? 0) <= column) offset++
+    while (offset < at && columnAt(entry, offset + 1 - start) <= column) offset++
     pos.startOffset = offset
     if (pos.startColumn !== undefined) pos.startColumn = offset - start + 1
   }
