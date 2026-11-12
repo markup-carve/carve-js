@@ -123,6 +123,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`, message?: string): void => {
     diagnostics.push({ code, message: message ?? (construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`), severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
   }
+  let altDepth = 0
   const inline = (text: string, line: number, linkLabel = false, tableCell = false): string => {
     let result = ''
     const bareLinks = linkLabel ? [] : markdownBareLinks(text)
@@ -158,7 +159,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         if (tail !== null) {
           i += scanned.end + tail[0].length
           emit('', line, 'dropped', 'attribute-dropped', match![1] === '!' ? DENIED_IMAGE_SOURCE : DENIED_LINK_DESTINATION)
-          result += match![1] === '!' ? escape(match![2]!) : inline(match![2]!, line, true)
+          result += match![1] === '!' ? plainAlt(match![2]!, line) : inline(match![2]!, line, true)
           return true
         }
         if (rest[match![0].length] === '<' || !href.includes('(') || rest[scanned.end] !== ')') return false
@@ -173,7 +174,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
         const image = match[1] === '!'
         if (deniedToken(match[3]!)) {
           emit('', line, 'dropped', 'attribute-dropped', image ? DENIED_IMAGE_SOURCE : DENIED_LINK_DESTINATION)
-          result += image ? escape(match[2]!) : inline(match[2]!, line, true, tableCell)
+          result += image ? plainAlt(match[2]!, line) : inline(match[2]!, line, true, tableCell)
           i += match[0].length
           continue
         }
@@ -185,11 +186,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
         const encodedHref = escape(tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href))
         result += image ? `<img src="${encodedHref}" alt="${escape(match[2]!)}"${title}>` : `<a href="${encodedHref}"${title}>${inline(match[2]!, line, true)}</a>`
         i += match[0].length
-      } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
+      } else if ((match = /^(!?)\[([^\]\n]*)\](?:\[([^\]\n]*)\])?/.exec(rest)) && (match[3] || match[2]) && definitions.has(labelKey(match[3] || match[2]!))) {
         const definition = definitions.get(labelKey(match[3] || match[2]!))!
         i += match[0].length
         // The definition's row covers every link that uses it.
-        if (definition.denied) { result += match[1] === '!' ? escape(match[2]!) : inline(match[2]!, line, true, tableCell); continue }
+        if (definition.denied) { result += match[1] === '!' ? plainAlt(match[2]!, line) : inline(match[2]!, line, true, tableCell); continue }
         emit('reference-link', line, 'normalized')
         const title = definition.title === undefined ? '' : ` title="${escape(definition.title)}"`
         const href = encodeWrittenDestination(definition.destination)
@@ -212,6 +213,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if (/^<(?:https?:\/\/|mailto:)[^<>\n]*>/.test(rest)) {
         result += '&lt;'; i++
       } else if ((match = /^<(?:!--[\s\S]*?--|\/?[A-Za-z][^<>]*|\?[\s\S]*?\?)>/.exec(rest))) {
+        // Raw HTML in alt text is part of its plain text.
+        if (altDepth > 0) { result += escape(match[0]); i += match[0].length; continue }
         if (/^<\/?(?:section|h[1-6]|input)\b/i.test(match[0])) complete = false
         emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else {
@@ -221,6 +224,20 @@ export function assessMarkdown(source: string, value: string): Assessment {
       }
     }
     return result
+  }
+  // CommonMark alt text is the label's text content; the import reports nothing for its
+  // markup, and a literal the reader cannot model is left to the shape comparison.
+  const plainAlt = (label: string, line: number): string => {
+    const rows = diagnostics.length, assessed = complete
+    altDepth++
+    const html = inline(label, line)
+    altDepth--
+    diagnostics.length = rows
+    complete = assessed
+    const text = (nodes: readonly P5Node[]): string => nodes.map(node => domTag(node) === 'img'
+      ? domAttrs(node)?.find(attr => attr.name === 'alt')?.value ?? ''
+      : domValue(node) ?? text(domChildren(node) ?? [])).join('')
+    return escape(text(domChildren(parseFragment(html)) ?? []))
   }
   const blocks = (input: string[], first: number, depth = 0, tight = false): string => {
     if (depth > 64) { complete = false; return '' }
@@ -353,11 +370,14 @@ export function assessMarkdown(source: string, value: string): Assessment {
       }
       const body: string[] = [line]; i++
       while (i < input.length && input[i]!.trim() !== '' && !/^(?: {0,3}(?:[#>`~]|[-+*][ \t]|\d+[.)][ \t]|\[[^\]]+\]:)| {4})/.test(input[i]!)) body.push(input[i++]!)
+      const paragraphRow = diagnostics.length
       if (!tight) emit('paragraph', n)
       if (body.some(text => /\t/.test(text))) complete = false
       const beforeInline = diagnostics.length
       const content = inline(body.join('\n').trim(), n)
       if (tight) { html += `${content}\n`; continue }
+      // A paragraph a dropped destination emptied is not written.
+      if (content.trim() === '') { diagnostics.splice(paragraphRow, 1); continue }
       const loneImage = diagnostics.slice(beforeInline).some(row => row.code === 'markdown-image' || row.code === 'markdown-reference-link') && /^<img\b[^>]*>$/.test(content)
       html += loneImage ? `${content}\n` : `<p>${content}</p>\n`
     }
