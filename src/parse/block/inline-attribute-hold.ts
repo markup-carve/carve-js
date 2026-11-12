@@ -6,6 +6,8 @@ export type InlineHostProbe = (prefix: string) => boolean
 
 const HOST_CLOSERS = '])`/*_~=}>:'
 const NOTED_MARKS = '[<{}/*_~=:'
+const NOTED = new Uint8Array(128)
+for (const ch of NOTED_MARKS + ']') NOTED[ch.charCodeAt(0)] = 1
 
 /**
  * The accepted inline attributes of one paragraph, line by line (PART 9 §9 R3). An accepted
@@ -15,7 +17,8 @@ const NOTED_MARKS = '[<{}/*_~=:'
 export class InlineAttributeHosts {
   private readonly history: string[] = []
   private readonly lastMarks = new Map<string, Mark>()
-  private previousMarks = new Map<string, Mark>()
+  // The marks this line replaced, as they stood when it began.
+  private readonly replacedMarks = new Map<string, Mark | undefined>()
   private readonly bracketOpeners: Mark[] = []
   private lastBracketMatch: Mark | undefined
   private lastBracketClose: Mark | undefined
@@ -23,9 +26,10 @@ export class InlineAttributeHosts {
   // Openers on earlier lines that already hosted an attribute: inline pairing does not pair them again.
   private readonly usedOpeners = new Set<string>()
   private line = ''
-  private bracketStarts = new Int32Array(0)
+  // Built on first use: most lines hold no `{` an attribute could open at.
+  private bracketStartsOfLine: Int32Array | undefined
   private acceptedEnd = -1
-  private ends: (at: number) => number = () => -1
+  private endsOfLine: ((at: number) => number) | undefined
 
   constructor(private readonly probe: InlineHostProbe) {}
 
@@ -33,14 +37,30 @@ export class InlineAttributeHosts {
   beginLine(line: string): void {
     this.line = line
     this.acceptedEnd = -1
-    this.previousMarks = new Map(this.lastMarks)
-    this.bracketStarts = new Int32Array(line.length).fill(-1)
+    this.replacedMarks.clear()
+    this.bracketStartsOfLine = undefined
+    this.endsOfLine = undefined
+  }
+
+  private get bracketStarts(): Int32Array {
+    if (this.bracketStartsOfLine) return this.bracketStartsOfLine
+    const line = this.line
+    const starts = this.bracketStartsOfLine = new Int32Array(line.length).fill(-1)
     const open: number[] = []
     for (let k = 0; k < line.length; k++) {
       if (line[k] === '[') open.push(k)
-      else if (line[k] === ']' && open.length > 0) this.bracketStarts[k] = open.pop()!
+      else if (line[k] === ']' && open.length > 0) starts[k] = open.pop()!
     }
-    this.ends = payloadEnds(line)
+    return starts
+  }
+
+  private ends(at: number): number {
+    return (this.endsOfLine ??= payloadEnds(this.line))(at)
+  }
+
+  private markAt(ch: string, mark: Mark): void {
+    if (!this.replacedMarks.has(ch)) this.replacedMarks.set(ch, this.lastMarks.get(ch))
+    this.lastMarks.set(ch, mark)
   }
 
   endLine(): void {
@@ -49,6 +69,7 @@ export class InlineAttributeHosts {
 
   /** The `}` closing an accepted inline attribute that opens at `at`, or -1. */
   acceptedAttributeEnd(at: number): number {
+    if (this.line[at] !== '{') return -1
     if (this.acceptedEnd !== at && !HOST_CLOSERS.includes(this.line[at - 1] ?? '\n')) return -1
     const end = this.ends(at)
     if (end === -1 || (this.acceptedEnd !== at && !this.hosts(at))) return -1
@@ -58,18 +79,20 @@ export class InlineAttributeHosts {
 
   /** Records the code span a backtick run at `at` opens. */
   noteCodeOpen(at: number): void {
-    this.lastMarks.set('`', [this.history.length, at])
+    this.markAt('`', [this.history.length, at])
   }
 
   /** Records a character the scan read as text. */
   noteText(at: number): void {
+    const code = this.line.charCodeAt(at)
+    if (code >= 128 || NOTED[code] === 0) return
     const ch = this.line[at]!
     if (ch === '[') this.bracketOpeners.push([this.history.length, at])
     else if (ch === ']' && this.bracketOpeners.length > 0) {
       this.lastBracketMatch = this.bracketOpeners.pop()
       this.lastBracketClose = [this.history.length, at]
     }
-    if (NOTED_MARKS.includes(ch)) this.lastMarks.set(ch, [this.history.length, at])
+    if (NOTED_MARKS.includes(ch)) this.markAt(ch, [this.history.length, at])
   }
 
   private hosts(at: number): boolean {
@@ -83,7 +106,7 @@ export class InlineAttributeHosts {
     const bracketClose = closer === ']' ? at - 1 : closer === ')' ? line.lastIndexOf('](', at - 1) : -1
     const paired = bracketClose >= 0 && this.lastBracketClose?.[0] === this.history.length &&
       this.lastBracketClose[1] === bracketClose ? this.lastBracketMatch : undefined
-    const prior = paired ?? this.previousMarks.get(marker)
+    const prior = paired ?? (this.replacedMarks.has(marker) ? this.replacedMarks.get(marker) : this.lastMarks.get(marker))
     if (prior === undefined || prior[0] >= this.history.length) return false
     const key = `${prior[0]}:${prior[1]}`
     // A closed bracket pairs no later `]`.
