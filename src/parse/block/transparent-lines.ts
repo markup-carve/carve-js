@@ -947,10 +947,14 @@ function authoredContainerBlocks(document: Document, owners: Map<number, string>
   }
   visit(document.children, 'doc')
   for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {})) {
-    const line = document.footnoteDefPos?.[label]?.startLine
-    const authoredOwner = owners.get(line ?? -1)
-    const key = authoredOwner?.endsWith(`/footnote:${line}`) ? authoredOwner : `doc/footnote:${line}`
-    if (line !== undefined) blocksByOwner.set(key, { blocks, containers: [] })
+    const pos = document.footnoteDefPos?.[label]
+    const line = pos?.startLine
+    // The marker line's owner may be a block the note opens on that line (`- [^n]: - a`).
+    const steps = owners.get(line ?? -1)?.split('/') ?? []
+    const note = steps.lastIndexOf(`footnote:${line}`)
+    const key = note > 0 ? steps.slice(0, note + 1).join('/') : `doc/footnote:${line}`
+    // The note's span lives in the side table; a comment it owns extends it (CARVE-P12-014).
+    if (pos !== undefined) blocksByOwner.set(key, { blocks, containers: [{ pos }] })
     visit(blocks, line === undefined ? 'doc' : key)
   }
   return blocksByOwner
@@ -1109,9 +1113,10 @@ export function restoreTransparentComments(document: Document, authored: Documen
       // hoisted out of keeps its own end (CARVE-P12-014, carve#5136).
       if (owned && owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
-        // A collected footnote is hoisted out of its source host. Its owned
-        // comment extends the note, not the list item or quote that held it.
-        const notePart = parts.findIndex((part) => part.startsWith('footnote:'))
+        // A collected footnote is hoisted out of its source host, an outer note
+        // included. Its owned comment extends the innermost note, not what held it.
+        let notePart = parts.length - 1
+        while (notePart >= 0 && !parts[notePart]!.startsWith('footnote:')) notePart--
         for (let depth = notePart < 0 ? 2 : notePart + 1; depth <= parts.length; depth++) {
           for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
             if (container.pos?.endOffset !== undefined && container.pos.endOffset < comment.pos.endOffset) {
