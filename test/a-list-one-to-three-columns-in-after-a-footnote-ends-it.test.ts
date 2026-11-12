@@ -37,4 +37,8 @@ describe('a quote line one to three columns in after a quote in a footnote', () 
   it('keeps a four-column quote line in the note', () => {
     expect(markdownToCarve('a[^1]\n\n[^1]: b\n\n    > q\n    > r\n')).toBe('a[^1]\n\n[^1]: b\n\n  > q\n  > r\n')
   })
+
+  it('reads a note that ends in a quote at the end of input', () => {
+    expect(markdownToCarve('a[^1]\n\n[^1]: b\n\n    > q')).toBe('a[^1]\n\n[^1]: b\n\n  > q')
+  })
 })
