@@ -839,12 +839,18 @@ export function ownLines(
 
   function trackBraceRun(at: number): void {
     const rawLine = lines[at]!
-    let unquoted = rawLine
-    for (let quoted = indentCols(unquoted).rest; isQuoteLine(quoted); quoted = indentCols(unquoted).rest) {
-      unquoted = quoteRest(quoted)
+    if (rawLine.trim() === '') {
+      braceRunStart = -1
+      return
     }
-    if (rawLine.trim() === '' || FOOTNOTE_DEF.test(unquoted.trimStart())) braceRunStart = -1
-    if (rawLine.trim() !== '' && rawLine.includes('{')) {
+    if (rawLine.includes('[^')) {
+      let unquoted = rawLine
+      for (let quoted = indentCols(unquoted).rest; isQuoteLine(quoted); quoted = indentCols(unquoted).rest) {
+        unquoted = quoteRest(quoted)
+      }
+      if (FOOTNOTE_DEF.test(unquoted.trimStart())) braceRunStart = -1
+    }
+    if (rawLine.includes('{')) {
       const stripped = markerLineBottomBlock(rawLine.trimStart())
       const heads = NOTE_HEADS_LEAD.exec(stripped)
       const noteBody = heads ? stripped.slice(heads[0].length) : stripped
