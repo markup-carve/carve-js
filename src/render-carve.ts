@@ -107,12 +107,13 @@ function onMarkerLine(blocks: readonly BlockNode[], body: string): string {
 /** A transparent line keeps its authored column through list and quote writing. */
 function restoreTransparentLineColumns(source: string): string {
   if (!source.includes('\0')) return source
-  const out: string[] = []
-  for (const line of source.split('\n')) {
+  const open = new OpenWrittenItems()
+  return source.split('\n').map((line) => {
     const marker = line.indexOf('\0')
-    out.push(marker < 0 ? line : reanchorTransparentLine(line.slice(0, marker), line.slice(marker + 1), out))
-  }
-  return out.join('\n')
+    if (marker >= 0) return reanchorTransparentLine(line.slice(0, marker), line.slice(marker + 1), open)
+    open.add(line)
+    return line
+  }).join('\n')
 }
 
 /**
@@ -120,9 +121,8 @@ function restoreTransparentLineColumns(source: string): string {
  * from the written prefix, and an authored indent a rewritten list item would
  * now take falls back to the host column.
  */
-function reanchorTransparentLine(written: string, line: string, previous: readonly string[]): string {
+function reanchorTransparentLine(written: string, line: string, open: OpenWrittenItems): string {
   const marks = /^\u0001*/.exec(line)![0].length
-  const hosted = marks > 0
   const authored = line.slice(marks)
   const writtenQuotes = written.lastIndexOf('>') + 1
   const authoredQuotes = /^(?:[ \t]*>)*/.exec(authored)![0].length
@@ -130,10 +130,9 @@ function reanchorTransparentLine(written: string, line: string, previous: readon
   const head = quotes ? written.slice(0, writtenQuotes) : ''
   const tail = quotes ? authored.slice(authoredQuotes) : authored
   const indent = /^ */.exec(tail)![0].length
-  const paragraphColumn = quotes ? written.length - writtenQuotes : written.length
-  const host = marks > 1 ? ancestorItemColumn(previous, head, paragraphColumn, marks - 1) ?? paragraphColumn : paragraphColumn
-  if (!hosted || /^[ ]*\t/.test(tail) || indent <= host || !takenByAWrittenItem(previous, head, host, indent))
-    return head + tail
+  const paragraphColumn = written.length - head.length
+  const host = marks > 1 ? open.ancestorColumn(head, paragraphColumn, marks - 1) ?? paragraphColumn : paragraphColumn
+  if (marks === 0 || /^[ ]*\t/.test(tail) || indent <= host || !open.takes(head, host, indent)) return head + tail
   return head + ' '.repeat(host) + tail.slice(indent)
 }
 
@@ -144,46 +143,55 @@ function paragraphCommentKey(node: { content: string; transparentSource?: string
   return `${node.transparentSource ?? ''}\0${node.content}`
 }
 
-/** The written content column of the item `levels` above the one holding a line at `column`. */
-function ancestorItemColumn(previous: readonly string[], head: string, column: number, levels: number): number | undefined {
-  let below = column + 1
-  for (let index = previous.length - 1; index >= 0 && levels >= 0; index--) {
-    const line = previous[index]!
-    if (!line.startsWith(head)) return undefined
+const WRITTEN_LIST_MARKER = /^ *(?:[-*+]|\d+[.)])(?: +|$)/
+
+/** The list items still open in the written output, per quote prefix, innermost last. */
+class OpenWrittenItems {
+  private readonly stacks = new Map<string, Array<{ at: number; content: number }>>()
+
+  add(line: string): void {
+    const head = /^(?:[ \t]*>)*/.exec(line)![0]
     const text = line.slice(head.length)
-    const marker = /^ *(?:[-*+]|\d+[.)])(?: +|$)/.exec(text)
-    if (!marker || marker[0].length >= below) continue
-    below = /^ */.exec(text)![0].length + 1
-    if (levels-- === 0) return marker[0].length
+    if (text.trim() === '') return
+    if (head !== '') this.close('', /^ */.exec(line)![0].length)
+    const at = /^ */.exec(text)![0].length
+    this.close(head, at)
+    const marker = WRITTEN_LIST_MARKER.exec(text)
+    if (!marker) return
+    const stack = this.stacks.get(head) ?? []
+    stack.push({ at, content: marker[0].length })
+    this.stacks.set(head, stack)
   }
-  return undefined
+
+  /** Whether an open item written at or past `host` takes a line at `indent`. */
+  takes(head: string, host: number, indent: number): boolean {
+    return (this.stacks.get(head) ?? []).some((item) => item.at >= host && item.content <= indent)
+  }
+
+  /** The content column of the item `levels` above the innermost one holding `column`. */
+  ancestorColumn(head: string, column: number, levels: number): number | undefined {
+    const stack = this.stacks.get(head) ?? []
+    let index = stack.length - 1
+    while (index >= 0 && stack[index]!.content > column) index--
+    return stack[index - levels]?.content
+  }
+
+  private close(head: string, at: number): void {
+    const stack = this.stacks.get(head)
+    while (stack !== undefined && stack.length > 0 && stack.at(-1)!.at >= at) stack.pop()
+  }
 }
 
-function ownsGapLine(item: ListItem, node: unknown): boolean {
-  const json = JSON.stringify(node)
-  return item.children.some((child) => child === node || child.type === 'comment' && JSON.stringify(child) === json)
+/** The comments an item holds, by value too: an AST JSON tree does not share them with the list's gap records. */
+function ownedComments(item: ListItem): (node: unknown) => boolean {
+  let values: Set<string> | undefined
+  return (node) => item.children.includes(node as BlockNode) ||
+    (values ??= new Set(item.children.filter((child) => child.type === 'comment').map((child) => JSON.stringify(child))))
+      .has(JSON.stringify(node))
 }
 
 function countQuotes(prefix: string): number {
   return prefix.split('>').length - 1
-}
-
-/** Whether a list item still open above, written at or past `host`, takes a line at `indent`. */
-function takenByAWrittenItem(previous: readonly string[], head: string, host: number, indent: number): boolean {
-  let floor = Infinity
-  for (let index = previous.length - 1; index >= 0; index--) {
-    const line = previous[index]!
-    if (!line.startsWith(head)) return false
-    const text = line.slice(head.length)
-    if (text.trim() === '') continue
-    const at = /^ */.exec(text)![0].length
-    if (at < host) return false
-    if (at >= floor) continue
-    floor = at
-    const marker = /^ *(?:[-*+]|\d+[.)])(?: +|$)/.exec(text)
-    if (marker && marker[0].length <= indent) return true
-  }
-  return false
 }
 
 /** Whether a transparent line is indented; inside a list, an indent behind its quotes counts too. */
@@ -4384,6 +4392,7 @@ class CarveRenderSession {
         }
         out += itemSource
         let previousGap: NonNullable<List['transparentBetweenItems']>[number] | undefined
+        const owns = ownedComments(item)
         for (const gap of node.transparentBetweenItems ?? []) {
           if (gap.after !== idx || this.itemLeadingComments.has(gap.node)) continue
           // After the last item the comment is a block of its own (PART 11 §2).
@@ -4395,7 +4404,7 @@ class CarveRenderSession {
               isLineComment(previousGap.node as BlockNode) && isLineComment(gap.node as BlockNode) &&
               !isRegionMarker(previousGap.node as BlockNode) && !isRegionMarker(gap.node as BlockNode)
             // An owned line is measured from the item's written content column.
-            const host = ownsGapLine(item, gap.node) ? `${' '.repeat(continuationWidth)}\0${HOSTED_LINE}` : '\0'
+            const host = owns(gap.node) ? `${' '.repeat(continuationWidth)}\0${HOSTED_LINE}` : '\0'
             out += `${this.canonicalTransparentLines && !node.tight && !continuesRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}${host}${transparentNodeSource(gap)}\n`
           }
           previousGap = gap
