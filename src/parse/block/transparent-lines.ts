@@ -235,7 +235,7 @@ export function erasedLinesStandAlone(document: Document, stream: TransparentLin
         }
         return
       }
-      for (const [key, part] of Object.entries(node)) if (key !== 'pos' && key !== 'attrs') visit(part)
+      for (const key in node) if (key !== 'pos' && key !== 'attrs') visit(node[key as keyof typeof node])
     }
   }
   visit(document.children)
@@ -298,8 +298,8 @@ function authoredComments(document: Document): Map<number, Comment> {
         const comment = value as Comment
         if (comment.pos) found.set(comment.pos.startLine, comment)
       }
-      for (const [key, part] of Object.entries(node)) {
-        if (key !== 'pos' && key !== 'attrs') visit(part)
+      for (const key in node) {
+        if (key !== 'pos' && key !== 'attrs') visit(node[key])
       }
     }
   }
@@ -320,8 +320,8 @@ export function authoredAbbreviations(document: Document, erased: number[]): Abb
         const definition = value as AbbreviationDef
         if (definition.pos && lines.has(definition.pos.startLine)) found.push(definition)
       }
-      for (const [key, part] of Object.entries(node)) {
-        if (key !== 'pos' && key !== 'attrs') visit(part)
+      for (const key in node) {
+        if (key !== 'pos' && key !== 'attrs') visit(node[key])
       }
     }
   }
