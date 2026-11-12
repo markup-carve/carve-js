@@ -110,9 +110,15 @@ function restoreTransparentLineColumns(source: string): string {
   const open = new OpenWrittenItems()
   return source.split('\n').map((line) => {
     const marker = line.indexOf('\0')
-    if (marker >= 0) return reanchorTransparentLine(line.slice(0, marker), line.slice(marker + 1), open)
-    open.add(line)
-    return line
+    if (marker < 0) {
+      open.add(line)
+      return line
+    }
+    const inParagraph = line[marker + 1] === IN_PARAGRAPH_LINE
+    const restored = reanchorTransparentLine(line.slice(0, marker), line.slice(marker + (inParagraph ? 2 : 1)), open)
+    // A comment line of a block run closes deeper items as the run does; one inside a paragraph does not.
+    if (!inParagraph) open.add(restored)
+    return restored
   }).join('\n')
 }
 
@@ -138,6 +144,8 @@ function reanchorTransparentLine(written: string, line: string, open: OpenWritte
 
 /** Marks a comment line written behind its host's content column; one more per item level its owner sits above that host. */
 const HOSTED_LINE = '\u0001'
+/** Marks an erased line written inside a paragraph, which leaves the paragraph's items open. */
+const IN_PARAGRAPH_LINE = '\u0002'
 
 function paragraphCommentKey(node: { content: string; transparentSource?: string }): string {
   return `${node.transparentSource ?? ''}\0${node.content}`
@@ -153,7 +161,10 @@ class OpenWrittenItems {
     const head = /^(?:[ \t]*>)*/.exec(line)![0]
     const text = line.slice(head.length)
     if (text.trim() === '') return
-    if (head !== '') this.close('', /^ */.exec(line)![0].length)
+    // A line under a deeper quote also ends the items written under each outer one.
+    this.close('', /^ */.exec(line)![0].length)
+    for (let end = head.indexOf('>'); end >= 0 && end < head.length - 1; end = head.indexOf('>', end + 1))
+      this.close(head.slice(0, end + 1), /^ */.exec(line.slice(end + 1))![0].length)
     const at = /^ */.exec(text)![0].length
     this.close(head, at)
     const marker = WRITTEN_LIST_MARKER.exec(text)
@@ -3976,7 +3987,7 @@ class CarveRenderSession {
               const prefix = notePrefix ?? (renderedLine && authored.endsWith(renderedLine)
                 ? authored.slice(0, -renderedLine.length)
                 : /^(?:[ \t]*>[ ]?)*[ \t]*/.exec(authored)?.[0] ?? '')
-              written[index] = `\0${prefix}${renderedLine}`
+              written[index] = `\0${IN_PARAGRAPH_LINE}${prefix}${renderedLine}`
             }
           }
           for (const comment of [...node.transparentComments].sort((a, b) => b.line - a.line)) {
@@ -3991,7 +4002,7 @@ class CarveRenderSession {
               : comment.source
             const owner = comment.node.type === 'comment' ? this.paragraphCommentOwners.get(paragraphCommentKey(comment.node)) : undefined
             const levels = owner !== undefined && owner < ctx.listDepth ? ctx.listDepth - owner : 0
-            written.splice(Math.min(after, written.length), 0, `\0${HOSTED_LINE.repeat(levels + 1)}${transparentNodeSource({ ...comment, source })}`)
+            written.splice(Math.min(after, written.length), 0, `\0${IN_PARAGRAPH_LINE}${HOSTED_LINE.repeat(levels + 1)}${transparentNodeSource({ ...comment, source })}`)
           }
           withComments = written.join('\n')
         }

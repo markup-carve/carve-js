@@ -27,6 +27,12 @@ it.each([
   }
 })
 
-it('keeps an authored comment column that still reads into its item (carve-js#5014)', () => {
-  expect(renderCarve(parse('- x\n   %% a\n- o\n', { positions: false }))).toBe('- x\n   %% a\n- o\n')
+it.each([
+  ['- x\n   %% a\n- o\n', '- x\n   %% a\n- o\n'],
+  ['- a\n%% c\n    %% c\n', '- a\n\n%% c\n    %% c\n'],
+  ['> - a\n> > x\n>     %% c\n', '> - a\n>\n> > x\n>\n>     %% c\n'],
+])('keeps an authored comment column that no written item takes (carve-js#5014): %j', (source, expected) => {
+  const written = renderCarve(parse(source, { positions: false }))
+  expect(written).toBe(expected)
+  expect(tree(written)).toBe(tree(source))
 })
