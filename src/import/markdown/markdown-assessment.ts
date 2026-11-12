@@ -123,6 +123,7 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`, message?: string): void => {
     diagnostics.push({ code, message: message ?? (construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`), severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
   }
+  let altDepth = 0
   const inline = (text: string, line: number, linkLabel = false, tableCell = false): string => {
     let result = ''
     const bareLinks = linkLabel ? [] : markdownBareLinks(text)
@@ -212,6 +213,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
       } else if (/^<(?:https?:\/\/|mailto:)[^<>\n]*>/.test(rest)) {
         result += '&lt;'; i++
       } else if ((match = /^<(?:!--[\s\S]*?--|\/?[A-Za-z][^<>]*|\?[\s\S]*?\?)>/.exec(rest))) {
+        // Raw HTML in alt text is part of its plain text.
+        if (altDepth > 0) { result += escape(match[0]); i += match[0].length; continue }
         if (/^<\/?(?:section|h[1-6]|input)\b/i.test(match[0])) complete = false
         emit('raw-html', line, 'degraded', 'raw-preserved'); result += match[0]; line += (match[0].match(/\n/g) ?? []).length; i += match[0].length
       } else {
@@ -222,11 +225,15 @@ export function assessMarkdown(source: string, value: string): Assessment {
     }
     return result
   }
-  // CommonMark alt text is the label's text content; the import reports nothing for its markup.
+  // CommonMark alt text is the label's text content; the import reports nothing for its
+  // markup, and a literal the reader cannot model is left to the shape comparison.
   const plainAlt = (label: string, line: number): string => {
-    const rows = diagnostics.length
+    const rows = diagnostics.length, assessed = complete
+    altDepth++
     const html = inline(label, line)
+    altDepth--
     diagnostics.length = rows
+    complete = assessed
     const text = (nodes: readonly P5Node[]): string => nodes.map(node => domTag(node) === 'img'
       ? domAttrs(node)?.find(attr => attr.name === 'alt')?.value ?? ''
       : domValue(node) ?? text(domChildren(node) ?? [])).join('')

@@ -44,6 +44,9 @@ describe('a dropped destination in the construct assessment', () => {
     ['emphasis', 'x ![a *b*](data:x) y\n'],
     ['strong and code', 'x ![a `c` **b**](data:x) y\n'],
     ['an entity', 'x ![a &amp; b](data:x) y\n'],
+    ['a literal underscore', 'x ![a_b](data:x) y\n'],
+    ['a literal backtick', 'x ![a`b](data:x) y\n'],
+    ['raw HTML', 'x ![<b>a</b>](data:x) y\n'],
   ])('models alt text with %s as its plain text', (_name, markdown) => {
     expect(rows(markdown)).toEqual([
       ['markdown-paragraph', 'info', 'preserved', 'exact', 'line:1'],
