@@ -1,8 +1,8 @@
 import type { Document } from '../ast.js'
 import { promoteBlockImages } from '../heading/heading-ids.js'
-import { parseDocument } from '../parse/parse-document.js'
+import { finishDocument, parseDocument } from '../parse/parse-document.js'
 import type { ParseOptions } from '../parse.js'
-import { readbackTree, renderCarve, renderCarveCandidate, renderCarveFromParsedSource, renderedReadsBack, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
+import { parseForReadback, readbackTree, renderCarve, renderCarveCandidate, renderCarveFromParsedSource, renderedReadsBack, takeReadbackDocument, withReadbackMemo, writtenReadsBackAs, type CarveRenderOptions } from '../render-carve.js'
 import { transparentLineStream } from '../parse/block/transparent-lines.js'
 import { losingFootnoteLines } from '../parse/losing-footnote-lines.js'
 import { isBlockAttributeLine } from '../parse/parse-prepass-core.js'
@@ -72,7 +72,11 @@ function writeCanonically(
   transform: ((document: Document) => boolean) | undefined,
   parsedSourceHint: string | undefined,
 ): string {
-  const document = parseDocument(source, opts)
+  const authoredStream = !opts.extensions?.length ? transparentLineStream(source) : null
+  // With default options the writer's parse is also the readback of `source` the stream path checks.
+  const defaultParse = Object.keys(opts).length === 0
+  const seeded = authoredStream && defaultParse ? parseForReadback(source) : null
+  const document = seeded ? finishDocument(seeded) : parseDocument(source, opts)
   const transformed = transform?.(document) === true
   withPromotedImages(document)
   // Figures can be promoted after parsing, and empty references can gain a
@@ -84,13 +88,17 @@ function writeCanonically(
     : renderCarve(document, options)
   // An erased line is written canonically wherever that keeps the tree; its
   // authored spelling is the fallback (PART 11 §2, carve#5012).
-  const stream = !transformed && !opts.extensions?.length ? transparentLineStream(source) : null
+  const stream = !transformed ? authoredStream : null
+  const parsedCandidate = (candidate: string): Document => {
+    const read = defaultParse ? takeReadbackDocument(candidate) : null
+    return read ? finishDocument(read) : parseDocument(candidate, opts)
+  }
   if (stream) {
     const canonicalOpts = { ...opts, canonicalTransparentLines: true }
     const candidate = renderCarveCandidate(document, canonicalOpts, readbackTree(source), canReuseSource ? source : undefined)
     // A canonical form is a fixpoint; an authored line it cannot settle keeps the authored spelling.
     if (candidate !== null && writtenReadsBackAs(source, candidate) && !hasUnrepresentedAuthoredLine(document, source, candidate, stream ?? undefined) &&
-        renderCarve(withPromotedImages(parseDocument(candidate, opts)), canonicalOpts) === candidate)
+        renderCarve(withPromotedImages(parsedCandidate(candidate)), canonicalOpts) === candidate)
       return candidate
 
     // A floating block attribute has no AST node (PART 9 §15 A4). The AST
@@ -116,7 +124,7 @@ function writeCanonically(
   // preserve the authored spelling when no canonical candidate does.
   if (!transformed && !opts.extensions?.length &&
       (source.includes('%%') || source.includes(']:') || source.includes('+')) &&
-      !renderedReadsBack(document, written, (reread) => withPromotedImages(parseDocument(reread, opts)))) {
+      !renderedReadsBack(document, written, (reread) => withPromotedImages(parsedCandidate(reread)))) {
     const normalized = source.replace(/\r\n?/g, '\n')
     return normalized.endsWith('\n') ? normalized : `${normalized}\n`
   }

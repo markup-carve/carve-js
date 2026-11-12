@@ -561,7 +561,11 @@ interface Reparsed {
  * in `entries`, and the escape search's window sources in `windows`, which the
  * fixpoint check's second search re-parses byte for byte.
  */
-let readbacks: { entries: Map<string, Reparsed>; minLength: number; windows: Map<string, Reparsed>; windowBytes: number } | null = null
+let readbacks: {
+  entries: Map<string, Reparsed>; minLength: number; windows: Map<string, Reparsed>; windowBytes: number
+  /** The raw tree of the last whole-document parse, until a caller that would parse the same source takes it. */
+  parsed: { src: string; document: Document } | null
+} | null = null
 
 const READBACK_MEMO_ENTRIES = 8
 
@@ -575,7 +579,7 @@ const WINDOW_MEMO_FACTOR = 64
  */
 export function withReadbackMemo<T>(source: string, write: () => T): T {
   if (readbacks !== null) return write()
-  readbacks = { entries: new Map(), minLength: source.length >> 1, windows: new Map(), windowBytes: WINDOW_MEMO_FACTOR * source.length }
+  readbacks = { entries: new Map(), minLength: source.length >> 1, windows: new Map(), windowBytes: WINDOW_MEMO_FACTOR * source.length, parsed: null }
   try {
     return write()
   } finally {
@@ -608,11 +612,30 @@ function reparsed(src: string): Reparsed {
   if (memo) {
     memo.set(src, fresh)
     if (memo.size > READBACK_MEMO_ENTRIES) memo.delete(memo.keys().next().value!)
+    if (document !== null) readbacks!.parsed = { src, document }
   } else if (readbacks !== null && readbacks.windowBytes >= src.length) {
     readbacks.windowBytes -= src.length
     readbacks.windows.set(src, fresh)
   }
   return fresh
+}
+
+/**
+ * The default parse of `src`, which a memoized write then reads back without parsing again,
+ * or null when the readback is already memoized or there is no memo.
+ */
+export function parseForReadback(src: string): Document | null {
+  if (readbacks === null || src.length < readbacks.minLength || readbacks.entries.has(src) || readbacks.windows.has(src)) return null
+  reparsed(src)
+  return takeReadbackDocument(src)
+}
+
+/** The default parse of `src` a readback just made, which no other caller holds. */
+export function takeReadbackDocument(src: string): Document | null {
+  const parsed = readbacks?.parsed
+  if (!parsed || parsed.src !== src) return null
+  readbacks!.parsed = null
+  return parsed.document
 }
 
 function attempt<T>(read: () => T): T | null {

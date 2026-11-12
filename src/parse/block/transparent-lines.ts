@@ -20,6 +20,12 @@ const COMMENT_FENCE = /^%%%/
 const COMMENT_LINE = /^%%/
 const MARKED_FENCE = /^[ \t>:*+-]*(?:\d+[.)][ \t]*)?%%%/
 
+function erasable(line: string): boolean {
+  const rest = line.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '').replace(/[ \t]+$/, '')
+  return (COMMENT_LINE.test(rest) && !COMMENT_FENCE.test(rest) && !REGION_MARKER.test(rest)) ||
+    (isLinkDefLine(rest) && !RE_FOOTNOTE_DEF.test(rest))
+}
+
 /** PART 0 S1: select whole, ordinary block lines before any layout reader runs. */
 export function transparentLineStream(source: string): TransparentLineStream | null {
   if (!source.includes('%%') && !source.includes(']:')) return null
@@ -40,15 +46,15 @@ export function transparentLineStream(source: string): TransparentLineStream | n
       sourceLines: original.map((_line, index) => index).filter((index) => index !== terminal),
       erased: [terminal], authoredTrace: [], originalOffsets: lexer.lineOffsets }
   }
+  // Only a line of this shape is erased, so without one the walk has nothing to select.
+  if (!original.some(erasable)) return null
   const trace: TraceRecord[] = []
   const authoredOwnership = ownLines(original, lexer.pos, trace)
   const erased: number[] = []
   for (const record of trace) {
     if (record.step !== 'S5' || record.form !== 'leaf') continue
     const index = record.line - 1
-    const rest = original[index]?.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, '').replace(/[ \t]+$/, '') ?? ''
-    if ((COMMENT_LINE.test(rest) && !COMMENT_FENCE.test(rest) && !REGION_MARKER.test(rest)) ||
-        (isLinkDefLine(rest) && !RE_FOOTNOTE_DEF.test(rest))) erased.push(index)
+    if (original[index] !== undefined && erasable(original[index])) erased.push(index)
   }
   if (!erased.length) return null
   const erasedSet = new Set(erased)

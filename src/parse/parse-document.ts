@@ -14,7 +14,8 @@ export function parseDocumentForHtml(source: string, opts: ParseOptions): Docume
   return finishDocument(parseTransientForHtml(source, opts))
 }
 
-function finishDocument(doc: Document): Document {
+/** The representation passes `parseDocument` runs on a parser tree. */
+export function finishDocument(doc: Document): Document {
   promoteBlockImages(doc.children, true)
   if (doc.footnoteDefs) {
     for (const body of Object.values(doc.footnoteDefs)) promoteBlockImages(body, true)
