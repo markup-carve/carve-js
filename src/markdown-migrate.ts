@@ -5516,9 +5516,12 @@ function quotedFenceLine(inner: string, text: string, item: unknown, held: numbe
   return RE_MD_FENCE_LINE.exec(inner) ?? (item === null ? heldItemFence(text, held) : null)
 }
 
-/** A fence four or more columns into a quote that is at most three past its item's column. */
+/**
+ * A fence four or more columns into a quote that is at most three past its
+ * item's column. Left of the item the line is no fence: the item has ended.
+ */
 function heldItemFence(text: string, held: number | undefined): RegExpExecArray | null {
-  if (held === undefined || indentColumns(text) < 4 || indentColumns(text) >= held + 4) return null
+  if (held === undefined || indentColumns(text) < Math.max(4, held) || indentColumns(text) >= held + 4) return null
   return RE_MD_FENCE_LINE.exec(stripColumns(text, held))
 }
 
@@ -5896,10 +5899,10 @@ function respellQuotedBlocks(
     const holder = list.itemAt(Infinity)
     // What the line above holds past its marker, when it is in this quote.
     const above = prev?.prefix === part.prefix ? prev.text.replace(RE_LIST_MARKER, '') : null
-    // Four columns past its item's content, a line under paragraph text
-    // continues the paragraph, whatever it looks like.
+    // Four columns past its item's content, a line under paragraph text, in
+    // the item or in a quote it holds, continues the paragraph.
     const item = list.itemAt(markerCol)
-    const overIndented = above !== null && markerCol >= (item?.content ?? 0) + 4 && opensParagraph(above)
+    const overIndented = above !== null && markerCol >= (item?.content ?? 0) + 4 && (opensParagraph(itemLineBody(above)) || openQuoteParagraph(itemLineBody(above)) !== null)
     const quoteParagraphOpen = prev?.prefix === part.prefix && opensParagraph(prev.text.replace(RE_LIST_MARKER, ''))
     const asText =
       overIndented ||
@@ -6055,6 +6058,13 @@ function narrowedPaddingStrands(part: PrefixedInlineLine, following: PrefixedInl
     following.text.trim() !== '' && indentColumns(following.text) >= tightContent && indentColumns(following.text) < sourceContent
 }
 
+/** What a line holds past every list marker it opens. */
+function itemLineBody(text: string): string {
+  let body = text
+  while (RE_LIST_MARKER.test(body)) body = body.replace(RE_LIST_MARKER, '')
+  return body
+}
+
 /**
  * Write a quoted line that carries no list marker, or one read as text: as a
  * lazy line of the open item or the quote it holds, or as a block that may
@@ -6071,7 +6081,7 @@ function respellUnmarkedQuoteLine(
   isTableRow: boolean,
   moved: (part: PrefixedInlineLine) => PrefixedInlineLine,
 ): { text: string; leavesList: boolean } {
-  const above = prev?.prefix === part.prefix ? prev.text.replace(RE_LIST_MARKER, '') : null
+  const above = prev?.prefix === part.prefix ? itemLineBody(prev.text) : null
   let text: string
   let leavesList = false
   // A quote run holds no blank line, so an unmarked paragraph line under an
@@ -6095,8 +6105,11 @@ function respellUnmarkedQuoteLine(
     open !== undefined &&
     !trimmed.startsWith('>') &&
     (markerCol >= open.content + 4 || isParagraphRunLine([trimmed], 0, 'text'))
-  if (overIndented) text = ' '.repeat(item === undefined ? 0 : item.content + item.shift) + escapeBlockOpener(trimmed)
-  else if (quoteLazy) {
+  if (overIndented && quote !== null && open !== undefined) text = ' '.repeat(open.content + open.shift) + quote + escapeBlockOpener(trimmed)
+  else if (overIndented) {
+    const holder = open ?? item
+    text = ' '.repeat(holder === undefined ? 0 : holder.content + holder.shift) + escapeBlockOpener(trimmed)
+  } else if (quoteLazy) {
     const escaped = markerCol >= open.content + 4 ? escapeBlockOpener(trimmed) : trimmed
     text = ' '.repeat(open.content + open.shift) + quote + escaped
   } else if (lazy) text = ' '.repeat(open.content + open.shift) + trimmed
