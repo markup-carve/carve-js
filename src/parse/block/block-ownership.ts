@@ -625,7 +625,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; codePayloadLines: Set<number>; frameVerseOpeners: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; codePayloadLines: Set<number>; frameVerseOpeners: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; braceTabColumns: Map<number, number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -684,6 +684,20 @@ export function ownLines(
   const tabQuoteFollower: { value: PendingTabQuoteFollower | null } = { value: null }
   const payloadLines = new Set<number>()
   const codePayloadLines = new Set<number>()
+  // A tab-led brace line's per-frame column, which every run reader measures it at (carve#5755).
+  const braceTabColumns = new Map<number, number>()
+  let braceTabOpen = -1
+  // A run lookahead extends the respelled prefix instead of rescanning it per line.
+  let runChain = { opener: -1, upTo: -1, respelled: false }
+  // Outside quotes and fences, a tab-led brace line and the lines of a run it leaves open stand at their per-frame column.
+  const braceTabColumn = (k: number, runOpen: boolean): number | null => {
+    const line = lines[k]
+    if (line === undefined || !/^[ \t]*\t/.test(line) || frames.some((f) => f.kind === 'quote' || f.kind === 'fence')) return null
+    const lead = indentCols(line)
+    if (lead.rest[0] !== '{' && !runOpen) return null
+    const column = tabColumnInFrames(line, frames, 1)
+    return column !== lead.col && frames.every((f, j) => j === 0 || lead.col < f.col || column >= f.col) ? column : null
+  }
   // Verse openers written at their per-frame column; the line-block reader takes them as written.
   const frameVerseOpeners = new Set<number>()
   const lazyCaptions = new Set<number>()
@@ -1011,6 +1025,7 @@ export function ownLines(
       }
       reached = k
     }
+    recordBraceTabColumn()
     // The frame columns decided the reach, so the readers see that run as spaces. A code
     // payload line keeps its authored lead: the payload reader measures it (carve#5755).
     if (frameReach && stripped !== null && respellsFrameTab(top(), stripped, m)) {
@@ -1020,6 +1035,12 @@ export function ownLines(
       m = indentCols(src)
     }
     reached = standInvisibleLine(reached, plus !== null)
+    function recordBraceTabColumn(): void {
+      const column = braceTabColumn(at, braceTabOpen === at - 1)
+      if (column === null) return
+      braceTabColumns.set(at, column)
+      if (!indentCols(lines[at]!).rest.includes('}')) braceTabOpen = at
+    }
     reached = endQuoteBlockAtBlank(reached)
     reopenPlus()
     function endQuoteBlockAtBlank(depth: number): number {
@@ -1479,7 +1500,8 @@ export function ownLines(
       const spanInEntry = form.family === 'comment' && (owner.last === 'term' || owner.last === 'dd')
       if (!invisibleLeaf && !spanInEntry) owner.last = form.kind
       owner.tableLine = form.table ? at : undefined
-      if (form.attrLines) attrRest = { left: form.attrLines, cut: col - canon }
+      // A continuation in the owner the opener reached moves with that owner's frame shift, not the opener's padding (carve#5874).
+      if (form.attrLines) attrRest = { left: form.attrLines, cut: (frames.indexOf(owner) <= reached ? owner.col : col) - canon }
       if (form.kind === 'term') recordDefinitionTerm(frames, owner, col)
       if (form.kind === 'dd') owner.ddShift = col - owner.canon
       if (form.kind === 'fence' || form.kind === 'colon') {
@@ -1817,7 +1839,7 @@ export function ownLines(
       return before.replace(/(?:[-*:]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, codePayloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, codePayloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, braceTabColumns, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)
@@ -2360,7 +2382,7 @@ export function ownLines(
     const col = runOpenerColumn(rest, depth, at)
     for (let end = at + 1; end < lines.length; end++) {
       const body = quotedMeasure(end, depth)
-      if (body === null || body.rest === '' || body.col <= col) return null
+      if (body === null || body.rest === '' || (depth === 0 ? runLineColumn(end, at) : body.col) <= col) return null
       // A comment-only run below an open paragraph's frame stays an invisible lazy line (CARVE-P9-013).
       if (body.rest.includes('%}')) {
         const commentOnly = trimEndSpaceTab(body.rest.slice(body.rest.indexOf('%}') + 2)) === ''
@@ -2372,12 +2394,26 @@ export function ownLines(
 
   // The column a brace run's continuations must pass: its `{`, or the body column of a note head it follows (CARVE-P2-035).
   function runOpenerColumn(rest: string, depth: number, at: number): number {
+    runChain.opener = -1
+    if (depth === 0 && indentCols(lines[at]!).rest.startsWith(rest)) return runLineColumn(at, at)
     let openerLine = lines[at]!
     for (let q = 0; q < depth && isQuoteLine(indentCols(openerLine).rest); q++) openerLine = quoteRest(indentCols(openerLine).rest)
     const trimmed = trimEndSpaceTab(openerLine)
     if (!trimmed.endsWith(rest)) return indentCols(openerLine).col
     const heads = NOTE_HEADS.exec(trimmed.slice(0, trimmed.length - rest.length))
     return heads ? docColumn(trimmed, trimmed.slice(heads[1]!.length)) + FOOTNOTE_BODY_COLUMN : docColumn(trimmed, rest)
+  }
+
+  // A brace run's lookahead measures its lines where the walk will write them (carve#5755).
+  function runLineColumn(k: number, opener: number): number {
+    if (runChain.opener !== opener || runChain.upTo > k) {
+      runChain = { opener, upTo: opener, respelled: braceTabColumn(opener, false) !== null }
+    }
+    while (runChain.respelled && runChain.upTo < k) {
+      const j = ++runChain.upTo
+      runChain.respelled = !indentCols(lines[j - 1]!).rest.includes('}') && braceTabColumn(j, true) !== null
+    }
+    return runChain.respelled && runChain.upTo >= k ? braceTabColumn(k, k > opener)! : indentCols(lines[k]!).col
   }
 
   function wrappedAttrRun(rest: string, depth: number, at: number): number | null {
@@ -2389,7 +2425,8 @@ export function ownLines(
         const quoted: string = indentCols(line).rest
         line = isQuoteLine(quoted) ? quoteRest(quoted) : null
       }
-      if (line === null || line.trim() === '' || indentCols(line).col <= openerColumn || /^[ \t]*\{/.test(line)) return null
+      if (line === null || line.trim() === '' || (depth === 0 ? runLineColumn(j, at) : indentCols(line).col) <= openerColumn ||
+          /^[ \t]*\{/.test(line)) return null
       const closed = line.includes('}')
       if (!closed && !isValidAttrPayload(`\n${line}\n`)) return null
       collected += `\n${line}`

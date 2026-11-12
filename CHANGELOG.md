@@ -12,6 +12,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 ### Fixes
 
 - `renderCarve` keeps the blank line between a delimited comment and a paragraph in a list item when the AST carries no source positions, so the comment no longer joins the paragraph on readback (#5012).
+- A tab-led `{%` or `{` run is measured at its per-frame column in every container, so a run whose continuation misses that column is refused and kept as text instead of dropped (#5008, markup-carve/carve#5874).
 
 ## [0.1.16] - 2026-11-12
 
