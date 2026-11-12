@@ -107,10 +107,83 @@ function onMarkerLine(blocks: readonly BlockNode[], body: string): string {
 /** A transparent line keeps its authored column through list and quote writing. */
 function restoreTransparentLineColumns(source: string): string {
   if (!source.includes('\0')) return source
-  return source.split('\n').map((line) => {
+  const out: string[] = []
+  for (const line of source.split('\n')) {
     const marker = line.indexOf('\0')
-    return marker < 0 ? line : line.slice(marker + 1)
-  }).join('\n')
+    out.push(marker < 0 ? line : reanchorTransparentLine(line.slice(0, marker), line.slice(marker + 1), out))
+  }
+  return out.join('\n')
+}
+
+/**
+ * The authored line under the prefix the writer gave its host: the quotes come
+ * from the written prefix, and an authored indent a rewritten list item would
+ * now take falls back to the host column.
+ */
+function reanchorTransparentLine(written: string, line: string, previous: readonly string[]): string {
+  const marks = /^\u0001*/.exec(line)![0].length
+  const hosted = marks > 0
+  const authored = line.slice(marks)
+  const writtenQuotes = written.lastIndexOf('>') + 1
+  const authoredQuotes = /^(?:[ \t]*>)*/.exec(authored)![0].length
+  const quotes = writtenQuotes > 0 && countQuotes(written) === countQuotes(authored.slice(0, authoredQuotes))
+  const head = quotes ? written.slice(0, writtenQuotes) : ''
+  const tail = quotes ? authored.slice(authoredQuotes) : authored
+  const indent = /^ */.exec(tail)![0].length
+  const paragraphColumn = quotes ? written.length - writtenQuotes : written.length
+  const host = marks > 1 ? ancestorItemColumn(previous, head, paragraphColumn, marks - 1) ?? paragraphColumn : paragraphColumn
+  if (!hosted || /^[ ]*\t/.test(tail) || indent <= host || !takenByAWrittenItem(previous, head, host, indent))
+    return head + tail
+  return head + ' '.repeat(host) + tail.slice(indent)
+}
+
+/** Marks a comment line written behind its host's content column; one more per item level its owner sits above that host. */
+const HOSTED_LINE = '\u0001'
+
+function paragraphCommentKey(node: { content: string; transparentSource?: string }): string {
+  return `${node.transparentSource ?? ''}\0${node.content}`
+}
+
+/** The written content column of the item `levels` above the one holding a line at `column`. */
+function ancestorItemColumn(previous: readonly string[], head: string, column: number, levels: number): number | undefined {
+  let below = column + 1
+  for (let index = previous.length - 1; index >= 0 && levels >= 0; index--) {
+    const line = previous[index]!
+    if (!line.startsWith(head)) return undefined
+    const text = line.slice(head.length)
+    const marker = /^ *(?:[-*+]|\d+[.)])(?: +|$)/.exec(text)
+    if (!marker || marker[0].length >= below) continue
+    below = /^ */.exec(text)![0].length + 1
+    if (levels-- === 0) return marker[0].length
+  }
+  return undefined
+}
+
+function ownsGapLine(item: ListItem, node: unknown): boolean {
+  const json = JSON.stringify(node)
+  return item.children.some((child) => child === node || child.type === 'comment' && JSON.stringify(child) === json)
+}
+
+function countQuotes(prefix: string): number {
+  return prefix.split('>').length - 1
+}
+
+/** Whether a list item still open above, written at or past `host`, takes a line at `indent`. */
+function takenByAWrittenItem(previous: readonly string[], head: string, host: number, indent: number): boolean {
+  let floor = Infinity
+  for (let index = previous.length - 1; index >= 0; index--) {
+    const line = previous[index]!
+    if (!line.startsWith(head)) return false
+    const text = line.slice(head.length)
+    if (text.trim() === '') continue
+    const at = /^ */.exec(text)![0].length
+    if (at < host) return false
+    if (at >= floor) continue
+    floor = at
+    const marker = /^ *(?:[-*+]|\d+[.)])(?: +|$)/.exec(text)
+    if (marker && marker[0].length <= indent) return true
+  }
+  return false
 }
 
 /** Whether a transparent line is indented; inside a list, an indent behind its quotes counts too. */
@@ -3078,6 +3151,8 @@ class CarveRenderSession {
   private canonicalTrailingComments = new WeakSet<Comment | AbbreviationDef>()
   /** Comments an item or description opens with: it writes them, not the gap after it. */
   private itemLeadingComments = new WeakSet<object>()
+  /** The list depth of the item that owns a comment written inside a descendant's paragraph. */
+  private paragraphCommentOwners = new Map<string, number>()
   private indentedHostDepth = 0
   private pendingMarkerLineShift = 0
   private noteBodyHost: { quoteDepth: number; listDepth: number } | undefined
@@ -3906,7 +3981,9 @@ class CarveRenderSession {
             const source = atNoteBodyColumn && comment.node.pos?.startColumn !== undefined
               ? comment.source.replace(/^(?:[ \t]*>[ ]?)*[ \t]*/, ' '.repeat(Math.max(0, comment.node.pos.startColumn - 1)))
               : comment.source
-            written.splice(Math.min(after, written.length), 0, `\0${transparentNodeSource({ ...comment, source })}`)
+            const owner = comment.node.type === 'comment' ? this.paragraphCommentOwners.get(paragraphCommentKey(comment.node)) : undefined
+            const levels = owner !== undefined && owner < ctx.listDepth ? ctx.listDepth - owner : 0
+            written.splice(Math.min(after, written.length), 0, `\0${HOSTED_LINE.repeat(levels + 1)}${transparentNodeSource({ ...comment, source })}`)
           }
           withComments = written.join('\n')
         }
@@ -4137,7 +4214,7 @@ class CarveRenderSession {
         (this.noteBodyHost === undefined || ctx.quoteDepth !== this.noteBodyHost.quoteDepth ||
           ctx.listDepth !== this.noteBodyHost.listDepth || isPlusStandIn(node)) &&
         (!this.canonicalTransparentLines || isPlusStandIn(node))) {
-      return `\0${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
+      return `\0${HOSTED_LINE}${transparentNodeSource({ source: node.transparentSource, node, originalValue: node.transparentOriginalValue })}`
     }
     // At block level `%%` plus percent-leading content needs a separator:
     // `%%%` would open a comment fence instead (carve-js#1674).
@@ -4317,7 +4394,9 @@ class CarveRenderSession {
             const continuesRun = previousGap !== undefined && previousGap.after === gap.after &&
               isLineComment(previousGap.node as BlockNode) && isLineComment(gap.node as BlockNode) &&
               !isRegionMarker(previousGap.node as BlockNode) && !isRegionMarker(gap.node as BlockNode)
-            out += `${this.canonicalTransparentLines && !node.tight && !continuesRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}\0${transparentNodeSource(gap)}\n`
+            // An owned line is measured from the item's written content column.
+            const host = ownsGapLine(item, gap.node) ? `${' '.repeat(continuationWidth)}\0${HOSTED_LINE}` : '\0'
+            out += `${this.canonicalTransparentLines && !node.tight && !continuesRun && !isRegionMarker(gap.node as BlockNode) ? '\n' : ''}${host}${transparentNodeSource(gap)}\n`
           }
           previousGap = gap
         }
@@ -4491,6 +4570,9 @@ class CarveRenderSession {
     // A list item is a prefix/indent host: its fences start over at `:::`.
     const outerFenceDepth = ctx.colonFenceDepth
     ctx.colonFenceDepth = 0
+    for (const child of item.children) {
+      if (child.type === 'comment' && child.transparentInParagraph) this.paragraphCommentOwners.set(paragraphCommentKey(child), ctx.listDepth)
+    }
     try {
       return atAnAuthoredBodyColumn(ctx, () => this.renderListItemBody(item, ctx, tight), true)
     } finally {
