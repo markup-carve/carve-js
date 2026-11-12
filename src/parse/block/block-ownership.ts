@@ -418,6 +418,10 @@ function matchMarker(rest: string): { width: number; head: number; axes: string 
 }
 
 // A line leaving a line block's open `%%%` span is markup-carve/carve#4994; it keeps the opener base.
+function noteChildAtSource(rest: string): boolean {
+  return matchMarker(rest) !== null || FOOTNOTE_DEF.test(rest)
+}
+
 function holdsCommentSpan(frame: Frame): boolean {
   return frame.kind === 'fence' && frame.lineBlock === true && frame.span?.[0] === '%'
 }
@@ -1511,7 +1515,9 @@ export function ownLines(
         take(form.head!)
         m = indentCols(src)
         const tabLead = (head + src.slice(0, src.length - m.rest.length)).includes('\t')
-        content(frame, col + form.head!, canon + form.head!)
+        // A marker-line note's opener is read at the body column unless it chains markers (CARVE-P9-083).
+        content(frame, col + form.head!, canon + form.head!,
+          form.kind === 'note' && !noteChildAtSource(m.rest) ? frame.col - m.col : undefined)
         // Content behind a lead tab is text to the readers, so it opens no row for a `+` to continue.
         if (tabLead) frame.tableLine = undefined
       }
@@ -1530,11 +1536,11 @@ export function ownLines(
     }
 
     // The rest of a marker line. Only a quote starts new coordinates, so only there can its content move.
-    function content(frame: Frame, start: number, canon: number): void {
+    function content(frame: Frame, start: number, canon: number, readStart = start): void {
       if (m.rest === '' || frames.length > MAX_FRAMES) return
       // CARVE-P2-010: behind an item marker's tab the line is text, whatever it spells; a quote has no such rule.
       const leadTab = frame.kind !== 'quote' && src.slice(0, src.length - m.rest.length).includes('\t')
-      const form = leadTab ? TEXT : classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : start + m.col)
+      const form = leadTab ? TEXT : classify(m.rest, frame, at, frame.kind === 'quote' ? m.col : readStart + m.col)
       if (form.kind === 'text') {
         let refusedMarker = false
         if (leadTab && frames.some((f) => f.kind === 'quote')) {
