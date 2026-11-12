@@ -9067,7 +9067,9 @@ function writeContainerOpener(st: MarkdownConversion, ln: MarkdownLine, i: numbe
     return i
   }
   if (isBlockquote) {
-    const run = collectBlockquoteInlineRun(lines, i, dialect, contentCol, quoteMarkers)
+    // A quote in a note body ends with the note.
+    const noteEnds = st.footnoteEnd > i && (lines[st.footnoteEnd] ?? '').trim() !== ''
+    const run = collectBlockquoteInlineRun(noteEnds ? lines.slice(0, st.footnoteEnd) : lines, i, dialect, contentCol, quoteMarkers)
     st.quoteCol = contentCol
     if (run.blank) sourceBlanks.add(out.length)
     out.push(...run.lines)

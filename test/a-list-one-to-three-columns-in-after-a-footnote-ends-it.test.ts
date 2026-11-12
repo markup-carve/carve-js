@@ -27,3 +27,18 @@ describe('a list one to three columns in after a footnote', () => {
     expect(markdownToCarve('a[^1]\n\n[^1]: b\n\n    - t\n')).toBe('a[^1]\n\n[^1]: b\n  - t\n')
   })
 })
+
+describe('a quote line one to three columns in after a quote in a footnote', () => {
+  it.each([0, 1, 2, 3])('ends the note at column %i', (col) => {
+    expect(markdownToCarve(`a[^1]\n\n[^1]: b\n\n    > q\n${' '.repeat(col)}> r\n`))
+      .toBe('a[^1]\n\n> r\n\n[^1]: b\n\n  > q\n')
+  })
+
+  it('keeps a four-column quote line in the note', () => {
+    expect(markdownToCarve('a[^1]\n\n[^1]: b\n\n    > q\n    > r\n')).toBe('a[^1]\n\n[^1]: b\n\n  > q\n  > r\n')
+  })
+
+  it('reads a note that ends in a quote at the end of input', () => {
+    expect(markdownToCarve('a[^1]\n\n[^1]: b\n\n    > q')).toBe('a[^1]\n\n[^1]: b\n\n  > q')
+  })
+})
