@@ -7102,7 +7102,11 @@ function quotedItemColumns(lines: readonly string[]): number[] {
       if (!lazy) while (itemCols.length && indentColumns(body) < itemCols[itemCols.length - 1]!) itemCols.pop()
       const marker = RE_MD_THEMATIC.test(body) ? null : RE_LIST_MARKER.exec(body)
       const ordered = marker === null ? undefined : sourceItem(body)?.number
-      if (marker && !(ordered !== undefined && Number(ordered) !== 1 && opensParagraph(preceding))) itemCols.push(itemContentColumn(marker[0]))
+      if (marker && !(ordered !== undefined && Number(ordered) !== 1 && opensParagraph(preceding))) {
+        itemCols.push(itemContentColumn(marker[0]))
+        // A line that opens more than one item (`- 1. a`) holds its content at the innermost.
+        for (const nested of nestedItemsOnLine(body, marker[0].length)) itemCols.push(nested.content)
+      }
       preceding = body
     }
     columns[at] = itemCols[itemCols.length - 1] ?? 0
