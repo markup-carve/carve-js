@@ -84,14 +84,38 @@ describe('borrowed HTML layout', () => {
     }
   })
 
-  it('routes a blank before a nested bullet list through the parser', () => {
+  it('renders a blank before a nested bullet list as a loose list', () => {
     for (const source of [
       '- first\n- second\n\n  - nested *strong*\n  - another\n',
       '- first\n\n\n  - nested\n',
       '- first\n\n  - nested\n\n    - deeper\n- last\n',
+      '- a\n  - b\n\n    - c\n',
     ]) {
-      expect(tryFastHtml(source, {}), source).toBeUndefined()
+      expect(tryFastHtml(source, {}), source).toBe(authoritative(source))
       expect(carveToHtml(source), source).toBe(authoritative(source))
+    }
+    expect(tryFastHtml('- first\n- second\n\n  - nested\n  - another\n', {})).toBe([
+      '<ul>',
+      '  <li><p>first</p></li>',
+      '  <li><p>second</p>',
+      '    <ul>',
+      '      <li>nested</li>',
+      '      <li>another</li>',
+      '    </ul>',
+      '  </li>',
+      '</ul>',
+    ].join('\n'))
+  })
+
+  // carve#6026: refusing this shape sent every such document through the block parser.
+  it('keeps a document of blank-nested lists on the borrowed path', () => {
+    const section = (blank: string) => `## S\n\n- first\n- second\n${blank}  - nested\n  - another\n\n`
+    for (const blank of ['', '\n']) {
+      const source = section(blank).repeat(160)
+      const result = tryFastHtmlWithStats(source, {})
+      expect(result, JSON.stringify(blank)).toBeDefined()
+      expect(result!.accepted.unorderedListItems).toBe(4 * 160)
+      expect(result!.html).toBe(authoritative(source))
     }
   })
 
@@ -108,11 +132,15 @@ describe('borrowed HTML layout', () => {
     }
   })
 
-  it('routes the shared JavaScript benchmark fixture through the parser', () => {
+  it('uses the fast path for the unchanged shared JavaScript benchmark fixture', () => {
     const source = readFileSync(new URL('./fixtures/bench-commonmark-core.crv', import.meta.url), 'utf8')
     const result = tryFastHtmlWithStats(source, {})
-    expect(result).toBeUndefined()
-    expect(carveToHtml(source)).toBe(authoritative(source))
+    expect(result).toBeDefined()
+    expect(result!.accepted.headings).toBe(151)
+    expect(result!.accepted.unorderedListItems).toBe(600)
+    expect(result!.accepted.thematicBreaks).toBe(150)
+    expect(result!.html).toBe(authoritative(source))
+    expect(carveToHtml(source)).toBe(result!.html)
   })
 
   it('accepts adjacent definitions and preserves reference resolution', () => {
@@ -216,7 +244,8 @@ describe('borrowed HTML layout', () => {
     // The Unicode headings in corpus 15-5 and 119 take the borrowed route.
     // Spaced thematic breaks (carve#4814) add corpus 132 and 132-5.
     // The spec pin through carve#5425 adds one accepted fixture.
-    expect(accepted).toBe(79)
+    // Loose nested lists (carve#6026) bring back corpus 87-2.
+    expect(accepted).toBe(80)
     // Corpus 550-3 and 550-4 add rules outside the frontmatter position.
     expect(acceptedFiles).toEqual(expect.arrayContaining([
       '550-a-dash-run-opens-frontmatter-only-at-the-start-and-only-a-dash-run-3.crv',
