@@ -19,8 +19,6 @@ import { carveToHtml } from '../src/index.js'
 import { expectedCorpusSize } from './helpers/corpus-population.js'
 import { RULED_HTML_AHEAD_OF_PIN } from './ruled-ahead-of-pin-5015.js'
 import { RULED_5016_HTML } from './ruled-5016-ahead-of-pin.js'
-import { RULED_5855_HTML } from './ruled-5855-ahead-of-pin.js'
-import { RULED_5866_HTML } from './ruled-5866-ahead-of-pin.js'
 import { RULED_HTML_AHEAD_OF_PIN_5012 } from './ruled-ahead-of-pin-5012.js'
 import { RULED_HTML_AHEAD_OF_PIN_5091 } from './ruled-ahead-of-pin-5091.js'
 import { RULED_5080_HTML } from './ruled-5080-ahead-of-pin.js'
@@ -43,6 +41,22 @@ if (!existsSync(corpusDir)) {
  * '01-emphasis-2', '01-emphasis-3', …). Grows with each PR.
  */
 const IMPLEMENTED = new Set([
+  // New categories at the 0.1.14 spec pin.
+  'a-block-shaped-line-inside-a-comment-run-keeps-the-item-tight',
+  'a-braced-comment-paragraph-with-text-misses-the-item',
+  'a-colon-line-without-a-term-continues-no-entry',
+  'a-column-after-an-astral-character-is-one-code-point',
+  'a-comment-fence-line-inside-a-braced-comment-run-is-run-text',
+  'a-comment-only-braced-paragraph-after-a-blank-closes-the-item-it-misses',
+  'a-comment-only-paragraph-loosens-a-list-as-a-comment-line-does',
+  'a-comment-run-after-a-glued-attribute-keeps-its-written-column',
+  'a-comment-span-under-a-marker-line-note-leaves-no-paragraph',
+  'a-lazy-comment-opener-is-measured-where-its-brace-is-written',
+  'a-line-that-ends-a-span-in-an-item-s-description-leaves-the-item-s-paragraph-open',
+  'a-tab-led-attribute-line-in-a-note-a-nested-plus-passes-stays-the-note-s',
+  'a-tabbed-verse-line-keeps-the-lead-its-frames-leave',
+  'a-verse-lead-under-an-indented-opener-is-measured-per-frame',
+  'an-attribute-line-in-a-note-s-body-stays-the-note-s-under-a-plus',
   // New categories at the #5845 spec pin.
   'a-brace-line-continues-a-marker-comment',
   'a-closed-inline-comment-holds-a-brace-line',
@@ -1662,14 +1676,11 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
   ...RULED_HTML_AHEAD_OF_PIN_5091,
   ...RULED_5080_HTML,
   ...RULED_5820_HTML,
-  ...RULED_5855_HTML,
-  ...RULED_5866_HTML,
 ])
-// Layout rewrite #5731 remains pending; the alias pin exposes these existing engine outputs.
+// Engine outputs that still differ from the pinned corpus, each with its ticket.
 const behindSpec = new Map<string, string>([
-  // The model keeps these lazy runs follower-dependent, against carve#5830 rule B (carve#5851).
-  ["964-a-lazy-line-after-a-comment-keeps-the-deepest-list-open", "<ul>\n  <li>a\n    <ul>\n      <li><p>b\n{% c\nd %}\ntail</p></li>\n      <li><p>z</p></li>\n    </ul>\n  </li>\n</ul>"],
-  ["1044-a-lazy-comment-run-lets-a-quote-open-in-its-note", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p\n{% a\n%}</p>\n      <blockquote><p>q\nafter</p></blockquote>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
+  // A tab-led refused lazy run in a note's description is dropped (#5008).
+  ["1070-a-lazy-comment-opener-is-measured-where-its-brace-is-written-4", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p</p>\n      <dl>\n        <dt>t</dt>\n        <dd>pre\n</dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
