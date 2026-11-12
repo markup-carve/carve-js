@@ -8177,11 +8177,11 @@ function prepareMarkdownLine(st: MarkdownConversion, ln: MarkdownLine, i: number
     if (/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]/.test(lines[i]!)) {
       if (st.out.at(-1)?.trim() !== '') st.out.push('')
       st.prevBlank = true
-      // The source list is at document level even with three optional spaces.
-      lines[i] = lines[i]!.replace(/^ {1,3}(?=(?:[-*+]|\d{1,9}[.)])[ \t])/, '')
     }
     listCols.length = 0
-    listMarkers.leave(0)
+    // The note's item closes too, so a list one to three columns in is read at
+    // document level as a whole; left open, its items were written in the note.
+    listMarkers.end(0)
     st.itemParagraph = false
     st.itemQuote = null
     st.footnoteEnd = -1
