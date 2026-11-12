@@ -34,6 +34,8 @@ describe('a Markdown destination with a denied scheme', () => {
     ['a reference link and its definition', '[x][r] ![i][r]\n\n[r]: javascript:x', 'x i'],
     ['an unused definition', 'p\n\n[r]: data:x', 'p'],
     ['an empty link inside emphasis', 'a *[](javascript:x)* b', 'a  b'],
+    ['in a definition term', ':: [x](javascript:x)\n: desc', ':: x\n: desc'],
+    ['in a definition description', 'Term\n: [y](javascript:x) d', 'Term\n: y d'],
     ['in a quoted list item', '> - [y](javascript:x)', '> - y'],
     ['in a table cell', '| a |\n|---|\n| [](javascript:x) [ok](https://e) |', '|= a |\n| [ok](https://e) |'],
   ])('%s', (_name, markdown, carve) => {

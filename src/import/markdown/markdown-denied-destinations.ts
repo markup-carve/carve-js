@@ -114,8 +114,9 @@ export function dropDeniedDestinations(document: Document, report: (message: str
       if (key === 'footnoteDefs') {
         const defs = value as Record<string, BlockNode[]>
         for (const label of Object.keys(defs)) defs[label] = blocks(defs[label]!)
-      } else if (key === 'definitions' && Array.isArray(value) && value.every(Array.isArray)) {
-        node[key] = (value as BlockNode[][]).map(blocks)
+      } else if (Array.isArray(value) && value.length > 0 && value.every(Array.isArray)) {
+        // A definition item: `definitions` are block bodies, `terms` inline runs.
+        node[key] = key === 'definitions' ? (value as BlockNode[][]).map(blocks) : (value as InlineNode[][]).map((run) => inlines(run, true))
       } else if (key === 'target' && node.type === 'figure' && (value as Node).type === 'image' && isDenied((value as Image).src)) {
         const image = value as Image
         changed = true
