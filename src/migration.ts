@@ -130,7 +130,11 @@ export function migrateMarkdownWithDestinations(
     fallback.report.diagnostics[0].path = 'line:1'
     return { ...fallback, authored }
   }
-  if (assessment.complete && result.losses.every(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE) && result.losses.length <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length) {
+  // The assessment locates each dropped destination; it stands in for the drop pass's rows only when it saw all of them.
+  const tasks = result.losses.filter(loss => loss.message === ORDERED_TASK_ITEM_UNSPELLABLE).length
+  const denied = result.losses.filter(loss => loss.code === 'attribute-dropped').length
+  if (assessment.complete && tasks + denied === result.losses.length && tasks <= assessment.diagnostics.filter(row => row.code === 'structure-unspellable').length
+    && denied === assessment.diagnostics.filter(row => row.code === 'attribute-dropped').length) {
     return { value: result.value, report: { schemaVersion: 2, sourceFormat: 'markdown', diagnostics: [...assessment.diagnostics, ...fixups] }, authored }
   }
   fallback.report.diagnostics.push(...assessment.diagnostics.filter(row => row.code === 'markdown-table-extra-cells'), ...fixups)
