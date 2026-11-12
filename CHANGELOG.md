@@ -9,7 +9,7 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
-## [0.1.16] - 2026-11-11
+## [0.1.16] - 2026-11-12
 
 This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, refused brace runs read as text, native table headers in the writer, and a large authoring lint set.
 
@@ -47,10 +47,15 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 - Attached fences, line blocks and verse close at their own closers and keep their payload (#4714, #4734, #4735, #4738, #4762, #4763, #4770, #4771, #4794, #4822, #4825, #4827).
 - Tab-led lines are measured per frame in markers, ownership, code and verse (#4075, #4833, #4854, #4922, #4925, #4948).
 - AST round trips keep erased comment lines, quote markers, transparent hosts and paragraph positions (#4691, #4692, #4694, #4695, #4696, #4697, #4831, #4841).
+- AST spans: a note starts at its parent's content column, and host, fence and note spans end at source the author wrote (#4963, #4964, #4969).
+- AST JSON round trips keep the last attribute write, and a heading extension receives the id written last (#4973, #4974).
+- A description-hosted note keeps its first-block `+` follower, and an indented description starts at its owner's content column (#4972, #4977).
 - Inline parsing keeps link tails, attribute runs after references and raw syntax, hard breaks after comments, smart quotes after attributed symbols and nested link attributes in their place (#4784, #4799, #4800, #4803, #4809, #4817).
 - Body admonitions and figure note references are numbered in document order (#4801, #4811).
 - HTML import reports authored attributes an endnote item cannot keep (#4850, markup-carve/carve#5747).
 - Lint reports a refused own-line `+` with the new `refused-continuation-marker` hint, a losing note's marker-line `+` as `continuation-marker-refused`, and an unclosed code fence a host ends at its opener (#4845, #4942, #4950).
+- Markdown import drops a destination with a denied scheme and reports where each one was dropped (#4985, #4991, #5000).
+- Markdown import reads reference definitions in footnote bodies, list items and item quotes, and ends footnotes, quotes and lazy lines, as cmark-gfm does (#4992, #4994, #4995, #4996, #5001, #5002).
 
 - Lists, descriptions, quotes and attached blocks keep their intended owner and boundaries across nested fences, blank lines, lazy text and continuation markers (#4522, #4523, #4525, #4548, #4571, #4576, #4577, #4581, #4583, #4587, #4591, #4598, #4599, #4603, #4605, #4609, #4610, #4611, #4612, #4616, #4617, #4618, #4619, #4621, #4622, #4625, #4630, #4631, #4634, #4636, #4637, #4640, #4641, #4642, #4643, #4644, #4645, #4646, #4651, #4652, #4653, #4655, #4657, #4662, #4667, #4668, #4670, #4674, #4676, #4677).
 - Footnote and definition bodies keep later content, attachments and sibling blocks at their authored boundaries (#4503, #4510, #4514, #4538, #4542, #4544, #4549, #4550, #4556, #4564, #4565, #4568, #4573, #4584, #4590, #4592, #4593, #4632, #4633, #4638, #4654, #4659, #4669, #4678).
@@ -83,6 +88,7 @@ This release follows the spec rulings of the last two weeks: one attach rule for
 ### Improvements
 
 - A paragraph of lazy `{%` opener lines and a container's comment run parse in linear time (#4898, #4914).
+- `carve lint` checks list markers below the content column in linear time (#4970).
 
 - Parsing and formatting avoid repeated ownership walks, blank lookahead and escape readbacks (#4531, #4532, #4582, #4647, #4648, #4650, #4679).
 

@@ -84,3 +84,14 @@
 4935: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
 4939: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
 4946: fixes an unreleased regression; its tests pass on the 0.1.15 tree.
+4954: fixes an unreleased regression; the quadratic restore came from #4407, merged after 0.1.15.
+4965: fixes an unreleased regression; carve-js 0.1.15 renders both shapes correctly.
+4967: fixes an unreleased regression in the column tracking #4965 added after 0.1.15.
+4975: fixes an unreleased regression; bisected to #4127, merged after 0.1.15.
+4980: fixes an unreleased regression; carve-js 0.1.15 renders these correctly.
+4981: fixes an unreleased regression; carve-js 0.1.15 renders the fixed output.
+4987: fixes an unreleased regression from erasing comment lines before layout (#4364).
+4988: fixes an unreleased regression; carve-js 0.1.15 reads the closer as payload.
+4989: fixes an unreleased regression; carve-js 0.1.15 renders the fixed output.
+5004: fixes an unreleased regression from the ownership walk; 0.1.15 renders it correctly.
+5006: fixes an unreleased regression; 0.1.15 renders it correctly.
