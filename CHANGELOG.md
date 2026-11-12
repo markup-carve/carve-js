@@ -9,6 +9,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 
 ## [Unreleased]
 
+### Fixes
+
+- `renderCarve` keeps the blank line between a delimited comment and a paragraph in a list item when the AST carries no source positions, so the comment no longer joins the paragraph on readback (#5012).
+
 ## [0.1.16] - 2026-11-12
 
 This release follows the spec rulings of the last two weeks: one attach rule for `+`, comment lines erased before layout, refused brace runs read as text, native table headers in the writer, and a large authoring lint set.

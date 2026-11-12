@@ -830,6 +830,15 @@ function writtenAsOneRun(previous: BlockNode, block: BlockNode, containerOwned =
   return after.startLine === before.endLine + 1
 }
 
+function joinsAnAdjacentParagraph(previous: BlockNode, block: BlockNode): boolean {
+  if (isDelimitedComment(block)) return anOpenParagraphReachesDown(previous)
+  return isDelimitedComment(previous) && block.type === 'paragraph'
+}
+
+function isDelimitedComment(block: BlockNode): boolean {
+  return block.type === 'comment' && !block.block && block.delimited === true
+}
+
 function isLineComment(block: BlockNode): boolean {
   return block.type === 'comment' && !block.block && block.delimited !== true
 }
@@ -4581,6 +4590,11 @@ class CarveRenderSession {
         if ((b.type === 'comment' && b.delimited || previousEmitted?.type === 'comment' && previousEmitted.delimited) &&
             previousEmitted?.pos?.endLine !== undefined &&
             b.pos?.startLine !== undefined && b.pos.startLine > previousEmitted.pos.endLine + 1) {
+          parts.push('')
+        } else if (!separated && previousEmitted !== null && (b.pos === undefined || previousEmitted.pos === undefined) &&
+            joinsAnAdjacentParagraph(previousEmitted, b)) {
+          // Without positions nothing records the blank, and a delimited comment
+          // beside a paragraph line reads as part of that paragraph (carve-js#5012).
           parts.push('')
         }
         // An authored blank run ends the nested list before this comment.
