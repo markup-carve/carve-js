@@ -111,7 +111,9 @@ const gfm = JSON.parse(readFileSync(new URL('./fixtures/markdown-table-image-alt
 for (const [index, c] of gfm.entries()) {
   it(`GFM image table ${index}`, () => {
     const normalize = (html: string) => html.replace(/\s+scope="(?:col|row)"/g, '').replaceAll('&quot;', '"').replaceAll(' />', '>').replaceAll('\n', '').trim().replace(/>\s+</g, '><')
-    expect(normalize(carveToHtml(markdownToCarve(c.md)))).toBe(normalize(c.html))
+    // carve#6010: an image with a denied source imports as its alt text, where GFM renders it with a blanked src.
+    const expected = /\]\(javascript:/.test(c.md) ? normalize(c.html).replace(/<img src="" alt="([^"]*)">/g, '$1') : normalize(c.html)
+    expect(normalize(carveToHtml(markdownToCarve(c.md)))).toBe(expected)
   })
 }
 it('migrates a reference with escaped alt text', () => {

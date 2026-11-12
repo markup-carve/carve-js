@@ -15,6 +15,7 @@ import { markdownBareLinks, markdownRawBareLinks } from './import/markdown/markd
 import { backtickRunEnds } from './parse/inline/backtick-run-index.js'
 import { opensCodeFence } from './parse/block/parse-quote-core.js'
 import { linkMarkdownEmailText } from './import/markdown/markdown-email-links.js'
+import { dropDeniedDestinations } from './import/markdown/markdown-denied-destinations.js'
 import { decodeQuotedAlertEscapes, GITHUB_ALERT_LABEL, importGithubAlerts } from './import/markdown/markdown-github-alerts.js'
 import { canonicalCarveWrite } from './ast/canonical-carve-write.js'
 import { convertedIds, protectUnresolvedCrossrefs } from './import/html/imported-crossrefs.js'
@@ -3102,6 +3103,7 @@ import { replaceLoneSurrogates } from './well-formed.js'
 export type MarkdownImportLoss = {
   code: 'structure-unspellable' | 'frontmatter-synthesized' | 'raw-span-whitespace-trimmed'
     | 'carrier-marker-dropped' | 'carrier-markers-damaged' | 'raw-code-fallback' | 'markdown-html-comment'
+    | 'attribute-dropped'
   message: string
   line?: number
   /** Overrides the code's default, for a reading the importer derived. */
@@ -7380,7 +7382,8 @@ function convertMarkdownSource(
     }, document => {
       const alerts = importGithubAlerts(document, written)
       const escapes = decodeQuotedAlertEscapes(document)
-      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts || escapes
+      const denied = dropDeniedDestinations(document, message => losses.push({ code: 'attribute-dropped', message }))
+      return (changesLinks && linkMarkdownEmailText(document, usedBoundaryKey)) || alerts || escapes || denied
     },
     value)
     if (!trailingNewline) value = value.replace(/\n$/, '')
