@@ -222,6 +222,8 @@ interface DefinitionLine {
   opensItem: boolean
   lineDepth: number
   blockList: number
+  /** The container body column the definition stands at. */
+  bodyIndent: number
   wrappedDestinationTitle: boolean
 }
 
@@ -364,7 +366,7 @@ function joinWrappedDefinitionTitle(
 
 /** Write a definition with a destination, or keep a bare reference head. */
 function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, destination: string): { i: number; canStart: boolean } {
-  const { line, label, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, wrappedDestinationTitle } = d
+  const { line, label, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, bodyIndent, wrappedDestinationTitle } = d
   let i = d.i
   const target = trimReferenceWhitespace(destination)
   if (target === '') {
@@ -456,15 +458,15 @@ function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, desti
     keepLines(st, quotePrefix)
   } else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && st.lines[i + 1]?.trim() === '') {
     i++
-  } else if (st.lines[i + 1]?.startsWith('    ') && st.lines[i + 1]!.trim() !== '') {
-    const text = st.lines[i + 1]!.replace(/^ {4}/, '')
+  } else if (st.lines[i + 1]?.startsWith(' '.repeat(bodyIndent + 4)) && st.lines[i + 1]!.trim() !== '') {
+    const text = st.lines[i + 1]!.slice(bodyIndent + 4)
     // Paragraph text the definition leaves behind; four columns in it opened
     // nothing, so a marker it starts with stays literal.
     if (opensBlock(text)) {
-      st.lines[i + 1] = text.trimStart().replace(/^(\d{1,9})(?=[.)])|^(?=[^\d])/, '$1\\')
+      st.lines[i + 1] = ' '.repeat(bodyIndent) + text.trimStart().replace(/^(\d{1,9})(?=[.)])|^(?=[^\d])/, '$1\\')
       st.referenceChunk = undefined
     } else {
-      st.lines[i + 1] = text
+      st.lines[i + 1] = ' '.repeat(bodyIndent) + text
       if (st.referenceChunk && i + 1 >= st.referenceChunk.start && i + 1 <= st.referenceChunk.through) {
         st.referenceChunk.offsets[i + 1 - st.referenceChunk.start]! += 4
       }
@@ -820,7 +822,7 @@ export function extractReferenceDefinitions(
         i++
         destination = followingBody
       }
-      const d: DefinitionLine = { line, i, label: definition[1]!, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, wrappedDestinationTitle }
+      const d: DefinitionLine = { line, i, label: definition[1]!, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, bodyIndent: listIndent, wrappedDestinationTitle }
       const emptied = new RegExp(String.raw`^[ \t]*<>(?:[ \t]+${TITLE})?[ \t]*$`).exec(destination)
       if (!emptied) {
         const written = writeTargetDefinition(st, d, destination)
