@@ -70,7 +70,10 @@ function authoredRunLine(lexer: Lexer, index: number): string | undefined {
 /** The quote-local column of line `index`; a `>` past the run opener's own quote levels is run text, not a prefix. */
 function authoredColumnAt(lexer: Lexer, index: number, openerDepth = Infinity): number | undefined {
   const source = authoredRunLine(lexer, index)
-  return source === undefined ? undefined : sourceQuoteLocalColumn(source, Math.min(openerDepth, quotePrefixDepth(source)))
+  if (source === undefined) return undefined
+  // A tab-led brace line stands at its per-frame column (carve#5755).
+  const perFrame = (lexer.documentRoot ?? lexer).braceTabColumns?.get(lexer.lineNumber(index))
+  return perFrame ?? sourceQuoteLocalColumn(source, Math.min(openerDepth, quotePrefixDepth(source)))
 }
 
 type RunSource = { column: number; depth: number }

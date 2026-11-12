@@ -1679,8 +1679,6 @@ const AHEAD_OF_PIN = new Map<string, { reason: string; html: string }>([
 ])
 // Engine outputs that still differ from the pinned corpus, each with its ticket.
 const behindSpec = new Map<string, string>([
-  // A tab-led refused lazy run in a note's description is dropped (#5008).
-  ["1070-a-lazy-comment-opener-is-measured-where-its-brace-is-written-4", "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p</p>\n      <dl>\n        <dt>t</dt>\n        <dd>pre\n</dd>\n      </dl>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"],
 ])
 // A corpus file is `NN-slug` or `NN-slug-VARIANT`. The CATEGORY is the slug
 // alone: the leading number is the spec's ordering, not an identity, and it
