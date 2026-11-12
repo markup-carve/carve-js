@@ -3087,12 +3087,13 @@ export class ParseSession extends InlineParseSession {
       const min = closerScan.minColumn[lexer.pos + 1 - closerScan.base]
       return min !== undefined && min > indentColumns(text) ? closerScan.closer : -1
     }
-    const attributeHosts = new InlineAttributeHosts((prefix) => {
-      let marker = 'data-carve-host-probe'
-      while (prefix.includes(marker)) marker += 'x'
-      return inlinesCarryKey(this.parseInline(`${prefix}{${marker}=1}`, lexer.abbrDefs, lexer.linkDefs), marker)
-    })
+    let hosts: InlineAttributeHosts | undefined
     const scanInlineCode = (line: string): void => {
+      const attributeHosts = hosts ??= new InlineAttributeHosts((prefix) => {
+        let marker = 'data-carve-host-probe'
+        while (prefix.includes(marker)) marker += 'x'
+        return inlinesCarryKey(this.parseInline(`${prefix}{${marker}=1}`, lexer.abbrDefs, lexer.linkDefs), marker)
+      })
       const destinations = line.includes('](') ? destinationSlotEnds(line) : undefined
       const lastCommentCloserOnLine = line.lastIndexOf('%}')
       attributeHosts.beginLine(line)
@@ -3141,6 +3142,15 @@ export class ParseSession extends InlineParseSession {
       }
       attributeHosts.endLine()
     }
+    // Only the next line reads the code and comment state, so a line is scanned when one follows.
+    const pendingScans: string[] = []
+    const settleInlineScan = (): void => {
+      if (pendingScans.length === 0) return
+      // From a closed state, a line with no backtick and no `{%` leaves it closed: keep it for the host history.
+      if (openInlineCode === 0 && !openInlineComment && !pendingScans.some(line => line.includes('`') || line.includes('{%'))) return
+      for (const line of pendingScans) scanInlineCode(line)
+      pendingScans.length = 0
+    }
     let imageCaptionSlot = false
     let captionAtContentColumn = false
     let mathCaptionChecked = false
@@ -3160,6 +3170,7 @@ export class ParseSession extends InlineParseSession {
       if (isBlankLine(ln)) break
       // Every line start is block position, a continuation line included (carve#5189).
       if (codeInclude && lines.length > 0) break
+      settleInlineScan()
       const refusedLines = flattened || openInlineCode !== 0 || openInlineComment ? 0 : refusedBraceLines(lexer, braceScan)
       if (refusedLines === 0 && !flattened && openInlineCode === 0 && !openInlineComment && lexer.pos > heldThrough) {
         const end = blockCommentEnd()
@@ -3226,7 +3237,7 @@ export class ParseSession extends InlineParseSession {
       if (refusedOpener) literalBraces.push(lines.length)
       lines.push(received)
       // The literal brace opens no comment or attribute span.
-      scanInlineCode(refusedOpener ? received.replace('{', 'a') : received)
+      pendingScans.push(refusedOpener ? received.replace('{', 'a') : received)
     }
     // Every paragraph line has its leading whitespace stripped (djot /
     // CommonMark): `a\n   b` renders as `a\nb`, and a leading-indented first

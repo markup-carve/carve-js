@@ -134,6 +134,14 @@ export function spanAttrProvablyInvalid(text: string, brace: number, quoteEnd: (
   return true
 }
 
+const VALUE_STOPS = '}|"\'\\ \t\n\r'
+
+function isLetterOrNumber(c: string): boolean {
+  const code = c.charCodeAt(0)
+  if (code < 0x80) return code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122
+  return /[\p{L}\p{N}]/u.test(c)
+}
+
 /** Record opaque inline spans and extend `codeEnds` through raw-format tails. */
 export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined, destinations: Map<number, number>, lineComments: Map<number, number>, attributeTails: Map<number, number>, brackets: ((at: number) => number | undefined) | undefined): Map<number, number> {
   if (codeEnds) {
@@ -158,7 +166,7 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
       valueStops = new Int32Array(text.length + 1)
       valueStops[text.length] = text.length
       for (let at = text.length - 1; at >= 0; at--) {
-        valueStops[at] = /[}|"'\\ \t\n\r]/.test(text[at]!) ? at : valueStops[at + 1]!
+        valueStops[at] = VALUE_STOPS.includes(text[at]!) ? at : valueStops[at + 1]!
       }
     }
     return valueStops[start]!
@@ -178,7 +186,7 @@ export function inlineOpaqueEnds(text: string, codeEnds: Int32Array | undefined,
         const prev = text[i - 1]
         const next = text[i + 1]
         const opens = text[i] === d && next !== undefined && !isCarveWhitespace(next) && next !== d && prev !== d && (prev !== '{' || lastBraced <= i)
-          && (prev === undefined || !/[\p{L}\p{N}]/u.test(prev))
+          && (prev === undefined || !isLetterOrNumber(prev))
         table[i + 1] = opens ? i : table[i]!
       }
       openers.set(d, table)

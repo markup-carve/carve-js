@@ -458,8 +458,10 @@ export class InlineParseSession {
       if (marker !== undefined && '/*_~='.includes(marker)) bareMarkers.add(PAIR_MARKERS.indexOf(marker))
     }
     addEveryBareMarker(bareMarkers)
+    // A marker the text never holds closes nothing, so its table would stay all -1.
+    const bareList = [...bareMarkers].filter(m => text.includes(PAIR_MARKERS[m]!))
     const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
-    for (const m of bareMarkers) bareTables[m] = new Int32Array(n + 2).fill(-1)
+    for (const m of bareList) bareTables[m] = new Int32Array(n + 2).fill(-1)
     const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
     // The editorial scan (`edScan`) reads no attribute run and no glued pair.
     const editorialMarker = PAIR_MARKERS.split('').map((_, m) => m === EDITORIAL_INSERT || m === EDITORIAL_DELETE)
@@ -692,6 +694,30 @@ export class InlineParseSession {
       }
       return false
     }
+    // Each bare table's stop at `j`: where a scan for that marker's closer starting there ends.
+    const bareStep = (j: number, ch: string, nextId: number, codeEnd: number | undefined, attributeEnd: number | undefined,
+      bracketEnd: number | undefined, destinationEnd: number | undefined): void => {
+      // No rule below reads this character: it only carries the next stop or closes its own kind.
+      const plain = ch !== '\\' && codeEnd === undefined && attributeEnd === undefined && bracketEnd === undefined &&
+        destinationEnd === undefined && !(ch === '{' && nextId !== -1 && ends[j] !== -1) && !bracketEnds.has(j) && !lineComments.has(j)
+      for (const m of bareList) {
+        const table = bareTables[m]!
+        const marker = PAIR_MARKERS[m]!
+        let stop: number
+        if (plain) stop = ch === marker && canCloseBarePair(text, j, marker, openerMarks) ? j : table[j + 1]!
+        else if (ch === '\\') stop = table[j + 2]!
+        else if (bracketEnds.has(j)) stop = -1
+        else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
+        else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
+        else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
+        else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
+        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
+        else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
+        else if (canCloseBarePair(text, j, marker, openerMarks)) stop = j
+        else stop = table[j + 1]!
+        table[j] = stop
+      }
+    }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
       const next = text[j + 1]
@@ -707,29 +733,14 @@ export class InlineParseSession {
       const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
       // A `{#` or `{%` that closes as a comment stays opaque whatever precedes it.
-      const isAttributeRun = attributeRunAt(j)
+      const isAttributeRun = attributeEnd !== undefined && attributeRunAt(j)
       let bareId = -1
       let bareClose = -1
       let bareTail: number | undefined
-      if (bareMarkers.size !== 0) {
-        for (const m of bareMarkers) {
-          const table = bareTables[m]!
-          const marker = PAIR_MARKERS[m]!
-          let stop: number
-          if (ch === '\\') stop = table[j + 2]!
-          else if (bracketEnds.has(j)) stop = -1
-          else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
-          else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
-          else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
-          else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
-          else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
-          else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
-          else if (canCloseBarePair(text, j, marker, openerMarks)) stop = j
-          else stop = table[j + 1]!
-          table[j] = stop
-        }
+      if (bareList.length !== 0) {
+        bareStep(j, ch, nextId, codeEnd, attributeEnd, bracketEnd, destinationEnd)
         bareId = PAIR_MARKERS.indexOf(ch)
-        const opener = bareTables[bareId] === undefined ? 'none' : bareOpener(text, j)
+        const opener = bareId === -1 || bareTables[bareId] === undefined ? 'none' : bareOpener(text, j)
         const guarded = opener === 'guarded'
         bareClose = opener !== 'none' ? bareTables[bareId]![j + 1]! : -1
         bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
