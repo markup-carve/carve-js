@@ -1113,9 +1113,10 @@ export function restoreTransparentComments(document: Document, authored: Documen
       // hoisted out of keeps its own end (CARVE-P12-014, carve#5136).
       if (owned && owner && comment.pos.endOffset !== undefined) {
         const parts = owner.split('/')
-        // A collected footnote is hoisted out of its source host. Its owned
-        // comment extends the note, not the list item or quote that held it.
-        const notePart = parts.findIndex((part) => part.startsWith('footnote:'))
+        // A collected footnote is hoisted out of its source host, an outer note
+        // included. Its owned comment extends the innermost note, not what held it.
+        let notePart = parts.length - 1
+        while (notePart >= 0 && !parts[notePart]!.startsWith('footnote:')) notePart--
         for (let depth = notePart < 0 ? 2 : notePart + 1; depth <= parts.length; depth++) {
           for (const container of ownedBlocks.get(parts.slice(0, depth).join('/'))?.containers ?? []) {
             if (container.pos?.endOffset !== undefined && container.pos.endOffset < comment.pos.endOffset) {

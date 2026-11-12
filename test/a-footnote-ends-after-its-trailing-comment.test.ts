@@ -26,6 +26,12 @@ describe('a footnote ends after a comment it owns', () => {
     expect(range(footnote)[1]).toBe(range(footnote.children?.at(-1))[1])
   })
 
+  it('leaves an outer note where a nested note collects the comment', () => {
+    const notes = toAstJson(parse('[^a]: outer\n  [^b]: inner\n    %%\n')).children as unknown as Spanned[]
+    expect(notes.map(range)).toEqual([[0, 11], [14, 32]])
+    expect(notes[1]?.children?.at(-1)?.type).toBe('comment')
+  })
+
   it('places a comment at a nested item column in that item', () => {
     const footnote = spans('- [^n]: - a\n          %%\n')
     const item = (footnote.children?.[0] as { items?: Spanned[] }).items?.[0]
