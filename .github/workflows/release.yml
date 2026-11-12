@@ -267,11 +267,22 @@ jobs:
   # Dispatched at an existing tag, the step finds it on the remote and creates
   # nothing. The publish runs in THIS run rather than on the new tag, because a
   # ref created with github.token triggers no workflow.
+  # The spec is released first; an engine release implements a spec release.
+  spec-pin:
+    name: The spec pin is a published spec release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - run: ./scripts/check-spec-pin-is-tag.sh spec
+
   tag:
     name: Create the tag
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [npm-credential]
+    needs: [npm-credential, spec-pin]
     environment: release
     permissions:
       contents: write
