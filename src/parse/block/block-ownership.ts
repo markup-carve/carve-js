@@ -708,7 +708,7 @@ export function ownLines(
   // span pending, takes the S5 path unchanged. Skipping it in the loop header keeps
   // the body's per-line closures off that path.
   const passesThrough = (at: number): boolean => {
-    if (trace || frames.length !== 1 || attachedHost || shiftedAttachedFence || resumable.length > 0 || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
+    if (frames.length !== 1 || attachedHost || shiftedAttachedFence || resumable.length > 0 || quoteBlock || attrRest || afterPlus || at <= movedSpanEnd ||
         releasedFollowers.has(at) || noteTextFollower.value?.at === at - 1 || tabQuoteFollower.value?.at === at - 1) return false
     const doc = frames[0]!
     if (doc.cut !== 0 || doc.endsAtBlank || doc.closedList || doc.termShift !== undefined) return false
@@ -720,6 +720,8 @@ export function ownLines(
     if (invisibleFollowerLine(at, movedSpanEnd, lines, skippedAbbreviations, separatingAbbreviations, separatingLinks, skippedComments, skippedNotes) !== null) return false
     doc.para = rest !== ''
     if (rest !== '') doc.last = 'para'
+    // The record the S5 path writes for a document-level text or blank line.
+    if (trace) emit(at, 'S5', 'doc', rest === '' ? 'CARVE-P0-003' : 'CARVE-P0-024', rest === '' ? 'blank' : 'text')
     result.push(line)
     return true
   }
