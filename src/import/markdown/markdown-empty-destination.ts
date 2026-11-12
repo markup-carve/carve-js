@@ -558,6 +558,11 @@ function readQuotedWrappedDefinition(st: ReferenceExtraction, i: number, lineDep
   return i + parsed.lines - 1
 }
 
+/** A footnote body continues at four columns, and a definition there is the document's (carve-js#4990). */
+function footnoteBodyColumn(line: string, lineDepth: number, listIndent: number, opensItem: boolean): number {
+  return lineDepth === 0 && listIndent === 0 && !opensItem ? leadingSpaces(line) + 4 : listIndent
+}
+
 /**
  * Remove reference definitions from the body. Empty destinations are recorded
  * for inline fallback; other definitions are returned for the document end.
@@ -770,6 +775,7 @@ export function extractReferenceDefinitions(
       keep(line + (empty ? ' \x00FNEMPTY\x00' : ''))
       depth = lineDepth
       canStart = false
+      listIndent = footnoteBodyColumn(line, lineDepth, listIndent, opensItem)
       continue
     }
     // A paragraph continuation line of this definition, without its quote
