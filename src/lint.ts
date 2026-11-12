@@ -230,6 +230,8 @@ function collectMarkerBeforeAttributes(
   out: LintWarning[],
   toUtf16: (offset: number) => number,
 ): void {
+  // Both readings need an attribute block.
+  if (!source.includes('{')) return
   // AST offsets count codepoints of the source as given.
   const cps = Array.from(source)
   const lineStarts = [0]
@@ -3181,6 +3183,7 @@ function collectAuthoringWarnings(
   }
   const foldable = (line: number): boolean => paragraphAt.has(line) || noteParagraphAt.has(line)
   const visible = (line: string): string => {
+    if (!line.includes('\\') && !line.includes('`') && !line.includes('](')) return line
     let result = line.replace(/\\[\\`*_/<>()\[\]]/g, match => ' '.repeat(match.length))
     result = result.replace(/(`+)(?:(?!\1).)*\1/g, match => ' '.repeat(match.length))
     const characters = result.split('')
@@ -3212,8 +3215,10 @@ function collectAuthoringWarnings(
     }
   }
   const visibleAt = (line: string, lineNumber: number, prefix: number): string => {
+    const atomic = atomicByLine.get(lineNumber)
+    if (atomic === undefined) return visible(line)
     const characters = visible(line).split('')
-    for (const [from, to] of atomicByLine.get(lineNumber) ?? []) {
+    for (const [from, to] of atomic) {
       characters.fill(' ', Math.max(0, from - prefix), Math.min(line.length, to - prefix))
     }
     return characters.join('')
