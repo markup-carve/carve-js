@@ -2,12 +2,14 @@ import { parseFragment } from 'parse5'
 import { domAttrs, domChildren, domData, domTag, domValue, type P5Node } from '../html/html-import-dom.js'
 import { carveToHtml } from '../../index.js'
 import type { MigrationDiagnostic } from '../../migration.js'
-import { orderedTaskMarkerIsUnspellable } from '../../markdown-migrate.js'
+import { decodeHtmlEntitiesRaw, orderedTaskMarkerIsUnspellable } from '../../markdown-migrate.js'
 import { markdownBareLinks } from './markdown-gfm-autolinks.js'
 import { ORDERED_TASK_ITEM_UNSPELLABLE } from './import-report-messages.js'
 import { encodeMarkdownDestinationCharacter } from './markdown-destination-encoding.js'
 import { scanDestination } from '../../link-destination.js'
 import { GITHUB_ALERT_KINDS, GITHUB_ALERT_LABEL } from './markdown-github-alerts.js'
+import { blankDeniedDestination } from './deny-listed-destination.js'
+import { DENIED_IMAGE_SOURCE, DENIED_LINK_DESTINATION, DENIED_REFERENCE_DESTINATION } from './markdown-denied-destinations.js'
 
 interface Assessment {
   diagnostics: MigrationDiagnostic[]
@@ -24,6 +26,20 @@ const destinationValue = (token: string): string | undefined => {
   const raw = token.startsWith('<') ? token.slice(1, -1) : token
   if (/&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/.test(raw)) return undefined
   return raw.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '$1')
+}
+/** Whether the import drops this destination token (carve#6010), read with escapes and entities decoded. */
+const deniedToken = (token: string): boolean => {
+  const raw = token.startsWith('<') ? token.slice(1, -1) : token
+  const value = raw.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])|&(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]+);/g,
+    (entity, escaped: string | undefined) => escaped ?? decodeHtmlEntitiesRaw(entity))
+  return value !== '' && blankDeniedDestination(value) === ''
+}
+/** A definition line, with balanced parentheses admitted where the destination is one the import drops. */
+const readDefinition = (line: string): RegExpExecArray | null => {
+  const definition = definitionPattern.exec(line)
+  if (definition !== null) return definition
+  const loose = /^ {0,3}\[([^\]\n]+)\]:[ \t]+((?:\\[!-~]|[^ ()\\\t\n]|\((?:\\[!-~]|[^ ()\\\t\n])*\))+)(?:[ \t]+"([^"\n]*)")?[ \t]*$/.exec(line)
+  return loose !== null && deniedToken(loose[2]!) ? loose : null
 }
 
 /** Compare document structure while ignoring generated heading wrappers and layout whitespace. */
@@ -93,18 +109,19 @@ export function assessMarkdown(source: string, value: string): Assessment {
   const diagnostics: MigrationDiagnostic[] = []
   let complete = true
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
-  const definitions = new Map<string, { destination: string; title: string | undefined }>()
+  const definitions = new Map<string, { destination: string; title: string | undefined; denied: boolean }>()
   const labelKey = (label: string): string => label.trim().replace(/[ \t\n]+/g, ' ').toLowerCase()
   for (const line of lines) {
-    const definition = definitionPattern.exec(line)
+    const definition = readDefinition(line)
     if (definition && !definitions.has(labelKey(definition[1]!))) {
       const destination = destinationValue(definition[2]!)
-      if (destination !== undefined) definitions.set(labelKey(definition[1]!), { destination, title: definition[3] })
+      const denied = deniedToken(definition[2]!)
+      if (destination !== undefined || denied) definitions.set(labelKey(definition[1]!), { destination: destination ?? '', title: definition[3], denied })
       else complete = false
     }
   }
-  const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`): void => {
-    diagnostics.push({ code, message: construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`, severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
+  const emit = (construct: string, line: number, fidelity: MigrationDiagnostic['fidelity'] = 'preserved', code = `markdown-${construct}`, message?: string): void => {
+    diagnostics.push({ code, message: message ?? (construct === 'ordered-task' ? ORDERED_TASK_ITEM_UNSPELLABLE : `Assessed Markdown ${construct}.`), severity: fidelity === 'dropped' ? 'warning' : 'info', fidelity, confidence: 'exact', path: `line:${line}` })
   }
   const inline = (text: string, line: number, linkLabel = false, tableCell = false): string => {
     let result = ''
@@ -133,17 +150,33 @@ export function assessMarkdown(source: string, value: string): Assessment {
         result += match[0]; i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]*)\]\(/.exec(rest)) && (() => {
         const scanned = scanDestination(rest, match![0].length - 1)
-        if (scanned === null || rest[match![0].length] === '<' || !scanned.dest.includes('(') || rest[scanned.end] !== ')') return false
+        if (scanned === null) return false
         const href = scanned.dest
+        // A dropped destination takes its title with it, so only the content is modeled.
+        const tail = deniedToken(href)
+          ? /^(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*\)/.exec(rest.slice(scanned.end)) : null
+        if (tail !== null) {
+          i += scanned.end + tail[0].length
+          emit('', line, 'dropped', 'attribute-dropped', match![1] === '!' ? DENIED_IMAGE_SOURCE : DENIED_LINK_DESTINATION)
+          result += match![1] === '!' ? escape(match![2]!) : inline(match![2]!, line, true)
+          return true
+        }
+        if (rest[match![0].length] === '<' || !href.includes('(') || rest[scanned.end] !== ')') return false
+        i += scanned.end + 1
         emit(match![1] === '!' ? 'image' : 'link', line)
         const encodedHref = escape(tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href))
         result += match![1] === '!' ? `<img src="${encodedHref}" alt="${escape(match![2]!)}">` : `<a href="${encodedHref}">${inline(match![2]!, line, true)}</a>`
-        i += scanned.end + 1
         return true
       })()) {
         continue
       } else if ((match = inlineDestinationPattern.exec(rest))) {
         const image = match[1] === '!'
+        if (deniedToken(match[3]!)) {
+          emit('', line, 'dropped', 'attribute-dropped', image ? DENIED_IMAGE_SOURCE : DENIED_LINK_DESTINATION)
+          result += image ? escape(match[2]!) : inline(match[2]!, line, true, tableCell)
+          i += match[0].length
+          continue
+        }
         const href = destinationValue(match[3]!)
         if (href === undefined) { complete = false; return result + escape(rest) }
         if (!/^(https?:\/\/|mailto:|[./#])/.test(href) && /^[A-Za-z][\w+.-]*:/.test(href)) complete = false
@@ -154,11 +187,13 @@ export function assessMarkdown(source: string, value: string): Assessment {
         i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?/.exec(rest)) && definitions.has(labelKey(match[3] || match[2]!))) {
         const definition = definitions.get(labelKey(match[3] || match[2]!))!
+        i += match[0].length
+        // The definition's row covers every link that uses it.
+        if (definition.denied) { result += match[1] === '!' ? escape(match[2]!) : inline(match[2]!, line, true, tableCell); continue }
         emit('reference-link', line, 'normalized')
         const title = definition.title === undefined ? '' : ` title="${escape(definition.title)}"`
         const href = encodeWrittenDestination(definition.destination)
         result += match[1] === '!' ? `<img src="${escape(href)}" alt="${escape(match[2]!)}"${title}>` : `<a href="${escape(href)}"${title}>${inline(match[2]!, line, true)}</a>`
-        i += match[0].length
       } else if ((match = /^<(https?:\/\/[^<>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/.exec(rest))) {
         emit('autolink', line, 'normalized'); const label = match[1]!; const href = label.includes('://') || label.startsWith('mailto:') ? label : `mailto:${label}`
         const encodedHref = tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href)
@@ -172,6 +207,8 @@ export function assessMarkdown(source: string, value: string): Assessment {
         emit('hard-break', line, 'normalized'); result += '<br>\n'; line++; i += match[0].length
       } else if (rest[0] === '\n') {
         emit('soft-break', line); result += '\n'; line++; i++
+      } else if ((match = /^<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x00-\x20]*)>/.exec(rest)) && deniedToken(match[1]!)) {
+        emit('', line, 'dropped', 'attribute-dropped', DENIED_LINK_DESTINATION); result += escape(match[1]!); i += match[0].length
       } else if (/^<(?:https?:\/\/|mailto:)[^<>\n]*>/.test(rest)) {
         result += '&lt;'; i++
       } else if ((match = /^<(?:!--[\s\S]*?--|\/?[A-Za-z][^<>]*|\?[\s\S]*?\?)>/.exec(rest))) {
@@ -192,7 +229,11 @@ export function assessMarkdown(source: string, value: string): Assessment {
       const line = input[i]!, n = first + i
       let match: RegExpExecArray | null
       if (line.trim() === '') { i++; continue }
-      if (definitionPattern.test(line)) { emit('reference-definition', n, 'normalized'); i++; continue }
+      if ((match = readDefinition(line))) {
+        if (deniedToken(match[2]!)) emit('', n, 'dropped', 'attribute-dropped', DENIED_REFERENCE_DESTINATION)
+        else emit('reference-definition', n, 'normalized')
+        i++; continue
+      }
       if ((match = /^ {0,3}(`{3,}|~{3,})([^`]*)$/.exec(line))) {
         const fence = match[1]!, info = match[2]!.trim(); const body: string[] = []; i++
         while (i < input.length && !(new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`)).test(input[i]!)) body.push(input[i++]!)

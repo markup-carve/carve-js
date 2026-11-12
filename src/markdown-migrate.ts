@@ -535,7 +535,7 @@ function resolveEntity(
 }
 
 /** Resolve every entity reference in `s`, with no Carve escaping applied. */
-function decodeHtmlEntitiesRaw(s: string): string {
+export function decodeHtmlEntitiesRaw(s: string): string {
   return s.replace(
     RE_HTML_ENTITY,
     (match, dec: string | undefined, hex: string | undefined, named: string | undefined) =>
