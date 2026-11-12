@@ -1559,6 +1559,21 @@ function flattenHtmlAnchorsInLinkLabels(
   return line.replace(/\x00P\d+\x00/g, (token, at: number) => removed.has(at) ? '' : token)
 }
 
+/** A quoted line shaped like a definition that continues the paragraph above it. */
+function escapeQuotedContinuationDefinitions(text: string): string {
+  const lines = text.split('\n')
+  for (let k = 1; k < lines.length; k++) {
+    const head = /^((?:[ \t]*>[ \t]?)+)([ \t]*)\[(?=[^^\]\n][^\]\n]*\]:)/.exec(lines[k]!)
+    if (!head) continue
+    const containers = /^(?:[ \t]*(?:>[ \t]?|(?:[-*+]|\d{1,9}[.)])[ \t]+))*/.exec(lines[k - 1]!)![0]
+    const above = lines[k - 1]!.slice(containers.length)
+    if (above.trim() === '' || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(above) ||
+        quoteDepth(head[1]!) > quoteDepth(containers)) continue
+    lines[k] = `${head[1]}${head[2]}\\${lines[k]!.slice(head[0].length - 1)}`
+  }
+  return lines.join('\n')
+}
+
 function convertInline(
   input: string,
   dialect: MarkdownDialect = COMMONMARK_GFM,
@@ -1811,6 +1826,8 @@ function convertInline(
   // A definition cannot interrupt a Markdown paragraph, but it does interrupt a
   // Carve one, so a continuation line shaped like one is escaped (carve-js#1812).
   line = line.replace(/\n([ \t]*)\[(?=[^^\]\n][^\]\n]*\]:)/g, '\n$1\\[')
+  // An item's quoted run keeps its `>` on each line (carve#6018).
+  if (line.includes('>')) line = escapeQuotedContinuationDefinitions(line)
   // So is a first line whose label or destination Markdown rejects (`[ ]: x`, `[\]: x`, `[x]: (`).
   line = line.replace(/^([ \t]*)\[(?=([^^\]\n][^\]\n]*)\]:(.*))/, (match, indent: string, label: string, rest: string) =>
     (!/\S/.test(label) || /(?<!\\)(?:\\\\)*\\$/.test(label) || unbalancedDestination(rest))
@@ -7917,7 +7934,9 @@ function referenceSeparatedListStarts(
     const line = kept[at] ?? ''
     const next = marker.exec(line)
     if (next === null) {
-      if (line.trim() !== '' && !reference.test(line)) previous = -1
+      // Kept right under text it is that paragraph's lazy line, not a definition.
+      const text = !reference.test(line) || !/^[ \t]*\[\^/.test(line) && (kept[at - 1] ?? '').trim() !== ''
+      if (line.trim() !== '' && text) previous = -1
       continue
     }
     const prior = previous < 0 ? null : marker.exec(kept[previous] ?? '')

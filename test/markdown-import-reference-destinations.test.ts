@@ -5,9 +5,8 @@ test('a reference chain uses the final definition', () => {
   expect(carveToHtml(markdownToCarve('[a][b][c](/u)\n\n[c]: /v'))).toContain('<p>[a]<a href="/v">b</a>(/u)</p>')
 })
 
-test('a lazy line after a quoted definition leaves the quote', () => {
-  expect(carveToHtml(markdownToCarve('> [a]: /u\nlazy'))).not.toContain('<blockquote><p>lazy</p></blockquote>')
-  expect(carveToHtml(markdownToCarve('> [a]: /u\nlazy'))).toContain('<p>lazy</p>')
+test('a lazy line after a quoted definition stays in the quote', () => {
+  expect(carveToHtml(markdownToCarve('> [a]: /u\nlazy'))).toContain('<blockquote><p>lazy</p></blockquote>')
 })
 
 test('a multiline title in a list definition reaches the reference', () => {
