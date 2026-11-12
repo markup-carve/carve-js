@@ -407,7 +407,10 @@ function inlineComplex(text: string): boolean {
 
 function renderList(lines: string[], start: number, offset: number, depth: number, defs: Map<string, LinkDef>, opts: Options, out: HtmlOutput, stats?: FastHtmlStats): { next: number } | undefined {
   if (offset >= 2 * MAX_NESTING_DEPTH) return undefined
-  out.push(indent(depth), '<ul>')
+  // A blank before an item's nested list loosens the whole list (carve#5015),
+  // so items are buffered until the list ends.
+  const items: { text: string; nested: string | undefined }[] = []
+  let loose = false
   let i = start
   while (i < lines.length) {
     const line = lines[i]!, leading = line.length - line.trimStart().length
@@ -416,26 +419,30 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
     const text = line.slice(leading + 2)
     if (!text || text.startsWith(' ') || text === '+' || blockish(text)) return undefined
     if (stats) accept(stats, 'unorderedListItems', i, i + 1)
-    out.push('\n', indent(depth + 1), '<li>')
-    if (!renderInline(text, defs, opts, out)) return undefined
+    const textOut = new HtmlOutput()
+    if (!renderInline(text, defs, opts, textOut)) return undefined
     i++
     let nestedStart = i
     while (lines[nestedStart]?.trim() === '') nestedStart++
     const afterBlank = lines[nestedStart]
     if (nestedStart !== i && afterBlank !== undefined &&
         afterBlank.length - afterBlank.trimStart().length === offset + 2 &&
-        afterBlank.slice(offset + 2).startsWith('- ')) return undefined
+        afterBlank.slice(offset + 2).startsWith('- ')) {
+      loose = true
+      i = nestedStart
+    }
+    let nested: string | undefined
     if (lines[i] !== undefined) {
       const nextIndent = lines[i]!.length - lines[i]!.trimStart().length
       if (nextIndent > offset) {
         if (nextIndent !== offset + 2 || !lines[i]!.slice(nextIndent).startsWith('- ')) return undefined
-        out.push('\n')
-        const nested = renderList(lines, i, offset + 2, depth + 2, defs, opts, out, stats)
-        if (!nested) return undefined
-        out.push('\n', indent(depth + 1)); i = nested.next
+        const nestedOut = new HtmlOutput()
+        const rendered = renderList(lines, i, offset + 2, depth + 2, defs, opts, nestedOut, stats)
+        if (!rendered) return undefined
+        nested = nestedOut.finish(); i = rendered.next
       }
     }
-    out.push('</li>')
+    items.push({ text: textOut.finish(), nested })
     if (i >= lines.length) break
     if (lines[i]!.trim() === '') {
       let nextIndex = i + 1
@@ -444,6 +451,14 @@ function renderList(lines: string[], start: number, offset: number, depth: numbe
       if (next && next.length - next.trimStart().length === offset && next.trimStart().startsWith('- ')) return undefined
       break
     }
+  }
+  out.push(indent(depth), '<ul>')
+  for (const item of items) {
+    out.push('\n', indent(depth + 1), '<li>')
+    if (loose) out.push('<p>', item.text, '</p>')
+    else out.push(item.text)
+    if (item.nested !== undefined) out.push('\n', item.nested, '\n', indent(depth + 1))
+    out.push('</li>')
   }
   out.push('\n', indent(depth), '</ul>')
   return { next: i }
