@@ -162,11 +162,13 @@ export class Lexer {
   private ownershipLeads?: Map<number, number>
   /** The same leading cuts, keyed by document line number. */
   private ownershipLeadsByLine?: Map<number, number>
+  /** Document lines the walk read as code fence payload. */
+  private codePayloadLines?: Set<number>
   /** Each root line's marker-line task box, for `rootFrameColumn`. */
   private taskBoxes: Map<number, [number, number] | null> | undefined
 
   /** Run the rule A ownership walk over the root lines; positions keep indexing the source. */
-  applyOwnership({ lines, cuts, letters, refusedPlus, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; frameVerseOpeners?: Set<number>; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
+  applyOwnership({ lines, cuts, letters, refusedPlus, codePayloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments, rewritten = false }: { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; codePayloadLines?: Set<number>; frameVerseOpeners?: Set<number>; lazyCaptions?: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; rewritten?: boolean }): void {
     this.skippedAbbreviations = skippedAbbreviations
     this.separatingAbbreviations = separatingAbbreviations
     for (const { index, column, host, reason } of refusedPlus) {
@@ -175,6 +177,7 @@ export class Lexer {
     }
     for (const { index, ...marker } of refusedPlus) this.parseOptions.onRefusedContinuationMarker?.({ line: this.lineNumber(index), ...marker })
     for (const index of lazyCaptions ?? []) this.itemLazyLines.add(this.lineNumber(index))
+    for (const index of codePayloadLines ?? []) (this.codePayloadLines ??= new Set()).add(this.lineNumber(index))
     for (const index of frameVerseOpeners ?? []) (this.frameVerseOpeners ??= new Set()).add(this.lineNumber(index))
     for (const o of overindented) {
       this.parseOptions.onOverindentedOpener?.({ line: this.lineNumber(o.index),
@@ -714,6 +717,12 @@ export class Lexer {
    */
   get hasDocumentOffsets(): boolean {
     return !this.nested || this.sourceOffsetMap !== undefined || (this.contiguousOrigin?.lexer.hasDocumentOffsets ?? false)
+  }
+
+  /** Whether the ownership walk read line `index` as code fence payload. */
+  isCodePayload(index: number): boolean {
+    const line = this.lineNumber(index)
+    return this.codePayloadLines?.has(line) === true || this.documentRoot?.codePayloadLines?.has(line) === true
   }
 
   lineNumber(lineIndex: number): number {

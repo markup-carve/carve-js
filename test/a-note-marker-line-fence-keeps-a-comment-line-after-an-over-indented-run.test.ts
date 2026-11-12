@@ -8,6 +8,7 @@ describe('a fence on a note marker line', () => {
     ['x[^n]\n\n[^n]: ```\n   ```\n   %%\n', '<pre><code> ```\n %%\n</code></pre>'],
     ['x[^n]\n\n[^n]: ~~~\n   ~~~\n   %%\n', '<pre><code> ~~~\n %%\n</code></pre>'],
     ['x[^n]\n\n- [^n]: ```\n     c\n     ```\n     %%\n', '<pre><code> c\n ```\n %%\n</code></pre>'],
+    ['x[^n]\n\n- [^n]: ```\n     ```\n     %% x\n', '<pre><code> ```\n %% x\n</code></pre>'],
   ])('%j', (source, code) => {
     expect(carveToHtml(source)).toContain(code)
   })

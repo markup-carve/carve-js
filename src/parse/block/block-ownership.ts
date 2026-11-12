@@ -625,7 +625,7 @@ export function ownLines(
   lines: string[],
   start = 0,
   trace: TraceRecord[] | null = null,
-): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; frameVerseOpeners: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
+): { lines: string[]; cuts: Map<number, OwnershipCut[]>; letters: string[] | null; refusedPlus: RefusedPlus[]; payloadLines: Set<number>; codePayloadLines: Set<number>; frameVerseOpeners: Set<number>; lazyCaptions: Set<number>; overindented: OverindentedOpener[]; skippedAbbreviations: Map<number, [string, string]>; separatingAbbreviations: Set<number>; skippedComments: boolean; skippedFences: Map<number, { closer: number; content: string }>; consumedMarkers: Set<number>; quoteSiblingSeparators: Set<number>; noteListBreaks: Map<number, number>; lazyLines: Set<number>; rewritten: boolean } {
   const result = lines.slice(0, start)
   // The walk may place a marker-line first block in its parent while the readers
   // keep it in the item. Trace records use the reader's owner for that block.
@@ -683,6 +683,7 @@ export function ownLines(
   const refusedInvisibleFollowers = new Set<number>()
   const tabQuoteFollower: { value: PendingTabQuoteFollower | null } = { value: null }
   const payloadLines = new Set<number>()
+  const codePayloadLines = new Set<number>()
   // Verse openers written at their per-frame column; the line-block reader takes them as written.
   const frameVerseOpeners = new Set<number>()
   const lazyCaptions = new Set<number>()
@@ -1323,6 +1324,7 @@ export function ownLines(
     // S1: an open payload tests its closer first.
     function readPayload(inner: Frame, lazyMissed = false, lazyReached = -1): void {
       payloadLines.add(at)
+      if (inner.family === 'code' && !lazyMissed) codePayloadLines.add(at)
       const payloadPath = trace ? ownerPath() : ''
       let payloadForm = 'payload'
       const nestedCodeTab = inner.family === 'code' && !inner.tabbedCodeOpener &&
@@ -1815,7 +1817,7 @@ export function ownLines(
       return before.replace(/(?:[-*:]|[0-9]+[.)]) /g, (marker) => ' '.repeat(marker.length)) + '  '
     }
   }
-  return { lines: result, cuts, letters, refusedPlus, payloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
+  return { lines: result, cuts, letters, refusedPlus, payloadLines, codePayloadLines, frameVerseOpeners, lazyCaptions, overindented, skippedAbbreviations, separatingAbbreviations, skippedComments: skippedComments.size > 0, skippedFences, consumedMarkers, quoteSiblingSeparators, noteListBreaks, lazyLines, rewritten }
 
   function standIn(ch: string): string {
     letters ??= pickSentinelRun(occupiedPrivateUse(lines), STAND_IN_BASE, STANDS_FOR.length)

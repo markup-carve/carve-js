@@ -2096,7 +2096,9 @@ export function createListParser(helpers: typeof listHelpers, trackItemLazyState
       if (lazyState.opaque === null) retainedFenceOpen = false
       if (hostedNoteBodyColumn !== undefined && lexer.hostBody !== null &&
           !isBlankLine(l) && indentColumns(l, hostedNoteBodyColumn) < hostedNoteBodyColumn) return 'stop'
-      const noteCommentEnd = markerNoteItem && !markerNoteLeft ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
+      // A `%%` line in a fence's payload is code, whatever this item's fence tracker reads (PART 0 S1).
+      const noteCommentEnd = markerNoteItem && !markerNoteLeft && !lexer.isCodePayload(lexer.pos)
+        ? coveredNoteComment(lexer, l, markerNoteFloor) : -1
       if (noteCommentEnd >= 0 && lazyState.opaque === null && !insideOpenFence(lazyState) && !braceHeld.holds(lexer.pos)) {
         for (let at = lexer.pos; at <= noteCommentEnd; at++) {
           pendingNoteComments.add(pendingBlankRun.lines.length)
