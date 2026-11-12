@@ -207,6 +207,8 @@ interface ReferenceExtraction {
   readonly definitions: string[]
   readonly definitionContainers: boolean[]
   readonly discardedEmptyDefinitions: Array<{ line: number; label: string }>
+  /** Whether a line's text opens an HTML block at a block start. */
+  readonly opensHtml: (text: string) => boolean
 }
 
 /** A definition line as the pass reads it, with the containers it stands in. */
@@ -404,8 +406,11 @@ function keepQuotedDefinitionPlace(st: ReferenceExtraction, i: number, quotePref
   const next = st.lines[i + 1]
   const own = next === undefined ? '' : /^((?: {0,3}>[ \t]?)*)/.exec(next)![1]!
   const body = next?.slice(own.length) ?? ''
-  if ((own.match(/>/g) ?? []).length < lineDepth && body.trim() !== '' && !opensBlock(body) && !/^(?:[ \t]*>| {0,3}<)/.test(body)) {
-    st.lines[i + 1] = quotePrefix + body.trimStart()
+  const text = body.trimStart()
+  if ((own.match(/>/g) ?? []).length < lineDepth && text !== '' && !opensBlock(body) && !/^[ \t]*>/.test(body) &&
+      !st.opensHtml(text)) {
+    // Past three columns a marker opened nothing, so it stays literal.
+    st.lines[i + 1] = quotePrefix + (opensBlock(text) ? text.replace(/^(\d{1,9})(?=[.)])|^(?=[^\d])/, '$1\\') : text)
     st.referenceChunk = undefined
   }
   keepLines(st, quotePrefix)
@@ -660,6 +665,7 @@ export function extractReferenceDefinitions(
     referenceChunk: undefined, nextSerial: 1, reservedReferences: reserved.references,
     decodeEntity, titleBreakMarker, titleWrap, empty, titled, defined, authoredDefinitions: new Set(), labels,
     sourceLabels, inline, tableInline, definitions, definitionContainers, discardedEmptyDefinitions,
+    opensHtml: (text) => htmlBlockCloser(text) !== null || opensOpaqueHtml(text, true),
   }
   const { kept } = st
   const keep = (...entries: string[]): void => keepLines(st, ...entries)

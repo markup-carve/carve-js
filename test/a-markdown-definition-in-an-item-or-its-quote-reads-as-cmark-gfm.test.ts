@@ -45,6 +45,12 @@ describe('the line after a removed definition', () => {
     expect(markdownToCarve(lines('- > a', '  >', '  > [r]: https://e', 'z [x][r]'))).toBe(lines('- > a', '  >', '  > z [x][r]', '', '[r]: https://e'))
   })
 
+  it('keeps a lazy line literal and inline HTML inline', () => {
+    expect(carveToHtml(markdownToCarve(lines('> [a]: /u', '    - item')))).toBe('<blockquote><p>- item</p></blockquote>')
+    expect(carveToHtml(markdownToCarve(lines('> [a]: /u', '<em>x</em>')))).toBe('<blockquote><p><em>x</em></p></blockquote>')
+    expect(carveToHtml(markdownToCarve(lines('> [a]: /u', '<div>x</div>')))).toContain('</blockquote>\n<div>x</div>')
+  })
+
   it('leaves the list tight when it only looks like a definition', () => {
     expect(markdownToCarve(lines('- a', '[r]: https://e', '- n'))).toBe(lines('- a', '  \\[r]: [https://e](https://e)', '- n'))
   })
