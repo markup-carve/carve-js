@@ -20,6 +20,7 @@ This patch release restores the 0.1.15 speed of `carveToHtml` on nested lists af
 - A tab-led `{%` or `{` run is measured at its per-frame column in every container, so a run whose continuation misses that column is refused and kept as text instead of dropped (#5008, markup-carve/carve#5874).
 - `carveToHtml` renders a list with a blank line before a nested list on its fast path again, as a loose list, instead of sending the document through the full parser; that shape was up to 25x slower in 0.1.16 (#5016, markup-carve/carve#6026).
 - `renderCarve` writes an erased `%%` line under the container prefix it wrote for the line's host, so a comment after a re-indented nested list (a task item, a shifted quote) stays in the item that owns it, and an authored comment column no open item takes is kept (#5014, #5017, #5018, #5019).
+- Paragraphs with inline attributes parse at about the 0.1.15 speed: a closer scan builds its bare-pair tables only when it reads them, and only for openers that can close before an attribute run (#5022).
 - A document with `%%` comments parses faster: the comment pass skips its ownership walk when no line can be erased, and `carveToCarve` parses the source and its candidate once each instead of twice (#5028, part of #5023 and #5024).
 - `parse` and `carveToHtml` spend less time in the block ownership walk, the erased-line restoration and the paragraph attribute tracker; rendering `large.crv` peaks at about the memory of 0.1.15 again instead of 1.58x (#5029, #5025, partly #5020).
 

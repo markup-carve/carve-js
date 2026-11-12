@@ -87,12 +87,9 @@ const emphasisPairs: ReadonlyArray<readonly [string, Emphasis['type']]> = [
 const ownedBlockClosers = new WeakMap<Map<number, BarePair>, Set<number>>()
 
 // A pair's `crossed` reads the table of the marker glued before it.
-function addEveryBareMarker(markers: Set<number>): void {
-  if (markers.size !== 0) for (const marker of '/*_~=') markers.add(PAIR_MARKERS.indexOf(marker))
-}
-
-function barePair(text: string, open: number, close: number, end: number, guarded: boolean, tables: Array<Int32Array | undefined>): BarePair {
-  const glued = tables[PAIR_MARKERS.indexOf(text[open - 1] ?? '')]?.[open] ?? -1
+function barePair(text: string, open: number, close: number, end: number, guarded: boolean, bareStop: (m: number, at: number) => number): BarePair {
+  const before = text[open - 1] ?? ''
+  const glued = before !== '' && '/*_~='.includes(before) ? bareStop(PAIR_MARKERS.indexOf(before), open) : -1
   const crossed = glued !== -1 && glued < close && bareOpener(text, open - 1) !== 'none'
   return { close, end, ...(guarded ? { guarded } : {}), ...(crossed ? { crossed } : {}) }
 }
@@ -452,16 +449,13 @@ export class InlineParseSession {
     const barePairs = new Map<number, BarePair>()
     const attributes = inlineOpaqueEnds(text, codeEnds, destinations, lineComments, attributeTails, brackets)
     for (const [start, end] of [...attributeTails].reverse()) attributeTails.set(start, attributeTails.get(end) ?? end)
-    const bareMarkers = new Set<number>()
+    // Only a marker glued before an attribute tail closes a bare pair that carries one.
+    const bareOpeners = new Uint8Array(PAIR_MARKERS.length)
     for (const start of attributeTails.keys()) {
       const marker = text[start - 1]
-      if (marker !== undefined && '/*_~='.includes(marker)) bareMarkers.add(PAIR_MARKERS.indexOf(marker))
+      if (marker !== undefined && '/*_~='.includes(marker)) bareOpeners[PAIR_MARKERS.indexOf(marker)] = 1
     }
-    addEveryBareMarker(bareMarkers)
-    // A marker the text never holds closes nothing, so its table would stay all -1.
-    const bareList = [...bareMarkers].filter(m => text.includes(PAIR_MARKERS[m]!))
-    const bareTables: Array<Int32Array | undefined> = new Array(PAIR_MARKERS.length)
-    for (const m of bareList) bareTables[m] = new Int32Array(n + 2).fill(-1)
+    const hasBareOpener = bareOpeners.includes(1)
     const afterAttributes = attributeTails.size === 0 ? (end: number): number => end : (end: number): number => attributeTails.get(end) ?? end
     // The editorial scan (`edScan`) reads no attribute run and no glued pair.
     const editorialMarker = PAIR_MARKERS.split('').map((_, m) => m === EDITORIAL_INSERT || m === EDITORIAL_DELETE)
@@ -694,29 +688,59 @@ export class InlineParseSession {
       }
       return false
     }
-    // Each bare table's stop at `j`: where a scan for that marker's closer starting there ends.
-    const bareStep = (j: number, ch: string, nextId: number, codeEnd: number | undefined, attributeEnd: number | undefined,
-      bracketEnd: number | undefined, destinationEnd: number | undefined): void => {
-      // No rule below reads this character: it only carries the next stop or closes its own kind.
-      const plain = ch !== '\\' && codeEnd === undefined && attributeEnd === undefined && bracketEnd === undefined &&
-        destinationEnd === undefined && !(ch === '{' && nextId !== -1 && ends[j] !== -1) && !bracketEnds.has(j) && !lineComments.has(j)
-      for (const m of bareList) {
-        const table = bareTables[m]!
-        const marker = PAIR_MARKERS[m]!
-        let stop: number
-        if (plain) stop = ch === marker && canCloseBarePair(text, j, marker, openerMarks) ? j : table[j + 1]!
-        else if (ch === '\\') stop = table[j + 2]!
-        else if (bracketEnds.has(j)) stop = -1
-        else if (lineComments.has(j)) stop = table[lineComments.get(j)!]!
-        else if (codeEnd !== undefined) stop = codeEnd === -1 ? -1 : table[afterAttributes(codeEnd)]!
-        else if (attributeEnd !== undefined) stop = table[ch === '<' ? afterAttributes(attributeEnd) : attributeEnd]!
-        else if (bracketEnd !== undefined) stop = table[afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)]!
-        else if (destinationEnd !== undefined) stop = table[afterAttributes(destinationEnd + 1)]!
-        else if (ch === '{' && nextId !== -1 && ends[j] !== -1) stop = table[afterAttributes(ends[j]!)]!
-        else if (canCloseBarePair(text, j, marker, openerMarks)) stop = j
-        else stop = table[j + 1]!
-        table[j] = stop
+    // Where a scan for a bare closer of marker `m` starting at `j` stops, as the
+    // right-to-left table would hold it: computed on demand, since only bare openers
+    // and glued markers read it. A step that reads at or before `j` reads -1.
+    const bareMemo: Array<Int32Array | undefined> = []
+    const bareRule = (j: number, marker: string): number => {
+      const ch = text[j]!
+      if (ch === '\\') return j + 2
+      if (bracketEnds.has(j)) return -1
+      const commentEnd = lineComments.get(j)
+      if (commentEnd !== undefined) return commentEnd
+      const codeEnd = ch === '`' ? codeEnds![j]! : undefined
+      if (codeEnd !== undefined) return codeEnd === -1 ? -1 : afterAttributes(codeEnd)
+      const attributeEnd = attributes.get(j)
+      if (attributeEnd !== undefined) return ch === '<' ? afterAttributes(attributeEnd) : attributeEnd
+      const bracketEnd = ch === '[' ? brackets?.(j) : undefined
+      if (bracketEnd !== undefined) return afterAttributes((destinations.get(bracketEnd + 1) ?? bracketEnd) + 1)
+      const destinationEnd = destinations.get(j)
+      if (destinationEnd !== undefined) return afterAttributes(destinationEnd + 1)
+      if (ch === '{' && PAIR_MARKERS.includes(text[j + 1] ?? '\0') && ends[j] !== -1) return afterAttributes(ends[j]!)
+      return canCloseBarePair(text, j, marker, openerMarks) ? -2 - j : j + 1
+    }
+    const bareStop = (m: number, from: number): number => {
+      let memo = bareMemo[m]
+      if (memo === undefined) bareMemo[m] = memo = new Int32Array(n + 2).fill(-2)
+      const marker = PAIR_MARKERS[m]!
+      const chain: number[] = []
+      let at = from
+      let stop: number
+      for (;;) {
+        if (at >= n) { stop = -1; break }
+        if (memo[at] !== -2) { stop = memo[at]!; break }
+        chain.push(at)
+        const step = bareRule(at, marker)
+        if (step < 0) { stop = step === -1 ? -1 : -2 - step; break }
+        if (step <= at) { stop = -1; break }
+        at = step
       }
+      for (const k of chain) memo[k] = stop
+      return stop
+    }
+    // A bare opener whose closer carries an attribute tail forms a pair with it.
+    const bareAt = (j: number, ch: string): { id: number; close: number; tail: number | undefined } => {
+      const id = PAIR_MARKERS.indexOf(ch)
+      const opener = id === -1 || bareOpeners[id] !== 1 ? 'none' : bareOpener(text, j)
+      const close = opener !== 'none' ? bareStop(id, j + 1) : -1
+      const tail = close === -1 ? undefined : attributeTails.get(close + 1)
+      if (tail !== undefined) barePairs.set(j, crossedBarePair(barePair(text, j, close, tail, opener === 'guarded', bareStop), j, close))
+      return { id, close, tail: opener === 'guarded' ? undefined : tail }
+    }
+    if (markers.length === 0) {
+      if (hasBareOpener) for (let j = n - 1; j >= 0; j--) bareAt(j, text[j]!)
+      this.rememberPairTables(key, tables, attributeTails, barePairs)
+      return tables
     }
     for (let j = n - 1; j >= 0; j--) {
       const ch = text[j]!
@@ -730,23 +754,10 @@ export class InlineParseSession {
       }
       const codeEnd = ch === '`' ? codeEnds![j]! : undefined
       const bracketEnd = ch === '[' ? brackets?.(j) : undefined
-      const destinationEnd = destinations.get(j)
       const attributeEnd = attributes.get(j)
       // A `{#` or `{%` that closes as a comment stays opaque whatever precedes it.
       const isAttributeRun = attributeEnd !== undefined && attributeRunAt(j)
-      let bareId = -1
-      let bareClose = -1
-      let bareTail: number | undefined
-      if (bareList.length !== 0) {
-        bareStep(j, ch, nextId, codeEnd, attributeEnd, bracketEnd, destinationEnd)
-        bareId = PAIR_MARKERS.indexOf(ch)
-        const opener = bareId === -1 || bareTables[bareId] === undefined ? 'none' : bareOpener(text, j)
-        const guarded = opener === 'guarded'
-        bareClose = opener !== 'none' ? bareTables[bareId]![j + 1]! : -1
-        bareTail = bareClose === -1 ? undefined : attributeTails.get(bareClose + 1)
-        if (bareTail !== undefined) barePairs.set(j, crossedBarePair(barePair(text, j, bareClose, bareTail, guarded, bareTables), j, bareClose))
-        if (guarded) bareTail = undefined
-      }
+      const { id: bareId, close: bareClose, tail: bareTail } = hasBareOpener ? bareAt(j, ch) : { id: -1, close: -1, tail: undefined }
       for (const m of markers) {
         const table = tables[m]!
         const raw = raws[m]!
@@ -1578,8 +1589,25 @@ export class InlineParseSession {
   ): number {
     // PART 8: a delimiter inside a balanced label cannot pair past its close.
     // Keep the original text so flanking and source offsets use the same run.
-    this.pairEndTables(text)
-    const attached = this.bareAttributePairs.size === 0 ? undefined : new Map<number, number>()
+    // The pair tables are built on the first read: a walk that meets no other
+    // bare marker and skips no construct closes without them.
+    let attached: Map<number, number> | undefined
+    let tables = false
+    const readTables = (): void => {
+      if (tables) return
+      tables = true
+      this.pairEndTables(text)
+      if (this.bareAttributePairs.size !== 0) attached = new Map()
+    }
+    const attributeEnd = (at: number): number => {
+      readTables()
+      return this.pairAttributeEnd(text, at)
+    }
+    // Only a bare marker opens a pair that carries an attribute run.
+    const childAt = (at: number): BarePair | undefined => {
+      if ('/*_~='.includes(text[at]!)) readTables()
+      return tables ? this.pairBareAttributes(text, at) : undefined
+    }
     // Closers of attached children, which open nothing. A child whose opener
     // an earlier glued marker's pair demotes (E2) spends none.
     let spent: Set<number> | undefined
@@ -1594,7 +1622,7 @@ export class InlineParseSession {
       if (failed !== undefined && failed[j] === 1) return -1
       visited?.push(j)
       const ch = text[j]!
-      const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? this.pairBareAttributes(text, j) : undefined
+      const child = ch !== delim && !this.openKinds.has(ch) && spent?.has(j) !== true ? childAt(j) : undefined
       if (child && (!child.guarded || (held?.has(j - 1) !== true && this.guardStands(text, j, from, delim))) &&
         !(lastOpener !== undefined && this.crossedByOpenSpan(text, j, child.close, from, delim, memo, end, lastOpener))) {
         attached?.set(child.close + 1, child.end)
@@ -1616,7 +1644,7 @@ export class InlineParseSession {
       if (ch === '/' && text[j + 1] === '*' && delim !== '/' && delim !== '*' && !(text[j - 1] === '*' && bareOpener(text, j - 1) !== 'none')) {
         const close = this.combinedTokenClose(text, j, memo)
         if (close !== undefined && close + 2 <= end && !this.combinedTokenDropped(text, j, close, delim, memo)) {
-          j = this.pairAttributeEnd(text, close + 2) - 1
+          j = attributeEnd(close + 2) - 1
           continue
         }
       }
@@ -1625,7 +1653,7 @@ export class InlineParseSession {
       if (ch === '`') {
         const span = verbatimSpanEnd(text, j)
         if (!span.closed) return -1
-        j = this.pairAttributeEnd(text, span.end) - 1
+        j = attributeEnd(span.end) - 1
         continue
       }
       // An unbounded comment consumes the rest of its line before the delimiter
@@ -1655,13 +1683,13 @@ export class InlineParseSession {
         RE_RAW_INLINE_STICKY.lastIndex = j
         const m = RE_RAW_INLINE_STICKY.exec(text)
         if (m) {
-          j = this.pairAttributeEnd(text, j + m[0].length) - 1
+          j = attributeEnd(j + m[0].length) - 1
           continue
         }
       }
       // An attached attribute run is opaque, such as one after a `:name:` shortcode.
       if (ch === '{' && text[j - 1] === ':') {
-        const tail = this.pairAttributeEnd(text, j)
+        const tail = attributeEnd(j)
         if (tail > j) {
           j = tail - 1
           continue
@@ -1671,7 +1699,7 @@ export class InlineParseSession {
       if (ch === '{') {
         const end = this.bracedInlineEnd(text, j, memo)
         if (end !== -1) {
-          j = this.pairAttributeEnd(text, end + 1) - 1
+          j = attributeEnd(end + 1) - 1
           continue
         }
       }
@@ -1689,7 +1717,7 @@ export class InlineParseSession {
       if (ch === '[') {
         const close = emphasisBrackets(text, memo)(j)
         if (close !== undefined) {
-          j = this.pairAttributeEnd(text, close + 1) - 1
+          j = attributeEnd(close + 1) - 1
           continue
         }
       }
@@ -1698,7 +1726,7 @@ export class InlineParseSession {
       if (ch === '(' && text[j - 1] === ']') {
         const end = linkDestinations(text, memo).get(j)
         if (end !== undefined) {
-          j = this.pairAttributeEnd(text, end + 1) - 1
+          j = attributeEnd(end + 1) - 1
           continue
         }
       }
@@ -1714,7 +1742,7 @@ export class InlineParseSession {
         RE_AUTOLINK_STICKY.lastIndex = j
         const m = RE_AUTOLINK_STICKY.exec(text)
         if (m) {
-          j = this.pairAttributeEnd(text, j + m[0].length) - 1
+          j = attributeEnd(j + m[0].length) - 1
           continue
         }
       }
