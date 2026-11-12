@@ -15,6 +15,7 @@ This patch release restores the 0.1.15 speed of `carveToHtml` on nested lists af
 
 ### Fixes
 
+- `parse`, `lintCarve` and `carveToCarve` are faster on plain prose and on paragraphs with inline attributes again: a paragraph line no longer pays for a code-state scan and host probe it never reads, and bare-pair tables cover only the markers a paragraph holds. Prose was about 3x and attributes 6x to 11x slower in 0.1.16 (#5027, #5021, #5022).
 - `renderCarve` keeps the blank line between a delimited comment and a paragraph in a list item when the AST carries no source positions, so the comment no longer joins the paragraph on readback (#5012, #5013).
 - A tab-led `{%` or `{` run is measured at its per-frame column in every container, so a run whose continuation misses that column is refused and kept as text instead of dropped (#5008, markup-carve/carve#5874).
 - `carveToHtml` renders a list with a blank line before a nested list on its fast path again, as a loose list, instead of sending the document through the full parser; that shape was up to 25x slower in 0.1.16 (#5016, markup-carve/carve#6026).
