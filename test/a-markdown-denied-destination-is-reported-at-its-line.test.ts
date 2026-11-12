@@ -24,6 +24,8 @@ describe('a dropped Markdown destination in the import report', () => {
     ['a pointy destination', 'a [x](<javascript:x>) b\n'],
     ['an autolink', 'a <javascript:x> b\n'],
     ['a parenthesized destination with a title', 'a [x](javascript:alert(1) "t") b\n'],
+    ['a single-quoted title', "a [x](javascript:x 't') b\n"],
+    ['a parenthesized title', 'a [x](<javascript:x> (t)) b\n'],
   ])('locates %s', (_name, markdown) => {
     expect(rows(markdown)).toEqual([
       ['markdown-paragraph', 'info', 'preserved', 'exact', 'line:1'],

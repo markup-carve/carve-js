@@ -150,17 +150,18 @@ export function assessMarkdown(source: string, value: string): Assessment {
         result += match[0]; i += match[0].length
       } else if ((match = /^(!?)\[([^\]\n]*)\]\(/.exec(rest)) && (() => {
         const scanned = scanDestination(rest, match![0].length - 1)
-        if (scanned === null || rest[match![0].length] === '<' || !scanned.dest.includes('(')) return false
+        if (scanned === null) return false
         const href = scanned.dest
         // A dropped destination takes its title with it, so only the content is modeled.
-        const tail = deniedToken(href) ? /^(?:[ \t]+"[^"\n]*")?\)/.exec(rest.slice(scanned.end)) : null
+        const tail = deniedToken(href)
+          ? /^(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*\)/.exec(rest.slice(scanned.end)) : null
         if (tail !== null) {
           i += scanned.end + tail[0].length
           emit('', line, 'dropped', 'attribute-dropped', match![1] === '!' ? DENIED_IMAGE_SOURCE : DENIED_LINK_DESTINATION)
           result += match![1] === '!' ? escape(match![2]!) : inline(match![2]!, line, true)
           return true
         }
-        if (rest[scanned.end] !== ')') return false
+        if (rest[match![0].length] === '<' || !href.includes('(') || rest[scanned.end] !== ')') return false
         i += scanned.end + 1
         emit(match![1] === '!' ? 'image' : 'link', line)
         const encodedHref = escape(tableCell ? encodeWrittenDestination(href).replace(/\|/g, '%7C') : encodeWrittenDestination(href))
