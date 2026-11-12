@@ -10,7 +10,7 @@ describe('Markdown reference extraction', () => {
     const before = [...lines]
     const result = extractReferenceDefinitions(lines, value => value, () => false)
     expect(lines).toEqual(before)
-    expect(result.lines).toEqual(['- text', '', '- other'])
+    expect(result.lines).toEqual(['- text', '- other'])
     expect(result.definitions).toEqual(['[a]: /a', '[b]: /b'])
   })
 
@@ -41,9 +41,9 @@ describe('Markdown reference extraction', () => {
   }
 })
 
-it('keeps distinct blank lines while chained definitions move ahead', () => {
+it('drops the blank runs chained definitions leave', () => {
   const result = extractReferenceDefinitions(['- [a]: /a', '', ' ', '\t', '  [b]: /b', '', '   ', '  [c]: /c', '  text'], value => value, () => false)
-  expect(result.lines).toEqual(['- text', '', ' ', '\t', '', '   '])
+  expect(result.lines).toEqual(['- text'])
   expect(result.definitions).toEqual(['[a]: /a', '[b]: /b', '[c]: /c'])
 })
 

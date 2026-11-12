@@ -191,7 +191,6 @@ interface ReferenceExtraction {
   sourceIndex: number
   precedingNonblank: string | undefined
   referenceChunk: { lines: readonly string[]; start: number; through: number; text: string; offsets: number[] } | undefined
-  deferredBlanks: { start: number; end: number; values: string[] } | undefined
   nextSerial: number
   readonly reservedReferences: ReadonlySet<number>
   readonly decodeEntity: (entity: string) => string
@@ -241,7 +240,6 @@ function keepLines(st: ReferenceExtraction, ...entries: string[]): void {
 
 function nextNonblankFrom(st: ReferenceExtraction, start: number): number {
   let at = start
-  if (st.deferredBlanks && at >= st.deferredBlanks.start && at < st.deferredBlanks.end) at = st.deferredBlanks.end
   while (at < st.lines.length && st.lines[at]!.trim() === '') at++
   return at
 }
@@ -259,6 +257,39 @@ function reservedImportSerials(lines: readonly string[], decodeEntity: (entity: 
   }
   return { references, footnotes }
 }
+
+/** The column a line's text starts at past the quotes it carries. */
+const itemIndent = (line: string, quotePrefix: string): number => quotePrefix.length + leadingSpaces(line.slice(quotePrefix.length))
+
+/** A line's quote prefix, with a quote that starts at the item's column however deep. */
+function lineQuotePrefix(line: string, listIndent: number, fence: string | null, htmlCloser: RegExp | null): string {
+  const quotePrefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
+  if (listIndent === 0 || fence !== null || htmlCloser !== null || itemIndent(line, quotePrefix) < listIndent) return quotePrefix
+  const nested = /^((?: {0,3}>[ \t]?)*)/.exec(line.slice(listIndent))![1]!
+  return nested === '' ? quotePrefix : line.slice(0, listIndent) + nested
+}
+
+/**
+ * The prefixes of a definition that starts inside every container an item
+ * line opens, so its lines continue under all of them (carve#6018).
+ */
+function openedDefinitionContainers(
+  opensItem: boolean, prefix: string, quotePrefix: string, content: string, blockContent: string,
+): { prefix: string; quotePrefix: string; content: string; depth: number } | null {
+  const opened = content.slice(0, content.length - blockContent.length)
+  if (!opensItem || opened === '' || !/^ {0,3}\[(?!\^)(?=[^\]]*[^\s\]])(?:[^[\]\\]|\\.)+\]:/.test(blockContent)) return null
+  return {
+    prefix: prefix + opened,
+    quotePrefix: quotePrefix + ' '.repeat(prefix.length - quotePrefix.length) +
+      opened.replace(/(?:[-*+]|[0-9]{1,9}[.)])(?=[ \t])/g, (marker) => ' '.repeat(marker.length)),
+    content: blockContent,
+    depth: (opened.match(/>/g) ?? []).length,
+  }
+}
+
+/** Text after which a definition may start: nothing, a heading or a break line. */
+const endsParagraphContext = (text: string): boolean =>
+  text.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(text)
 
 /**
  * Take the list markers off a line inside `quotePrefix`, and the container
@@ -281,7 +312,8 @@ function readContainerPrefixes(
     listIndent = prefix.length
     opensItem = true
   } else if (listIndent > 0 && content.trim() !== '') {
-    if (leadingSpaces(line) >= listIndent) content = line.slice(listIndent)
+    // A quote at the item's column already came off with `quotePrefix`.
+    if (itemIndent(line, quotePrefix) >= listIndent) content = quotePrefix === '' ? line.slice(listIndent) : content
     else listIndent = 0
   }
   // CONTAINER PREFIXES NEST, and the BLOCK decisions below need the innermost
@@ -364,6 +396,21 @@ function joinWrappedDefinitionTitle(
   return null
 }
 
+/**
+ * Keep a removed quoted definition's place. A lazy line after it continued
+ * its paragraph, so that line stays in the quote (CommonMark 5.1).
+ */
+function keepQuotedDefinitionPlace(st: ReferenceExtraction, i: number, quotePrefix: string, lineDepth: number): void {
+  const next = st.lines[i + 1]
+  const own = next === undefined ? '' : /^((?: {0,3}>[ \t]?)*)/.exec(next)![1]!
+  const body = next?.slice(own.length) ?? ''
+  if ((own.match(/>/g) ?? []).length < lineDepth && body.trim() !== '' && !opensBlock(body) && !/^(?:[ \t]*>| {0,3}<)/.test(body)) {
+    st.lines[i + 1] = quotePrefix + body.trimStart()
+    st.referenceChunk = undefined
+  }
+  keepLines(st, quotePrefix)
+}
+
 /** Write a definition with a destination, or keep a bare reference head. */
 function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, destination: string): { i: number; canStart: boolean } {
   const { line, label, key, continued, quotePrefix, prefix, opensItem, lineDepth, blockList, bodyIndent, wrappedDestinationTitle } = d
@@ -430,32 +477,33 @@ function writeTargetDefinition(st: ReferenceExtraction, d: DefinitionLine, desti
     st.definitionContainers.push(opensItem || lineDepth > 0 || blockList > 0)
   }
   if (opensItem) {
-    const nextLine = st.lines[i + 1]
-    if (nextLine !== undefined && nextLine.trim() !== '' && leadingSpaces(nextLine) < prefix.length + 4 &&
-        !opensBlock(nextLine) && !/^ {0,3}\[[^\]\n]+\]:/.test(nextLine.trimStart())) {
-      st.lines[i + 1] = prefix + nextLine.trimStart()
+    // The item's lines read inside the quote the item opened in.
+    const bodyAt = (at: number): string | undefined => {
+      const entry = st.lines[at]
+      if (entry === undefined) return undefined
+      if (entry.startsWith(quotePrefix)) return entry.slice(quotePrefix.length)
+      return quotePrefix !== '' && entry === quotePrefix.trimEnd() ? '' : undefined
+    }
+    const column = prefix.length - quotePrefix.length
+    const nextBody = bodyAt(i + 1)
+    if (nextBody !== undefined && nextBody.trim() !== '' && leadingSpaces(nextBody) < column + 4 &&
+        !opensBlock(nextBody)) {
+      st.lines[i + 1] = prefix + nextBody.trimStart()
     } else {
-      let continuation = i + 2
-      if (nextLine?.trim() === '') {
-        continuation = nextNonblankFrom(st, continuation)
-      }
-      if (nextLine?.trim() === '' && continuation < st.lines.length &&
-          leadingSpaces(st.lines[continuation]!) >= prefix.length && leadingSpaces(st.lines[continuation]!) < prefix.length + 4 &&
-          !opensBlock(st.lines[continuation]!.trimStart())) {
-        const moved = prefix + st.lines[continuation]!.trimStart()
-        // Keep a blank run in place while chained definitions move ahead of it.
-        const values = st.deferredBlanks?.values ?? st.lines.slice(i + 1, continuation)
-        if (st.deferredBlanks) {
-          for (let at = st.deferredBlanks.end; at < continuation; at++) values.push(st.lines[at]!)
-        }
-        st.deferredBlanks = { start: i + 2, end: continuation + 1, values }
-        st.lines[i + 1] = moved
-        st.lines[continuation] = ''
+      let continuation = i + 1
+      while (bodyAt(continuation)?.trim() === '') continuation++
+      const text = bodyAt(continuation)
+      if (continuation > i + 1 && text !== undefined &&
+          leadingSpaces(text) >= column && leadingSpaces(text) < column + 4 && !opensBlock(text.trimStart())) {
+        // The blank run after the definition goes with it, so the item stays
+        // as tight as cmark-gfm reads it.
+        st.lines[continuation] = prefix + text.trimStart()
         st.referenceChunk = undefined
+        i = continuation - 1
       } else keepLines(st, prefix.trimEnd() + ' \x00REFITEM\x00')
     }
   } else if (quotePrefix !== '') {
-    keepLines(st, quotePrefix)
+    keepQuotedDefinitionPlace(st, i, quotePrefix, lineDepth)
   } else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && st.lines[i + 1]?.trim() === '') {
     i++
   } else if (st.lines[i + 1]?.startsWith(' '.repeat(bodyIndent + 4)) && st.lines[i + 1]!.trim() !== '') {
@@ -506,7 +554,7 @@ function recordEmptyDestination(st: ReferenceExtraction, d: DefinitionLine, empt
   // Keep the item as an empty comment line; the output pass restores the
   // marker after inline conversion.
   if (opensItem) keepLines(st, prefix.trimEnd() + ' \x00REFITEM\x00')
-  else if (quotePrefix !== '') keepLines(st, quotePrefix)
+  else if (quotePrefix !== '') keepQuotedDefinitionPlace(st, i, quotePrefix, lineDepth)
   else if ((st.kept.length === 0 || st.kept.at(-1)!.trim() === '') && i + 1 < st.lines.length && st.lines[i + 1]!.trim() === '') i++
   return i
 }
@@ -609,7 +657,7 @@ export function extractReferenceDefinitions(
   const reservedFootnotes = reserved.footnotes
   const st: ReferenceExtraction = {
     lines, kept: [], keptSource: [], bareReferenceHeads: [], sourceIndex: 0, precedingNonblank: undefined,
-    referenceChunk: undefined, deferredBlanks: undefined, nextSerial: 1, reservedReferences: reserved.references,
+    referenceChunk: undefined, nextSerial: 1, reservedReferences: reserved.references,
     decodeEntity, titleBreakMarker, titleWrap, empty, titled, defined, authoredDefinitions: new Set(), labels,
     sourceLabels, inline, tableInline, definitions, definitionContainers, discardedEmptyDefinitions,
   }
@@ -629,15 +677,6 @@ export function extractReferenceDefinitions(
     }
     return st.referenceChunk.text.slice(st.referenceChunk.offsets[index - st.referenceChunk.start])
   }
-  const flushBlanks = (): void => {
-    const blanks = st.deferredBlanks
-    if (!blanks) return
-    for (let at = blanks.start; at < blanks.end; at++) {
-      lines[at] = blanks.values[at - blanks.start]!
-    }
-    st.deferredBlanks = undefined
-    st.referenceChunk = undefined
-  }
   let fence: string | null = null
   let htmlCloser: RegExp | null = null
   let blockDepth = 0
@@ -649,10 +688,9 @@ export function extractReferenceDefinitions(
   let blockIndent = 0
   for (let i = 0; i < lines.length; i++) {
     st.sourceIndex = i
-    if (st.deferredBlanks && i >= st.deferredBlanks.start) flushBlanks()
     const line = lines[i]!
-    const quotePrefix = /^((?: {0,3}>[ \t]?)*)/.exec(line)![1]!
-    const lineDepth = (quotePrefix.match(/>/g) ?? []).length
+    let quotePrefix = lineQuotePrefix(line, listIndent, fence, htmlCloser)
+    let lineDepth = (quotePrefix.match(/>/g) ?? []).length
     // Leaving the container ends a fence or HTML block opened in it.
     if (
       (fence !== null || htmlCloser !== null) &&
@@ -677,7 +715,8 @@ export function extractReferenceDefinitions(
       continue
     }
     const containers = readContainerPrefixes(line, quotePrefix, fence, listIndent, blockIndent)
-    const { prefix, content, blockContent, opensItem } = containers
+    const { blockContent, opensItem } = containers
+    let { prefix, content } = containers
     listIndent = containers.listIndent
     blockIndent = containers.blockIndent
     if (fence !== null) {
@@ -762,6 +801,8 @@ export function extractReferenceDefinitions(
       continue
     }
     // A deeper quote opens a block; a shallower line is lazy continuation.
+    const inner = openedDefinitionContainers(opensItem, prefix, quotePrefix, content, blockContent)
+    if (inner) ({ prefix, quotePrefix, content } = inner, lineDepth += inner.depth)
     // A label needs a non-whitespace character (CommonMark 4.7).
     const head = /^ {0,3}\[(?=[^\]]*[^\s\]])((?:[^[\]\\]|\\.)+)\]:(.*)$/.exec(content)
     const definition = head && (head[1]!.startsWith('^') || !unbalancedDestination(head[2]!)) ? head : null
@@ -835,8 +876,9 @@ export function extractReferenceDefinitions(
       continue
     }
     keep(line)
-    depth = lineDepth
-    canStart = content.trim() === '' || /^ {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|=+[ \t]*$)/.test(content)
+    // A quote opened after an item marker holds the line's text too.
+    depth = opensItem ? (line.slice(0, line.length - blockContent.length).match(/>/g) ?? []).length : lineDepth
+    canStart = endsParagraphContext(opensItem ? blockContent : content)
   }
   for (const { index, key, marker, labelLength } of st.bareReferenceHeads) {
     const line = kept[index]!
