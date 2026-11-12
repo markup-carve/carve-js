@@ -947,10 +947,14 @@ function authoredContainerBlocks(document: Document, owners: Map<number, string>
   }
   visit(document.children, 'doc')
   for (const [label, blocks] of Object.entries(document.footnoteDefs ?? {})) {
-    const line = document.footnoteDefPos?.[label]?.startLine
-    const authoredOwner = owners.get(line ?? -1)
-    const key = authoredOwner?.endsWith(`/footnote:${line}`) ? authoredOwner : `doc/footnote:${line}`
-    if (line !== undefined) blocksByOwner.set(key, { blocks, containers: [] })
+    const pos = document.footnoteDefPos?.[label]
+    const line = pos?.startLine
+    // The marker line's owner may be a block the note opens on that line (`- [^n]: - a`).
+    const steps = owners.get(line ?? -1)?.split('/') ?? []
+    const note = steps.lastIndexOf(`footnote:${line}`)
+    const key = note > 0 ? steps.slice(0, note + 1).join('/') : `doc/footnote:${line}`
+    // The note's span lives in the side table; a comment it owns extends it (CARVE-P12-014).
+    if (pos !== undefined) blocksByOwner.set(key, { blocks, containers: [{ pos }] })
     visit(blocks, line === undefined ? 'doc' : key)
   }
   return blocksByOwner
