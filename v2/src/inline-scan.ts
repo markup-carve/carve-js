@@ -2,7 +2,7 @@
 // then the delimiter stack, then the events with the attached attribute blocks.
 import {
   AT_SIGN, BACKSLASH, BACKTICK, BANG, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DOLLAR, HASH, LESS, LF,
-  PERCENT,
+  PERCENT, SPACE,
 } from './chars.ts'
 import {
   scanAtSign, scanBackslash, scanBacktick, scanBrace, scanColon, scanDollar, scanHash, scanLess, scanLineBreak,
@@ -78,6 +78,19 @@ function resetScan(state: InlineState): void {
 }
 
 /**
+ * C2-I-002: spaces and tabs at the end of the content are not part of it, but a space that a
+ * backslash escapes is (C2-I-011). A backslash escapes when an even number of backslashes stands before it.
+ */
+function contentEnd(text: string): number {
+  let end = text.length
+  while (end > 0 && isSpaceOrTab(text.charCodeAt(end - 1))) end--
+  if (end === text.length || text.charCodeAt(end) !== SPACE) return end
+  let first = end
+  while (first > 0 && text.charCodeAt(first - 1) === BACKSLASH) first--
+  return (end - first) % 2 === 1 ? end + 1 : end
+}
+
+/**
  * Reads the inline content of the source spans `spans[from..to)` (start and end pairs) and
  * leaves its events in the state. `baseDepth` is the number of open containers around the
  * content (C2-I-118). A line block reads no line comment (C2-B-144).
@@ -87,8 +100,7 @@ export function scanInline(
 ): void {
   setContent(state, src, spans, from, to)
   const text = state.text
-  let end = text.length
-  while (end > 0 && isSpaceOrTab(text.charCodeAt(end - 1))) end--
+  const end = contentEnd(text)
   state.end = end
   state.baseDepth = baseDepth
   state.lineComments = lineComments

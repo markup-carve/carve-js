@@ -148,7 +148,8 @@ function referenceLabel(state: InlineState, pos: number, textStart: number, text
   const text = state.text
   const first = text.charCodeAt(pos + 1)
   if (first === BRACKET_CLOSE) return isBlank(text, textStart, textEnd) ? NONE : pos + 2
-  if (first === AT_SIGN) return NONE
+  // A label that starts with a caret is a footnote reference behind the pair (C2-I-087).
+  if (first === AT_SIGN || first === CARET) return NONE
   const close = labelEnd(state, pos + 1)
   return close === NONE || isBlank(text, pos + 1, close) ? NONE : close + 1
 }

@@ -29,6 +29,16 @@ describe('preliminaries', () => {
     expect(tree('a `b', '', '- c`')).toBe('p["a " code!"b"] ul(-)[li[p["c" code!""]]]')
   })
 
+  it('C2-I-002: spaces and tabs at the end of a line are no content, but an escaped space is', () => {
+    expect(inline('a \t', 'b  ')).toBe('"a" sb "b"')
+    expect(inline('a\\ ')).toBe('"a" nbsp')
+    expect(inline('a\\  \t')).toBe('"a" nbsp')
+    expect(inline('a\\\\ ')).toBe('"a\\"')
+    expect(inline('a\\\\\\ ')).toBe('"a\\" nbsp')
+    expect(inline('a\\ ', 'b')).toBe('"a" nbsp sb "b"')
+    expect(tree('| a\\ | b |')).toBe('table[tr[td["a" br] td["b"]]]')
+  })
+
   it('C2-I-002: a content has no container prefix, no marker and no indent', () => {
     expect(tree('> - *a', '>   b*')).toBe('quote[ul(-)[li[p[strong["a" sb "b"]]]]]')
     expect(tree('= /a', '  b/')).toBe('h1[em["a" sb "b"]]')
@@ -536,6 +546,7 @@ describe('reference resolution', () => {
 
   it('C2-I-078: a label that starts with an at-sign is no reference label', () => {
     expect(inline('[a][@b] [a][ @b]')).toBe('"[a][" @"b" "] " ref(@b)["a"]')
+    expect(inline('[a][^b] [a][ ^b]')).toBe('"[a]" fnref"b" " " ref(^b)["a"]')
   })
 
   it('C2-I-079: the key of a label folds whitespace and keeps case and backslashes', () => {
@@ -578,6 +589,7 @@ describe('reference resolution', () => {
 
 describe('footnotes', () => {
   it('C2-I-087: a footnote reference takes no link tail and no reference label', () => {
+    expect(inline('[x][^n] ![x][^n]')).toBe('"[x]" fnref"n" " ![x]" fnref"n"')
     expect(inline('a[^n] [^n](/u) [^n][b] [^a b]')).toBe('"a" fnref"n" " " fnref"n" "(/u) " fnref"n" "[b] " fnref"a b"')
     expect(inline('a[^my', 'note] b')).toBe('"a" fnref"my note" " b"')
     expect(inline('[^] [^ ] [^ ](/u) [^a')).toBe('"[^] [^ ] [^ ](/u) [^a"')
@@ -671,7 +683,7 @@ describe('hard break and soft break', () => {
   it('C2-I-102: a backslash at the end of a line or of the content is a hard break', () => {
     expect(inline('a\\', 'b')).toBe('"a" br "b"')
     expect(inline('a\\')).toBe('"a" br')
-    expect(inline('a\\  ')).toBe('"a" br')
+    expect(inline('a\\\t')).toBe('"a" br')
     expect(tree('| a\\ | b |')).toBe('table[tr[td["a" br] td["b"]]]')
     expect(inline('a\\\\', 'b')).toBe('"a\\" sb "b"')
     expect(inline('*a\\', 'b*')).toBe('strong["a" br "b"]')
@@ -1011,7 +1023,7 @@ describe('what the events hold', () => {
   })
 
   it('a break at the end of the content ends where the content ends', () => {
-    const src = 'x\\ '
+    const src = 'x\\\t'
     const hardBreak = parseTree(src).children![0]!.inlines![1]!
     expect([hardBreak.start, hardBreak.end]).toEqual([1, 2])
   })
