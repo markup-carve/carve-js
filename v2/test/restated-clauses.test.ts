@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateRenderTables } from '../scripts/generate-render-tables.ts'
 import {
-  type AstNode, CarveInputError, parse, parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics,
+  type AstNode, CarveInputError, CarveRenderError, parse, parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics,
 } from '../src/index.ts'
 import { type Diagnostic, locateFindings } from '../src/diagnostics.ts'
 import { escapeText } from '../src/html-attributes.ts'
@@ -675,6 +675,20 @@ describe('the position of a diagnostic', () => {
     expect(output.diagnostics.map((entry) => [entry.code, entry.path, entry.range])).toEqual([
       ['carrier-attribute-dropped', '/children/0/children/0', undefined], ['raw-format-dropped', '/children/0/children/1/pairs/0/base/0', undefined],
     ])
+  })
+})
+
+describe('a loss that is thrown', () => {
+  it('C2-A-173, C2-H-130: carries the position of its node', () => {
+    let thrown: unknown = null
+    try {
+      render('a\n\n{{ x.crv }}', { strictLosses: true })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(CarveRenderError)
+    expect((thrown as CarveRenderError).diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['include-unresolved', '/children/1']])
+    expect(renderWithDiagnostics('{{ x.crv }}', { strictLosses: true }).html).toBe('')
   })
 })
 

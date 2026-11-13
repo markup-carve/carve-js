@@ -28,15 +28,17 @@ export function addFinding(findings: Findings, node: AstNode | null, entry: Diag
 const NODE_LISTS = ['children', 'title', 'fallback', 'short', 'prefix', 'locator', 'suffix', 'columns'] as const
 const PAIR_LISTS = ['base', 'annotation'] as const
 
+/** A node on the way down, with the step that leads to it from the node above. The pointer is spelled only for a node that is wanted. */
 interface Frame {
   node: AstNode
-  path: string
+  above: Frame | null
+  step: string
 }
 
-function pushList(stack: Frame[], list: unknown, path: string): void {
+function pushList(stack: Frame[], list: unknown, above: Frame, slot: string): void {
   if (!Array.isArray(list)) return
   const nodes = list as AstNode[]
-  for (let at = nodes.length - 1; at >= 0; at--) stack.push({ node: nodes[at]!, path: `${path}/${at}` })
+  for (let at = nodes.length - 1; at >= 0; at--) stack.push({ node: nodes[at]!, above, step: `${slot}/${at}` })
 }
 
 /** RFC 6901: `~` and `/` in a key are written as `~0` and `~1`. */
@@ -45,22 +47,29 @@ function pointerKey(key: string): string {
 }
 
 function pushSlots(stack: Frame[], frame: Frame): void {
-  const { node, path } = frame
-  for (const name of NODE_LISTS) pushList(stack, node[name], `${path}/${name}`)
-  if (node.caption !== undefined) stack.push({ node: node.caption, path: `${path}/caption` })
+  const node = frame.node
+  for (const name of NODE_LISTS) pushList(stack, node[name], frame, name)
+  if (node.caption !== undefined) stack.push({ node: node.caption, above: frame, step: 'caption' })
   ;(node.pairs ?? []).forEach((pair, at) => {
-    for (const name of PAIR_LISTS) pushList(stack, pair[name], `${path}/pairs/${at}/${name}`)
+    for (const name of PAIR_LISTS) pushList(stack, pair[name], frame, `pairs/${at}/${name}`)
   })
-  for (const [name, list] of Object.entries(node.slots ?? {})) pushList(stack, list, `${path}/slots/${pointerKey(name)}`)
+  for (const [name, list] of Object.entries(node.slots ?? {})) pushList(stack, list, frame, `slots/${pointerKey(name)}`)
+}
+
+/** The pointer of the node of `frame`: the steps from the document down to it. */
+function pointerOf(frame: Frame): string {
+  const steps: string[] = []
+  for (let at: Frame | null = frame; at !== null && at.above !== null; at = at.above) steps.push(at.step)
+  return steps.length === 0 ? '' : `/${steps.reverse().join('/')}`
 }
 
 /** The pointer of each node of `wanted` that stands in the tree below `document`. */
 function pointers(document: AstNode, wanted: Set<AstNode>): Map<AstNode, string> {
   const found = new Map<AstNode, string>()
-  const stack: Frame[] = [{ node: document, path: '' }]
+  const stack: Frame[] = [{ node: document, above: null, step: '' }]
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
-    if (wanted.has(frame.node)) found.set(frame.node, frame.path)
+    if (wanted.has(frame.node)) found.set(frame.node, pointerOf(frame))
     pushSlots(stack, frame)
   }
   return found

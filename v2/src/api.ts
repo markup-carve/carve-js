@@ -12,7 +12,7 @@ import { type ParseOptions, readOptions, type RenderOptions, type Settings } fro
 import { utf8Length } from './positions.ts'
 import { applyProfile } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
-import { resolve } from './resolve.ts'
+import { type Resolution, resolve } from './resolve.ts'
 import { acquireState, releaseState } from './state.ts'
 import { buildTree, readInlines } from './tree.ts'
 
@@ -77,9 +77,12 @@ export function parseWithDiagnostics(src: string, options?: ParseOptions): Parse
   return { document: built.document, diagnostics: locateFindings(built.document, resolution.findings) }
 }
 
-/** The resolved tree of `src` (spec/0.2/ast.md). */
+/** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
 export function parse(src: string, options?: ParseOptions): AstNode {
-  return parseWithDiagnostics(src, options).document
+  const settings = readOptions(options, 'parse')
+  const built = buildSource(src, options?.positions !== false)
+  resolve(built.document, settings.headingIds, built.facts)
+  return built.document
 }
 
 /**
@@ -114,27 +117,42 @@ function renderTree(input: string | AstNode, settings: Settings, rule: ProfileRu
   return { document: rule === NO_PROFILE ? input : structuredClone(input), facts: null }
 }
 
-/**
- * The HTML of Carve source or of a tree (spec/0.2/html.md), with the diagnostics of the run. A
- * supplied tree is validated and resolved in place before it is written.
- */
-export function renderWithDiagnostics(input: string | AstNode, options?: RenderOptions): RenderOutput {
-  const settings = readOptions(options, 'render')
+interface Rendered {
+  document: AstNode
+  html: string
+  resolution: Resolution
+  losses: Findings
+}
+
+/** Resolves and writes the tree of `input`. A supplied tree is validated and resolved in place. */
+function renderInput(input: string | AstNode, settings: Settings): Rendered {
   const rule = PROFILES.get(settings.profile) ?? NO_PROFILE
   const built = renderTree(input, settings, rule)
   const losses: Findings = { entries: [], nodes: [] }
   if (rule !== NO_PROFILE) applyProfile(built.document, settings.profile, rule, losses)
   const resolution = resolve(built.document, settings.headingIds, built.facts, settings.symbols)
   const result = renderDocument(built.document, settings, resolution, losses)
-  const diagnostics = [...locateFindings(built.document, resolution.findings), ...locateFindings(built.document, losses)]
-  if (settings.strictLosses && losses.entries.length > 0) return { html: '', diagnostics }
-  return { html: result.html, diagnostics }
+  return { document: built.document, html: result.html, resolution, losses }
 }
 
-/** The HTML fragment of Carve source or of a tree. Under `strictLosses` a render loss throws. */
+/**
+ * The HTML of Carve source or of a tree (spec/0.2/html.md), with the diagnostics of the run, each
+ * with its position (C2-A-173). Under `strictLosses` a render that lost something returns no output.
+ */
+export function renderWithDiagnostics(input: string | AstNode, options?: RenderOptions): RenderOutput {
+  const settings = readOptions(options, 'render')
+  const rendered = renderInput(input, settings)
+  const diagnostics = [...locateFindings(rendered.document, rendered.resolution.findings), ...locateFindings(rendered.document, rendered.losses)]
+  return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html, diagnostics }
+}
+
+/**
+ * The HTML fragment of Carve source or of a tree. Under `strictLosses` a render loss throws. The
+ * diagnostics are not asked for, so they are given a position only where a loss is thrown.
+ */
 export function render(input: string | AstNode, options?: RenderOptions): string {
-  const output = renderWithDiagnostics(input, options)
-  const losses = output.diagnostics.filter((entry) => entry.channel === 'render-loss')
-  if (options?.strictLosses === true && losses.length > 0) throw new CarveRenderError(losses)
-  return output.html
+  const settings = readOptions(options, 'render')
+  const rendered = renderInput(input, settings)
+  if (settings.strictLosses && rendered.losses.entries.length > 0) throw new CarveRenderError(locateFindings(rendered.document, rendered.losses))
+  return rendered.html
 }
