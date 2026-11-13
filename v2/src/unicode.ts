@@ -1,6 +1,6 @@
 // Character tests of the inline scan. ASCII is decided by comparisons; the Unicode classes are
 // read from the engine's tables only for a character outside ASCII, which is off the hot path.
-import { DIGIT_0, DIGIT_9, LF, LOWER_A, LOWER_Z, SPACE, TAB, UPPER_A, UPPER_Z } from './chars.ts'
+import { DIGIT_0, DIGIT_9, HYPHEN, LF, LOWER_A, LOWER_Z, SPACE, TAB, UNDERSCORE, UPPER_A, UPPER_Z } from './chars.ts'
 
 /** The start and the end of a content, which count as whitespace. */
 export const NO_CHARACTER = -1
@@ -22,6 +22,15 @@ export function isAsciiLetter(code: number): boolean {
 
 export function isAsciiDigit(code: number): boolean {
   return code >= DIGIT_0 && code <= DIGIT_9
+}
+
+export function isAsciiAlphanumeric(code: number): boolean {
+  return isAsciiLetter(code) || isAsciiDigit(code)
+}
+
+/** An ASCII letter or digit, `_` or `-`: a character of a name such as a tag or a key. */
+export function isAsciiNameCharacter(code: number): boolean {
+  return isAsciiAlphanumeric(code) || code === UNDERSCORE || code === HYPHEN
 }
 
 /** A Unicode letter or number (general category L or N). */

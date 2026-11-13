@@ -5,6 +5,7 @@ import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
 import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
 import { type Resolution } from './resolve.ts'
+import { isAsciiLetter } from './unicode.ts'
 
 /** The state of one render. */
 export interface Render {
@@ -130,10 +131,6 @@ export function loss(r: Render, node: AstNode | null, code: string, message: str
   addFinding(r.losses, node, { code, severity, channel: 'render-loss', message })
 }
 
-function isAsciiLetter(code: number): boolean {
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
-
 function isSchemeCharacter(code: number): boolean {
   return isAsciiLetter(code) || (code >= 48 && code <= 57) || code === 43 || code === 45 || code === 46
 }
@@ -166,7 +163,7 @@ function schemeText(url: string, colon: number, removed: boolean): string {
 }
 
 /** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
-export function schemePasses(r: Render, url: string): boolean {
+function schemePasses(r: Render, url: string): boolean {
   const scheme = schemeOf(url)
   if (scheme === '') return true
   const settings = r.settings

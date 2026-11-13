@@ -1,5 +1,5 @@
 // The inline elements of C2-H-072 to C2-H-101.
-import { type AstNode, type Attrs, childrenOf, hrefOf, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
+import { type AstNode, type Attrs, childrenOf, hrefOf, isBreak, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
   attributeBlockText, attributes, destination, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
@@ -12,10 +12,6 @@ const ELEMENTS = new Map([
 ])
 // C2-H-075: the keys that name an element, from inside out, and the attribute the value of each becomes.
 const SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
-
-function isBreak(node: AstNode): boolean {
-  return node.type === 'soft_break' || node.type === 'hard_break'
-}
 
 function isLineComment(node: AstNode | undefined): boolean {
   return node?.type === 'comment' && node.form === 'line'

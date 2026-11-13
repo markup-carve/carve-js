@@ -14,7 +14,7 @@ const ROMAN_PLACES: readonly (readonly [number, string])[] = [
   [5, 'v'], [4, 'iv'], [1, 'i'],
 ]
 
-export interface ListMarkers {
+interface ListMarkers {
   /** The marker of each item, without the space behind it. */
   markers: string[]
   /** C2-B-045: the start value that no first marker can carry, for the attribute line. */

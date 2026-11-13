@@ -1,6 +1,6 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
-import { AST_VERSION, type AstNode } from './ast.ts'
+import { AST_VERSION, type AstNode, isRecord } from './ast.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
 
@@ -167,10 +167,6 @@ function fail(path: string, reason: string): never {
   throw new CarveTreeError(path, reason)
 }
 
-function isObject(value: Value): value is Fields {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function requireString(value: Value, path: string): string {
   return typeof value === 'string' ? value : fail(path, 'not a string')
 }
@@ -191,7 +187,7 @@ function checkPairs(value: Value, path: string): void {
 
 /** C2-A-032, C2-A-034: an optional id, a list of classes and a list of pairs; `id` and `class` are no keys. */
 function checkAttrs(value: Value, path: string): void {
-  if (!isObject(value)) fail(path, 'attrs is not an object')
+  if (!isRecord(value)) fail(path, 'attrs is not an object')
   for (const name of Object.keys(value)) {
     if (name !== 'id' && name !== 'classes' && name !== 'keyValues') fail(`${path}/${name}`, 'unknown field of attrs')
   }
@@ -209,7 +205,7 @@ function checkAttrs(value: Value, path: string): void {
 
 /** C2-A-139, C2-A-140: six integers, never null, with the start not behind the end. */
 function checkPosition(value: Value, path: string): void {
-  if (!isObject(value)) fail(path, 'pos is not an object')
+  if (!isRecord(value)) fail(path, 'pos is not an object')
   for (const name of POSITION_FIELDS) {
     if (!Number.isInteger(value[name])) fail(`${path}/${name}`, 'not an integer')
   }
@@ -221,7 +217,7 @@ function checkPosition(value: Value, path: string): void {
 
 /** C2-A-054 to C2-A-058. */
 function checkMarker(value: Value, path: string): void {
-  if (!isObject(value)) fail(path, 'marker is not an object')
+  if (!isRecord(value)) fail(path, 'marker is not an object')
   const ordered = value['kind'] === 'ordered'
   if (!ordered && value['kind'] !== 'bullet') fail(`${path}/kind`, 'neither bullet nor ordered')
   const allowed = ordered ? ['kind', 'style', 'delimiter', 'start'] : ['kind', 'char']
@@ -241,7 +237,7 @@ function checkOrderedMarker(value: Fields, path: string): void {
 
 /** C2-A-060, C2-A-061: the status follows from the mark. */
 function checkTask(value: Value, path: string): void {
-  if (!isObject(value)) fail(path, 'task is not an object')
+  if (!isRecord(value)) fail(path, 'task is not an object')
   const status = TASK_STATUS.get(value['mark'] as string)
   if (status === undefined) fail(`${path}/mark`, 'unknown task mark')
   if (value['status'] !== status) fail(`${path}/status`, 'the status does not follow from the mark')
@@ -288,14 +284,14 @@ function checkStages(value: Value, path: string): void {
 
 function checkPairsOfRuby(value: Value, path: string, depth: number): void {
   requireArray(value, path).forEach((pair, index) => {
-    if (!isObject(pair) || pair['type'] !== 'rubyPair') fail(`${path}/${index}`, 'not a rubyPair')
+    if (!isRecord(pair) || pair['type'] !== 'rubyPair') fail(`${path}/${index}`, 'not a rubyPair')
     checkList(pair['base'], `${path}/${index}/base`, 'inlines', depth)
     checkList(pair['annotation'], `${path}/${index}/annotation`, 'inlines', depth)
   })
 }
 
 function checkSlots(value: Value, path: string, depth: number, node: Fields): void {
-  if (!isObject(value)) fail(path, 'slots is not an object')
+  if (!isRecord(value)) fail(path, 'slots is not an object')
   const content = node['type'] === 'block_extension' ? 'blocks' : 'inlines'
   for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${name}`, content, depth)
 }
@@ -304,7 +300,7 @@ function checkSlots(value: Value, path: string, depth: number, node: Fields): vo
 function checkResources(value: Value, path: string): void {
   const seen = new Set<string>()
   requireArray(value, path).forEach((entry, index) => {
-    if (!isObject(entry)) fail(`${path}/${index}`, 'not a resource')
+    if (!isRecord(entry)) fail(`${path}/${index}`, 'not a resource')
     const id = requireString(entry['id'], `${path}/${index}/id`)
     requireString(entry['mediaType'], `${path}/${index}/mediaType`)
     const digest = requireString(entry['digest'], `${path}/${index}/digest`)
@@ -317,7 +313,7 @@ function checkResources(value: Value, path: string): void {
 /** C2-A-017: a qualified name, a boolean `required` and an optional version. */
 function checkExtensions(value: Value, path: string): void {
   requireArray(value, path).forEach((entry, index) => {
-    if (!isObject(entry)) fail(`${path}/${index}`, 'not an extension declaration')
+    if (!isRecord(entry)) fail(`${path}/${index}`, 'not an extension declaration')
     requireString(entry['name'], `${path}/${index}/name`)
     if (typeof entry['required'] !== 'boolean') fail(`${path}/${index}/required`, 'not a boolean')
     // C2-A-018: this reader knows no extension, so a required one is unknown.
@@ -326,7 +322,7 @@ function checkExtensions(value: Value, path: string): void {
 }
 
 function checkObject(value: Value, path: string): void {
-  if (!isObject(value)) fail(path, 'not an object')
+  if (!isRecord(value)) fail(path, 'not an object')
 }
 
 const FIELD_CHECKS = new Map<string, FieldCheck>([
@@ -395,7 +391,7 @@ function checkFields(node: Fields, type: string, rule: Rule, path: string, depth
 
 function checkNode(value: Value, path: string, allowed: readonly string[], depth: number): void {
   if (depth > MAX_TREE_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
-  if (!isObject(value)) fail(path, 'not a node')
+  if (!isRecord(value)) fail(path, 'not a node')
   const type = value['type']
   if (typeof type !== 'string') fail(path, 'a node without a type')
   const rule = RULES.get(type)
@@ -453,13 +449,13 @@ function checkBounds(node: Fields, path: string, budget: Budget, fallbacks: numb
     const inner = slot === 'fallback' ? fallbacks + 1 : fallbacks
     list.forEach((child, index) => checkBounds(child as Fields, `${path}/${slot}/${index}`, budget, inner))
   }
-  if (isObject(node['caption'])) checkBounds(node['caption'], `${path}/caption`, budget, fallbacks)
+  if (isRecord(node['caption'])) checkBounds(node['caption'], `${path}/caption`, budget, fallbacks)
 }
 
 /** Refuses `document` unless it is a tree of contract 2.0. */
 export function validateTree(document: unknown): asserts document is AstNode {
   // C2-A-168.
-  if (!isObject(document)) fail('', 'not a tree')
+  if (!isRecord(document)) fail('', 'not a tree')
   if (document['type'] !== 'document') fail('/type', 'the root is not a document')
   if (document['children'] === undefined) fail('/children', 'the root has no children')
   checkVersion(document['astVersion'], '/astVersion')

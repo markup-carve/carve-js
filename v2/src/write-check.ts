@@ -2,12 +2,12 @@
 // and compared with the tree they were written from. Where the parse reads a construct that the
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
-import { type AstNode, childrenOf, INLINE_PARENTS, valueOf } from './ast.ts'
+import { type AstNode, childrenOf, INLINE_PARENTS, isBreak, isRecord, valueOf } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
-import { isAsciiPunctuation } from './write-attributes.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */
 export function parseChunk(src: string, abbreviations: Map<string, string>): AstNode {
@@ -58,11 +58,6 @@ function sameList(a: readonly unknown[], b: unknown): boolean {
   return Array.isArray(b) && a.length === b.length && a.every((item, at) => sameValue(item, b[at]))
 }
 
-/** Equality of two values that are no node lists of their own: scalars, lists and plain objects. */
-function isRecord(value: unknown): value is Fields {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function sameFields(left: Fields, right: Fields): boolean {
   for (const name in left) if (!SKIPPED.includes(name) && left[name] !== undefined && !sameValue(left[name], right[name])) return false
   for (const name in right) if (!SKIPPED.includes(name) && right[name] !== undefined && left[name] === undefined) return false
@@ -107,10 +102,6 @@ function differingField(c: Check, e: AstNode, a: AstNode): string | null {
   return null
 }
 
-function isBreak(node: AstNode | undefined): boolean {
-  return node !== undefined && (node.type === 'soft_break' || node.type === 'hard_break')
-}
-
 /** Asks for the other spelling of `node`. */
 function changeForm(c: Check, node: AstNode): void {
   c.forms.push(node)
@@ -139,10 +130,6 @@ function escapeAt(c: Check, node: AstNode, at: number): boolean {
   return true
 }
 
-function isAlphanumeric(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
-
 /**
  * The offsets at which a line that reads as a block opener can be made text, best first (C2-W-092).
  * C2-W-099: of a hyphen run the second hyphen. An ordered marker is escaped at its delimiter,
@@ -153,7 +140,7 @@ function openerOffsets(value: string): number[] {
   if (value.startsWith('--')) offsets.push(1)
   offsets.push(0)
   let end = 0
-  while (end < value.length && isAlphanumeric(value.charCodeAt(end))) end++
+  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
   if (end > 0 && (value[end] === '.' || value[end] === ')')) offsets.push(end)
   return offsets
 }
@@ -567,14 +554,14 @@ function compareInline(c: Check, e: AstNode, a: AstNode): void {
 function blockMismatch(c: Check, e: AstNode): void {
   c.misaligned = true
   // C2-W-092: the first line of a paragraph read as a block opener.
-  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, childrenOf(e), 0, e)
   else c.losses.push([e, null])
 }
 
 /** The block `e` has no block in the parse: the block above it took its lines. */
 function missingBlock(c: Check, e: AstNode): void {
   // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
-  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, childrenOf(e), 0, e)
   else if (hasOtherForm(c, e)) changeForm(c, e)
   else c.losses.push([e, null])
 }
@@ -629,7 +616,7 @@ function readStarts(node: AstNode, offset: number, paragraphs: Set<number>, line
 function hasOpenerShape(node: AstNode | undefined): boolean {
   const value = node?.type === 'text' ? valueOf(node) : ''
   if (value === '') return node !== undefined && node.type !== 'text'
-  return !isAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
+  return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 
 /** Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a block. */

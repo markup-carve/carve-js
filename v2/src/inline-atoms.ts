@@ -321,7 +321,7 @@ function symbol(state: InlineState, pos: number): number {
   return end + 1
 }
 
-export type BracketOpener = (state: InlineState, start: number, end: number, form: number) => number
+type BracketOpener = (state: InlineState, start: number, end: number, form: number) => number
 
 /** C2-I-093, C2-I-094: a symbol, or the opener of an inline extension, which `open` pushes. */
 export function scanColon(state: InlineState, pos: number, open: BracketOpener): number {

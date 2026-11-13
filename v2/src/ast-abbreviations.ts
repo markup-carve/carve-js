@@ -1,8 +1,8 @@
 // C2-I-098 to C2-I-100: each occurrence of a defined term in the ordinary text of an inline flow
 // is an abbreviation node. A term is ASCII letters and digits (C2-B-084) and matches a whole word.
-import { type AstNode, INLINE_PARENTS, valueOf } from './ast.ts'
+import { type AstNode, childrenOf, INLINE_PARENTS, valueOf } from './ast.ts'
 import { addText, type TreeContext } from './ast-inline.ts'
-import { codePointAt, codePointBefore, isWordCharacter, NO_CHARACTER } from './unicode.ts'
+import { codePointAt, codePointBefore, isAsciiAlphanumeric, isWordCharacter, NO_CHARACTER } from './unicode.ts'
 
 /** C2-I-100: no term matches in the text of these nodes, whose content is not flow of this content. */
 function isFlowParent(node: AstNode): boolean {
@@ -10,36 +10,32 @@ function isFlowParent(node: AstNode): boolean {
 }
 
 /** The first character of the flow at `nodes[from]`, or `after` when the list ends there. An element edge is no boundary (C2-I-099). */
-function firstCharacter(nodes: AstNode[], from: number, after: number): number {
+function firstCharacter(nodes: readonly AstNode[], from: number, after: number): number {
   for (let at = from; at < nodes.length; at++) {
     const node = nodes[at]!
-    if (node.type === 'text') return codePointAt(node.value!, 0, node.value!.length)
+    if (node.type === 'text') return codePointAt(valueOf(node), 0, valueOf(node).length)
     if (node.type === 'comment') continue
     if (!isFlowParent(node) || node.type === 'inline_footnote') return NO_CHARACTER
-    if (node.children!.length > 0) return firstCharacter(node.children!, 0, NO_CHARACTER)
+    if (childrenOf(node).length > 0) return firstCharacter(childrenOf(node), 0, NO_CHARACTER)
   }
   return after
 }
 
-function lastCharacter(nodes: AstNode[], before: number): number {
+function lastCharacter(nodes: readonly AstNode[], before: number): number {
   for (let at = nodes.length - 1; at >= 0; at--) {
     const node = nodes[at]!
-    if (node.type === 'text') return codePointBefore(node.value!, node.value!.length)
+    if (node.type === 'text') return codePointBefore(valueOf(node), valueOf(node).length)
     if (node.type === 'comment') continue
     if (!isFlowParent(node) || node.type === 'inline_footnote') return NO_CHARACTER
-    if (node.children!.length > 0) return lastCharacter(node.children!, NO_CHARACTER)
+    if (childrenOf(node).length > 0) return lastCharacter(childrenOf(node), NO_CHARACTER)
   }
   return before
-}
-
-function isAsciiWord(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
 }
 
 /** The end of the run of ASCII letters and digits that starts at `at`, or `at` when none starts there. */
 function wordEnd(value: string, at: number): number {
   let end = at
-  while (end < value.length && isAsciiWord(value.charCodeAt(end))) end++
+  while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
   return end
 }
 
@@ -111,7 +107,7 @@ function applyTo(ctx: TreeContext, nodes: AstNode[], before: number, after: numb
     let parts: AstNode[] | null = null
     if (node.type === 'text') {
       parts = splitText(ctx, node, previous, next())
-      previous = codePointBefore(node.value!, node.value!.length)
+      previous = codePointBefore(valueOf(node), valueOf(node).length)
     } else if (node.type === 'inline_footnote') {
       // C2-I-109: an inline footnote is a flow of its own.
       node.children = applyTo(ctx, node.children!, NO_CHARACTER, NO_CHARACTER)

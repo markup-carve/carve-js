@@ -1,5 +1,6 @@
 // The reader side of the source-layout record (C2-L-007 to C2-L-012, C2-L-020, C2-L-027): a record
 // that the document refuses fails with a typed error that names the field and what was wrong.
+import { isRecord } from './ast.ts'
 import { LAYOUT_VERSION, type SourceLayout } from './layout.ts'
 import { utf8Length } from './positions.ts'
 
@@ -25,10 +26,6 @@ const WRAP_FIELDS = ['line', 'path', 'offset', 'row']
 
 function fail(path: string, reason: string): never {
   throw new CarveLayoutError(path, reason)
-}
-
-function isObject(value: unknown): value is Fields {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 const checkBoolean: Check = (value, path) => {
@@ -65,7 +62,7 @@ const checkWraps: Check = (value, path) => {
   let line = 0
   value.forEach((wrap: unknown, index) => {
     const at = `${path}/${index}`
-    if (!isObject(wrap)) fail(at, 'is not an object')
+    if (!isRecord(wrap)) fail(at, 'is not an object')
     for (const key of Object.keys(wrap)) if (!WRAP_FIELDS.includes(key)) fail(`${at}/${key}`, 'is not a field of a wrap')
     const own = checkCount(wrap['line'], `${at}/line`, 1)
     if (own < line) fail(`${at}/line`, 'is not sorted by line')
@@ -106,7 +103,7 @@ function checkFence(entry: Fields, path: string): void {
 
 /** Checks one entry and returns its path. `length` is the byte length of the source (C2-L-012). */
 function checkEntry(entry: unknown, path: string, length: number): string {
-  if (!isObject(entry)) fail(path, 'is not an object')
+  if (!isRecord(entry)) fail(path, 'is not an object')
   checkPointer(entry['path'], `${path}/path`)
   const start = checkCount(entry['startByte'], `${path}/startByte`)
   const end = checkCount(entry['endByte'], `${path}/endByte`)
@@ -136,7 +133,7 @@ function checkRoot(record: Fields): void {
 
 /** Returns `value` as a record, or throws a `CarveLayoutError` for a record the document refuses. */
 export function validateLayout(value: unknown): SourceLayout {
-  if (!isObject(value)) fail('', 'the record is not an object')
+  if (!isRecord(value)) fail('', 'the record is not an object')
   checkRoot(value)
   const length = utf8Length(value['source'] as string)
   let previous: string | null = null

@@ -206,7 +206,7 @@ function tryWithout(w: Writer, rounds: Rounds): boolean {
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function writeGroup(w: Writer, document: AstNode, from: number, first: boolean): number {
-  const nodes = document.children!
+  const nodes = childrenOf(document)
   const rounds: Rounds = { round: 0, escapes: [], doubtful: null, trial: null }
   for (;;) {
     const end = groupEnd(w, nodes, from)

@@ -1,5 +1,5 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
-import { type AstNode, AST_VERSION, type Marker } from './ast.ts'
+import { type AstNode, AST_VERSION, type Marker, valueOf } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
@@ -18,18 +18,15 @@ import {
   DOCUMENT, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { orderedDelimiter, trimEnd } from './lines.ts'
+import { lineFeedAt } from './source.ts'
 import { definitionLabel, readOpenerInfo } from './opener.ts'
 import { finishPositions, utf8Length } from './positions.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS, TASK_STATUS } from './tree-tables.ts'
+import { isAsciiNameCharacter } from './unicode.ts'
 
 type BlockBuilder = (ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null) => AstNode
-
-function lineEnd(src: string, pos: number): number {
-  const end = src.indexOf('\n', pos)
-  return end < 0 ? src.length : end
-}
 
 /** True when each line of `spans` starts one character behind the end of the line before it, at a line feed. */
 function isContiguous(src: string, spans: number[]): boolean {
@@ -188,7 +185,7 @@ function listNode(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
 function markerAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   if ((node.flags & FLAG_MARKER_ATTRIBUTES) === 0) return null
   const src = ctx.src
-  const end = lineEnd(src, node.start)
+  const end = lineFeedAt(src, node.start)
   const code = src.charCodeAt(node.start)
   const after = code === STAR || src[node.start] === '-' ? node.start + 1 : orderedDelimiter(src, node.start, end) + 1
   const attributes = emptyAttributes()
@@ -336,10 +333,6 @@ function dropPositions(nodes: AstNode[]): void {
   }
 }
 
-function isNameCharacter(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95 || code === 45
-}
-
 /** The index of the caption number mark in the value of a top-level text node that starts at `start` in the source, or -1. */
 function numberMarkIndex(src: string, start: number, value: string): number {
   let at = start
@@ -349,7 +342,7 @@ function numberMarkIndex(src: string, start: number, value: string): number {
     if (escaped) at++
     if (escaped || value[index] !== '#') continue
     // A character that starts no tag name follows it, or nothing does.
-    if (index + 1 === value.length || !isNameCharacter(value.charCodeAt(index + 1))) return index
+    if (index + 1 === value.length || !isAsciiNameCharacter(value.charCodeAt(index + 1))) return index
   }
   return -1
 }
@@ -359,7 +352,7 @@ function markCaptionNumber(ctx: TreeContext, children: AstNode[]): void {
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
     if (child.type !== 'text') continue
-    const value = child.value!
+    const value = valueOf(child)
     const start = child.pos?.startOffset ?? -1
     // A text node with no position was merged from pieces, and its source is not at hand: it holds no mark.
     const index = start < 0 ? -1 : numberMarkIndex(ctx.src, start, value)

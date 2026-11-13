@@ -21,7 +21,7 @@ export function lineEndOf(src: string, pos: number): number {
 }
 
 /** Where a line stands behind its quote marks: the offset, the column from the start of the line and the column that counts as 0. */
-export interface Prefix {
+interface Prefix {
   pos: number
   column: number
   origin: number

@@ -332,7 +332,7 @@ function lineHtml(r: Render, node: AstNode): string {
   const first = children[0]
   if (first?.type !== 'text') return inlineHtml(r, children)
   const spaces = leadingSpaces(valueOf(first))
-  return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: first.value!.slice(spaces) }, ...children.slice(1)])
+  return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: valueOf(first).slice(spaces) }, ...children.slice(1)])
 }
 
 /** C2-H-043: one `<p>` per stanza, and every line break in it is `<br>`. */
@@ -635,7 +635,7 @@ function writeDocument(r: Render, document: AstNode): void {
   if (hasNotes && !placed) writeNotes(r, 0, null)
 }
 
-export interface RenderResult {
+interface RenderResult {
   html: string
   losses: Findings
 }

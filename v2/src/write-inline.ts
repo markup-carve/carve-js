@@ -1,7 +1,8 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
 import { type AstNode, childrenOf, hrefOf, keyOf, pairsOf, valueOf } from './ast.ts'
-import { braceBlock, isAsciiPunctuation, quoted } from './write-attributes.ts'
+import { isAsciiPunctuation } from './unicode.ts'
+import { braceBlock, quoted } from './write-attributes.ts'
 import { lose, trimEnd, type Writer } from './write-state.ts'
 
 /** The content stands in a table cell: a pipe in text takes a backslash (C2-W-098). */
@@ -111,7 +112,7 @@ function kindsBelow(w: Writer, node: AstNode): number {
 
 /** C2-W-116: a node that needs content and has none is left out. */
 function contentOf(w: Writer, node: AstNode, flags: number): string | null {
-  if (childrenOf(node).length > 0) return writeInlines(w, node.children!, flags)
+  if (childrenOf(node).length > 0) return writeInlines(w, childrenOf(node), flags)
   lose(w, node, null)
   return null
 }

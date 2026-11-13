@@ -3,16 +3,17 @@
 import { type AttributeSink, readAttributeBlock } from './attributes.ts'
 import {
   BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
-  DIGIT_9, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
+  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
+import { isAsciiDigit } from './unicode.ts'
 
 const MAX_HEADING_LEVEL = 6
 const MAX_ORDERED_DIGITS = 9
 const MAX_ORDERED_LETTERS = 9
-export const MIN_RUN_LENGTH = 3
+const MIN_RUN_LENGTH = 3
 const TASK_BOX_LENGTH = 4
 const FRONTMATTER_RUN = 3
 
@@ -42,7 +43,7 @@ function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: n
 }
 
 /** Offset after the brace block at `pos`, or -1. A quoted value may hold a closing brace. */
-export function braceBlockEnd(src: string, pos: number, end: number): number {
+function braceBlockEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACE_OPEN) return -1
   const first = src.charCodeAt(pos + 1)
   // `{%` starts a braced comment and `{{` an include directive.
@@ -90,10 +91,6 @@ export function bulletMarkerEnd(src: string, pos: number, end: number): number {
   return afterMarkerSpace(src, braceBlocksEnd(src, pos + 1, end), end, 1)
 }
 
-function isDigit(code: number): boolean {
-  return code >= DIGIT_0 && code <= DIGIT_9
-}
-
 function isLower(code: number): boolean {
   return code >= LOWER_A && code <= LOWER_Z
 }
@@ -119,7 +116,7 @@ export function romanLetterValue(code: number): number {
 /** Offset after the one to nine digits at `pos`, or -1. */
 function digitsEnd(src: string, pos: number, end: number): number {
   let p = pos
-  while (p < end && isDigit(src.charCodeAt(p))) p++
+  while (p < end && isAsciiDigit(src.charCodeAt(p))) p++
   return p - pos > MAX_ORDERED_DIGITS ? -1 : p
 }
 
@@ -165,7 +162,7 @@ function lettersEnd(src: string, pos: number, end: number): number {
 export function orderedDelimiter(src: string, pos: number, end: number): number {
   const first = src.charCodeAt(pos)
   let p = pos
-  if (isDigit(first)) p = digitsEnd(src, pos, end)
+  if (isAsciiDigit(first)) p = digitsEnd(src, pos, end)
   else if (isLower(first) || isUpper(first)) p = lettersEnd(src, pos, end)
   if (p < 0 || p >= end) return -1
   const delimiter = src.charCodeAt(p)
@@ -378,7 +375,7 @@ export function quotedEnd(src: string, pos: number, end: number): number {
 export function isAbbreviation(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== STAR || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
   let p = pos + 2
-  while (p < end && (isDigit(src.charCodeAt(p)) || isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
+  while (p < end && (isAsciiDigit(src.charCodeAt(p)) || isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
   if (p === pos + 2 || p + 1 >= end || src.charCodeAt(p) !== BRACKET_CLOSE || src.charCodeAt(p + 1) !== COLON) return false
   return afterMarkerSpace(src, p + 2, end, 1) >= 0
 }
@@ -440,7 +437,7 @@ export function isFrontmatterOpener(src: string, pos: number, end: number): bool
   const name = p + 1 < end && src.charCodeAt(p) === SPACE ? p + 1 : p
   if (name < end && isLower(src.charCodeAt(name))) {
     p = name + 1
-    while (p < end && (isLower(src.charCodeAt(p)) || isDigit(src.charCodeAt(p)) || src.charCodeAt(p) === HYPHEN)) p++
+    while (p < end && (isLower(src.charCodeAt(p)) || isAsciiDigit(src.charCodeAt(p)) || src.charCodeAt(p) === HYPHEN)) p++
   }
   return skipSpaces(src, p, end) === end
 }
@@ -495,7 +492,7 @@ export function attributeKeyValue(src: string, pos: number, end: number, key: st
 export function countValue(value: string | null): number {
   if (value === null) return -1
   if (value === '') return 1
-  for (let p = 0; p < value.length; p++) if (!isDigit(value.charCodeAt(p))) return -1
+  for (let p = 0; p < value.length; p++) if (!isAsciiDigit(value.charCodeAt(p))) return -1
   // A count past any table takes every row, so its size is capped and not parsed.
   return value.length > MAX_COUNT_DIGITS ? 10 ** MAX_COUNT_DIGITS : decimalValue(value, 0, value.length)
 }

@@ -1,11 +1,12 @@
 // The include directive (C2-B-201 to C2-B-206): its shape on one line, and what its options make of the line.
 import { unescape } from './attributes.ts'
 import {
-  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DIGIT_0, DIGIT_9, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
+  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
   SLASH, SPACE, UNDERSCORE,
 } from './chars.ts'
 import { INCLUDE_OPTIONS } from './render-tables.ts'
 import { isSpaceOrTab } from './source.ts'
+import { isAsciiDigit, isAsciiLetter, isAsciiNameCharacter } from './unicode.ts'
 
 const LEFT_CURLY_QUOTE = 0x201c
 const RIGHT_CURLY_QUOTE = '\u201d'
@@ -29,25 +30,12 @@ interface Shape {
 }
 
 /** The parts of an include node (C2-A-181). */
-export interface IncludeParts {
+interface IncludeParts {
   path: string
   section: string | null
   options: [string, string][]
   /** The offset behind the closing braces, where the node ends (C2-A-182). */
   end: number
-}
-
-function isLetter(code: number): boolean {
-  const lower = code | 32
-  return lower >= 97 && lower <= 122
-}
-
-function isDigit(code: number): boolean {
-  return code >= DIGIT_0 && code <= DIGIT_9
-}
-
-function isNameCharacter(code: number): boolean {
-  return isLetter(code) || isDigit(code) || code === UNDERSCORE || code === HYPHEN
 }
 
 function skip(src: string, pos: number, end: number): number {
@@ -97,16 +85,16 @@ function endsBarePath(code: number): boolean {
 function nameEnd(src: string, pos: number, end: number, first: (code: number) => boolean): number {
   if (pos >= end || !first(src.charCodeAt(pos))) return NONE
   let p = pos + 1
-  while (p < end && isNameCharacter(src.charCodeAt(p))) p++
+  while (p < end && isAsciiNameCharacter(src.charCodeAt(p))) p++
   return p
 }
 
 function startsSection(code: number): boolean {
-  return isLetter(code) || isDigit(code) || code === UNDERSCORE
+  return isAsciiLetter(code) || isAsciiDigit(code) || code === UNDERSCORE
 }
 
 function startsKey(code: number): boolean {
-  return isLetter(code) || code === UNDERSCORE
+  return isAsciiLetter(code) || code === UNDERSCORE
 }
 
 /** C2-B-204: the offset behind the value at `pos`: a quoted run, or one or more characters up to `@`, `}`, a space or a tab. */
@@ -185,12 +173,12 @@ function isShift(value: string): boolean {
   const first = value.charCodeAt(0)
   const start = first === PLUS || first === HYPHEN ? 1 : 0
   if (start === value.length) return false
-  for (let p = start; p < value.length; p++) if (!isDigit(value.charCodeAt(p))) return false
+  for (let p = start; p < value.length; p++) if (!isAsciiDigit(value.charCodeAt(p))) return false
   return true
 }
 
 function isLanguageCharacter(code: number): boolean {
-  return isNameCharacter(code) || code === PLUS || code === HASH || code === DOT || code === SLASH
+  return isAsciiNameCharacter(code) || code === PLUS || code === HASH || code === DOT || code === SLASH
 }
 
 function isLanguage(value: string): boolean {

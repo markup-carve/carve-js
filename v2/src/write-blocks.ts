@@ -153,7 +153,7 @@ function textLeaf(w: Writer, node: AstNode, prefix: string, flags: number, mark:
   attributeLine(w, node, prefix)
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
-  emitLines(w, prefix, indent, writeContent(w, node.children!, flags))
+  emitLines(w, prefix, indent, writeContent(w, childrenOf(node), flags))
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
@@ -417,7 +417,7 @@ const WRITERS = new Map<string, BlockWriter>([
   ['table', table],
 ])
 
-export function writeBlock(w: Writer, node: AstNode, prefix: string, flags: number): void {
+function writeBlock(w: Writer, node: AstNode, prefix: string, flags: number): void {
   const writer = WRITERS.get(node.type) ?? childrenOnly
   writer(w, node, prefix, flags)
 }

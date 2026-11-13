@@ -1,6 +1,6 @@
 import { CR, LF, SPACE, TAB } from './chars.ts'
 
-export const TAB_STOP = 4
+const TAB_STOP = 4
 
 /** Index of the line that holds `offset`. The line ending belongs to its line. */
 export function lineAt(lineStarts: Int32Array, lineCount: number, offset: number): number {
@@ -12,6 +12,12 @@ export function lineAt(lineStarts: Int32Array, lineCount: number, offset: number
     else high = middle - 1
   }
   return low
+}
+
+/** The offset of the line feed behind `pos`, or the end of the source. */
+export function lineFeedAt(src: string, pos: number): number {
+  const feed = src.indexOf('\n', pos)
+  return feed < 0 ? src.length : feed
 }
 
 /** Offset of the end of line `line`, before its line ending. */

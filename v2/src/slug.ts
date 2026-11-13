@@ -1,6 +1,7 @@
 // The generated id of a heading (C2-H-022, C2-H-144 to C2-H-148): the slug of its plain text.
 import { type HeadingIds } from './options.ts'
 import { SLUG_REMOVED, SLUG_REVERSED } from './render-tables.ts'
+import { isAsciiAlphanumeric } from './unicode.ts'
 
 // Letters that a canonical decomposition does not reduce to ASCII. The table of the `ascii` value is host-defined.
 const FOLDS = new Map([
@@ -14,10 +15,6 @@ const COMBINING_END = 0x36f
 
 // C2-H-144: every code point of the list lies at or above this one.
 const FIRST_REMOVED = 0xad
-
-function isAsciiAlphanumeric(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
 
 /** C2-H-146: each run of ASCII characters that are no letter and no digit becomes one hyphen; the ends are trimmed. */
 function slugRun(text: string, keepsOthers: boolean): string {

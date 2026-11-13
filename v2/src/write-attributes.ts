@@ -1,32 +1,19 @@
 // The brace block of a node (C2-W-047 to C2-W-050): the id, the classes, the language, the keys.
 import { type AstNode, classesOf, keyValuesOf } from './ast.ts'
-
-const UNDERSCORE = 95
-const HYPHEN = 45
-
-function isLetter(code: number): boolean {
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
-
-function isDigit(code: number): boolean {
-  return code >= 48 && code <= 57
-}
-
-function isNameCode(code: number): boolean {
-  return isLetter(code) || isDigit(code) || code === UNDERSCORE || code === HYPHEN
-}
+import { UNDERSCORE } from './chars.ts'
+import { isAsciiLetter, isAsciiNameCharacter, isAsciiPunctuation } from './unicode.ts'
 
 /** C2-I-030: a name is one or more ASCII letters, digits, `_` and `-`. */
 export function isName(text: string): boolean {
   if (text.length === 0) return false
-  for (let at = 0; at < text.length; at++) if (!isNameCode(text.charCodeAt(at))) return false
+  for (let at = 0; at < text.length; at++) if (!isAsciiNameCharacter(text.charCodeAt(at))) return false
   return true
 }
 
 /** C2-I-030: a key is an ASCII letter or `_`, then name characters. */
 function isKey(text: string): boolean {
   const first = text.charCodeAt(0)
-  return isName(text) && (isLetter(first) || first === UNDERSCORE)
+  return isName(text) && (isAsciiLetter(first) || first === UNDERSCORE)
 }
 
 /** C2-I-032: an unquoted value has no space, tab, quote, backslash, pipe or closing brace. */
@@ -34,10 +21,6 @@ function isUnquoted(value: string): boolean {
   if (value.length === 0) return false
   for (const char of value) if (' \t"\'\\|}'.includes(char)) return false
   return true
-}
-
-export function isAsciiPunctuation(code: number): boolean {
-  return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
 }
 
 /**
@@ -56,7 +39,7 @@ export function quoted(value: string): string {
 }
 
 /** C2-W-049, C2-W-050: one key with its value. */
-export function keyPart(key: string, value: string): string {
+function keyPart(key: string, value: string): string {
   // C2-I-031: a bare key does not start with `_`.
   if (value === '') return key.startsWith('_') ? `${key}=""` : key
   return `${key}=${isUnquoted(value) ? value : quoted(value)}`
@@ -69,11 +52,6 @@ export interface BlockParts {
   keys?: readonly (readonly [string, string])[]
   /** Classes that the opener of the block stands for and that are not written (C2-W-039, C2-W-081). */
   skipClasses?: readonly number[]
-}
-
-/** The names of the keys that `attrs` cannot hold as written. A caller reports them (C2-W-117). */
-export function unspellableKeys(node: AstNode): string[] {
-  return keyValuesOf(node).filter((pair) => !isKey(pair[0])).map((pair) => pair[0])
 }
 
 function classParts(node: AstNode, parts: string[], skip: readonly number[]): void {

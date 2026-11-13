@@ -103,9 +103,9 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
 }
 
 function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
-  const lineEnd = ctx.src.indexOf('\n', row.start)
-  const joined = lineEnd >= 0 && lineEnd < row.end
-  const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? lineEnd : row.end + 1) }
+  const firstEnd = rowRangeEnd(ctx.src, row)
+  const joined = firstEnd < row.end
+  const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1) }
   if (ctx.trace !== null) ctx.trace.blocks.set(out, row)
   if (row.aux !== 0) {
     // C2-B-167: the row attribute stands behind the closing pipe.

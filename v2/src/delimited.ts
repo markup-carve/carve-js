@@ -2,6 +2,7 @@
 // Read on demand from the code node, not by the block pass. Cells are copied, because a quoted
 // cell is not a span of the source: a doubled quote stands for one.
 import { TAB } from './chars.ts'
+import { lineFeedAt } from './source.ts'
 import { attributeKeyValue, countValue, isWord } from './lines.ts'
 import type { BlockNode } from './tree.ts'
 
@@ -16,8 +17,7 @@ export interface DelimitedTable {
 }
 
 export function readDelimitedTable(src: string, node: BlockNode): DelimitedTable {
-  const lineEnd = src.indexOf('\n', node.start)
-  const tsv = isWord(src, node.start + node.aux, lineEnd < 0 ? src.length : lineEnd, 'tsv')
+  const tsv = isWord(src, node.start + node.aux, lineFeedAt(src, node.start), 'tsv')
   const separator = tsv ? String.fromCharCode(TAB) : ','
   const spans = node.spans!
   const lines: string[] = []

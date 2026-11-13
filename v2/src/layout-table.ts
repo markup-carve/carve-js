@@ -1,6 +1,6 @@
 // The continuation rows of a pipe table for the source-layout record (C2-L-019 to C2-L-021): how
 // many each row has, and where each fragment starts in the content of its cell.
-import { type AstNode, rowspanOf } from './ast.ts'
+import { type AstNode, childrenOf, rowspanOf, valueOf } from './ast.ts'
 import { type LayoutTrace } from './ast-inline.ts'
 import { GREATER, PLUS } from './chars.ts'
 import { ROW } from './kinds.ts'
@@ -82,7 +82,7 @@ function addWrap(walk: CellWalk, fragment: number, path: string, offset: number)
 
 /** C2-L-021: a joining space is the character before the offset, which counts UTF-8 bytes of the value. */
 function textWraps(walk: CellWalk, node: AstNode, path: string, breaks: number[]): void {
-  const value = node.value!
+  const value = valueOf(node)
   let from = 0
   let bytes = 0
   for (let at = 0; at < breaks.length; at += 2) {
@@ -94,7 +94,7 @@ function textWraps(walk: CellWalk, node: AstNode, path: string, breaks: number[]
 
 /** A node with a value that crosses lines, a code span for one, holds each break as a line feed. */
 function valueWraps(walk: CellWalk, node: AstNode, path: string, start: number, end: number): void {
-  const value = node.value!
+  const value = valueOf(node)
   const spans = walk.spans
   while (walk.spanAt < spans.length && spans[walk.spanAt]! <= start) walk.spanAt += 2
   let feed = -1
@@ -115,7 +115,7 @@ function startsPiece(walk: CellWalk, offset: number): boolean {
   return walk.spanAt < spans.length && spans[walk.spanAt] === offset
 }
 
-function walkList(walk: CellWalk, nodes: AstNode[], base: string): void {
+function walkList(walk: CellWalk, nodes: readonly AstNode[], base: string): void {
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const path = `${base}/${at}`
@@ -143,7 +143,8 @@ export function cellWraps(
   const walk: CellWalk = {
     src, trace, table, home, spanning: (rowspanOf(node)) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
   }
-  const content = node.children![0]?.children ?? []
+  const paragraph = childrenOf(node)[0]
+  const content = paragraph === undefined ? [] : childrenOf(paragraph)
   const base = `${path}/children/0/children`
   // C2-L-021: a cell whose first piece stands in a continuation row starts with that fragment, at offset 0.
   if (content.length > 0 && cell.spans!.length > 0 && cell.spans![0]! >= lineEndOf(src, table.rows[home]!.start)) {

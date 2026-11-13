@@ -218,3 +218,13 @@ export function rowspanOf(cell: AstNode): number {
 export function levelOf(heading: AstNode): number {
   return heading.level ?? 1
 }
+
+/** A soft or a hard line break. */
+export function isBreak(node: AstNode | undefined): boolean {
+  return node !== undefined && (node.type === 'soft_break' || node.type === 'hard_break')
+}
+
+/** A JSON object: not null and not a list. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
