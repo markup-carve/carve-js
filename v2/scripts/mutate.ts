@@ -2,10 +2,11 @@
 // temporary copies of v2/, runs the clause and example tests on each and lists the survivors.
 //   node v2/scripts/mutate.ts [--jobs N] [--only TEXT] [--shard K/N] [--files A,B] [--seconds N]
 // A survivor is a mutation no test notices. Each survivor is then compared with the unchanged
-// engine on every document of up to three lines over the enumerator alphabet, and on every
-// content of up to three tokens over the alphabet of inline tokens: when the events or the trees
-// differ, a test is missing and the smallest differing document is printed; when they are the
-// same, the mutation changes nothing those documents can show.
+// engine on every document of up to three lines over the enumerator alphabet, on every content
+// of up to three tokens over the alphabet of inline tokens and on every example of the
+// specification: when the events, the trees or the HTML under three sets of options differ, a
+// test is missing and the smallest differing document is printed; when they are the same, the
+// mutation changes nothing those documents can show.
 // `--files` names the sources to mutate (default: all of them), `--seconds` the time one test
 // run may take before it counts as failed, which is how a mutation that never ends is killed.
 // At most four test runners work at a time, each in one process, and all of them are killed
@@ -18,11 +19,16 @@ import { join } from 'node:path'
 const FILES = [
   'src/blocks.ts', 'src/lines.ts', 'src/tree.ts', 'src/attributes.ts', 'src/inline-atoms.ts', 'src/inline-brackets.ts',
   'src/inline-delimiters.ts', 'src/inline-emit.ts', 'src/inline-scan.ts', 'src/inline-tree.ts', 'src/typography.ts',
-  'src/unicode.ts',
+  'src/unicode.ts', 'src/ast-abbreviations.ts', 'src/ast-attributes.ts', 'src/ast-blocks.ts', 'src/ast-inline.ts',
+  'src/ast-json.ts', 'src/ast-lines.ts', 'src/ast-table.ts', 'src/ast-text.ts', 'src/ast-validate.ts', 'src/positions.ts',
+  'src/resolve.ts', 'src/slug.ts', 'src/options.ts', 'src/html.ts', 'src/html-inline.ts', 'src/html-attributes.ts',
+  'src/api.ts',
 ]
 const MAX_JOBS = 4
 const TESTS = [
   'test/clauses.test.ts', 'test/examples.test.ts', 'test/inline-clauses.test.ts', 'test/inline-examples.test.ts',
+  'test/block-fixes.test.ts', 'test/ast-clauses.test.ts', 'test/positions.test.ts', 'test/resolve-clauses.test.ts',
+  'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts',
 ]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.

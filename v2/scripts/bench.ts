@@ -1,18 +1,22 @@
 // CPU time of the block pass and of the inline pass per parse. CI runs it and prints the numbers;
 // nothing fails on them.
-//   node v2/scripts/bench.ts [--corpus DIR] [--realistic DIR] [--files A,B] [--spike DIR] [--rounds N] [--sample-ms N]
+//   node v2/scripts/bench.ts [--corpus DIR] [--realistic DIR] [--files A,B] [--spike DIR] [--old FILE] [--rounds N] [--sample-ms N]
 // `--corpus` holds small.crv and large.crv of carve-bench (default: ../carve-bench/corpus),
 // `--realistic` the Track D documents guide.crv, migration.crv and contract.crv
 // (default: <corpus>/realistic). Missing files are skipped. `--spike` is the `src` directory of the
 // phase 0 spike (branch spike/0.2-block-events, spike/block-events/src): its scanner then runs in
 // the same process and rounds, writing events into its own reused array.
+// A second table gives source to HTML: `parse` (the public tree with positions) and `render` of
+// this engine, and `carveToHtml` of the 0.1 engine of this repository, as time per document and
+// as a ratio. `--old` is the built entry of the 0.1 engine (default: ../../dist/index.js, which
+// `npm run build` writes); without it the two columns stay empty.
 import { existsSync, readFileSync } from 'node:fs'
 import { cpus, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
-  LINE_BLOCK, PARAGRAPH, parseTree, releaseInlineState, releaseState, scanBlocks, scanInline, TERM,
+  LINE_BLOCK, PARAGRAPH, parse, parseTree, releaseInlineState, releaseState, render, scanBlocks, scanInline, TERM,
 } from '../src/index.ts'
 
 function option(name: string, fallback: string): string {
@@ -42,6 +46,16 @@ async function loadSpike(directory: string): Promise<SpikeModules | null> {
 }
 
 const spike = await loadSpike(option('spike', ''))
+
+interface OldEngine {
+  carveToHtml(src: string): string
+}
+
+async function loadOld(file: string): Promise<OldEngine | null> {
+  return existsSync(file) ? await import(pathToFileURL(file).href) as OldEngine : null
+}
+
+const old = await loadOld(option('old', join(import.meta.dirname, '../../dist/index.js')))
 
 // `--files A,B` replaces the default inputs, for a runner that has no carve-bench checkout.
 const listed = option('files', '')
@@ -168,5 +182,25 @@ for (const file of files) {
 }
 releaseState(state)
 releaseInlineState(inlineState)
+console.log('')
+console.log('Source to HTML, median in microseconds per document. The ratio is the 0.1 engine over `render` of this engine.')
+console.log('')
+console.log('| Input | Bytes | 0.2 parse (tree with positions) | 0.2 render (source to HTML) | 0.1 carveToHtml | Ratio |')
+console.log('|---|--:|--:|--:|--:|--:|')
+for (const file of files) {
+  if (!existsSync(file)) continue
+  const src = readFileSync(file, 'utf8')
+  const tasks: (() => void)[] = [() => void parse(src), () => void render(src)]
+  if (old !== null) tasks.push(() => void old.carveToHtml(src))
+  const times: number[][] = tasks.map(() => [])
+  for (const task of tasks) sample(task)
+  for (let round = 0; round < rounds; round++) tasks.forEach((task, at) => times[at]!.push(sample(task)))
+  const [parseTime, renderTime, oldTime] = times.map(median)
+  const ratio = oldTime === undefined ? '' : (oldTime / renderTime!).toFixed(1)
+  console.log(
+    `| ${file.split('/').slice(-1)[0]!} | ${Buffer.byteLength(src)} | ${parseTime!.toFixed(2)} | ${renderTime!.toFixed(2)} | ` +
+    `${oldTime === undefined ? '' : oldTime.toFixed(2)} | ${ratio} |`,
+  )
+}
 console.log('')
 console.log(`Load average at the end: ${load()}`)

@@ -83,6 +83,73 @@ jobs:
       - name: Stress
         run: npm run stress-inline:v2
 
+  conformance:
+    name: examples of the specification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Every example of the block chapter, the inline chapter and the HTML document, rendered and
+      # compared byte for byte. Prints the number per document and per label, and fails when an
+      # example fails without a written verdict.
+      - name: Conformance
+        run: npm run conformance:v2
+
+  enumerate-tree:
+    name: tree and HTML properties, three lines and four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The public tree and the HTML of every enumerated document: the validator accepts the tree,
+      # positions are those of the source, encode then decode gives the same tree, the HTML is well formed.
+      - name: Documents of up to three lines
+        run: npm run enumerate-tree:v2 -- lines 3
+
+      - name: Contents of up to four tokens
+        run: npm run enumerate-tree:v2 -- tokens 4
+
+  stress-tree:
+    name: tree and HTML stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Block and inline shapes that make a naive pass quadratic, through `parse` and `render`, at
+      # three sizes ten times apart. Fails when a step takes more than 60 times the step before it.
+      - name: Stress
+        run: node --max-old-space-size=4096 v2/scripts/stress-tree.ts
+
   benchmark:
     name: benchmark (prints, never fails on a number)
     runs-on: ubuntu-latest
@@ -100,5 +167,6 @@ jobs:
       - run: npm ci
 
       # A shared runner is not idle, so there is no threshold yet.
-      - name: Block pass and inline pass, CPU time per parse
+      # `npm ci` builds the 0.1 engine into dist/, which the second table compares with.
+      - name: Block pass, inline pass and source to HTML, CPU time per document
         run: npm run bench:v2 -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20

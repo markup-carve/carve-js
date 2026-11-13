@@ -15,7 +15,7 @@ const limit = Number(option('limit', '30'))
 
 // [name, the content for a size]. A size is a count of openers, of nesting levels or of pairs;
 // for the lines of one character it is a tenth of the length, so the last size is 1 MB.
-const SHAPES: readonly (readonly [string, (size: number) => string])[] = [
+export const SHAPES: readonly (readonly [string, (size: number) => string])[] = [
   ...['*a ', '/a ', '{*', '{=a ', '[', '![', '^[', ':n[', '{%', '{#', '</#', '<a:', '<a@', '{k="', '{k=a', '{.a ', '[a](', '[a](x "', '[a]((', '[a][', '[^', '"', "'", '@', '#a ', ':a', '``a` ']
     .map((opener): [string, (size: number) => string] => [`unclosed ${opener.trim()}`, (size) => opener.repeat(size)]),
   ['nested brackets', (size) => `${'['.repeat(size)}x${']'.repeat(size)}`],
@@ -60,18 +60,21 @@ function time(src: string): number {
   return best / 1000
 }
 
-console.log(`Node ${process.version}, load average ${loadavg().map((n) => n.toFixed(2)).join(' ')}`)
-console.log(`CPU milliseconds of one inline pass at the sizes ${sizes.join(', ')}; the last column is the last step`)
-console.log('')
-console.log(`| Shape | ${sizes.join(' | ')} | Step |`)
-console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|`)
-let worst = 0
-for (const [name, build] of SHAPES) {
-  const times = sizes.map((size) => time(build(size)))
-  const step = times[times.length - 1]! / Math.max(times[times.length - 2]!, 0.05)
-  worst = Math.max(worst, step)
-  console.log(`| ${name.replaceAll('|', '\\|')} | ${times.map((ms) => ms.toFixed(2)).join(' | ')} | ${step.toFixed(1)} |`)
+// The shapes are also read by scripts/stress-tree.ts, which must not start this run.
+if (process.argv[1] === import.meta.filename) {
+  console.log(`Node ${process.version}, load average ${loadavg().map((n) => n.toFixed(2)).join(' ')}`)
+  console.log(`CPU milliseconds of one inline pass at the sizes ${sizes.join(', ')}; the last column is the last step`)
+  console.log('')
+  console.log(`| Shape | ${sizes.join(' | ')} | Step |`)
+  console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|`)
+  let worst = 0
+  for (const [name, build] of SHAPES) {
+    const times = sizes.map((size) => time(build(size)))
+    const step = times[times.length - 1]! / Math.max(times[times.length - 2]!, 0.05)
+    worst = Math.max(worst, step)
+    console.log(`| ${name.replaceAll('|', '\\|')} | ${times.map((ms) => ms.toFixed(2)).join(' | ')} | ${step.toFixed(1)} |`)
+  }
+  console.log('')
+  console.log(`Largest last step: ${worst.toFixed(1)} (a linear pass takes about 10)`)
+  process.exitCode = worst > limit ? 1 : 0
 }
-console.log('')
-console.log(`Largest last step: ${worst.toFixed(1)} (a linear pass takes about 10)`)
-process.exitCode = worst > limit ? 1 : 0
