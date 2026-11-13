@@ -7,7 +7,8 @@ import { defineConfig } from 'vitest/config'
 // here as "no test suite found" if vitest tried to load them.
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    // `v2/` is the 0.2 engine. It shares the runner and nothing else.
+    include: ['test/**/*.test.ts', 'v2/test/**/*.test.ts'],
     // Rule A branch differences from the spec model, each with its ticket.
     setupFiles: ['test/rule-a-todo.setup.ts'],
     // One module graph per worker instead of per file: re-importing the engine

@@ -1,0 +1,57 @@
+name: 0.2 block core
+
+# The checks of the 0.2 engine that are too slow for the normal test run, on pull
+# requests against next2 that touch it. Three-line enumeration stays in `npm test`.
+on:
+  pull_request:
+    branches: [next2]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-block-core.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  enumerate:
+    name: enumerator, four lines
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Every document of up to four lines over the alphabet of line shapes,
+      # through the property checks. Fails on the first violated property.
+      - name: Enumerate
+        run: npm run enumerate:v2 -- 4
+
+  benchmark:
+    name: benchmark (prints, never fails on a number)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # A shared runner is not idle, so there is no threshold yet.
+      - name: Block pass, CPU time per parse
+        run: npm run bench:v2 -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20
