@@ -3,7 +3,7 @@
 import { type AstNode, childrenOf, classesOf, hrefOf, keyOf, levelOf, valueOf } from './ast.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
-import { BARE_BREAKS, writeContent, writeInlines } from './write-inline.ts'
+import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { writeTable } from './write-table.ts'
@@ -131,7 +131,7 @@ function comment(w: Writer, node: AstNode, prefix: string): void {
   attributeLine(w, node, prefix)
   if (node.form !== 'block') {
     if (value.includes('\n')) lose(w, node, 'value')
-    emit(w, prefix, node.form === 'braced' ? `{% ${value} %}` : value === '' ? '%%' : `%% ${value}`)
+    emit(w, prefix, node.form === 'braced' ? bracedComment(value) : value === '' ? '%%' : `%% ${value}`)
     return
   }
   const lines = value === '' ? [] : value.split('\n')

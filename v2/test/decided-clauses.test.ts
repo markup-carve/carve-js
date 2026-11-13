@@ -90,3 +90,11 @@ describe('the bidirectional controls', () => {
     expect(render(`${FENCE}=html\n<b>${controls}</b>\n${FENCE}`, { rawHtml: true })).toBe(`<b>${controls}</b>`)
   })
 })
+
+describe('the writer', () => {
+  it('C2-W-059: an empty braced comment is written {%%}', () => {
+    expect(format('a {%  %} b')).toBe('a {%%} b\n')
+    expect(format('{% %}')).toBe('{%%}\n')
+    expect(format('a {% x %} b')).toBe('a {% x %} b\n')
+  })
+})

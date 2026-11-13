@@ -156,6 +156,11 @@ function losesPadding(value: string): boolean {
   return false
 }
 
+/** C2-W-059: a braced comment, written `{%%}` when its value is empty. */
+export function bracedComment(value: string): string {
+  return value === '' ? '{%%}' : `{% ${value} %}`
+}
+
 /** C2-W-077: the shortest backtick run that does not occur in `value`, with padding where the ends need it. */
 export function codeSpan(value: string): string {
   const taken = runLengths(value, BACKTICK)
@@ -244,7 +249,7 @@ function mentionNode(w: Writer, node: AstNode): string {
 /** C2-W-059: the comment forms that inline content holds. */
 function commentNode(_w: Writer, node: AstNode): string {
   const value = valueOf(node)
-  if (node.form === 'braced') return `{% ${value} %}`
+  if (node.form === 'braced') return bracedComment(value)
   return value === '' ? '%%' : `%% ${value}`
 }
 
