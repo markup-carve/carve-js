@@ -400,6 +400,29 @@ describe('thematic break', () => {
   })
 })
 
+describe('readings the chapter leaves open', () => {
+  it('C2-B-023: an item that joined its list at another column owns lines from its own column on', () => {
+    expect(blocks('- a', '    - b', '  - c', '    - d')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"] li[p"c" ul(-)[li[p"d"]]]]]]')
+  })
+
+  it('C2-B-046: with nested lists open, a marker left of them is judged against the outermost list', () => {
+    expect(blocks('  - a', '    1. b', '', '1. c')).toBe('ul(-)[li[p"a" ol(1.)[li[p"b"]]]] ol(1.)[li[p"c"]]')
+  })
+
+  it('C2-B-095: a comment line that the container of an open fence does not own closes the fence', () => {
+    expect(blocks('- ```', '  x', '%% c', '  y')).toBe('ul(-)[li[code"x" %"%% c" p"y"]]')
+    expect(blocks('- ```', '  x', '  %% c', '  y')).toBe('ul(-)[li[code"x|%% c|y"]]')
+  })
+
+  it('C2-B-096: with no leaf open in a quote, a comment line is a comment node', () => {
+    expect(blocks('> = a', '> %% c')).toBe('quote[h1"a" %"%% c"]')
+  })
+
+  it('a lone carriage return is not a line ending', () => {
+    expect(blocks('a\rb')).toBe('p"a\rb"')
+  })
+})
+
 describe('the fallback rule', () => {
   it('C2-B-131: past depth 200 an opener is text', () => {
     const marks = '> '.repeat(MAX_DEPTH)
