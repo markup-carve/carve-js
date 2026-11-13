@@ -454,6 +454,10 @@ function textAt(nodes: readonly AstNode[], at: number): AstNode | null {
   return node?.type === 'text' ? node : null
 }
 
+function isLostCode(c: Check, node: AstNode | undefined): boolean {
+  return node !== undefined && node.type === 'code' && c.w.lost.has(node)
+}
+
 /** Compares an expected node that is no text with the parse. Returns false where the lists cannot be compared further. */
 function matchNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
   const e = es[at.i]!
@@ -463,6 +467,13 @@ function matchNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at:
     return false
   }
   if (a.type !== e.type || at.aj > 0) return respell(c, es, at.i) && stepOver(c, es, as, at)
+  if (isLostCode(c, es[at.i + 1])) {
+    // C2-W-112: the code spans behind this one were written into it and reported.
+    at.i++
+    while (isLostCode(c, es[at.i])) at.i++
+    at.j++
+    return true
+  }
   if (readsNeighbor(c, es, at.i, a)) return false
   compareInline(c, e, a)
   at.i++
