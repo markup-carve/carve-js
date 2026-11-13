@@ -302,15 +302,10 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
 function closeUnowned(state: BlockState, matched: number, end: number): void {
   const src = state.src
   if (matched < state.depth) {
-    const kind = state.stackKind[matched]
-    let keepsList = true
-    if (kind === ITEM) {
-      // Below a marker the list of the item stays open: `openItem` decides between a sibling
-      // and a new list (C2-B-041, C2-B-045, C2-B-046). Any other line closes that list too.
-      keepsList = isListMarker(src, state.pos, end)
-    } else if (kind === DESCRIPTION) {
-      keepsList = state.column - state.origin === state.stackColumn[matched] && isDescriptionListMark(src, state.pos, end)
-    }
+    // Below a marker the list of an item stays open: `openItem` decides between a sibling
+    // and a new list (C2-B-041, C2-B-045, C2-B-046). Any other line closes that list too.
+    // A description list is judged below.
+    const keepsList = state.stackKind[matched] !== ITEM || isListMarker(src, state.pos, end)
     closeTo(state, keepsList ? matched : matched - 1)
   }
   const top = state.depth - 1

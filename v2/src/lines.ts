@@ -130,10 +130,13 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
     if (p - pos > MAX_ORDERED_DIGITS) return -1
   } else if (isLower(first) || isUpper(first)) {
     const lower = isLower(first)
-    while (p < end && (lower ? isLower(src.charCodeAt(p)) : isUpper(src.charCodeAt(p)))) p++
-    if (p - pos > MAX_ROMAN_LETTERS) return -1
-    if (p - pos > 1) {
-      for (let letter = pos; letter < p; letter++) if (romanLetterValue(src.charCodeAt(letter)) === 0) return -1
+    let roman = romanLetterValue(first) > 0
+    p++
+    // Two or more letters are a marker only as a roman numeral, so an ordinary word ends the test at once.
+    while (p < end && (lower ? isLower(src.charCodeAt(p)) : isUpper(src.charCodeAt(p)))) {
+      roman = roman && romanLetterValue(src.charCodeAt(p)) > 0
+      if (!roman || p - pos >= MAX_ROMAN_LETTERS) return -1
+      p++
     }
   }
   if (p >= end) return -1
@@ -379,12 +382,14 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
   return false
 }
 
-/** C2-B-111: exactly `---`, an optional format word and trailing spaces. */
+/** C2-B-111: exactly `---`, an optional format word after one space, and trailing spaces. */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   let p = pos + FRONTMATTER_RUN
-  if (p < end && src.charCodeAt(p) === SPACE) p++
-  while (p < end && (isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
+  if (p < end && src.charCodeAt(p) === SPACE) {
+    p++
+    while (p < end && (isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
+  }
   return runLength(src, p, end, SPACE) === end - p
 }
 

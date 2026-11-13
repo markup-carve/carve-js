@@ -816,3 +816,104 @@ describe('frontmatter', () => {
     expect(blocks('---', 'a', '', 'b')).toBe('fm!"a||b"')
   })
 })
+
+// Cases found by scripts/mutate.ts: each fails under a mutation that the tests above let pass.
+describe('boundaries pinned by the mutation check', () => {
+  const quotes = (count: number): string => '> '.repeat(count)
+  const inQuotes = (count: number, inner: string): string => 'quote['.repeat(count) + inner + ']'.repeat(count)
+
+  it('C2-B-131: a list needs two levels and opens at the cap exactly', () => {
+    expect(blocks(`${quotes(MAX_DEPTH - 2)}- a`)).toBe(inQuotes(MAX_DEPTH - 2, 'ul(-)[li[p"a"]]'))
+    expect(blocks(`${quotes(MAX_DEPTH - 1)}1. a`)).toBe(inQuotes(MAX_DEPTH - 1, 'p"1. a"'))
+    expect(blocks(`${quotes(MAX_DEPTH - 4)}- a`, `${quotes(MAX_DEPTH - 4)}  - b`))
+      .toBe(inQuotes(MAX_DEPTH - 4, 'ul(-)[li[p"a" ul(-)[li[p"b"]]]]'))
+    expect(blocks(`${quotes(MAX_DEPTH - 3)}- a`, `${quotes(MAX_DEPTH - 3)}  - b`))
+      .toBe(inQuotes(MAX_DEPTH - 3, 'ul(-)[li[p"a|- b"]]'))
+    expect(blocks(`${quotes(MAX_DEPTH - 4)}- > q`, `${quotes(MAX_DEPTH - 4)}  - b`))
+      .toBe(inQuotes(MAX_DEPTH - 4, 'ul(-)[li[quote[p"q"] ul(-)[li[p"b"]]]]'))
+    expect(blocks(`${quotes(MAX_DEPTH - 3)}- > q`, `${quotes(MAX_DEPTH - 3)}  - b`))
+      .toBe(inQuotes(MAX_DEPTH - 3, 'ul(-)[li[quote[p"q|- b"]]]'))
+  })
+
+  it('C2-B-131: a div, a description list and a description open at the cap exactly', () => {
+    expect(blocks(`${quotes(MAX_DEPTH - 1)}::: a`)).toBe(inQuotes(MAX_DEPTH - 1, 'div[]'))
+    expect(blocks(`${quotes(MAX_DEPTH - 1)}:: t`)).toBe(inQuotes(MAX_DEPTH - 1, 'dl[dt"t"]'))
+    expect(blocks(`${quotes(MAX_DEPTH)}:: t`)).toBe(inQuotes(MAX_DEPTH, 'p":: t"'))
+    expect(blocks(`${quotes(MAX_DEPTH - 2)}:: t`, `${quotes(MAX_DEPTH - 2)}: d`))
+      .toBe(inQuotes(MAX_DEPTH - 2, 'dl[dt"t" dd[p"d"]]'))
+  })
+
+  it('C2-B-049: a block opener stands after an ordered marker', () => {
+    expect(blocks('1. > a')).toBe('ol(1.)[li[quote[p"a"]]]')
+  })
+
+  it('C2-B-017, C2-B-101: only the innermost open quote is closed and captioned by a caption line', () => {
+    expect(blocks('> = h', '^ c')).toBe('quote[h1"h"] cap"c"')
+    expect(blocks('> - = h', '^ c')).toBe('quote[ul(-)[li[h1"h"]]] p"^ c"')
+    expect(blocks('> > = h', '^ c')).toBe('quote[quote[h1"h"]] p"^ c"')
+  })
+
+  it('C2-B-021: below description text a list marker is judged against the description list first', () => {
+    expect(blocks('- a', '', '  :: t', '  : d', '  - x')).toBe('ul(-)[li[p"a" dl[dt"t" dd[p"d|- x"]]]]')
+    expect(blocks('- :: t', '  : d', ' - y')).toBe('ul(-)[li[dl[dt"t" dd[p"d"]] ul(-)[li[p"y"]]]]')
+  })
+
+  it('C2-B-080: fewer than three percent signs open no comment block', () => {
+    expect(blocks('% a', 'b')).toBe('p"% a|b"')
+  })
+
+  it('C2-B-097, C2-B-108: a braced comment and a lone brace pair are no attribute line and no include', () => {
+    expect(blocks('{% c %}', 'x')).toBe('p"{% c %}|x"')
+    expect(blocks('{{}}', 'x')).toBe('inc"{{}}" p"x"')
+    expect(blocks('{{ a }}  ', 'x')).toBe('inc"{{ a }}  " p"x"')
+    expect(blocks('{x}}', 'y')).toBe('p"{x}}|y"')
+    expect(blocks('{{ a }', 'y')).toBe('p"{{ a }|y"')
+    expect(blocks('{{ a} }', 'y')).toBe('p"{{ a} }|y"')
+  })
+
+  it('C2-B-033: the last letter of the alphabet and the longest roman numeral', () => {
+    expect(blocks('z) x')).toBe('ol(a26))[li[p"x"]]')
+    expect(blocks('Z) x')).toBe('ol(A26))[li[p"x"]]')
+    expect(blocks('A) x')).toBe('ol(A1))[li[p"x"]]')
+    expect(blocks(`${'m'.repeat(15)}) x`)).toBe('ol(i15000))[li[p"x"]]')
+    expect(blocks(`${'m'.repeat(16)}) x`)).toBe(`p"${'m'.repeat(16)}) x"`)
+  })
+
+  it('C2-B-039: a task box is three characters between brackets', () => {
+    expect(blocks('- [xy a')).toBe('ul(-)[li[p"[xy a"]]')
+    expect(blocks('- ax] b')).toBe('ul(-)[li[p"ax] b"]]')
+  })
+
+  it('C2-B-087, C2-B-088: a sigil stands alone after the run', () => {
+    expect(blocks('::: |x', 'a', ':::')).toBe('div[p"a"]')
+    expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div[p"a"] p"^ c"')
+  })
+
+  it('C2-B-063, C2-B-064, C2-B-065: the colon stands directly behind the label', () => {
+    expect(blocks('[a]  x')).toBe('p"[a]  x"')
+    expect(blocks('[^a]  x')).toBe('p"[^a]  x"')
+    expect(blocks('*^a]: x')).toBe('p"*^a]: x"')
+    expect(blocks('[ab]: /u')).toBe('def"[ab]: /u"')
+    expect(blocks('[[a]: b')).toBe('p"[[a]: b"')
+    expect(blocks('[a]: /u x"')).toBe('p"[a]: /u x""')
+    expect(blocks('[a]: /u ""')).toBe('def"[a]: /u """')
+  })
+
+  it('C2-B-109: an image starts with `![` and has a target', () => {
+    expect(blocks('a[b](c)')).toBe('p"a[b](c)"')
+    expect(blocks('![a]')).toBe('p"![a]"')
+    expect(blocks('![a]x')).toBe('p"![a]x"')
+  })
+
+  it('C2-B-102: a math block is `$$` and one closed backtick span', () => {
+    expect(blocks('a$`x`', '^ c')).toBe('p"a$`x`|^ c"')
+    expect(blocks('$a`x`', '^ c')).toBe('p"$a`x`|^ c"')
+    expect(blocks('$$x', '^ c')).toBe('p"$$x|^ c"')
+    expect(blocks('$$`x', '^ c')).toBe('p"$$`x|^ c"')
+  })
+
+  it('C2-B-111: the format word stands after one space', () => {
+    expect(blocks('---yaml', 'a')).toBe('p"---yaml|a"')
+    expect(blocks('--- 1', 'a')).toBe('p"--- 1|a"')
+  })
+})
