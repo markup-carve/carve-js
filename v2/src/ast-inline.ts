@@ -2,7 +2,7 @@
 import { type AstNode, type Attrs } from './ast.ts'
 import {
   AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY,
-  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE,
+  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION,
   INLINE_KIND_NAMES, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
@@ -125,18 +125,17 @@ function parentNode(ctx: TreeContext, node: InlineNode, flow: number): AstNode {
   const out: AstNode = { type: INLINE_KIND_NAMES[node.kind - FIRST_INLINE_KIND]! }
   if (node.kind === LINK) setTarget(out, node, 'href')
   if (node.kind === INLINE_EXTENSION) out.name = ctx.src.slice(node.start + 1, node.aux)
-  // C2-I-109: an inline footnote is a content of its own, but its breaks follow the block it stands in.
-  out.children = inlineNodes(ctx, node.children!, node.kind === INLINE_FOOTNOTE ? flow & ~FLOW_UNPLACED : flow)
+  out.children = inlineNodes(ctx, node.children!, flow)
   return out
 }
 
-/** Adds text to `list`: adjacent runs are one text node (C2-A-040), which then has no single source range. */
+/** Adds text to `list`: adjacent runs are one text node (C2-A-040). */
 export function addText(ctx: TreeContext, list: AstNode[], value: string, start: number, end: number): void {
   const last = list.length > 0 ? list[list.length - 1]! : null
   if (last !== null && last.type === 'text') {
     last.value += value
-    if (last.pos !== undefined && start >= 0 && last.pos.endOffset === start) last.pos.endOffset = end
-    else delete last.pos
+    // The inline tree has joined the runs that are adjacent in the source, so these two are not (C2-A-158).
+    delete last.pos
     return
   }
   const node: AstNode = { type: 'text', value }

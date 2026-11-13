@@ -28,7 +28,7 @@ const MAX_JOBS = 4
 const TESTS = [
   'test/clauses.test.ts', 'test/examples.test.ts', 'test/inline-clauses.test.ts', 'test/inline-examples.test.ts',
   'test/block-fixes.test.ts', 'test/ast-clauses.test.ts', 'test/positions.test.ts', 'test/resolve-clauses.test.ts',
-  'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts',
+  'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts', 'test/tree-details.test.ts',
 ]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.
