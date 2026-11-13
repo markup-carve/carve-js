@@ -1126,6 +1126,7 @@ describe('raw blocks and the caption number', () => {
   it('C2-B-116: a code fence whose info string is `=` and a format name is a raw block', () => {
     expect(blocks('```=html', '<b>', '```')).toBe('raw"<b>"')
     expect(blocks('```=Xml', '<b>', '```')).toBe('raw"<b>"')
+    expect(blocks('```=x', '<b>', '```')).toBe('raw"<b>"')
     expect(blocks('```= html', '<b>', '```')).toBe('code"<b>"')
     expect(blocks('```html', '<b>', '```')).toBe('code"<b>"')
     expect(blocks('```=html', '%% c', '```')).toBe('raw"%% c"')
