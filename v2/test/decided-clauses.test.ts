@@ -1,7 +1,10 @@
 // The clauses that the specification commits "decide the cases the three engine lanes logged" and
 // "fix what the review of today's clauses found" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { parse, parseWithLayout, render, type RenderOptions } from '../src/index.ts'
+import { format, parse, parseWithLayout, render, type RenderOptions } from '../src/index.ts'
+import { documentOf, paragraph, text } from './support/tree.ts'
+
+const FENCE = '```'
 
 /** [clause id and subject, source, expected HTML, options]. */
 type Case = readonly [string, string, string, RenderOptions?]
@@ -61,5 +64,29 @@ describe('U+0000 in the source', () => {
     const document = parse('a\0b')
     expect(document.srcByteLength).toBe(3)
     expect(document.children![0]!.pos).toMatchObject({ startOffset: 0, endOffset: 3, endColumn: 4 })
+  })
+})
+
+describe('the bidirectional controls', () => {
+  const controls = '‪‫‬‭‮⁦⁧⁨⁩'
+
+  it('C2-H-172: they are not written in a text node, a code span, a code block or an escaped raw block', () => {
+    const src = `a${controls}b \`c${controls}d\`\n\n${FENCE}\ne${controls}\n${FENCE}\n\n${FENCE}=html\n<b>${controls}</b>\n${FENCE}`
+    expect(render(src)).toBe('<p>ab <code>cd</code></p>\n<pre><code>e\n</code></pre>\n<pre><code class="language-html">&lt;b&gt;&lt;/b&gt;\n</code></pre>')
+  })
+
+  it('C2-H-172: they stay in the tree, in the canonical form and in attribute values', () => {
+    const src = `[t${controls}]{k="v${controls}"}`
+    expect(render(src)).toBe(`<p><span k="v${controls}">t</span></p>`)
+    expect(JSON.stringify(parse(src))).toContain(`t${controls}`)
+    expect(format(src)).toBe(`[t${controls}]{k=v${controls}}\n`)
+  })
+
+  it('C2-H-172: a supplied tree is written without them too', () => {
+    expect(render(documentOf(paragraph(text(`x${controls}y`))))).toBe('<p>xy</p>')
+  })
+
+  it('C2-H-172: raw HTML that is written as markup keeps them', () => {
+    expect(render(`${FENCE}=html\n<b>${controls}</b>\n${FENCE}`, { rawHtml: true })).toBe(`<b>${controls}</b>`)
   })
 })

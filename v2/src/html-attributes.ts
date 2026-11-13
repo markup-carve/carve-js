@@ -100,6 +100,41 @@ export function escapeText(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
+const BIDI_EMBEDDINGS_FIRST = 0x202a
+const BIDI_EMBEDDINGS_LAST = 0x202e
+const BIDI_ISOLATES_FIRST = 0x2066
+const BIDI_ISOLATES_LAST = 0x2069
+
+function isBidiControl(code: number): boolean {
+  return (code >= BIDI_EMBEDDINGS_FIRST && code <= BIDI_EMBEDDINGS_LAST) || (code >= BIDI_ISOLATES_FIRST && code <= BIDI_ISOLATES_LAST)
+}
+
+/** C2-H-172: true when `text` holds a bidirectional control. Nine searches are cheaper than a look at each character. */
+function hasBidiControl(text: string): boolean {
+  return text.indexOf('\u202a') >= 0 || text.indexOf('\u202b') >= 0 || text.indexOf('\u202c') >= 0 || text.indexOf('\u202d') >= 0
+    || text.indexOf('\u202e') >= 0 || text.indexOf('\u2066') >= 0 || text.indexOf('\u2067') >= 0 || text.indexOf('\u2068') >= 0
+    || text.indexOf('\u2069') >= 0
+}
+
+/**
+ * C2-H-002 and C2-H-172: the content of a text node, a code span or a code block, escaped and without
+ * its bidirectional controls. A short text is read once for both.
+ */
+export function escapeContent(text: string): string {
+  if (text.length >= SEARCH_LENGTH && !hasBidiControl(text)) return escapeText(text)
+  let out = ''
+  let from = 0
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE && code < BIDI_EMBEDDINGS_FIRST) continue
+    const entity = textEntity(code)
+    if (entity === '' && !isBidiControl(code)) continue
+    out += text.slice(from, at) + entity
+    from = at + 1
+  }
+  return from === 0 ? text : out + text.slice(from)
+}
+
 function textEntity(code: number): string {
   if (code === 38) return '&amp;'
   if (code === 60) return '&lt;'

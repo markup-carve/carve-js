@@ -1,7 +1,7 @@
 // The inline elements of C2-H-072 to C2-H-101.
 import { type AstNode, type Attrs, childrenOf, hrefOf, isBreak, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
-  attributeBlockText, attributes, destination, escapeText, keyValue, loss, type Pair, type Render, type TagParts,
+  attributeBlockText, attributes, destination, escapeContent, escapeText, keyValue, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 
 type InlineWriter = (r: Render, node: AstNode) => string
@@ -33,7 +33,7 @@ export function inlineHtml(r: Render, nodes: readonly AstNode[]): string {
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
-    if (node.type === 'text') out += escapeText(valueOf(node))
+    if (node.type === 'text') out += escapeContent(valueOf(node))
     else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += WRITERS.get(node.type)?.(r, node) ?? ''
   }
   return out
@@ -278,7 +278,7 @@ function inlineExtension(r: Render, node: AstNode): string {
 }
 
 const WRITERS = new Map<string, InlineWriter>([
-  ['text', (_r, node) => escapeText(valueOf(node))],
+  ['text', (_r, node) => escapeContent(valueOf(node))],
   ['span', span],
   ['link', link],
   ['image', image],
@@ -286,7 +286,7 @@ const WRITERS = new Map<string, InlineWriter>([
   ['xref', xref],
   ['footnote_ref', noteReference],
   ['inline_footnote', noteReference],
-  ['code', (r, node) => `<code${attributes(r, node, {})}>${escapeText(valueOf(node))}</code>`],
+  ['code', (r, node) => `<code${attributes(r, node, {})}>${escapeContent(valueOf(node))}</code>`],
   ['literal_inline', literal],
   ['math', math],
   ['raw_inline', rawInline],

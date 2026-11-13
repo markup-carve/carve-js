@@ -5,7 +5,7 @@ import {
 import { blockText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
-  attributes, escapeAttribute, escapeText, loss, type Pair, type Render, type TagParts,
+  attributes, escapeAttribute, escapeContent, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
@@ -298,7 +298,7 @@ function preHtml(r: Render, node: AstNode, language: string | undefined, title: 
   if (title !== undefined && !authored) structural.push(['title', title])
   if (r.settings.roundtrip && node.groupLabel !== undefined) structural.push(['data-carve-label', node.groupLabel])
   const code = language === undefined ? '<code>' : `<code class="language-${escapeAttribute(language)}">`
-  return `<pre${tag(r, node, { structural })}>${code}${escapeText(valueOf(node))}</code></pre>`
+  return `<pre${tag(r, node, { structural })}>${code}${escapeContent(valueOf(node))}</code></pre>`
 }
 
 function codeBlock(r: Render, node: AstNode, level: number): void {
