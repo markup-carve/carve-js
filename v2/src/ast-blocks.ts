@@ -441,12 +441,13 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
   return foldLabel(lines.join('\n'))
 }
 
-function buildDocument(ctx: TreeContext, root: BlockNode): BuiltTree {
+/** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
+function buildDocument(ctx: TreeContext, root: BlockNode, source: string): BuiltTree {
   const src = ctx.src
   const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
   if (ctx.positions) {
-    document.srcByteLength = utf8Length(src)
-    finishPositions(document, src)
+    document.srcByteLength = utf8Length(source)
+    finishPositions(document, source)
   }
   const facts: ParseFacts = {
     headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
@@ -462,16 +463,18 @@ function buildDocument(ctx: TreeContext, root: BlockNode): BuiltTree {
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
 ): BuiltTree {
+  // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
+  const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
   const blocks = acquireState()
   const inline = acquireInlineState()
   try {
-    scanBlocks(blocks, src)
+    scanBlocks(blocks, text)
     const root = buildTree(blocks.events, blocks.eventLength)
     const ctx: TreeContext = {
-      src, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(src, root), markup: new Map(),
+      src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
       headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace,
     }
-    return buildDocument(ctx, root)
+    return buildDocument(ctx, root, src)
   } finally {
     releaseInlineState(inline)
     releaseState(blocks)

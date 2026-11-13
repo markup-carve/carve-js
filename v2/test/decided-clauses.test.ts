@@ -49,3 +49,17 @@ describe('the byte-order mark', () => {
     expect(first).toMatchObject({ startByte: 3, markerColumn: 0, contentColumn: 2 })
   })
 })
+
+describe('U+0000 in the source', () => {
+  it('C2-B-218: U+0000 is read as U+FFFD in text, code, a code block, an attribute value and a destination', () => {
+    const src = 'a\0b `c\0` [t]{k="v\0"} [x](/u\0)\n\n```\nd\0\n```'
+    expect(JSON.stringify(parse(src))).not.toContain('\\u0000')
+    expect(render(src)).toBe('<p>a�b <code>c�</code> <span k="v�">t</span> <a href="/u�">x</a></p>\n<pre><code>d�\n</code></pre>')
+  })
+
+  it('C2-B-218: offsets count the source as it stands, one byte for U+0000', () => {
+    const document = parse('a\0b')
+    expect(document.srcByteLength).toBe(3)
+    expect(document.children![0]!.pos).toMatchObject({ startOffset: 0, endOffset: 3, endColumn: 4 })
+  })
+})
