@@ -166,13 +166,15 @@ describe('shape', () => {
     }))).toBe('/nodes/0/path: is not a JSON Pointer')
   })
 
-  it('C2-L-011: entries are sorted by path as strings, and no path stands twice', () => {
+  it('C2-L-011: entries stand in document order, each index compared as a number, and no path stands twice', () => {
     const src = Array.from({ length: 12 }, (_value, index) => `p${index}\n`).join('\n')
     const paths = layoutOf(src).nodes.map((node) => node.path)
-    expect(paths.slice(0, 5)).toEqual(['/children/0', '/children/1', '/children/10', '/children/11', '/children/2'])
-    expect(paths).toEqual([...paths].sort((a, b) => (a < b ? -1 : 1)))
+    expect(paths.slice(9)).toEqual(['/children/9', '/children/10', '/children/11'])
+    expect(layoutOf('- a\n- b\n').nodes.map((node) => node.path)).toEqual([
+      '/children/0', '/children/0/children/0', '/children/0/children/0/children/0', '/children/0/children/1', '/children/0/children/1/children/0',
+    ])
     const record = layoutOf('. a\n. b\n')
-    expect(refusal({ ...record, nodes: [record.nodes[1], record.nodes[0]] })).toBe('/nodes/1/path: is not sorted by path')
+    expect(refusal({ ...record, nodes: [record.nodes[1], record.nodes[0]] })).toBe('/nodes/1/path: is not in document order')
     expect(refusal({ ...record, nodes: [record.nodes[0], record.nodes[0]] })).toBe('/nodes/1/path: is a duplicate path')
   })
 

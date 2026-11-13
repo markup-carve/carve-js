@@ -182,22 +182,14 @@ function visit(walk: Walk, node: AstNode, path: string, frame: Frame): void {
   if (origin !== undefined) inner = visitBlock(walk, node, path, origin, frame)
   else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
   else visitInline(walk, node, path, frame)
-  // C2-L-011: the slots in the order of their names, so the entries come out sorted by path.
-  if (node.caption !== undefined) visit(walk, node.caption, `${path}/caption`, inner)
-  if (node.children !== undefined) visitList(walk, node.children, `${path}/children`, inner)
+  // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
   if (Array.isArray(node.title)) visitList(walk, node.title, `${path}/title`, inner)
+  if (node.children !== undefined) visitList(walk, node.children, `${path}/children`, inner)
+  if (node.caption !== undefined) visit(walk, node.caption, `${path}/caption`, inner)
 }
 
-function visitFrom(walk: Walk, nodes: AstNode[], base: string, frame: Frame, index: number): void {
-  visit(walk, nodes[index]!, `${base}/${index}`, frame)
-  const stop = Math.min(nodes.length, index * 10 + 10)
-  for (let next = index * 10; next < stop; next++) visitFrom(walk, nodes, base, frame, next)
-}
-
-/** Visits a list in the order of its indexes as strings: 0, 1, 10, 100, 11, 2. */
 function visitList(walk: Walk, nodes: AstNode[], base: string, frame: Frame): void {
-  if (nodes.length > 0) visit(walk, nodes[0]!, `${base}/0`, frame)
-  for (let first = 1; first <= 9 && first < nodes.length; first++) visitFrom(walk, nodes, base, frame, first)
+  for (let index = 0; index < nodes.length; index++) visit(walk, nodes[index]!, `${base}/${index}`, frame)
 }
 
 /** The record of `src` for `document`, the tree that was built with `trace`. */

@@ -131,6 +131,29 @@ function checkRoot(record: Fields): void {
   if (!Array.isArray(record['nodes'])) fail('/nodes', 'is not a list')
 }
 
+// The slots of a node in the order in which the source holds them.
+const SLOT_ORDER = ['title', 'children', 'caption']
+
+function compareSegments(a: string, b: string): number {
+  const numberA = Number(a)
+  const numberB = Number(b)
+  if (Number.isInteger(numberA) && Number.isInteger(numberB)) return numberA - numberB
+  const slot = SLOT_ORDER.indexOf(a) - SLOT_ORDER.indexOf(b)
+  if (slot !== 0) return slot
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/** C2-L-011: below 0 when the node at `a` comes before the node at `b` in a walk, a node before the nodes inside it. */
+export function compareDocumentOrder(a: string, b: string): number {
+  const left = a.split('/')
+  const right = b.split('/')
+  for (let at = 0; at < left.length && at < right.length; at++) {
+    const order = compareSegments(left[at]!, right[at]!)
+    if (order !== 0) return order
+  }
+  return left.length - right.length
+}
+
 /** Returns `value` as a record, or throws a `CarveLayoutError` for a record the document refuses. */
 export function validateLayout(value: unknown): SourceLayout {
   if (!isRecord(value)) fail('', 'the record is not an object')
@@ -139,9 +162,9 @@ export function validateLayout(value: unknown): SourceLayout {
   let previous: string | null = null
   ;(value['nodes'] as unknown[]).forEach((entry, index) => {
     const path = checkEntry(entry, `/nodes/${index}`, length)
-    // C2-L-011: sorted by path as strings, each path once.
-    if (previous !== null && path <= previous) {
-      fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not sorted by path')
+    // C2-L-011: in document order, each path once.
+    if (previous !== null && compareDocumentOrder(path, previous) <= 0) {
+      fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not in document order')
     }
     previous = path
   })
