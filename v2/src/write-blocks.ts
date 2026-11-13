@@ -149,7 +149,7 @@ function frontmatter(w: Writer, node: AstNode, prefix: string): void {
 }
 
 function textLeaf(w: Writer, node: AstNode, prefix: string, flags: number, mark: string, indent: string): void {
-  if ((childrenOf(node)).length === 0) return lose(w, node, null)
+  if (childrenOf(node).length === 0) return lose(w, node, null)
   attributeLine(w, node, prefix)
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
@@ -422,7 +422,9 @@ export function writeBlock(w: Writer, node: AstNode, prefix: string, flags: numb
   writer(w, node, prefix, flags)
 }
 
-const LAZY_CONTAINERS: readonly string[] = ['list', 'list_item', 'block_quote', 'definition_list', 'definition_description', 'footnote', 'figure']
+const LAZY_CONTAINERS: readonly string[] = [
+  'list', 'list_item', 'block_quote', 'definition_list', 'definition_description', 'footnote', 'figure',
+]
 /** The containers that an indent or a mark keeps open, so that a comment-only line below one stays in it (C2-B-138). */
 const OPEN_CONTAINERS: readonly string[] = ['list', 'list_item', 'definition_list', 'definition_description', 'footnote']
 const OPAQUE: readonly string[] = ['code_block', 'raw_block']
@@ -490,6 +492,13 @@ function isNestedList(w: Writer, before: AstNode, node: AstNode, at: number): bo
   return listAttributes(node, listMarkers(w, node).start) === ''
 }
 
+/** C2-B-138: the fence an open container ends with takes its other spelling where a comment line follows the container. */
+function markFenceBeforeComment(w: Writer, node: AstNode, next: AstNode | undefined): void {
+  if (!isCommentLine(next) || !isOpenContainer(w, node)) return
+  const fence = lastFence(w, node)
+  if (fence !== null) w.forms.set(fence, 1)
+}
+
 function writeSiblings(w: Writer, nodes: readonly AstNode[], prefix: string, flags: number, layout: number): void {
   let before: AstNode | null = null
   // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
@@ -502,10 +511,7 @@ function writeSiblings(w: Writer, nodes: readonly AstNode[], prefix: string, fla
       const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
       for (let blank = blankLinesBetween(w, before, list, node, nested); blank > 0; blank--) emit(w, prefix, '')
     }
-    if (isCommentLine(nodes[at + 1]) && isOpenContainer(w, node)) {
-      const fence = lastFence(w, node)
-      if (fence !== null) w.forms.set(fence, 1)
-    }
+    markFenceBeforeComment(w, node, nodes[at + 1])
     const written = w.lines.length
     writeBlock(w, node, prefix, flags)
     if (w.lines.length === written) {

@@ -241,18 +241,29 @@ function optionVerdict(key: string, written: string | null): string {
 }
 
 /** The options of `shape` as pairs in the order of C2-A-181, or null when one of them makes the line a paragraph (C2-B-206). */
+/** C2-A-181: the value an option keeps. A list of column names keeps its quotes. */
+function keptValue(key: string, written: string | null): string {
+  if (written === null) return ''
+  return key === 'cols' && isNameList(written) ? written : valueText(written)
+}
+
 function optionPairs(src: string, shape: Shape): [string, string][] | null {
   const values = new Map<string, string>()
-  for (let at = 0; at < shape.options.length; at += 4) {
-    const key = src.slice(shape.options[at], shape.options[at + 1])
-    const written = shape.options[at + 2] === NONE ? null : src.slice(shape.options[at + 2], shape.options[at + 3])
-    const verdict = values.has(key) ? INCLUDE_OPTIONS.get(key)?.repeated : optionVerdict(key, written)
+  const options = shape.options
+  for (let at = 0; at < options.length; at += 4) {
+    const key = src.slice(options[at], options[at + 1])
+    const written = options[at + 2] === NONE ? null : src.slice(options[at + 2], options[at + 3])
+    const repeated = values.has(key)
+    const verdict = repeated ? INCLUDE_OPTIONS.get(key)?.repeated : optionVerdict(key, written)
     if (verdict === 'paragraph' || verdict === undefined) return null
-    // C2-A-181: a repeated option keeps the first one, and a list of column names keeps its quotes.
-    if (!values.has(key)) values.set(key, written === null ? '' : key === 'cols' && isNameList(written) ? written : valueText(written))
+    // C2-A-181: a repeated option keeps the first one.
+    if (!repeated) values.set(key, keptValue(key, written))
   }
   const pairs: [string, string][] = []
-  for (const key of INCLUDE_OPTIONS.keys()) if (values.has(key)) pairs.push([key, values.get(key)!])
+  for (const key of INCLUDE_OPTIONS.keys()) {
+    const value = values.get(key)
+    if (value !== undefined) pairs.push([key, value])
+  }
   return pairs
 }
 

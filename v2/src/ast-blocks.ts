@@ -208,7 +208,8 @@ function itemNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
 
 function footnoteNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   const [start, end] = definitionLabel(ctx.src, node.start)
-  return { type: 'footnote', key: foldLabel(ctx.src.slice(start, end)), namespace: 'footnote', children: blockChildren(ctx, node.children!, flow) }
+  const key = foldLabel(ctx.src.slice(start, end))
+  return { type: 'footnote', key, namespace: 'footnote', children: blockChildren(ctx, node.children!, flow) }
 }
 
 /** C2-A-066: the node a div opener gives, before its children. */
@@ -436,7 +437,9 @@ function buildDocument(ctx: TreeContext, root: BlockNode): BuiltTree {
     document.srcByteLength = utf8Length(src)
     finishPositions(document, src)
   }
-  const facts: ParseFacts = { headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves }
+  const facts: ParseFacts = {
+    headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
+  }
   return { document, facts }
 }
 

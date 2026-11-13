@@ -92,7 +92,8 @@ describe('character ranges', () => {
   it('positions on later lines and at the start of a line are found again after a step back', () => {
     const src = 'é\n\n{.a}\n%% c\nb é\n\né *x*\n'
     expect(checkTree(src)).toBeNull()
-    expect(placedTree(src).children!.map((node) => [node.pos!.startLine, node.pos!.startColumn, node.pos!.startOffset])).toEqual([[1, 1, 0], [4, 1, 9], [3, 1, 4], [7, 1, 20]])
+    const starts = placedTree(src).children!.map((node) => [node.pos!.startLine, node.pos!.startColumn, node.pos!.startOffset])
+    expect(starts).toEqual([[1, 1, 0], [4, 1, 9], [3, 1, 4], [7, 1, 20]])
   })
 
   it('text is escaped at the four characters and at nothing beside them', () => {
@@ -269,7 +270,8 @@ describe('equality in detail', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: {} } }), documentOf({ ...paragraph(), data: { a: null } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: [] } }), documentOf({ ...paragraph(), data: { a: {} } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: {} } }), documentOf({ ...paragraph(), data: { a: [] } }))).toBe(false)
-    expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1, c: 2 } }))).toBe(false)
+    const withB = documentOf({ ...paragraph(), data: { a: 1, b: 2 } })
+    expect(treesEqual(withB, documentOf({ ...paragraph(), data: { a: 1, c: 2 } }))).toBe(false)
   })
 
   it('an envelope carries the extensions of its document, and a bare tree with a field named document is no envelope', () => {

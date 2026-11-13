@@ -110,7 +110,8 @@ function time(action: () => void): number {
 
 if (process.argv[1] === import.meta.filename) {
   console.log(`Node ${process.version}, load average ${loadavg().map((n) => n.toFixed(2)).join(' ')}`)
-  console.log(`CPU milliseconds of parse (tree with positions) and of render (source to HTML) at the sizes ${sizes.join(', ')}; a step is the last size over the one before it`)
+  const what = 'CPU milliseconds of parse (tree with positions) and of render (source to HTML)'
+  console.log(`${what} at the sizes ${sizes.join(', ')}; a step is the last size over the one before it`)
   console.log('')
   console.log(`| Shape | parse ${sizes.join(' | parse ')} | Step | render ${sizes.join(' | render ')} | Step |`)
   console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|${sizes.map(() => '--:').join('|')}|--:|`)

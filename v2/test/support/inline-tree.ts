@@ -84,6 +84,18 @@ function isPart(kind: number): boolean {
   return kind === ATTRIBUTE_BLOCK || kind === DESTINATION || kind === TITLE || kind === LABEL
 }
 
+function addSpan(src: string, root: InlineNode[], top: InlineNode | null, start: number, end: number): void {
+  if (top === null || top.children !== null) return addText(top === null ? root : top.children!, src.slice(start, end), start, end)
+  top.value = top.value === null ? src.slice(start, end) : `${top.value}\n${src.slice(start, end)}`
+}
+
+function closeNode(src: string, node: InlineNode, host: InlineNode | null, list: InlineNode[], content: ContentReader): void {
+  // C2-A-041: an escape is no node. Its character is text.
+  if (node.kind === ESCAPE) addText(list, node.value ?? '', node.start, node.end)
+  else if (isPart(node.kind)) closePart(src, node, host!, content)
+  else list.push(node)
+}
+
 /**
  * Builds the inline nodes of one content from the first `length` ints of its events. `content`
  * gives the source of a range without the prefixes of the lines it crosses.
@@ -100,19 +112,13 @@ export function buildInlineTree(src: string, events: Int32Array, length: number,
     if (type === ENTER) {
       top = createNode(eventKind(tag), a, eventFlags(tag), b)
       open.push(top)
-    } else if (type === SPAN && top !== null && top.children === null) {
-      top.value = top.value === null ? src.slice(a, b) : `${top.value}\n${src.slice(a, b)}`
     } else if (type === SPAN) {
-      addText(top === null ? root : top.children!, src.slice(a, b), a, b)
+      addSpan(src, root, top, a, b)
     } else {
       const node = open.pop()!
       node.end = a
       top = open.length > 0 ? open[open.length - 1]! : null
-      const list = top === null ? root : top.children
-      // C2-A-041: an escape is no node. Its character is text.
-      if (node.kind === ESCAPE) addText(list!, node.value ?? '', node.start, a)
-      else if (isPart(node.kind)) closePart(src, node, top!, content)
-      else list!.push(node)
+      closeNode(src, node, top, top === null ? root : top.children!, content)
     }
   }
   return root
@@ -129,8 +135,12 @@ function hasInlineContent(kind: number): boolean {
 }
 
 /** The inline nodes of the content `spans[from..to)` of a leaf. */
-function contentInlines(state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean): InlineNode[] {
-  if (to - from === 2 && isPlainText(src, spans[from]!, spans[from + 1]!)) return [textNode(src.slice(spans[from], spans[from + 1]), spans[from]!, spans[from + 1]!)]
+function contentInlines(
+  state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean,
+): InlineNode[] {
+  const start = spans[from]!
+  const end = spans[from + 1]!
+  if (to - from === 2 && isPlainText(src, start, end)) return [textNode(src.slice(start, end), start, end)]
   scanInline(state, src, spans, from, to, depth, lineComments)
   return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
 }

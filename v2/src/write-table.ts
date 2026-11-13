@@ -94,7 +94,7 @@ function fragmentLines(w: Writer, row: AstNode, cell: AstNode, count: number): n
   const lines: number[] = []
   for (const wrap of wraps) {
     // C2-L-006: a wrap past the continuation rows of its row, or out of order, contradicts the record.
-    if ((wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || (lines.length > 0 && wrap.line <= lines[lines.length - 1]!)) return null
+    if ((wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || wrap.line <= (lines[lines.length - 1] ?? 0)) return null
     lines.push(wrap.line)
   }
   return lines
@@ -114,13 +114,14 @@ function writtenCell(w: Writer, row: AstNode, cell: AstNode, flags: number): Wri
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
   if (recorded !== null) return { prefix: cellPrefix(cell), parts, places: recorded }
   // C2-L-035: without a record that fits, the row is one line.
-  if ((w.facts?.get(cell)?.wraps?.length ?? 0) === parts.length - 1) return { prefix: cellPrefix(cell), parts: [parts.join(' ')], places: [] }
+  const wraps = w.facts?.get(cell)?.wraps?.length ?? 0
+  if (wraps === parts.length - 1) return { prefix: cellPrefix(cell), parts: [parts.join(' ')], places: [] }
   // A line break that the content itself holds, as in a code span that crossed rows, is a continuation row in any case (C2-W-005).
   return { prefix: cellPrefix(cell), parts, places: parts.slice(1).map((_part, at) => at + 1) }
 }
 
 function writtenRow(w: Writer, row: AstNode, flags: number): WrittenRow {
-  const cells = (childrenOf(row)).map((cell) => writtenCell(w, row, cell, flags))
+  const cells = childrenOf(row).map((cell) => writtenCell(w, row, cell, flags))
   let below = w.facts?.get(row)?.continuationLines ?? 0
   for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
   const lines: string[][] = []
@@ -156,15 +157,20 @@ function lineComment(w: Writer, node: AstNode, prefix: string): void {
   emit(w, prefix, value === '' ? '%%' : `%% ${value}`)
 }
 
-function pipeTable(w: Writer, table: AstNode, prefix: string, flags: number): void {
-  const block = braceBlock(table, tableKeys(table, []))
-  if (block !== '') emit(w, prefix, block)
-  // The rows and the comments between them, in source order (C2-A-086).
+/** The written rows of `table` and the comments between them, in source order (C2-A-086). */
+function tableEntries(w: Writer, table: AstNode, flags: number): (WrittenRow | AstNode)[] {
   const entries: (WrittenRow | AstNode)[] = []
   for (const group of childrenOf(table)) {
     if (group.type === 'comment') entries.push(group)
     else for (const row of childrenOf(group)) entries.push(isRow(row) ? writtenRow(w, row, flags) : row)
   }
+  return entries
+}
+
+function pipeTable(w: Writer, table: AstNode, prefix: string, flags: number): void {
+  const block = braceBlock(table, tableKeys(table, []))
+  if (block !== '') emit(w, prefix, block)
+  const entries = tableEntries(w, table, flags)
   const rows = entries.filter((entry): entry is WrittenRow => 'lines' in entry)
   if (w.alignTables) alignColumns(rows)
   for (const entry of entries) {
@@ -175,15 +181,20 @@ function pipeTable(w: Writer, table: AstNode, prefix: string, flags: number): vo
 
 /** Whether `cell` holds what a cell of a delimited table can: plain text and nothing else (C2-B-180). */
 function isPlainCell(cell: AstNode, header: boolean): boolean {
-  if (cell.header !== header || cell.span !== undefined || cell.align !== undefined || cell.attrs !== undefined || cell.lang !== undefined) return false
+  if (cell.header !== header || cell.span !== undefined || cell.align !== undefined) return false
+  if (cell.attrs !== undefined || cell.lang !== undefined) return false
   const blocks = childrenOf(cell)
   if (blocks.length !== 1 || blocks[0]!.type !== 'cell_paragraph') return false
   const content = childrenOf(blocks[0]!)
   return content.length === 0 || (content.length === 1 && content[0]!.type === 'text' && content[0]!.attrs === undefined)
 }
 
+function isPlainRow(row: AstNode, header: boolean): boolean {
+  return isRow(row) && row.attrs === undefined && childrenOf(row).every((cell) => isPlainCell(cell, header))
+}
+
 function isPlainGroup(group: AstNode, header: boolean): boolean {
-  return (childrenOf(group)).every((row) => isRow(row) && row.attrs === undefined && (childrenOf(row)).every((cell) => isPlainCell(cell, header)))
+  return childrenOf(group).every((row) => isPlainRow(row, header))
 }
 
 /** C2-L-006: whether a delimited table can hold `table`. */
@@ -210,17 +221,19 @@ function hasPlainGroups(groups: readonly AstNode[], headerBody: boolean): boolea
   return groups.every((group) => isPlainGroup(group, headerBody || group.type === 'table_head'))
 }
 
+/** Whether the first node of the first block of `cell` is text with a line break. */
+function cellHoldsLineBreak(cell: AstNode): boolean {
+  return cell.children?.[0]?.children?.[0]?.value?.includes('\n') === true
+}
+
 function holdsLineBreak(table: AstNode): boolean {
-  for (const group of childrenOf(table)) {
-    for (const row of childrenOf(group)) for (const cell of childrenOf(row)) if (cell.children?.[0]?.children?.[0]?.value?.includes('\n') === true) return true
-  }
-  return false
+  return childrenOf(table).some((group) => childrenOf(group).some((row) => childrenOf(row).some(cellHoldsLineBreak)))
 }
 
 /** C2-W-066: the form of the table, `pipe`, `csv` or `tsv`. */
 function tableFormat(w: Writer, table: AstNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
-  const declares = (childrenOf(table)).some((group) => group.headRows !== undefined)
+  const declares = childrenOf(table).some((group) => group.headRows !== undefined)
   const rows = rowsOf(table, 'table_head').length + rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length
   if (!fitsDelimited(table)) {
     // A pipe table needs a row (C2-L-036) and cannot declare its head rows (C2-A-088).
@@ -251,12 +264,12 @@ function longestBacktickLine(lines: readonly string[]): number {
 function delimitedTable(w: Writer, table: AstNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = (childrenOf(table)).find((group) => group.headRows !== undefined)?.headRows
+  const declared = childrenOf(table).find((group) => group.headRows !== undefined)?.headRows
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   emit(w, prefix, braceBlock(table, tableKeys(table, first)))
   const body: string[] = []
   for (const group of childrenOf(table)) {
-    for (const row of childrenOf(group)) body.push((childrenOf(row)).map((cell) => delimitedCell(cell, separator)).join(separator))
+    for (const row of childrenOf(group)) body.push(childrenOf(row).map((cell) => delimitedCell(cell, separator)).join(separator))
   }
   const lines = body.join('\n').split('\n')
   const run = '`'.repeat(Math.max(MIN_RUN, longestBacktickLine(lines) + 1))

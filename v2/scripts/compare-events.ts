@@ -26,11 +26,15 @@ interface Engine {
 const OPTION_SETS: readonly RenderOptions[] = [
   {},
   { roundtrip: true, sourceLines: true, sections: false, smartTypography: false, rawHtml: true, headingIds: 'lower' },
-  { headingIds: 'off', urlPolicy: { allow: ['https'] }, symbols: { n: '<i>' }, social: { mentionUrl: '/u/{name}', tagUrl: '/t/{name}' } },
+  {
+    headingIds: 'off', urlPolicy: { allow: ['https'] }, symbols: { n: '<i>' },
+    social: { mentionUrl: '/u/{name}', tagUrl: '/t/{name}' },
+  },
 ]
 
 const other = await import(pathToFileURL(join(process.argv[2]!, 'src/index.ts')).href) as Engine
-const otherTree = await import(pathToFileURL(join(process.argv[2]!, 'test/support/inline-tree.ts')).href) as { parseTree(src: string): TreeNode }
+const otherTreeUrl = pathToFileURL(join(process.argv[2]!, 'test/support/inline-tree.ts')).href
+const otherTree = await import(otherTreeUrl) as { parseTree(src: string): TreeNode }
 const mine = acquireState()
 const theirs = other.acquireState()
 

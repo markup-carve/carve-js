@@ -217,7 +217,10 @@ function hexValue(code: number): number {
 function cssEscape(value: string, at: number): [string, number] {
   let code = 0
   let p = at
-  while (p < value.length && p - at < MAX_ESCAPE_DIGITS && hexValue(value.charCodeAt(p)) >= 0) code = code * 16 + hexValue(value.charCodeAt(p++))
+  while (p < value.length && p - at < MAX_ESCAPE_DIGITS && hexValue(value.charCodeAt(p)) >= 0) {
+    code = code * 16 + hexValue(value.charCodeAt(p))
+    p++
+  }
   if (p === at) {
     // A backslash before a line break stands for nothing, and before any other character for that character.
     const next = value[at] ?? ''
@@ -307,23 +310,35 @@ function styleDeclarations(keys: [string, string][], parts: TagParts): string {
   return declarations
 }
 
-function addKeys(r: Render, list: AttributeList, keys: [string, string][], parts: TagParts, origin: AstNode | null): void {
-  const declarations = styleDeclarations(keys, parts)
-  const hasStyle = keys.some(([key]) => key.toLowerCase() === 'style')
-  for (const [key, value] of keys) {
-    const name = key.toLowerCase()
-    if (isBlockedName(name) || list.has(name)) continue
-    if (r.settings.roundtrip && CARRIERS.has(name)) {
-      loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
-    } else if (name === 'style') {
-      list.add(key, declarations === '' ? keyValue(name, value) : withDeclaration(keyValue(name, value), declarations))
-    } else if (name === 'align' && parts.alignStyle === true && ALIGN_VALUES.includes(value)) {
-      if (!hasStyle) list.add('style', declarations)
-    } else {
-      list.add(key, keyValue(name, value))
-    }
+/** What the keys of one node give the `style` attribute: the declarations they add, and whether one of them is `style`. */
+interface StyleFacts {
+  declarations: string
+  hasStyle: boolean
+}
+
+/** The value of the `style` key: the declarations of the other keys follow what the author wrote. */
+function styleValue(value: string, declarations: string): string {
+  const written = keyValue('style', value)
+  return declarations === '' ? written : withDeclaration(written, declarations)
+}
+
+function addKey(
+  r: Render, list: AttributeList, [key, value]: [string, string], parts: TagParts, style: StyleFacts, origin: AstNode | null,
+): void {
+  const name = key.toLowerCase()
+  if (isBlockedName(name) || list.has(name)) return
+  if (r.settings.roundtrip && CARRIERS.has(name)) {
+    return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
   }
-  if (declarations !== '') list.add('style', declarations)
+  if (name === 'style') return list.add(key, styleValue(value, style.declarations))
+  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) return list.add(key, keyValue(name, value))
+  if (!style.hasStyle) list.add('style', style.declarations)
+}
+
+function addKeys(r: Render, list: AttributeList, keys: [string, string][], parts: TagParts, origin: AstNode | null): void {
+  const style: StyleFacts = { declarations: styleDeclarations(keys, parts), hasStyle: keys.some(([key]) => key.toLowerCase() === 'style') }
+  for (const pair of keys) addKey(r, list, pair, parts, style, origin)
+  if (style.declarations !== '') list.add('style', style.declarations)
 }
 
 /** The id an element writes: the one its parts name, or the authored one. */

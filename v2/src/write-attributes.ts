@@ -73,7 +73,7 @@ export interface BlockParts {
 
 /** The names of the keys that `attrs` cannot hold as written. A caller reports them (C2-W-117). */
 export function unspellableKeys(node: AstNode): string[] {
-  return (keyValuesOf(node)).filter((pair) => !isKey(pair[0])).map((pair) => pair[0])
+  return keyValuesOf(node).filter((pair) => !isKey(pair[0])).map((pair) => pair[0])
 }
 
 function classParts(node: AstNode, parts: string[], skip: readonly number[]): void {

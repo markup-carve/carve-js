@@ -38,40 +38,57 @@ function headRows(src: string, node: BlockNode): number {
   return countValue(value)
 }
 
+/** A position in the body of a delimited table. */
+interface Cursor {
+  body: string
+  at: number
+}
+
+/** The quoted part of the cell at the cursor, which stands on its opening quote. A doubled quote is one quote. */
+function quotedPart(cursor: Cursor, table: DelimitedTable): string {
+  const body = cursor.body
+  let cell = ''
+  let at = cursor.at + 1
+  for (;;) {
+    const quote = body.indexOf('"', at)
+    if (quote < 0) {
+      table.malformed = true
+      cursor.at = body.length
+      return cell + body.slice(at)
+    }
+    cell += body.slice(at, quote)
+    at = quote + 1
+    if (body[at] !== '"') break
+    cell += '"'
+    at++
+  }
+  cursor.at = at
+  return cell
+}
+
+/** The cell at the cursor, up to the next separator or line end. */
+function readCell(cursor: Cursor, separator: string, table: DelimitedTable): string {
+  const body = cursor.body
+  const quoted = body[cursor.at] === '"' ? quotedPart(cursor, table) : ''
+  const start = cursor.at
+  while (cursor.at < body.length && body[cursor.at] !== separator && body[cursor.at] !== '\n') cursor.at++
+  return quoted + body.slice(start, cursor.at)
+}
+
 function readRows(body: string, separator: string, table: DelimitedTable): void {
   if (body.length === 0) return
+  const cursor: Cursor = { body, at: 0 }
   let row: string[] = []
-  let at = 0
   for (;;) {
-    let cell = ''
-    if (body[at] === '"') {
-      at++
-      for (;;) {
-        const quote = body.indexOf('"', at)
-        if (quote < 0) {
-          cell += body.slice(at)
-          at = body.length
-          table.malformed = true
-          break
-        }
-        cell += body.slice(at, quote)
-        at = quote + 1
-        if (body[at] !== '"') break
-        cell += '"'
-        at++
-      }
-    }
-    const start = at
-    while (at < body.length && body[at] !== separator && body[at] !== '\n') at++
-    row.push(cell + body.slice(start, at))
+    row.push(readCell(cursor, separator, table))
     // A separator always starts another cell, so a row ending in one keeps its empty last cell.
-    if (at < body.length && body[at] === separator) {
-      at++
+    if (cursor.at < body.length && body[cursor.at] === separator) {
+      cursor.at++
       continue
     }
     table.rows.push(row)
     row = []
-    at++
-    if (at >= body.length) return
+    cursor.at++
+    if (cursor.at >= body.length) return
   }
 }

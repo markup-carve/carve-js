@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import sonarjs from 'eslint-plugin-sonarjs'
 import tseslint from 'typescript-eslint'
 
 const typedRules = {
@@ -40,6 +41,19 @@ export default [{
       tsconfigRootDir: fileURLToPath(new URL('.', import.meta.url)),
     },
   },
-  plugins: { '@typescript-eslint': tseslint.plugin },
-  rules: { ...typedRules, complexity: ['error', { max: 15 }] },
+  plugins: { '@typescript-eslint': tseslint.plugin, sonarjs },
+  rules: {
+    ...typedRules,
+    complexity: ['error', { max: 15 }],
+    'sonarjs/cognitive-complexity': ['error', 15],
+    'max-len': ['error', { code: 140, ignoreUrls: true }],
+  },
+}, {
+  // A test states its input and its expected output as one literal each.
+  files: ['v2/test/**/*.test.ts'],
+  rules: { 'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }] },
+}, {
+  // The Unicode tables of the 0.1 engine, copied unchanged from its generator.
+  files: ['v2/src/width-data.ts'],
+  rules: { 'max-len': 'off' },
 }]

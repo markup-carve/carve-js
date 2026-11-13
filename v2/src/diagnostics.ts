@@ -50,7 +50,7 @@ function pushSlots(stack: Frame[], frame: Frame): void {
   const node = frame.node
   for (const name of NODE_LISTS) pushList(stack, node[name], frame, name)
   if (node.caption !== undefined) stack.push({ node: node.caption, above: frame, step: 'caption' })
-  ;(pairsOf(node)).forEach((pair, at) => {
+  ;pairsOf(node).forEach((pair, at) => {
     for (const name of PAIR_LISTS) pushList(stack, pair[name], frame, `pairs/${at}/${name}`)
   })
   for (const [name, list] of Object.entries(node.slots ?? {})) pushList(stack, list, frame, `slots/${pointerKey(name)}`)

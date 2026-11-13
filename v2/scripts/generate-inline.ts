@@ -2,6 +2,7 @@
 //   node v2/scripts/generate-inline.ts
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { wrapJson } from './wrap-literal.ts'
 
 const ASCII = 128
 
@@ -123,15 +124,19 @@ function smartLines(read: DataReader): { lines: string[], triggers: number[] } {
   for (const row of [...replaced, ...smart.quotes, ...smart.dashes]) kinds.set(row.kind!, row.glyph!)
   const names = [...kinds.keys()].sort()
   const lines = names.map((name, index) => `export const SMART_${name.toUpperCase()} = ${index}`)
-  lines.push('', `export const SMART_KIND_NAMES: readonly string[] = ${JSON.stringify(names)}`)
-  lines.push(`export const SMART_GLYPHS: readonly string[] = ${JSON.stringify(names.map((name) => kinds.get(name)))}`)
+  lines.push('', ...wrapJson('export const SMART_KIND_NAMES: readonly string[] = ', names))
+  lines.push(...wrapJson('export const SMART_GLYPHS: readonly string[] = ', names.map((name) => kinds.get(name))))
   // The runs matched in text, the longest first (C2-I-115). The braced en dash is an atom of the scan.
-  const runs = replaced.filter((run) => !run.source.startsWith('{')).sort((a, b) => b.source.length - a.source.length || (a.source < b.source ? -1 : 1))
+  const runs = replaced
+    .filter((run) => !run.source.startsWith('{'))
+    .sort((a, b) => b.source.length - a.source.length || (a.source < b.source ? -1 : 1))
   lines.push('', '/** The replaced runs, the longest first, as [source, kind]. */')
   lines.push(`export const SMART_RUNS: readonly (readonly [string, number])[] = [`)
   for (const run of runs) lines.push(`  [${JSON.stringify(run.source)}, ${names.indexOf(run.kind!)}],`)
-  lines.push(']', '', `export const APOSTROPHE_WORDS: readonly string[] = ${JSON.stringify(smart.apostrophe_words.words)}`)
-  const triggers = [...new Set([...runs.map((run) => run.source.charCodeAt(0)), ...smart.quotes.map((quote) => (quote as Glyph & { source: string }).source.charCodeAt(0)), ...smart.dashes.map((dash) => (dash as Glyph & { source: string }).source.charCodeAt(0))])]
+  lines.push(']', '', ...wrapJson('export const APOSTROPHE_WORDS: readonly string[] = ', smart.apostrophe_words.words))
+  const first = (row: { source: string }): number => row.source.charCodeAt(0)
+  const glyphs = [...smart.quotes, ...smart.dashes] as (Glyph & { source: string })[]
+  const triggers = [...new Set([...runs.map(first), ...glyphs.map(first)])]
   return { lines, triggers }
 }
 
@@ -144,7 +149,7 @@ function markLines(read: DataReader): string[] {
   return [
     '/** The marks of the braced forms, the node each makes, and the marks that are bare delimiters. */',
     `export const BRACED_MARKS = ${JSON.stringify(marks.join(''))}`,
-    `export const BRACED_NODES: readonly string[] = ${JSON.stringify(nodes)}`,
+    ...wrapJson('export const BRACED_NODES: readonly string[] = ', nodes),
     `export const BARE_MARKS = ${JSON.stringify(bare.join(''))}`,
   ]
 }
@@ -169,5 +174,6 @@ export function generateInlineTables(read: DataReader): string {
 
 if (process.argv[1] === import.meta.filename) {
   const root = join(import.meta.dirname, '..')
-  writeFileSync(join(root, 'src/inline-tables.ts'), generateInlineTables((file) => readFileSync(join(root, 'data', file), 'utf8')))
+  const text = generateInlineTables((file) => readFileSync(join(root, 'data', file), 'utf8'))
+  writeFileSync(join(root, 'src/inline-tables.ts'), text)
 }

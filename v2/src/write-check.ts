@@ -35,7 +35,10 @@ export interface Check {
 }
 
 export function createCheck(w: Writer): Check {
-  return { w, escapes: [], retracted: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0, spanMarks: false }
+  return {
+    w, escapes: [], retracted: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
+    spanMarks: false,
+  }
 }
 
 /** The number of changes the comparison has asked for so far. */
@@ -395,9 +398,9 @@ function stepOver(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: 
   const a = as[at.j]
   const spelled = writeInlines(c.w, [es[at.i]!], c.flags)
   // An escape in the node is one character of the text, so the two do not compare by length.
-  if (a?.type !== 'text' || spelled.includes('\\') || !(valueOf(a)).startsWith(spelled, at.aj)) return false
+  if (a?.type !== 'text' || spelled.includes('\\') || !valueOf(a).startsWith(spelled, at.aj)) return false
   at.aj += spelled.length
-  if (at.aj === (valueOf(a)).length) {
+  if (at.aj === valueOf(a).length) {
     at.j++
     at.aj = 0
   }
@@ -413,7 +416,7 @@ function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
   if (end < 0) return false
   at.vi = end
   at.j++
-  if (at.vi === (valueOf(e)).length) {
+  if (at.vi === valueOf(e).length) {
     at.i++
     at.vi = 0
   }
@@ -428,11 +431,11 @@ function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
 function readsNeighbor(c: Check, es: readonly AstNode[], i: number, a: AstNode): boolean {
   const e = es[i]!
   const next = textAt(es, i + 1)
-  if (next !== null && !sameValue(e.attrs, a.attrs) && (valueOf(next)).startsWith('{')) return escapeAt(c, next, 0)
+  if (next !== null && !sameValue(e.attrs, a.attrs) && valueOf(next).startsWith('{')) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   if (next !== null && escapeAt(c, next, 0)) return true
   const before = textAt(es, i - 1)
-  return before !== null && escapeAt(c, before, (valueOf(before)).length - 1)
+  return before !== null && escapeAt(c, before, valueOf(before).length - 1)
 }
 
 function textAt(nodes: readonly AstNode[], at: number): AstNode | null {
@@ -544,14 +547,14 @@ function compareInline(c: Check, e: AstNode, a: AstNode): void {
 function blockMismatch(c: Check, e: AstNode): void {
   c.misaligned = true
   // C2-W-092: the first line of a paragraph read as a block opener.
-  if (e.type === 'paragraph' && (childrenOf(e)).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, e.children!, 0, e)
   else c.losses.push([e, null])
 }
 
 /** The block `e` has no block in the parse: the block above it took its lines. */
 function missingBlock(c: Check, e: AstNode): void {
   // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
-  if (e.type === 'paragraph' && (childrenOf(e)).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, e.children!, 0, e)
   else if (hasOtherForm(c, e)) changeForm(c, e)
   else c.losses.push([e, null])
 }
@@ -633,7 +636,9 @@ export function escapeOpeners(c: Check, parsed: AstNode, offset: number): void {
   const paragraphs = new Set<number>()
   const lines = new Set<number>()
   readStarts(parsed, offset, paragraphs, lines)
-  for (const [node, place] of c.w.starts) if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines)
+  for (const [node, place] of c.w.starts) {
+    if (node.attrs === undefined && node.lang === undefined) escapeOpenerLines(c, node, place, paragraphs, lines)
+  }
 }
 
 /** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */

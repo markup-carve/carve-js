@@ -68,7 +68,7 @@ function isVisible(node: AstNode): boolean {
 /** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
 function isBareImage(node: AstNode): boolean {
   if (node.blockImage !== true) return false
-  const image = (childrenOf(node)).find((child) => child.type === 'image')
+  const image = childrenOf(node).find((child) => child.type === 'image')
   return image === undefined || image.key === undefined || image.src !== undefined
 }
 
@@ -104,7 +104,7 @@ function paragraphHtml(r: Render, node: AstNode): string {
 
 /** C2-H-122: in static mode a math block is its source as a code block. */
 function staticMathBlock(r: Render, node: AstNode): string {
-  const math = (childrenOf(node)).find((child) => child.type === 'math')
+  const math = childrenOf(node).find((child) => child.type === 'math')
   const value = math?.value ?? ''
   return `<pre${tag(r, node)}><code class="language-math">${escapeText(value.endsWith('\n') ? value : `${value}\n`)}</code></pre>`
 }
@@ -167,7 +167,7 @@ function listParts(r: Render, node: AstNode): TagParts {
     // C2-H-138.
     if (node.spacing === 'tight') structural.push(['data-carve-tight', null])
   }
-  const tasks = (childrenOf(node)).some((item) => item.task !== undefined)
+  const tasks = childrenOf(node).some((item) => item.task !== undefined)
   return tasks ? { structural, base: ['task-list'] } : { structural }
 }
 
@@ -211,7 +211,7 @@ function listItem(r: Render, node: AstNode, level: number, tight: boolean): void
 
 /** C2-H-040: a description with one block writes a paragraph bare. */
 function description(r: Render, node: AstNode, level: number): void {
-  const blocks = (childrenOf(node)).filter(isVisible)
+  const blocks = childrenOf(node).filter(isVisible)
   if (blocks.length <= 1 && (blocks.length === 0 || isTextParagraph(blocks[0]))) {
     const text = blocks.length === 0 ? '' : inlineHtml(r, childrenOf(blocks[0]!))
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
@@ -268,7 +268,7 @@ function admonition(r: Render, node: AstNode, level: number): void {
 
 /** C2-H-065: a caption with one paragraph writes it bare; with several blocks every paragraph gets `<p>`. */
 function captionLine(r: Render, caption: AstNode, name: string, level: number): void {
-  const blocks = (childrenOf(caption)).filter(isVisible)
+  const blocks = childrenOf(caption).filter(isVisible)
   if (blocks.length === 1 && isTextParagraph(blocks[0])) {
     line(r, level, `<${name}>${inlineHtml(r, childrenOf(blocks[0]))}</${name}>`)
     return
@@ -346,7 +346,7 @@ function lineBlock(r: Render, node: AstNode, level: number): void {
     stanza = []
   }
   for (const child of childrenOf(node)) {
-    if ((childrenOf(child)).length === 0) flush()
+    if (childrenOf(child).length === 0) flush()
     else stanza.push(lineHtml(r, child))
   }
   flush()
@@ -455,8 +455,8 @@ function writeRows(r: Render, layout: TableLayout, group: AstNode, level: number
 /** C2-H-060: true when a row span crosses the end of its group. */
 function spanCrossesGroup(groups: AstNode[]): boolean {
   for (const group of groups) {
-    const rows = (childrenOf(group)).filter((row) => row.type === 'table_row')
-    const crosses = rows.some((row, index) => (childrenOf(row)).some((cell) => index + (rowspanOf(cell)) > rows.length))
+    const rows = childrenOf(group).filter((row) => row.type === 'table_row')
+    const crosses = rows.some((row, index) => childrenOf(row).some((cell) => index + (rowspanOf(cell)) > rows.length))
     if (crosses) return true
   }
   return false
@@ -474,7 +474,7 @@ function writeGroups(r: Render, layout: TableLayout, groups: AstNode[], level: n
   }
   for (const group of groups) {
     // C2-H-055: an empty group is not written.
-    if (!(childrenOf(group)).some((row) => row.type === 'table_row')) continue
+    if (!childrenOf(group).some((row) => row.type === 'table_row')) continue
     const name = GROUP_ELEMENTS.get(group.type)!
     line(r, level, `<${name}${tag(r, group)}>`)
     writeRows(r, layout, group, level + 1, [])
@@ -507,7 +507,7 @@ function table(r: Render, node: AstNode, level: number): void {
   if (node.caption !== undefined) captionLine(r, node.caption, 'caption', level + 1)
   const layout: TableLayout = { columns: columnsOf(node), headValign: headMarks(node, 'valign') }
   writeColumnGroup(r, layout.columns, level + 1)
-  writeGroups(r, layout, (childrenOf(node)).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
+  writeGroups(r, layout, childrenOf(node).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
   line(r, level, '</table>')
 }
 
@@ -575,7 +575,8 @@ function writeNote(r: Render, note: Note, level: number): void {
  */
 function writeNotes(r: Render, level: number, directive: AstNode | null): void {
   const id = directive === null ? undefined : r.resolution.labelIds.get(directive)
-  const name = id === undefined ? `aria-label="${escapeAttribute(r.settings.labels['endnotes'] ?? '')}"` : `aria-labelledby="${escapeAttribute(id)}"`
+  const label = r.settings.labels['endnotes'] ?? ''
+  const name = id === undefined ? `aria-label="${escapeAttribute(label)}"` : `aria-labelledby="${escapeAttribute(id)}"`
   line(r, level, `<section role="doc-endnotes" ${name}>`)
   if (directive !== null) writeTitle(r, directive, level + 1, id ?? null)
   line(r, level + 1, '<hr>')
@@ -598,13 +599,17 @@ function closeSections(r: Render, open: number[], level: number): void {
   }
 }
 
+function sectionAttributes(r: Render, node: AstNode, id: string | undefined): string {
+  if (r.settings.roundtrip) return attributes(r, null, { structural: idCarriers(r, node), id: id ?? null })
+  // Without the carriers of `roundtrip` a section carries its id and nothing else.
+  return id === undefined ? '' : ` id="${escapeAttribute(id)}"`
+}
+
 /** C2-H-026, C2-H-027: a top-level heading opens a section that carries its id. */
 function openSection(r: Render, node: AstNode, open: number[]): void {
   closeSections(r, open, levelOf(node))
   const id = headingId(node)
-  // Without the carriers of `roundtrip` a section carries its id and nothing else.
-  const attrs = r.settings.roundtrip ? attributes(r, null, { structural: idCarriers(r, node), id: id ?? null }) : id === undefined ? '' : ` id="${escapeAttribute(id)}"`
-  line(r, open.length, `<section${attrs}>`)
+  line(r, open.length, `<section${sectionAttributes(r, node, id)}>`)
   open.push(levelOf(node))
   line(r, open.length, headingHtml(r, node, true))
 }

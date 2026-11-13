@@ -19,7 +19,8 @@ function nodeAt(tree: AstNode, path: string): AstNode | undefined {
 export function isRefusal(tree: AstNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
     const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
-    return entry.code === 'field-unspellable' && node !== undefined && VERBATIM_SPANS.includes(node.type) && (node.value ?? '').includes('\n')
+    const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && (node.value ?? '').includes('\n')
+    return entry.code === 'field-unspellable' && multiline
   })
 }
 
@@ -31,7 +32,8 @@ function isAsciiPunctuation(code: number): boolean {
 export function needlessEscape(written: string, tree: AstNode): number {
   for (let at = 0; at + 1 < written.length; at++) {
     if (written[at] !== '\\') continue
-    if (isAsciiPunctuation(written.charCodeAt(at + 1)) && treesEqual(parse(written.slice(0, at) + written.slice(at + 1)), tree)) return at
+    const unescaped = written.slice(0, at) + written.slice(at + 1)
+    if (isAsciiPunctuation(written.charCodeAt(at + 1)) && treesEqual(parse(unescaped), tree)) return at
     // The character behind a backslash is not the start of another escape.
     at++
   }
@@ -44,7 +46,10 @@ function show(text: string): string {
 
 /** The gates on one written form: it parses to `tree` (C2-W-002) and holds no needless escape (C2-W-088). */
 function checkWritten(tree: AstNode, written: string, losses: readonly Diagnostic[], path: string): string | null {
-  if (losses.length > 0) return `${path}: the writer reports ${losses.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')}, written ${show(written)}`
+  if (losses.length > 0) {
+    const reported = losses.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
+    return `${path}: the writer reports ${reported}, written ${show(written)}`
+  }
   if (!treesEqual(tree, parse(written))) return `${path}: C2-W-002, the written form parses to another tree: ${show(written)}`
   const needless = needlessEscape(written, tree)
   if (needless >= 0) return `${path}: C2-W-088, the backslash at ${needless} is not needed: ${show(written)}`
@@ -60,7 +65,8 @@ export function checkWriter(src: string): string | null {
   const plain = writeWithDiagnostics(tree)
   const losses = formatted.diagnostics.filter((entry) => entry.channel === 'render-loss')
   if (isRefusal(tree, losses) && isRefusal(tree, plain.diagnostics)) return 'refused'
-  const failure = checkWritten(tree, formatted.source, losses, 'with the record') ?? checkWritten(tree, plain.source, plain.diagnostics, 'without the record')
+  const failure = checkWritten(tree, formatted.source, losses, 'with the record')
+    ?? checkWritten(tree, plain.source, plain.diagnostics, 'without the record')
   if (failure !== null) return failure
   // C2-W-003 without the sidecar.
   const again = write(parse(plain.source))

@@ -87,4 +87,9 @@ describe('a leaf that resolution does not walk into', () => {
     // An id inside a leaf is reserved before the heading ids, so the second `a` is reported.
     expect(parseWithDiagnostics(src).diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['duplicate-id', '/children/3/children/0/children/0/children/1']])
   })
+
+  it('a leaf whose only node is an inline note is walked into, so the note is numbered', () => {
+    expect(parse('x^[]', { positions: false }).children![0]!.children![1]).toEqual({ type: 'inline_footnote', children: [], number: 1 })
+    expect(render('x^[]')).toContain('<li id="fn1">')
+  })
 })

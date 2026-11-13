@@ -32,7 +32,9 @@ export const SLUG_REVERSED: ReadonlyMap<string, string> = new Map([
 ])
 
 /** C2-H-159: the ranges of code points that are removed from a destination before its scheme is read. */
-export const PROBE_REMOVED: readonly (readonly [number, number])[] = [[0,32],[127,160],[5760,5760],[8192,8202],[8232,8233],[8239,8239],[8287,8287],[12288,12288],[65279,65279]]
+export const PROBE_REMOVED: readonly (readonly [number, number])[] = [
+  [0,32], [127,160], [5760,5760], [8192,8202], [8232,8233], [8239,8239], [8287,8287], [12288,12288], [65279,65279],
+]
 
 /** C2-H-161: the attribute names that are never written, and the prefixes of such names. */
 export const DROPPED_NAMES: readonly string[] = ["formaction","srcdoc"]
@@ -61,13 +63,46 @@ export interface ProfileRule {
 }
 
 export const PROFILES: ReadonlyMap<string, ProfileRule> = new Map([
-  ["article", { deniedBlock: ["raw_block"], deniedInline: ["raw_inline"], allowedBlock: null, allowedInline: null, linkRel: "", maxNesting: -1, maxLength: -1 }],
-  ["comment", { deniedBlock: null, deniedInline: null, allowedBlock: ["block_quote","code_block","list","list_item","paragraph"], allowedInline: ["code","delete","emphasis","hard_break","highlight","inline_extension","insert","link","literal_inline","mention","soft_break","strike","strong","subscript","superscript","text","underline"], linkRel: "nofollow ugc", maxNesting: 4, maxLength: 100000 }],
+  ["article", {
+    deniedBlock: ["raw_block"],
+    deniedInline: ["raw_inline"],
+    allowedBlock: null,
+    allowedInline: null,
+    linkRel: "",
+    maxNesting: -1,
+    maxLength: -1,
+  }],
+  ["comment", {
+    deniedBlock: null,
+    deniedInline: null,
+    allowedBlock: ["block_quote","code_block","list","list_item","paragraph"],
+    allowedInline: [
+      "code", "delete", "emphasis", "hard_break", "highlight", "inline_extension", "insert", "link", "literal_inline", "mention",
+      "soft_break", "strike", "strong", "subscript", "superscript", "text", "underline",
+    ],
+    linkRel: "nofollow ugc",
+    maxNesting: 4,
+    maxLength: 100000,
+  }],
   ["full", { deniedBlock: null, deniedInline: null, allowedBlock: null, allowedInline: null, linkRel: "", maxNesting: -1, maxLength: -1 }],
-  ["minimal", { deniedBlock: null, deniedInline: null, allowedBlock: ["list","list_item","paragraph"], allowedInline: ["code","delete","emphasis","hard_break","inline_extension","insert","literal_inline","mention","soft_break","strike","strong","subscript","superscript","text","underline"], linkRel: "", maxNesting: 2, maxLength: 10000 }],
+  ["minimal", {
+    deniedBlock: null,
+    deniedInline: null,
+    allowedBlock: ["list","list_item","paragraph"],
+    allowedInline: [
+      "code", "delete", "emphasis", "hard_break", "inline_extension", "insert", "literal_inline", "mention", "soft_break", "strike",
+      "strong", "subscript", "superscript", "text", "underline",
+    ],
+    linkRel: "",
+    maxNesting: 2,
+    maxLength: 10000,
+  }],
 ])
 
-/** C2-B-205, C2-B-206: the shape of the value of each include option, and what a line is when the option has no value, a value outside the shape, or stands twice. */
+/**
+ * C2-B-205, C2-B-206: the shape of the value of each include option, and what a line is when the option has no value,
+ * a value outside the shape, or stands twice.
+ */
 export interface IncludeOptionRule {
   value: string
   withoutValue: string

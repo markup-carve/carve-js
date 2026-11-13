@@ -52,7 +52,8 @@ export interface Writer {
 
 export function createWriter(facts: Map<AstNode, WriterFacts> | null, alignTables: boolean): Writer {
   return {
-    lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null, alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
+    lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
+    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(),
   }
 }
@@ -110,5 +111,6 @@ export function lose(w: Writer, node: AstNode, field: string | null): void {
   const message = field === null
     ? `a ${node.type} node has no spelling in Carve source here`
     : `the field ${field} of a ${node.type} node has no spelling in Carve source here`
-  addFinding(w.losses, node, { code: field === null ? 'structure-unspellable' : 'field-unspellable', severity: 'warning', channel: 'render-loss', message })
+  const code = field === null ? 'structure-unspellable' : 'field-unspellable'
+  addFinding(w.losses, node, { code, severity: 'warning', channel: 'render-loss', message })
 }

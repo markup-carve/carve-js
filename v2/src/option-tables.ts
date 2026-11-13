@@ -64,4 +64,8 @@ export const DEFAULT_LABELS: Readonly<Record<string, string>> = {
 }
 
 /** C2-H-128: the schemes the default URL policy denies. */
-export const DEFAULT_DENIED_SCHEMES: readonly string[] = ["javascript","vbscript","data","file","ms-msdt","ms-office","ms-word","ms-excel","ms-powerpoint","ms-access","ms-visio","ms-project","ms-publisher","ms-infopath","ms-spd","ms-search","search-ms","ms-cxh","ms-cxh-full","shell","vscode","vscode-insiders","jar"]
+export const DEFAULT_DENIED_SCHEMES: readonly string[] = [
+  "javascript", "vbscript", "data", "file", "ms-msdt", "ms-office", "ms-word", "ms-excel", "ms-powerpoint", "ms-access", "ms-visio",
+  "ms-project", "ms-publisher", "ms-infopath", "ms-spd", "ms-search", "search-ms", "ms-cxh", "ms-cxh-full", "shell", "vscode",
+  "vscode-insiders", "jar",
+]

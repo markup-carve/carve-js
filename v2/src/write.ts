@@ -53,11 +53,15 @@ function seek(cursor: WrapCursor, value: string, offset: number): boolean {
   return cursor.bytes === offset
 }
 
-/** Whether the wrap at the byte `offset` of the text `node` fits the tree: a place behind the wraps before it, with the joining space before it, or the start of the value (C2-L-021). */
+/**
+ * Whether the wrap at the byte `offset` of the text `node` fits the tree: a place behind the wraps
+ * before it, with the joining space before it, or the start of the value (C2-L-021).
+ */
 function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
   const value = valueOf(node)
   if (node.type !== 'text' || !seek(cursor, value, offset)) return false
-  const fits = cursor.at === 0 ? cursor.points.length === 0 : cursor.at > (cursor.points[cursor.points.length - 1] ?? 0) && value[cursor.at - 1] === ' '
+  const last = cursor.points[cursor.points.length - 1] ?? 0
+  const fits = cursor.at === 0 ? cursor.points.length === 0 : cursor.at > last && value[cursor.at - 1] === ' '
   if (fits) cursor.points.push(cursor.at)
   return fits
 }
@@ -224,6 +228,17 @@ function compareGroup(w: Writer, document: AstNode, group: readonly AstNode[], f
   return check
 }
 
+/** The last block of `nodes[from..to)` that is no comment, or `list` where all of them are comments. */
+function lastBlock(nodes: readonly AstNode[], from: number, to: number, list: AstNode | null): AstNode | null {
+  for (let at = to - 1; at >= from; at--) if (nodes[at]!.type !== 'comment') return nodes[at]!
+  return list
+}
+
+function addLines(out: string[], lines: readonly string[], blanks: number): void {
+  for (let blank = 0; blank < blanks; blank++) out.push('')
+  for (const line of lines) out.push(line)
+}
+
 function writeDocument(w: Writer, document: AstNode): string {
   const nodes = childrenOf(document)
   const out: string[] = []
@@ -234,10 +249,10 @@ function writeDocument(w: Writer, document: AstNode): string {
     at = writeGroup(w, document, from, out.length === 0)
     if (w.lines.length === 0) continue
     if (out.length === 0 && w.blankFirst) out.push('')
-    if (before !== null) for (let blank = blankLinesBetween(w, before, list, nodes[from]!, false); blank > 0; blank--) out.push('')
-    for (const line of w.lines) out.push(line)
+    const blanks = before === null ? 0 : blankLinesBetween(w, before, list, nodes[from]!, false)
+    addLines(out, w.lines, blanks)
     before = nodes[at - 1]!
-    for (let k = from; k < at; k++) if (nodes[k]!.type !== 'comment') list = nodes[k]!
+    list = lastBlock(nodes, from, at, list)
   }
   // C2-W-022: the output ends with one line ending.
   return out.length === 0 ? '' : `${out.join('\n')}\n`

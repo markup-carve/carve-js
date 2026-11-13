@@ -28,8 +28,12 @@ export function treeShape(src: string): string {
   return shapeOf(src, parseTree(src))
 }
 
+function attributeText(src: string, attributes: NonNullable<BlockNode['attributes']>): string {
+  return joinSpans(src, attributes).replaceAll(/[ \t]+(?=\||$)/g, '').slice(1, -1).replaceAll('}|{', '|')
+}
+
 export function shapeOf(src: string, node: BlockNode): string {
-  const attributes = node.attributes === null ? '' : `{${joinSpans(src, node.attributes).replaceAll(/[ \t]+(?=\||$)/g, '').slice(1, -1).replaceAll('}|{', '|')}}`
+  const attributes = node.attributes === null ? '' : `{${attributeText(src, node.attributes)}}`
   return attributes + bare(src, node)
 }
 

@@ -1,7 +1,10 @@
 // The bracket stack of the inline scan (C2-I-006): openers, the closing bracket and what is
 // glued to it, the link tail, reference labels and footnote references.
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
-import { APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT, QUOTE_MARK, SPACE } from './chars.ts'
+import {
+  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT,
+  QUOTE_MARK, SPACE,
+} from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
 } from './inline-kinds.ts'
@@ -31,6 +34,11 @@ function isBlank(text: string, start: number, end: number): boolean {
   return true
 }
 
+/** C2-I-023: `%%` after whitespace starts a line comment where line comments are read. */
+function startsLineComment(state: InlineState, p: number): boolean {
+  return state.lineComments && state.text.charCodeAt(p + 1) === PERCENT && isBoundarySpace(state.text.charCodeAt(p - 1))
+}
+
 /**
  * C2-I-076: the offset of the next `]` that no backslash escapes, from `pos` on, or NONE.
  * C2-I-077: a line comment that starts inside the label takes its closer.
@@ -42,7 +50,7 @@ function labelEnd(state: InlineState, pos: number): number {
     const code = text.charCodeAt(p)
     if (code === BRACKET_CLOSE) return p
     if (code === BACKSLASH) p++
-    else if (code === PERCENT && state.lineComments && text.charCodeAt(p + 1) === PERCENT && isBoundarySpace(text.charCodeAt(p - 1))) return NONE
+    else if (code === PERCENT && startsLineComment(state, p)) return NONE
   }
   // No later label can find a closer either.
   state.labelCloserMissing = true
@@ -178,30 +186,40 @@ function closePair(state: InlineState, open: number, pos: number, kind: number):
 }
 
 /** What is glued to the closing bracket at `pos` decides the construct (C2-I-006). Returns the offset behind it, or NONE. */
-function closeConstruct(state: InlineState, open: number, pos: number): number {
+/** Closes a link or an image whose `]` at `pos` is followed by its destination in parentheses. */
+function closeInlineLink(state: InlineState, open: number, pos: number, image: boolean): number {
+  const end = linkTail(state, pos + 1)
+  if (end === NONE) return NONE
+  closePair(state, open, pos, image ? IMAGE : LINK)
+  pushToken(state, TOKEN_TAIL, pos + 1, end, pos + 2, state.tailDestinationEnd, state.tailTitleStart, NONE)
+  return end
+}
+
+/** Closes a link or an image whose `]` at `pos` is followed by a reference label. */
+function closeReference(state: InlineState, open: number, pos: number, image: boolean): number {
+  const end = referenceLabel(state, pos + 1, state.tokens[open + TOKEN_END]!, pos)
+  if (end === NONE) return NONE
+  closePair(state, open, pos, image ? IMAGE : LINK)
+  pushToken(state, LABEL, pos + 1, end, pos + 2, end - 1, end === pos + 3 ? FLAG_COLLAPSED : 0, NONE)
+  return end
+}
+
+/** Closes a span whose `]` at `pos` is followed by an attribute block. */
+function closeSpan(state: InlineState, open: number, pos: number, image: boolean): number {
   const text = state.text
-  const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
-  const next = pos + 1 < state.end ? text.charCodeAt(pos + 1) : NONE
-  if (next === PAREN_OPEN) {
-    const end = linkTail(state, pos + 1)
-    if (end === NONE) return NONE
-    closePair(state, open, pos, image ? IMAGE : LINK)
-    pushToken(state, TOKEN_TAIL, pos + 1, end, pos + 2, state.tailDestinationEnd, state.tailTitleStart, NONE)
-    return end
-  }
-  if (next === BRACKET_OPEN) {
-    const end = referenceLabel(state, pos + 1, state.tokens[open + TOKEN_END]!, pos)
-    if (end === NONE) return NONE
-    closePair(state, open, pos, image ? IMAGE : LINK)
-    pushToken(state, LABEL, pos + 1, end, pos + 2, end - 1, end === pos + 3 ? FLAG_COLLAPSED : 0, NONE)
-    return end
-  }
-  if (next !== BRACE_OPEN) return NONE
   if (readAttributeBlock(text, pos + 1, state.end, state, null) === NONE && emptyBlockEnd(text, pos + 1, state.end) === NONE) return NONE
   // C2-I-074: before a span the `!` is text.
   if (image) state.tokens[open + TOKEN_START]!++
   closePair(state, open, pos, BRACKET_SPAN)
   return attributeRun(state, pos + 1)
+}
+
+function closeConstruct(state: InlineState, open: number, pos: number): number {
+  const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
+  const next = pos + 1 < state.end ? state.text.charCodeAt(pos + 1) : NONE
+  if (next === PAREN_OPEN) return closeInlineLink(state, open, pos, image)
+  if (next === BRACKET_OPEN) return closeReference(state, open, pos, image)
+  return next === BRACE_OPEN ? closeSpan(state, open, pos, image) : NONE
 }
 
 /** C2-I-006: a closing bracket pairs with the nearest open one. With none it is text. */

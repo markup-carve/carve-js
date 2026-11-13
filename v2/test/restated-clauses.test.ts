@@ -180,7 +180,9 @@ describe('the include directive', () => {
 })
 
 describe('caption numbering', () => {
-  const captions = (src: string, options?: RenderOptions): string[] => [...render(src, options).matchAll(/<(?:fig)?caption>(.*)<\/(?:fig)?caption>/g)].map((match) => match[1]!)
+  const captionPattern = /<(?:fig)?caption>(.*)<\/(?:fig)?caption>/g
+  const captions = (src: string, options?: RenderOptions): string[] =>
+    [...render(src, options).matchAll(captionPattern)].map((match) => match[1]!)
   const figure = (caption: string): string => `![a](a.png)\n^ ${caption}\n`
 
   it('C2-B-207: the mark is the first `#` of the top-level text that no tag-name character follows', () => {

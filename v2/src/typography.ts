@@ -110,13 +110,15 @@ function writeDashes(state: InlineState, pos: number, length: number): void {
   }
 }
 
+/** The characters before a flag that open a phrase. */
+const OPENING_CHARACTERS: readonly number[] = [PAREN_OPEN, QUOTE_MARK, APOSTROPHE, LEFT_SINGLE, LEFT_DOUBLE]
+
 /** C2-I-112: a hyphen run after whitespace, or after `(` or a quote that follows whitespace, and before no whitespace. */
 function isFlag(state: InlineState, pos: number, from: number, next: number): boolean {
   if (isBoundarySpace(next)) return false
   const previous = before(state, pos, from)
   if (isBoundarySpace(previous)) return true
-  const opener = previous === PAREN_OPEN || previous === QUOTE_MARK || previous === APOSTROPHE || previous === LEFT_SINGLE || previous === LEFT_DOUBLE
-  return opener && beforeFollowsSpace(state, pos, from)
+  return OPENING_CHARACTERS.includes(previous) && beforeFollowsSpace(state, pos, from)
 }
 
 /**

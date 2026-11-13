@@ -42,10 +42,18 @@ function writePieces(state: InlineState, start: number, end: number): void {
 }
 
 /** A node with no inline children: its payload is `[from, to)`, or nothing when `from` is NONE. */
-function writeLeaf(state: InlineState, kind: number, flags: number, start: number, aux: number, from: number, to: number, end: number): void {
+function writeLeaf(
+  state: InlineState, kind: number, flags: number, start: number, aux: number, from: number, to: number, end: number,
+): void {
   writeInlineEvent(state, eventTag(ENTER, kind, flags), toSource(state, start), aux)
   if (from !== NONE) writePieces(state, from, to)
   writeInlineEvent(state, eventTag(EXIT, kind, 0), toSource(state, end), 0)
+}
+
+/** The label of a reference, from the token at `at`. */
+function writeLabel(state: InlineState, at: number): void {
+  const tokens = state.tokens
+  writeLeaf(state, LABEL, 0, tokens[at + TOKEN_START]!, 0, tokens[at + TOKEN_A]!, tokens[at + TOKEN_B]!, tokens[at + TOKEN_END]!)
 }
 
 /** What a quote or a hyphen run sees before it, after a closed node (C2-I-104): a word character. */
@@ -144,7 +152,7 @@ function writeClose(state: InlineState, at: number): number {
   if (kind === INLINE_FOOTNOTE && state.footnoteDepth > 0) state.singleQuoteOpen = state.footnoteQuotes[--state.footnoteDepth] === 1
   if (next < state.tokenLength && (tokens[next] === TOKEN_TAIL || tokens[next] === LABEL) && kind !== BRACKET_SPAN) {
     if (tokens[next] === TOKEN_TAIL) writeTail(state, next)
-    else writeLeaf(state, LABEL, 0, tokens[next + TOKEN_START]!, 0, tokens[next + TOKEN_A]!, tokens[next + TOKEN_B]!, tokens[next + TOKEN_END]!)
+    else writeLabel(state, next)
     end = tokens[next + TOKEN_END]!
     next += TOKEN_WIDTH
   }
@@ -175,7 +183,8 @@ function writeAtom(state: InlineState, at: number): number {
   }
   let aux = tokens[at + TOKEN_D]!
   if (kind === RAW_INLINE) aux = toSource(state, aux)
-  writeInlineEvent(state, eventTag(ENTER, kind, tokens[at + TOKEN_C]!), toSource(state, start), kind === SMART || kind === RAW_INLINE ? aux : 0)
+  const keepsAux = kind === SMART || kind === RAW_INLINE
+  writeInlineEvent(state, eventTag(ENTER, kind, tokens[at + TOKEN_C]!), toSource(state, start), keepsAux ? aux : 0)
   if (tokens[at + TOKEN_A] !== NONE) writePieces(state, tokens[at + TOKEN_A]!, tokens[at + TOKEN_B]!)
   const previous = state.previous
   const afterSpace = state.previousAfterSpace

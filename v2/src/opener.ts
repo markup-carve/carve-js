@@ -19,33 +19,40 @@ export interface OpenerInfo {
 }
 
 /** Reads the opener line from `pos`, the offset behind the run. */
+/** Reads the word at `p` into `info` and returns the offset behind it and the spaces after it. */
+function readWord(src: string, p: number, end: number, info: OpenerInfo): number {
+  if (p >= end || src.charCodeAt(p) === QUOTE_MARK) return p
+  info.wordStart = p
+  while (p < end && !isSpaceOrTab(src.charCodeAt(p))) p++
+  info.wordEnd = p
+  return skipSpaces(src, p, end)
+}
+
+/** Reads the quoted title at `p` into `info` and returns the offset behind it and the spaces after it. */
+function readTitle(src: string, p: number, end: number, info: OpenerInfo): number {
+  if (p >= end || src.charCodeAt(p) !== QUOTE_MARK) return p
+  const after = quotedEnd(src, p, end)
+  if (after < 0) return p
+  info.titleStart = p + 1
+  info.titleEnd = after - 1
+  return skipSpaces(src, after, end)
+}
+
+/** Reads the bracketed label at `p` into `info` and returns the offset behind it and the spaces after it. */
+function readLabel(src: string, p: number, end: number, info: OpenerInfo): number {
+  if (p >= end || src.charCodeAt(p) !== BRACKET_OPEN) return p
+  const close = src.indexOf(']', p)
+  if (close < 0 || close >= end) return p
+  info.labelStart = p + 1
+  info.labelEnd = close
+  return skipSpaces(src, close + 1, end)
+}
+
 export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   let end = pos
   while (end < src.length && src.charCodeAt(end) !== LF && src.charCodeAt(end) !== CR) end++
   const info: OpenerInfo = { wordStart: -1, wordEnd: -1, titleStart: -1, titleEnd: -1, labelStart: -1, labelEnd: -1, extra: false }
-  let p = skipSpaces(src, pos, end)
-  if (p < end && src.charCodeAt(p) !== QUOTE_MARK) {
-    info.wordStart = p
-    while (p < end && !isSpaceOrTab(src.charCodeAt(p))) p++
-    info.wordEnd = p
-    p = skipSpaces(src, p, end)
-  }
-  if (p < end && src.charCodeAt(p) === QUOTE_MARK) {
-    const after = quotedEnd(src, p, end)
-    if (after >= 0) {
-      info.titleStart = p + 1
-      info.titleEnd = after - 1
-      p = skipSpaces(src, after, end)
-    }
-  }
-  if (p < end && src.charCodeAt(p) === BRACKET_OPEN) {
-    const close = src.indexOf(']', p)
-    if (close >= 0 && close < end) {
-      info.labelStart = p + 1
-      info.labelEnd = close
-      p = skipSpaces(src, close + 1, end)
-    }
-  }
+  const p = readLabel(src, readTitle(src, readWord(src, skipSpaces(src, pos, end), end, info), end, info), end, info)
   info.extra = p < end
   return info
 }

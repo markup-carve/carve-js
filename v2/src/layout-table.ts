@@ -137,7 +137,9 @@ function walkList(walk: CellWalk, nodes: AstNode[], base: string): void {
 }
 
 /** C2-L-020: the wraps of the cell at `path`, whose own row is row `home` of `table`. */
-export function cellWraps(src: string, trace: LayoutTrace, table: TableRows, home: number, node: AstNode, cell: BlockNode, path: string): Wrap[] {
+export function cellWraps(
+  src: string, trace: LayoutTrace, table: TableRows, home: number, node: AstNode, cell: BlockNode, path: string,
+): Wrap[] {
   const walk: CellWalk = {
     src, trace, table, home, spanning: (rowspanOf(node)) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
   }

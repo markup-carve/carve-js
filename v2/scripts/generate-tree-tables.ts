@@ -21,6 +21,8 @@ export function generateTreeTables(divJson: string, taskJson: string): string {
   const names = JSON.parse(divJson) as DivNames
   const tasks = JSON.parse(taskJson) as TaskStates
   const marks = tasks.states.filter((state) => state.char === state.mark)
+  const checked = marks.filter((state) => state.checked).map((state) => state.mark)
+  const noState = marks.filter((state) => state.state_attribute === null).map((state) => state.mark)
   const lines = [
     '// Generated from data/div-names.json and data/task-states.json by scripts/generate-tree-tables.ts. Do not edit.',
     '',
@@ -38,8 +40,8 @@ export function generateTreeTables(divJson: string, taskJson: string): string {
     '])',
     '',
     '/** C2-H-032, C2-H-033: the marks whose box is checked, and the marks that write no state attribute. */',
-    `export const TASK_CHECKED: readonly string[] = ${JSON.stringify(marks.filter((state) => state.checked).map((state) => state.mark))}`,
-    `export const TASK_NO_STATE: readonly string[] = ${JSON.stringify(marks.filter((state) => state.state_attribute === null).map((state) => state.mark))}`,
+    `export const TASK_CHECKED: readonly string[] = ${JSON.stringify(checked)}`,
+    `export const TASK_NO_STATE: readonly string[] = ${JSON.stringify(noState)}`,
     '',
   ]
   return lines.join('\n')

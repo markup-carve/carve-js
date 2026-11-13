@@ -57,7 +57,7 @@ function authoredKey(node: AstNode, name: string): string | undefined {
 
 /** A copy of `node` without the keys `names`, which an element takes as its name. */
 function withoutKeys(node: AstNode, names: string[]): AstNode {
-  const keyValues = (keyValuesOf(node)).filter(([key]) => !names.includes(key.toLowerCase()))
+  const keyValues = keyValuesOf(node).filter(([key]) => !names.includes(key.toLowerCase()))
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
@@ -177,6 +177,10 @@ function noteReference(r: Render, node: AstNode): string {
   return `<a${tag}><sup>${note.number}</sup></a>`
 }
 
+function equationNumber(node: AstNode): string {
+  return escapeText(`${node.numberPrefix ?? ''} ${node.number}`)
+}
+
 function math(r: Render, node: AstNode): string {
   // C2-H-122: static output has no client renderer, so an equation is its source as code.
   if (r.settings.mode === 'static') return `<code${attributes(r, node, { base: ['language-math'] })}>${escapeText(valueOf(node))}</code>`
@@ -184,7 +188,7 @@ function math(r: Render, node: AstNode): string {
   const tag = attributes(r, node, { base: ['math', display ? 'display' : 'inline'], generated: [['role', 'math']] })
   const value = escapeText(valueOf(node))
   // C2-H-151: the number of a numbered equation, which only a supplied tree holds.
-  const number = node.number === undefined || !display ? '' : ` <span class="equation-number">${escapeText(`${node.numberPrefix ?? ''} ${node.number}`)}</span>`
+  const number = node.number === undefined || !display ? '' : ` <span class="equation-number">${equationNumber(node)}</span>`
   return `<span${tag}>${display ? `\\[${value}\\]` : `\\(${value}\\)`}</span>${number}`
 }
 

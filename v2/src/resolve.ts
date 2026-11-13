@@ -117,7 +117,7 @@ const NAMING_KEYS = ['aria-label', 'aria-labelledby']
 
 /** C2-H-155: true when the attribute line names the node itself, so the renderer generates no name and no id. */
 export function hasAuthoredName(node: AstNode): boolean {
-  return (keyValuesOf(node)).some(([key]) => NAMING_KEYS.includes(key.toLowerCase()))
+  return keyValuesOf(node).some(([key]) => NAMING_KEYS.includes(key.toLowerCase()))
 }
 
 function visitAdmonition(walk: Walk, node: AstNode): void {
@@ -141,7 +141,10 @@ const SLOTS = 4
 
 interface Step {
   visitor: Visitor | null
-  /** LEAF: inline content that a parse may know to hold nothing. OPAQUE: a note, whose content is walked with the notes. SLOTS: a title or a caption. */
+  /**
+   * LEAF: inline content that a parse may know to hold nothing. OPAQUE: a note, whose content is
+   * walked with the notes. SLOTS: a title or a caption.
+   */
   traits: number
 }
 
@@ -183,6 +186,11 @@ function visitSlots(walk: Walk, node: AstNode): void {
   if (node.caption !== undefined) visit(walk, node.caption, node)
 }
 
+/** Whether the leaf `node` may hold a node that resolution reads: any leaf of a supplied tree, and the noted leaves of a parse. */
+function mayResolve(walk: Walk, node: AstNode): boolean {
+  return walk.resolvableLeaves === null || walk.resolvableLeaves.has(node)
+}
+
 /**
  * Visits `node` and the nodes below it in document order. A note is visited with the notes, not
  * where it stands, and a leaf of a parsed tree is entered only where the parse saw a node that
@@ -195,10 +203,13 @@ function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
   step.visitor?.(walk, node, parent)
   const traits = step.traits
   if (traits === SLOTS) visitSlots(walk, node)
-  else if (traits === 0 || (traits === LEAF && (walk.resolvableLeaves === null || walk.resolvableLeaves.has(node)))) visitChildren(walk, node)
+  else if (traits === 0 || (traits === LEAF && mayResolve(walk, node))) visitChildren(walk, node)
 }
 
-/** The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered` counts the rows a cell above still spans. */
+/**
+ * The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered`
+ * counts the rows a cell above still spans.
+ */
 function rowMarks(row: AstNode, field: 'align' | 'valign', covered: number[], marks: (string | undefined)[]): void {
   const cells = childrenOf(row)
   const marked = cells.some((cell) => cell.span !== undefined)
@@ -349,7 +360,10 @@ function setDestinations(walk: Walk, targets: Map<AstNode, AstNode>, kept: Set<A
   }
 }
 
-/** C2-B-208: the sequence key of a caption: the plain text of its label, which is what stands before the mark, without trailing whitespace. */
+/**
+ * C2-B-208: the sequence key of a caption: the plain text of its label, which is what stands before
+ * the mark, without trailing whitespace.
+ */
 function captionKey(walk: Walk, children: AstNode[], mark: number): string {
   return labelText(children.slice(0, mark), walk.symbols).trimEnd()
 }

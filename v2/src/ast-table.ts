@@ -117,39 +117,62 @@ function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
   return joined ? out : place(ctx, out, row.start, row.end)
 }
 
+/** Where the sort of the rows of one table stands. */
+interface RowCursor {
+  headRows: number
+  footStart: number
+  /** The row index of the next row that is no comment. */
+  index: number
+  group: AstNode[]
+  covered: number[]
+  /** The end of the last comment in `groups.trailing`. */
+  trailingEnd: number
+}
+
+/** The end of the range a row adds to its group: its first line, since a continuation row is no part of it (C2-B-175). */
+function rowRangeEnd(src: string, row: BlockNode): number {
+  const lineEnd = src.indexOf('\n', row.start)
+  return lineEnd >= 0 && lineEnd < row.end ? lineEnd : row.end
+}
+
+/** C2-A-086: the comments above a row belong to the group of the row above them. */
+function flushTrailing(groups: Groups, cursor: RowCursor, rowStart: number): void {
+  if (groups.trailing.length === 0) return
+  for (const pending of groups.trailing) cursor.group.push(pending)
+  extend(groups, cursor.group, rowStart, cursor.trailingEnd)
+  groups.trailing = []
+}
+
+function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: BlockNode): void {
+  flushTrailing(groups, cursor, child.start)
+  // C2-B-174: a row span does not cross the head boundary.
+  if (cursor.index === cursor.headRows) cursor.covered = []
+  if (cursor.index < cursor.headRows) cursor.group = groups.head
+  else cursor.group = cursor.index < cursor.footStart ? groups.body : groups.foot
+  const row = rowNode(ctx, child, cursor.covered)
+  groups.width = Math.max(groups.width, row.children!.length)
+  cursor.group.push(row)
+  extend(groups, cursor.group, child.start, rowRangeEnd(ctx.src, child))
+  cursor.index++
+}
+
 function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): Groups {
   const headRows = node.facts & FACT_MASK
   const rowCount = node.children!.reduce((count, child) => count + (child.kind === COMMENT ? 0 : 1), 0)
-  const footStart = rowCount - (node.facts >> FACT_SHIFT)
   const groups = emptyGroups()
-  let covered: number[] = []
-  let group = headRows > 0 ? groups.head : groups.body
-  let index = 0
-  let trailingEnd = 0
+  const cursor: RowCursor = {
+    headRows, footStart: rowCount - (node.facts >> FACT_SHIFT), index: 0, group: headRows > 0 ? groups.head : groups.body,
+    covered: [], trailingEnd: 0,
+  }
   for (const child of node.children!) {
-    if (child.kind === COMMENT) {
-      const out = comment(ctx, child)
-      if (ctx.trace !== null) ctx.trace.blocks.set(out, child)
-      groups.trailing.push(out)
-      trailingEnd = child.end
+    if (child.kind !== COMMENT) {
+      addRow(ctx, groups, cursor, child)
       continue
     }
-    // C2-A-086: a comment between two rows belongs to the group of the row above it.
-    if (groups.trailing.length > 0) {
-      for (const pending of groups.trailing) group.push(pending)
-      extend(groups, group, child.start, trailingEnd)
-      groups.trailing = []
-    }
-    // C2-B-174: a row span does not cross the head boundary.
-    if (index === headRows) covered = []
-    group = index < headRows ? groups.head : index < footStart ? groups.body : groups.foot
-    const row = rowNode(ctx, child, covered)
-    groups.width = Math.max(groups.width, row.children!.length)
-    group.push(row)
-    // A continuation row is no part of the range: a comment may stand between the row and it (C2-B-175).
-    const lineEnd = ctx.src.indexOf('\n', child.start)
-    extend(groups, group, child.start, lineEnd >= 0 && lineEnd < child.end ? lineEnd : child.end)
-    index++
+    const out = comment(ctx, child)
+    if (ctx.trace !== null) ctx.trace.blocks.set(out, child)
+    groups.trailing.push(out)
+    cursor.trailingEnd = child.end
   }
   return groups
 }
@@ -195,7 +218,8 @@ function groupNode(ctx: TreeContext, groups: Groups, type: string, rows: AstNode
 function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): AstNode {
   takeKey(attributes, 'footer-rows')
   takeKey(attributes, 'header-rows')
-  const table: AstNode = { type: 'table', columns: columnNodes(groups.width, takeKey(attributes, 'aligns'), takeKey(attributes, 'widths')), children: [] }
+  const columns = columnNodes(groups.width, takeKey(attributes, 'aligns'), takeKey(attributes, 'widths'))
+  const table: AstNode = { type: 'table', columns, children: [] }
   if (groups.head.length > 0) table.children!.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.body.length > 0) table.children!.push(groupNode(ctx, groups, 'table_body', groups.body))
   if (groups.foot.length > 0) table.children!.push(groupNode(ctx, groups, 'table_foot', groups.foot))

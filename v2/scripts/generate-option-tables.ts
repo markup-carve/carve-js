@@ -2,6 +2,7 @@
 //   node v2/scripts/generate-option-tables.ts
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { wrapJson } from './wrap-literal.ts'
 
 interface OptionRow {
   name: string
@@ -26,7 +27,7 @@ export function generateOptionTables(json: string): string {
     '])',
     '',
     'export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([',
-    ...enums.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.values)}],`),
+    ...enums.flatMap((option) => wrapJson(`[${JSON.stringify(option.name)}, `, option.values!, '],', '  ')),
     '])',
     '',
     'export const ENUM_DEFAULTS: ReadonlyMap<string, string> = new Map([',
@@ -41,7 +42,7 @@ export function generateOptionTables(json: string): string {
     `export const DEFAULT_LABELS: Readonly<Record<string, string>> = ${JSON.stringify(row('labels').default, null, 2)}`,
     '',
     '/** C2-H-128: the schemes the default URL policy denies. */',
-    `export const DEFAULT_DENIED_SCHEMES: readonly string[] = ${JSON.stringify((row('urlPolicy').default as { deny: string[] }).deny)}`,
+    ...wrapJson('export const DEFAULT_DENIED_SCHEMES: readonly string[] = ', (row('urlPolicy').default as { deny: string[] }).deny),
     '',
   ]
   return lines.join('\n')
@@ -49,5 +50,6 @@ export function generateOptionTables(json: string): string {
 
 if (process.argv[1] === import.meta.filename) {
   const root = join(import.meta.dirname, '..')
-  writeFileSync(join(root, 'src/option-tables.ts'), generateOptionTables(readFileSync(join(root, 'data/options.json'), 'utf8')))
+  const text = generateOptionTables(readFileSync(join(root, 'data/options.json'), 'utf8'))
+  writeFileSync(join(root, 'src/option-tables.ts'), text)
 }

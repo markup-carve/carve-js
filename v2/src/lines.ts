@@ -432,7 +432,10 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
   return false
 }
 
-/** C2-B-161, C2-B-164: exactly `---`, then a format name of lowercase letters, digits and hyphens, glued or after one space, or nothing, and trailing spaces. */
+/**
+ * C2-B-161, C2-B-164: exactly `---`, then a format name of lowercase letters, digits and hyphens,
+ * glued or after one space, or nothing, and trailing spaces.
+ */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   let p = pos + FRONTMATTER_RUN

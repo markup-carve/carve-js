@@ -71,7 +71,8 @@ function checkNode(node: AstNode, outer: Position | null, table: Map<number, [nu
   if (pos !== undefined) {
     const failure = checkPosition(pos, table, path)
     if (failure !== null) return failure
-    if (outer !== null && (pos.startOffset < outer.startOffset || pos.endOffset > outer.endOffset)) return `${path}: ${node.type} lies outside its parent`
+    const outside = outer !== null && (pos.startOffset < outer.startOffset || pos.endOffset > outer.endOffset)
+    if (outside) return `${path}: ${node.type} lies outside its parent`
   }
   for (const list of slotLists(node)) {
     const failure = checkSiblings(list, path) ?? checkList(list, pos ?? outer, table, path)
@@ -89,6 +90,16 @@ function checkList(list: AstNode[], outer: Position | null, table: Map<number, [
 }
 
 /** Tags balanced, attributes quoted, no attribute twice, and no markup character outside a tag. */
+/** What is wrong with the tag `match` at `at`, given the open elements, or null. Takes the tag into `open`. */
+function tagFailure(match: RegExpExecArray, at: number, open: string[]): string | null {
+  const names = Array.from(match[3]!.matchAll(ATTRIBUTE), (attribute) => attribute[1]!.toLowerCase())
+  if (new Set(names).size !== names.length) return `an attribute twice in ${match[0]}`
+  const name = match[2]!
+  if (match[1] === '/') return open.pop() === name ? null : `</${name}> closes nothing at ${at}`
+  if (!VOID_ELEMENTS.includes(name)) open.push(name)
+  return null
+}
+
 export function checkHtml(html: string): string | null {
   const open: string[] = []
   for (let at = 0; at < html.length; at++) {
@@ -98,14 +109,8 @@ export function checkHtml(html: string): string | null {
     TAG.lastIndex = at
     const match = TAG.exec(html)
     if (match === null) return `a malformed tag at ${at}: ${html.slice(at, at + 40)}`
-    const names = Array.from(match[3]!.matchAll(ATTRIBUTE), (attribute) => attribute[1]!.toLowerCase())
-    if (new Set(names).size !== names.length) return `an attribute twice in ${match[0]}`
-    const name = match[2]!
-    if (match[1] === '/') {
-      if (open.pop() !== name) return `</${name}> closes nothing at ${at}`
-    } else if (!VOID_ELEMENTS.includes(name)) {
-      open.push(name)
-    }
+    const failure = tagFailure(match, at, open)
+    if (failure !== null) return failure
     at += match[0].length - 1
   }
   return open.length === 0 ? null : `<${open[open.length - 1]!}> is not closed`

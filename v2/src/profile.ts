@@ -61,7 +61,7 @@ function headingText(node: AstNode): string {
 }
 
 function rowText(node: AstNode): string {
-  return (childrenOf(node)).filter((cell) => cell.span === undefined).map(blockText).join(' | ')
+  return childrenOf(node).filter((cell) => cell.span === undefined).map(blockText).join(' | ')
 }
 
 // The blocks whose degraded text is not that of their content alone: the mark of the kind stands in it, as 0.1 wrote it.

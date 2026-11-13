@@ -29,25 +29,25 @@ export function checkDocument(src: string): string | null {
   }
 }
 
+/** What is wrong with the event at `at`, given the kinds of the open blocks, or null. Takes the event into `open`. */
+function eventFailure(tag: number, at: number, open: number[]): string | null {
+  const type = eventType(tag)
+  const top = open.length > 0 ? open[open.length - 1]! : -1
+  if (type === SPAN) return top < 0 || !isLeaf(top) ? `event ${at}: a span outside a leaf` : null
+  if (type === EXIT) return open.pop() === eventKind(tag) ? null : `event ${at}: an exit that does not match its enter`
+  if (type !== ENTER) return `event ${at}: unknown event type`
+  if (top >= 0 && isLeaf(top)) return `event ${at}: a block inside a leaf`
+  if (top < 0 && at > 0) return `event ${at}: a block after the document`
+  open.push(eventKind(tag))
+  return null
+}
+
 /** Every exit closes the block entered last, spans stand in leaves only, and a leaf holds no block. */
 function checkBalance(state: BlockState): string | null {
-  const events = state.events
   const open: number[] = []
   for (let at = 0; at < state.eventLength; at += EVENT_WIDTH) {
-    const tag = events[at]!
-    const type = eventType(tag)
-    const top = open.length > 0 ? open[open.length - 1]! : -1
-    if (type === ENTER) {
-      if (top >= 0 && isLeaf(top)) return `event ${at}: a block inside a leaf`
-      if (top < 0 && at > 0) return `event ${at}: a block after the document`
-      open.push(eventKind(tag))
-    } else if (type === SPAN) {
-      if (top < 0 || !isLeaf(top)) return `event ${at}: a span outside a leaf`
-    } else if (type === EXIT) {
-      if (open.pop() !== eventKind(tag)) return `event ${at}: an exit that does not match its enter`
-    } else {
-      return `event ${at}: unknown event type`
-    }
+    const failure = eventFailure(state.events[at]!, at, open)
+    if (failure !== null) return failure
   }
   return open.length === 0 ? null : 'unclosed blocks at the end'
 }

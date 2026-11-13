@@ -53,7 +53,10 @@ const RULES = new Map<string, Rule>([
   ['caption', ['blocks', [], ['short']]],
   ['caption_number', ['none', [], ['n']]],
   ['cell_paragraph', ['inlines', [], ['blockImage']]],
-  ['citation', ['none', ['key', 'suppressAuthor', 'namespace'], ['prefix', 'locator', 'locatorLabel', 'locatorValue', 'suffix', 'mode', 'number', 'useIndex']]],
+  ['citation', [
+    'none', ['key', 'suppressAuthor', 'namespace'],
+    ['prefix', 'locator', 'locatorLabel', 'locatorValue', 'suffix', 'mode', 'number', 'useIndex'],
+  ]],
   ['citation_definition', ['inlines', REFERENCE, []]],
   ['citation_group', [['citation'], ['raw'], ['mode']]],
   ['code', ['none', ['value'], []]],
@@ -66,7 +69,10 @@ const RULES = new Map<string, Rule>([
   ['delete', ['inlines', [], []]],
   ['directive', ['blocks', ['kind'], ['title', 'groupLabel', 'tocTarget']]],
   ['div', ['blocks', [], ['title', 'groupLabel']]],
-  ['document', [[...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter'], ['astVersion'], ['srcByteLength', 'extensions', 'stages', 'resources']]],
+  ['document', [
+    [...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter'],
+    ['astVersion'], ['srcByteLength', 'extensions', 'stages', 'resources'],
+  ]],
   ['emphasis', ['inlines', [], []]],
   ['figure', ['blocks', [], ['caption', 'kind']]],
   ['figure_group', ['blocks', [], ['caption']]],
@@ -190,7 +196,9 @@ function checkAttrs(value: Value, path: string): void {
     if (name !== 'id' && name !== 'classes' && name !== 'keyValues') fail(`${path}/${name}`, 'unknown field of attrs')
   }
   if (value['id'] !== undefined) requireString(value['id'], `${path}/id`)
-  if (value['classes'] !== undefined) requireArray(value['classes'], `${path}/classes`).forEach((name, index) => requireString(name, `${path}/classes/${index}`))
+  if (value['classes'] !== undefined) {
+    requireArray(value['classes'], `${path}/classes`).forEach((name, index) => requireString(name, `${path}/classes/${index}`))
+  }
   if (value['keyValues'] === undefined) return
   checkPairs(value['keyValues'], `${path}/keyValues`)
   for (const [key] of value['keyValues'] as [string, string][]) {
@@ -226,7 +234,8 @@ function checkMarker(value: Value, path: string): void {
 
 function checkOrderedMarker(value: Fields, path: string): void {
   if (value['style'] !== undefined && !ORDERED_STYLES.includes(value['style'] as string)) fail(`${path}/style`, 'unknown style')
-  if (value['delimiter'] !== undefined && value['delimiter'] !== '.' && value['delimiter'] !== ')') fail(`${path}/delimiter`, 'unknown delimiter')
+  const delimiter = value['delimiter']
+  if (delimiter !== undefined && delimiter !== '.' && delimiter !== ')') fail(`${path}/delimiter`, 'unknown delimiter')
   if (value['start'] !== undefined && !Number.isInteger(value['start'])) fail(`${path}/start`, 'not an integer')
 }
 
@@ -298,7 +307,8 @@ function checkResources(value: Value, path: string): void {
     if (!isObject(entry)) fail(`${path}/${index}`, 'not a resource')
     const id = requireString(entry['id'], `${path}/${index}/id`)
     requireString(entry['mediaType'], `${path}/${index}/mediaType`)
-    if (!/^sha256:[0-9a-f]{64}$/.test(requireString(entry['digest'], `${path}/${index}/digest`))) fail(`${path}/${index}/digest`, 'not a sha256 digest')
+    const digest = requireString(entry['digest'], `${path}/${index}/digest`)
+    if (!/^sha256:[0-9a-f]{64}$/.test(digest)) fail(`${path}/${index}/digest`, 'not a sha256 digest')
     if (seen.has(id)) fail(`${path}/${index}/id`, 'a duplicate resource id')
     seen.add(id)
   })
@@ -365,22 +375,22 @@ function checkDependencies(node: Fields, type: string, path: string): void {
   }
 }
 
+/** C2-A-028, C2-A-169: nodes are closed. C2-A-139: a field that is absent is left out; it is never null. */
+function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, depth: number): void {
+  const [, required, optional] = rule
+  const value = node[name]
+  const at = `${path}/${name}`
+  if (!COMMON.includes(name) && !required.includes(name) && !optional.includes(name)) fail(at, `not a field of ${type}`)
+  if (value === null || value === undefined) fail(at, 'a field without a value')
+  if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, depth, node)
+}
+
 function checkFields(node: Fields, type: string, rule: Rule, path: string, depth: number): void {
-  const [content, required, optional] = rule
+  const [content, required] = rule
   for (const name of required) if (node[name] === undefined) fail(`${path}/${name}`, 'a required field is missing')
-  for (const [name, value] of Object.entries(node)) {
-    if (name === 'type' || name === 'children') continue
-    // C2-A-028, C2-A-169: nodes are closed.
-    if (!COMMON.includes(name) && !required.includes(name) && !optional.includes(name)) fail(`${path}/${name}`, `not a field of ${type}`)
-    // C2-A-139: a field that is absent is left out; it is never null.
-    if (value === null || value === undefined) fail(`${path}/${name}`, 'a field without a value')
-    if (!checkScalar(type, name, value, `${path}/${name}`)) FIELD_CHECKS.get(name)?.(value, `${path}/${name}`, depth, node)
-  }
-  if (content === 'none') {
-    if (node['children'] !== undefined) fail(`${path}/children`, `${type} holds no children`)
-  } else {
-    checkList(node['children'], `${path}/children`, content, depth)
-  }
+  for (const name of Object.keys(node)) if (name !== 'type' && name !== 'children') checkField(node, type, rule, name, path, depth)
+  if (content !== 'none') checkList(node['children'], `${path}/children`, content, depth)
+  else if (node['children'] !== undefined) fail(`${path}/children`, `${type} holds no children`)
 }
 
 function checkNode(value: Value, path: string, allowed: readonly string[], depth: number): void {

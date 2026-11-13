@@ -201,7 +201,9 @@ function grown(array: Int32Array): Int32Array {
 }
 
 /** Appends a token and returns its offset in the token array. */
-export function pushToken(state: InlineState, kind: number, start: number, end: number, a: number, b: number, c: number, d: number): number {
+export function pushToken(
+  state: InlineState, kind: number, start: number, end: number, a: number, b: number, c: number, d: number,
+): number {
   const at = state.tokenLength
   if (at + TOKEN_WIDTH > state.tokens.length) state.tokens = grown(state.tokens)
   const tokens = state.tokens
@@ -231,8 +233,9 @@ const LINE_FEED = 10
 
 /** The lines `spans[from..to)` of the source with one line feed between two. */
 function joinLines(src: string, spans: ArrayLike<number>, from: number, to: number): string {
-  let text = ''
-  for (let at = from; at < to; at += 2) text += at === from ? src.slice(spans[at], spans[at + 1]) : `\n${src.slice(spans[at], spans[at + 1])}`
+  if (from >= to) return ''
+  let text = src.slice(spans[from], spans[from + 1])
+  for (let at = from + 2; at < to; at += 2) text += `\n${src.slice(spans[at], spans[at + 1])}`
   return text
 }
 

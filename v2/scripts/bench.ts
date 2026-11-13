@@ -310,14 +310,16 @@ for (const file of files) {
   for (const peer of peers) {
     const input = peer.engine === null ? null : peerInput(file, peer.extension)
     columns.push(input === null ? -1 : tasks.length)
-    if (input === null) notes.push(peer.engine === null ? `${peer.name} is not installed` : `${peer.name} cannot read ${baseName(file)}: no ${peer.extension} file beside it`)
-    else tasks.push(() => built(peer.engine!(input)))
+    if (input !== null) tasks.push(() => built(peer.engine!(input)))
+    else if (peer.engine === null) notes.push(`${peer.name} is not installed`)
+    else notes.push(`${peer.name} cannot read ${baseName(file)}: no ${peer.extension} file beside it`)
   }
   const times: number[][] = tasks.map(() => [])
   for (const task of tasks) sample(task)
   for (let round = 0; round < rounds; round++) tasks.forEach((task, at) => times[at]!.push(sample(task)))
   const medians = times.map(median)
-  console.log(`| ${baseName(file)} | ${medians[0]!.toFixed(2)} | ${columns.map((at) => (at < 0 ? '' : medians[at]!.toFixed(2))).join(' | ')} |`)
+  const cells = columns.map((at) => (at < 0 ? '' : medians[at]!.toFixed(2)))
+  console.log(`| ${baseName(file)} | ${medians[0]!.toFixed(2)} | ${cells.join(' | ')} |`)
 }
 console.log('')
 for (const note of new Set(notes)) console.log(`- ${note}`)

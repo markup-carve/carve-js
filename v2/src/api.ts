@@ -122,7 +122,8 @@ function renderInput(input: string | AstNode, settings: Settings): Rendered {
 export function renderWithDiagnostics(input: string | AstNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
   const rendered = renderInput(input, settings)
-  const diagnostics = [...locateFindings(rendered.document, rendered.resolution.findings), ...locateFindings(rendered.document, rendered.losses)]
+  const found = locateFindings(rendered.document, rendered.resolution.findings)
+  const diagnostics = [...found, ...locateFindings(rendered.document, rendered.losses)]
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html, diagnostics }
 }
 
@@ -133,6 +134,6 @@ export function renderWithDiagnostics(input: string | AstNode, options?: RenderO
 export function render(input: string | AstNode, options?: RenderOptions): string {
   const settings = readOptions(options, 'render')
   const rendered = renderInput(input, settings)
-  if (settings.strictLosses && rendered.losses.entries.length > 0) throw new CarveRenderError(locateFindings(rendered.document, rendered.losses))
-  return rendered.html
+  if (!settings.strictLosses || rendered.losses.entries.length === 0) return rendered.html
+  throw new CarveRenderError(locateFindings(rendered.document, rendered.losses))
 }

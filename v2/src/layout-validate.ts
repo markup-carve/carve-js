@@ -143,7 +143,9 @@ export function validateLayout(value: unknown): SourceLayout {
   ;(value['nodes'] as unknown[]).forEach((entry, index) => {
     const path = checkEntry(entry, `/nodes/${index}`, length)
     // C2-L-011: sorted by path as strings, each path once.
-    if (previous !== null && path <= previous) fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not sorted by path')
+    if (previous !== null && path <= previous) {
+      fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not sorted by path')
+    }
     previous = path
   })
   return value as unknown as SourceLayout

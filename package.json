@@ -91,6 +91,7 @@
     "@types/node": "^22.19.20",
     "commonmark": "^0.31.2",
     "eslint": "^9.39.5",
+    "eslint-plugin-sonarjs": "^4.2.2",
     "markdown-it": "^15.0.3",
     "prettier": "^3.9.6",
     "typescript": "^5.7.2",

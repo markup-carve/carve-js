@@ -62,7 +62,10 @@ const SCANNERS = scanners()
 // Whether a character has a scanner, as bytes: the scan asks this once per character of text.
 const STARTS_TOKEN = Uint8Array.from(SCANNERS, (scanner) => (scanner === undefined ? 0 : 1))
 // Whether a character is text wherever it stands: it starts no token and no smart punctuation.
-const ALWAYS_TEXT = Uint8Array.from(STARTS_TOKEN, (starts, code) => (starts === 0 && (CHARACTER_CLASSES[code]! & CLASS_SMART_TRIGGER) === 0 ? 1 : 0))
+const ALWAYS_TEXT = Uint8Array.from(STARTS_TOKEN, (starts, code) => {
+  const smart = (CHARACTER_CLASSES[code]! & CLASS_SMART_TRIGGER) !== 0
+  return starts === 0 && !smart ? 1 : 0
+})
 
 /**
  * True when `src[start, end)`, one line, is one run of text for the inline pass: ASCII characters

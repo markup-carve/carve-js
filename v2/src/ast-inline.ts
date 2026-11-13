@@ -292,29 +292,31 @@ function closeFrame(ctx: TreeContext, spans: number[], node: InlineFrame, host: 
   else addNode(ctx, list, node, flow)
 }
 
+/** Adds the source `[start, end)` to the open leaf `top`, or as a run of text to the list it belongs to. */
+function addSpan(ctx: TreeContext, root: AstNode[], top: InlineFrame | null, start: number, end: number, flow: number): void {
+  const text = ctx.src.slice(start, end)
+  if (top === null || top.children !== null) return addRun(ctx, top === null ? root : top.children!, text, runStart(flow, start), end)
+  top.value = top.spanned ? `${top.value}\n${text}` : text
+  top.spanned = true
+}
+
 /** Builds the public nodes of one content from the events of its inline pass. */
 function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): AstNode[] {
   const { events, eventLength } = ctx.inline
-  const src = ctx.src
   const root: AstNode[] = []
   const open: InlineFrame[] = []
   let top: InlineFrame | null = null
   for (let at = 0; at < eventLength; at += EVENT_WIDTH) {
     const tag = events[at]!
-    const a = events[at + 1]!
-    const b = events[at + 2]!
     const type = eventType(tag)
     if (type === ENTER) {
-      top = openFrame(eventKind(tag), a, eventFlags(tag), b)
+      top = openFrame(eventKind(tag), events[at + 1]!, eventFlags(tag), events[at + 2]!)
       open.push(top)
-    } else if (type === SPAN && top !== null && top.children === null) {
-      top.value = top.spanned ? `${top.value}\n${src.slice(a, b)}` : src.slice(a, b)
-      top.spanned = true
     } else if (type === SPAN) {
-      addRun(ctx, top === null ? root : top.children!, src.slice(a, b), runStart(flow, a), b)
+      addSpan(ctx, root, top, events[at + 1]!, events[at + 2]!, flow)
     } else {
       const node = open.pop()!
-      node.end = a
+      node.end = events[at + 1]!
       top = open.length > 0 ? open[open.length - 1]! : null
       closeFrame(ctx, spans, node, top, top === null ? root : top.children!, flow)
     }

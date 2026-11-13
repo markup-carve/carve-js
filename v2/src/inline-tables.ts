@@ -55,7 +55,11 @@ export const SMART_RIGHTWARDS_ARROW = 15
 export const SMART_RIGHTWARDS_DOUBLE_ARROW = 16
 export const SMART_TRADEMARK = 17
 
-export const SMART_KIND_NAMES: readonly string[] = ["ellipsis","em_dash","en_dash","greater_than_or_equal","left_double_quote","left_right_arrow","left_right_double_arrow","left_single_quote","leftwards_arrow","leftwards_double_arrow","less_than_or_equal","not_equal","plus_minus","right_double_quote","right_single_quote","rightwards_arrow","rightwards_double_arrow","trademark"]
+export const SMART_KIND_NAMES: readonly string[] = [
+  "ellipsis", "em_dash", "en_dash", "greater_than_or_equal", "left_double_quote", "left_right_arrow", "left_right_double_arrow",
+  "left_single_quote", "leftwards_arrow", "leftwards_double_arrow", "less_than_or_equal", "not_equal", "plus_minus", "right_double_quote",
+  "right_single_quote", "rightwards_arrow", "rightwards_double_arrow", "trademark",
+]
 export const SMART_GLYPHS: readonly string[] = ["…","—","–","≥","“","↔","⇔","‘","←","⇐","≤","≠","±","”","’","→","⇒","™"]
 
 /** The replaced runs, the longest first, as [source, kind]. */
@@ -78,7 +82,9 @@ export const APOSTROPHE_WORDS: readonly string[] = ["bout","cause","em","n","til
 
 /** The marks of the braced forms, the node each makes, and the marks that are bare delimiters. */
 export const BRACED_MARKS = "*+,-/=^_~"
-export const BRACED_NODES: readonly string[] = ["strong","insert","subscript","delete","emphasis","highlight","superscript","underline","strike"]
+export const BRACED_NODES: readonly string[] = [
+  "strong", "insert", "subscript", "delete", "emphasis", "highlight", "superscript", "underline", "strike",
+]
 export const BARE_MARKS = "/*"
 
 export const DEPTH_CAP = 200

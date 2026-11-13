@@ -91,51 +91,55 @@ function openFrontmatter(state: BlockState, end: number): boolean {
   return true
 }
 
+/** Closes the open leaf that is not text, which did not take the line. Returns the containers the line still matches. */
+function closeBodyLeaf(state: BlockState, matched: number, end: number, blank: boolean): number {
+  const opaque = state.leaf !== TABLE
+  closeLeaf(state)
+  if (!opaque || blank) return matched
+  // C2-B-111: the leaf ends with its container. C2-B-135: a comment line is no exception,
+  // so the containers that do not own this line close before it is read again.
+  closeUnowned(state, matched, end)
+  return state.depth
+}
+
+/** C2-B-032: a blank line without the mark ends a quote. C2-B-009: it ends nothing else. */
+function blankLine(state: BlockState, matched: number): void {
+  closeLeaf(state)
+  closeTo(state, matched)
+  state.blankCount++
+  state.captionDepth = NO_DEPTH
+  state.attributesDepth = NO_DEPTH
+}
+
+/** C2-B-012: the open text leaf takes the line as a lazy line, whatever its indent or prefix, unless the line interrupts it. */
+function lazyLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
+  if (interruptsLeaf(state, matched, lineStart, end)) return false
+  writeEvent(state, SPAN_TAG, state.pos, end)
+  state.contentEnd = end
+  // C2-B-157: a comment-only line below a block image or a math block does not count.
+  if (!isLineComment(state.src, state.pos, end)) state.leafLines++
+  return true
+}
+
 function scanLine(state: BlockState, lineStart: number, end: number): void {
   let matched = matchContainers(state, lineStart, end)
   const blank = state.pos >= end
   if (state.leaf !== NO_LEAF && !isTextLeaf(state.leaf)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
-    const opaque = state.leaf !== TABLE
-    closeLeaf(state)
-    if (opaque && !blank) {
-      // C2-B-111: the leaf ends with its container. C2-B-135: a comment line is no exception,
-      // so the containers that do not own this line close before it is read again.
-      closeUnowned(state, matched, end)
-      matched = state.depth
-    }
+    matched = closeBodyLeaf(state, matched, end, blank)
   }
-  if (blank) {
-    // C2-B-032: a blank line without the mark ends a quote. C2-B-009: it ends nothing else.
-    closeLeaf(state)
-    closeTo(state, matched)
-    state.blankCount++
-    state.captionDepth = NO_DEPTH
-    state.attributesDepth = NO_DEPTH
-    return
-  }
+  if (blank) return blankLine(state, matched)
   // C2-B-154: a line that does not continue the open heading meets it closed.
   if (state.leaf === HEADING && !continuesHeading(state, matched)) closeLeaf(state)
-  let captions = false
   if (isTextLeaf(state.leaf)) {
-    captions = state.leaf === PARAGRAPH && captionsAfterParagraph(state, matched, end)
-    if (!captions && !interruptsLeaf(state, matched, lineStart, end)) {
-      // C2-B-012: a lazy line, whatever its indent or prefix.
-      writeEvent(state, SPAN_TAG, state.pos, end)
-      state.contentEnd = end
-      // C2-B-157: a comment-only line below a block image or a math block does not count.
-      if (!isLineComment(state.src, state.pos, end)) state.leafLines++
-      return
-    }
+    const captions = state.leaf === PARAGRAPH && captionsAfterParagraph(state, matched, end)
+    if (!captions && lazyLine(state, matched, lineStart, end)) return
     closeLeaf(state)
-  } else if (isLineComment(state.src, state.pos, end)) {
-    // C2-B-137, C2-B-138: a comment-only line closes nothing and counts neither as blank nor as content.
-    writeComment(state, end)
-    return
-  } else {
-    captions = captionsAfterBlock(state, matched, end)
+    return openLine(state, matched, lineStart, end, captions)
   }
-  openLine(state, matched, lineStart, end, captions)
+  // C2-B-137, C2-B-138: a comment-only line closes nothing and counts neither as blank nor as content.
+  if (isLineComment(state.src, state.pos, end)) return writeComment(state, end)
+  openLine(state, matched, lineStart, end, captionsAfterBlock(state, matched, end))
 }
 
 /** A line of the open opaque leaf or table. Returns false when the line ends that block. */
@@ -307,7 +311,10 @@ function continuesHeading(state: BlockState, matched: number): boolean {
   return matched === state.depth && state.column - state.origin > state.leafColumn
 }
 
-/** The interrupters of an open text leaf: (a) a fence line, (b) a list marker, (c) a sibling mark or definition, (e) a table row, (f) a thematic break. */
+/**
+ * The interrupters of an open text leaf: (a) a fence line, (b) a list marker, (c) a sibling mark or
+ * definition, (e) a table row, (f) a thematic break.
+ */
 function interruptsLeaf(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
   const pos = state.pos
@@ -448,6 +455,19 @@ function openBulletItem(state: BlockState, end: number): boolean {
   return true
 }
 
+/** The style flags of an ordered marker of letters that starts at `pos`, added to `style`. */
+function letterFlags(state: BlockState, pos: number, delimiter: number, style: number): number {
+  const first = state.src.charCodeAt(pos)
+  const flags = first < LOWER_A ? style | FLAG_UPPER : style
+  return flags | letterStyle(state, flags, delimiter - pos === 1, romanLetterValue(first) > 0, first === LOWER_I || first === UPPER_I)
+}
+
+/** The number of an ordered marker of letters of the style `style`. */
+function letterStart(src: string, pos: number, delimiter: number, style: number): number {
+  if ((style & FLAG_ROMAN) !== 0) return romanValue(src, pos, delimiter)
+  return src.charCodeAt(pos) - ((style & FLAG_UPPER) !== 0 ? UPPER_A : LOWER_A) + 1
+}
+
 function openOrderedItem(state: BlockState, end: number): boolean {
   const src = state.src
   const pos = state.pos
@@ -456,22 +476,17 @@ function openOrderedItem(state: BlockState, end: number): boolean {
   const markerEnd = orderedMarkerEnd(src, pos, delimiter, end)
   if (markerEnd < 0) return false
   let style = src.charCodeAt(delimiter) === PAREN_CLOSE ? FLAG_PAREN : 0
-  let start = 0
   const first = src.charCodeAt(pos)
-  if (delimiter === pos) {
-    // C2-B-042, C2-B-043: the bare dot numbers automatically and is of the decimal style.
-    start = -1
-  } else if (first >= DIGIT_0 && first <= DIGIT_9) {
+  // C2-B-042, C2-B-043: the bare dot numbers automatically and is of the decimal style.
+  let start = -1
+  if (delimiter !== pos && first >= DIGIT_0 && first <= DIGIT_9) {
     start = decimalValue(src, pos, delimiter)
-  } else {
-    const upper = first < LOWER_A
-    if (upper) style |= FLAG_UPPER
-    style |= letterStyle(state, style, delimiter - pos === 1, romanLetterValue(first) > 0, first === LOWER_I || first === UPPER_I)
-    start = (style & FLAG_ROMAN) !== 0 ? romanValue(src, pos, delimiter) : first - (upper ? UPPER_A : LOWER_A) + 1
+  } else if (delimiter !== pos) {
+    style = letterFlags(state, pos, delimiter, style)
+    start = letterStart(src, pos, delimiter, style)
   }
-  if (!openItem(state, ORDERED_LIST, style, start < 0 ? FLAG_AUTO : 0, start < 0 ? 0 : start, 0, delimiter + 1)) {
-    return false
-  }
+  const auto = start < 0
+  if (!openItem(state, ORDERED_LIST, style, auto ? FLAG_AUTO : 0, auto ? 0 : start, 0, delimiter + 1)) return false
   moveTo(state, markerEnd, end)
   return true
 }

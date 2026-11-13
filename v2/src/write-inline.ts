@@ -111,7 +111,7 @@ function kindsBelow(w: Writer, node: AstNode): number {
 
 /** C2-W-116: a node that needs content and has none is left out. */
 function contentOf(w: Writer, node: AstNode, flags: number): string | null {
-  if ((childrenOf(node)).length > 0) return writeInlines(w, node.children!, flags)
+  if (childrenOf(node).length > 0) return writeInlines(w, node.children!, flags)
   lose(w, node, null)
   return null
 }

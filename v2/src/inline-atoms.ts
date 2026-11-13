@@ -3,7 +3,10 @@
 // Each scanner takes the offset of its first character and returns the offset where the scan
 // goes on; it pushes a token when its form matched.
 import { classRunEnd, readAttributeBlock } from './attributes.ts'
-import { AT_SIGN, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_OPEN, COLON, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LF, PERCENT, SLASH, SPACE } from './chars.ts'
+import {
+  AT_SIGN, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_OPEN, COLON, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LF,
+  PERCENT, SLASH, SPACE,
+} from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END,
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SOFT_BREAK, SYMBOL, TAG, XREF,
@@ -273,13 +276,19 @@ function atSigilBoundary(state: InlineState, pos: number): boolean {
 }
 
 /** C2-I-092: the end of the name of a mention or a tag that starts at `pos`, or NONE. */
+/** A dot inside a name: not its first character, not behind another dot, and before a character of the name. */
+function isInnerDot(text: string, p: number, pos: number, end: number): boolean {
+  if (text.charCodeAt(p) !== DOT || p === pos || text.charCodeAt(p - 1) === DOT) return false
+  return inClass(p + 1 < end ? text.charCodeAt(p + 1) : NO_CHARACTER, CLASS_MENTION)
+}
+
 function dottedNameEnd(text: string, pos: number, end: number): number {
   let p = pos
   let letters = false
   for (; p < end; p++) {
     const code = text.charCodeAt(p)
     if (inClass(code, CLASS_MENTION)) letters ||= isAsciiLetter(code)
-    else if (code !== DOT || p === pos || text.charCodeAt(p - 1) === DOT || !inClass(p + 1 < end ? text.charCodeAt(p + 1) : NO_CHARACTER, CLASS_MENTION)) break
+    else if (!isInnerDot(text, p, pos, end)) break
   }
   // A trailing hyphen is text behind the name.
   while (p > pos && (text.charCodeAt(p - 1) === HYPHEN || text.charCodeAt(p - 1) === DOT)) p--

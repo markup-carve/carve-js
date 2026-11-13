@@ -37,7 +37,8 @@ function runEnumeration(kind: string, max: number): boolean {
   for (let size = 1; size <= max; size++) {
     const started = Date.now()
     const result = kind === 'tokens' ? enumerateWriter(INLINE_TOKENS, size, '', 'x') : enumerateWriter(LINE_SHAPES, size, '\n', '')
-    console.log(`${size} ${kind}: ${result.documents} documents, ${result.refused} refused (C2-W-016), ${result.failures.length} failures, ${Date.now() - started} ms`)
+    const counts = `${result.documents} documents, ${result.refused} refused (C2-W-016), ${result.failures.length} failures`
+    console.log(`${size} ${kind}: ${counts}, ${Date.now() - started} ms`)
     for (const failure of result.failures) console.log(`  ${failure}`)
     if (result.failures.length > 0) passed = false
   }

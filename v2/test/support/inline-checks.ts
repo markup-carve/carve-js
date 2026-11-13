@@ -51,7 +51,9 @@ function checkCoverage(state: InlineState, src: string, start: number, end: numb
   return src.slice(cursor, end).trim() === '' ? null : `offset ${cursor}: the end of the content is not covered`
 }
 
-function checkContent(state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean): string | null {
+function checkContent(
+  state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean,
+): string | null {
   if (to === from) return null
   scanInline(state, src, spans, from, to, depth, lineComments)
   const failure = checkEvents(state, spans[from]!, spans[to - 1]!) ?? checkCoverage(state, src, spans[from]!, spans[to - 1]!)

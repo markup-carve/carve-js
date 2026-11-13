@@ -13,19 +13,29 @@ function option(name: string, fallback: string): string {
 const sizes = option('sizes', '1000,10000,100000').split(',').map(Number)
 const limit = Number(option('limit', '30'))
 
+type Shape = [string, (size: number) => string]
+
+const OPENERS = [
+  '*a ', '/a ', '{*', '{=a ', '[', '![', '^[', ':n[', '{%', '{#', '</#', '<a:', '<a@', '{k="', '{k=a', '{.a ', '[a](',
+  '[a](x "', '[a]((', '[a][', '[^', '"', "'", '@', '#a ', ':a', '``a` ',
+]
+const LINE_CHARACTERS = ['*', '/', '-', '`', '[', ']', '{', '}', '\\', '<', "'", '.', '=', '%', '_']
+const PAIRS = [
+  '*a* ', '/a/ ', '{*a*} ', '[a] ', '[a](/u) ', '[a][b] ', '[a]{.c} ', '`a` ', '{%a%} ', '"a" ', '*a/ ', '{*a/} ',
+  '/a *b/ c* ', '*{%a%} ', '{%a%}* ', '{*a*}{.c} ', 'a--b ', '<a:b> ', '</#a> ', '^[a] ', ':n[a] ', '![a](/u) ', '\\*a ',
+]
+
 // [name, the content for a size]. A size is a count of openers, of nesting levels or of pairs;
 // for the lines of one character it is a tenth of the length, so the last size is 1 MB.
 export const SHAPES: readonly (readonly [string, (size: number) => string])[] = [
-  ...['*a ', '/a ', '{*', '{=a ', '[', '![', '^[', ':n[', '{%', '{#', '</#', '<a:', '<a@', '{k="', '{k=a', '{.a ', '[a](', '[a](x "', '[a]((', '[a][', '[^', '"', "'", '@', '#a ', ':a', '``a` ']
-    .map((opener): [string, (size: number) => string] => [`unclosed ${opener.trim()}`, (size) => opener.repeat(size)]),
+  ...OPENERS.map((opener): Shape => [`unclosed ${opener.trim()}`, (size) => opener.repeat(size)]),
   ['nested brackets', (size) => `${'['.repeat(size)}x${']'.repeat(size)}`],
   ['nested links', (size) => `${'['.repeat(size)}x${'](/u)'.repeat(size)}`],
   ['nested spans', (size) => `${'['.repeat(size)}x${']{.c}'.repeat(size)}`],
   ['nested braced', (size) => `${'{^'.repeat(size)}x${'^}'.repeat(size)}`],
   ['nested bare', (size) => `${'*a '.repeat(size)}${'b* '.repeat(size)}`],
-  ...['*', '/', '-', '`', '[', ']', '{', '}', '\\', '<', "'", '.', '=', '%', '_'].map((character): [string, (size: number) => string] => [`line of ${character}`, (size) => character.repeat(size * 10)]),
-  ...['*a* ', '/a/ ', '{*a*} ', '[a] ', '[a](/u) ', '[a][b] ', '[a]{.c} ', '`a` ', '{%a%} ', '"a" ', '*a/ ', '{*a/} ', '/a *b/ c* ', '*{%a%} ', '{%a%}* ', '{*a*}{.c} ', 'a--b ', '<a:b> ', '</#a> ', '^[a] ', ':n[a] ', '![a](/u) ', '\\*a ']
-    .map((pair): [string, (size: number) => string] => [`alternating ${pair.trim()}`, (size) => pair.repeat(size)]),
+  ...LINE_CHARACTERS.map((character): Shape => [`line of ${character}`, (size) => character.repeat(size * 10)]),
+  ...PAIRS.map((pair): Shape => [`alternating ${pair.trim()}`, (size) => pair.repeat(size)]),
   ['closers only *}', (size) => '*} '.repeat(size)],
   ['closers only ]', (size) => '](/u) '.repeat(size)],
   ['spans that fail on a slash between words', (size) => `${'/a '.repeat(size)}*b c/d ${'e/ '.repeat(size)}`],
