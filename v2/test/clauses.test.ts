@@ -811,6 +811,10 @@ describe('captions', () => {
     expect(blocks('::: figure "T"', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     // C2-B-159: trailing spaces do not stop a thematic break. C2-B-087: a footnote marker line starts with any block.
     expect(blocks('*** ', 'next')).toBe('hr p"next"')
+    // C2-B-122: a raw fence and a sigil div take no title and no label, and still open.
+    expect(blocks('```=html "T" [G]', '<b>', '```')).toBe('raw"<b>"')
+    expect(blocks('::: > "T" [G]', 'q', ':::')).toBe('div(>)[p"q"]')
+    expect(blocks('::: | "T"', 'l', ':::')).toBe('lines"l"')
     expect(blocks('[^n]: > q')).toBe('fn[quote[p"q"]]')
     expect(blocks('::: note', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     expect(blocks('![a](b)', '^ c')).toBe('img"![a](b)" cap"c"')
