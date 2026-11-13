@@ -47,19 +47,14 @@ export function braceBlockEnd(src: string, pos: number, end: number): number {
   const first = src.charCodeAt(pos + 1)
   // `{%` starts a braced comment and `{{` an include directive.
   if (first === PERCENT || first === BRACE_OPEN || first === BRACE_CLOSE) return -1
-  let quoted = false
   for (let p = pos + 1; p < end; p++) {
     const code = src.charCodeAt(p)
-    if (quoted) {
-      if (code === BACKSLASH) p++
-      else if (code === QUOTE_MARK) quoted = false
-    } else if (code === QUOTE_MARK) {
-      quoted = true
-    } else if (code === BRACE_OPEN) {
-      return -1
-    } else if (code === BRACE_CLOSE) {
-      return p + 1
-    }
+    if (code === BRACE_OPEN) return -1
+    if (code === BRACE_CLOSE) return p + 1
+    if (code !== QUOTE_MARK) continue
+    const after = quotedEnd(src, p, end)
+    if (after < 0) return -1
+    p = after - 1
   }
   return -1
 }
@@ -353,17 +348,20 @@ export function footnoteMarkerEnd(src: string, pos: number, end: number): number
 }
 
 /** C2-B-083: `[label]:`, one or more spaces, a URL without spaces that may be empty, and an optional quoted title. */
-export function isLinkDefinition(src: string, pos: number, end: number): boolean {
-  if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
-  const marker = labelEnd(src, pos, end, 1, true)
-  if (marker < 0 || marker >= end || src.charCodeAt(marker) !== SPACE) return false
-  let p = skipSpaces(src, marker + 1, end)
-  // A destination or a title must follow: a label and a colon alone are text.
+/** Whether a destination, a title or both stand from `p` to the line end `end`. A label and a colon alone are text. */
+function hasDefinitionTail(src: string, p: number, end: number): boolean {
   if (p === end) return false
   while (p < end && !isSpaceOrTab(src.charCodeAt(p)) && src.charCodeAt(p) !== QUOTE_MARK) p++
   p = skipSpaces(src, p, end)
   if (p < end && src.charCodeAt(p) === QUOTE_MARK) p = quotedEnd(src, p, end)
   return p >= 0 && skipSpaces(src, p, end) === end
+}
+
+export function isLinkDefinition(src: string, pos: number, end: number): boolean {
+  if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
+  const marker = labelEnd(src, pos, end, 1, true)
+  if (marker < 0 || marker >= end || src.charCodeAt(marker) !== SPACE) return false
+  return hasDefinitionTail(src, skipSpaces(src, marker + 1, end), end)
 }
 
 /** Offset after the quoted string at `pos`, or -1. */

@@ -85,24 +85,28 @@ function readLanguage(text: string, pos: number, end: number, sink: AttributeSin
   return p
 }
 
+/** The value behind the `=` at `equals` of the key `[pos, equals)`: quoted or bare. Returns the offset behind it, or NONE. */
+function readValue(text: string, pos: number, equals: number, end: number, memo: AttributeMemo, sink: AttributeSink | null): number {
+  const first = equals + 1 < end ? text.charCodeAt(equals + 1) : NONE
+  if (first === QUOTE_MARK || first === APOSTROPHE) {
+    const close = quotedValueEnd(text, equals + 1, end, memo)
+    if (close === NONE) return NONE
+    sink?.key(text.slice(pos, equals), unescape(text, equals + 2, close))
+    return close + 1
+  }
+  const after = unquotedValueEnd(text, equals + 1, end, memo)
+  if (after !== NONE) sink?.key(text.slice(pos, equals), text.slice(equals + 1, after))
+  return after
+}
+
 function readKey(text: string, pos: number, end: number, memo: AttributeMemo, sink: AttributeSink | null): number {
   if (!inClass(text.charCodeAt(pos), CLASS_KEY_FIRST)) return NONE
   const keyEnd = classRunEnd(text, pos + 1, end, CLASS_KEY_REST)
-  if (keyEnd >= end || text.charCodeAt(keyEnd) !== EQUALS) {
-    // C2-I-031: a bare key does not start with an underscore.
-    if (!inClass(text.charCodeAt(pos), CLASS_BARE_KEY_FIRST)) return NONE
-    if (sink !== null) sink.key(text.slice(pos, keyEnd), '')
-    return keyEnd
-  }
-  const first = keyEnd + 1 < end ? text.charCodeAt(keyEnd + 1) : NONE
-  if (first === QUOTE_MARK || first === APOSTROPHE) {
-    const close = quotedValueEnd(text, keyEnd + 1, end, memo)
-    if (close !== NONE && sink !== null) sink.key(text.slice(pos, keyEnd), unescape(text, keyEnd + 2, close))
-    return close === NONE ? NONE : close + 1
-  }
-  const after = unquotedValueEnd(text, keyEnd + 1, end, memo)
-  if (after !== NONE && sink !== null) sink.key(text.slice(pos, keyEnd), text.slice(keyEnd + 1, after))
-  return after
+  if (keyEnd < end && text.charCodeAt(keyEnd) === EQUALS) return readValue(text, pos, keyEnd, end, memo, sink)
+  // C2-I-031: a bare key does not start with an underscore.
+  if (!inClass(text.charCodeAt(pos), CLASS_BARE_KEY_FIRST)) return NONE
+  sink?.key(text.slice(pos, keyEnd), '')
+  return keyEnd
 }
 
 /** C2-I-033: the offset of the quote that closes the value whose opening quote is at `pos`, on the same line. */

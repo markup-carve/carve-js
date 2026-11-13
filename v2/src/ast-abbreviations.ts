@@ -1,6 +1,6 @@
 // C2-I-098 to C2-I-100: each occurrence of a defined term in the ordinary text of an inline flow
 // is an abbreviation node. A term is ASCII letters and digits (C2-B-084) and matches a whole word.
-import { type AstNode, INLINE_PARENTS } from './ast.ts'
+import { type AstNode, INLINE_PARENTS, valueOf } from './ast.ts'
 import { addText, type TreeContext } from './ast-inline.ts'
 import { codePointAt, codePointBefore, isWordCharacter, NO_CHARACTER } from './unicode.ts'
 
@@ -80,22 +80,22 @@ function addTerm(split: Split, at: number, end: number, expansion: string): void
 }
 
 /** The parts of one text node: its text around the abbreviation nodes of the terms in it, or null when it holds none. */
+/** C2-I-099: whether the word `[at, end)` of `value` stands alone: the character on each side is absent or is no word character. */
+function standsAlone(value: string, at: number, end: number, before: number, after: number): boolean {
+  const left = at === 0 ? before : codePointBefore(value, at)
+  const right = end === value.length ? after : codePointAt(value, end, value.length)
+  return !isWordCharacter(left) && !isWordCharacter(right)
+}
+
 function splitText(ctx: TreeContext, node: AstNode, before: number, after: number): AstNode[] | null {
-  const value = node.value!
+  const value = valueOf(node)
   const start = node.pos?.startOffset ?? -1
   const split: Split = { ctx, node, value, start, parts: [], done: 0, seen: 0, seenOffset: start }
   for (let at = 0; at < value.length;) {
     const end = wordEnd(value, at)
-    if (end === at) {
-      at++
-      continue
-    }
-    const expansion = ctx.abbreviations.get(value.slice(at, end))
-    // C2-I-099: the character on each side is absent or is no word character.
-    const left = at === 0 ? before : codePointBefore(value, at)
-    const right = end === value.length ? after : codePointAt(value, end, value.length)
-    if (expansion !== undefined && !isWordCharacter(left) && !isWordCharacter(right)) addTerm(split, at, end, expansion)
-    at = end
+    const expansion = end === at ? undefined : ctx.abbreviations.get(value.slice(at, end))
+    if (expansion !== undefined && standsAlone(value, at, end, before, after)) addTerm(split, at, end, expansion)
+    at = Math.max(end, at + 1)
   }
   if (split.parts.length === 0) return null
   if (split.done < value.length) addText(ctx, split.parts, value.slice(split.done), offsetOf(split, split.done), node.pos?.endOffset ?? -1)

@@ -1,5 +1,5 @@
 // The inline elements of C2-H-072 to C2-H-101.
-import { type AstNode, childrenOf, hrefOf, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
+import { type AstNode, type Attrs, childrenOf, hrefOf, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
   attributeBlockText, attributes, destination, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
@@ -81,17 +81,19 @@ function span(r: Render, node: AstNode): string {
 }
 
 /** C2-H-141: the attributes of a link definition merge into a reference that resolves through it; the reference wins. */
+/** The attributes of a reference and of its definition, merged: the reference decides a key, the id and the language both carry. */
+function mergedAttrs(own: Attrs, from: Attrs): Attrs {
+  const ownKeys = own.keyValues ?? []
+  const keys = (from.keyValues ?? []).filter(([key]) => !ownKeys.some(([name]) => name.toLowerCase() === key.toLowerCase()))
+  const attrs: Attrs = { classes: [...(from.classes ?? []), ...(own.classes ?? [])], keyValues: [...keys, ...ownKeys] }
+  const id = own.id ?? from.id
+  if (id !== undefined) attrs.id = id
+  return attrs
+}
+
 function withDefinition(node: AstNode, definition: AstNode | undefined): AstNode {
   if (definition?.attrs === undefined && definition?.lang === undefined) return node
-  const own = node.attrs ?? {}
-  const from = definition.attrs ?? {}
-  const keys = (from.keyValues ?? []).filter(([key]) => !(own.keyValues ?? []).some(([name]) => name.toLowerCase() === key.toLowerCase()))
-  const merged: AstNode = {
-    ...node,
-    attrs: { classes: [...(from.classes ?? []), ...(own.classes ?? [])], keyValues: [...keys, ...(own.keyValues ?? [])] },
-  }
-  const id = own.id ?? from.id
-  if (id !== undefined) merged.attrs!.id = id
+  const merged: AstNode = { ...node, attrs: mergedAttrs(node.attrs ?? {}, definition.attrs ?? {}) }
   const lang = node.lang ?? definition.lang
   if (lang !== undefined) merged.lang = lang
   return merged

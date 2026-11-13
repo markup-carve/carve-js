@@ -112,14 +112,22 @@ function isDestinationEscape(code: number): boolean {
 }
 
 /** C2-I-068: a quoted title behind the one space at `pos`, optional spaces and `)`. Returns the offset behind the tail, or NONE. */
+/**
+ * The offset of the quote `quote` that closes a title, from `p` on and within its line, or NONE. A
+ * backslash escapes the character behind it.
+ */
+function closingQuote(text: string, p: number, end: number, quote: number): number {
+  while (p < end && text.charCodeAt(p) !== quote && text.charCodeAt(p) !== LF) p += text.charCodeAt(p) === BACKSLASH ? 2 : 1
+  return p < end && text.charCodeAt(p) === quote ? p : NONE
+}
+
 function titleEnd(state: InlineState, pos: number): number {
   const text = state.text
   const quote = text.charCodeAt(pos + 1)
   if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return NONE
-  let p = pos + 2
-  while (p < state.end && text.charCodeAt(p) !== quote && text.charCodeAt(p) !== LF) p += text.charCodeAt(p) === BACKSLASH ? 2 : 1
-  if (p >= state.end || text.charCodeAt(p) !== quote) return NONE
-  p++
+  const close = closingQuote(text, pos + 2, state.end, quote)
+  if (close === NONE) return NONE
+  let p = close + 1
   while (p < state.end && text.charCodeAt(p) === SPACE) p++
   if (p >= state.end || text.charCodeAt(p) !== PAREN_CLOSE) return NONE
   state.tailTitleStart = pos + 1

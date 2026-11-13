@@ -287,23 +287,34 @@ function readsOwnAttributes(node: BlockNode): boolean {
   return node.kind === TABLE || node.kind === DIV || (node.kind === CODE && (node.flags & FLAG_DELIMITED) !== 0)
 }
 
-function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const own = readsOwnAttributes(node)
-  const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
-  // C2-I-118: the depth of a content counts the containers around it.
+/** Builds the node of `node` with its builder. C2-I-118: the depth of a content counts the containers around it. */
+function buildBlock(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null): AstNode {
   const container = node.kind > DOCUMENT && node.kind <= DIV
   if (container) ctx.depth++
   const out = BUILDERS.get(node.kind)!(ctx, node, flow, attributes)
   if (container) ctx.depth--
-  if (!own) setAttributes(out, attributes)
-  if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
+  return out
+}
+
+/** Places the block `out`, built from `node`, unless its builder placed it already. */
+function placeBlock(ctx: TreeContext, out: AstNode, node: BlockNode): AstNode {
   if (out.pos !== undefined) return out
   // C2-A-182: an include directive ends at its closing braces, before the spaces behind them.
   const end = node.kind === INCLUDE ? trimEnd(ctx.src, node.start, node.end) : node.end
   // C2-A-148: a block that took attribute lines starts at the first of them.
-  if (node.attributes === null || node.attributes.length === 0 || !ctx.positions) return place(ctx, out, node.start, end)
+  const first = node.attributes?.[0]
+  if (first === undefined || !ctx.positions) return place(ctx, out, node.start, end)
   ctx.markup.set(out, node.start)
-  return place(ctx, out, node.attributes[0]!, end)
+  return place(ctx, out, first, end)
+}
+
+function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
+  const own = readsOwnAttributes(node)
+  const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
+  const out = buildBlock(ctx, node, flow, attributes)
+  if (!own) setAttributes(out, attributes)
+  if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
+  return placeBlock(ctx, out, node)
 }
 
 /** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-150). */
@@ -363,18 +374,25 @@ function markCaptionNumber(ctx: TreeContext, children: AstNode[]): void {
 }
 
 /** C2-A-082, C2-A-183: attaches a caption to the block above it, through the comments between them. */
+/** A table or a figure group takes the caption itself, with the comments before it as its last children. */
+function captionHost(target: AstNode, comments: AstNode[], caption: AstNode): void {
+  for (const comment of comments) target.children!.push(comment)
+  target.caption = caption
+  if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
+}
+
 function attachCaption(ctx: TreeContext, list: AstNode[], caption: AstNode): void {
   let at = list.length - 1
   while (at >= 0 && list[at]!.type === 'comment') at--
   if (at < 0) return
   const target = list[at]!
   const comments = list.splice(at + 1)
-  if (target.type === 'table' || target.type === 'figure_group') {
-    for (const comment of comments) target.children!.push(comment)
-    target.caption = caption
-    if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
-    return
-  }
+  if (target.type === 'table' || target.type === 'figure_group') return captionHost(target, comments, caption)
+  list[at] = figureOf(ctx, target, comments, caption)
+}
+
+/** The figure that holds `target`, the comments behind it and the caption. */
+function figureOf(ctx: TreeContext, target: AstNode, comments: AstNode[], caption: AstNode): AstNode {
   const figure: AstNode = { type: 'figure', children: [target, ...comments], caption }
   // The attribute line above a captioned block applies to the figure.
   if (target.attrs !== undefined) figure.attrs = target.attrs
@@ -386,7 +404,7 @@ function attachCaption(ctx: TreeContext, list: AstNode[], caption: AstNode): voi
     // C2-A-148: the block inside starts at its own markup, behind the attribute lines the figure took.
     target.pos.startOffset = ctx.markup.get(target) ?? target.pos.startOffset
   }
-  list[at] = figure
+  return figure
 }
 
 function blockChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): AstNode[] {

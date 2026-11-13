@@ -91,10 +91,18 @@ function isUpper(style: string): boolean {
   return style !== style.toLowerCase()
 }
 
+function markerStyle(list: AstNode): string {
+  return list.marker?.style ?? '1'
+}
+
+function markerDelimiter(list: AstNode): string {
+  return list.marker?.delimiter ?? '.'
+}
+
 function sameOrderedKind(a: AstNode, b: AstNode): boolean {
-  const first = a.marker?.style ?? '1'
-  const second = b.marker?.style ?? '1'
-  if ((a.marker?.delimiter ?? '.') !== (b.marker?.delimiter ?? '.')) return false
+  const first = markerStyle(a)
+  const second = markerStyle(b)
+  if (markerDelimiter(a) !== markerDelimiter(b)) return false
   // C2-B-038, C2-B-039: a single letter is a sibling in a list of the other letter style.
   return first === second || (first !== '1' && second !== '1' && isUpper(first) === isUpper(second))
 }

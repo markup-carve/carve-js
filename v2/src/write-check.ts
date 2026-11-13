@@ -59,14 +59,19 @@ function sameList(a: readonly unknown[], b: unknown): boolean {
 }
 
 /** Equality of two values that are no node lists of their own: scalars, lists and plain objects. */
-function sameValue(a: unknown, b: unknown): boolean {
-  if (Array.isArray(a)) return sameList(a, b)
-  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null || Array.isArray(b)) return a === b
-  const left = a as Fields
-  const right = b as Fields
+function isRecord(value: unknown): value is Fields {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sameFields(left: Fields, right: Fields): boolean {
   for (const name in left) if (!SKIPPED.includes(name) && left[name] !== undefined && !sameValue(left[name], right[name])) return false
   for (const name in right) if (!SKIPPED.includes(name) && right[name] !== undefined && left[name] === undefined) return false
   return true
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a)) return sameList(a, b)
+  return isRecord(a) && isRecord(b) ? sameFields(a, b) : a === b
 }
 
 /** Whether equality compares the field `name` of `node` here, apart from its node slots (C2-A-161, C2-A-162). */
@@ -367,18 +372,15 @@ function matchCharacters(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean 
  * Compares the expected text at the cursor with the parse. Returns false where the lists cannot
  * be compared further.
  */
-function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
-  const e = es[at.i]!
-  const value = valueOf(e)
-  const a = as[at.j]
-  if (a === undefined) {
-    if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
-    else c.losses.push([owner, null])
-    return false
-  }
-  if (a.type !== 'text') return skipConstruct(c, e, a, at)
-  if (!matchCharacters(c, e, a, at)) return false
-  if (at.vi < value.length) return true
+/** The parse ended inside the text node `es[at.i]` of `owner`. */
+function parseEndsInText(c: Check, es: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
+  if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
+  else c.losses.push([owner, null])
+  return false
+}
+
+/** The text node `es[at.i]` is matched to its end; the parse may hold more text behind it. */
+function afterTextNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
   at.i++
   at.vi = 0
   if (at.aj === 0 || es[at.i]?.type === 'text') return true
@@ -387,6 +389,16 @@ function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at:
   else if (at.j + 1 >= as.length && isPaired(owner)) closedEarly(c, es, at.i, 0, owner)
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
   return false
+}
+
+function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
+  const e = es[at.i]!
+  const value = valueOf(e)
+  const a = as[at.j]
+  if (a === undefined) return parseEndsInText(c, es, at, owner)
+  if (a.type !== 'text') return skipConstruct(c, e, a, at)
+  if (!matchCharacters(c, e, a, at)) return false
+  return at.vi < value.length || afterTextNode(c, es, as, at, owner)
 }
 
 /**
@@ -487,20 +499,28 @@ function setAnchor(es: readonly AstNode[], as: readonly AstNode[], at: Cursor): 
  * are parses of one source, so they can be compared again from there, and one round finds the
  * other deviations of the line (C2-W-091). False where there is no such place.
  */
+/** The first parsed node from `j` on that starts at `offset` or later. */
+function firstNodeFrom(as: readonly AstNode[], j: number, offset: number): number {
+  while (j < as.length && (as[j]!.pos?.startOffset ?? -1) < offset) j++
+  return j
+}
+
+function resumeAt(at: Cursor, i: number, j: number): boolean {
+  at.i = i
+  at.j = j
+  at.vi = 0
+  at.aj = 0
+  return true
+}
+
 function resync(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor): boolean {
   const failed = as[at.j]?.pos
   if (at.anchor < 0 || failed === undefined) return false
   let offset = at.anchorByte
   let j = at.j
   for (let k = at.anchor; k < es.length && !isBreak(es[k]); k++) {
-    while (j < as.length && (as[j]!.pos?.startOffset ?? -1) < offset) j++
-    if (k > at.i && offset >= failed.endOffset && as[j]?.pos?.startOffset === offset) {
-      at.i = k
-      at.j = j
-      at.vi = 0
-      at.aj = 0
-      return true
-    }
+    j = firstNodeFrom(as, j, offset)
+    if (k > at.i && offset >= failed.endOffset && as[j]?.pos?.startOffset === offset) return resumeAt(at, k, j)
     offset += utf8Length(writeInlines(c.w, [es[k]!], c.flags))
   }
   return false

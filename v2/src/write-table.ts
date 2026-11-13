@@ -4,6 +4,7 @@ import { type AstNode, childrenOf, columnsOf, valueOf } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
 import { emit, lose, type Writer } from './write-state.ts'
+import { type Wrap } from './layout.ts'
 import { displayWidth } from './width.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
@@ -87,14 +88,18 @@ function segment(prefix: string, content: string): string {
 }
 
 /** The number of continuation rows below `row`, and for each cell the line of each of its fragments. */
+/** C2-L-006: a wrap past the continuation rows of its row, or not behind the wrap before it, contradicts the record. */
+function contradicts(wrap: Wrap, below: number, previous: number): boolean {
+  return (wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || wrap.line <= previous
+}
+
 function fragmentLines(w: Writer, row: AstNode, cell: AstNode, count: number): number[] | null {
   const wraps = w.facts?.get(cell)?.wraps
   const below = w.facts?.get(row)?.continuationLines ?? 0
   if (wraps === undefined || wraps.length !== count) return null
   const lines: number[] = []
   for (const wrap of wraps) {
-    // C2-L-006: a wrap past the continuation rows of its row, or out of order, contradicts the record.
-    if ((wrap.row ?? 0) !== 0 || wrap.line < 1 || wrap.line > below || wrap.line <= (lines[lines.length - 1] ?? 0)) return null
+    if (contradicts(wrap, below, lines[lines.length - 1] ?? 0)) return null
     lines.push(wrap.line)
   }
   return lines

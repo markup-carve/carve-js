@@ -325,21 +325,32 @@ function writeInline(w: Writer, node: AstNode, flags: number): string {
 }
 
 /** The source of a list of inline nodes. */
+/** The end of the part that starts at `nodes[at]`: a run of code spans, or the node alone. */
+function partEnd(w: Writer, nodes: readonly AstNode[], at: number): number {
+  return nodes[at]!.type === 'code' && nodes[at + 1]?.type === 'code' ? codeRunEnd(w, nodes, at) : at + 1
+}
+
+/** The written form of the part `nodes[at..end)`. */
+function writePart(w: Writer, nodes: readonly AstNode[], at: number, end: number, flags: number): string {
+  const node = nodes[at]!
+  const part = end > at + 1 ? codeRun(nodes, at, end) : writeInline(w, node, flags)
+  // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
+  return node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
+}
+
 export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
   let lineStart = true
-  for (let at = 0; at < nodes.length; at++) {
+  for (let at = 0; at < nodes.length;) {
     const node = nodes[at]!
     // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
     if (node.type === 'comment' && node.form !== 'braced' && !lineStart) out += ' '
-    const end = node.type === 'code' && nodes[at + 1]?.type === 'code' ? codeRunEnd(w, nodes, at) : at + 1
-    let part = end > at + 1 ? codeRun(nodes, at, end) : writeInline(w, node, flags)
-    // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
-    if (node.type === 'text' && nodes[at + 1]?.type === 'soft_break') part = trimEnd(part)
+    const end = partEnd(w, nodes, at)
+    const part = writePart(w, nodes, at, end, flags)
     out += part
     if (part !== '') lineStart = part.charCodeAt(part.length - 1) === 10
-    at = end - 1
+    at = end
   }
   return out
 }
