@@ -53,7 +53,7 @@ describe('paragraphs, headings and sections', () => {
   check([
     ['C2-H-018: a paragraph is p around its inline content', 'a *b*', '<p>a <strong>b</strong></p>'],
     ['C2-H-019: a paragraph that holds only comments renders nothing', '{% only %}\n\na', '<p>a</p>'],
-    ['C2-H-020: a block image is written without its p, also where it is an unresolved reference', '![a](b)\n\n![c][nope]\n\n![d](e) f', '<img src="b" alt="a">\n![c][nope]\n<p><img src="e" alt="d"> f</p>'],
+    ['C2-H-020: a block image is written without its p; one whose reference does not resolve is text and keeps it', '![a](b)\n\n![c][nope]\n\n![d](e) f', '<img src="b" alt="a">\n<p>![c][nope]</p>\n<p><img src="e" alt="d"> f</p>'],
     ['C2-H-022: every heading has an id, authored or generated', '# One two\n\n{#mine}\n## Three', '<h1 id="One-two">One two</h1>\n<h2 id="mine">Three</h2>', { sections: false }],
     ['C2-H-022, C2-H-131: with headingIds off no id is generated, and an authored id is still written', '# One\n\n{#mine}\n# Two', '<h1>One</h1>\n<h1 id="mine">Two</h1>', { sections: false, headingIds: 'off' }],
     ['C2-H-022: lower folds the slug to lower case', '# One Two', '<h1 id="one-two">One Two</h1>', { sections: false, headingIds: 'lower' }],

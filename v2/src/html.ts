@@ -38,9 +38,16 @@ function isVisible(node: AstNode): boolean {
   return node.type !== 'paragraph' || !onlyComments(node)
 }
 
-/** A paragraph that is written as `<p>`: not a block image, which is a bare `<img>` (C2-H-020). */
+/** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
+function isBareImage(node: AstNode): boolean {
+  if (node.blockImage !== true) return false
+  const image = (node.children ?? []).find((child) => child.type === 'image')
+  return image === undefined || image.key === undefined || image.src !== undefined
+}
+
+/** A paragraph that is written as `<p>`. */
 function isTextParagraph(node: AstNode | undefined): node is AstNode {
-  return node !== undefined && node.type === 'paragraph' && node.blockImage !== true
+  return node !== undefined && node.type === 'paragraph' && !isBareImage(node)
 }
 
 function writeBlocks(r: Render, nodes: AstNode[], level: number): void {
@@ -69,8 +76,7 @@ function paragraphHtml(r: Render, node: AstNode, parts: TagParts = {}): string {
 
 function paragraph(r: Render, node: AstNode, level: number): void {
   if (onlyComments(node)) return
-  // C2-H-020: a block image is written without its `<p>`.
-  line(r, level, node.blockImage === true ? inlineHtml(r, node.children ?? []) : paragraphHtml(r, node))
+  line(r, level, isBareImage(node) ? inlineHtml(r, node.children ?? []) : paragraphHtml(r, node))
 }
 
 function headingId(node: AstNode): string | undefined {
