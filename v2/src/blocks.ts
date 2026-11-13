@@ -575,6 +575,9 @@ function openCommentBlock(state: BlockState, end: number): boolean {
   if (length === 0) return false
   writeEvent(state, enterTag(state, COMMENT_BLOCK, 0), state.pos, length)
   openOpaqueLeaf(state, COMMENT_BLOCK, PERCENT, length)
+  // C2-B-108: text behind the run is the first line of the value.
+  const tail = skipSpaces(state.src, state.pos + length, end)
+  if (tail < end) writeEvent(state, SPAN_TAG, tail, end)
   return true
 }
 
