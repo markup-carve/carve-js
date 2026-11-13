@@ -816,10 +816,11 @@ describe('captions', () => {
     expect(blocks('{*a %% *}', 'para')).toBe('p"{*a %% *}|para"')
     expect(blocks('{.a key="v" #i}{:en}', 'para')).toBe('{.a key="v" #i}{:en}p"para"')
     // C2-B-164: the format name is glued or stands after one space.
-    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe(blocks('---toml', 'a = 1', '---', 'x'))
-    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('fm"a = 1" p"x"')
+    expect(blocks('---markdown', 'a = 1', '---', 'x')).toBe(blocks('---toml', 'a = 1', '---', 'x'))
+    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('p"--- toml|a = 1|---|x"')
     expect(blocks('---  toml', 'a')).toBe('p"---  toml|a"')
-    expect(blocks('--- xml', 'a')).toBe('p"--- xml|a"')
+    expect(blocks('---Foo', 'a')).toBe('p"---Foo|a"')
+    expect(blocks('---x-2', 'a', '---')).toBe('fm"a"')
     expect(blocks('--- ', 'a: 1', '---')).toBe('fm"a: 1"')
     // C2-B-151: spaces and tabs alone are no content, so the marker is text.
     expect(blocks('= \t', 'following')).toBe('p"= 	|following"')
@@ -1028,8 +1029,9 @@ describe('boundaries pinned by the mutation check', () => {
   it('C2-B-164: the format name is `yaml`, `toml` or `json`, glued to the hyphens', () => {
     expect(blocks('---yaml', 'a', '---')).toBe('fm"a"')
     expect(blocks('---json', 'a', '---')).toBe('fm"a"')
-    expect(blocks('---yml', 'a', '---')).toBe('p"---yml|a|---"')
-    expect(blocks('---yamlx', 'a', '---')).toBe('p"---yamlx|a|---"')
+    expect(blocks('---yml', 'a', '---')).toBe('fm"a"')
+    expect(blocks('---Yml', 'a', '---')).toBe('p"---Yml|a|---"')
+    expect(blocks('---y ml', 'a', '---')).toBe('p"---y ml|a|---"')
     expect(blocks('--- 1', 'a')).toBe('p"--- 1|a"')
   })
 })

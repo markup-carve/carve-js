@@ -78,10 +78,11 @@ function commentBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
 /** C2-A-049: the format is the word on the opener, or `yaml`. */
 function frontmatterNode(ctx: TreeContext, node: BlockNode): AstNode {
   const src = ctx.src
-  let word = node.start + 3
-  if (src.charCodeAt(word) === SPACE) word++
-  const name = src.slice(word, word + 4)
-  const format = name === 'toml' || name === 'json' ? name : 'yaml'
+  // C2-B-164: the name is glued to the hyphens and holds no space, so it ends at the first space, tab or line end.
+  const word = node.start + 3
+  let wordEnd = word
+  while (wordEnd < src.length && src.charCodeAt(wordEnd) > SPACE) wordEnd++
+  const format = wordEnd > word ? src.slice(word, wordEnd) : 'yaml'
   return { type: 'frontmatter', format, value: bodyValue(src, node.spans!) }
 }
 
