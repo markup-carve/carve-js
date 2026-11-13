@@ -1055,6 +1055,8 @@ describe('tables', () => {
     expect(blocks('|= A |= B |', '|= C |= D |', '| 1 | 2 |')).toBe('table(h2)[tr[th"A" th"B"] tr[th"C" th"D"] tr[td"1" td"2"]]')
     expect(blocks('|= A | b |', '| 1 | 2 |')).toBe('table[tr[th"A" td"b"] tr[td"1" td"2"]]')
     expect(blocks('| 1 |', '|= A |')).toBe('table[tr[td"1"] tr[th"A"]]')
+    expect(blocks('|= A | < |', '| 1 | 2 |')).toBe('table(h1)[tr[th(c2)"A"] tr[td"1" td"2"]]')
+    expect(blocks('|= A |', '| ^ |')).toBe('table(h1)[tr[th"A"] tr[td""]]')
   })
 
   it('C2-B-187, C2-B-191: the footer rows are set when the table closes', () => {

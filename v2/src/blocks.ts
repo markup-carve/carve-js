@@ -639,22 +639,25 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   const src = state.src
   const attribute = rowAttributeStart(src, closing, end)
   writeEvent(state, eventTag(ENTER, ROW, 0), state.pos, attribute < 0 ? 0 : attribute)
-  let header = true
+  let headers = 0
+  let others = 0
   for (let pipe = state.pos; pipe < closing;) {
     const next = nextPipe(src, pipe + 1, closing + 1)
-    if (!writeCell(state, pipe, next)) header = false
+    const flags = writeCell(state, pipe, next)
+    if ((flags & FLAG_HEADER) !== 0) headers++
+    else if ((flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) === 0) others++
     pipe = next
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
   state.tableRows++
-  // C2-B-178: the head is the leading rows made only of header cells.
-  state.tableHeadOpen = state.tableHeadOpen && header
+  // C2-B-178: the head is the leading rows made only of header cells. A span mark joins another cell and is none itself.
+  state.tableHeadOpen = state.tableHeadOpen && headers > 0 && others === 0
   if (state.tableHeadOpen) state.tableHeadRows++
 }
 
-/** Writes the cell between the pipes at `pipe` and `next` and returns whether it is a header cell. */
-function writeCell(state: BlockState, pipe: number, next: number): boolean {
+/** Writes the cell between the pipes at `pipe` and `next` and returns its flags. */
+function writeCell(state: BlockState, pipe: number, next: number): number {
   const src = state.src
   // C2-B-171: the header cell mark, a glued brace block, one space.
   let p = pipe + 1
@@ -673,7 +676,7 @@ function writeCell(state: BlockState, pipe: number, next: number): boolean {
   writeEvent(state, eventTag(ENTER, CELL, flags), pipe, alignment)
   writeEvent(state, SPAN_TAG, content, contentEnd)
   writeEvent(state, eventTag(EXIT, CELL, 0), next, 0)
-  return (flags & FLAG_HEADER) !== 0
+  return flags
 }
 
 function alignmentMark(code: number): number {

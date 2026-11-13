@@ -1,5 +1,5 @@
-// CPU time of the block pass per parse. Run by hand; not part of CI.
-//   node v2/scripts/bench.ts [--corpus DIR] [--realistic DIR] [--spike DIR] [--rounds N] [--sample-ms N]
+// CPU time of the block pass per parse. CI runs it and prints the numbers; nothing fails on them.
+//   node v2/scripts/bench.ts [--corpus DIR] [--realistic DIR] [--files A,B] [--spike DIR] [--rounds N] [--sample-ms N]
 // `--corpus` holds small.crv and large.crv of carve-bench (default: ../carve-bench/corpus),
 // `--realistic` the Track D documents guide.crv, migration.crv and contract.crv
 // (default: <corpus>/realistic). Missing files are skipped. `--spike` is the `src` directory of the
@@ -39,7 +39,9 @@ async function loadSpike(directory: string): Promise<SpikeModules | null> {
 
 const spike = await loadSpike(option('spike', ''))
 
-const files = [
+// `--files A,B` replaces the default inputs, for a runner that has no carve-bench checkout.
+const listed = option('files', '')
+const files = listed !== '' ? listed.split(',') : [
   join(corpus, 'small.crv'), join(corpus, 'large.crv'),
   join(realistic, 'guide.crv'), join(realistic, 'migration.crv'), join(realistic, 'contract.crv'),
 ]
