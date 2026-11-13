@@ -94,6 +94,22 @@ describe('resolution results', () => {
     expect(resolved('# T', 'off').document.children![0]!.generatedId).toBeUndefined()
   })
 
+  it('C2-A-025: a walker visits the children first and then the secondary slots, and no value, data or payload', () => {
+    const { document, resolution } = resolved('| a[^x] |\n^ c[^y] `[^z]`\n\n[^x]: X\n[^y]: Y\n[^z]: Z')
+    expect(resolution.notes.map((note) => note.definition!.key)).toEqual(['x', 'y'])
+    const hidden: AstNode = { type: 'footnote_ref', key: 'x', namespace: 'footnote' }
+    const supplied = documentOf({ ...paragraph(), data: { 'org.example.x': hidden } }, document.children![1]!)
+    expect(resolve(supplied, 'keep-case', null).notes).toEqual([])
+    expect(hidden.number).toBeUndefined()
+  })
+
+  it('C2-A-159: a tree that was built without source has no position, and resolution adds none', () => {
+    const supplied = documentOf({ type: 'heading', level: 1, children: [text('T')] }, paragraph({ type: 'xref', key: 'T', namespace: 'heading' }))
+    resolve(supplied, 'keep-case', null)
+    expect(JSON.stringify(supplied)).not.toContain('pos')
+    expect(at(supplied, 'children.1.children.0.href')).toBe('#T')
+  })
+
   it('C2-A-135: the root names the stages that ran', () => {
     expect(resolved('a').document.stages).toEqual(['referenceResolution', 'tableAlignment'])
   })
@@ -105,7 +121,7 @@ describe('resolution results', () => {
     expect(at(resolved('{aligns="left"}\n|={>} a |').document, 'children.0.columns.0.resolvedAlign')).toBe('left')
   })
 
-  it('C2-A-039, C2-A-172: a duplicate id is reported in the diagnostics record, and nothing in the tree marks it', () => {
+  it('C2-A-005, C2-A-039, C2-A-172, C2-A-173: a duplicate id is reported in the diagnostics record with a code, a severity, a message and a channel, and nothing in the tree marks it', () => {
     const { document, resolution } = resolved('{#a}\nx\n\n{#a}\ny')
     expect(resolution.diagnostics).toEqual([{ code: 'duplicate-id', severity: 'warning', channel: 'lint', message: 'the id a is used more than once' }])
     expect(document.children!.map((node) => node.attrs)).toEqual([{ id: 'a' }, { id: 'a' }])

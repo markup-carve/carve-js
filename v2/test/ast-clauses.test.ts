@@ -499,10 +499,21 @@ describe('inline nodes', () => {
     ])
   })
 
-  it('C2-A-111, C2-A-112: a link inside link text stays a node, and a destination holds what the author wrote', () => {
+  it('C2-A-111 to C2-A-113: a link inside link text stays a node, and a destination holds what the author wrote, a script URL included', () => {
     expect(inlines('[a [b](javascript:x)](/u)')).toEqual([{
       type: 'link', href: '/u', children: [text('a '), { type: 'link', href: 'javascript:x', children: [text('b')] }],
     }])
+  })
+
+  it('C2-A-114: a link or an image may carry targetKind for a target that is no URL', () => {
+    expect(refusal(documentOf(paragraph({ type: 'link', href: 'Page', targetKind: 'wiki', children: [] })))).toBeNull()
+    expect(refusal(documentOf(paragraph({ type: 'image', src: 'x', targetKind: 'ftp' })))).toBe('/children/0/children/0/targetKind: unknown value "ftp"')
+  })
+
+  it('C2-A-043: every string holds literal Unicode, and a private-use character has no special meaning', () => {
+    const src = 'a \ue000 b \u{f0000} c'
+    expect(inlines(src)).toEqual([text(src)])
+    expect(decodeTree(encodeTree(tree(src)))).toEqual(tree(src))
   })
 
   it('C2-A-115: an image carries its alt text and its tooltip', () => {
@@ -538,6 +549,26 @@ describe('citations, extension nodes and resources', () => {
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [] }))).toBe('/children/0/fallback: a required field is missing')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [text('x')] }))).toBe('/children/0/fallback/0: text does not stand here')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('x')] }))).toBeNull()
+  })
+
+  it('C2-A-128: reading a tree keeps payload, props and data as they are and runs nothing in them', () => {
+    const node: AstNode = {
+      type: 'inline_extension', name: 'org.example.x', children: [], fallback: [text('f')],
+      props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { type: 'link' } },
+    }
+    expect(decodeTree(encodeTree(documentOf(paragraph(node)))).children![0]!.children![0]).toEqual(node)
+  })
+
+  it('C2-A-132: a reader bounds metadata nesting, resource references and fallback nesting', () => {
+    let metadata: Record<string, unknown> = {}
+    for (let level = 0; level < 70; level++) metadata = { a: metadata }
+    expect(refusal(documentOf({ ...paragraph(), metadata }))).toMatch(/metadata is nested deeper than 64 levels$/)
+    const references = Array.from({ length: 5000 }, (_unused, index) => `r${index}`)
+    const extension: AstNode = { type: 'inline_extension', name: 'org.example.x', children: [], resourceIds: references }
+    expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
+    let nested: AstNode = text('x')
+    for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'org.example.x', children: [], fallback: [nested] }
+    expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 extension nodes$/)
   })
 
   it('C2-A-131: a resource has an id, a media type and a digest, and no id occurs twice', () => {
@@ -650,6 +681,13 @@ describe('reading a tree', () => {
     let deep: AstNode = paragraph('a')
     for (let level = 0; level <= MAX_TREE_DEPTH; level++) deep = { type: 'block_quote', children: [deep] }
     expect(refusal(documentOf(deep))).toMatch(/nested deeper than a parser can produce$/)
+  })
+
+  it('C2-A-142, C2-A-157: pos may name the file it is measured in, and segments holds ranges in the shape of pos', () => {
+    const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
+    expect(refusal(documentOf({ ...paragraph(), pos: { ...pos, file: 'part.crv' }, segments: [pos, pos] }))).toBeNull()
+    expect(refusal(documentOf({ ...paragraph(), segments: [{ ...pos, endOffset: undefined }] } as unknown as AstNode))).toBe('/children/0/segments/0/endOffset: not an integer')
+    expect(refusal(documentOf({ ...paragraph(), pos: { ...pos, startOffset: 5 } }))).toBe('/children/0/pos: the start lies behind the end')
   })
 
   it('C2-A-176: a tree that holds a retired node type is refused, not migrated', () => {

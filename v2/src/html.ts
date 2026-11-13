@@ -17,10 +17,14 @@ const ALPHA_STYLES = ['a', 'A', 'i', 'I']
 
 /** C2-H-005: two spaces per level. */
 function line(r: Render, level: number, text: string): void {
-  r.lines.push('  '.repeat(level) + text)
+  r.lines.push(level === 0 ? text : '  '.repeat(level) + text)
 }
 
-function tag(r: Render, node: AstNode | null, parts: TagParts = {}): string {
+const NO_PARTS: TagParts = {}
+
+function tag(r: Render, node: AstNode | null, parts: TagParts = NO_PARTS): string {
+  // Most blocks carry no attribute and add none.
+  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || (node.attrs === undefined && node.lang === undefined))) return ''
   return attributes(r, node, { ...parts, block: true })
 }
 

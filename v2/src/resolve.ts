@@ -101,18 +101,19 @@ const VISITORS = new Map<string, Visitor>([
   ['table', visitHost],
 ])
 
-/** The nodes below `node` in document order. A note is visited with the notes, not where it stands. */
-function innerNodes(node: AstNode): AstNode[] {
-  if (node.type === 'inline_footnote' || node.type === 'footnote') return []
-  const title = Array.isArray(node.title) ? node.title : []
-  const caption = node.caption === undefined ? [] : [node.caption]
-  return title.length === 0 && caption.length === 0 ? node.children ?? [] : [...title, ...(node.children ?? []), ...caption]
-}
-
+/**
+ * Visits `node` and the nodes below it in document order: the title, the children, the caption
+ * (C2-A-025). A note is visited with the notes, not where it stands.
+ */
 function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
+  // Most nodes are text, which resolution does not read.
+  if (node.type === 'text') return
   VISITORS.get(node.type)?.(walk, node, parent)
   if (node.attrs?.id !== undefined) walk.identified.push(node)
-  for (const child of innerNodes(node)) visit(walk, child, node)
+  if (node.type === 'inline_footnote' || node.type === 'footnote') return
+  if (Array.isArray(node.title)) for (const child of node.title) visit(walk, child, node)
+  if (node.children !== undefined) for (const child of node.children) visit(walk, child, node)
+  if (node.caption !== undefined) visit(walk, node.caption, node)
 }
 
 /** C2-A-089: the alignment of a column is the one its source spelled, or that of its last head cell that has one. */

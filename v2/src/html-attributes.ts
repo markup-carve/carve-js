@@ -58,6 +58,8 @@ const BLOCKED_NAMES = new Set(['srcdoc', 'formaction'])
 const CSS_NEEDLES = ['expression(', 'url(', '@import', 'behavior:', '-moz-binding']
 const ALIGN_VALUES = ['left', 'right', 'center']
 const SPACE_CODE = 32
+const GREATER_CODE = 62
+const NO_BREAK_SPACE_CODE = 0xa0
 const DELETE_CODE = 0x7f
 const C1_END = 0x9f
 
@@ -66,7 +68,10 @@ export function escapeText(text: string): string {
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
-    const entity = textEntity(text.charCodeAt(at))
+    const code = text.charCodeAt(at)
+    // Every character that is escaped is one of four; the test keeps the common case to one comparison.
+    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE) continue
+    const entity = textEntity(code)
     if (entity === '') continue
     out += text.slice(from, at) + entity
     from = at + 1

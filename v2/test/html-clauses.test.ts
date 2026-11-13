@@ -207,6 +207,19 @@ describe('inline elements', () => {
     )
   })
 
+  it('C2-A-119: with no extension for citations a citation group writes its bracket text and a citation definition writes nothing', () => {
+    const citation: AstNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
+    const group: AstNode = { type: 'citation_group', raw: '[@a, p. 3 & 4]', children: [citation] }
+    const definition: AstNode = { type: 'citation_definition', key: 'a', namespace: 'citation', children: [text('A book')] }
+    expect(render(documentOf(paragraph('see ', group), definition))).toBe('<p>see [@a, p. 3 &amp; 4]</p>')
+  })
+
+  it('C2-A-123: an inline extension with a qualified name is a registered extension and renders through its fallback', () => {
+    const extension: AstNode = { type: 'inline_extension', name: 'org.example.badge', children: [], fallback: [text('new')] }
+    expect(render(documentOf(paragraph(extension)))).toBe('<p>new</p>')
+    expect(lossCodes(documentOf(paragraph(extension)))).toEqual(['extension-fallback-rendered'])
+  })
+
   it('C2-H-076, C2-A-127: an unknown optional extension renders through its fallback and is reported', () => {
     const extension: AstNode = { type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('f')] }
     expect(render(documentOf(extension))).toBe('<p>f</p>')
@@ -302,7 +315,7 @@ describe('roundtrip carriers', () => {
     ['C2-H-112: the option adds the carriers and changes nothing else; it is off by default', '[x][r]\n\n[r]: /u', '<p><a href="/u">x</a></p>'],
     ['C2-H-113, C2-H-119: a spelling the sidecar holds has no carrier', '::: >\nq\n:::\n\n. a\n\n***', '<blockquote><p>q</p></blockquote>\n<ol data-carve-tight>\n  <li>a</li>\n</ol>\n<hr>', { roundtrip: true }],
     ['C2-H-114: the carriers of a raw span, of a code fence label, of a line block and of a div with no other attribute', 'a `<b>`{=html}\n\n```js [L]\n```\n\n::: |\nx\n:::\n\n:::\n:::\n\n{.c}\n:::\n:::', '<p>a <span data-carve-raw="html">&lt;b&gt;</span></p>\n<pre data-carve-label="L"><code class="language-js"></code></pre>\n<div data-carve-line-block class="line-block">\n  <p>x</p>\n</div>\n<div data-carve-div>\n\n</div>\n<div class="c">\n\n</div>', { roundtrip: true }],
-    ['C2-H-115, C2-H-116: with roundtrip on an authored attribute with a reserved name is dropped; another data-carve- name is ordinary', '[t]{data-carve-ref=x data-carve-other=y data-marker=z}', '<p><span data-carve-other="y">t</span></p>', { roundtrip: true }],
+    ['C2-H-115, C2-H-116, C2-H-120: with roundtrip on an authored attribute with a reserved name is dropped; another data-carve- name is ordinary', '[t]{data-carve-ref=x data-carve-other=y data-marker=z}', '<p><span data-carve-other="y">t</span></p>', { roundtrip: true }],
     ['C2-H-116: with roundtrip off the attribute passes through', '[t]{data-carve-ref=x}', '<p><span data-carve-ref="x">t</span></p>'],
     ['C2-H-117: a presence carrier is the bare attribute name', '<https://x.y>', '<p><a href="https://x.y" data-carve-autolink>https://x.y</a></p>', { roundtrip: true }],
     ['C2-H-118: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
@@ -344,7 +357,7 @@ describe('options', () => {
     expect(render('a', { profile: 'full' })).toBe('<p>a</p>')
   })
 
-  it('C2-H-130: strictLosses turns a render loss into an error, and the render returns no output', () => {
+  it('C2-H-130, C2-A-174: strictLosses turns a render loss into an error, and the render returns no output', () => {
     expect(() => render('{{ a.crv }}', { strictLosses: true })).toThrow(CarveRenderError)
     expect(renderWithDiagnostics('{{ a.crv }}', { strictLosses: true }).html).toBe('')
     expect(render('a', { strictLosses: true })).toBe('<p>a</p>')

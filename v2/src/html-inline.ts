@@ -241,6 +241,18 @@ function ruby(r: Render, node: AstNode): string {
   return `<ruby${attributes(r, node, {})}>${html}</ruby>`
 }
 
+/**
+ * C2-H-076: an inline extension written in source has no renderer and is a span. C2-A-123,
+ * C2-A-127: a name with a dot names a registered extension, which this engine does not know, so
+ * it renders through its fallback and is reported.
+ */
+function inlineExtension(r: Render, node: AstNode): string {
+  const name = node.name ?? ''
+  if (!name.includes('.')) return element('span', { base: [`ext-${name}`] })(r, node)
+  loss(r, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
+  return inlineHtml(r, node.fallback ?? node.children ?? [])
+}
+
 const WRITERS = new Map<string, InlineWriter>([
   ['text', (_r, node) => escapeText(node.value ?? '')],
   ['span', span],
@@ -266,8 +278,7 @@ const WRITERS = new Map<string, InlineWriter>([
   ['smart_punctuation', (r, node) => escapeText((r.settings.smartTypography ? node.glyph : undefined) ?? node.source ?? '')],
   ['abbreviation', abbreviation],
   ['caption_number', captionNumber],
-  // C2-H-076: an inline extension with no renderer.
-  ['inline_extension', (r, node) => element('span', { base: [`ext-${node.name ?? ''}`] })(r, node)],
+  ['inline_extension', inlineExtension],
   ['small_caps', element('span', { base: ['smallcaps'] })],
   ['ruby', ruby],
   // C2-A-119: with no extension for citations the bracket text is written as text.

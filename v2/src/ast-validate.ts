@@ -398,6 +398,48 @@ function checkVersion(value: Value, path: string): void {
   if (version.split('.')[0] !== AST_VERSION.split('.')[0]) fail(path, `major version ${version.split('.')[0]!} is not read by this engine`)
 }
 
+// C2-A-132: the bounds on what a tree may carry besides its nodes.
+const MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
+const MAX_METADATA_DEPTH = 64
+const MAX_RESOURCE_REFERENCES = 4096
+const MAX_FALLBACK_DEPTH = 32
+
+/** What the walk for the bounds has counted so far. */
+interface Budget {
+  resourceReferences: number
+}
+
+function metadataDepth(value: Value, path: string, depth: number): void {
+  if (typeof value !== 'object' || value === null) return
+  if (depth > MAX_METADATA_DEPTH) fail(path, 'metadata is nested deeper than 64 levels')
+  for (const [name, inner] of Object.entries(value)) metadataDepth(inner, `${path}/${name}`, depth + 1)
+}
+
+function payloadBytes(node: Fields): number {
+  const payload = (node['payload'] ?? []) as { value?: unknown }[]
+  return payload.reduce((bytes, entry) => bytes + (typeof entry.value === 'string' ? entry.value.length : 0), 0)
+}
+
+function checkNodeBounds(node: Fields, path: string, budget: Budget, fallbacks: number): void {
+  if (node['metadata'] !== undefined) metadataDepth(node['metadata'], `${path}/metadata`, 1)
+  if (payloadBytes(node) > MAX_PAYLOAD_BYTES) fail(`${path}/payload`, 'an extension payload above 8 MiB')
+  budget.resourceReferences += (node['resourceId'] === undefined ? 0 : 1) + ((node['resourceIds'] as unknown[] | undefined)?.length ?? 0)
+  if (budget.resourceReferences > MAX_RESOURCE_REFERENCES) fail(path, 'more than 4096 resource references')
+  if (fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 extension nodes')
+}
+
+/** C2-A-132: walks the validated tree once more for the bounds that no single node shows. */
+function checkBounds(node: Fields, path: string, budget: Budget, fallbacks: number): void {
+  checkNodeBounds(node, path, budget, fallbacks)
+  for (const slot of ['children', 'fallback', 'title', 'short']) {
+    const list = node[slot]
+    if (!Array.isArray(list)) continue
+    const inner = slot === 'fallback' ? fallbacks + 1 : fallbacks
+    list.forEach((child, index) => checkBounds(child as Fields, `${path}/${slot}/${index}`, budget, inner))
+  }
+  if (isObject(node['caption'])) checkBounds(node['caption'], `${path}/caption`, budget, fallbacks)
+}
+
 /** Refuses `document` unless it is a tree of contract 2.0. */
 export function validateTree(document: unknown): asserts document is AstNode {
   // C2-A-168.
@@ -412,4 +454,5 @@ export function validateTree(document: unknown): asserts document is AstNode {
     // C2-A-049.
     if (child['type'] === 'frontmatter' && index > 0) fail(`/children/${index}`, 'frontmatter is not the first child')
   })
+  checkBounds(document, '', { resourceReferences: 0 }, 0)
 }
