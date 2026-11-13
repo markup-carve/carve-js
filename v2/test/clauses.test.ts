@@ -72,7 +72,7 @@ describe('paragraphs and interrupters', () => {
     expect(blocks('- a', '        b', 'c')).toBe('ul(-)[li[p"a|b|c"]]')
     expect(blocks('> a', 'b', '> c')).toBe('quote[p"a|b|c"]')
     expect(blocks('- > a', '> b')).toBe('ul(-)[li[quote[p"a|> b"]]]')
-    expect(blocks('a', '= b', '> c', '***', '%% d')).toBe('p"a|= b|> c|***|%% d"')
+    expect(blocks('a', '= b', '> c', '%% d')).toBe('p"a|= b|> c|%% d"')
   })
 
   it('C2-B-013: a paragraph closes at a blank line, at an interrupter or with its container', () => {
@@ -393,6 +393,13 @@ describe('headings', () => {
 describe('thematic break', () => {
   it('C2-B-159: three or more stars and nothing else, at any indent', () => {
     expect(blocks('***')).toBe('hr')
+    // C2-B-200: a thematic break interrupts a paragraph, like a fence line.
+    expect(blocks('a', '***', 'b')).toBe('p"a" hr p"b"')
+    expect(blocks('a', '*** b')).toBe('p"a|*** b"')
+    expect(blocks('a', '**')).toBe('p"a|**"')
+    expect(blocks('- a', '***', 'b')).toBe('ul(-)[li[p"a"]] hr p"b"')
+    expect(blocks('- a', '  ***')).toBe('ul(-)[li[p"a" hr]]')
+    expect(blocks('> a', '***')).toBe('quote[p"a"] hr')
     expect(blocks('     ******  ')).toBe('hr')
     expect(blocks('**')).toBe('p"**"')
     expect(blocks('*** a')).toBe('p"*** a"')

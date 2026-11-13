@@ -297,13 +297,15 @@ function captionsAfterBlock(state: BlockState, matched: number, end: number): bo
   return state.captionDepth === state.depth
 }
 
-/** The interrupters of an open text leaf: (a) a fence line, (b) a list marker, (c) a sibling mark or definition. */
+/** The interrupters of an open text leaf: (a) a fence line, (b) a list marker, (c) a sibling mark or definition, (e) a table row, (f) a thematic break. */
 function interruptsLeaf(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
   const pos = state.pos
   const shapes = shapesAt(state)
   // C2-B-014.
   if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return true
+  // C2-B-200.
+  if ((shapes & SHAPE_THEMATIC_BREAK) !== 0 && isThematicBreak(src, pos, end)) return true
   // C2-B-019.
   if ((shapes & SHAPE_TABLE_ROW) !== 0) return rowClosingPipe(src, pos, end) >= 0
   if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched)
