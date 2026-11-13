@@ -3,13 +3,13 @@
 import {
   BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DIGIT_9, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
-  PERCENT, PIPE, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
+  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { isSpaceOrTab } from './source.ts'
 
 const MAX_HEADING_LEVEL = 6
 const MAX_ORDERED_DIGITS = 9
-const MAX_ROMAN_LETTERS = 15
+const MAX_ORDERED_LETTERS = 9
 export const MIN_RUN_LENGTH = 3
 const TASK_BOX_LENGTH = 4
 const FRONTMATTER_RUN = 3
@@ -26,13 +26,13 @@ export function runLength(src: string, pos: number, end: number, code: number): 
   return p - pos
 }
 
-/** C2-B-028: `>` followed by a space or by the end of the line. */
+/** C2-B-031: `>` followed by a space or by the end of the line. */
 export function isQuoteMark(src: string, pos: number, end: number): boolean {
   if (pos >= end || src.charCodeAt(pos) !== GREATER) return false
   return pos + 1 === end || src.charCodeAt(pos + 1) === SPACE
 }
 
-/** Offset after the `spaces` spaces of a marker that ends at `markerEnd`, or -1 (C2-B-006, C2-B-030). */
+/** Offset after the `spaces` spaces of a marker that ends at `markerEnd`, or -1 (C2-B-006, C2-B-033). */
 function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: number): number {
   const contentStart = markerEnd + spaces
   if (contentStart > end || runLength(src, markerEnd, contentStart, SPACE) !== spaces) return -1
@@ -62,7 +62,7 @@ export function braceBlockEnd(src: string, pos: number, end: number): number {
   return -1
 }
 
-/** Offset after the glued brace blocks at `pos`; `pos` itself when there are none (C2-B-071). */
+/** Offset after the glued brace blocks at `pos`; `pos` itself when there are none (C2-B-093). */
 export function braceBlocksEnd(src: string, pos: number, end: number): number {
   for (;;) {
     const next = braceBlockEnd(src, pos, end)
@@ -71,13 +71,13 @@ export function braceBlocksEnd(src: string, pos: number, end: number): number {
   }
 }
 
-/** C2-B-068: one or more glued brace blocks, alone on the line. */
+/** C2-B-090: one or more glued brace blocks, alone on the line. */
 export function isAttributeLine(src: string, pos: number, end: number): boolean {
   const blocksEnd = braceBlocksEnd(src, pos, end)
   return blocksEnd > pos && skipSpaces(src, blocksEnd, end) === end
 }
 
-/** C2-B-108: `{{ ... }}` alone on its line. */
+/** C2-B-156: `{{ ... }}` alone on its line. */
 export function isIncludeLine(src: string, pos: number, end: number): boolean {
   if (pos + 4 > end || src.charCodeAt(pos) !== BRACE_OPEN || src.charCodeAt(pos + 1) !== BRACE_OPEN) return false
   let last = end
@@ -85,7 +85,7 @@ export function isIncludeLine(src: string, pos: number, end: number): boolean {
   return last - pos >= 4 && src.charCodeAt(last - 1) === BRACE_CLOSE && src.charCodeAt(last - 2) === BRACE_CLOSE
 }
 
-/** Offset after the space of the bullet marker at `pos`, or -1. Brace blocks may abut the marker (C2-B-031, C2-B-079). */
+/** Offset after the space of the bullet marker at `pos`, or -1. Brace blocks may abut the marker (C2-B-034, C2-B-101). */
 export function bulletMarkerEnd(src: string, pos: number, end: number): number {
   const code = src.charCodeAt(pos)
   if (code !== HYPHEN && code !== STAR) return -1
@@ -125,7 +125,7 @@ function digitsEnd(src: string, pos: number, end: number): number {
   return p - pos > MAX_ORDERED_DIGITS ? -1 : p
 }
 
-/** Offset after the one letter, or the two or more roman letters of one case, at `pos`, or -1. */
+/** Offset after the one letter, or the two to nine roman letters of one case, at `pos`, or -1. */
 function lettersEnd(src: string, pos: number, end: number): number {
   const lower = isLower(src.charCodeAt(pos))
   let roman = romanLetterValue(src.charCodeAt(pos)) > 0
@@ -133,14 +133,14 @@ function lettersEnd(src: string, pos: number, end: number): number {
   // Two or more letters are a marker only as a roman numeral, so an ordinary word ends the test at once.
   while (p < end && (lower ? isLower(src.charCodeAt(p)) : isUpper(src.charCodeAt(p)))) {
     roman = roman && romanLetterValue(src.charCodeAt(p)) > 0
-    if (!roman || p - pos >= MAX_ROMAN_LETTERS) return -1
+    if (!roman || p - pos >= MAX_ORDERED_LETTERS) return -1
     p++
   }
   return p
 }
 
 /**
- * Offset of the delimiter of the ordered marker at `pos`, or -1 (C2-B-033). Before it stand one
+ * Offset of the delimiter of the ordered marker at `pos`, or -1 (C2-B-036). Before it stand one
  * to nine digits, one letter, two or more roman letters of one case, or nothing before a dot.
  */
 export function orderedDelimiter(src: string, pos: number, end: number): number {
@@ -156,7 +156,7 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 
 /** Offset after the spaces of the ordered marker whose delimiter is at `delimiter`, or -1. */
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
-  // C2-B-037: a letter or roman marker with a dot needs two spaces.
+  // C2-B-040: a letter or roman marker with a dot needs two spaces.
   const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && !isDigit(src.charCodeAt(pos)) ? 2 : 1
   return afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
 }
@@ -191,7 +191,7 @@ function isTaskState(code: number): boolean {
     code === BANG || code === HYPHEN || code === GREATER || code === QUESTION
 }
 
-/** Offset after the space of the task box at `pos`, or -1 (C2-B-039). */
+/** Offset after the space of the task box at `pos`, or -1 (C2-B-046). */
 export function taskBoxEnd(src: string, pos: number, end: number): number {
   if (pos + TASK_BOX_LENGTH > end) return -1
   if (src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 2) !== BRACKET_CLOSE) return -1
@@ -199,12 +199,12 @@ export function taskBoxEnd(src: string, pos: number, end: number): number {
   return afterMarkerSpace(src, pos + 3, end, 1)
 }
 
-/** Offset after the space of the term mark `::` at `pos`, or -1 (C2-B-055). */
+/** Offset after the space of the term mark `::` at `pos`, or -1 (C2-B-067). */
 export function termMarkEnd(src: string, pos: number, end: number): number {
   return runLength(src, pos, end, COLON) === 2 ? afterMarkerSpace(src, pos + 2, end, 1) : -1
 }
 
-/** Offset after the space of the description mark `:` at `pos`, or -1 (C2-B-055). */
+/** Offset after the space of the description mark `:` at `pos`, or -1 (C2-B-067). */
 export function descriptionMarkEnd(src: string, pos: number, end: number): number {
   return runLength(src, pos, end, COLON) === 1 ? afterMarkerSpace(src, pos + 1, end, 1) : -1
 }
@@ -214,7 +214,7 @@ export function isDescriptionListMark(src: string, pos: number, end: number): bo
   return termMarkEnd(src, pos, end) >= 0 || descriptionMarkEnd(src, pos, end) >= 0
 }
 
-/** Heading level of the `=` or `#` run at `pos`, or 0 (C2-B-104, C2-B-105). */
+/** Heading level of the `=` or `#` run at `pos`, or 0 (C2-B-151, C2-B-152). */
 export function headingLevel(src: string, pos: number, end: number): number {
   const code = src.charCodeAt(pos)
   if (code !== EQUALS && code !== HASH) return 0
@@ -223,48 +223,49 @@ export function headingLevel(src: string, pos: number, end: number): number {
   return afterMarkerSpace(src, pos + level, end, 1) < 0 ? 0 : level
 }
 
-/** Length of the backtick or tilde run at `pos` when it opens a code fence, or 0 (C2-B-080). */
+/** Length of the backtick or tilde run at `pos` when it opens a code fence, or 0 (C2-B-108). */
 export function fenceOpenerLength(src: string, pos: number, end: number): number {
   const code = src.charCodeAt(pos)
   if (code !== BACKTICK && code !== TILDE) return 0
   const length = runLength(src, pos, end, code)
   if (length < MIN_RUN_LENGTH) return 0
   if (code === BACKTICK) {
-    // C2-B-086: a backtick in the info string makes the run inline code.
+    // C2-B-118: a backtick in the info string makes the run inline code.
     for (let p = pos + length; p < end; p++) if (src.charCodeAt(p) === BACKTICK) return 0
   }
   return length
 }
 
-/** Length of the run of `code` at `pos` when it has three or more characters, or 0 (C2-B-080). */
+/** Length of the run of `code` at `pos` when it has three or more characters, or 0 (C2-B-108). */
 export function fenceRunLength(src: string, pos: number, end: number, code: number): number {
   const length = runLength(src, pos, end, code)
   return length >= MIN_RUN_LENGTH ? length : 0
 }
 
-/** C2-B-013: a line that opens or closes a code fence, a div or a comment block. */
+/** C2-B-014: a line that opens or closes a code fence, a div or a comment block. */
 export function isFenceLine(src: string, pos: number, end: number): boolean {
   const code = src.charCodeAt(pos)
   if (code === COLON || code === PERCENT) return fenceRunLength(src, pos, end, code) > 0
   return fenceOpenerLength(src, pos, end) > 0
 }
 
-/** C2-B-081, C2-B-082: a bare run of `code`, at least `minLength` long. */
+/** C2-B-109, C2-B-110: a bare run of `code`, at least `minLength` long. */
 export function isBareRun(src: string, pos: number, end: number, code: number, minLength: number): boolean {
   const length = runLength(src, pos, end, code)
   return length >= minLength && skipSpaces(src, pos + length, end) === end
 }
 
-/** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-087, C2-B-088). */
+/** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-123, C2-B-124). */
 export function divSigil(src: string, pos: number, end: number): number {
   const at = skipSpaces(src, pos, end)
-  if (at >= end) return 0
+  // A sigil stands after at least one space; a name may abut the run.
+  if (at >= end || at === pos) return 0
   const code = src.charCodeAt(at)
   if (code !== PIPE && code !== BACKSLASH && code !== GREATER) return 0
   return at + 1 === end || isSpaceOrTab(src.charCodeAt(at + 1)) ? code : 0
 }
 
-/** True when the word after the colon run that ends at `pos` is `figure` (C2-B-102). */
+/** True when the word after the colon run that ends at `pos` is `figure` (C2-B-127). */
 export function isFigureName(src: string, pos: number, end: number): boolean {
   const at = skipSpaces(src, pos, end)
   const name = 'figure'
@@ -273,17 +274,17 @@ export function isFigureName(src: string, pos: number, end: number): boolean {
   return at + name.length === end || isSpaceOrTab(src.charCodeAt(at + name.length))
 }
 
-/** C2-B-110: three or more stars and nothing else. */
+/** C2-B-159: three or more stars and nothing else. */
 export function isThematicBreak(src: string, pos: number, end: number): boolean {
   return isBareRun(src, pos, end, STAR, MIN_RUN_LENGTH)
 }
 
-/** True when a line comment starts at `pos`. Three percent signs open a comment block instead (C2-B-080). */
+/** True when a line comment starts at `pos`. Three percent signs open a comment block instead (C2-B-108). */
 export function isLineComment(src: string, pos: number, end: number): boolean {
   return runLength(src, pos, end, PERCENT) === 2
 }
 
-/** Offset of the content of the caption line at `pos`, or -1 (C2-B-101). */
+/** Offset of the content of the caption line at `pos`, or -1 (C2-B-146). */
 export function captionContentStart(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== CARET || src.charCodeAt(pos + 1) !== SPACE) return -1
   const content = skipSpaces(src, pos + 1, end)
@@ -305,19 +306,22 @@ function labelEnd(src: string, pos: number, end: number, skip: number, spaces: b
   return p + 2
 }
 
-/** Offset after the space of the footnote definition marker `[^label]:` at `pos`, or -1 (C2-B-063). */
+/** Offset after the space of the footnote definition marker `[^label]:` at `pos`, or -1 (C2-B-082). */
 export function footnoteMarkerEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) !== CARET) return -1
   const marker = labelEnd(src, pos, end, 2, false)
   return marker < 0 ? -1 : afterMarkerSpace(src, marker, end, 1)
 }
 
-/** C2-B-064: `[label]:`, a space, a URL without spaces that may be empty, and an optional quoted title. */
+/** C2-B-083: `[label]:`, a space, a URL without spaces that may be empty, and an optional quoted title. */
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
   const marker = labelEnd(src, pos, end, 1, true)
   if (marker < 0 || marker >= end || src.charCodeAt(marker) !== SPACE) return false
-  let p = marker + 1
+  let p = skipSpaces(src, marker + 1, end)
+  // A destination or a title must follow: a label and a colon alone are text.
+  if (p === end) return false
+  p = marker + 1
   while (p < end && !isSpaceOrTab(src.charCodeAt(p)) && src.charCodeAt(p) !== QUOTE_MARK) p++
   p = skipSpaces(src, p, end)
   if (p < end && src.charCodeAt(p) === QUOTE_MARK) p = quotedEnd(src, p, end)
@@ -334,7 +338,7 @@ export function quotedEnd(src: string, pos: number, end: number): number {
   return -1
 }
 
-/** C2-B-065: `*[label]:` with a label of ASCII letters and digits, a space and an expansion that is not empty. */
+/** C2-B-084: `*[label]:` with a label of ASCII letters and digits, a space and an expansion that is not empty. */
 export function isAbbreviation(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== STAR || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
   let p = pos + 2
@@ -343,7 +347,7 @@ export function isAbbreviation(src: string, pos: number, end: number): boolean {
   return afterMarkerSpace(src, p + 2, end, 1) >= 0
 }
 
-/** True when a definition of any of the three kinds stands at `pos` (C2-B-015). */
+/** True when a definition of any of the three kinds stands at `pos` (C2-B-016). */
 export function isDefinition(src: string, pos: number, end: number): boolean {
   return footnoteMarkerEnd(src, pos, end) >= 0 || isLinkDefinition(src, pos, end) || isAbbreviation(src, pos, end)
 }
@@ -362,7 +366,7 @@ function pairEnd(src: string, pos: number, end: number, open: number, close: num
 
 /**
  * True when the line holds one image and nothing else: `![alt](target)` or `![alt][label]`, with
- * optional glued brace blocks (C2-B-016, C2-B-109). The inline pass will own this test.
+ * optional glued brace blocks (C2-B-017, C2-B-157). The inline pass will own this test.
  */
 export function isImageOnly(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
@@ -375,7 +379,7 @@ export function isImageOnly(src: string, pos: number, end: number): boolean {
   return p >= 0 && skipSpaces(src, braceBlocksEnd(src, p, end), end) === end
 }
 
-/** True when the line holds one display math span, `$$` and a backtick span, and nothing else (C2-B-102). */
+/** True when the line holds one display math span, `$$` and a backtick span, and nothing else (C2-B-158). */
 export function isDisplayMathOnly(src: string, pos: number, end: number): boolean {
   if (pos + 2 >= end || src.charCodeAt(pos) !== DOLLAR || src.charCodeAt(pos + 1) !== DOLLAR) return false
   const open = runLength(src, pos + 2, end, BACKTICK)
@@ -393,19 +397,148 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
   return false
 }
 
-/** C2-B-111: exactly `---`, an optional format word after one space, and trailing spaces. */
+/** C2-B-161, C2-B-164: exactly `---`, an optional format word glued to it or after spaces, and trailing spaces. */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
-  let p = pos + FRONTMATTER_RUN
-  if (p < end && src.charCodeAt(p) === SPACE) {
-    p++
-    while (p < end && (isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
-  }
+  let p = pos + FRONTMATTER_RUN + runLength(src, pos + FRONTMATTER_RUN, end, SPACE)
+  while (p < end && (isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
   return runLength(src, p, end, SPACE) === end - p
 }
 
-/** C2-B-112: exactly `---` plus trailing spaces. */
+/** C2-B-162: exactly `---` plus trailing spaces. */
 export function isFrontmatterCloser(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   return runLength(src, pos + FRONTMATTER_RUN, end, SPACE) === end - pos - FRONTMATTER_RUN
+}
+
+/** True when the info string of the fence whose run ends at `pos` is `=` and a format name (C2-B-116). */
+export function isRawInfo(src: string, pos: number, end: number): boolean {
+  return pos + 1 < end && src.charCodeAt(pos) === EQUALS && (isLower(src.charCodeAt(pos + 1)) || isUpper(src.charCodeAt(pos + 1)))
+}
+
+/** True when the word at `pos` is `word` and ends there. */
+export function isWord(src: string, pos: number, end: number, word: string): boolean {
+  if (pos + word.length > end) return false
+  for (let p = 0; p < word.length; p++) if (src.charCodeAt(pos + p) !== word.charCodeAt(p)) return false
+  return pos + word.length === end || isSpaceOrTab(src.charCodeAt(pos + word.length))
+}
+
+/**
+ * Offset of the value of `key` in the brace blocks between `pos` and `end`: behind `key=`, or behind
+ * a bare `key`. -1 when the key is not there. A key starts a brace block or stands after a space.
+ */
+export function attributeValueStart(src: string, pos: number, end: number, key: string): number {
+  for (let p = pos + 1; p + key.length <= end; p++) {
+    const before = src.charCodeAt(p - 1)
+    if (before !== BRACE_OPEN && before !== SPACE) continue
+    let at = 0
+    while (at < key.length && src.charCodeAt(p + at) === key.charCodeAt(at)) at++
+    if (at < key.length) continue
+    const after = src.charCodeAt(p + at)
+    if (after === EQUALS) return p + at + 1
+    if (after === SPACE || after === BRACE_CLOSE) return p + at
+  }
+  return -1
+}
+
+/** Offset after the digits at `pos`. */
+export function digitRunEnd(src: string, pos: number, end: number): number {
+  while (pos < end && isDigit(src.charCodeAt(pos))) pos++
+  return pos
+}
+
+/**
+ * Offset of the next pipe that separates cells between `pos` and `end`, or -1 (C2-B-169). A pipe
+ * is no separator when it is escaped or stands between a backtick run and its matching closing run.
+ */
+export function nextPipe(src: string, pos: number, end: number): number {
+  let p = pos
+  while (p < end) {
+    const code = src.charCodeAt(p)
+    if (code === PIPE) return p
+    if (code === BACKSLASH) {
+      p += 2
+    } else if (code === BACKTICK) {
+      const run = runLength(src, p, end, BACKTICK)
+      const close = closingRun(src, p + run, end, run)
+      p = close < 0 ? p + run : close + run
+    } else {
+      p++
+    }
+  }
+  return -1
+}
+
+/** Offset of the next backtick run of exactly `length` at or after `pos`, or -1. */
+function closingRun(src: string, pos: number, end: number, length: number): number {
+  let p = pos
+  while (p < end) {
+    if (src.charCodeAt(p) !== BACKTICK) {
+      p++
+      continue
+    }
+    const run = runLength(src, p, end, BACKTICK)
+    if (run === length) return p
+    p += run
+  }
+  return -1
+}
+
+/** Offset of the last separating pipe between `pos` and `end`, or -1. */
+function lastPipe(src: string, pos: number, end: number): number {
+  let last = -1
+  for (let p = nextPipe(src, pos, end); p >= 0; p = nextPipe(src, p + 1, end)) last = p
+  return last
+}
+
+/** Offset of the brace block of the row attribute behind the closing pipe at `pipe`, or -1 (C2-B-167). */
+export function rowAttributeStart(src: string, pipe: number, end: number): number {
+  let p = pipe + 1
+  if (p < end && src.charCodeAt(p) === SPACE) p++
+  return braceBlockEnd(src, p, end) < 0 ? -1 : p
+}
+
+/**
+ * Offset of the closing pipe of the table row at `pos`, or -1 (C2-B-166). The row starts with a
+ * pipe and ends with another; a row attribute and a line comment may follow the last pipe (C2-B-167).
+ */
+export function rowClosingPipe(src: string, pos: number, end: number): number {
+  if (src.charCodeAt(pos) !== PIPE) return -1
+  const last = lastPipe(src, pos + 1, end)
+  if (last < 0) return -1
+  const attribute = rowAttributeStart(src, last, end)
+  const tail = skipSpaces(src, attribute < 0 ? last + 1 : braceBlocksEnd(src, attribute, end), end)
+  return tail === end || isLineComment(src, tail, end) ? last : -1
+}
+
+/** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-177). */
+export function continuationClosingPipe(src: string, pos: number, end: number): number {
+  if (src.charCodeAt(pos) !== PLUS) return -1
+  const last = lastPipe(src, pos + 1, end)
+  return last >= 0 && skipSpaces(src, last + 1, end) === end ? last : -1
+}
+
+/** Offset of the first bare `#` of a caption's text, the caption number mark, or -1 (C2-B-150). */
+export function captionNumberMark(src: string, pos: number, end: number): number {
+  let p = pos
+  while (p < end) {
+    const code = src.charCodeAt(p)
+    if (code === HASH) return p
+    if (code === BACKSLASH) {
+      p += 2
+    } else if (code === BACKTICK) {
+      const run = runLength(src, p, end, BACKTICK)
+      const close = closingRun(src, p + run, end, run)
+      p = close < 0 ? p + run : close + run
+    } else {
+      p++
+    }
+  }
+  return -1
+}
+
+/** Offset after the last character between `pos` and `end` that is not a space or a tab. */
+export function trimEnd(src: string, pos: number, end: number): number {
+  while (end > pos && isSpaceOrTab(src.charCodeAt(end - 1))) end--
+  return end
 }

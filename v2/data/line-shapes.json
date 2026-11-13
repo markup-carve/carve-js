@@ -1,17 +1,18 @@
 {
   "description": "Line shapes of the 0.2 block pass, keyed by the first character after the prefixes. A shape is tested only on a line that starts with one of its characters. The order of `shapes` is the order of the bits in the generated table, not a priority: the scanner fixes the order of the tests. A range is two characters joined by a hyphen.",
   "shapes": [
-    { "name": "quote", "first": [">"], "clauses": ["C2-B-028"] },
-    { "name": "bullet", "first": ["-", "*"], "clauses": ["C2-B-031"] },
-    { "name": "ordered", "first": ["0-9", "a-z", "A-Z", "."], "clauses": ["C2-B-033"] },
-    { "name": "description", "first": [":"], "clauses": ["C2-B-055"] },
-    { "name": "div", "first": [":"], "clauses": ["C2-B-080", "C2-B-089", "C2-B-090"] },
-    { "name": "fence", "first": ["`", "~"], "clauses": ["C2-B-080"] },
-    { "name": "comment", "first": ["%"], "clauses": ["C2-B-080", "C2-B-091"] },
-    { "name": "heading", "first": ["=", "#"], "clauses": ["C2-B-104", "C2-B-105"] },
-    { "name": "thematic_break", "first": ["*"], "clauses": ["C2-B-110"] },
-    { "name": "brace", "first": ["{"], "clauses": ["C2-B-068", "C2-B-108"] },
-    { "name": "definition", "first": ["[", "*"], "clauses": ["C2-B-063", "C2-B-064", "C2-B-065"] },
-    { "name": "caption", "first": ["^"], "clauses": ["C2-B-101"] }
+    { "name": "quote", "first": [">"], "clauses": ["C2-B-031"] },
+    { "name": "bullet", "first": ["-", "*"], "clauses": ["C2-B-034"] },
+    { "name": "ordered", "first": ["0-9", "a-z", "A-Z", "."], "clauses": ["C2-B-036"] },
+    { "name": "description", "first": [":"], "clauses": ["C2-B-067"] },
+    { "name": "div", "first": [":"], "clauses": ["C2-B-108", "C2-B-125", "C2-B-126"] },
+    { "name": "fence", "first": ["`", "~"], "clauses": ["C2-B-108"] },
+    { "name": "comment", "first": ["%"], "clauses": ["C2-B-108", "C2-B-133"] },
+    { "name": "heading", "first": ["=", "#"], "clauses": ["C2-B-151", "C2-B-152"] },
+    { "name": "thematic_break", "first": ["*"], "clauses": ["C2-B-159"] },
+    { "name": "brace", "first": ["{"], "clauses": ["C2-B-090", "C2-B-156"] },
+    { "name": "definition", "first": ["[", "*"], "clauses": ["C2-B-082", "C2-B-083", "C2-B-084"] },
+    { "name": "caption", "first": ["^"], "clauses": ["C2-B-146"] },
+    { "name": "table", "first": ["|"], "clauses": ["C2-B-166"] }
   ]
 }

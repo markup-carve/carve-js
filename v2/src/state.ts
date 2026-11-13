@@ -3,7 +3,7 @@
 // so a parse takes its state from a pool and a parse started inside another one gets its own.
 import { EVENT_WIDTH } from './events.ts'
 
-/** C2-B-131: the deepest container stack. The document at index 0 is not counted. */
+/** C2-B-190: the deepest container stack. The document at index 0 is not counted. */
 export const MAX_DEPTH = 200
 export const NO_LEAF = -1
 export const NO_LINE = -1
@@ -30,9 +30,9 @@ export interface BlockState {
   stackLoose: Uint8Array
   depth: number
 
-  // The open leaf: NO_LEAF, a text leaf or an opaque leaf.
+  // The open leaf: NO_LEAF, a text leaf, an opaque leaf or TABLE, whose rows are read like a leaf's lines.
   leaf: number
-  // The first line of the open text leaf and the number of its lines (C2-B-016, C2-B-109).
+  // The first line of the open text leaf and the number of its lines (C2-B-017, C2-B-157).
   leafStart: number
   leafEnd: number
   leafLines: number
@@ -43,16 +43,25 @@ export interface BlockState {
   // First of the blank lines at the end of an open opaque leaf that no later line has claimed yet.
   pendingBlankLine: number
 
-  // Blank lines since the last line that was not blank (C2-B-044, C2-B-052).
+  // Blank lines since the last line that was not blank (C2-B-052, C2-B-062).
   blankCount: number
   // End of the last line that belongs to a block. Closing blocks end here.
   contentEnd: number
-  // Stack depth at which the block directly above takes a caption, or NO_DEPTH (C2-B-101).
+  // Stack depth at which the block directly above takes a caption, or NO_DEPTH (C2-B-146).
   captionDepth: number
-  // Stack depth at which attribute lines are pending, or NO_DEPTH (C2-B-070).
+  // Stack depth at which attribute lines are pending, or NO_DEPTH (C2-B-092).
   attributesDepth: number
   // The next enter event takes the pending attribute lines.
   takeAttributes: boolean
+  // Source range of the pending attribute lines, for the keys the block pass reads (C2-B-180, C2-B-187).
+  attributesStart: number
+  attributesEnd: number
+
+  // The open table: its rows so far, its head rows, whether the head is still open, and `footer-rows`.
+  tableRows: number
+  tableHeadRows: number
+  tableHeadOpen: boolean
+  tableFooterRows: number
 
   // Cursor in the current line. `column` counts from the start of the line (C2-B-005);
   // `origin` is the column after the innermost matched quote mark and `prefixEnd` its offset (C2-B-003).
@@ -87,6 +96,12 @@ function createState(): BlockState {
     captionDepth: NO_DEPTH,
     attributesDepth: NO_DEPTH,
     takeAttributes: false,
+    attributesStart: 0,
+    attributesEnd: 0,
+    tableRows: 0,
+    tableHeadRows: 0,
+    tableHeadOpen: false,
+    tableFooterRows: 0,
     pos: 0,
     column: 0,
     origin: 0,

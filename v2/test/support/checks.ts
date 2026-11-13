@@ -1,8 +1,8 @@
 // Properties that hold for every document, checked on the events of one block pass.
 // `checkDocument` returns the first violation as text, or null.
 import {
-  acquireState, type BlockState, buildTree, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT, isLeaf, isOpaqueLeaf,
-  lineAt, lineEndAt, releaseState, scanBlocks, SPAN,
+  acquireState, type BlockState, buildTree, CELL, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT, isLeaf, isOpaqueLeaf,
+  lineAt, lineEndAt, releaseState, ROW, scanBlocks, SPAN,
 } from '../../src/index.ts'
 import { shape, shapeOf } from './shape.ts'
 
@@ -72,33 +72,42 @@ function checkOrder(state: BlockState, length: number): string | null {
  * of a div). A blank line has an owner only inside an opaque leaf.
  */
 function checkOwners(state: BlockState, src: string): string | null {
-  const events = state.events
   const owner = new Int32Array(state.lineCount).fill(-1)
   const ownerKind = new Int32Array(state.lineCount).fill(-1)
   const marked = new Uint8Array(state.lineCount)
-  let leaf = -1
-  let leafKind = -1
-  for (let at = 0; at < state.eventLength && state.lineCount > 0; at += EVENT_WIDTH) {
-    const tag = events[at]!
-    const type = eventType(tag)
-    const line = lineAt(state.lineStarts, state.lineCount, events[at + 1]!)
-    if (type !== SPAN && !isLeaf(eventKind(tag))) {
-      marked[line] = 1
-      continue
-    }
-    if (type === ENTER) {
-      leaf = at
-      leafKind = eventKind(tag)
-    }
-    if (owner[line] !== -1 && owner[line] !== leaf) return `line ${line + 1}: two owners`
-    owner[line] = leaf
-    ownerKind[line] = leafKind
-  }
+  const failure = state.lineCount === 0 ? null : claimLines(state, owner, ownerKind, marked)
+  if (failure !== null) return failure
   for (let line = 0; line < state.lineCount; line++) {
     const text = src.slice(state.lineStarts[line], lineEndAt(src, state.lineStarts, state.lineCount, line))
     const blank = text.trim() === ''
     if (owner[line] === -1 && marked[line] === 0 && text.replaceAll('>', '').trim() !== '') return `line ${line + 1}: no owner`
     if (owner[line] !== -1 && blank && !isOpaqueLeaf(ownerKind[line]!)) return `line ${line + 1}: a blank line with an owner`
+  }
+  return null
+}
+
+/** Records the owner of every line an event touches. A row owns its line and its cells share it. */
+function claimLines(state: BlockState, owner: Int32Array, ownerKind: Int32Array, marked: Uint8Array): string | null {
+  const events = state.events
+  let leaf = -1
+  let leafKind = -1
+  for (let at = 0; at < state.eventLength; at += EVENT_WIDTH) {
+    const tag = events[at]!
+    const type = eventType(tag)
+    const kind = eventKind(tag)
+    const line = lineAt(state.lineStarts, state.lineCount, events[at + 1]!)
+    if (type !== SPAN && kind === CELL) continue
+    if (type !== SPAN && !isLeaf(kind) && kind !== ROW) {
+      marked[line] = 1
+      continue
+    }
+    if (type === ENTER) {
+      leaf = at
+      leafKind = kind
+    }
+    if (owner[line] !== -1 && owner[line] !== leaf) return `line ${line + 1}: two owners`
+    owner[line] = leaf
+    ownerKind[line] = leafKind
   }
   return null
 }

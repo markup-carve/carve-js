@@ -12,6 +12,7 @@ export const LINE_SHAPES = [
   ':: t', ': d', '  : d', 'a.  x', 'i) x',
   '[^a]: x', '[a]: /u', '{.a}', '{{ x }}', '^ c', '![a](b)',
   ':::', '::: x', '::: |', '%%%', '---',
+  '| a |', '|= a |', '| ^ | < |', '+ a |', '|', '{footer-rows=1}',
 ] as const
 
 export interface EnumerationResult {

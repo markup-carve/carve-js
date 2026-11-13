@@ -6,10 +6,11 @@ export { scanBlocks } from './blocks.ts'
 export { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, EXIT, SPAN } from './events.ts'
 export * from './kinds.ts'
 export * from './dispatch.ts'
-export { type OpenerInfo, readOpenerInfo } from './opener.ts'
+export { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 export { columnAt, lineAt, lineEndAt } from './source.ts'
 export { acquireState, type BlockState, MAX_DEPTH, releaseState } from './state.ts'
-export { type BlockNode, buildTree } from './tree.ts'
+export { type BlockNode, buildTree, FACT_MASK, FACT_SHIFT } from './tree.ts'
+export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */
 export function parseBlockTree(src: string): BlockNode {

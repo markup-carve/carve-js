@@ -11,12 +11,12 @@ const LINE_SHAPES = [
 ]
 
 const EXPLANATIONS = [
-  'C2-B-052: a blank line inside an item does not make its list loose',
-  'C2-B-044: three blank lines end a list',
-  'C2-B-013: a fence line interrupts a paragraph',
-  'C2-B-014, C2-B-048: a marker past the item\'s marker opens a nested list without a blank line',
-  'C2-B-023: an item that joined its list from the left owns lines from its own marker column',
-  'C2-B-011: a line that is no interrupter stays a lazy line, also without the container\'s prefix',
+  'C2-B-062: a blank line inside an item does not make its list loose',
+  'C2-B-052: three blank lines end a list',
+  'C2-B-014: a fence line interrupts a paragraph',
+  'C2-B-015, C2-B-056: a marker past the item\'s marker opens a nested list without a blank line',
+  'C2-B-025: an item that joined its list from the left owns lines from its own marker column',
+  'C2-B-012: a line that is no interrupter stays a lazy line, also without the container\'s prefix',
 ]
 
 function count(text: string, part: string): number {
@@ -40,7 +40,7 @@ function explain(lines: string[], carve: string, djot: string): number {
   return -1
 }
 
-/** True when a marker at column 0 follows a blank line below an indented marker (C2-B-046). */
+/** True when a marker at column 0 follows a blank line below an indented marker (C2-B-054). */
 function joinsFromLeft(lines: string[]): boolean {
   let indented = false
   for (let at = 0; at < lines.length; at++) {

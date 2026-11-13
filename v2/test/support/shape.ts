@@ -7,11 +7,12 @@
 //   A leaf that ended without its closer has `!` before its text, as in code!"x".
 //   {.a|.b}p"x" is a block that took two attribute lines.
 import {
-  ABBREVIATION, type BlockNode, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION,
-  DESCRIPTION_LIST, DIV, DOCUMENT, FLAG_ALPHA, FLAG_AUTO, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE,
-  FLAG_MARKER_ATTRIBUTES, FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT,
-  FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION,
-  ORDERED_LIST, PARAGRAPH, parseBlockTree, QUOTE, TERM, THEMATIC_BREAK,
+  ABBREVIATION, type BlockNode, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION,
+  DESCRIPTION_LIST, DIV, DOCUMENT, FACT_MASK, FACT_SHIFT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES,
+  FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_MATH,
+  FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER,
+  FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH,
+  parseBlockTree, QUOTE, readDelimitedTable, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from '../../src/index.ts'
 
 export function shape(src: string): string {
@@ -41,6 +42,8 @@ function containerShape(node: BlockNode, children: string): string {
     case DESCRIPTION: return `dd[${children}]`
     case FOOTNOTE: return `fn[${children}]`
     case DIV: return `div${divSigil(node.flags)}[${children}]`
+    case TABLE: return `table${tableFacts(node)}[${children}]`
+    case ROW: return `tr${node.aux === 0 ? '' : '{}'}[${children}]`
     default: return `?${node.kind}[${children}]`
   }
 }
@@ -69,16 +72,52 @@ function divSigil(flags: number): string {
   return (flags & FLAG_FIGURE) !== 0 ? '(figure)' : ''
 }
 
+function tableFacts(node: BlockNode): string {
+  const parts: string[] = []
+  if ((node.facts & FACT_MASK) > 0) parts.push(`h${node.facts & FACT_MASK}`)
+  if (node.facts >> FACT_SHIFT > 0) parts.push(`f${node.facts >> FACT_SHIFT}`)
+  return parts.length === 0 ? '' : `(${parts.join(',')})`
+}
+
+/** th or td, then (c2,r2,<) for spans and alignment, then {} for a brace block in the prefix. */
+function cellName(node: BlockNode): string {
+  const parts: string[] = []
+  if ((node.facts & FACT_MASK) > 1) parts.push(`c${node.facts & FACT_MASK}`)
+  if (node.facts >> FACT_SHIFT > 1) parts.push(`r${node.facts >> FACT_SHIFT}`)
+  if (node.aux !== 0) parts.push(String.fromCharCode(node.aux))
+  const name = (node.flags & FLAG_HEADER) !== 0 ? 'th' : 'td'
+  return `${name}${parts.length === 0 ? '' : `(${parts.join(',')})`}${(node.flags & FLAG_CELL_ATTRIBUTES) !== 0 ? '{}' : ''}`
+}
+
+/** csv(h1)[a,b / 1,2] for the rows of a delimited table, with `!` when its quoting is malformed. */
+function delimitedShape(src: string, node: BlockNode): string {
+  const table = readDelimitedTable(src, node)
+  const rows = table.rows.map((row) => row.join(',').replaceAll('\n', '|')).join(' / ')
+  return `csv(h${table.headRows})${table.malformed ? '!' : ''}[${rows}]`
+}
+
+function codeName(node: BlockNode): string {
+  return (node.flags & FLAG_RAW) !== 0 ? 'raw' : 'code'
+}
+
+function paragraphName(node: BlockNode): string {
+  if ((node.exitFlags & FLAG_IMAGE) !== 0) return 'img'
+  return (node.exitFlags & FLAG_MATH) !== 0 ? 'math' : 'p'
+}
+
 const LEAF_NAMES = new Map<number, string>([
-  [TERM, 'dt'], [CAPTION, 'cap'], [CODE, 'code'], [COMMENT_BLOCK, '%%%'], [LINE_BLOCK, 'lines'],
+  [TERM, 'dt'], [CAPTION, 'cap'], [COMMENT_BLOCK, '%%%'], [LINE_BLOCK, 'lines'],
   [FRONTMATTER, 'fm'], [COMMENT, '%'], [INCLUDE, 'inc'], [LINK_DEFINITION, 'def'], [ABBREVIATION, 'abbr'],
 ])
 
 function leafShape(src: string, node: BlockNode): string {
   if (node.kind === THEMATIC_BREAK) return 'hr'
+  if (node.kind === CODE && (node.flags & FLAG_DELIMITED) !== 0) return delimitedShape(src, node)
   let name = LEAF_NAMES.get(node.kind) ?? `?${node.kind}`
-  if (node.kind === PARAGRAPH) name = (node.exitFlags & FLAG_IMAGE) !== 0 ? 'img' : 'p'
+  if (node.kind === PARAGRAPH) name = paragraphName(node)
   if (node.kind === HEADING) name = `h${node.aux}`
+  if (node.kind === CODE) name = codeName(node)
+  if (node.kind === CELL) name = cellName(node)
   return `${name}${(node.exitFlags & FLAG_UNCLOSED) !== 0 ? '!' : ''}"${text(src, node)}"`
 }
 
