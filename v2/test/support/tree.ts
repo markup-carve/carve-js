@@ -53,7 +53,7 @@ export function documentOf(...children: AstNode[]): AstNode {
 /** The resolved tree of `src`, without positions, with what resolution returns beside it. */
 export function resolved(src: string, mode: HeadingIds = 'keep-case'): { document: AstNode, resolution: Resolution } {
   const built = buildDocument(src, parseTree(src), false)
-  return { document: built.document, resolution: resolve(built.document, mode, built.headingSources) }
+  return { document: built.document, resolution: resolve(built.document, mode, built.facts) }
 }
 
 /** The inline nodes of block `index` of the resolved tree of `src`. */

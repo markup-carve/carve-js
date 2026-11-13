@@ -45,6 +45,14 @@ function createNode(kind: number, start: number, flags: number, aux: number): In
   }
 }
 
+/** The node of the text `value`, which stands at `[start, end)` of the source. */
+export function textNode(value: string, start: number, end: number): InlineNode {
+  const node = createNode(TEXT, start, 0, 0)
+  node.value = value
+  node.end = end
+  return node
+}
+
 /** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
 export function foldLabel(source: string): string {
   return source.replaceAll(/[ \t\n]+/g, ' ').trim()
@@ -106,7 +114,8 @@ type ContentReader = (start: number, end: number) => string
 function closePart(src: string, node: InlineNode, host: InlineNode, content: ContentReader): void {
   const value = node.value ?? ''
   if (node.kind === ATTRIBUTE_BLOCK) addAttributes(src, host, node.start, node.end)
-  else if (node.kind === DESTINATION) host.destination = value.replaceAll(/\\([()\\])/g, '$1')
+  // C2-I-067: a backslash before a parenthesis or a backslash is dropped; most destinations hold none.
+  else if (node.kind === DESTINATION) host.destination = value.includes('\\') ? value.replaceAll(/\\([()\\])/g, '$1') : value
   else if (node.kind === TITLE) host.title = unescape(value, 0, value.length)
   // C2-I-072: the label of a collapsed reference is the source of its own text.
   else if ((host.flags & FLAG_COLLAPSED) !== 0) host.label = foldLabel(content(host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))

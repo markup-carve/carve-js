@@ -66,7 +66,7 @@ function buildSource(src: string, positions: boolean): BuiltTree {
 export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
   const built = buildSource(src, options?.positions !== false)
-  const resolution = resolve(built.document, settings.headingIds, built.headingSources)
+  const resolution = resolve(built.document, settings.headingIds, built.facts)
   return { document: built.document, diagnostics: locateFindings(built.document, resolution.findings) }
 }
 
@@ -91,7 +91,7 @@ function renderTree(input: string | AstNode, settings: Settings, rule: ProfileRu
   }
   validateTree(input)
   // A profile replaces nodes, and the tree of the caller keeps its own.
-  return { document: rule === NO_PROFILE ? input : structuredClone(input), headingSources: null }
+  return { document: rule === NO_PROFILE ? input : structuredClone(input), facts: null }
 }
 
 /**
@@ -104,7 +104,7 @@ export function renderWithDiagnostics(input: string | AstNode, options?: RenderO
   const built = renderTree(input, settings, rule)
   const losses: Findings = { entries: [], nodes: [] }
   if (rule !== NO_PROFILE) applyProfile(built.document, settings.profile, rule, losses)
-  const resolution = resolve(built.document, settings.headingIds, built.headingSources, settings.symbols)
+  const resolution = resolve(built.document, settings.headingIds, built.facts, settings.symbols)
   const result = renderDocument(built.document, settings, resolution, losses)
   const diagnostics = [...locateFindings(built.document, resolution.findings), ...locateFindings(built.document, losses)]
   if (settings.strictLosses && losses.entries.length > 0) return { html: '', diagnostics }

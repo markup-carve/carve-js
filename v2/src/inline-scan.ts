@@ -14,7 +14,7 @@ import {
 import { pairDelimiters, scanBareMark, scanBracedMark } from './inline-delimiters.ts'
 import { writeEvents } from './inline-emit.ts'
 import { type InlineState, NONE, setContent } from './inline-state.ts'
-import { BARE_MARKS, BRACED_MARKS } from './inline-tables.ts'
+import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 
 type Scanner = (state: InlineState, pos: number) => number
@@ -61,6 +61,22 @@ function scanners(): readonly (Scanner | undefined)[] {
 const SCANNERS = scanners()
 // Whether a character has a scanner, as bytes: the scan asks this once per character of text.
 const STARTS_TOKEN = Uint8Array.from(SCANNERS, (scanner) => (scanner === undefined ? 0 : 1))
+// Whether a character is text wherever it stands: it starts no token and no smart punctuation.
+const ALWAYS_TEXT = Uint8Array.from(STARTS_TOKEN, (starts, code) => (starts === 0 && (CHARACTER_CLASSES[code]! & CLASS_SMART_TRIGGER) === 0 ? 1 : 0))
+
+/**
+ * True when `src[start, end)`, one line, is one run of text for the inline pass: ASCII characters
+ * that are text wherever they stand, with no space or tab at either end (C2-I-002). Such a content
+ * needs no pass, and half of the contents of an ordinary document are of this kind.
+ */
+export function isPlainText(src: string, start: number, end: number): boolean {
+  if (start >= end || isSpaceOrTab(src.charCodeAt(start)) || isSpaceOrTab(src.charCodeAt(end - 1))) return false
+  for (let pos = start; pos < end; pos++) {
+    const code = src.charCodeAt(pos)
+    if (code >= ASCII || ALWAYS_TEXT[code] === 0) return false
+  }
+  return true
+}
 
 function resetScan(state: InlineState): void {
   state.tokenLength = 0

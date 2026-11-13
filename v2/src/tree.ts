@@ -1,7 +1,7 @@
 import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
-import { scanInline } from './inline-scan.ts'
+import { isPlainText, scanInline } from './inline-scan.ts'
 import { type InlineState } from './inline-state.ts'
-import { buildInlineTree, type InlineNode, LINE } from './inline-tree.ts'
+import { buildInlineTree, type InlineNode, LINE, textNode } from './inline-tree.ts'
 import {
   ATTRIBUTES, CAPTION, CELL, COMMENT, DIV, DOCUMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
   HEADING, isLeaf, LINE_BLOCK, PARAGRAPH, ROW, TABLE, TERM,
@@ -211,6 +211,8 @@ function hasInlineContent(kind: number): boolean {
 
 /** The inline nodes of the content `spans[from..to)` of a leaf. */
 function contentInlines(state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean): InlineNode[] {
+  // One line of plain text is one text node, with no pass over it.
+  if (to - from === 2 && isPlainText(src, spans[from]!, spans[from + 1]!)) return [textNode(src.slice(spans[from], spans[from + 1]), spans[from]!, spans[from + 1]!)]
   scanInline(state, src, spans, from, to, depth, lineComments)
   return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
 }

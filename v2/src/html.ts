@@ -17,12 +17,28 @@ const MAX_HEADING_ELEMENT = 6
 const INVISIBLE = ['comment', 'frontmatter', ...DEFINITION_TYPES]
 const ALPHA_STYLES = ['a', 'A', 'i', 'I']
 
-/** C2-H-005: two spaces per level. */
+const CACHED_LEVELS = 64
+// C2-H-005: a line break and two spaces per level, for the levels a document usually has.
+const LINE_STARTS: readonly string[] = Array.from({ length: CACHED_LEVELS }, (_, level) => `\n${'  '.repeat(level)}`)
+
+/** Adds one line to the output, indented by `level`. */
 function line(r: Render, level: number, text: string): void {
-  r.lines.push(level === 0 ? text : '  '.repeat(level) + text)
+  r.out += (level < CACHED_LEVELS ? LINE_STARTS[level]! : `\n${'  '.repeat(level)}`) + text
+  r.count++
+}
+
+/** Adds one line as it stands, with no indent. */
+function rawLine(r: Render, text: string): void {
+  r.out += `\n${text}`
+  r.count++
 }
 
 const NO_PARTS: TagParts = {}
+
+/** True for a node whose element takes nothing from it: no attribute, no language and no source line. */
+function isPlain(r: Render, node: AstNode): boolean {
+  return node.attrs === undefined && node.lang === undefined && !r.settings.sourceLines
+}
 
 function tag(r: Render, node: AstNode | null, parts: TagParts = NO_PARTS): string {
   // Most blocks carry no attribute and add none.
@@ -31,7 +47,14 @@ function tag(r: Render, node: AstNode | null, parts: TagParts = NO_PARTS): strin
 }
 
 function onlyComments(node: AstNode): boolean {
-  return (node.children ?? []).every((child) => child.type === 'comment')
+  for (const child of node.children ?? []) if (child.type !== 'comment') return false
+  return true
+}
+
+/** The blocks of `nodes` that write something: the list itself where all of them do. */
+function visibleBlocks(nodes: AstNode[]): AstNode[] {
+  for (const node of nodes) if (!isVisible(node)) return nodes.filter(isVisible)
+  return nodes
 }
 
 /** A block that writes something. C2-H-019: a paragraph that holds only comments writes nothing. */
@@ -58,9 +81,9 @@ function writeBlocks(r: Render, nodes: AstNode[], level: number): void {
 
 /** C2-H-008: a body that writes nothing keeps one empty line between its tags. */
 function writeBody(r: Render, nodes: AstNode[], level: number): void {
-  const before = r.lines.length
+  const before = r.count
   writeBlocks(r, nodes, level)
-  if (r.lines.length === before) r.lines.push('')
+  if (r.count === before) rawLine(r, '')
 }
 
 function container(name: string, parts: (r: Render, node: AstNode) => TagParts = () => ({})): BlockWriter {
@@ -71,9 +94,10 @@ function container(name: string, parts: (r: Render, node: AstNode) => TagParts =
   }
 }
 
-function paragraphHtml(r: Render, node: AstNode, parts: TagParts = {}): string {
+function paragraphHtml(r: Render, node: AstNode): string {
   const tail = r.backlinkHost === node ? r.backlinks : ''
-  return `<p${tag(r, node, { alignStyle: true, ...parts })}>${inlineHtml(r, node.children ?? [])}${tail}</p>`
+  const open = isPlain(r, node) ? '<p>' : `<p${tag(r, node, { alignStyle: true })}>`
+  return `${open}${inlineHtml(r, node.children ?? [])}${tail}</p>`
 }
 
 /** C2-H-122: in static mode a math block is its source as a code block. */
@@ -106,6 +130,8 @@ function idCarriers(r: Render, node: AstNode): Pair[] {
 function headingHtml(r: Render, node: AstNode, inSection: boolean): string {
   const level = node.level ?? 1
   const name = level <= MAX_HEADING_ELEMENT ? `h${level}` : 'div'
+  // The heading of a section that carries no attribute of its own, which is the usual one.
+  if (inSection && level <= MAX_HEADING_ELEMENT && isPlain(r, node)) return `<${name}>${inlineHtml(r, node.children ?? [])}</${name}>`
   const structural: Pair[] = level <= MAX_HEADING_ELEMENT ? [] : [['role', 'heading'], ['aria-level', String(level)]]
   if (!inSection) structural.push(...idCarriers(r, node))
   const parts: TagParts = { structural, id: inSection ? null : headingId(node) ?? null, alignStyle: true }
@@ -114,7 +140,7 @@ function headingHtml(r: Render, node: AstNode, inSection: boolean): string {
 
 /** C2-H-006: a quote whose only visible child is one paragraph is written on one line. */
 function quote(r: Render, node: AstNode, level: number): void {
-  const visible = (node.children ?? []).filter(isVisible)
+  const visible = visibleBlocks(node.children ?? [])
   if (visible.length === 1 && isTextParagraph(visible[0])) {
     line(r, level, `<blockquote${tag(r, node)}>${paragraphHtml(r, visible[0])}</blockquote>`)
     return
@@ -162,7 +188,7 @@ function itemOpen(r: Render, node: AstNode): string {
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
 function listItem(r: Render, node: AstNode, level: number, tight: boolean): void {
-  const blocks = (node.children ?? []).filter(isVisible)
+  const blocks = visibleBlocks(node.children ?? [])
   const first = blocks[0]
   let open = itemOpen(r, node)
   let rest = blocks
@@ -208,10 +234,10 @@ function div(r: Render, node: AstNode, level: number): void {
   const attrs = tag(r, node, { base, alignStyle: true })
   // C2-H-114: a div with no other attribute.
   line(r, level, `<div${attrs === '' && r.settings.roundtrip ? ' data-carve-div' : attrs}>`)
-  const before = r.lines.length
+  const before = r.count
   writeTitle(r, node, level + 1, null)
   writeBlocks(r, node.children ?? [], level + 1)
-  if (r.lines.length === before) r.lines.push('')
+  if (r.count === before) rawLine(r, '')
   line(r, level, '</div>')
 }
 
@@ -231,10 +257,10 @@ function admonitionName(r: Render, node: AstNode, id: string | null): Pair[] {
 function admonition(r: Render, node: AstNode, level: number): void {
   const id = r.resolution.labelIds.get(node) ?? null
   line(r, level, `<aside${tag(r, node, { base: ['admonition', node.kind ?? ''], generated: admonitionName(r, node, id) })}>`)
-  const before = r.lines.length
+  const before = r.count
   writeTitle(r, node, level + 1, id)
   writeBlocks(r, node.children ?? [], level + 1)
-  if (r.lines.length === before) r.lines.push('')
+  if (r.count === before) rawLine(r, '')
   line(r, level, '</aside>')
 }
 
@@ -252,14 +278,14 @@ function captionLine(r: Render, caption: AstNode, name: string, level: number): 
 
 function figureOf(r: Render, node: AstNode, level: number, base: string[]): void {
   line(r, level, `<figure${tag(r, node, { base })}>`)
-  const before = r.lines.length
+  const before = r.count
   for (const child of node.children ?? []) {
     // C2-H-064: each panel of a group.
     if (base.includes('carve-figure-group') && child.type === 'figure') figureOf(r, child, level + 1, ['carve-figure-panel'])
     else BLOCKS.get(child.type)?.(r, child, level + 1)
   }
   if (node.caption !== undefined) captionLine(r, node.caption, 'figcaption', level + 1)
-  if (r.lines.length === before) r.lines.push('')
+  if (r.count === before) rawLine(r, '')
   line(r, level, '</figure>')
 }
 
@@ -289,7 +315,7 @@ function rawBlock(r: Render, node: AstNode, level: number): void {
     return
   }
   const value = node.value ?? ''
-  r.lines.push(value.endsWith('\n') ? value.slice(0, -1) : value)
+  rawLine(r, value.endsWith('\n') ? value.slice(0, -1) : value)
 }
 
 function leadingSpaces(text: string): number {
@@ -311,7 +337,7 @@ function lineHtml(r: Render, node: AstNode): string {
 function lineBlock(r: Render, node: AstNode, level: number): void {
   const structural: Pair[] = r.settings.roundtrip ? [['data-carve-line-block', null]] : []
   line(r, level, `<div${tag(r, node, { last: [LINE_BLOCK_CLASS], structural })}>`)
-  const before = r.lines.length
+  const before = r.count
   let stanza: string[] = []
   const flush = (): void => {
     if (stanza.length > 0) line(r, level + 1, `<p>${stanza.join('<br>\n')}</p>`)
@@ -322,7 +348,7 @@ function lineBlock(r: Render, node: AstNode, level: number): void {
     else stanza.push(lineHtml(r, child))
   }
   flush()
-  if (r.lines.length === before) r.lines.push('')
+  if (r.count === before) rawLine(r, '')
   line(r, level, '</div>')
 }
 
@@ -377,9 +403,9 @@ function cellContent(r: Render, cell: AstNode): string {
   const blocks = cell.children ?? []
   if (blocks.every((block) => block.type === 'cell_paragraph')) return blocks.map((block) => inlineHtml(r, block.children ?? [])).join(' ')
   // C2-A-175: blocks in a cell, which only a supplied tree holds.
-  const inner: Render = { ...r, lines: [] }
+  const inner: Render = { ...r, out: '', count: 0 }
   writeBlocks(inner, blocks, 0)
-  return inner.lines.join('\n')
+  return inner.out.slice(1)
 }
 
 /** C2-H-056 to C2-H-058. */
@@ -573,7 +599,10 @@ function closeSections(r: Render, open: number[], level: number): void {
 /** C2-H-026, C2-H-027: a top-level heading opens a section that carries its id. */
 function openSection(r: Render, node: AstNode, open: number[]): void {
   closeSections(r, open, node.level ?? 1)
-  line(r, open.length, `<section${attributes(r, null, { structural: idCarriers(r, node), id: headingId(node) ?? null })}>`)
+  const id = headingId(node)
+  // Without the carriers of `roundtrip` a section carries its id and nothing else.
+  const attrs = r.settings.roundtrip ? attributes(r, null, { structural: idCarriers(r, node), id: id ?? null }) : id === undefined ? '' : ` id="${escapeAttribute(id)}"`
+  line(r, open.length, `<section${attrs}>`)
   open.push(node.level ?? 1)
   line(r, open.length, headingHtml(r, node, true))
 }
@@ -607,9 +636,9 @@ export interface RenderResult {
 /** The HTML fragment of a resolved tree (C2-H-001). `losses` takes the losses of the render. */
 export function renderDocument(document: AstNode, settings: Settings, resolution: Resolution, losses: Findings): RenderResult {
   const r: Render = {
-    settings, resolution, lines: [], losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
+    settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
     backlinkHost: null, backlinks: '',
   }
   writeDocument(r, document)
-  return { html: r.lines.join('\n'), losses: r.losses }
+  return { html: r.out.slice(1), losses: r.losses }
 }

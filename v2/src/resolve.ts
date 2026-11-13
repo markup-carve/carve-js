@@ -3,6 +3,7 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import { type AstNode } from './ast.ts'
+import { type ParseFacts } from './ast-blocks.ts'
 import { labelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
@@ -55,6 +56,8 @@ interface Walk {
   /** C2-H-151: the figures and figure groups around the node that is visited whose caption has a number mark. */
   numberedFigures: number
   symbols: Readonly<Record<string, string>>
+  /** The leaves of a parsed tree that the walk goes into, or null for a tree of which nothing is known. */
+  resolvableLeaves: ReadonlySet<AstNode> | null
 }
 
 type Visitor = (walk: Walk, node: AstNode, parent: AstNode | null) => void
@@ -131,37 +134,68 @@ function visitReference(walk: Walk, node: AstNode): void {
   if (node.key !== undefined) walk.references.push(node)
 }
 
-const VISITORS = new Map<string, Visitor>([
-  ['footnote_ref', visitFootnoteRef],
-  ['inline_footnote', (walk, node) => useNote(walk, node, null)],
-  ['heading', (walk, node) => void walk.headings.push(node)],
-  ['link', visitReference],
-  ['image', visitReference],
-  ['xref', (walk, node) => void walk.xrefs.push(node)],
-  ['figure', visitHost],
-  ['figure_group', visitHost],
-  ['table', visitHost],
-  ['math', visitMath],
-  ['admonition', visitAdmonition],
-  ['directive', visitDirective],
+// What the walk does at a node of a type, besides going into its children. A type with no entry has nothing.
+const LEAF = 1
+const OPAQUE = 2
+const SLOTS = 4
+
+interface Step {
+  visitor: Visitor | null
+  /** LEAF: inline content that a parse may know to hold nothing. OPAQUE: a note, whose content is walked with the notes. SLOTS: a title or a caption. */
+  traits: number
+}
+
+const STEPS = new Map<string, Step>([
+  ['footnote_ref', { visitor: visitFootnoteRef, traits: 0 }],
+  ['inline_footnote', { visitor: (walk, node) => useNote(walk, node, null), traits: OPAQUE }],
+  ['footnote', { visitor: null, traits: OPAQUE }],
+  ['heading', { visitor: (walk, node) => void walk.headings.push(node), traits: LEAF }],
+  ['paragraph', { visitor: null, traits: LEAF }],
+  ['definition_term', { visitor: null, traits: LEAF }],
+  ['cell_paragraph', { visitor: null, traits: LEAF }],
+  ['line', { visitor: null, traits: LEAF }],
+  ['link', { visitor: visitReference, traits: 0 }],
+  ['image', { visitor: visitReference, traits: 0 }],
+  ['xref', { visitor: (walk, node) => void walk.xrefs.push(node), traits: 0 }],
+  ['figure', { visitor: visitHost, traits: SLOTS }],
+  ['figure_group', { visitor: visitHost, traits: SLOTS }],
+  ['table', { visitor: visitHost, traits: SLOTS }],
+  ['math', { visitor: visitMath, traits: 0 }],
+  ['admonition', { visitor: visitAdmonition, traits: SLOTS }],
+  ['directive', { visitor: visitDirective, traits: SLOTS }],
+  ['div', { visitor: null, traits: SLOTS }],
 ])
 
-/**
- * Visits `node` and the nodes below it in document order: the title, the children, the caption
- * (C2-A-025). A note is visited with the notes, not where it stands.
- */
-function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
-  // Most nodes are text, which resolution does not read.
-  if (node.type === 'text') return
-  VISITORS.get(node.type)?.(walk, node, parent)
-  if (node.attrs?.id !== undefined) walk.identified.push(node)
-  if (node.type === 'inline_footnote' || node.type === 'footnote') return
+/** Visits the children of `node`. Text is skipped here and not in the call: half of the nodes of a document are text. */
+function visitChildren(walk: Walk, node: AstNode): void {
+  const children = node.children
+  if (children === undefined) return
+  for (const child of children) if (child.type !== 'text') visit(walk, child, node)
+}
+
+/** The title, the children and the caption of a node that may carry a title or a caption, in that order (C2-A-025). */
+function visitSlots(walk: Walk, node: AstNode): void {
   if (Array.isArray(node.title)) for (const child of node.title) visit(walk, child, node)
-  const owns = ownsNumber(node)
+  const owns = node.caption !== undefined && ownsNumber(node)
   if (owns) walk.numberedFigures++
-  if (node.children !== undefined) for (const child of node.children) visit(walk, child, node)
+  visitChildren(walk, node)
   if (owns) walk.numberedFigures--
   if (node.caption !== undefined) visit(walk, node.caption, node)
+}
+
+/**
+ * Visits `node` and the nodes below it in document order. A note is visited with the notes, not
+ * where it stands, and a leaf of a parsed tree is entered only where the parse saw a node that
+ * resolution reads.
+ */
+function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
+  const step = STEPS.get(node.type)
+  if (node.attrs?.id !== undefined) walk.identified.push(node)
+  if (step === undefined) return visitChildren(walk, node)
+  step.visitor?.(walk, node, parent)
+  const traits = step.traits
+  if (traits === SLOTS) visitSlots(walk, node)
+  else if (traits === 0 || (traits === LEAF && (walk.resolvableLeaves === null || walk.resolvableLeaves.has(node)))) visitChildren(walk, node)
 }
 
 /** The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered` counts the rows a cell above still spans. */
@@ -225,11 +259,11 @@ function headingId(heading: AstNode): string | undefined {
 }
 
 /** C2-I-084: the folded source and the plain text of each heading that can be a target; the first heading wins. */
-function headingIndex(walk: Walk, mode: HeadingIds, sources: Map<AstNode, string> | null): Map<string, AstNode> {
+function headingIndex(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Map<string, AstNode> {
   const index = new Map<string, AstNode>()
   for (const heading of walk.headings) {
     if (mode === 'off' && heading.attrs?.id === undefined) continue
-    const source = sources?.get(heading)
+    const source = facts?.headingSource(heading)
     if (source !== undefined && !index.has(source)) index.set(source, heading)
     const text = plainText(heading.children ?? [])
     if (!index.has(text)) index.set(text, heading)
@@ -238,11 +272,17 @@ function headingIndex(walk: Walk, mode: HeadingIds, sources: Map<AstNode, string
 }
 
 /** C2-A-109: the definition or the heading each reference resolves to. An image never resolves to a heading (C2-I-083). */
-function findTargets(walk: Walk, headings: Map<string, AstNode>): Map<AstNode, AstNode> {
+function findTargets(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Map<AstNode, AstNode> {
   const targets = new Map<AstNode, AstNode>()
+  // The headings are indexed when the first reference finds no definition, which most documents never need.
+  let headings: Map<string, AstNode> | null = null
   for (const reference of walk.references) {
     const key = reference.key!
-    const target = walk.resolution.definitions.get(key) ?? (reference.type === 'link' ? headings.get(key) : undefined)
+    let target = walk.resolution.definitions.get(key)
+    if (target === undefined && reference.type === 'link') {
+      headings ??= headingIndex(walk, mode, facts)
+      target = headings.get(key)
+    }
     if (target !== undefined) targets.set(reference, target)
   }
   return targets
@@ -351,7 +391,8 @@ function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
 /** C2-H-095, C2-H-096: a cross-reference resolves against the ids of headings and of numbered captions. */
 function resolveXrefs(walk: Walk): void {
   const anchors = new Map<string, string>()
-  for (const heading of walk.headings) {
+  // The text of a heading is read only where a cross-reference may point at it.
+  for (const heading of walk.xrefs.length === 0 ? [] : walk.headings) {
     const id = headingId(heading)
     if (id !== undefined && !anchors.has(id)) anchors.set(id, plainText(heading.children ?? []))
   }
@@ -368,9 +409,9 @@ function resolveXrefs(walk: Walk): void {
 }
 
 /** The references whose destination an earlier resolution published and this one cannot look up again. */
-function keptReferences(document: AstNode, walk: Walk, sources: Map<AstNode, string> | null): Set<AstNode> {
+function keptReferences(document: AstNode, walk: Walk, facts: ParseFacts | null): Set<AstNode> {
   const kept = new Set<AstNode>()
-  if (sources !== null || document.stages?.includes('referenceResolution') !== true) return kept
+  if (facts !== null || document.stages?.includes('referenceResolution') !== true) return kept
   for (const reference of walk.references) {
     if ((reference.type === 'link' ? reference.href : reference.src) !== undefined) kept.add(reference)
   }
@@ -378,12 +419,12 @@ function keptReferences(document: AstNode, walk: Walk, sources: Map<AstNode, str
 }
 
 /**
- * Resolves `document` in place. `sources` holds the folded source of each heading of a tree that
- * was parsed from source; without it a heading matches by its plain text alone (C2-I-084).
+ * Resolves `document` in place. `facts` is what the parse knows of a tree it built from source;
+ * without it a heading matches by its plain text alone (C2-I-084), and every node is walked.
  * `symbols` is the table of a render, which the key of a caption sequence reads (C2-B-208).
  */
 export function resolve(
-  document: AstNode, mode: HeadingIds, sources: Map<AstNode, string> | null, symbols: Readonly<Record<string, string>> = {},
+  document: AstNode, mode: HeadingIds, facts: ParseFacts | null, symbols: Readonly<Record<string, string>> = {},
 ): Resolution {
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
@@ -392,7 +433,7 @@ export function resolve(
   }
   const walk: Walk = {
     resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
-    notesDirective: null, numberedFigures: 0, symbols,
+    notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null,
   }
   collectDefinitions(document, walk)
   visit(walk, document, null)
@@ -402,8 +443,8 @@ export function resolve(
     const body = note.definition ?? note.inline!
     for (const child of body.children ?? []) visit(walk, child, body)
   }
-  const kept = keptReferences(document, walk, sources)
-  const targets = findTargets(walk, headingIndex(walk, mode, sources))
+  const kept = keptReferences(document, walk, facts)
+  const targets = findTargets(walk, mode, facts)
   const taken = reserveIds(walk, targets, kept)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)

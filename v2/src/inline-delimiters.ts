@@ -249,6 +249,8 @@ export function pairDelimiters(state: InlineState): void {
   state.stackFloor = NONE
   state.lastSlash = NONE
   state.lastStar = NONE
+  // A content with no token has nothing to pair, which is every run of plain text.
+  if (state.tokenLength === 0) return
   state.classTop.fill(NONE)
   for (let at = 0; at < state.tokenLength; at += TOKEN_WIDTH) {
     const kind = tokens[at]!

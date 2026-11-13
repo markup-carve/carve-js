@@ -2,7 +2,7 @@
 import { type AstNode, type Attrs } from './ast.ts'
 import {
   AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY,
-  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION,
+  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE,
   INLINE_KIND_NAMES, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
@@ -16,7 +16,15 @@ export interface TreeContext {
   abbreviations: Map<string, string>
   /** The offset of the own markup of each block that took attribute lines (C2-A-148). */
   markup: Map<AstNode, number>
-  headingSources: Map<AstNode, string>
+  /** The source lines of the text of each heading, as a start and an end per line (C2-I-084). */
+  headingSpans: Map<AstNode, number[]>
+  /**
+   * Set when an inline node is built that resolution reads: one with an id, a reference, a note or
+   * a cross-reference. A leaf asks it after its content is built.
+   */
+  resolvable: boolean
+  /** The leaves whose inline content holds such a node. Resolution walks into no other leaf. */
+  resolvableLeaves: Set<AstNode>
 }
 
 // How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard
@@ -149,10 +157,17 @@ function addBreak(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: num
   list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, node.end))
 }
 
+/** True for a node that resolution reads: it carries an id, or it is a reference, a note or a cross-reference. */
+function isResolvable(node: InlineNode): boolean {
+  if (node.attributes !== null && node.attributes.id !== null) return true
+  return node.kind === XREF || node.kind === FOOTNOTE_REF || node.kind === INLINE_FOOTNOTE || (node.flags & FLAG_REFERENCE) !== 0
+}
+
 function addNode(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: number): void {
   const unplaced = (flow & FLOW_UNPLACED) !== 0
   if (node.kind === TEXT) return addText(ctx, list, node.value ?? '', unplaced ? -1 : node.start, node.end)
   if (node.kind === SOFT_BREAK) return addBreak(ctx, list, node, flow)
+  if (!ctx.resolvable && isResolvable(node)) ctx.resolvable = true
   const out = node.children !== null ? parentNode(ctx, node, flow) : LEAVES.get(node.kind)!(ctx, node)
   setAttributes(out, node.attributes)
   list.push(unplaced ? out : place(ctx, out, node.start, node.end))
@@ -162,5 +177,16 @@ function addNode(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: numb
 export function inlineNodes(ctx: TreeContext, nodes: InlineNode[], flow: number): AstNode[] {
   const list: AstNode[] = []
   for (const node of nodes) addNode(ctx, list, node, flow)
+  return list
+}
+
+/**
+ * The inline content of the leaf `leaf`, as `inlineNodes` gives it. The leaf is noted when its
+ * content holds a node that resolution reads.
+ */
+export function leafInlines(ctx: TreeContext, leaf: AstNode, nodes: InlineNode[], flow: number): AstNode[] {
+  ctx.resolvable = false
+  const list = inlineNodes(ctx, nodes, flow)
+  if (ctx.resolvable) ctx.resolvableLeaves.add(leaf)
   return list
 }

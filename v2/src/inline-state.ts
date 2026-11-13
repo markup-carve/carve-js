@@ -227,6 +227,15 @@ export function writeInlineEvent(state: InlineState, tag: number, a: number, b: 
   state.eventLength = at + EVENT_WIDTH
 }
 
+const LINE_FEED = 10
+
+/** The lines `spans[from..to)` of the source with one line feed between two. */
+function joinLines(src: string, spans: ArrayLike<number>, from: number, to: number): string {
+  let text = ''
+  for (let at = from; at < to; at += 2) text += at === from ? src.slice(spans[at], spans[at + 1]) : `\n${src.slice(spans[at], spans[at + 1])}`
+  return text
+}
+
 /** Sets the content of a pass: the source spans `spans[from..to)`, as start and end pairs. */
 export function setContent(state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number): void {
   const lines = (to - from) >> 1
@@ -234,18 +243,23 @@ export function setContent(state: InlineState, src: string, spans: ArrayLike<num
     state.lineText = new Int32Array(lines * 2)
     state.lineSource = new Int32Array(lines * 2)
   }
-  let text = ''
+  // Lines that follow each other in the source, with one line feed between two, are one piece of it: no copy is made.
+  let joined = true
+  let length = 0
   for (let at = from, line = 0; at < to; at += 2, line++) {
-    if (line > 0) text += '\n'
-    state.lineText[line] = text.length
+    if (line > 0) {
+      joined &&= spans[at] === spans[at - 1]! + 1 && src.charCodeAt(spans[at - 1]!) === LINE_FEED
+      length++
+    }
+    state.lineText[line] = length
     state.lineSource[line] = spans[at]!
-    text += src.slice(spans[at], spans[at + 1])
+    length += spans[at + 1]! - spans[at]!
   }
   state.src = src
-  state.text = text
+  state.text = joined && to > from ? src.slice(spans[from], spans[to - 1]) : joinLines(src, spans, from, to)
   state.lineCount = lines
-  if (text.length + 2 > state.tailDepth.length) {
-    state.tailDepth = new Int32Array(text.length * 2 + 2)
-    state.tailLowest = new Int32Array(text.length * 2 + 2)
+  if (length + 2 > state.tailDepth.length) {
+    state.tailDepth = new Int32Array(length * 2 + 2)
+    state.tailLowest = new Int32Array(length * 2 + 2)
   }
 }

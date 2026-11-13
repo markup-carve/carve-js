@@ -3,11 +3,11 @@ import { type AstNode, AST_VERSION, type Marker } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, inlineNodes, place, setAttributes, type TreeContext,
+  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, leafInlines, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
-import { DIGIT_0, DIGIT_9, SPACE, STAR } from './chars.ts'
+import { DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
 import { type Attributes, foldLabel } from './inline-tree.ts'
 import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
@@ -28,18 +28,28 @@ function lineEnd(src: string, pos: number): number {
   return end < 0 ? src.length : end
 }
 
+/** True when each line of `spans` starts one character behind the end of the line before it, at a line feed. */
+function isContiguous(src: string, spans: number[]): boolean {
+  for (let at = 2; at < spans.length; at += 2) {
+    if (spans[at] !== spans[at - 1]! + 1 || src.charCodeAt(spans[at - 1]!) !== LF) return false
+  }
+  return spans.length > 0
+}
+
 /** C2-A-045, C2-A-046: every line of an opaque body with a line break after it. */
 function bodyValue(src: string, spans: number[]): string {
+  // A body at column 0 with bare line feeds is one piece of the source, which is the usual case.
+  if (isContiguous(src, spans)) return `${src.slice(spans[0], spans[spans.length - 1])}\n`
   let value = ''
   for (let at = 0; at < spans.length; at += 2) value += `${src.slice(spans[at], spans[at + 1])}\n`
   return value
 }
 
-/** The inline content of a text leaf, with the abbreviations in its text (C2-I-098). */
-function leafChildren(ctx: TreeContext, node: BlockNode, flow: number): AstNode[] {
-  const children = inlineNodes(ctx, node.inlines ?? [], flow)
-  if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
-  return children
+/** Gives the text leaf `out` its inline content, with the abbreviations in its text (C2-I-098). */
+function leafChildren(ctx: TreeContext, out: AstNode, node: BlockNode, flow: number): AstNode {
+  out.children = leafInlines(ctx, out, node.inlines ?? [], flow)
+  if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
+  return out
 }
 
 /** True when `children` holds exactly one node for which `test` holds, and besides it only comments and breaks. */
@@ -53,7 +63,7 @@ function holdsOnly(children: AstNode[], test: (node: AstNode) => boolean): boole
 }
 
 function paragraphNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const out: AstNode = { type: 'paragraph', children: leafChildren(ctx, node, flow) }
+  const out = leafChildren(ctx, { type: 'paragraph' }, node, flow)
   // C2-A-136, C2-A-184: the mark needs the shape of the line and the one node the inline pass made of it.
   if ((node.exitFlags & FLAG_IMAGE) !== 0 && holdsOnly(out.children!, (child) => child.type === 'image')) out.blockImage = true
   if ((node.exitFlags & FLAG_BLOCK_MATH) !== 0 && holdsOnly(out.children!, (child) => child.type === 'math' && child.display === true)) {
@@ -104,9 +114,10 @@ function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
 /** C2-A-069: one `line` per line of the body; an empty line ends a stanza. */
 function lineBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
   const lines = (node.inlines ?? []).map((line) => {
-    const children = inlineNodes(ctx, line.children!, FLOW_PLAIN)
-    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
-    return place(ctx, { type: 'line', children }, line.start, line.end)
+    const out: AstNode = { type: 'line' }
+    out.children = leafInlines(ctx, out, line.children!, FLOW_PLAIN)
+    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
+    return place(ctx, out, line.start, line.end)
   })
   return { type: 'line_block', children: lines }
 }
@@ -227,11 +238,9 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
 }
 
 function headingNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const out: AstNode = { type: 'heading', level: node.aux, children: leafChildren(ctx, node, flow) }
-  // C2-I-084: a reference finds a heading by the folded source of its text.
-  const lines: string[] = []
-  for (let at = 0; at < node.spans!.length; at += 2) lines.push(ctx.src.slice(node.spans![at], node.spans![at + 1]))
-  ctx.headingSources.set(out, foldLabel(lines.join('\n')))
+  const out = leafChildren(ctx, { type: 'heading', level: node.aux }, node, flow)
+  // C2-I-084: a reference finds a heading by the folded source of its text, which is read when one looks.
+  ctx.headingSpans.set(out, node.spans!)
   return out
 }
 
@@ -240,7 +249,7 @@ function container(type: string): BlockBuilder {
 }
 
 function textLeaf(type: string): BlockBuilder {
-  return (ctx, node, flow) => ({ type, children: leafChildren(ctx, node, flow) })
+  return (ctx, node, flow) => leafChildren(ctx, { type }, node, flow)
 }
 
 const BUILDERS = new Map<number, BlockBuilder>([
@@ -289,7 +298,7 @@ function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
 /** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-150). */
 function captionNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   // The mark is found in the source of the text, so the text is placed also where no position is asked for.
-  const paragraph: AstNode = { type: 'paragraph', children: leafChildren(ctx.positions ? ctx : { ...ctx, positions: true }, node, flow) }
+  const paragraph = leafChildren(ctx.positions ? ctx : { ...ctx, positions: true }, { type: 'paragraph' }, node, flow)
   markCaptionNumber(ctx, paragraph.children!)
   if (!ctx.positions) dropPositions(paragraph.children!)
   place(ctx, paragraph, node.spans![0]!, node.end)
@@ -387,19 +396,35 @@ function collectAbbreviations(src: string, root: BlockNode): Map<string, string>
   return terms
 }
 
+/** What a parse knows of the tree it built, which resolution reads beside the tree. */
+export interface ParseFacts {
+  /** C2-I-084: the folded source of the text of a heading of the tree, or undefined for a node that is none. */
+  headingSource: (heading: AstNode) => string | undefined
+  /** The leaves with inline content that holds an id, a reference, a note or a cross-reference. */
+  resolvableLeaves: ReadonlySet<AstNode>
+}
+
 export interface BuiltTree {
   document: AstNode
-  /** The folded source of the text of each heading, which resolution reads (C2-I-084). Null for a supplied tree. */
-  headingSources: Map<AstNode, string> | null
+  /** Null for a supplied tree, of which nothing is known. */
+  facts: ParseFacts | null
+}
+
+function headingSource(src: string, spans: number[] | undefined): string | undefined {
+  if (spans === undefined) return undefined
+  const lines: string[] = []
+  for (let at = 0; at < spans.length; at += 2) lines.push(src.slice(spans[at], spans[at + 1]))
+  return foldLabel(lines.join('\n'))
 }
 
 /** The public tree of `src` from its block tree, whose inline content has been read. */
 export function buildDocument(src: string, root: BlockNode, positions: boolean): BuiltTree {
-  const ctx: TreeContext = { src, positions, abbreviations: collectAbbreviations(src, root), markup: new Map(), headingSources: new Map() }
+  const ctx: TreeContext = { src, positions, abbreviations: collectAbbreviations(src, root), markup: new Map(), headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set() }
   const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
   if (positions) {
     document.srcByteLength = utf8Length(src)
     finishPositions(document, src)
   }
-  return { document, headingSources: ctx.headingSources }
+  const facts: ParseFacts = { headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves }
+  return { document, facts }
 }

@@ -36,8 +36,9 @@ export function inlineHtml(r: Render, nodes: AstNode[]): string {
   let out = ''
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
-    if (isBreak(node) && isSkippedBreak(nodes, at)) continue
-    out += WRITERS.get(node.type)?.(r, node) ?? ''
+    // Most nodes are text, which needs no writer.
+    if (node.type === 'text') out += escapeText(node.value ?? '')
+    else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += WRITERS.get(node.type)?.(r, node) ?? ''
   }
   return out
 }

@@ -10,8 +10,10 @@ import { type Resolution } from './resolve.ts'
 export interface Render {
   settings: Settings
   resolution: Resolution
-  /** The output, one entry per line. */
-  lines: string[]
+  /** The output: every line with a line break before it, so the first character is cut off at the end. */
+  out: string
+  /** The lines written so far. */
+  count: number
   losses: Findings
   /** C2-H-163: the `rel` value the profile writes on every link, or the empty string. */
   linkRel: string
@@ -72,8 +74,17 @@ const MAX_ESCAPE_DIGITS = 6
 const MAX_CODE_POINT = 0x10ffff
 const REPLACEMENT = '\ufffd'
 
+// From this length on a search for each of the four characters is cheaper than a look at every character.
+const SEARCH_LENGTH = 24
+
+/** True when `text` holds none of the characters that C2-H-002 escapes. */
+function isClean(text: string): boolean {
+  return text.indexOf('&') < 0 && text.indexOf('<') < 0 && text.indexOf('>') < 0 && text.indexOf('\u00a0') < 0
+}
+
 /** C2-H-002: the three markup characters and the no-break space. */
 export function escapeText(text: string): string {
+  if (text.length >= SEARCH_LENGTH && isClean(text)) return text
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
@@ -136,15 +147,22 @@ function isProbeRemoved(code: number): boolean {
 
 /** C2-H-159: the scheme of `url` in lower case, or the empty string when it has none. */
 function schemeOf(url: string): string {
-  let scheme = ''
-  for (let at = 0; at < url.length; at++) {
+  let removed = false
+  for (let at = 0, length = 0; at < url.length; at++) {
     const code = url.charCodeAt(at)
-    if (isProbeRemoved(code)) continue
-    if (code === COLON_CODE) return scheme
-    if (scheme === '' ? !isAsciiLetter(code) : !isSchemeCharacter(code)) return ''
-    scheme += url[at]!.toLowerCase()
+    if (isProbeRemoved(code)) removed = true
+    else if (code === COLON_CODE) return length === 0 ? '' : schemeText(url, at, removed)
+    else if (length++ === 0 ? !isAsciiLetter(code) : !isSchemeCharacter(code)) return ''
   }
   return ''
+}
+
+/** The scheme that ends before `colon`, in lower case and without the characters that C2-H-159 removes. */
+function schemeText(url: string, colon: number, removed: boolean): string {
+  if (!removed) return url.slice(0, colon).toLowerCase()
+  let scheme = ''
+  for (let at = 0; at < colon; at++) if (!isProbeRemoved(url.charCodeAt(at))) scheme += url[at]!
+  return scheme.toLowerCase()
 }
 
 /** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
@@ -272,6 +290,7 @@ class AttributeList {
 
 function addClasses(list: AttributeList, node: AstNode | null, parts: TagParts): void {
   const authored = parts.bare === true ? [] : node?.attrs?.classes ?? []
+  if (authored.length === 0 && parts.base === undefined && parts.last === undefined) return
   // A class that occurs twice is written once, at its first place, as in 0.1.
   const classes = new Set([...(parts.base ?? []), ...authored, ...(parts.last ?? [])])
   if (classes.size > 0) list.add('class', [...classes].join(' '))
@@ -327,8 +346,24 @@ function addAuthored(r: Render, list: AttributeList, node: AstNode | null, parts
   if (keys !== undefined || parts.style !== undefined) addKeys(r, list, keys ?? [], parts, parts.origin ?? node)
 }
 
+/** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
+function isStructuralOnly(r: Render, node: AstNode | null, parts: TagParts): boolean {
+  if (node !== null && parts.bare !== true && (node.attrs !== undefined || node.lang !== undefined)) return false
+  if (parts.id !== undefined && parts.id !== null) return false
+  if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
+  return !(r.settings.sourceLines && parts.block === true)
+}
+
+/** The structural attributes as they stand. An element names none of them twice. */
+function structuralText(pairs: Pair[]): string {
+  let text = ''
+  for (const [name, value] of pairs) text += value === null ? ` ${name}` : ` ${name}="${escapeAttribute(value)}"`
+  return text
+}
+
 /** C2-H-009: the attributes of one element, each with a leading space. */
 export function attributes(r: Render, node: AstNode | null, parts: TagParts): string {
+  if (isStructuralOnly(r, node, parts)) return structuralText(parts.structural ?? [])
   const list = new AttributeList()
   const id = writtenId(node, parts)
   if (parts.idFirst === true && id !== undefined) list.add('id', id)

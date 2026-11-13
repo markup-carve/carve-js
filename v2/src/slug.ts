@@ -67,9 +67,15 @@ function startsWithNumber(slug: string): boolean {
   return /^\p{N}/u.test(slug)
 }
 
+function isAscii(text: string): boolean {
+  for (let at = 0; at < text.length; at++) if (text.charCodeAt(at) >= ASCII_END) return false
+  return true
+}
+
 /** The slug of `text` under a value of `headingIds` other than `off`. Duplicates are not handled here. */
 export function slugify(text: string, mode: HeadingIds): string {
-  let slug = slugRun(withoutPresentation(text.normalize('NFC')), true)
+  // ASCII text is in NFC and holds no character of C2-H-144 and C2-H-145.
+  let slug = slugRun(isAscii(text) ? text : withoutPresentation(text.normalize('NFC')), true)
   if (mode === 'ascii') slug = slugRun(transliterate(slug), false)
   if (mode === 'lower' || mode === 'ascii') {
     // C2-H-147: per code point, so no mapping that depends on context applies.

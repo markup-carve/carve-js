@@ -3,7 +3,7 @@
 import { type AstNode } from './ast.ts'
 import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, inlineNodes, place, setAttributes, type TreeContext,
+  FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
@@ -64,7 +64,8 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
-  const paragraph: AstNode = { type: 'cell_paragraph', children: inlineNodes(ctx, node.inlines ?? [], flow) }
+  const paragraph: AstNode = { type: 'cell_paragraph' }
+  paragraph.children = leafInlines(ctx, paragraph, node.inlines ?? [], flow)
   const cell: AstNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if ((node.facts & FACT_MASK) > 1) cell.colspan = node.facts & FACT_MASK
   if (node.facts >> FACT_SHIFT > 1) cell.rowspan = node.facts >> FACT_SHIFT
