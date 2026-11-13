@@ -755,6 +755,13 @@ describe('smart typography', () => {
     expect(inline('--a', '--b')).toBe('"--a" sb "--b"')
     expect(inline('*--a*')).toBe('strong["--a"]')
     expect(inline('a ---b')).toBe('"a ---b"')
+    // A no-break space, escaped or as U+00A0, is whitespace for every boundary test.
+    expect(inline('run\\ --verbose')).toBe('"run" nbsp "--verbose"')
+    expect(inline('run\u00a0--verbose')).toBe('"run --verbose"')
+    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(--b)"')
+    expect(inline('x\u00a0%% c')).toBe('"x " %%" c"')
+    expect(inline('*\u00a0a*')).toBe('"* a*"')
+    expect(inline('a\u00a0"b"')).toBe('"a " ‹“› "b" ‹”›')
   })
 
   it('C2-I-113: `{--}` is an en dash', () => {
@@ -967,7 +974,7 @@ describe('more cases per clause', () => {
   })
 
   it('C2-I-112: what stands before the character before a hyphen run', () => {
-    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(" ‹–› "b)"')
+    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(--b)"')
     expect(inline('*a* (--b)')).toBe('strong["a"] " (--b)"')
     expect(inline('a', '(--b)')).toBe('"a" sb "(--b)"')
     expect(inline('a \\"--b a \\(--b')).toBe('"a "" ‹–› "b a (" ‹–› "b"')

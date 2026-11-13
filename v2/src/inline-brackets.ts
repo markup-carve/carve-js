@@ -10,7 +10,7 @@ import {
   TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
 import { DEPTH_CAP } from './inline-tables.ts'
-import { isWhitespace } from './unicode.ts'
+import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
 /** Pushes a bracket opener that spans `[start, end)`. C2-I-118: past the cap it is text. */
@@ -42,7 +42,7 @@ function labelEnd(state: InlineState, pos: number): number {
     const code = text.charCodeAt(p)
     if (code === BRACKET_CLOSE) return p
     if (code === BACKSLASH) p++
-    else if (code === PERCENT && state.lineComments && text.charCodeAt(p + 1) === PERCENT && isWhitespace(text.charCodeAt(p - 1))) return NONE
+    else if (code === PERCENT && state.lineComments && text.charCodeAt(p + 1) === PERCENT && isBoundarySpace(text.charCodeAt(p - 1))) return NONE
   }
   // No later label can find a closer either.
   state.labelCloserMissing = true

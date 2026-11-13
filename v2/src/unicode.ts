@@ -40,6 +40,13 @@ export function isWhitespace(code: number): boolean {
   return code === SPACE || code === TAB || code === LF || code === NO_CHARACTER
 }
 
+const NO_BREAK_SPACE = 0xa0
+
+/** Whitespace for a test of the character before or after a position: a no-break space counts too. */
+export function isBoundarySpace(code: number): boolean {
+  return isWhitespace(code) || code === NO_BREAK_SPACE
+}
+
 /** C2-I-050: a combining mark, a variation selector or a zero-width joiner. */
 export function isJoining(code: number): boolean {
   if (code < ASCII) return false

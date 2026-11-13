@@ -11,11 +11,10 @@ import {
   SMART_RIGHT_DOUBLE_QUOTE, SMART_RIGHT_SINGLE_QUOTE, SMART_RIGHTWARDS_ARROW, SMART_RUNS,
 } from './inline-tables.ts'
 import {
-  codePointAt, codePointBefore, isAsciiDigit, isAsciiLetter, isLetter, isWhitespace, isWordCharacter, NO_CHARACTER,
+  codePointAt, codePointBefore, isAsciiDigit, isAsciiLetter, isBoundarySpace, isLetter, isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
 const ASCII = 128
-const NO_BREAK_SPACE = 0xa0
 const EN_DASH = 0x2013
 const EM_DASH = 0x2014
 const LEFT_SINGLE = 0x2018
@@ -48,8 +47,8 @@ function before(state: InlineState, pos: number, from: number): number {
 }
 
 function beforeFollowsSpace(state: InlineState, pos: number, from: number): boolean {
-  if (pos > from + 1) return isWhitespace(state.text.charCodeAt(pos - 2))
-  return pos === from + 1 ? isWhitespace(state.previous) : state.previousAfterSpace
+  if (pos > from + 1) return isBoundarySpace(state.text.charCodeAt(pos - 2))
+  return pos === from + 1 ? isBoundarySpace(state.previous) : state.previousAfterSpace
 }
 
 /** The character at `pos`, or behind the text stretch when it ends at `to`. */
@@ -59,10 +58,10 @@ function after(state: InlineState, pos: number, to: number): number {
 
 /** C2-I-104, C2-I-106: whether a straight quote after `previous` and before `next` opens. */
 function quoteOpens(previous: number, next: number): boolean {
-  if (isWhitespace(previous) || previous === NO_BREAK_SPACE || previous === LEFT_SINGLE || previous === LEFT_DOUBLE) return true
+  if (isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE) return true
   if (!isDash(previous) && !inClass(previous, CLASS_QUOTE_OPENS_AFTER)) return false
   if (!isDash(previous) && previous !== SLASH) return true
-  return !isWhitespace(next) && !inClass(next, CLASS_QUOTE_CLOSES_BEFORE)
+  return !isBoundarySpace(next) && !inClass(next, CLASS_QUOTE_CLOSES_BEFORE)
 }
 
 /** C2-I-107: the length of the apostrophe word that starts at `pos`, or 0. The word ends where its letters end. */
@@ -113,9 +112,9 @@ function writeDashes(state: InlineState, pos: number, length: number): void {
 
 /** C2-I-112: a hyphen run after whitespace, or after `(` or a quote that follows whitespace, and before no whitespace. */
 function isFlag(state: InlineState, pos: number, from: number, next: number): boolean {
-  if (isWhitespace(next)) return false
+  if (isBoundarySpace(next)) return false
   const previous = before(state, pos, from)
-  if (isWhitespace(previous)) return true
+  if (isBoundarySpace(previous)) return true
   const opener = previous === PAREN_OPEN || previous === QUOTE_MARK || previous === APOSTROPHE || previous === LEFT_SINGLE || previous === LEFT_DOUBLE
   return opener && beforeFollowsSpace(state, pos, from)
 }
@@ -191,7 +190,7 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
 
 /** Sets what the next quote or hyphen run sees before it, after a node was written up to `pos`. */
 function afterSmart(state: InlineState, pos: number, from: number, start: number): void {
-  state.previousAfterSpace = isWhitespace(before(state, start, from))
+  state.previousAfterSpace = isBoundarySpace(before(state, start, from))
   state.previous = SMART_GLYPHS[state.smartKind]!.codePointAt(0)!
   state.textRun = pos
 }

@@ -18,7 +18,7 @@ import {
 } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
-  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isUrlCharacter, isWhitespace,
+  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace,
   isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
@@ -218,7 +218,7 @@ export function scanLess(state: InlineState, pos: number): number {
 export function scanPercent(state: InlineState, pos: number): number {
   const text = state.text
   if (!state.lineComments || text.charCodeAt(pos + 1) !== PERCENT) return pos + 1
-  if (!isWhitespace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER)) return pos + 1
+  if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER)) return pos + 1
   let start = pos
   while (start > state.tokenEnd && isSpaceOrTab(text.charCodeAt(start - 1))) start--
   let end = text.indexOf('\n', pos)

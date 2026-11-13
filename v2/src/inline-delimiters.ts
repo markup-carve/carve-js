@@ -10,7 +10,7 @@ import {
   TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
 import { BARE_MARKS, BRACED_MARKS, DEPTH_CAP } from './inline-tables.ts'
-import { codePointAt, isJoining, isWhitespace, isWordCharacter } from './unicode.ts'
+import { codePointAt, isBoundarySpace, isJoining, isWordCharacter } from './unicode.ts'
 
 const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 // Classes of a stack entry: the nine braced marks, then the two bare delimiters, a bracket
@@ -30,8 +30,8 @@ function flanking(state: InlineState, pos: number): number {
   const wordBefore = isWordCharacter(before)
   const wordAfter = isWordCharacter(after)
   let flags = wordBefore && wordAfter ? BETWEEN_WORDS : 0
-  if (!wordBefore && !isWhitespace(after)) flags |= CAN_OPEN
-  if (!isWhitespace(before) && !wordAfter) flags |= CAN_CLOSE
+  if (!wordBefore && !isBoundarySpace(after)) flags |= CAN_OPEN
+  if (!isBoundarySpace(before) && !wordAfter) flags |= CAN_CLOSE
   return flags
 }
 
