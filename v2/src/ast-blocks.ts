@@ -428,10 +428,11 @@ export interface ParseFacts {
   resolvableLeaves: ReadonlySet<AstNode>
 }
 
-export interface BuiltTree {
-  document: AstNode
+/** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
+export interface ParsedTree {
+  readonly document: AstNode
   /** Null for a supplied tree, of which nothing is known. */
-  facts: ParseFacts | null
+  readonly facts: ParseFacts | null
 }
 
 function headingSource(src: string, spans: number[] | undefined): string | undefined {
@@ -442,7 +443,7 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
 }
 
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
-function buildDocument(ctx: TreeContext, root: BlockNode, source: string): BuiltTree {
+function buildDocument(ctx: TreeContext, root: BlockNode, source: string): ParsedTree {
   const src = ctx.src
   const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
   if (ctx.positions) {
@@ -462,7 +463,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Built
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
-): BuiltTree {
+): ParsedTree {
   // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
   const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
   const blocks = acquireState()
