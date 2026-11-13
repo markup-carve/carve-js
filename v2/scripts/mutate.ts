@@ -12,7 +12,7 @@
 // At most four test runners work at a time, each in one process, and all of them are killed
 // when this script ends or is interrupted.
 import { type ChildProcess, spawn } from 'node:child_process'
-import { cpSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,13 +22,14 @@ const FILES = [
   'src/unicode.ts', 'src/ast-abbreviations.ts', 'src/ast-attributes.ts', 'src/ast-blocks.ts', 'src/ast-inline.ts',
   'src/ast-json.ts', 'src/ast-lines.ts', 'src/ast-table.ts', 'src/ast-text.ts', 'src/ast-validate.ts', 'src/positions.ts',
   'src/resolve.ts', 'src/slug.ts', 'src/options.ts', 'src/html.ts', 'src/html-inline.ts', 'src/html-attributes.ts',
-  'src/api.ts',
+  'src/api.ts', 'src/include.ts', 'src/profile.ts', 'src/diagnostics.ts', 'src/delimited.ts',
 ]
 const MAX_JOBS = 4
 const TESTS = [
   'test/clauses.test.ts', 'test/examples.test.ts', 'test/inline-clauses.test.ts', 'test/inline-examples.test.ts',
   'test/block-fixes.test.ts', 'test/ast-clauses.test.ts', 'test/positions.test.ts', 'test/resolve-clauses.test.ts',
   'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts', 'test/tree-details.test.ts',
+  'test/restated-clauses.test.ts', 'test/fast-paths.test.ts',
 ]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.
@@ -87,7 +88,17 @@ function killChildren(): void {
   }
 }
 
-process.on('exit', killChildren)
+// The copies of v2/ this run made. They are removed when it ends, however it ends.
+const copies: string[] = []
+
+function removeCopies(): void {
+  for (const copy of copies) rmSync(copy, { recursive: true, force: true })
+}
+
+process.on('exit', () => {
+  killChildren()
+  removeCopies()
+})
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(signal, () => process.exit(130))
 
 /** Runs a command in its own process group and resolves its exit code and output. */
@@ -140,6 +151,7 @@ let next = 0
 
 async function worker(): Promise<void> {
   const copy = mkdtempSync(join(tmpdir(), 'carve-v2-mutate-'))
+  copies.push(copy)
   cpSync(v2, copy, { recursive: true })
   symlinkSync(join(v2, '../node_modules'), join(copy, 'node_modules'))
   while (next < mutations.length) {

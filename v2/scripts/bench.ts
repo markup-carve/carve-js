@@ -10,9 +10,14 @@
 // this engine, and `carveToHtml` of the 0.1 engine of this repository, as time per document and
 // as a ratio. `--old` is the built entry of the 0.1 engine (default: ../../dist/index.js, which
 // `npm run build` writes); without it the two columns stay empty.
+// A third table gives source to HTML of this engine against djot.js, markdown-it and commonmark.js
+// on the same inputs. An engine reads an input in its own language only, so a document with no
+// file in that language beside it is left out for that engine, with a note below the table.
+// The times are CPU time of the process, which counts the collector threads too, and on a kernel
+// that accounts CPU time by ticks a sample of 20 ms is too short: pass `--sample-ms 200` there.
 import { existsSync, readFileSync } from 'node:fs'
 import { cpus, loadavg } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
@@ -56,6 +61,87 @@ async function loadOld(file: string): Promise<OldEngine | null> {
 }
 
 const old = await loadOld(option('old', join(import.meta.dirname, '../../dist/index.js')))
+
+type Converter = (src: string) => string
+
+/** Another engine of the third table, with the extension of the language it reads. Its converter is null when it is not installed. */
+interface Peer {
+  name: string
+  extension: string
+  engine: Converter | null
+}
+
+/** The module `name`, or null when it is not installed. */
+async function optional(name: string): Promise<unknown> {
+  try {
+    return await import(name) as unknown
+  } catch {
+    return null
+  }
+}
+
+interface DjotModule {
+  parse(src: string): unknown
+  renderHTML(tree: unknown): string
+}
+
+interface MarkdownItModule {
+  default: new (preset: string) => { render(src: string): string }
+}
+
+interface CommonmarkModule {
+  Parser: new () => { parse(src: string): unknown }
+  HtmlRenderer: new () => { render(tree: unknown): string }
+}
+
+function djotConverter(module: DjotModule | null): Converter | null {
+  return module === null ? null : (src) => module.renderHTML(module.parse(src))
+}
+
+/** markdown-it with its CommonMark preset, built once as an application would. */
+function markdownItConverter(module: MarkdownItModule | null): Converter | null {
+  if (module === null) return null
+  const engine = new module.default('commonmark')
+  return (src) => engine.render(src)
+}
+
+function commonmarkConverter(module: CommonmarkModule | null): Converter | null {
+  if (module === null) return null
+  const parser = new module.Parser()
+  const renderer = new module.HtmlRenderer()
+  return (src) => renderer.render(parser.parse(src))
+}
+
+const peers: Peer[] = [
+  { name: 'djot.js', extension: '.dj', engine: djotConverter(await optional('@djot/djot') as DjotModule | null) },
+  { name: 'markdown-it', extension: '.md', engine: markdownItConverter(await optional('markdown-it') as MarkdownItModule | null) },
+  { name: 'commonmark.js', extension: '.md', engine: commonmarkConverter(await optional('commonmark') as CommonmarkModule | null) },
+]
+
+function baseName(file: string): string {
+  return file.split('/').slice(-1)[0]!
+}
+
+// The names of the three languages of a carve-bench directory, which holds one document as `carve.crv`, `djot.dj` and `markdown.md`.
+const BENCH_NAMES = new Map([['.dj', 'djot.dj'], ['.md', 'markdown.md']])
+
+/**
+ * The text an engine of the language `extension` reads for the input `file`: the file itself when
+ * it has that extension, or the file beside it with the same name in that language. Null when
+ * there is none, so the engine cannot read this document.
+ */
+function peerInput(file: string, extension: string): string | null {
+  if (file.endsWith(extension)) return readFileSync(file, 'utf8')
+  const dot = file.lastIndexOf('.')
+  const stem = dot < 0 ? file : file.slice(0, dot)
+  const beside = baseName(stem) === 'carve' ? join(dirname(file), BENCH_NAMES.get(extension)!) : `${stem}${extension}`
+  return existsSync(beside) ? readFileSync(beside, 'utf8') : null
+}
+
+/** Reads the last character of an output, which makes the runtime build a string it has only concatenated. */
+function built(html: string): void {
+  void html.charCodeAt(html.length - 1)
+}
 
 // `--files A,B` replaces the default inputs, for a runner that has no carve-bench checkout.
 const listed = option('files', '')
@@ -202,5 +288,32 @@ for (const file of files) {
     `${oldTime === undefined ? '' : oldTime.toFixed(2)} | ${ratio} |`,
   )
 }
+console.log('')
+console.log('Source to HTML against other engines, median in microseconds per document. Each engine reads the document in its own')
+console.log('language: the input itself, or the file beside it with the same name and the extension of that language. Every output')
+console.log('is read once, so no engine leaves a string unbuilt.')
+console.log('')
+console.log(`| Input | 0.2 render | ${peers.map((peer) => peer.name).join(' | ')} |`)
+console.log(`|---|--:|${peers.map(() => '--:').join('|')}|`)
+const notes: string[] = []
+for (const file of files) {
+  if (!existsSync(file)) continue
+  const src = readFileSync(file, 'utf8')
+  const tasks: (() => void)[] = [() => built(render(src))]
+  const columns: number[] = []
+  for (const peer of peers) {
+    const input = peer.engine === null ? null : peerInput(file, peer.extension)
+    columns.push(input === null ? -1 : tasks.length)
+    if (input === null) notes.push(peer.engine === null ? `${peer.name} is not installed` : `${peer.name} cannot read ${baseName(file)}: no ${peer.extension} file beside it`)
+    else tasks.push(() => built(peer.engine!(input)))
+  }
+  const times: number[][] = tasks.map(() => [])
+  for (const task of tasks) sample(task)
+  for (let round = 0; round < rounds; round++) tasks.forEach((task, at) => times[at]!.push(sample(task)))
+  const medians = times.map(median)
+  console.log(`| ${baseName(file)} | ${medians[0]!.toFixed(2)} | ${columns.map((at) => (at < 0 ? '' : medians[at]!.toFixed(2))).join(' | ')} |`)
+}
+console.log('')
+for (const note of new Set(notes)) console.log(`- ${note}`)
 console.log('')
 console.log(`Load average at the end: ${load()}`)
