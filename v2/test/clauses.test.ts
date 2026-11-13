@@ -817,7 +817,12 @@ describe('captions', () => {
     expect(blocks('{.a key="v" #i}{:en}', 'para')).toBe('{.a key="v" #i}{:en}p"para"')
     // C2-B-164: the format name is glued or stands after one space.
     expect(blocks('---markdown', 'a = 1', '---', 'x')).toBe(blocks('---toml', 'a = 1', '---', 'x'))
-    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('p"--- toml|a = 1|---|x"')
+    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('fm"a = 1" p"x"')
+    expect(blocks('--- notes', 'a', '---', 'x')).toBe('fm"a" p"x"')
+    expect(blocks('--- two words', 'a')).toBe('p"--- two words|a"')
+    expect(blocks('--- Notes', 'a')).toBe('p"--- Notes|a"')
+    expect(blocks('x', '--- toml', 'a', '---')).toBe('p"x|--- toml|a|---"')
+    expect(blocks('', '---', 'a', '---')).toBe('p"---|a|---"')
     expect(blocks('---  toml', 'a')).toBe('p"---  toml|a"')
     expect(blocks('---Foo', 'a')).toBe('p"---Foo|a"')
     expect(blocks('---x-2', 'a', '---')).toBe('fm"a"')

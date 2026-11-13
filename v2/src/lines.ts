@@ -434,12 +434,13 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
   return false
 }
 
-/** C2-B-161, C2-B-164: exactly `---`, then a glued format name of lowercase letters, digits and hyphens or nothing, and trailing spaces. */
+/** C2-B-161, C2-B-164: exactly `---`, then a format name of lowercase letters, digits and hyphens, glued or after one space, or nothing, and trailing spaces. */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   let p = pos + FRONTMATTER_RUN
-  if (p < end && isLower(src.charCodeAt(p))) {
-    p++
+  const name = p + 1 < end && src.charCodeAt(p) === SPACE ? p + 1 : p
+  if (name < end && isLower(src.charCodeAt(name))) {
+    p = name + 1
     while (p < end && (isLower(src.charCodeAt(p)) || isDigit(src.charCodeAt(p)) || src.charCodeAt(p) === HYPHEN)) p++
   }
   return skipSpaces(src, p, end) === end
