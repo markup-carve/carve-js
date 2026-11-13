@@ -893,7 +893,7 @@ describe('frontmatter', () => {
   it('C2-B-161, C2-B-165: line 1 opens frontmatter when it is exactly three hyphens at column 0', () => {
     expect(blocks('---', 'a: b', '---', 'x')).toBe('fm"a: b" p"x"')
     expect(blocks('---toml  ', 'a', '---')).toBe('fm"a"')
-    expect(blocks('--- toml', 'a', '---')).toBe('p"--- toml|a|---"')
+    expect(blocks('---  toml', 'a', '---')).toBe('p"---  toml|a|---"')
     expect(blocks('﻿---', 'a', '---')).toBe('fm"a"')
     expect(blocks('----', 'a')).toBe('p"----|a"')
     expect(blocks(' ---', 'a')).toBe('p"---|a"')
