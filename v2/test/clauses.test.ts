@@ -905,6 +905,10 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('[[a]: b')).toBe('p"[[a]: b"')
     expect(blocks('[a]: /u x"')).toBe('p"[a]: /u x""')
     expect(blocks('[a]: /u ""')).toBe('def"[a]: /u """')
+    expect(blocks(' [^a]: x')).toBe('p"[^a]: x"')
+    expect(blocks('*[]: x')).toBe('p"*[]: x"')
+    expect(blocks('*[a]x y')).toBe('p"*[a]x y"')
+    expect(blocks('*[a-: x')).toBe('p"*[a-: x"')
   })
 
   it('C2-B-109: an image starts with `![` and has a target', () => {
