@@ -811,6 +811,9 @@ describe('captions', () => {
     expect(blocks('::: figure "T"', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     // C2-B-159: trailing spaces do not stop a thematic break. C2-B-087: a footnote marker line starts with any block.
     expect(blocks('*** ', 'next')).toBe('hr p"next"')
+    // C2-B-151: spaces and tabs alone are no content, so the marker is text.
+    expect(blocks('= \t', 'following')).toBe('p"= 	|following"')
+    expect(blocks('- \t')).toBe('p"- 	"')
     // C2-B-031: a quote mark alone is an empty quote. C2-B-162, C2-B-089: closers and definitions may end in spaces and tabs.
     expect(blocks('>')).toBe('quote[]')
     expect(blocks('---', 'a: 1', '---\t', 'x')).toBe('fm"a: 1" p"x"')
