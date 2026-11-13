@@ -1,8 +1,11 @@
 // One test or more for every clause of the inline chapter (spec/0.2/syntax-inline.md). Each test
 // names its clause id. Shape notation: see support/shape.ts and support/inline-shape.ts.
 import { describe, expect, it } from 'vitest'
-import { FLAG_BRACED, MAX_DEPTH, parseTree } from '../src/index.ts'
+import {
+  acquireInlineState, buildInlineTree, FLAG_BRACED, MAX_DEPTH, parseTree, releaseInlineState, scanInline,
+} from '../src/index.ts'
 import { checkInlines } from './support/inline-checks.ts'
+import { inlineShapeOf } from './support/inline-shape.ts'
 import { shape, treeShape } from './support/shape.ts'
 
 /** The tree shape of the lines, with the property checks run on the same input. */
@@ -974,5 +977,55 @@ describe('more cases per clause', () => {
     expect(spans.slice('span['.repeat(MAX_DEPTH).length, 'span['.repeat(MAX_DEPTH).length + 9)).toBe('"[x"]{.c}')
     expect(spans.endsWith(']{.c} "]{.c}"')).toBe(true)
     expect(inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)).toContain('span["[[" strong["a"] "]"]{.c}')
+  })
+})
+
+// Checked here and not with the properties, so that the mutation run reads them.
+describe('what the events hold', () => {
+  /** The events of the content `src`, read on a state that has read `before` first. */
+  function eventsAfter(before: string, src: string): number[] {
+    const state = acquireInlineState()
+    try {
+      scanInline(state, before, [0, before.length], 0, 2, 0, true)
+      scanInline(state, src, [0, src.length], 0, 2, 0, true)
+      return Array.from(state.events.subarray(0, state.eventLength))
+    } finally {
+      releaseInlineState(state)
+    }
+  }
+
+  it('the tokens of an earlier content are not read', () => {
+    // Each first content leaves a token behind the last token of the second one.
+    const deep = '{^'.repeat(MAX_DEPTH)
+    for (const [before, src] of [
+      ['`a`{.c}', '`a`'], ['[a][b]', '^[a]'], ['[a](/u)', ':n[a]'], ['^[a]{.c}', '^[a]'], [`${deep}[a](/u)`, `${deep}^[a]`],
+    ]) {
+      // The escapes overwrite those tokens with ones that no later step looks for.
+      expect(eventsAfter(before!, src!), src).toEqual(eventsAfter('\\*\\*\\*\\*\\*\\*', src!))
+    }
+  })
+
+  it('a node with no payload has no span', () => {
+    expect(eventsAfter('', 'x`').length).toBe(3 * 3)
+    expect(eventsAfter('', '{%%}').length).toBe(2 * 3)
+  })
+
+  it('a break at the end of the content ends where the content ends', () => {
+    const src = 'x\\ '
+    const hardBreak = parseTree(src).children![0]!.inlines![1]!
+    expect([hardBreak.start, hardBreak.end]).toEqual([1, 2])
+  })
+
+  it('a line comment at the start of a content', () => {
+    const src = '%% c\nd'
+    const state = acquireInlineState()
+    try {
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, true)
+      expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('%%" c" sb "d"')
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, false)
+      expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('"%% c" sb "d"')
+    } finally {
+      releaseInlineState(state)
+    }
   })
 })
