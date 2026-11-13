@@ -89,6 +89,13 @@ const VARIANTS: Variant[] = [
   { entries: 'U-017', input: '- +\n{x}\n- c\n', output: '- {%%}\n\n{x}\n- c\n', check: 'pass', stable: true },
   { entries: 'U-017', input: '> +\n\nafter\n', output: '>\n\nafter\n', check: 'pass', stable: true },
   { entries: 'U-017', input: '- a\n  - +\npara\n', output: '- a\n  - {%%}\n\npara\n', check: 'pass', stable: true },
+  // A definition in the middle of a block: 0.1 reads a paragraph on across it and keeps a list whole.
+  { entries: 'U-038', input: '- a\n  [r]: /u\n more\ntail\n\n[x][r]\n', output: '- a\n more\ntail\n\n[r]: /u\n\n[x][r]\n', check: 'pass', stable: true },
+  { entries: 'U-005', input: 'Some text\n[r]: /u\nmore text [x][r]\n', output: 'Some text\nmore text [x][r]\n\n[r]: /u\n', check: 'pass', stable: true },
+  { entries: 'U-005', input: '- a\n[r]: /u\n- b [x][r]\n', output: '- a\n- b [x][r]\n\n[r]: /u\n', check: 'pass', stable: true },
+  { entries: 'U-038', input: '- a\n  *[A]: x\ntail A\n', output: '- a\ntail A\n\n*[A]: x\n', check: 'pass', stable: true },
+  { entries: 'U-038', input: ':: t\n:  d\n [r]: /u\ntail [r][]\n', output: ':: t\n:  d\ntail [r][]\n\n[r]: /u\n', check: 'pass', stable: true },
+  { entries: 'U-005', input: 'Text[^n]\n[^n]: note\nmore\n', output: 'Text[^n]\n\n[^n]: note\nmore\n', check: 'pass', stable: true },
 ]
 
 describe('variants of the contract inputs', () => {

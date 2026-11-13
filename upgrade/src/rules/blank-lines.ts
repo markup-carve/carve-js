@@ -76,7 +76,8 @@ function quoteOpens(ctx: Context, above: Visit, below: Visit, line: number): boo
 function blockEntry(ctx: Context, above: Visit, below: Visit, line: number, notes: Set<number>): string | null {
   const term = isTerm(below)
   if (below.node.type === 'heading') return underItem(above, below, 'U-001', 'U-006')
-  if (DEFINITIONS.has(below.node.type) || notes.has(line)) return 'U-005'
+  // A definition in the middle of a block of the document is moved out whole (U-038), not set off.
+  if (DEFINITIONS.has(below.node.type) || notes.has(line)) return ctx.blocks.within[line]! > line ? null : 'U-005'
   if (term) return isInside(above, below.parent!) ? null : underItem(above, below, 'U-004', 'U-009')
   if (quoteOpens(ctx, above, below, line)) return underItem(above, below, 'U-002', 'U-006')
   return listEntry(below, above, line)

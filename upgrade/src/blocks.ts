@@ -12,6 +12,23 @@ export interface BlockMap {
   leaf: (Visit | null)[]
   /** The leaf blocks in document order. */
   leaves: Visit[]
+  /**
+   * For a line strictly inside a block of the document, the last line of that block, else 0. A
+   * definition on such a line stands in the middle of the block: between the lines of a paragraph,
+   * which 0.1 reads on across it, or between two items of a list.
+   */
+  within: number[]
+}
+
+const DEFINITIONS = new Set(['link_reference_definition', 'abbreviation_def'])
+
+function blockEnds(doc: Node01, lineCount: number): number[] {
+  const ends = new Array<number>(lineCount + 2).fill(0)
+  for (const child of doc.children ?? []) {
+    if (child.pos === undefined || DEFINITIONS.has(child.type)) continue
+    for (let line = child.pos.startLine + 1; line < child.pos.endLine && line <= lineCount; line++) ends[line] = child.pos.endLine
+  }
+  return ends
 }
 
 export function isContainer(node: Node01): boolean {
@@ -27,7 +44,7 @@ export function mapBlocks(visits: Visit[], lineCount: number): BlockMap {
     leaves.push(visit)
     for (let line = pos.startLine; line <= pos.endLine && line <= lineCount; line++) leaf[line] ??= visit
   }
-  return { leaf, leaves }
+  return { leaf, leaves, within: blockEnds(visits[0]!.node, lineCount) }
 }
 
 /** The nearest ancestor of `visit` of the type `type`, or null. */

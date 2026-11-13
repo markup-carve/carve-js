@@ -97,26 +97,34 @@ function hoistInPlace(ctx: Context, id: string, span: Span, cut: number, message
   }
 }
 
-/** U-038, U-039: the definition moves to column 0, after the container it stood in. */
-function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
-  const text = lineText(ctx.lines, span.first)
-  const cut = prefixLength(text)
-  if (cut === 0) return
-  const depth = quoteDepth(text)
-  const id = entryOf(ctx, span, depth)
-  const message = 'definition moved to column 0 outside its container'
-  const end = containerEnd(ctx, span, depth, cut, ends)
-  ends.set(span.first, end)
-  if (end === span.last) {
-    hoistInPlace(ctx, id, span, cut, message)
-    return
-  }
+/** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
+function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
   change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
   const at = lineStart(ctx.lines, end + 1)
   const lead = at > 0 && ctx.src.charCodeAt(at - 1) !== 0x0a ? '\n\n' : '\n'
   change(ctx, id, at, at, lead + withoutPrefix(ctx, span, cut) + tail, message)
+}
+
+/** U-038, U-039: the definition moves to column 0, after the container it stood in. */
+function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
+  const text = lineText(ctx.lines, span.first)
+  const cut = prefixLength(text)
+  const depth = quoteDepth(text)
+  const message = 'definition moved to column 0 outside its container'
+  const block = ctx.blocks.within[span.first]!
+  if (block > span.last) {
+    // U-005 when the block is a paragraph of the document: 0.2 would read the line as its text.
+    moveAfter(ctx, cut === 0 && ctx.blocks.leaf[span.first]?.parent?.node === ctx.doc ? 'U-005' : 'U-038', span, cut, block, message)
+    return
+  }
+  if (cut === 0) return
+  const id = entryOf(ctx, span, depth)
+  const end = containerEnd(ctx, span, depth, cut, ends)
+  ends.set(span.first, end)
+  if (end === span.last) hoistInPlace(ctx, id, span, cut, message)
+  else moveAfter(ctx, id, span, cut, end, message)
 }
 
 /** U-040, U-041: 0.1 took the last definition of a key, so every earlier one is removed. */
