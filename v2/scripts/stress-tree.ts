@@ -10,7 +10,7 @@ import { loadavg } from 'node:os'
 import { parse, render } from '../src/index.ts'
 import { SHAPES } from './stress-inline.ts'
 
-type Shape = readonly [string, (size: number) => string]
+export type Shape = readonly [string, (size: number) => string]
 
 function option(name: string, fallback: string): string {
   const at = process.argv.indexOf(`--${name}`)
@@ -31,7 +31,7 @@ function each(size: number, line: (index: number) => string): string {
 }
 
 // [name, the document for a size]. A size is a count of blocks, of references or of nesting levels.
-const BLOCK_SHAPES: readonly Shape[] = [
+export const BLOCK_SHAPES: readonly Shape[] = [
   ['paragraphs', (size) => 'a b\n\n'.repeat(size)],
   ['items of one tight list', (size) => '- a\n'.repeat(size)],
   ['items of one loose list', (size) => '- a\n\n'.repeat(size)],

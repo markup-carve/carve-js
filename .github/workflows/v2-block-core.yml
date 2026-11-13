@@ -178,6 +178,11 @@ jobs:
       - name: Stress
         run: node --max-old-space-size=4096 v2/scripts/stress-tree.ts
 
+      # The same shapes, and shapes whose written form takes escapes or another spelling, through
+      # `format`: parse with the source-layout record, write, and parse each written group again.
+      - name: Stress of the formatter
+        run: node --max-old-space-size=4096 v2/scripts/stress-format.ts
+
   benchmark:
     name: benchmark (prints, never fails on a number)
     runs-on: ubuntu-latest
@@ -196,5 +201,5 @@ jobs:
 
       # A shared runner is not idle, so there is no threshold yet.
       # `npm ci` builds the 0.1 engine into dist/, which the second table compares with.
-      - name: Block pass, inline pass and source to HTML, CPU time per document
+      - name: Block pass, inline pass, source to HTML and source to canonical source, CPU time per document
         run: npm run bench:v2 -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20

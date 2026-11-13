@@ -15,13 +15,17 @@
 // file in that language beside it is left out for that engine, with a note below the table.
 // The times are CPU time of the process, which counts the collector threads too, and on a kernel
 // that accounts CPU time by ticks a sample of 20 ms is too short: pass `--sample-ms 200` there.
+//
+// A fourth table gives source to canonical source: `parseWithLayout` (the tree with its
+// source-layout record) and `format` of this engine, and `carveToCarve` of the 0.1 engine.
 import { existsSync, readFileSync } from 'node:fs'
 import { cpus, loadavg } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
-  LINE_BLOCK, PARAGRAPH, parse, parseTree, releaseInlineState, releaseState, render, scanBlocks, scanInline, TERM,
+  format, LINE_BLOCK, PARAGRAPH, parse, parseTree, parseWithLayout, releaseInlineState, releaseState, render, scanBlocks,
+  scanInline, TERM,
 } from '../src/index.ts'
 
 function option(name: string, fallback: string): string {
@@ -54,6 +58,7 @@ const spike = await loadSpike(option('spike', ''))
 
 interface OldEngine {
   carveToHtml(src: string): string
+  carveToCarve?: (src: string) => string
 }
 
 async function loadOld(file: string): Promise<OldEngine | null> {
@@ -315,5 +320,26 @@ for (const file of files) {
 }
 console.log('')
 for (const note of new Set(notes)) console.log(`- ${note}`)
+console.log('')
+console.log('Source to canonical source, median in microseconds per document. The ratio is the 0.1 engine over `format` of this engine.')
+console.log('')
+console.log('| Input | Bytes | 0.2 parse with the record | 0.2 format | 0.1 carveToCarve | Ratio |')
+console.log('|---|--:|--:|--:|--:|--:|')
+for (const file of files) {
+  if (!existsSync(file)) continue
+  const src = readFileSync(file, 'utf8')
+  const tasks: (() => void)[] = [() => void parseWithLayout(src), () => void format(src)]
+  const oldFormat = old?.carveToCarve
+  if (oldFormat !== undefined) tasks.push(() => void oldFormat(src))
+  const times: number[][] = tasks.map(() => [])
+  for (const task of tasks) sample(task)
+  for (let round = 0; round < rounds; round++) tasks.forEach((task, at) => times[at]!.push(sample(task)))
+  const [recordTime, formatTime, oldTime] = times.map(median)
+  const ratio = oldTime === undefined ? '' : (oldTime / formatTime!).toFixed(1)
+  console.log(
+    `| ${file.split('/').slice(-1)[0]!} | ${Buffer.byteLength(src)} | ${recordTime!.toFixed(2)} | ${formatTime!.toFixed(2)} | ` +
+    `${oldTime === undefined ? '' : oldTime.toFixed(2)} | ${ratio} |`,
+  )
+}
 console.log('')
 console.log(`Load average at the end: ${load()}`)

@@ -75,6 +75,7 @@
     "conformance:v2": "node v2/scripts/conformance.ts",
     "bench:v2": "node v2/scripts/bench.ts",
     "writer-gates:v2": "node v2/scripts/writer-gates.ts",
+    "stress-format:v2": "node v2/scripts/stress-format.ts",
     "mutate:v2": "node v2/scripts/mutate.ts",
     "differential:v2": "node v2/scripts/differential.ts",
     "test:includes": "vitest run test/include-conformance.test.ts",
