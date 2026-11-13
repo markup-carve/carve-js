@@ -6,8 +6,11 @@ import {
   LOWER_I, LOWER_X, PAREN_CLOSE, PERCENT, PIPE, STAR, TILDE, UPPER_A, UPPER_I, UPPER_X,
 } from './chars.ts'
 import {
-  FIRST_CHARACTER_SHAPES, SHAPE_BRACE, SHAPE_BULLET, SHAPE_CAPTION, SHAPE_COMMENT, SHAPE_DEFINITION,
-  SHAPE_DESCRIPTION, SHAPE_DIV, SHAPE_FENCE, SHAPE_HEADING, SHAPE_ORDERED, SHAPE_QUOTE, SHAPE_TABLE, SHAPE_THEMATIC_BREAK,
+  FIRST_CHARACTER_SHAPES, SHAPE_ABBREVIATION_DEFINITION, SHAPE_ATTRIBUTE_LINE, SHAPE_BULLET, SHAPE_CAPTION,
+  SHAPE_CODE_FENCE_OPENER, SHAPE_COMMENT_BLOCK_OPENER, SHAPE_COMMENT_ONLY, SHAPE_CONTINUATION_ROW,
+  SHAPE_DESCRIPTION, SHAPE_DIV_BARE_RUN, SHAPE_DIV_OPENER, SHAPE_FOOTNOTE_DEFINITION, SHAPE_HEADING,
+  SHAPE_INCLUDE, SHAPE_LINK_DEFINITION, SHAPE_ORDERED, SHAPE_QUOTE, SHAPE_TABLE_ROW, SHAPE_TERM,
+  SHAPE_THEMATIC_BREAK,
 } from './dispatch.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
@@ -34,11 +37,14 @@ import { FACT_SHIFT } from './tree.ts'
 const LIST_BOUNDARY_BLANKS = 3
 const SPAN_TAG = eventTag(SPAN, 0, 0)
 const ASCII = 128
-const FENCE_SHAPES = SHAPE_FENCE | SHAPE_DIV | SHAPE_COMMENT
+// Unions of the shapes of spec/0.2/data/line-shapes.json that one rule treats alike.
+const FENCE_SHAPES = SHAPE_CODE_FENCE_OPENER | SHAPE_DIV_BARE_RUN | SHAPE_DIV_OPENER | SHAPE_COMMENT_BLOCK_OPENER
+const MARK_SHAPES = SHAPE_DESCRIPTION | SHAPE_TERM
+const DEFINITION_SHAPES = SHAPE_FOOTNOTE_DEFINITION | SHAPE_LINK_DEFINITION | SHAPE_ABBREVIATION_DEFINITION
 const MARKER_SHAPES = SHAPE_BULLET | SHAPE_ORDERED
-const CONTAINER_SHAPES = SHAPE_QUOTE | MARKER_SHAPES | SHAPE_DESCRIPTION | SHAPE_DEFINITION
-const LEAF_SHAPES = FENCE_SHAPES | SHAPE_HEADING | SHAPE_THEMATIC_BREAK | SHAPE_DESCRIPTION | SHAPE_BRACE |
-  SHAPE_DEFINITION | SHAPE_TABLE
+const CONTAINER_SHAPES = SHAPE_QUOTE | MARKER_SHAPES | SHAPE_DESCRIPTION | SHAPE_FOOTNOTE_DEFINITION
+const LEAF_SHAPES = FENCE_SHAPES | SHAPE_COMMENT_ONLY | SHAPE_HEADING | SHAPE_THEMATIC_BREAK | SHAPE_TERM |
+  SHAPE_ATTRIBUTE_LINE | SHAPE_INCLUDE | SHAPE_LINK_DEFINITION | SHAPE_ABBREVIATION_DEFINITION | SHAPE_TABLE_ROW
 
 /** Writes the block events of `src` into `state`, with the line-start table. */
 export function scanBlocks(state: BlockState, src: string): void {
@@ -299,9 +305,9 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   // C2-B-014.
   if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return true
   // C2-B-019.
-  if ((shapes & SHAPE_TABLE) !== 0) return rowClosingPipe(src, pos, end) >= 0
-  if ((shapes & SHAPE_DESCRIPTION) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched)
-  if ((shapes & SHAPE_DEFINITION) !== 0 && pos === lineStart && isSiblingDefinition(state, matched, end)) return true
+  if ((shapes & SHAPE_TABLE_ROW) !== 0) return rowClosingPipe(src, pos, end) >= 0
+  if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched)
+  if ((shapes & DEFINITION_SHAPES) !== 0 && pos === lineStart && isSiblingDefinition(state, matched, end)) return true
   return (shapes & MARKER_SHAPES) !== 0 && isListMarker(src, pos, end) && markerInterrupts(state, matched)
 }
 
@@ -384,7 +390,8 @@ function openContainerOf(state: BlockState, shape: number, lineStart: number, en
     case SHAPE_BULLET: return openBulletItem(state, end)
     case SHAPE_ORDERED: return openOrderedItem(state, end)
     case SHAPE_DESCRIPTION: return openDescription(state, end)
-    default: return openFootnote(state, lineStart, end)
+    case SHAPE_FOOTNOTE_DEFINITION: return openFootnote(state, lineStart, end)
+    default: return false
   }
 }
 
@@ -529,26 +536,32 @@ function openLeaf(state: BlockState, lineStart: number, end: number): void {
 
 function openLeafOf(state: BlockState, shape: number, lineStart: number, end: number): boolean {
   switch (shape) {
-    case SHAPE_COMMENT: return openCommentLine(state, end)
     case SHAPE_HEADING: return openHeading(state, end)
+    case SHAPE_COMMENT_BLOCK_OPENER: return openCommentBlock(state, end)
+    case SHAPE_COMMENT_ONLY: return openComment(state, end)
+    case SHAPE_ABBREVIATION_DEFINITION: return openDefinitionLine(state, ABBREVIATION, lineStart, end)
     case SHAPE_THEMATIC_BREAK: return openThematicBreak(state, end)
-    case SHAPE_FENCE: return openFence(state, end)
-    case SHAPE_DIV: return openDivLine(state, end)
-    case SHAPE_DESCRIPTION: return openTerm(state, end)
-    case SHAPE_BRACE: return openBraceLine(state, end)
-    case SHAPE_TABLE: return openTable(state, end)
-    default: return openDefinitionLine(state, lineStart, end)
+    case SHAPE_DIV_BARE_RUN: return openBareRun(state, end)
+    case SHAPE_DIV_OPENER: return openDiv(state, end)
+    case SHAPE_TERM: return openTerm(state, end)
+    case SHAPE_LINK_DEFINITION: return openDefinitionLine(state, LINK_DEFINITION, lineStart, end)
+    case SHAPE_CODE_FENCE_OPENER: return openFence(state, end)
+    case SHAPE_ATTRIBUTE_LINE: return openAttributeLine(state, end)
+    case SHAPE_INCLUDE: return openInclude(state, end)
+    case SHAPE_TABLE_ROW: return openTable(state, end)
+    default: return false
   }
 }
 
-/** A line comment or the opener of a comment block. */
-function openCommentLine(state: BlockState, end: number): boolean {
-  if (isLineComment(state.src, state.pos, end)) {
-    // C2-B-136: after a marker the comment is the content of the block that opened.
-    state.takeAttributes = false
-    writeComment(state, end)
-    return true
-  }
+/** C2-B-136: after a marker the comment is the content of the block that opened. */
+function openComment(state: BlockState, end: number): boolean {
+  if (!isLineComment(state.src, state.pos, end)) return false
+  state.takeAttributes = false
+  writeComment(state, end)
+  return true
+}
+
+function openCommentBlock(state: BlockState, end: number): boolean {
   const length = fenceRunLength(state.src, state.pos, end, PERCENT)
   if (length === 0) return false
   writeEvent(state, enterTag(state, COMMENT_BLOCK, 0), state.pos, length)
@@ -617,7 +630,7 @@ function tableLine(state: BlockState, end: number): boolean {
     writeRow(state, closing, end)
     return true
   }
-  const last = continuationClosingPipe(src, state.pos, end)
+  const last = (shapesAt(state) & SHAPE_CONTINUATION_ROW) === 0 ? -1 : continuationClosingPipe(src, state.pos, end)
   if (last < 0) return false
   // C2-B-184, C2-B-185: a fragment is plain text for the cell of its column in the row above.
   writeEvent(state, eventTag(ENTER, ROW, FLAG_CONTINUATION), state.pos, 0)
@@ -689,27 +702,27 @@ function spanMark(code: number): number {
   return code === CARET ? FLAG_SPAN_UP : 0
 }
 
-/** An attribute line or an include directive. */
-function openBraceLine(state: BlockState, end: number): boolean {
-  if (isAttributeLine(state.src, state.pos, end)) {
-    if (!state.takeAttributes) state.attributesStart = state.pos
-    state.attributesEnd = end
-    // C2-B-092: held pending until the next line. C2-B-102: consecutive lines merge.
-    writeLeafLine(state, enterTag(state, ATTRIBUTES, 0), ATTRIBUTES, end)
-    state.attributesDepth = state.depth
-    return true
-  }
+/** C2-B-092: held pending until the next line. C2-B-102: consecutive lines merge. */
+function openAttributeLine(state: BlockState, end: number): boolean {
+  if (!isAttributeLine(state.src, state.pos, end)) return false
+  if (!state.takeAttributes) state.attributesStart = state.pos
+  state.attributesEnd = end
+  writeLeafLine(state, enterTag(state, ATTRIBUTES, 0), ATTRIBUTES, end)
+  state.attributesDepth = state.depth
+  return true
+}
+
+function openInclude(state: BlockState, end: number): boolean {
   if (!isIncludeLine(state.src, state.pos, end)) return false
   writeLeafLine(state, enterTag(state, INCLUDE, 0), INCLUDE, end)
   return true
 }
 
 /** C2-B-081: a link or abbreviation definition stands at column 0 outside every container. */
-function openDefinitionLine(state: BlockState, lineStart: number, end: number): boolean {
+function openDefinitionLine(state: BlockState, kind: number, lineStart: number, end: number): boolean {
   if (state.pos !== lineStart || state.depth !== 1) return false
-  const link = isLinkDefinition(state.src, state.pos, end)
-  if (!link && !isAbbreviation(state.src, state.pos, end)) return false
-  const kind = link ? LINK_DEFINITION : ABBREVIATION
+  const matches = kind === LINK_DEFINITION ? isLinkDefinition(state.src, state.pos, end) : isAbbreviation(state.src, state.pos, end)
+  if (!matches) return false
   writeLeafLine(state, enterTag(state, kind, 0), kind, end)
   return true
 }
@@ -755,25 +768,30 @@ function openTerm(state: BlockState, end: number): boolean {
   return true
 }
 
-/** A colon run of three or more: the closer of an open div, or the opener of a div or a line block. */
-function openDivLine(state: BlockState, end: number): boolean {
+/** C2-B-125: a bare colon run closes the innermost open div it is long enough for, and otherwise opens an anonymous div. */
+function openBareRun(state: BlockState, end: number): boolean {
+  const src = state.src
+  const length = divRunLength(src, state.pos, end)
+  if (length === 0 || skipSpaces(src, state.pos + length, end) !== end) return false
+  for (let index = state.depth - 1; state.stackKind[index] === DIV; index--) {
+    if (state.stackColumn[index]! > length) continue
+    const captioned = (state.stackStyle[index]! & (FLAG_QUOTE_FENCE | FLAG_FIGURE)) !== 0
+    state.contentEnd = end
+    closeTo(state, index)
+    // C2-B-147: a quote fence and a figure group take a caption.
+    if (captioned) state.captionDepth = state.depth
+    return true
+  }
+  return pushDiv(state, 0, length)
+}
+
+/** C2-B-126: a colon run followed by a name or a sigil always opens a div or a line block. */
+function openDiv(state: BlockState, end: number): boolean {
   const src = state.src
   const pos = state.pos
   const length = divRunLength(src, pos, end)
-  if (length === 0) return false
   const runEnd = pos + length
-  if (skipSpaces(src, runEnd, end) === end) {
-    // C2-B-125: a bare run closes the innermost open div it is long enough for.
-    for (let index = state.depth - 1; state.stackKind[index] === DIV; index--) {
-      if (state.stackColumn[index]! > length) continue
-      const captioned = (state.stackStyle[index]! & (FLAG_QUOTE_FENCE | FLAG_FIGURE)) !== 0
-      state.contentEnd = end
-      closeTo(state, index)
-      // C2-B-147: a quote fence and a figure group take a caption.
-      if (captioned) state.captionDepth = state.depth
-      return true
-    }
-  }
+  if (length === 0 || skipSpaces(src, runEnd, end) === end) return false
   const sigil = divSigil(src, runEnd, end)
   if (sigil === PIPE) {
     // C2-B-123: the body of a line block is one leaf.
@@ -781,13 +799,17 @@ function openDivLine(state: BlockState, end: number): boolean {
     openOpaqueLeaf(state, LINE_BLOCK, COLON, length)
     return true
   }
-  if (state.depth > MAX_DEPTH) return false
   let style = 0
   if (sigil === BACKSLASH) style = FLAG_HARD_BREAKS
   else if (sigil === GREATER) style = FLAG_QUOTE_FENCE
   else if (isFigureName(src, runEnd, end)) style = FLAG_FIGURE
-  // C2-B-126: a run followed by a name or a sigil always opens.
-  push(state, DIV, style, pos, length, length)
+  return pushDiv(state, style, length)
+}
+
+/** Opens a div. Its run length stands in the column slot of the stack. Returns false at the depth cap. */
+function pushDiv(state: BlockState, style: number, length: number): boolean {
+  if (state.depth > MAX_DEPTH) return false
+  push(state, DIV, style, state.pos, length, length)
   state.stackStyle[state.depth - 1] = style
   return true
 }

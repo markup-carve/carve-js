@@ -1051,6 +1051,7 @@ describe('tables', () => {
     expect(blocks('| 1 | 2 |', '+ | b |', '+ c | |')).toBe('table[tr[td"1|c" td"2|b"]]')
     expect(blocks('| 1 | 2 |', '+ < |= x |{.r}')).toBe('table[tr[td"1" td"2"]] p"+ < |= x |{.r}"')
     expect(blocks('| 1 |', '+ = a |')).toBe('table[tr[td"1|= a"]]')
+    expect(blocks('| 1 |', '+a |')).toBe('table[tr[td"1|a"]]')
     expect(blocks('+ a |')).toBe('p"+ a |"')
     expect(blocks('| 1 |', '', '+ a |')).toBe('table[tr[td"1"]] p"+ a |"')
   })

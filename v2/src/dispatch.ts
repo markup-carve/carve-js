@@ -1,27 +1,42 @@
 // Generated from data/line-shapes.json by scripts/generate-dispatch.ts. Do not edit.
 
-export const SHAPE_QUOTE = 1
-export const SHAPE_BULLET = 2
-export const SHAPE_ORDERED = 4
-export const SHAPE_DESCRIPTION = 8
-export const SHAPE_DIV = 16
-export const SHAPE_FENCE = 32
-export const SHAPE_COMMENT = 64
-export const SHAPE_HEADING = 128
-export const SHAPE_THEMATIC_BREAK = 256
-export const SHAPE_BRACE = 512
-export const SHAPE_DEFINITION = 1024
-export const SHAPE_CAPTION = 2048
-export const SHAPE_TABLE = 4096
+export const SHAPE_BLANK = 1
+export const SHAPE_TEXT = 2
+export const SHAPE_BLOCK_IMAGE = 4
+export const SHAPE_HEADING = 8
+export const SHAPE_DISPLAY_MATH = 16
+export const SHAPE_COMMENT_BLOCK_CLOSER = 32
+export const SHAPE_COMMENT_BLOCK_OPENER = 64
+export const SHAPE_COMMENT_ONLY = 128
+export const SHAPE_ABBREVIATION_DEFINITION = 256
+export const SHAPE_BULLET = 512
+export const SHAPE_THEMATIC_BREAK = 1024
+export const SHAPE_CONTINUATION_ROW = 2048
+export const SHAPE_FRONTMATTER_CLOSER = 4096
+export const SHAPE_FRONTMATTER_OPENER = 8192
+export const SHAPE_ORDERED = 16384
+export const SHAPE_DESCRIPTION = 32768
+export const SHAPE_DIV_BARE_RUN = 65536
+export const SHAPE_DIV_OPENER = 131072
+export const SHAPE_TERM = 262144
+export const SHAPE_QUOTE = 524288
+export const SHAPE_FOOTNOTE_DEFINITION = 1048576
+export const SHAPE_LINK_DEFINITION = 2097152
+export const SHAPE_CAPTION = 4194304
+export const SHAPE_CODE_FENCE_CLOSER = 8388608
+export const SHAPE_CODE_FENCE_OPENER = 16777216
+export const SHAPE_ATTRIBUTE_LINE = 33554432
+export const SHAPE_INCLUDE = 67108864
+export const SHAPE_TABLE_ROW = 134217728
 
 /** The shapes a line can have, by the code of its first character after the prefixes. */
 export const FIRST_CHARACTER_SHAPES: readonly number[] = [
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 128, 0, 64, 0, 0, 0, 0, 1282, 0, 0, 2, 4, 0,
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 24, 0, 0, 128, 1, 0,
-  0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1024, 0, 0, 2048, 0,
-  32, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 512, 4096, 0, 32, 0,
+  0, 4, 0, 8, 16, 224, 0, 0, 0, 0, 1792, 2048, 0, 12800, 16384, 0,
+  16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 491520, 0, 0, 8, 524288, 0,
+  0, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384,
+  16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 3145728, 0, 0, 4194304, 0,
+  25165824, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384,
+  16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 16384, 100663296, 134217728, 0, 25165824, 0,
 ]
