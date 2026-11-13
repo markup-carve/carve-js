@@ -526,6 +526,36 @@ describe('comments that tools read', () => {
   })
 })
 
+describe('the start attribute of an ordered list', () => {
+  const marker = (src: string): unknown => block(src).marker
+  const keys = (src: string): unknown => block(src).attrs?.keyValues
+
+  it('C2-B-045: the attribute sets the start value and is no key, so it gives the tree of a first marker with that number', () => {
+    expect(block('{start=5}\n1. a\n2. b')).toEqual(block('5. a\n6. b'))
+    expect(block('{start=5 .c}\n. a')).toEqual({ ...block('5. a'), attrs: { classes: ['c'] } })
+    expect(marker('{start=3}\nb. x')).toEqual({ kind: 'ordered', style: 'a', delimiter: '.', start: 3 })
+    expect(marker('{start="12"}\nI) x')).toEqual({ kind: 'ordered', style: 'I', delimiter: ')', start: 12 })
+    // C2-A-058: a start of 1 is omitted.
+    expect(marker('{start=1}\n7. a')).toEqual({ kind: 'ordered', style: '1', delimiter: '.' })
+    expect(marker('{start=0}\n1. a')).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 0 })
+  })
+
+  it('C2-B-045: where both are written the attribute decides', () => {
+    expect(marker('{start=5}\n3. a')).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 5 })
+    expect(render('{start=5}\n3. a')).toBe('<ol start="5">\n  <li>a</li>\n</ol>')
+  })
+
+  it('C2-B-045: a value that is no unsigned decimal integer, and 0 on letters or roman numerals, is no start value and stays a key', () => {
+    for (const value of ['x', '-1', '+2', '1.5', '', '1234567890']) {
+      expect([value, marker(`{start="${value}"}\n3. a`), keys(`{start="${value}"}\n3. a`)]).toEqual([value, { kind: 'ordered', style: '1', delimiter: '.', start: 3 }, [['start', value]]])
+    }
+    expect([marker('{start=0}\nb. x'), keys('{start=0}\nb. x')]).toEqual([{ kind: 'ordered', style: 'a', delimiter: '.', start: 2 }, [['start', '0']]])
+    expect(keys('{start=0}\nii. x')).toEqual([['start', '0']])
+    // On a bullet list the key is an ordinary key.
+    expect(keys('{start=5}\n- a')).toEqual([['start', '5']])
+  })
+})
+
 describe('the byte-order mark', () => {
   check([
     ['C2-B-165: a byte-order mark at the start of the source is skipped before line 1 is read, whatever line 1 holds', '﻿# T', '<section id="T">\n  <h1>T</h1>\n</section>'],

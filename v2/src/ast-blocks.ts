@@ -1,13 +1,13 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
 import { type AstNode, AST_VERSION, type Marker } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
-import { emptyAttributes, readAttributeLines, readGluedBlocks } from './ast-attributes.ts'
+import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
   addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, inlineNodes, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
-import { SPACE, STAR } from './chars.ts'
+import { DIGIT_0, DIGIT_9, SPACE, STAR } from './chars.ts'
 import { type Attributes, foldLabel } from './inline-tree.ts'
 import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
@@ -129,21 +129,42 @@ function linkDefinitionNode(ctx: TreeContext, node: BlockNode): AstNode {
   return out
 }
 
-function listNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
+const MAX_START_DIGITS = 9
+
+/**
+ * C2-B-045: the start value that the `start` key of an attribute line gives a list of `style`, or
+ * -1 when its value is none: an unsigned decimal integer, at least 1 on letters and roman numerals.
+ */
+function startValue(value: string, style: string): number {
+  if (value === '' || value.length > MAX_START_DIGITS) return -1
+  for (let at = 0; at < value.length; at++) if (value.charCodeAt(at) < DIGIT_0 || value.charCodeAt(at) > DIGIT_9) return -1
+  const start = Number(value)
+  return start === 0 && style !== '1' ? -1 : start
+}
+
+function orderedMarker(node: BlockNode, attributes: Attributes | null): Marker {
   const flags = node.flags
-  let marker: Marker
-  if (node.kind === BULLET_LIST) {
-    marker = { kind: 'bullet', char: (flags & FLAG_STAR) !== 0 ? '*' : '-' }
-  } else {
-    let style = (flags & FLAG_ROMAN) !== 0 ? 'i' : (flags & FLAG_ALPHA) !== 0 ? 'a' : '1'
-    if ((flags & FLAG_UPPER) !== 0) style = style.toUpperCase()
-    marker = { kind: 'ordered', style, delimiter: (flags & FLAG_PAREN) !== 0 ? ')' : '.' }
-    // C2-A-058: a start of 1 is omitted, and the bare dot starts at 1.
-    if ((flags & FLAG_AUTO) === 0 && node.aux !== 1) marker.start = node.aux
+  let style = (flags & FLAG_ROMAN) !== 0 ? 'i' : (flags & FLAG_ALPHA) !== 0 ? 'a' : '1'
+  if ((flags & FLAG_UPPER) !== 0) style = style.toUpperCase()
+  const marker: Marker = { kind: 'ordered', style, delimiter: (flags & FLAG_PAREN) !== 0 ? ')' : '.' }
+  let start = (flags & FLAG_AUTO) === 0 ? node.aux : 1
+  // C2-B-045: the attribute decides over the number of the first marker, and is then no key of the list.
+  const authored = attributes?.keys.find((pair) => pair[0] === 'start')
+  const fromKey = authored === undefined ? -1 : startValue(authored[1], style.toLowerCase())
+  if (fromKey >= 0) {
+    start = fromKey
+    takeKey(attributes, 'start')
   }
+  // C2-A-058: a start of 1 is omitted, and the bare dot starts at 1.
+  if (start !== 1) marker.start = start
+  return marker
+}
+
+function listNode(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null): AstNode {
+  const bullet: Marker = { kind: 'bullet', char: (node.flags & FLAG_STAR) !== 0 ? '*' : '-' }
   return {
-    type: 'list', marker, spacing: (node.exitFlags & FLAG_TIGHT) !== 0 ? 'tight' : 'loose',
-    children: blockChildren(ctx, node.children!, flow),
+    type: 'list', marker: node.kind === BULLET_LIST ? bullet : orderedMarker(node, attributes),
+    spacing: (node.exitFlags & FLAG_TIGHT) !== 0 ? 'tight' : 'loose', children: blockChildren(ctx, node.children!, flow),
   }
 }
 
