@@ -46,14 +46,15 @@ export default [{
     ...typedRules,
     complexity: ['error', { max: 15 }],
     'sonarjs/cognitive-complexity': ['error', 15],
-    'max-len': ['error', { code: 140, ignoreUrls: true }],
   },
 }, {
-  // A test states its input and its expected output as one literal each.
-  files: ['v2/test/**/*.test.ts'],
-  rules: { 'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }] },
+  // width-data.ts holds the Unicode tables of the 0.1 engine, copied unchanged from its generator.
+  files: ['v2/**/*.ts'],
+  ignores: ['v2/test/*.test.ts', 'v2/src/width-data.ts'],
+  rules: { 'max-len': ['error', { code: 140, ignoreUrls: true }] },
 }, {
-  // The Unicode tables of the 0.1 engine, copied unchanged from its generator.
-  files: ['v2/src/width-data.ts'],
-  rules: { 'max-len': 'off' },
+  // A test states its input and its expected output as one literal each.
+  files: ['v2/**/*.ts'],
+  ignores: ['v2/src/**', 'v2/scripts/**', 'v2/test/support/**'],
+  rules: { 'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }] },
 }]
