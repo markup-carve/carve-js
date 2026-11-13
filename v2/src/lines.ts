@@ -407,11 +407,12 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
   return false
 }
 
-/** C2-B-161, C2-B-164: exactly `---`, directly followed by `yaml`, `toml`, `json` or nothing, and trailing spaces. */
+/** C2-B-161, C2-B-164: exactly `---`, then `yaml`, `toml` or `json` glued or after one space, or nothing, and trailing spaces. */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   let p = pos + FRONTMATTER_RUN
-  if (startsWith(src, p, end, 'yaml') || startsWith(src, p, end, 'toml') || startsWith(src, p, end, 'json')) p += 4
+  const name = p < end && src.charCodeAt(p) === SPACE ? p + 1 : p
+  if (startsWith(src, name, end, 'yaml') || startsWith(src, name, end, 'toml') || startsWith(src, name, end, 'json')) p = name + 4
   return runLength(src, p, end, SPACE) === end - p
 }
 

@@ -811,6 +811,12 @@ describe('captions', () => {
     expect(blocks('::: figure "T"', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     // C2-B-159: trailing spaces do not stop a thematic break. C2-B-087: a footnote marker line starts with any block.
     expect(blocks('*** ', 'next')).toBe('hr p"next"')
+    // C2-B-164: the format name is glued or stands after one space.
+    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe(blocks('---toml', 'a = 1', '---', 'x'))
+    expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('fm"a = 1" p"x"')
+    expect(blocks('---  toml', 'a')).toBe('p"---  toml|a"')
+    expect(blocks('--- xml', 'a')).toBe('p"--- xml|a"')
+    expect(blocks('--- ', 'a: 1', '---')).toBe('fm"a: 1"')
     // C2-B-151: spaces and tabs alone are no content, so the marker is text.
     expect(blocks('= \t', 'following')).toBe('p"= 	|following"')
     expect(blocks('- \t')).toBe('p"- 	"')
