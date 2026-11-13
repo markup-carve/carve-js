@@ -5,7 +5,7 @@ import { type AstNode } from './ast.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
-import { type Check, compareBlocks, createCheck, parseChunk } from './write-check.ts'
+import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -36,15 +36,30 @@ function nodeAt(document: AstNode, path: string): AstNode | null {
   return typeof at === 'object' && at !== null && !Array.isArray(at) ? at as AstNode : null
 }
 
-/** The string offset of the UTF-8 byte offset `bytes` of `value`, or -1 where no character starts there. */
-function offsetOfByte(value: string, bytes: number): number {
-  let rest = bytes
-  let at = 0
-  for (; rest > 0 && at < value.length; at++) {
-    const code = value.charCodeAt(at)
-    rest -= code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdfff ? 2 : 3
+/** How far the wraps of one text node have been read: a byte offset of its value and the string offset of it. */
+interface WrapCursor {
+  bytes: number
+  at: number
+  points: number[]
+}
+
+/** Moves `cursor` to the byte `offset` of `value`. False where no character starts there, or the offset lies behind. */
+function seek(cursor: WrapCursor, value: string, offset: number): boolean {
+  if (offset < cursor.bytes) return false
+  while (cursor.bytes < offset && cursor.at < value.length) {
+    const code = value.charCodeAt(cursor.at++)
+    cursor.bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdfff ? 2 : 3
   }
-  return rest === 0 ? at : -1
+  return cursor.bytes === offset
+}
+
+/** Whether the wrap at the byte `offset` of the text `node` fits the tree: a place behind the wraps before it, with the joining space before it, or the start of the value (C2-L-021). */
+function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
+  const value = node.value ?? ''
+  if (node.type !== 'text' || !seek(cursor, value, offset)) return false
+  const fits = cursor.at === 0 ? cursor.points.length === 0 : cursor.at > (cursor.points[cursor.points.length - 1] ?? 0) && value[cursor.at - 1] === ' '
+  if (fits) cursor.points.push(cursor.at)
+  return fits
 }
 
 /**
@@ -53,28 +68,22 @@ function offsetOfByte(value: string, bytes: number): number {
  * contradicts the tree, and then the cell keeps no wrap.
  */
 function readWraps(w: Writer, document: AstNode, cell: AstNode, entry: LayoutEntry): void {
-  const points = new Map<AstNode, number[]>()
+  const cursors = new Map<AstNode, WrapCursor>()
+  let path = ''
+  let node: AstNode | null = null
   for (const wrap of entry.wraps ?? []) {
-    const node = nodeAt(document, wrap.path)
-    const list = node === null ? [] : points.get(node) ?? []
-    const at = node === null ? -1 : wrapPoint(node, wrap.offset, list)
-    if (node === null || at < 0) {
+    // The wraps of one cell mostly name one text node, so its pointer is resolved once.
+    if (wrap.path !== path || node === null) node = nodeAt(document, wrap.path)
+    path = wrap.path
+    const cursor = node === null ? undefined : cursors.get(node) ?? { bytes: 0, at: 0, points: [] }
+    if (node === null || cursor === undefined || !addWrap(cursor, node, wrap.offset)) {
       w.facts!.set(cell, { ...entry, wraps: [] })
       return
     }
-    list.push(at)
-    points.set(node, list)
+    cursors.set(node, cursor)
   }
   w.wrapPoints ??= new Map()
-  for (const [node, list] of points) w.wrapPoints.set(node, list)
-}
-
-/** The string offset of the wrap at the byte `offset` of the text `node`, behind the wraps `earlier`, or -1 where it does not fit. */
-function wrapPoint(node: AstNode, offset: number, earlier: readonly number[]): number {
-  const value = node.value ?? ''
-  const at = node.type === 'text' ? offsetOfByte(value, offset) : -1
-  if (at === 0) return earlier.length === 0 ? 0 : -1
-  return at > (earlier[earlier.length - 1] ?? 0) && value[at - 1] === ' ' ? at : -1
+  for (const [text, cursor] of cursors) w.wrapPoints.set(text, cursor.points)
 }
 
 function readLayout(w: Writer, document: AstNode, entries: readonly LayoutEntry[]): void {
@@ -145,7 +154,7 @@ interface Rounds {
 }
 
 /** The escapes of a group that are taken out on trial, each for one round. More than these keep linear time over minimality. */
-const MAX_TRIALS = 32
+const MAX_TRIALS = 16
 
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
@@ -200,6 +209,7 @@ function writeGroup(w: Writer, document: AstNode, from: number, first: boolean):
     const group = nodes.slice(from, end)
     w.lines = []
     w.lead = null
+    w.starts.clear()
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0 || !settle(w, document, group, first, rounds)) return end
   }
@@ -208,7 +218,9 @@ function writeGroup(w: Writer, document: AstNode, from: number, first: boolean):
 function compareGroup(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean): Check {
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
-  compareBlocks(check, group, parseChunk(source, w.abbreviations).children ?? [], document)
+  const parsed = parseChunk(source, w.abbreviations)
+  compareBlocks(check, group, parsed.children ?? [], document)
+  escapeOpeners(check, parsed, first ? 1 : 2)
   return check
 }
 

@@ -5,7 +5,7 @@ import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
-import { emit, emitLines, lose, type Writer } from './write-state.ts'
+import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { writeTable } from './write-table.ts'
 
 type BlockWriter = (w: Writer, node: AstNode, prefix: string, flags: number) => void
@@ -151,6 +151,7 @@ function frontmatter(w: Writer, node: AstNode, prefix: string): void {
 function textLeaf(w: Writer, node: AstNode, prefix: string, flags: number, mark: string, indent: string): void {
   if ((node.children ?? []).length === 0) return lose(w, node, null)
   attributeLine(w, node, prefix)
+  if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
   emitLines(w, prefix, indent, writeContent(w, node.children!, flags))
 }
@@ -171,6 +172,13 @@ function isBarePath(path: string): boolean {
   return true
 }
 
+const INCLUDE_OPTIONS: readonly string[] = ['lines', 'region', 'rows', 'cols', 'shift', 'code']
+
+function optionRank(name: string): number {
+  const rank = INCLUDE_OPTIONS.indexOf(name)
+  return rank < 0 ? INCLUDE_OPTIONS.length : rank
+}
+
 function includeOption(pair: readonly [string, string]): string {
   const [key, value] = pair
   // C2-A-181: a part that is no option is kept as its text.
@@ -186,7 +194,9 @@ function include(w: Writer, node: AstNode, prefix: string): void {
   if (path.includes('\n')) lose(w, node, 'path')
   let out = `{{ ${isBarePath(path) ? path : `"${path.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`}`
   if (node.section !== undefined) out += ` #${node.section}`
-  for (const pair of node.options ?? []) out += ` ${includeOption(pair)}`
+  // C2-W-058: the six options in the order of the directive grammar, then every other option in the order of the node.
+  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
+  for (const pair of options) out += ` ${includeOption(pair)}`
   emit(w, prefix, `${out} }}`)
 }
 
@@ -196,7 +206,8 @@ function linkDefinition(w: Writer, node: AstNode, prefix: string): void {
   const href = node.href ?? ''
   if (href === '') lose(w, node, 'href')
   const title = typeof node.title === 'string' ? ` ${quoted(node.title)}` : ''
-  emit(w, prefix, `[${node.key ?? ''}]: ${href}${title}`)
+  // C2-W-022: a definition with no destination ends at its colon.
+  emit(w, prefix, `[${node.key ?? ''}]:${href === '' && title === '' ? '' : ' '}${href}${title}`)
 }
 
 /** C2-W-024, C2-W-027: the blocks of a body behind its marker, the first on the marker line. */
@@ -297,12 +308,12 @@ function usesHardBreakOpener(w: Writer, node: AstNode): boolean {
 
 function div(w: Writer, node: AstNode, prefix: string, flags: number): void {
   const classes = node.attrs?.classes ?? []
-  const inner = classes.includes(HARD_BREAKS_CLASS) ? flags | BARE_BREAKS : flags
-  const write = (): void => writeBlocks(w, node.children ?? [], prefix, inner, false)
   if (usesHardBreakOpener(w, node)) {
     attributeLine(w, node, prefix, { skipClasses: [classes.length - 1] })
-    return fenced(w, node, prefix, ' \\', true, write)
+    // C2-W-080: behind the opener a hard break is the bare line ending. In the class form it keeps its backslash (C2-W-079).
+    return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, node.children ?? [], prefix, flags | BARE_BREAKS, false))
   }
+  const write = (): void => writeBlocks(w, node.children ?? [], prefix, flags, false)
   const name = divName(node)
   attributeLine(w, node, prefix, name === null ? {} : { skipClasses: [0] })
   fenced(w, node, prefix, (name === null ? '' : ` ${name}`) + titleTail(w, node, flags), true, write)

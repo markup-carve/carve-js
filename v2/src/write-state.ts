@@ -29,6 +29,8 @@ export interface Writer {
   escapes: Map<AstNode, number[]>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
   forms: Map<AstNode, number>
+  /** Where each paragraph of the group being written starts: its line in `lines` and its column, as one number. */
+  starts: Map<AstNode, number>
   /** What the reparse has tried for a node that did not form: the step it is at, and the escapes of that step. */
   attempts: Map<AstNode, Attempt>
   facts: Map<AstNode, WriterFacts> | null
@@ -50,7 +52,7 @@ export interface Writer {
 
 export function createWriter(facts: Map<AstNode, WriterFacts> | null, alignTables: boolean): Writer {
   return {
-    lines: [], lead: null, escapes: new Map(), forms: new Map(), attempts: new Map(), facts, wrapPoints: null, alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
+    lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null, alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(),
   }
 }
@@ -63,6 +65,17 @@ function trimmedLength(line: string): number {
   let end = line.length
   while (end > 0 && (line.charCodeAt(end - 1) === SPACE || line.charCodeAt(end - 1) === TAB)) end--
   return end
+}
+
+/** The columns a line can have in a place of `Writer.starts`. */
+export const PLACE_COLUMNS = 8192
+
+/** Notes where the paragraph `node` starts, for the test of its lines after a parse (C2-W-092). */
+export function notePlace(w: Writer, node: AstNode, prefix: string): void {
+  const head = w.lead ?? prefix
+  // Columns count code points, so only a prefix of markers and spaces is measured by its length.
+  for (let at = 0; at < head.length; at++) if (head.charCodeAt(at) > 127) return
+  if (head.length < PLACE_COLUMNS) w.starts.set(node, w.lines.length * PLACE_COLUMNS + head.length)
 }
 
 /** `text` without the spaces and tabs at its end. */

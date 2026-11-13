@@ -70,8 +70,8 @@ function cellContent(w: Writer, cell: AstNode, flags: number): string {
   const blocks = cell.children ?? []
   // C2-A-175: blocks in a cell have no spelling.
   if (blocks.length > 1 || (blocks.length === 1 && blocks[0]!.type !== 'cell_paragraph')) lose(w, cell, null)
-  let content = ''
-  for (const block of blocks) content += writeInlines(w, block.children ?? [], flags | IN_CELL)
+  // C2-W-012: the content of two former blocks is kept apart by a space.
+  const content = blocks.map((block) => writeInlines(w, block.children ?? [], flags | IN_CELL)).join(' ')
   // C2-W-063: a cell whose content is only a span mark and that is no span takes an escape.
   return content === '^' || content === '<' ? `\\${content}` : content
 }

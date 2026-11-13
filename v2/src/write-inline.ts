@@ -6,8 +6,8 @@ import { lose, trimEnd, type Writer } from './write-state.ts'
 
 /** The content stands in a table cell: a pipe in text takes a backslash (C2-W-098). */
 export const IN_CELL = 1
-const IN_EMPHASIS = 2
-const IN_STRONG = 4
+export const IN_EMPHASIS = 2
+export const IN_STRONG = 4
 /** C2-W-080: a hard break is the bare line ending. */
 export const BARE_BREAKS = 8
 
@@ -27,14 +27,14 @@ function doubles(value: string, at: number): boolean {
 
 /** The text `value[from, to)` with the backslashes it needs. */
 function escaped(w: Writer, node: AstNode, value: string, from: number, to: number, cell: boolean): string {
-  const escapes = w.escapes.get(node)
+  const escapes = w.escapes.get(node) ?? []
   let out = ''
-  let next = 0
+  let next = firstFrom(escapes, from)
   let start = from
   for (let at = from; at < to; at++) {
     const code = value.charCodeAt(at)
-    while (escapes !== undefined && next < escapes.length && escapes[next]! < at) next++
-    const asked = escapes !== undefined && next < escapes.length && escapes[next] === at
+    const asked = next < escapes.length && escapes[next] === at
+    if (asked) next++
     if (!asked && !(code === BACKSLASH && doubles(value, at)) && !(cell && code === PIPE)) continue
     out += `${value.slice(start, at)}\\`
     start = at
@@ -49,6 +49,18 @@ function unitBytes(code: number): number {
   return code >= 0xd800 && code <= 0xdfff ? 2 : 3
 }
 
+/** The index of the first entry of the ascending list `offsets` that is not below `from`. */
+export function firstFrom(offsets: readonly number[], from: number): number {
+  let low = 0
+  let high = offsets.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (offsets[middle]! < from) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
 /**
  * The offset in the value of the text `node` behind the `bytes` UTF-8 bytes of its spelling that
  * start at the offset `from`, or -1 where no character of the value ends there.
@@ -56,8 +68,7 @@ function unitBytes(code: number): number {
 export function spelledEnd(w: Writer, node: AstNode, from: number, bytes: number, cell: boolean): number {
   const value = node.value ?? ''
   const escapes = w.escapes.get(node) ?? []
-  let next = 0
-  while (next < escapes.length && escapes[next]! < from) next++
+  let next = firstFrom(escapes, from)
   let rest = bytes
   let at = from
   for (; rest > 0 && at < value.length; at++) {
@@ -199,7 +210,7 @@ function rawReference(w: Writer, node: AstNode): string | null {
   const raw = w.facts?.get(node)?.rawRef
   if (raw === undefined) return null
   // C2-W-022: no space or tab stands at the end of a line of it.
-  return raw.replaceAll(/[ \t]+\n/g, '\n')
+  return raw.includes('\n') ? raw.replaceAll(/[ \t]+\n/g, '\n') : raw
 }
 
 function linkNode(w: Writer, node: AstNode, flags: number): string {
@@ -317,6 +328,12 @@ export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number
     const node = nodes[at]!
     // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
     if (node.type === 'comment' && node.form !== 'braced' && out !== '' && !out.endsWith('\n')) out += ' '
+    if (node.type === 'code' && nodes[at + 1]?.type === 'code') {
+      const end = codeRunEnd(w, nodes, at)
+      out += codeRun(nodes, at, end)
+      at = end - 1
+      continue
+    }
     const part = writeInline(w, node, flags)
     // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
     out += node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
@@ -327,5 +344,22 @@ export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */
 export function writeContent(w: Writer, nodes: readonly AstNode[], flags: number): string {
   const out = writeInlines(w, nodes, flags)
-  return nodes.length > 0 && nodes[nodes.length - 1]!.type === 'text' ? trimEnd(out) : out
+  const last = nodes[nodes.length - 1]
+  if (last?.type === 'text') return trimEnd(out)
+  // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022).
+  return last?.type === 'hard_break' && out.endsWith('\n') ? out.slice(0, -1) : out
+}
+
+/** C2-W-112: the end of the run of code spans that starts at `from`. Each span behind the first is reported. */
+function codeRunEnd(w: Writer, nodes: readonly AstNode[], from: number): number {
+  let end = from + 1
+  while (end < nodes.length && nodes[end]!.type === 'code') lose(w, nodes[end++]!, null)
+  return end
+}
+
+/** C2-W-112: code spans with nothing between them have no spelling, so their content is written as one span. */
+function codeRun(nodes: readonly AstNode[], from: number, end: number): string {
+  let value = ''
+  for (let at = from; at < end; at++) value += nodes[at]!.value ?? ''
+  return codeSpan(value) + braceBlock(nodes[from]!)
 }
