@@ -42,7 +42,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [33, ['3. a', '4. b'], 'ol(3.)[li[p"a"] li[p"b"]]'],
   [34, ['i.  a', 'ii.  b'], 'ol(i1.)[li[p"a"] li[p"b"]]'],
   [35, ['h.  x', 'i.  y'], 'ol(a8.)[li[p"x"] li[p"y"]]'],
-  [36, ['i. a'], 'p"i. a"'],
+  [36, ['A. Smith'], 'p"A. Smith"'],
   [37, ['1. a', '2) b'], 'ol(1.)[li[p"a"]] ol(2))[li[p"b"]]'],
   [38, ['1234567890. a'], 'p"1234567890. a"'],
   [39, ['iv.  a', 'v.  b'], 'ol(i4.)[li[p"a"] li[p"b"]]'],

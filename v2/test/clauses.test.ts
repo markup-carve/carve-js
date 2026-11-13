@@ -472,9 +472,13 @@ describe('ordered lists with letters and roman numerals', () => {
 
   it('C2-B-040: a letter or roman marker with a dot needs two spaces', () => {
     expect(blocks('a.  x')).toBe('ol(a1.)[li[p"x"]]')
-    expect(blocks('a. x')).toBe('p"a. x"')
+    expect(blocks('a. x')).toBe('ol(a1.)[li[p"x"]]')
+    expect(blocks('A. Smith')).toBe('p"A. Smith"')
+    expect(blocks('I. Claudius')).toBe('p"I. Claudius"')
+    expect(blocks('A.  x')).toBe('ol(A1.)[li[p"x"]]')
+    expect(blocks('IV. x')).toBe('ol(I4.)[li[p"x"]]')
     expect(blocks('iv.  x')).toBe('ol(i4.)[li[p"x"]]')
-    expect(blocks('iv. x')).toBe('p"iv. x"')
+    expect(blocks('iv. x')).toBe('ol(i4.)[li[p"x"]]')
     expect(blocks('a) x')).toBe('ol(a1))[li[p"x"]]')
     expect(blocks('1. x')).toBe('ol(1.)[li[p"x"]]')
   })

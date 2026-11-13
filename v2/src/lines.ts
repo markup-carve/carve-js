@@ -156,8 +156,8 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 
 /** Offset after the spaces of the ordered marker whose delimiter is at `delimiter`, or -1. */
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
-  // C2-B-040: a letter or roman marker with a dot needs two spaces.
-  const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && !isDigit(src.charCodeAt(pos)) ? 2 : 1
+  // C2-B-040: one uppercase letter and a dot needs two spaces, so an initial stays text.
+  const spaces = src.charCodeAt(delimiter) === DOT && delimiter === pos + 1 && isUpper(src.charCodeAt(pos)) ? 2 : 1
   return afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
 }
 
