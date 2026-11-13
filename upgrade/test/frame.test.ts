@@ -90,6 +90,17 @@ describe('the comparison of section 1', () => {
     expect(compareHtml('<ul><li><p>a</p></li></ul>', '<ul><li>a</li></ul>').equal).toBe(false)
   })
 
+  it('on request takes the only item of a list with or without its paragraph elements (U-021)', () => {
+    const old = '<ul><li><p>a</p><hr></li></ul>'
+    const next = '<ul><li>a<hr></li></ul>'
+    expect(compareHtml(old, next).equal).toBe(false)
+    expect(compareHtml(old, next, true).equal).toBe(true)
+    // Two items: a loose list stays different from a tight one.
+    expect(compareHtml('<ul><li><p>a</p></li><li><p>b</p></li></ul>', '<ul><li>a</li><li>b</li></ul>', true).equal).toBe(false)
+    // A nested list of one item inside a list of two is taken on its own.
+    expect(compareHtml('<ul><li>x<ol><li><p>a</p></li></ol></li><li>y</li></ul>', '<ul><li>x<ol><li>a</li></ol></li><li>y</li></ul>', true).equal).toBe(true)
+  })
+
   it('names the source line of the 0.2 element at the difference', () => {
     const compared = compareHtml('<p>a</p><p>b</p>', '<p data-source-line="1">a</p><p data-source-line="3">c</p>')
     expect(compared.difference?.line).toBe(3)
@@ -124,6 +135,14 @@ describe('the report', () => {
     const record = result.records.find((entry) => entry.entry === 'upgrade-mismatch')
     expect([record?.class, record?.line]).toEqual(['mismatch', 6])
     expect(record?.message).toBe('the HTML differs: 0.1 gives "</p><div></div></div>", 0.2 gives "</p></div></aside>"')
+  })
+
+  it('does not let U-021 explain a difference outside the paragraph elements of the one item', () => {
+    const explained = upgrade('- item\n\n  ***\n')
+    expect([explained.check, explained.records.map((record) => record.entry)]).toEqual(['explained', ['U-021', 'upgrade-difference']])
+    // The same list, and after it the block of U-114 that 0.1 and 0.2 read differently.
+    const other = upgrade('- item\n\n  ***\n\n:::: note\nbody\n:::\nafter\n::::\n')
+    expect([other.check, other.records.map((record) => record.entry)]).toEqual(['mismatch', ['U-021', 'upgrade-mismatch']])
   })
 
   it('prints one summary line for the later paragraphs of tight items', () => {

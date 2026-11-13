@@ -7,7 +7,7 @@ import { RULES } from './rules/index.ts'
 import { lineOf, readLines } from './source.ts'
 
 /** Report entries after which the HTML of 0.2 differs from the HTML of 0.1 by the contract. */
-const HTML_CHANGING = new Set(['U-011', 'U-021', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077'])
+const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077'])
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -75,7 +75,7 @@ function hasEntry(records: ReportRecord[], entry: string): boolean {
 
 /** Renders both sides and adds what the comparison found to `records`. */
 function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
-  const { output, records, edits } = done
+  const { output, records } = done
   let old: string
   let next: string
   try {
@@ -86,23 +86,32 @@ function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
     records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0, message: `an engine failed: ${String(error)}` })
     return 'mismatch'
   }
-  const compared = compareHtml(old, next)
-  if (compared.gainedParagraphs > 0) {
-    const message = `${compared.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
+  const strict = compareHtml(old, next)
+  if (strict.gainedParagraphs > 0) {
+    const message = `${strict.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
     records.push({ entry: 'U-019', class: 'summary', line: 0, message })
   }
-  if (compared.difference === null) return 'pass'
-  const { line, expected, actual } = compared.difference
-  const place = line === 0 ? 0 : inputLine(input, edits, readLines(output).starts[line - 1] ?? output.length)
+  if (strict.difference === null) return 'pass'
+  // U-021: a list of one item is tight in 0.2, so its paragraph elements are left out of a second comparison.
+  const oneItem = hasEntry(records, 'U-021')
+  const compared = oneItem ? compareHtml(old, next, true) : strict
   const explained = records.filter((record) => HTML_CHANGING.has(record.entry)).map((record) => record.entry)
-  if (explained.length > 0) {
+  if (oneItem) explained.unshift('U-021')
+  if (compared.difference === null || explained.length > (oneItem ? 1 : 0)) {
+    const line = compared.difference === null ? strict.difference.line : compared.difference.line
     const message = `the HTML differs, as the entries ${[...new Set(explained)].join(', ')} say`
-    records.push({ entry: 'upgrade-difference', class: 'summary', line: place, message })
+    records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, line), message })
     return 'explained'
   }
+  const { line, expected, actual } = compared.difference
   const message = `the HTML differs: 0.1 gives ${JSON.stringify(expected)}, 0.2 gives ${JSON.stringify(actual)}`
-  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: place, message })
+  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: placeOf(input, done, line), message })
   return 'mismatch'
+}
+
+/** The line of the input for the line `line` of the output that the comparison names. */
+function placeOf(input: string, done: Rewritten, line: number): number {
+  return line === 0 ? 0 : inputLine(input, done.edits, readLines(done.output).starts[line - 1] ?? done.output.length)
 }
 
 /** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */

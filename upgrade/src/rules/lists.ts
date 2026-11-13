@@ -189,6 +189,8 @@ function tightness(ctx: Context, visit: Visit): void {
   const keyLine = looseLine(ctx, list)
   if (items.length === 1) {
     note(ctx, 'U-021', list.pos!.startLine, 'a loose list with one item is tight in 0.2, its first paragraph loses the paragraph element')
+    // The key stays an attribute of the list in 0.2 (C2-B-066) and would be written as `loose=""`.
+    if (keyLine > 0) removeAttribute(ctx, 'U-020', keyLine, (token) => token === 'loose', 'key loose removed, it does nothing in 0.2 and would be written as an attribute')
     return
   }
   if (blankBetween(ctx, items)) return

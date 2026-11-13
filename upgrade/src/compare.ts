@@ -120,6 +120,31 @@ function tokenize(html: string): Token[] {
 interface Frame {
   name: string
   children: number
+  /** Index of the open tag, and for a list the number of its items. */
+  open: number
+  items: number
+}
+
+/** The open tags of the items that are the only item of their list. */
+function onlyItems(tokens: Token[]): Set<number> {
+  const only = new Set<number>()
+  const stack: Frame[] = []
+  const firstItem = new Map<number, number>()
+  tokens.forEach((token, index) => {
+    if (token.kind === TEXT || VOID.has(token.name)) return
+    if (token.kind === CLOSE) {
+      const frame = stack.pop()
+      if (frame !== undefined && frame.items === 1) only.add(firstItem.get(frame.open)!)
+      return
+    }
+    const top = stack[stack.length - 1]
+    if (token.name === 'li' && top !== undefined) {
+      top.items++
+      if (top.items === 1) firstItem.set(top.open, index)
+    }
+    stack.push({ name: token.name, children: 0, open: index, items: 0 })
+  })
+  return only
 }
 
 interface Reduced {
@@ -130,32 +155,37 @@ interface Reduced {
 
 /**
  * Drops the paragraph element around a later paragraph of a list item, which 0.1 writes bare in
- * a tight list and 0.2 always writes (ruling on U-019), and counts the elements dropped.
+ * a tight list and 0.2 always writes (ruling on U-019), and counts the elements dropped. With
+ * `only`, every paragraph element directly in the only item of a list is dropped too: 0.1 could
+ * make such a list loose and 0.2 cannot (U-021).
  */
-function dropLaterParagraphs(tokens: Token[]): Reduced {
+function dropParagraphs(tokens: Token[], only: Set<number>): Reduced {
   const out: Token[] = []
   const stack: Frame[] = []
   const dropped: boolean[] = []
   let count = 0
-  for (const token of tokens) {
+  tokens.forEach((token, index) => {
     const top = stack[stack.length - 1]
     if (token.kind === TEXT) {
       if (top !== undefined && !isWhitespace(token.text)) top.children++
       out.push(token)
-    } else if (token.kind === OPEN) {
-      const later = token.text === '<p>' && top !== undefined && top.name === 'li' && top.children > 0
-      if (top !== undefined) top.children++
-      if (later) count++
-      else out.push(token)
-      if (!VOID.has(token.name)) {
-        stack.push({ name: token.name, children: 0 })
-        dropped.push(later)
-      }
-    } else {
+      return
+    }
+    if (token.kind === CLOSE) {
       stack.pop()
       if (dropped.pop() !== true) out.push(token)
+      return
     }
-  }
+    const inItem = token.text === '<p>' && top !== undefined && top.name === 'li'
+    const later = inItem && top.children > 0
+    const drop = later || (inItem && only.has(top.open))
+    if (top !== undefined) top.children++
+    if (later) count++
+    if (!drop) out.push(token)
+    if (VOID.has(token.name)) return
+    stack.push({ name: token.name, children: 0, open: index, items: 0 })
+    dropped.push(drop)
+  })
   return { tokens: out, laterParagraphs: count }
 }
 
@@ -227,10 +257,16 @@ function excerpt(tokens: Token[], at: number): string {
   return out
 }
 
-/** Compares the HTML of 0.1 for the input with the HTML of 0.2 for the output. */
-export function compareHtml(html01: string, html02: string): Comparison {
-  const old = dropLaterParagraphs(tokenize(html01))
-  const next = dropLaterParagraphs(tokenize(html02))
+/**
+ * Compares the HTML of 0.1 for the input with the HTML of 0.2 for the output. With
+ * `singleItems` a list of one item compares equal whether its paragraphs are bare or not.
+ */
+export function compareHtml(html01: string, html02: string, singleItems = false): Comparison {
+  const oldTokens = tokenize(html01)
+  const nextTokens = tokenize(html02)
+  const none = new Set<number>()
+  const old = dropParagraphs(oldTokens, singleItems ? onlyItems(oldTokens) : none)
+  const next = dropParagraphs(nextTokens, singleItems ? onlyItems(nextTokens) : none)
   const a = settle(old.tokens)
   const b = settle(next.tokens)
   const gainedParagraphs = Math.max(0, next.laterParagraphs - old.laterParagraphs)
