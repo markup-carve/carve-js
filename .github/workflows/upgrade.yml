@@ -1,0 +1,39 @@
+name: upgrade tool
+
+# The 0.1 to 0.2 upgrade tool in `upgrade/`. It reads the build of `src/` and the engine in
+# `v2/`, so a change to either runs it too.
+on:
+  push:
+    branches: [next2]
+    paths:
+      - 'upgrade/**'
+      - 'v2/src/**'
+      - '.github/workflows/upgrade.yml'
+  pull_request:
+    branches: [next2]
+    paths:
+      - 'upgrade/**'
+      - 'v2/src/**'
+      - '.github/workflows/upgrade.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm --prefix upgrade run typecheck
+      - name: Lint
+        run: npm --prefix upgrade run lint
+      - name: Test
+        run: npm --prefix upgrade test
