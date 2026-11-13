@@ -586,7 +586,7 @@ describe('definitions', () => {
 })
 
 describe('attribute lines', () => {
-  it('C2-B-090, C2-B-093: one or more glued brace blocks, alone on the line', () => {
+  it('C2-B-090, C2-B-093, C2-B-193: one or more glued brace blocks, alone on the line', () => {
     expect(blocks('{.a}', 'x')).toBe('{.a}p"x"')
     expect(blocks('  {.a}{#b}  ', 'x')).toBe('{.a}{#b}p"x"')
     expect(blocks('{.a} {.b}', 'x')).toBe('p"{.a} {.b}|x"')
@@ -610,7 +610,7 @@ describe('attribute lines', () => {
     expect(blocks('::: x', '{.a}', ':::')).toBe('div[p"{.a}"]')
   })
 
-  it('C2-B-102: consecutive attribute lines merge, also into one paragraph when no block takes them', () => {
+  it('C2-B-102, C2-B-192: consecutive attribute lines merge, also into one paragraph when no block takes them', () => {
     expect(blocks('{.a}', '{.b}', 'x')).toBe('{.a|.b}p"x"')
     expect(blocks('{.a}', '', '{.b}', '{.c}', 'x')).toBe('p"{.a}" {.b|.c}p"x"')
     expect(blocks('{.a}', '{.b}')).toBe('p"{.a}|{.b}"')
@@ -641,12 +641,14 @@ describe('attribute lines', () => {
     expect(blocks('{.a}', '%% c', 'x')).toBe('%"%% c" {.a}p"x"')
   })
 
-  it('C2-B-100, C2-B-101: the attributes of an item abut the marker and close on its line', () => {
+  it('C2-B-100, C2-B-101, C2-B-194: the attributes of an item abut the marker and close on its line', () => {
     expect(blocks('-{.i} b')).toBe('ul(-)[li{}[p"b"]]')
     expect(blocks('1.{.i}{#j} b')).toBe('ol(1.)[li{}[p"b"]]')
     expect(blocks('-{.i}b')).toBe('p"-{.i}b"')
     expect(blocks('-{.i', '} b')).toBe('p"-{.i|} b"')
     expect(blocks('- {.i} b')).toBe('ul(-)[li[p"{.i} b"]]')
+    expect(blocks('::{.c} t', ': d')).toBe('p"::{.c} t|: d"')
+    expect(blocks(':: t', ':{.c} d')).toBe('dl[dt"t|:{.c} d"]')
   })
 })
 
@@ -689,9 +691,14 @@ describe('divs, sigil divs and comment blocks', () => {
   it('C2-B-124: a hard-break block and a quote fence are containers', () => {
     expect(blocks('::: \\', '- a', ':::')).toBe('div(\\)[ul(-)[li[p"a"]]]')
     expect(blocks('::: >', '= h', ':::')).toBe('div(>)[h1"h"]')
-    expect(blocks(':::>', 'x', ':::')).toBe('div[p"x"]')
-    expect(blocks(':::|', 'x', ':::')).toBe('div[p"x"]')
     expect(blocks(':::  >', 'x', ':::')).toBe('div(>)[p"x"]')
+  })
+
+  it('C2-B-196: a sigil glued to the colon run makes the line text', () => {
+    expect(blocks(':::>', 'x')).toBe('p":::>|x"')
+    expect(blocks(':::|', 'x')).toBe('p":::||x"')
+    expect(blocks('a', ':::\\ b')).toBe('p"a|:::\\ b"')
+    expect(blocks(':::>x', 'y', ':::')).toBe('div[p"y"]')
   })
 
   it('C2-B-125: a bare colon run closes the innermost div it is long enough for, or opens an anonymous div', () => {
@@ -813,11 +820,13 @@ describe('one-line constructs', () => {
     expect(blocks('- {{ a.crv }}')).toBe('ul(-)[li[inc"{{ a.crv }}"]]')
   })
 
-  it('C2-B-157, C2-B-158, C2-B-191: a paragraph that closes holding one image or one math span is promoted', () => {
+  it('C2-B-157, C2-B-158, C2-B-197, C2-B-198, C2-B-191: a paragraph that closes as one image line or one math line is promoted', () => {
     expect(blocks('![a](b)')).toBe('img"![a](b)"')
     expect(blocks('![a](b)', 'x')).toBe('p"![a](b)|x"')
     expect(blocks('![a](b) x')).toBe('p"![a](b) x"')
     expect(blocks('$$`x^2`')).toBe('math"$$`x^2`"')
+    expect(blocks('$$`x`{.c}  ')).toBe('math"$$`x`{.c}  "')
+    expect(blocks('$$`x` y')).toBe('p"$$`x` y"')
     expect(blocks('$$`x`', 'y')).toBe('p"$$`x`|y"')
     expect(blocks('![a [b]](c (d))')).toBe('img"![a [b]](c (d))"')
     expect(blocks('[a](b)')).toBe('p"[a](b)"')
@@ -827,7 +836,8 @@ describe('one-line constructs', () => {
 describe('frontmatter', () => {
   it('C2-B-161, C2-B-165: line 1 opens frontmatter when it is exactly three hyphens at column 0', () => {
     expect(blocks('---', 'a: b', '---', 'x')).toBe('fm"a: b" p"x"')
-    expect(blocks('--- toml  ', 'a', '---')).toBe('fm"a"')
+    expect(blocks('---toml  ', 'a', '---')).toBe('fm"a"')
+    expect(blocks('--- toml', 'a', '---')).toBe('p"--- toml|a|---"')
     expect(blocks('﻿---', 'a', '---')).toBe('fm"a"')
     expect(blocks('----', 'a')).toBe('p"----|a"')
     expect(blocks(' ---', 'a')).toBe('p"---|a"')
@@ -948,9 +958,11 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('$$`x', '^ c')).toBe('p"$$`x|^ c"')
   })
 
-  it('C2-B-164: the format word is glued to the hyphens or stands after spaces', () => {
+  it('C2-B-164: the format name is `yaml`, `toml` or `json`, glued to the hyphens', () => {
     expect(blocks('---yaml', 'a', '---')).toBe('fm"a"')
-    expect(blocks('---   json', 'a', '---')).toBe('fm"a"')
+    expect(blocks('---json', 'a', '---')).toBe('fm"a"')
+    expect(blocks('---yml', 'a', '---')).toBe('p"---yml|a|---"')
+    expect(blocks('---yamlx', 'a', '---')).toBe('p"---yamlx|a|---"')
     expect(blocks('--- 1', 'a')).toBe('p"--- 1|a"')
   })
 })

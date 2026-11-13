@@ -20,7 +20,7 @@ import {
 } from './kinds.ts'
 import {
   attributeValueStart, braceBlocksEnd, bulletMarkerEnd, captionContentStart, continuationClosingPipe, decimalValue,
-  descriptionMarkEnd, digitRunEnd, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
+  descriptionMarkEnd, digitRunEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, isRawInfo, isThematicBreak, isWord, nextPipe, orderedDelimiter,
@@ -759,7 +759,7 @@ function openTerm(state: BlockState, end: number): boolean {
 function openDivLine(state: BlockState, end: number): boolean {
   const src = state.src
   const pos = state.pos
-  const length = fenceRunLength(src, pos, end, COLON)
+  const length = divRunLength(src, pos, end)
   if (length === 0) return false
   const runEnd = pos + length
   if (skipSpaces(src, runEnd, end) === end) {

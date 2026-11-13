@@ -245,8 +245,22 @@ export function fenceRunLength(src: string, pos: number, end: number, code: numb
 /** C2-B-014: a line that opens or closes a code fence, a div or a comment block. */
 export function isFenceLine(src: string, pos: number, end: number): boolean {
   const code = src.charCodeAt(pos)
-  if (code === COLON || code === PERCENT) return fenceRunLength(src, pos, end, code) > 0
+  if (code === COLON) return divRunLength(src, pos, end) > 0
+  if (code === PERCENT) return fenceRunLength(src, pos, end, code) > 0
   return fenceOpenerLength(src, pos, end) > 0
+}
+
+/** Length of the colon run at `pos` when it is a div line, or 0. C2-B-196: a sigil glued to the run makes the line text. */
+export function divRunLength(src: string, pos: number, end: number): number {
+  const length = fenceRunLength(src, pos, end, COLON)
+  return length > 0 && isSigil(src, pos + length, end) ? 0 : length
+}
+
+function isSigil(src: string, pos: number, end: number): boolean {
+  if (pos >= end) return false
+  const code = src.charCodeAt(pos)
+  if (code !== PIPE && code !== BACKSLASH && code !== GREATER) return false
+  return pos + 1 === end || isSpaceOrTab(src.charCodeAt(pos + 1))
 }
 
 /** C2-B-109, C2-B-110: a bare run of `code`, at least `minLength` long. */
@@ -258,11 +272,8 @@ export function isBareRun(src: string, pos: number, end: number, code: number, m
 /** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-123, C2-B-124). */
 export function divSigil(src: string, pos: number, end: number): number {
   const at = skipSpaces(src, pos, end)
-  // A sigil stands after at least one space; a name may abut the run.
-  if (at >= end || at === pos) return 0
-  const code = src.charCodeAt(at)
-  if (code !== PIPE && code !== BACKSLASH && code !== GREATER) return 0
-  return at + 1 === end || isSpaceOrTab(src.charCodeAt(at + 1)) ? code : 0
+  // C2-B-196: a sigil stands after a space; a name may abut the run.
+  return at > pos && isSigil(src, at, end) ? src.charCodeAt(at) : 0
 }
 
 /** True when the word after the colon run that ends at `pos` is `figure` (C2-B-127). */
@@ -364,10 +375,7 @@ function pairEnd(src: string, pos: number, end: number, open: number, close: num
   return -1
 }
 
-/**
- * True when the line holds one image and nothing else: `![alt](target)` or `![alt][label]`, with
- * optional glued brace blocks (C2-B-017, C2-B-157). The inline pass will own this test.
- */
+/** C2-B-197: exactly one image form, `![alt](destination)` or `![alt][label]`, with optional glued brace blocks. */
 export function isImageOnly(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
   let p = pairEnd(src, pos + 1, end, BRACKET_OPEN, BRACKET_CLOSE)
@@ -379,7 +387,7 @@ export function isImageOnly(src: string, pos: number, end: number): boolean {
   return p >= 0 && skipSpaces(src, braceBlocksEnd(src, p, end), end) === end
 }
 
-/** True when the line holds one display math span, `$$` and a backtick span, and nothing else (C2-B-158). */
+/** C2-B-198: exactly one display math span, `$$` glued to a code span, with optional glued brace blocks. */
 export function isDisplayMathOnly(src: string, pos: number, end: number): boolean {
   if (pos + 2 >= end || src.charCodeAt(pos) !== DOLLAR || src.charCodeAt(pos + 1) !== DOLLAR) return false
   const open = runLength(src, pos + 2, end, BACKTICK)
@@ -392,16 +400,16 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
     }
     const run = runLength(src, p, end, BACKTICK)
     p += run
-    if (run === open) return skipSpaces(src, p, end) === end
+    if (run === open) return skipSpaces(src, braceBlocksEnd(src, p, end), end) === end
   }
   return false
 }
 
-/** C2-B-161, C2-B-164: exactly `---`, an optional format word glued to it or after spaces, and trailing spaces. */
+/** C2-B-161, C2-B-164: exactly `---`, directly followed by `yaml`, `toml`, `json` or nothing, and trailing spaces. */
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
-  let p = pos + FRONTMATTER_RUN + runLength(src, pos + FRONTMATTER_RUN, end, SPACE)
-  while (p < end && (isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
+  let p = pos + FRONTMATTER_RUN
+  if (startsWith(src, p, end, 'yaml') || startsWith(src, p, end, 'toml') || startsWith(src, p, end, 'json')) p += 4
   return runLength(src, p, end, SPACE) === end - p
 }
 
@@ -416,11 +424,15 @@ export function isRawInfo(src: string, pos: number, end: number): boolean {
   return pos + 1 < end && src.charCodeAt(pos) === EQUALS && (isLower(src.charCodeAt(pos + 1)) || isUpper(src.charCodeAt(pos + 1)))
 }
 
-/** True when the word at `pos` is `word` and ends there. */
-export function isWord(src: string, pos: number, end: number, word: string): boolean {
+function startsWith(src: string, pos: number, end: number, word: string): boolean {
   if (pos + word.length > end) return false
   for (let p = 0; p < word.length; p++) if (src.charCodeAt(pos + p) !== word.charCodeAt(p)) return false
-  return pos + word.length === end || isSpaceOrTab(src.charCodeAt(pos + word.length))
+  return true
+}
+
+/** True when the word at `pos` is `word` and ends there. */
+export function isWord(src: string, pos: number, end: number, word: string): boolean {
+  return startsWith(src, pos, end, word) && (pos + word.length === end || isSpaceOrTab(src.charCodeAt(pos + word.length)))
 }
 
 /**
