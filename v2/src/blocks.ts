@@ -112,6 +112,8 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
     state.attributesDepth = NO_DEPTH
     return
   }
+  // C2-B-154: a line that does not continue the open heading meets it closed.
+  if (state.leaf === HEADING && !continuesHeading(state, matched)) closeLeaf(state)
   let captions = false
   if (isTextLeaf(state.leaf)) {
     captions = state.leaf === PARAGRAPH && captionsAfterParagraph(state, matched, end)
@@ -295,6 +297,11 @@ function captionsAfterBlock(state: BlockState, matched: number, end: number): bo
   if ((shapesAt(state) & SHAPE_CAPTION) === 0 || captionContentStart(state.src, state.pos, end) < 0) return false
   if (matched < state.depth) return state.stackKind[matched] === QUOTE
   return state.captionDepth === state.depth
+}
+
+/** C2-B-154: a heading takes only lines of its own containers that are indented past its marker. */
+function continuesHeading(state: BlockState, matched: number): boolean {
+  return matched === state.depth && state.column - state.origin > state.leafColumn
 }
 
 /** The interrupters of an open text leaf: (a) a fence line, (b) a list marker, (c) a sibling mark or definition, (e) a table row, (f) a thematic break. */
@@ -571,14 +578,15 @@ function openCommentBlock(state: BlockState, end: number): boolean {
   return true
 }
 
-/** C2-B-153, C2-B-154: one line, and everything after the space is its text. */
+/** C2-B-153, C2-B-154: everything after the space is its text, and lines indented past the marker continue it. */
 function openHeading(state: BlockState, end: number): boolean {
   const pos = state.pos
   const level = headingLevel(state.src, pos, end)
   if (level === 0) return false
   writeEvent(state, enterTag(state, HEADING, 0), pos, level)
-  writeEvent(state, SPAN_TAG, skipSpaces(state.src, pos + level, end), end)
-  writeEvent(state, eventTag(EXIT, HEADING, 0), end, 0)
+  openTextLeaf(state, HEADING, skipSpaces(state.src, pos + level, end), end)
+  state.leafColumn = state.column - state.origin
+  state.contentEnd = end
   return true
 }
 

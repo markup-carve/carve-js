@@ -1,4 +1,4 @@
-// All 225 examples of the block chapter (spec/0.2/syntax-blocks.md on next2 of the spec repository), checked at the
+// All 226 examples of the block chapter (spec/0.2/syntax-blocks.md on next2 of the spec repository), checked at the
 // block level. The chapter gives the expected HTML; the shapes below were checked against that
 // HTML by hand. The HTML itself is compared once the renderer exists. Notation: support/shape.ts.
 import { describe, expect, it } from 'vitest'
@@ -232,6 +232,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [223, ['%%%', 'hidden'], '%%%!"hidden"'],
   [224, ['{footer-rows=1}', '| a |', '| b |', '| c |'], '{footer-rows=1}table(f1)[tr[td"a"] tr[td"b"] tr[td"c"]]'],
   [225, ['- one', '- two', '', '- three'], 'ul(-,loose)[li[p"one"] li[p"two"] li[p"three"]]'],
+  [226, ['== A long heading that', '   continues here', 'and a paragraph'], 'h2"A long heading that|continues here" p"and a paragraph"'],
 ]
 
 describe('block chapter examples, block level', () => {

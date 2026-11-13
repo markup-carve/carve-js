@@ -47,7 +47,7 @@ export function isIndentContainer(kind: number): boolean {
 
 /** The leaves that take lazy lines (C2-B-012, C2-B-069, C2-B-148). */
 export function isTextLeaf(kind: number): boolean {
-  return kind === PARAGRAPH || kind === TERM || kind === CAPTION
+  return kind === PARAGRAPH || kind === TERM || kind === CAPTION || kind === HEADING
 }
 
 /** The leaves whose body is not read and that end at a closer (C2-B-114, C2-B-123, C2-B-162). */

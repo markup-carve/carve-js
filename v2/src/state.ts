@@ -36,6 +36,8 @@ export interface BlockState {
   leafStart: number
   leafEnd: number
   leafLines: number
+  /** Column of the marker of the open heading (C2-B-154). */
+  leafColumn: number
   // Closer character, opener run length and opener column of the open opaque leaf.
   fenceChar: number
   fenceLength: number
@@ -87,6 +89,7 @@ function createState(): BlockState {
     leafStart: 0,
     leafEnd: 0,
     leafLines: 0,
+    leafColumn: 0,
     fenceChar: 0,
     fenceLength: 0,
     fenceColumn: 0,

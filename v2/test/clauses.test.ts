@@ -356,7 +356,7 @@ describe('comments', () => {
   it('C2-B-138: the comment is a child of the innermost open container, whatever its indent', () => {
     expect(blocks('%% c')).toBe('%"%% c"')
     expect(blocks('- - = a', '%% c')).toBe('ul(-)[li[ul(-)[li[h1"a" %"%% c"]]]]')
-    expect(blocks('= a', '        %% c')).toBe('h1"a" %"%% c"')
+    expect(blocks('= a', '        %% c')).toBe('h1"a|%% c"')
   })
 
   it('C2-B-139: a line that holds only a braced comment is a paragraph', () => {
@@ -384,7 +384,16 @@ describe('headings', () => {
     expect(blocks('= a {.c}')).toBe('h1"a {.c}"')
   })
 
-  it('C2-B-154: a heading is one line', () => {
+  it('C2-B-154: a heading takes the lines indented past its marker', () => {
+    expect(blocks('== a', '   b', 'c')).toBe('h2"a|b" p"c"')
+    expect(blocks('##### a', ' b', '  c')).toBe('h5"a|b|c"')
+    expect(blocks('= a', ' = b')).toBe('h1"a|= b"')
+    expect(blocks('= a', ' b', '', ' c')).toBe('h1"a|b" p"c"')
+    expect(blocks('= a', ' ***', ' b')).toBe('h1"a" hr p"b"')
+    expect(blocks('= a', ' | x |')).toBe('h1"a" table[tr[td"x"]]')
+    expect(blocks('- = a', '   b', '  c')).toBe('ul(-)[li[h1"a|b" p"c"]]')
+    expect(blocks('> = a', '>  b', '> c', ' d')).toBe('quote[h1"a|b" p"c|d"]')
+    expect(blocks('| a \\|')).toBe('p"| a \\|"')
     expect(blocks('= a', 'b', '= c', '= d')).toBe('h1"a" p"b|= c|= d"')
     expect(blocks('= a', '= b')).toBe('h1"a" h1"b"')
   })
