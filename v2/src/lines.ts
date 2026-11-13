@@ -415,10 +415,10 @@ export function isFrontmatterOpener(src: string, pos: number, end: number): bool
   return runLength(src, p, end, SPACE) === end - p
 }
 
-/** C2-B-162: exactly `---` plus trailing spaces. */
+/** C2-B-162: exactly `---` plus trailing spaces and tabs. */
 export function isFrontmatterCloser(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
-  return runLength(src, pos + FRONTMATTER_RUN, end, SPACE) === end - pos - FRONTMATTER_RUN
+  return skipSpaces(src, pos + FRONTMATTER_RUN, end) === end
 }
 
 /** True when the info string of the fence whose run ends at `pos` is `=` and a format name (C2-B-116). */
