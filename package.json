@@ -69,6 +69,7 @@
     "typecheck:v2": "tsc -p v2/tsconfig.json",
     "enumerate:v2": "node v2/scripts/enumerate.ts",
     "enumerate-inline:v2": "node v2/scripts/enumerate-inline.ts",
+    "stress-inline:v2": "node v2/scripts/stress-inline.ts",
     "bench:v2": "node v2/scripts/bench.ts",
     "mutate:v2": "node v2/scripts/mutate.ts",
     "differential:v2": "node v2/scripts/differential.ts",

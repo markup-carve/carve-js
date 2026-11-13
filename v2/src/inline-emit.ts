@@ -18,12 +18,23 @@ const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 const NO_BREAK_SPACE = 0xa0
 const MAX_FOOTNOTES = 256
 
+/**
+ * The offset of the first line break at or behind `pos`, or the end of the content. The answer
+ * is kept, so that a content with few line breaks is not searched once per node.
+ */
+function lineBreakFrom(state: InlineState, pos: number): number {
+  if (pos < state.breakFrom || pos > state.nextBreak) {
+    const at = state.text.indexOf('\n', pos)
+    state.nextBreak = at < 0 ? state.text.length : at
+  }
+  state.breakFrom = pos
+  return state.nextBreak
+}
+
 /** Writes `[start, end)` of the content as source spans, one per line, also for a line that holds nothing. */
 function writePieces(state: InlineState, start: number, end: number): void {
-  const text = state.text
   while (start < end) {
-    let lineEnd = text.indexOf('\n', start)
-    if (lineEnd < 0 || lineEnd > end) lineEnd = end
+    const lineEnd = Math.min(lineBreakFrom(state, start), end)
     writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, start), toSource(state, lineEnd))
     if (lineEnd + 1 === end) writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, end), toSource(state, end))
     start = lineEnd + 1
@@ -191,6 +202,8 @@ export function writeEvents(state: InlineState): void {
   state.line = 0
   state.singleQuoteOpen = false
   state.footnoteDepth = 0
+  state.breakFrom = 0
+  state.nextBreak = NONE
   startOfContent(state)
   let textStart = 0
   for (let at = 0; at < state.tokenLength;) {

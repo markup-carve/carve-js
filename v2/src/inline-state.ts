@@ -110,8 +110,11 @@ export interface InlineState {
   lastSlash: number
   lastStar: number
 
-  // Emission: the line of the source cursor, and the typography state.
+  // Emission: the line of the source cursor, the last search for a line break and its answer,
+  // and the typography state.
   line: number
+  breakFrom: number
+  nextBreak: number
   previous: number
   previousAfterSpace: boolean
   singleQuoteOpen: boolean
@@ -166,6 +169,8 @@ function createState(): InlineState {
     lastSlash: NONE,
     lastStar: NONE,
     line: 0,
+    breakFrom: 0,
+    nextBreak: NONE,
     previous: NO_CHARACTER,
     previousAfterSpace: true,
     singleQuoteOpen: false,

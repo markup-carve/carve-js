@@ -57,6 +57,27 @@ jobs:
       - name: Enumerate
         run: npm run enumerate-inline:v2 -- 5
 
+  stress-inline:
+    name: inline stress shapes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Shapes that make a naive inline scan quadratic, at three sizes ten times apart.
+      # Fails when a step takes more than 30 times the step before it.
+      - name: Stress
+        run: npm run stress-inline:v2
+
   benchmark:
     name: benchmark (prints, never fails on a number)
     runs-on: ubuntu-latest
