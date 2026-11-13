@@ -698,7 +698,15 @@ describe('divs, sigil divs and comment blocks', () => {
     expect(blocks(':::>', 'x')).toBe('p":::>|x"')
     expect(blocks(':::|', 'x')).toBe('p":::||x"')
     expect(blocks('a', ':::\\ b')).toBe('p"a|:::\\ b"')
-    expect(blocks(':::>x', 'y', ':::')).toBe('div[p"y"]')
+    expect(blocks(':::>x', 'y')).toBe('p":::>x|y"')
+  })
+
+  it('C2-B-119: a div name stands after a space behind the colon run', () => {
+    expect(blocks(':::e', 'x')).toBe('p":::e|x"')
+    expect(blocks(':::warning', 'x', ':::')).toBe('p":::warning|x" div[]')
+    expect(blocks('::: warning', 'x', ':::')).toBe('div[p"x"]')
+    expect(blocks(':::  ', 'x', ':::')).toBe('div[p"x"]')
+    expect(blocks('- m', '   :::e', '   :::', 'l')).toBe('ul(-)[li[p"m|:::e" div[]]] p"l"')
   })
 
   it('C2-B-125: a bare colon run closes the innermost div it is long enough for, or opens an anonymous div', () => {
@@ -1052,6 +1060,13 @@ describe('tables', () => {
     expect(blocks('| 1 | 2 |', '+ < |= x |{.r}')).toBe('table[tr[td"1" td"2"]] p"+ < |= x |{.r}"')
     expect(blocks('| 1 |', '+ = a |')).toBe('table[tr[td"1|= a"]]')
     expect(blocks('| 1 |', '+a |')).toBe('table[tr[td"1|a"]]')
+  })
+
+  it('C2-B-184: a fragment joins the cell that covers its column after the span marks are resolved', () => {
+    expect(blocks('| a | b |', '| < | c |', '+ x | y |')).toBe('table[tr[td"a" td"b"] tr[td"x" td"c|y"]]')
+    expect(blocks('| a | < |', '+ x | y |')).toBe('table[tr[td(c2)"a|x|y"]]')
+    expect(blocks('| a | b |', '| ^ | c |', '+ x | y |')).toBe('table[tr[td(r2)"a|x" td"b"] tr[td"c|y"]]')
+    expect(blocks('| a | < |', '+ x | y | z |')).toBe('table[tr[td(c2)"a|x|y" td"z"]]')
     expect(blocks('+ a |')).toBe('p"+ a |"')
     expect(blocks('| 1 |', '', '+ a |')).toBe('table[tr[td"1"]] p"+ a |"')
   })

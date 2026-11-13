@@ -50,7 +50,7 @@ export function buildTree(events: Int32Array, length: number): BlockNode {
       node.end = a
       node.exitFlags = eventFlags(tag)
       top = open.length > 0 ? open[open.length - 1]! : null
-      exitNode(node, b, top)
+      exitNode(node, b)
     }
   }
   return root!
@@ -66,12 +66,10 @@ function enterNode(kind: number, flags: number, start: number, aux: number, pare
   }
 }
 
-function exitNode(node: BlockNode, facts: number, parent: BlockNode | null): void {
+function exitNode(node: BlockNode, facts: number): void {
   if (node.kind === TABLE) {
     node.facts = facts
-    resolveSpans(node)
-  } else if (node.kind === ROW && (node.flags & FLAG_CONTINUATION) !== 0) {
-    joinContinuation(node, parent!.children!)
+    resolveTable(node)
   }
   if (node.children !== null) orphanAttributes(node.children)
 }
@@ -119,40 +117,47 @@ function orphanAttributes(children: BlockNode[]): void {
 }
 
 /**
- * C2-B-184: each fragment of a continuation row joins the cell of its column in the row above;
- * an empty fragment adds nothing. C2-B-176: a fragment past the last column forms a new cell.
+ * Resolves the span marks of a closed table (C2-B-172, C2-B-183) and joins its continuation rows.
+ * A cell that joins another is removed from its row; a mark that fails is an empty cell (C2-B-173).
  */
-function joinContinuation(row: BlockNode, rows: BlockNode[]): void {
-  rows.pop()
-  let above = rows.length - 1
-  while (rows[above]!.kind !== ROW) above--
-  const cells = rows[above]!.children!
-  const fragments = row.children!
-  for (let column = 0; column < fragments.length; column++) {
-    const fragment = fragments[column]!
-    if (column >= cells.length) {
-      cells.push(fragment)
-    } else if (fragment.spans![0] !== fragment.spans![1]) {
-      cells[column]!.spans!.push(fragment.spans![0]!, fragment.spans![1]!)
+function resolveTable(table: BlockNode): void {
+  const headRows = table.facts & FACT_MASK
+  const kept: BlockNode[] = []
+  let owners: (BlockNode | null)[] = []
+  let last: BlockNode | null = null
+  let rowIndex = 0
+  for (const row of table.children!) {
+    if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) !== 0) {
+      joinContinuation(row, last!, owners)
+      continue
     }
+    kept.push(row)
+    if (row.kind !== ROW) continue
+    // C2-B-174: a row span does not cross the head boundary.
+    owners = resolveRow(row, rowIndex === headRows ? [] : owners)
+    last = row
+    rowIndex++
   }
-  rows[above]!.end = row.end
+  table.children = kept
 }
 
 /**
- * Resolves the span marks of a closed table (C2-B-172, C2-B-183). A cell that joins another is
- * removed from its row; a mark that fails is an empty cell (C2-B-173).
+ * C2-B-184: each fragment of a continuation row joins the cell that covers its column in the row
+ * above, after the span marks of that row are resolved; an empty fragment adds nothing.
+ * C2-B-176: a fragment past the last column forms a new cell.
  */
-function resolveSpans(table: BlockNode): void {
-  const headRows = table.facts & FACT_MASK
-  let above: (BlockNode | null)[] = []
-  let rowIndex = 0
-  for (const row of table.children!) {
-    if (row.kind !== ROW) continue
-    // C2-B-174: a row span does not cross the head boundary.
-    above = resolveRow(row, rowIndex === headRows ? [] : above)
-    rowIndex++
+function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode | null)[]): void {
+  const fragments = row.children!
+  for (let column = 0; column < fragments.length; column++) {
+    const fragment = fragments[column]!
+    if (column >= owners.length) {
+      above.children!.push(fragment)
+      owners.push(fragment)
+    } else if (fragment.spans![0] !== fragment.spans![1]) {
+      owners[column]!.spans!.push(fragment.spans![0]!, fragment.spans![1]!)
+    }
   }
+  above.end = row.end
 }
 
 /** Resolves one row against the cells that own each column of the row above, and returns its own owners. */

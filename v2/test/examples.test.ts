@@ -1,4 +1,4 @@
-// All 225 examples of the block chapter (spec/0.2/syntax-blocks.md at 3439be78d), checked at the
+// All 225 examples of the block chapter (spec/0.2/syntax-blocks.md on next2 of the spec repository), checked at the
 // block level. The chapter gives the expected HTML; the shapes below were checked against that
 // HTML by hand. The HTML itself is compared once the renderer exists. Notation: support/shape.ts.
 import { describe, expect, it } from 'vitest'

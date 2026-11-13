@@ -89,4 +89,4 @@ export const FLAG_ATTRIBUTES = 128
 export const FLAG_TIGHT = 1
 export const FLAG_IMAGE = 2
 export const FLAG_UNCLOSED = 4
-export const FLAG_MATH = 8
+export const FLAG_BLOCK_MATH = 8

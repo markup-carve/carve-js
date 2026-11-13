@@ -250,14 +250,17 @@ export function isFenceLine(src: string, pos: number, end: number): boolean {
   return fenceOpenerLength(src, pos, end) > 0
 }
 
-/** Length of the colon run at `pos` when it is a div line, or 0. C2-B-196: a sigil glued to the run makes the line text. */
+/**
+ * Length of the colon run at `pos` when it is a div line, or 0. The run is bare, or a space stands
+ * behind it: a name or a sigil glued to the run makes the line text (C2-B-119, C2-B-196).
+ */
 export function divRunLength(src: string, pos: number, end: number): number {
   const length = fenceRunLength(src, pos, end, COLON)
-  return length > 0 && isSigil(src, pos + length, end) ? 0 : length
+  const after = pos + length
+  return after === end || isSpaceOrTab(src.charCodeAt(after)) ? length : 0
 }
 
 function isSigil(src: string, pos: number, end: number): boolean {
-  if (pos >= end) return false
   const code = src.charCodeAt(pos)
   if (code !== PIPE && code !== BACKSLASH && code !== GREATER) return false
   return pos + 1 === end || isSpaceOrTab(src.charCodeAt(pos + 1))
@@ -272,8 +275,7 @@ export function isBareRun(src: string, pos: number, end: number, code: number, m
 /** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-123, C2-B-124). */
 export function divSigil(src: string, pos: number, end: number): number {
   const at = skipSpaces(src, pos, end)
-  // C2-B-196: a sigil stands after a space; a name may abut the run.
-  return at > pos && isSigil(src, at, end) ? src.charCodeAt(at) : 0
+  return at < end && isSigil(src, at, end) ? src.charCodeAt(at) : 0
 }
 
 /** True when the word after the colon run that ends at `pos` is `figure` (C2-B-127). */

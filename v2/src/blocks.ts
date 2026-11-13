@@ -16,7 +16,7 @@ import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
   ABBREVIATION, ATTRIBUTES, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST,
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
-  FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_MATH, FLAG_PAREN,
+  FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
   FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_SPAN_LEFT, FLAG_SPAN_UP, FLAG_STAR, FLAG_TASK, FLAG_TIGHT,
   FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, isIndentContainer, isList, isOpaqueLeaf,
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
@@ -859,9 +859,9 @@ function leafFacts(state: BlockState, kind: number): number {
     return FLAG_UNCLOSED
   }
   if (kind !== PARAGRAPH || state.leafLines !== 1) return 0
-  // C2-B-157, C2-B-158: a paragraph that closes holding nothing but one image or one display math span.
+  // C2-B-157, C2-B-158: a paragraph that closes holding nothing but one image or one display math span (block image, block math).
   if (isImageOnly(state.src, state.leafStart, state.leafEnd)) return FLAG_IMAGE
-  return isDisplayMathOnly(state.src, state.leafStart, state.leafEnd) ? FLAG_MATH : 0
+  return isDisplayMathOnly(state.src, state.leafStart, state.leafEnd) ? FLAG_BLOCK_MATH : 0
 }
 
 /** Closes the open leaf and the containers above stack index `depth`. Tightness is set here (C2-B-191). */
