@@ -2,6 +2,8 @@
 import { type AstNode } from '../../src/ast.ts'
 import { buildDocument } from '../../src/ast-blocks.ts'
 import { parseTree } from '../../src/index.ts'
+import { type HeadingIds } from '../../src/options.ts'
+import { resolve, type Resolution } from '../../src/resolve.ts'
 
 /** The tree of `src` before resolution, without positions. */
 export function tree(src: string): AstNode {
@@ -46,4 +48,15 @@ export function paragraph(...children: (AstNode | string)[]): AstNode {
 /** A document that holds `children`. */
 export function documentOf(...children: AstNode[]): AstNode {
   return { type: 'document', astVersion: '2.0', children }
+}
+
+/** The resolved tree of `src`, without positions, with what resolution returns beside it. */
+export function resolved(src: string, mode: HeadingIds = 'keep-case'): { document: AstNode, resolution: Resolution } {
+  const built = buildDocument(src, parseTree(src), false)
+  return { document: built.document, resolution: resolve(built.document, mode, built.headingSources) }
+}
+
+/** The inline nodes of block `index` of the resolved tree of `src`. */
+export function resolvedInlines(src: string, index = 0): AstNode[] {
+  return resolved(src).document.children![index]!.children!
 }
