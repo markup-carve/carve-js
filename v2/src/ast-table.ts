@@ -129,7 +129,7 @@ function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): G
     }
     // C2-A-086: a comment between two rows belongs to the group of the row above it.
     if (groups.trailing.length > 0) {
-      group.push(...groups.trailing)
+      for (const pending of groups.trailing) group.push(pending)
       extend(groups, group, child.start, trailingEnd)
       groups.trailing = []
     }
@@ -176,7 +176,7 @@ function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null
   if (groups.head.length > 0) table.children!.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.body.length > 0) table.children!.push(groupNode(ctx, groups, 'table_body', groups.body))
   if (groups.foot.length > 0) table.children!.push(groupNode(ctx, groups, 'table_foot', groups.foot))
-  table.children!.push(...groups.trailing)
+  for (const pending of groups.trailing) table.children!.push(pending)
   setAttributes(table, attributes)
   return table
 }

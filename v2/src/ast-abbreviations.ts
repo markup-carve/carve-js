@@ -32,15 +32,6 @@ function lastCharacter(nodes: AstNode[], before: number): number {
   return before
 }
 
-/** The source offset of index `index` of the value of a text node that starts at `start`: an escape is two characters of source. */
-function sourceOffset(src: string, start: number, value: string, index: number): number {
-  let at = start
-  for (let seen = 0; seen < index; seen++, at++) {
-    if (src[at] === '\\' && src[at + 1] === value[seen]) at++
-  }
-  return at
-}
-
 function isAsciiWord(code: number): boolean {
   return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
 }
@@ -60,10 +51,23 @@ interface Split {
   start: number
   parts: AstNode[]
   done: number
+  // The last index whose source offset was asked for, and that offset: indexes only grow, so no index is walked twice.
+  seen: number
+  seenOffset: number
 }
 
+/** The source offset of index `index` of the value: an escape is two characters of source. */
 function offsetOf(split: Split, index: number): number {
-  return split.start < 0 ? -1 : sourceOffset(split.ctx.src, split.start, split.value, index)
+  if (split.start < 0) return -1
+  const { value } = split
+  const src = split.ctx.src
+  let at = split.seenOffset
+  for (let seen = split.seen; seen < index; seen++, at++) {
+    if (src[at] === '\\' && src[at + 1] === value[seen]) at++
+  }
+  split.seen = index
+  split.seenOffset = at
+  return at
 }
 
 function addTerm(split: Split, at: number, end: number, expansion: string): void {
@@ -78,7 +82,8 @@ function addTerm(split: Split, at: number, end: number, expansion: string): void
 /** The parts of one text node: its text around the abbreviation nodes of the terms in it, or null when it holds none. */
 function splitText(ctx: TreeContext, node: AstNode, before: number, after: number): AstNode[] | null {
   const value = node.value!
-  const split: Split = { ctx, node, value, start: node.pos?.startOffset ?? -1, parts: [], done: 0 }
+  const start = node.pos?.startOffset ?? -1
+  const split: Split = { ctx, node, value, start, parts: [], done: 0, seen: 0, seenOffset: start }
   for (let at = 0; at < value.length;) {
     const end = wordEnd(value, at)
     if (end === at) {
@@ -118,7 +123,7 @@ function applyTo(ctx: TreeContext, nodes: AstNode[], before: number, after: numb
       previous = NO_CHARACTER
     }
     if (parts !== null) out ??= nodes.slice(0, at)
-    if (out !== null) out.push(...(parts ?? [node]))
+    if (out !== null) for (const part of parts ?? [node]) out.push(part)
   }
   return out ?? nodes
 }
@@ -126,5 +131,8 @@ function applyTo(ctx: TreeContext, nodes: AstNode[], before: number, after: numb
 /** Replaces, in place, the defined terms in the text of one content by abbreviation nodes. */
 export function applyAbbreviations(ctx: TreeContext, nodes: AstNode[]): void {
   const result = applyTo(ctx, nodes, NO_CHARACTER, NO_CHARACTER)
-  if (result !== nodes) nodes.splice(0, nodes.length, ...result)
+  if (result === nodes) return
+  // Not a spread: a content may hold more nodes than a call takes arguments.
+  nodes.length = 0
+  for (const node of result) nodes.push(node)
 }

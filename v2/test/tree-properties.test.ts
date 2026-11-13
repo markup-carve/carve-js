@@ -3,6 +3,7 @@
 // lie inside their parent, siblings are ordered and disjoint, encode then decode gives the same
 // tree, two parses give the same tree, and the HTML is well formed. See support/tree-checks.ts.
 import { describe, expect, it } from 'vitest'
+import { parse, render } from '../src/index.ts'
 import { EXAMPLES } from './support/conformance.ts'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS } from './support/inline-enumerate.ts'
@@ -37,6 +38,19 @@ describe('the examples of the specification', () => {
       expect(checkTree(example.input.replaceAll('\n', '\r\n'))).toBeNull()
       expect(checkTree(example.input.replaceAll('a', 'é').replaceAll('b', '€').replaceAll('x', '😀'))).toBeNull()
     }
+  })
+})
+
+describe('large documents', () => {
+  it('a block with more children than a call takes arguments is parsed and rendered', () => {
+    const count = 150_000
+    const list = parse('- a\n'.repeat(count))
+    expect(list.children![0]!.children!.length).toBe(count)
+    expect(list.children![0]!.children![count - 1]!.pos!.startLine).toBe(count)
+    const terms = parse(`*[HTML]: x\n\n${'HTML '.repeat(count)}`).children![1]!.children!
+    expect(terms.filter((node) => node.type === 'abbreviation').length).toBe(count)
+    expect(terms[terms.length - 1]!.pos!.endOffset).toBe(12 + 5 * count - 1)
+    expect(render(`| a |\n${'%% c\n'.repeat(count)}^ cap`)).toContain('<caption>cap</caption>')
   })
 })
 

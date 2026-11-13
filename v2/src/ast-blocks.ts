@@ -324,7 +324,7 @@ function attachCaption(ctx: TreeContext, list: AstNode[], caption: AstNode): voi
   const target = list[at]!
   const comments = list.splice(at + 1)
   if (target.type === 'table' || target.type === 'figure_group') {
-    target.children!.push(...comments)
+    for (const comment of comments) target.children!.push(comment)
     target.caption = caption
     if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
     return

@@ -125,20 +125,14 @@ function placeEnd(cursor: Cursor, pos: Position, end: number): void {
   pos.endOffset = cursor.bytes
 }
 
-/** The slots that hold positioned nodes besides `children`, in source order where there is one. */
-function slotNodes(node: AstNode): AstNode[] {
-  const nodes: AstNode[] = []
-  if (Array.isArray(node.title)) nodes.push(...node.title)
-  if (node.children !== undefined) nodes.push(...node.children)
-  if (node.caption !== undefined) nodes.push(node.caption)
-  return nodes
-}
-
+/** Places a node, then the slots that hold positioned nodes in source order, then its end. */
 function placeNode(cursor: Cursor, node: AstNode): void {
   const pos = node.pos
   const end = pos === undefined ? 0 : pos.endOffset
   if (pos !== undefined) placeStart(cursor, pos)
-  for (const child of slotNodes(node)) placeNode(cursor, child)
+  if (Array.isArray(node.title)) for (const child of node.title) placeNode(cursor, child)
+  if (node.children !== undefined) for (const child of node.children) placeNode(cursor, child)
+  if (node.caption !== undefined) placeNode(cursor, node.caption)
   if (pos !== undefined) placeEnd(cursor, pos, end)
 }
 
