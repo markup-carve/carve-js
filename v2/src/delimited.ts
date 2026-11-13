@@ -35,9 +35,10 @@ function headRows(src: string, node: BlockNode): number {
 }
 
 function readRows(body: string, separator: string, table: DelimitedTable): void {
+  if (body.length === 0) return
   let row: string[] = []
   let at = 0
-  while (at < body.length) {
+  for (;;) {
     let cell = ''
     if (body[at] === '"') {
       at++
@@ -59,10 +60,14 @@ function readRows(body: string, separator: string, table: DelimitedTable): void 
     const start = at
     while (at < body.length && body[at] !== separator && body[at] !== '\n') at++
     row.push(cell + body.slice(start, at))
-    if (at >= body.length || body[at] === '\n') {
-      table.rows.push(row)
-      row = []
+    // A separator always starts another cell, so a row ending in one keeps its empty last cell.
+    if (at < body.length && body[at] === separator) {
+      at++
+      continue
     }
+    table.rows.push(row)
+    row = []
     at++
+    if (at >= body.length) return
   }
 }

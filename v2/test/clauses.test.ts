@@ -1112,6 +1112,8 @@ describe('tables', () => {
     expect(blocks('{table}', '```csv', 'a,b', '1,2', '```')).toBe('{table}csv(h1)[a,b / 1,2]')
     expect(blocks('{.x table header-rows=2}', '~~~tsv', 'a\tb', '```')).toBe('{.x table header-rows=2}csv(h2)[a,b / ```]')
     expect(blocks('{table}', '```csv', '"a ""b"", c",d', '```')).toBe('{table}csv(h1)[a "b", c,d]')
+    expect(blocks('{table}', '```csv', 'a,b', '1,', '```')).toBe('{table}csv(h1)[a,b / 1,]')
+    expect(blocks('{table}', '```csv', 'a,', '```')).toBe('{table}csv(h1)[a,]')
     expect(blocks('{table}', '```js', 'a,b', '```')).toBe('{table}code"a,b"')
     expect(blocks('{tables}', '```csv', 'a,b', '```')).toBe('{tables}code"a,b"')
     expect(blocks('```csv', 'a,b', '```')).toBe('code"a,b"')
