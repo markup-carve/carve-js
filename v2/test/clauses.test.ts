@@ -564,6 +564,8 @@ describe('definitions', () => {
     expect(blocks('[a]: "t"')).toBe('def"[a]: "t""')
     expect(blocks('[a]: /u more')).toBe('p"[a]: /u more"')
     expect(blocks('[a]:/u')).toBe('p"[a]:/u"')
+    expect(blocks('[a]:   /u')).toBe('def"[a]:   /u"')
+    expect(blocks(':::   note', 'x', ':::')).toBe(blocks('::: note', 'x', ':::'))
   })
 
   it('C2-B-084: an abbreviation definition has a label of ASCII letters and digits and an expansion', () => {
