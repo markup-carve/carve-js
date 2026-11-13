@@ -1,5 +1,6 @@
 // Line-shape tests. Each reads character codes of the source between `pos` and `end`
 // (the end of the line) and copies nothing.
+import { readAttributeBlock } from './attributes.ts'
 import {
   BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DIGIT_9, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
@@ -71,10 +72,14 @@ export function braceBlocksEnd(src: string, pos: number, end: number): number {
   }
 }
 
-/** C2-B-090: one or more glued brace blocks, alone on the line. */
+/** C2-B-090: one or more glued brace blocks, each a valid attribute block, alone on the line. */
 export function isAttributeLine(src: string, pos: number, end: number): boolean {
   const blocksEnd = braceBlocksEnd(src, pos, end)
-  return blocksEnd > pos && skipSpaces(src, blocksEnd, end) === end
+  if (blocksEnd === pos || skipSpaces(src, blocksEnd, end) !== end) return false
+  const memo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+  let p = pos
+  while (p >= 0 && p < blocksEnd) p = readAttributeBlock(src, p, blocksEnd, memo, null)
+  return p === blocksEnd
 }
 
 /** C2-B-156: `{{ ... }}` alone on its line. */
@@ -323,7 +328,8 @@ function labelEnd(src: string, pos: number, end: number, skip: number, spaces: b
 /** Offset after the space of the footnote definition marker `[^label]:` at `pos`, or -1 (C2-B-082). */
 export function footnoteMarkerEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) !== CARET) return -1
-  const marker = labelEnd(src, pos, end, 2, false)
+  // C2-B-082: a footnote label may hold spaces, as the label of its reference does (C2-I-076).
+  const marker = labelEnd(src, pos, end, 2, true)
   return marker < 0 ? -1 : afterMarkerSpace(src, marker, end, 1)
 }
 

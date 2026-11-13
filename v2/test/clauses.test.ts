@@ -574,7 +574,7 @@ describe('definitions', () => {
     expect(blocks('[^a]: > q', '  - i')).toBe('fn[quote[p"q"] ul(-)[li[p"i"]]]')
     expect(blocks('[^a]:')).toBe('p"[^a]:"')
     expect(blocks('[^]: x')).toBe('p"[^]: x"')
-    expect(blocks('[^a b]: x')).toBe('p"[^a b]: x"')
+    expect(blocks('[^a b]: x')).toBe('fn[p"x"]')
   })
 
   it('C2-B-083, C2-B-089: a link definition is one line with a URL without spaces and an optional quoted title', () => {
@@ -811,6 +811,10 @@ describe('captions', () => {
     expect(blocks('::: figure "T"', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     // C2-B-159: trailing spaces do not stop a thematic break. C2-B-087: a footnote marker line starts with any block.
     expect(blocks('*** ', 'next')).toBe('hr p"next"')
+    // C2-B-082: a footnote label may hold spaces. C2-B-090: a brace run that is no valid attribute block is text.
+    expect(blocks('[^my note]: Text.')).toBe('fn[p"Text."]')
+    expect(blocks('{*a %% *}', 'para')).toBe('p"{*a %% *}|para"')
+    expect(blocks('{.a key="v" #i}{:en}', 'para')).toBe('{.a key="v" #i}{:en}p"para"')
     // C2-B-164: the format name is glued or stands after one space.
     expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe(blocks('---toml', 'a = 1', '---', 'x'))
     expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('fm"a = 1" p"x"')

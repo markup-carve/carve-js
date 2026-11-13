@@ -8,6 +8,11 @@ on:
     paths:
       - 'v2/**'
       - '.github/workflows/v2-block-core.yml'
+  push:
+    branches: [next2]
+    paths:
+      - 'v2/**'
+      - '.github/workflows/v2-block-core.yml'
   workflow_dispatch:
 
 concurrency:
