@@ -205,22 +205,25 @@ function target(node: AstNode, field: 'href' | 'src'): string {
 }
 
 /** C2-W-075, C2-W-084: the verbatim text of a reference, where the sidecar holds it and the reparse did not refuse it. */
-function rawReference(w: Writer, node: AstNode): string | null {
+function rawReference(w: Writer, node: AstNode, flags: number): string | null {
   if (node.key === undefined || (w.forms.get(node) ?? 0) > 0) return null
   const raw = w.facts?.get(node)?.rawRef
   if (raw === undefined) return null
+  if (!raw.includes('\n')) return raw
+  // C2-W-067: a break inside a label of a cell is not kept; the label folds it to a space (C2-I-079).
+  if ((flags & IN_CELL) !== 0) return raw.replaceAll(/[ \t]*\n[ \t]*/g, ' ')
   // C2-W-022: no space or tab stands at the end of a line of it.
-  return raw.includes('\n') ? raw.replaceAll(/[ \t]+\n/g, '\n') : raw
+  return raw.replaceAll(/[ \t]+\n/g, '\n')
 }
 
 function linkNode(w: Writer, node: AstNode, flags: number): string {
-  const raw = rawReference(w, node)
+  const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
   return `[${writeInlines(w, node.children ?? [], flags)}]${target(node, 'href')}`
 }
 
-function imageNode(w: Writer, node: AstNode): string {
-  return rawReference(w, node) ?? `![${node.alt ?? ''}]${target(node, 'src')}`
+function imageNode(w: Writer, node: AstNode, flags: number): string {
+  return rawReference(w, node, flags) ?? `![${node.alt ?? ''}]${target(node, 'src')}`
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */

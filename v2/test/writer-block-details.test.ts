@@ -1,6 +1,6 @@
 // Edges of the block writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
-import { format } from '../src/index.ts'
+import { format, parse, treesEqual, write } from '../src/index.ts'
 
 const TICK = '`'
 const FENCE = TICK.repeat(3)
@@ -49,5 +49,37 @@ describe('blocks', () => {
 
   it('C2-W-081: a hard-break block with a title is written in the class form, since the opener takes none', () => {
     expect(format('{.hardbreaks}\n::: "T"\na\n:::')).toBe('::: hardbreaks "T"\na\n:::\n')
+  })
+})
+
+describe('continuation rows', () => {
+  const stays = (src: string): void => {
+    const written = format(src)
+    expect(written).toBe(`${src}\n`)
+    expect(treesEqual(parse(written), parse(src))).toBe(true)
+  }
+
+  it('C2-W-067, C2-L-020: the offsets of a wrap are bytes, also behind characters of two, three and four bytes', () => {
+    stays('| é ü |\n+ ö 😀 |\n+ ß |')
+  })
+
+  it('C2-L-021: a fragment that joins an empty cell, and one behind an empty continuation row', () => {
+    stays('| |\n+ b |')
+    stays('| a |\n+ |\n+ b |')
+    stays('| a | b |\n+ c | d |\n+ | e |')
+  })
+
+  it('C2-L-020: wraps in two text nodes of one cell, and in a text node behind a code span', () => {
+    stays(`| x ${TICK}c${TICK} y |\n+ z |`)
+    stays(`| x ${TICK}c${TICK} |\n+ y z |\n+ w |`)
+    stays('| *a |\n+ b* c |')
+  })
+
+  it('C2-W-005: a code span that crossed rows holds the line break, so its rows are kept with and without the record', () => {
+    const src = `| ${TICK}a |\n+ b${TICK} |`
+    stays(src)
+    const plain = write(parse(src))
+    expect(plain).toBe(`${src}\n`)
+    expect(parse(src).children![0]!.children![0]!.children![0]!.children![0]!.children![0]!.children![0]!.value).toBe('a\nb')
   })
 })

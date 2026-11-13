@@ -100,22 +100,34 @@ function fragmentLines(w: Writer, row: AstNode, cell: AstNode, count: number): n
   return lines
 }
 
+/** One cell as written: its prefix, the parts of its content, and the line of each part behind the first. */
+interface WrittenCell {
+  prefix: string
+  parts: string[]
+  places: number[]
+}
+
+function writtenCell(w: Writer, row: AstNode, cell: AstNode, flags: number): WrittenCell {
+  const span = cell.span === undefined ? undefined : SPAN_MARKS.get(cell.span)
+  if (span !== undefined) return { prefix: '', parts: [span], places: [] }
+  const parts = cellContent(w, cell, flags).split('\n')
+  const recorded = fragmentLines(w, row, cell, parts.length - 1)
+  if (recorded !== null) return { prefix: cellPrefix(cell), parts, places: recorded }
+  // C2-L-035: without a record that fits, the row is one line.
+  if ((w.facts?.get(cell)?.wraps?.length ?? 0) === parts.length - 1) return { prefix: cellPrefix(cell), parts: [parts.join(' ')], places: [] }
+  // A line break that the content itself holds, as in a code span that crossed rows, is a continuation row in any case (C2-W-005).
+  return { prefix: cellPrefix(cell), parts, places: parts.slice(1).map((_part, at) => at + 1) }
+}
+
 function writtenRow(w: Writer, row: AstNode, flags: number): WrittenRow {
-  const cells = row.children ?? []
-  const below = w.facts?.get(row)?.continuationLines ?? 0
+  const cells = (row.children ?? []).map((cell) => writtenCell(w, row, cell, flags))
+  let below = w.facts?.get(row)?.continuationLines ?? 0
+  for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
   const lines: string[][] = []
   for (let line = 0; line <= below; line++) lines.push(new Array<string>(cells.length).fill(' '))
   cells.forEach((cell, column) => {
-    const span = cell.span === undefined ? undefined : SPAN_MARKS.get(cell.span)
-    if (span !== undefined) {
-      lines[0]![column] = ` ${span} `
-      return
-    }
-    const parts = cellContent(w, cell, flags).split('\n')
-    const places = fragmentLines(w, row, cell, parts.length - 1)
-    // C2-L-035: without a record that fits, the row is one line.
-    lines[0]![column] = segment(cellPrefix(cell), places === null ? parts.join(' ') : parts[0]!)
-    if (places !== null) places.forEach((line, at) => (lines[line]![column] = segment('', parts[at + 1]!)))
+    lines[0]![column] = segment(cell.prefix, cell.parts[0]!)
+    cell.places.forEach((line, at) => (lines[line]![column] = segment('', cell.parts[at + 1]!)))
   })
   return { lines, attribute: braceBlock(row) }
 }
