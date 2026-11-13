@@ -1,5 +1,5 @@
 import { compareHtml } from './compare.ts'
-import { type Context, type Finding, makeContext } from './context.ts'
+import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
 import { needsPerson, type ReportRecord } from './report.ts'
@@ -32,19 +32,31 @@ interface Rewritten {
  */
 function rewrite(input: string): Rewritten {
   const ctx: Context = makeContext(input)
-  for (const rule of RULES) rule(ctx)
+  const failures: ReportRecord[] = []
+  for (const rule of RULES) runRule(ctx, rule, failures)
   const collected: Edit[] = []
   for (const finding of ctx.findings) {
     if (finding.edit !== null) collected.push(finding.edit)
   }
   const edits = selectEdits(collected)
   const kept = new Set(edits)
-  const records: ReportRecord[] = []
+  const records: ReportRecord[] = [...failures]
   for (const finding of ctx.findings) {
     if (finding.edit === null || kept.has(finding.edit)) records.push(finding.record)
     else records.push(conflict(finding))
   }
   return { output: applyEdits(input, edits), records, edits }
+}
+
+/** A rule that fails on a tree it did not expect leaves no edit behind, and the failure is reported. */
+function runRule(ctx: Context, rule: Rule, failures: ReportRecord[]): void {
+  const before = ctx.findings.length
+  try {
+    rule(ctx)
+  } catch (error) {
+    ctx.findings.length = before
+    failures.push({ entry: 'upgrade-error', class: 'mismatch', line: 0, message: `the rule ${rule.name} failed: ${String(error)}` })
+  }
 }
 
 function conflict(finding: Finding): ReportRecord {

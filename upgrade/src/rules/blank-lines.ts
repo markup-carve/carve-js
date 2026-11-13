@@ -53,7 +53,9 @@ function listEntry(below: Visit, above: Visit, line: number): string | null {
   if (quote !== null && !isInside(below, quote) && ancestor(above, 'list_item') !== null) return 'U-007'
   const descriptions = ancestor(above, 'definition_list')
   // C2-B-022: a description list is not a list for the marker interrupter.
-  return descriptions !== null && !isInside(below, descriptions) ? 'U-008' : null
+  if (descriptions !== null && !isInside(below, descriptions)) return 'U-008'
+  // The text of a footnote body takes a marker as a lazy line in the same way.
+  return above.parent!.parent === null && above.siblings !== below.siblings && ancestor(below, 'list')?.parent?.parent === null ? 'U-008' : null
 }
 
 function underItem(above: Visit, below: Visit, plain: string, inItem: string): string {
@@ -70,16 +72,28 @@ function quoteOpens(ctx: Context, above: Visit, below: Visit, line: number): boo
   return text.charCodeAt(indentOf(text)) === GT || quotesOf(above).length > 0
 }
 
-/** The entry that puts a blank line between `above` and the block `below` that starts on `line`. */
-function entryFor(ctx: Context, kind: Above, above: Visit, below: Visit, line: number, notes: Set<number>): string | null {
-  if (kind === 'caption') return below.node.type === 'paragraph' ? 'U-107' : 'U-010'
+/** The entry for a block that 0.1 opened directly under paragraph text and 0.2 reads as a lazy line. */
+function blockEntry(ctx: Context, above: Visit, below: Visit, line: number, notes: Set<number>): string | null {
   const term = isTerm(below)
-  if (kind === 'term') return term || isInside(below, above.parent!) ? null : 'U-106'
   if (below.node.type === 'heading') return underItem(above, below, 'U-001', 'U-006')
   if (DEFINITIONS.has(below.node.type) || notes.has(line)) return 'U-005'
   if (term) return isInside(above, below.parent!) ? null : underItem(above, below, 'U-004', 'U-009')
   if (quoteOpens(ctx, above, below, line)) return underItem(above, below, 'U-002', 'U-006')
   return listEntry(below, above, line)
+}
+
+/** The entry that puts a blank line between `above` and the block `below` that starts on `line`. */
+function entryFor(ctx: Context, kind: Above, above: Visit, below: Visit, line: number, notes: Set<number>): string | null {
+  const plain = below.node.type === 'paragraph' && !notes.has(line)
+  if (kind === 'caption') {
+    // U-107: a second caret line continues the caption (C2-B-148); any other text 0.1 folded too.
+    if (plain) return ctx.src[below.node.pos!.startOffset] === '^' && opensAt(below, above, 'list_item', line) === null ? 'U-107' : null
+    return blockEntry(ctx, above, below, line, notes) === null ? null : 'U-010'
+  }
+  if (kind !== 'term') return blockEntry(ctx, above, below, line, notes)
+  if (isTerm(below) || isInside(below, above.parent!)) return null
+  // U-106: a term continues like paragraph text (C2-B-069), so text that 0.1 put after the list needs the blank line.
+  return plain || blockEntry(ctx, above, below, line, notes) !== null || opensAt(below, above, 'list', line) !== null ? 'U-106' : null
 }
 
 /** The start of `text` through its `count`-th quote mark: what a blank line inside those quotes holds. */
@@ -112,7 +126,9 @@ export function isAttributeLine(text: string): boolean {
 function attributeLine(ctx: Context, above: Visit, line: number): void {
   const text = lineText(ctx.lines, line)
   const prefix = quotePrefix(text, quotesOf(above).length)
-  if (!isAttributeLine(text.slice(prefix.length))) return
+  const inner = text.slice(prefix.length).trimStart()
+  // A gap line that starts with a brace is an attribute block, also when it wraps (U-032).
+  if (!inner.startsWith('{') || inner.startsWith('{{') || inner.startsWith('{%') || inner.length < 3) return
   const entry = ancestor(above, 'list_item') === null ? 'U-003' : 'U-033'
   const at = lineStart(ctx.lines, line)
   change(ctx, entry, at, at, prefix + '\n', 'blank line put above the attribute line, which 0.2 reads as text directly under text')

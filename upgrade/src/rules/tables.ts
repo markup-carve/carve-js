@@ -2,7 +2,7 @@
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { lineStart, lineText } from '../source.ts'
-import { attributeLinesAbove, isBlankInQuotes, removeAttribute, removeLine, trimmedEnd } from './lines.ts'
+import { attributeLinesAbove, insideQuotes, isBlankInQuotes, removeAttribute, removeLine, trimmedEnd } from './lines.ts'
 
 const STAR = 0x2a
 const ALIGN_MARKS: Record<string, string> = { left: '<', right: '>', center: '~' }
@@ -31,7 +31,8 @@ function thematicBreak(ctx: Context, node: Node01): void {
 }
 
 function cellsOf(row: Node01): Node01[] {
-  return Array.isArray(row.cells) ? (row.cells as Node01[]) : []
+  // A cell that a continuation row formed has no position, and nothing is edited there.
+  return Array.isArray(row.cells) ? (row.cells as Node01[]).filter((cell) => cell.pos !== undefined) : []
 }
 
 function rowsOf(table: Node01): Node01[] {
@@ -94,10 +95,17 @@ function isHeaderRow(row: Node01): boolean {
   return cells.length > 0 && cells.every((cell) => cell.header === true)
 }
 
+/** Whether `table` carries another row key: 0.1 then applies none of them. */
+function otherRowKeys(table: Node01): boolean {
+  const values = table.attrs?.keyValues
+  if (typeof values !== 'object' || values === null) return false
+  return Object.keys(values).some((key) => key !== 'header-rows' && key.includes('rows'))
+}
+
 /** U-058: `header-rows` has no effect on a pipe table (C2-B-186). */
 function headerRows(ctx: Context, table: Node01): void {
   const count = Number.parseInt(keyValue(table, 'header-rows') ?? '', 10)
-  if (!(count > 0) || table.sourceFormat !== undefined) return
+  if (!(count > 0) || table.sourceFormat !== undefined || otherRowKeys(table)) return
   const message = 'header-rows removed, the counted rows written with header cells'
   const lines = attributeLinesAbove(ctx, table.pos!.startLine)
   if (!lines.some((line) => removeAttribute(ctx, 'U-058', line, (token) => token.startsWith('header-rows='), message))) return
@@ -128,7 +136,7 @@ function table(ctx: Context, node: Node01): void {
     if (row.pos === undefined) continue
     escapedLastPipe(ctx, row)
     for (const cell of cellsOf(row)) {
-      if (cell.pos !== undefined && cell.header === true) gluedAlignment(ctx, cell)
+      if (cell.header === true) gluedAlignment(ctx, cell)
     }
   }
 }
@@ -169,7 +177,7 @@ export function includes(ctx: Context): void {
   for (const leaf of ctx.blocks.leaves) {
     if (leaf.node.type !== 'paragraph') continue
     for (let line = leaf.node.pos!.startLine; line <= leaf.node.pos!.endLine; line++) {
-      const text = lineText(ctx.lines, line).trim()
+      const text = insideQuotes(lineText(ctx.lines, line)).trim()
       if (text.startsWith('{{') && text.endsWith('}}') && lineStart(ctx.lines, line) >= 0) {
         note(ctx, 'U-011', line, 'an include directive is not expanded by 0.2.0 and renders as text')
       }

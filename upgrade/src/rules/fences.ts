@@ -2,11 +2,13 @@
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, lineEnd, lineStart, lineText } from '../source.ts'
+import { commentShift } from './lists.ts'
 
 const PERCENT = 0x25
 
 /** U-050: the closer of a comment block is a bare run in 0.2 (C2-B-110). */
-function commentCloser(ctx: Context, node: Node01): void {
+function commentCloser(ctx: Context, visit: Visit): void {
+  const node = visit.node
   const line = node.pos!.endLine
   if (node.block !== true || line === node.pos!.startLine) return
   const text = lineText(ctx.lines, line)
@@ -15,9 +17,13 @@ function commentCloser(ctx: Context, node: Node01): void {
   while (text.charCodeAt(at) === PERCENT) at++
   const rest = text.slice(at).trim()
   if (at - indent < 3 || rest === '') return
-  const run = text.slice(0, at)
   const start = lineStart(ctx.lines, line)
-  change(ctx, 'U-050', start, lineEnd(ctx.lines, line), `${text.slice(0, indent)}${rest}\n${run}`, 'text after the comment closer moved into the comment')
+  const message = 'text after the comment closer moved into the comment'
+  // The text goes to the end of the line above, so the closer line keeps its place and its indent.
+  const above = lineEnd(ctx.lines, line - 1)
+  // The new line takes the indent U-026 gives the block, or it would leave the item.
+  change(ctx, 'U-050', above, above, `\n${' '.repeat(commentShift(ctx, visit))}${text.slice(0, indent)}${rest}`, message)
+  change(ctx, 'U-050', start + at, lineEnd(ctx.lines, line), '', message)
 }
 
 /** U-052: in the body of a line block `%%` is text in 0.2 (C2-B-144); a braced comment renders nothing. */
@@ -31,10 +37,79 @@ function commentInLineBlock(ctx: Context, visit: Visit): void {
   change(ctx, 'U-052', start, end, `{% ${ctx.src.slice(start + 2, end).trim()} %}`, 'comment line in a line block written as a braced comment')
 }
 
+function runLength(text: string, at: number, code: number): number {
+  let end = at
+  while (text.charCodeAt(end) === code) end++
+  return end - at
+}
+
+/** Length of the longest line of `content` that is a bare run of `code`. */
+function longestBareRun(content: string, code: number): number {
+  let longest = 0
+  for (const line of content.split('\n')) {
+    const text = line.trim()
+    if (text !== '' && runLength(text, 0, code) === text.length) longest = Math.max(longest, text.length)
+  }
+  return longest
+}
+
+/**
+ * U-049: 0.1 refused a closer at another indent and ran the block to the end of its container;
+ * 0.2 has no column test (C2-B-109). A longer opener keeps the line in the body, and a closer is
+ * added where 0.1 ended the block.
+ */
+function indentedCloser(ctx: Context, node: Node01): void {
+  const { startLine, endLine } = node.pos!
+  const opener = lineText(ctx.lines, startLine)
+  const indent = indentOf(opener)
+  const code = opener.charCodeAt(indent)
+  const length = runLength(opener, indent, code)
+  if (length < 3 || typeof node.content !== 'string') return
+  const last = lineText(ctx.lines, endLine).trim()
+  const closed = endLine > startLine && runLength(last, 0, code) === last.length && last.length >= length
+  const longest = longestBareRun(node.content, code)
+  if (closed || longest < length) return
+  const run = String.fromCharCode(code).repeat(longest + 1)
+  const start = lineStart(ctx.lines, startLine) + indent
+  const message = 'fence lengthened past the closer 0.1 refused for its indent, and closed where 0.1 ended it'
+  change(ctx, 'U-049', start, start + length, run, message)
+  const end = lineEnd(ctx.lines, endLine)
+  const tail = end === ctx.src.length ? '\n' + opener.slice(0, indent) + run : '\n' + opener.slice(0, indent) + run
+  change(ctx, 'U-049', end, end, tail, message)
+}
+
+/**
+ * U-053: 0.1 expanded a tab after the stripped indent of a code line to spaces; 0.2 keeps the
+ * bytes (C2-B-004, C2-B-007), so the spaces 0.1 rendered are written.
+ */
+function tabsInCode(ctx: Context, node: Node01): void {
+  const { startLine, endLine } = node.pos!
+  const opener = lineText(ctx.lines, startLine)
+  const indent = opener.slice(0, indentOf(opener))
+  if (typeof node.content !== 'string' || indent === '') return
+  const body = node.content.split('\n')
+  for (let index = 0; index < body.length && startLine + 1 + index < endLine; index++) {
+    const line = startLine + 1 + index
+    const text = lineText(ctx.lines, line)
+    const lead = indentOf(body[index]!)
+    const sourceLead = indentOf(text)
+    const tail = text.slice(indent.length, sourceLead)
+    if (!text.startsWith(indent) || !tail.includes('\t') || text.slice(sourceLead) !== body[index]!.slice(lead)) continue
+    const at = lineStart(ctx.lines, line) + indent.length
+    change(ctx, 'U-053', at, at + tail.length, ' '.repeat(lead), 'tab after the stripped indent of a code line written as the spaces 0.1 rendered')
+  }
+}
+
 export function fences(ctx: Context): void {
   for (const visit of ctx.visits) {
-    if (visit.node.type !== 'comment' || visit.node.pos === undefined) continue
-    commentCloser(ctx, visit.node)
-    commentInLineBlock(ctx, visit)
+    const node = visit.node
+    if (node.pos === undefined) continue
+    if (node.type === 'comment') {
+      commentCloser(ctx, visit)
+      commentInLineBlock(ctx, visit)
+    } else if (node.type === 'code_block') {
+      indentedCloser(ctx, node)
+      tabsInCode(ctx, node)
+    }
   }
 }

@@ -11,6 +11,9 @@ export interface Edit {
 
 function before(a: Edit, b: Edit): number {
   if (a.start !== b.start) return a.start - b.start
+  // An insertion stands before a span replaced at the same offset, or the replacement would take it.
+  const aInserts = a.start === a.end
+  if (aInserts !== (b.start === b.end)) return aInserts ? -1 : 1
   if (a.entry !== b.entry) return a.entry < b.entry ? -1 : 1
   return a.sequence - b.sequence
 }
@@ -19,7 +22,8 @@ function before(a: Edit, b: Edit): number {
  * The edits that apply together, in source order. Two edits collide when their spans share a
  * character, or when one inserts inside the span of the other. Of two that collide, the entry
  * with the lower id stays; the other waits for the next pass, which reads the changed text. Two
- * insertions at one offset both apply, the lower entry id first.
+ * insertions at one offset both apply, the lower entry id first, and both before a span replaced
+ * from that offset on.
  */
 export function selectEdits(edits: Edit[]): Edit[] {
   const byEntry = [...edits].sort((a, b) => (a.entry === b.entry ? before(a, b) : a.entry < b.entry ? -1 : 1))

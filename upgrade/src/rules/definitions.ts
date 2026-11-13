@@ -74,6 +74,22 @@ function entryOf(ctx: Context, span: Span, depth: number): string {
   return 'U-039'
 }
 
+/**
+ * The definition is the last thing in its container: its lines lose their prefix where they
+ * stand, and the blank lines of the container above it lose their quote marks.
+ */
+function hoistInPlace(ctx: Context, id: string, span: Span, cut: number, message: string): void {
+  for (let line = span.first - 1; line >= 1 && isGap(ctx, line) && isBlankInQuotes(lineText(ctx.lines, line)); line--) {
+    const text = lineText(ctx.lines, line)
+    if (text !== '') change(ctx, id, lineStart(ctx.lines, line), lineStart(ctx.lines, line) + text.length, '', message)
+  }
+  for (let line = span.first; line <= span.last; line++) {
+    const start = lineStart(ctx.lines, line)
+    const length = Math.min(cut, prefixLength(lineText(ctx.lines, line)))
+    if (length > 0) change(ctx, id, start, start + length, '', message)
+  }
+}
+
 /** U-038, U-039: the definition moves to column 0, after the container it stood in. */
 function hoist(ctx: Context, span: Span): void {
   const text = lineText(ctx.lines, span.first)
@@ -83,10 +99,11 @@ function hoist(ctx: Context, span: Span): void {
   const id = entryOf(ctx, span, depth)
   const message = 'definition moved to column 0 outside its container'
   const end = containerEnd(ctx, span, depth, cut)
-  let first = span.first
-  // The blank line the definition leaves at the end of its container goes with it.
-  if (end === span.last && first > 1 && isGap(ctx, first - 1) && isBlankInQuotes(lineText(ctx.lines, first - 1))) first--
-  change(ctx, id, lineStart(ctx.lines, first), lineStart(ctx.lines, span.last + 1), '', message)
+  if (end === span.last) {
+    hoistInPlace(ctx, id, span, cut, message)
+    return
+  }
+  change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
   const at = lineStart(ctx.lines, end + 1)

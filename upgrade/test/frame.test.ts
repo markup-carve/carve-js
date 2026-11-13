@@ -28,6 +28,11 @@ describe('the edit list', () => {
     expect(edits.map((kept) => [kept.start, kept.entry])).toEqual([[2, 'U-016'], [2, 'U-038'], [6, 'U-065']])
   })
 
+  it('puts an insertion before a span replaced from the same offset, whatever the entry ids', () => {
+    const edits = selectEdits([edit(2, 4, '', 'U-038'), edit(2, 2, '>\n', 'U-106', 1)])
+    expect(applyEdits('01xx45', edits)).toBe('01>\n45')
+  })
+
   it('orders two insertions at one offset by entry id, then by collection', () => {
     const edits = selectEdits([edit(3, 3, 'b', 'U-065', 0), edit(3, 3, 'a', 'U-001', 1), edit(3, 3, 'c', 'U-065', 2)])
     expect(applyEdits('012345', edits)).toBe('012abc345')
@@ -111,10 +116,12 @@ describe('the report', () => {
   })
 
   it('reports a difference no entry explains with the line of the input', () => {
-    const result = upgrade('ok\n\n```=html "T"\n<b>x</b>\n```\n')
+    // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
+    const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
     expect(result.check).toBe('mismatch')
     const record = result.records.find((entry) => entry.entry === 'upgrade-mismatch')
-    expect([record?.class, record?.line]).toEqual(['mismatch', 3])
+    expect([record?.class, record?.line]).toEqual(['mismatch', 6])
+    expect(record?.message).toBe('the HTML differs: 0.1 gives "</p><div></div></div>", 0.2 gives "</p></div></aside>"')
   })
 
   it('prints one summary line for the later paragraphs of tight items', () => {

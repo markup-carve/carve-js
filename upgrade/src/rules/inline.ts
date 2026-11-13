@@ -1,6 +1,8 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
+import { isInside } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
+import { headingTexts, isUnresolved } from './references.ts'
 
 const BRACE = 0x7b
 
@@ -109,5 +111,12 @@ function inlineNode(ctx: Context, visit: Visit): void {
 }
 
 export function inline(ctx: Context): void {
-  for (const visit of ctx.visits) inlineNode(ctx, visit)
+  const headings = headingTexts(ctx)
+  for (let index = 0; index < ctx.visits.length; index++) {
+    inlineNode(ctx, ctx.visits[index]!)
+    if (!isUnresolved(ctx, index, headings)) continue
+    // 0.1 wrote an unresolved reference as typed, so nothing inside it is a span to respell (U-113).
+    const link = ctx.visits[index]!
+    while (index + 1 < ctx.visits.length && isInside(ctx.visits[index + 1]!, link)) index++
+  }
 }

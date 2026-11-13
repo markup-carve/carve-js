@@ -4,6 +4,7 @@ import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { isGap, trimmedEnd } from './lines.ts'
+import { headingTexts, plainText } from './references.ts'
 
 const EQUALS = 0x3d
 const HEADING_MAX = 6
@@ -105,24 +106,6 @@ function underHeading(ctx: Context, visit: Visit): void {
   change(ctx, 'U-102', at + column, at + indent, '', 'line under the heading moved to the column of the heading marker')
 }
 
-function headingTexts(ctx: Context): Set<string> {
-  const texts = new Set<string>()
-  let current = ''
-  let heading: Visit | null = null
-  for (const visit of ctx.visits) {
-    if (heading !== null && !isInside(visit, heading)) {
-      texts.add(current)
-      heading = null
-    }
-    if (visit.node.type === 'heading') {
-      heading = visit
-      current = ''
-    } else if (heading !== null && typeof visit.node.value === 'string') current += visit.node.value
-  }
-  if (heading !== null) texts.add(current)
-  return texts
-}
-
 const INLINE_TEXT = new Set(['text', 'soft_break', 'escaped_text', 'non_breaking_space'])
 
 /** U-113: an unresolved reference renders its children in 0.2 (C2-I-085); 0.1 wrote it as typed. */
@@ -138,7 +121,8 @@ function markupInside(ctx: Context, link: Node01): void {
 }
 
 /** U-110 to U-113: references 0.1 left text and 0.2 resolves or renders. */
-function reference(ctx: Context, link: Node01, headings: Set<string>): void {
+function reference(ctx: Context, index: number, headings: Set<string>): void {
+  const link = ctx.visits[index]!.node
   const ref = link.ref
   const raw = link.rawRef
   if (link.href !== '' || typeof ref !== 'string' || typeof raw !== 'string') return
@@ -150,7 +134,8 @@ function reference(ctx: Context, link: Node01, headings: Set<string>): void {
   } else if (ref.includes('\n')) {
     // C2-I-080: a label may wrap in 0.2.
     change(ctx, 'U-111', start, start, '\\', 'reference with a wrapped label escaped, the label folds and may resolve in 0.2')
-  } else if (headings.has(ref)) {
+    markupInside(ctx, link)
+  } else if (headings.has(collapsed ? plainText(ctx.visits, index) : ref)) {
     // C2-I-081: the heading lookup applies to the full form too.
     if (!collapsed) change(ctx, 'U-110', start, start, '\\', 'full reference to a heading escaped, it would link in 0.2')
   } else {
@@ -158,15 +143,61 @@ function reference(ctx: Context, link: Node01, headings: Set<string>): void {
   }
 }
 
+/**
+ * U-104, U-105: a fence opener that 0.1 read as paragraph text, because of its title, opens its
+ * block in 0.2 (C2-B-122). A backslash keeps a colon line text; a backtick line takes an empty
+ * braced comment, because a backslash would leave a code span open on a shorter run.
+ */
+function fenceOpenerAsText(ctx: Context, paragraph: Node01): void {
+  const start = paragraph.pos!.startOffset
+  const colon = ctx.src.startsWith(':::', start)
+  if (!colon && !ctx.src.startsWith('```', start)) return
+  const line = ctx.src.slice(start, lineEnd(ctx.lines, paragraph.pos!.startLine))
+  // The 0.2 engine says whether the line opens a block there.
+  if (probe02(line + '\nx\n').startsWith('<p>')) return
+  if (colon) change(ctx, 'U-104', start, start, '\\', 'fence opener that 0.1 read as text escaped')
+  else change(ctx, 'U-105', start, start, '{%%}', 'fence opener that 0.1 read as text kept from opening by an empty braced comment')
+}
+
+const SPAN_MARKS = '*/_~=^,'
+
+/** The delimiter of the bare span `node`, or an empty string. */
+function bareMark(ctx: Context, node: Node01): string {
+  const mark = ctx.src[node.pos!.startOffset]!
+  return node.pos !== undefined && SPAN_MARKS.includes(mark) && ctx.src[node.pos.endOffset - 1] === mark ? mark : ''
+}
+
+/**
+ * U-070: bare and braced spans share one stack in 0.2 and the first pair closed wins (C2-I-059),
+ * so the delimiter of an outer bare span is escaped inside a braced span it holds.
+ */
+function delimiterInBraces(ctx: Context, visit: Visit): void {
+  const { startOffset: start, endOffset: end } = visit.node.pos!
+  if (visit.node.value !== ctx.src.slice(start, end)) return
+  let braced = false
+  let marks = ''
+  for (let at = visit.parent; at !== null && at.node.pos !== undefined && at.node.type !== 'paragraph'; at = at.parent) {
+    if (ctx.src[at.node.pos.startOffset] === '{') braced = true
+    else if (braced) marks += bareMark(ctx, at.node)
+  }
+  if (marks === '') return
+  for (let at = start; at < end; at++) {
+    if (marks.includes(ctx.src[at]!)) change(ctx, 'U-070', at, at, '\\', 'delimiter of an outer span escaped inside a braced span, where it would close the outer span in 0.2')
+  }
+}
+
 export function escapes(ctx: Context): void {
   const headings = headingTexts(ctx)
-  for (const visit of ctx.visits) {
+  for (let index = 0; index < ctx.visits.length; index++) {
+    const visit = ctx.visits[index]!
     const node = visit.node
     if (node.pos === undefined) continue
-    if (node.type === 'link') reference(ctx, node, headings)
+    if (node.type === 'link') reference(ctx, index, headings)
     else if (node.type === 'heading') underHeading(ctx, visit)
+    else if (node.type === 'text') delimiterInBraces(ctx, visit)
     else if (node.type === 'paragraph' && visit.parent !== null && ctx.blocks.leaf[node.pos.startLine] === visit) {
       equalsStart(ctx, node)
+      fenceOpenerAsText(ctx, node)
       letterMarkers(ctx, visit)
       rowAttribute(ctx, node)
       shortIndent(ctx, visit)

@@ -15,8 +15,8 @@ interface Case {
 
 const cases = JSON.parse(readFileSync(join(import.meta.dirname, 'contract.json'), 'utf8')) as Case[]
 
-/** Entries the tool does not implement yet: the text stays and the self-check says so. */
-const NOT_DONE = new Set(['U-049#0', 'U-053#0', 'U-070#0', 'U-104#0', 'U-105#0'])
+/** U-053: the contract's input is also a one-item loose list, so U-021 explains a difference. */
+const WITH_REPORT = new Set(['U-053#0'])
 
 /**
  * Inputs where the 0.2 engine or the 0.1 engine does not do what the contract states. Each is in
@@ -50,17 +50,11 @@ describe('the contract', () => {
           expect(result.check).toBe(known.check)
           expect(entries(input)).toContain(known.entry)
         })
-      } else if (NOT_DONE.has(key)) {
-        it(`${key} is not rewritten yet, and the self-check reports the difference`, () => {
-          const result = upgrade(input)
-          expect(result.output).toBe(input)
-          expect(result.check).not.toBe('pass')
-        })
       } else if (entry.class === 'rewrite' || entry.class === 'escape') {
         it(`${key} gives the output of the contract and keeps the HTML`, () => {
           const result = upgrade(input)
           expect(result.output).toBe(entry.outputs[index])
-          expect(result.check).toBe('pass')
+          expect(result.check).toBe(WITH_REPORT.has(key) ? 'explained' : 'pass')
           expect(entries(input)).toContain(entry.id)
         })
       } else if (entry.class === 'report') {

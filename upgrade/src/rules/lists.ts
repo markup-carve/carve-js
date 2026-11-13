@@ -1,5 +1,5 @@
 // Contract 2.2: lists. `+` lines, tightness, marker columns and marker spellings.
-import { ancestor, quotesOf } from '../blocks.ts'
+import { isContainer, quotesOf } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
@@ -33,15 +33,15 @@ function plusLine(ctx: Context, from: number, to: number): number {
   return 0
 }
 
-/** U-014, U-015: a `+` line is text in 0.2 (C2-B-059); a blank line and the item's indent attach the block. */
-function plusInItem(ctx: Context, item: Node01, child: Node01, line: number): void {
+/** U-014, U-015: a `+` line is text in 0.2 (C2-B-059); a blank line and the body's indent attach the block. */
+function plusInBody(ctx: Context, column: number, child: Node01, line: number): void {
   const id = child.type === 'paragraph' ? 'U-015' : 'U-014'
   const message = '+ line replaced by a blank line, the block indented into its item'
   const text = lineText(ctx.lines, line)
   const keep = quotePrefix(text, quotesOfLine(text))
   change(ctx, id, lineStart(ctx.lines, line) + keep.length, lineEnd(ctx.lines, line), '', message)
   const first = child.pos!.startLine
-  indentLines(ctx, id, first, child.pos!.endLine, contentColumn(ctx, item) - indentOf(lineText(ctx.lines, first)), message)
+  indentLines(ctx, id, first, child.pos!.endLine, column - indentOf(lineText(ctx.lines, first)), message)
 }
 
 function quotesOfLine(text: string): number {
@@ -64,17 +64,28 @@ function plusInQuote(ctx: Context, quote: Visit, child: Node01, line: number): v
   }
 }
 
+/** The column where the blocks of the body `visit` stands in start, or -1 where a `+` attaches nothing. */
+function bodyColumn(ctx: Context, visit: Visit): number {
+  const parent = visit.parent!.node
+  if (parent.type === 'list_item') return contentColumn(ctx, parent)
+  // A description and a footnote body: the column of the block on the marker line.
+  const body = parent.type === 'definition_list' || (parent === ctx.doc && visit.siblings !== ctx.doc.children)
+  const first = visit.siblings[0]!.pos
+  return body && first !== undefined ? first.startColumn - 1 : -1
+}
+
 function plusLines(ctx: Context, visit: Visit): void {
-  const children = visit.node.children ?? []
-  for (let index = 1; index < children.length; index++) {
-    const child = children[index]!
-    const above = children[index - 1]!
-    if (child.pos === undefined || above.pos === undefined) continue
-    const line = plusLine(ctx, above.pos.endLine + 1, child.pos.startLine)
-    if (line === 0) continue
-    if (visit.node.type === 'list_item') plusInItem(ctx, visit.node, child, line)
-    else if (visit.node.fenced !== true) plusInQuote(ctx, visit, child, line)
+  const above = visit.index > 0 ? visit.siblings[visit.index - 1]!.pos : undefined
+  const child = visit.node
+  if (above === undefined || visit.parent === null || !isContainer(visit.parent.node)) return
+  const line = plusLine(ctx, above.endLine + 1, child.pos!.startLine)
+  if (line === 0) return
+  if (visit.parent.node.type === 'block_quote') {
+    if (visit.parent.node.fenced !== true) plusInQuote(ctx, visit.parent, child, line)
+    return
   }
+  const column = bodyColumn(ctx, visit)
+  if (column >= 0) plusInBody(ctx, column, child, line)
 }
 
 /** U-017: an item may start with any block on its marker line (C2-B-057). */
@@ -150,7 +161,8 @@ function listAbove(visit: Visit): Node01 | null {
  * in 0.2 (C2-B-056, C2-B-030), so it moves to the column of the list.
  */
 function markerColumns(ctx: Context, visit: Visit): void {
-  if (quotesOf(visit).length > 0 || ancestor(visit, 'list_item') !== null) return
+  // Only a list of the document itself: inside a container the columns belong to the container.
+  if (visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
   const items = itemsOf(visit.node)
   if (items.length === 0) return
   let base = markerColumn(ctx, items[0]!)
@@ -207,21 +219,22 @@ function longNumber(ctx: Context, list: Node01): void {
   }
 }
 
-/** U-026: a `%%%` block at column 0 between two items ends the list in 0.2 (C2-B-142). */
-function commentInItem(ctx: Context, visit: Visit): void {
-  const item = visit.node
-  const next = visit.siblings[visit.index + 1]
-  if (next === undefined) return
-  for (const child of item.children ?? []) {
-    if (child.type !== 'comment' || child.block !== true || child.pos === undefined || child.pos.startLine === item.pos!.startLine) continue
-    const short = contentColumn(ctx, item) - indentOf(lineText(ctx.lines, child.pos.startLine))
-    indentLines(ctx, 'U-026', child.pos.startLine, child.pos.endLine, short, 'comment block indented into the item above')
-  }
+/**
+ * The spaces U-026 puts before each line of the comment block `visit`: a `%%%` block left of its
+ * item's content column, between two items, ends the list in 0.2 (C2-B-142).
+ */
+export function commentShift(ctx: Context, visit: Visit): number {
+  const item = visit.parent
+  const child = visit.node
+  if (item === null || item.node.type !== 'list_item' || item.siblings[item.index + 1] === undefined) return 0
+  if (child.type !== 'comment' || child.block !== true || child.pos!.startLine === item.node.pos!.startLine) return 0
+  return Math.max(0, contentColumn(ctx, item.node) - indentOf(lineText(ctx.lines, child.pos!.startLine)))
 }
 
 function listNode(ctx: Context, visit: Visit): void {
   const node = visit.node
   if (node.pos === undefined) return
+  plusLines(ctx, visit)
   if (node.type === 'list') {
     tightness(ctx, visit)
     markerColumns(ctx, visit)
@@ -231,10 +244,8 @@ function listNode(ctx: Context, visit: Visit): void {
     }
   } else if (node.type === 'list_item') {
     plusFirst(ctx, node)
-    plusLines(ctx, visit)
-    commentInItem(ctx, visit)
-  } else if (node.type === 'block_quote') {
-    plusLines(ctx, visit)
+  } else if (node.type === 'comment') {
+    indentLines(ctx, 'U-026', node.pos.startLine, node.pos.endLine, commentShift(ctx, visit), 'comment block indented into the item above')
   }
 }
 
