@@ -7,6 +7,15 @@ import {
 } from './inline-kinds.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 import { type Attributes, foldLabel, type InlineNode, TEXT } from './inline-tree.ts'
+import type { BlockNode } from './tree.ts'
+
+/** What the source-layout record reads beside the tree (C2-L-001). Filled only on request. */
+export interface LayoutTrace {
+  blocks: Map<AstNode, BlockNode>
+  inlines: Map<AstNode, InlineNode>
+  /** C2-L-020: per text node of a cell, pairs of the offset in its value and the source offset at which a fragment starts. */
+  breaks: Map<AstNode, number[]>
+}
 
 /** What a tree build needs besides the nodes: the source, and whether positions are wanted. */
 export interface TreeContext {
@@ -25,6 +34,7 @@ export interface TreeContext {
   resolvable: boolean
   /** The leaves whose inline content holds such a node. Resolution walks into no other leaf. */
   resolvableLeaves: Set<AstNode>
+  trace: LayoutTrace | null
 }
 
 // How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard
@@ -150,9 +160,19 @@ export function addText(ctx: TreeContext, list: AstNode[], value: string, start:
   list.push(start < 0 ? node : place(ctx, node, start, end))
 }
 
+function traceBreak(trace: LayoutTrace, text: AstNode, fragment: number): void {
+  const breaks = trace.breaks.get(text)
+  if (breaks === undefined) trace.breaks.set(text, [text.value!.length, fragment])
+  else breaks.push(text.value!.length, fragment)
+}
+
 function addBreak(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: number): void {
   const kind = flow & FLOW_KIND_MASK
-  if (kind === FLOW_CELL) return addText(ctx, list, ' ', -1, -1)
+  if (kind === FLOW_CELL) {
+    addText(ctx, list, ' ', -1, -1)
+    if (ctx.trace !== null) traceBreak(ctx.trace, list[list.length - 1]!, node.end)
+    return
+  }
   const out: AstNode = { type: kind === FLOW_HARD_BREAKS ? 'hard_break' : 'soft_break' }
   list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, node.end))
 }
@@ -170,6 +190,7 @@ function addNode(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: numb
   if (!ctx.resolvable && isResolvable(node)) ctx.resolvable = true
   const out = node.children !== null ? parentNode(ctx, node, flow) : LEAVES.get(node.kind)!(ctx, node)
   setAttributes(out, node.attributes)
+  if (ctx.trace !== null) ctx.trace.inlines.set(out, node)
   list.push(unplaced ? out : place(ctx, out, node.start, node.end))
 }
 

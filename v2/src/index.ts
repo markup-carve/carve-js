@@ -19,7 +19,8 @@ export { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
 export {
-  CarveInputError, CarveRenderError, parse, type ParseResult, parseWithDiagnostics, render, type RenderOutput, renderWithDiagnostics,
+  CarveInputError, CarveRenderError, type LayoutResult, parse, type ParseResult, parseWithDiagnostics, parseWithLayout, render,
+  type RenderOutput, renderWithDiagnostics,
 } from './api.ts'
 export {
   AST_VERSION, type AstNode, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
@@ -27,6 +28,8 @@ export {
 } from './ast.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'
 export { CarveTreeError, MAX_TREE_DEPTH, validateTree } from './ast-validate.ts'
+export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from './layout.ts'
+export { CarveLayoutError, validateLayout } from './layout-validate.ts'
 export {
   CarveOptionError, type HeadingIds, type Mode, type Options, type ParseOptions, type Profile, type RenderOptions,
   type Social, type UrlPolicy,

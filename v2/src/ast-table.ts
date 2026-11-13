@@ -71,6 +71,7 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
   if (node.facts >> FACT_SHIFT > 1) cell.rowspan = node.facts >> FACT_SHIFT
   if (node.aux !== 0) cell.align = alignmentOf(node.aux)
   setAttributes(cell, cellAttributes(ctx, node))
+  if (ctx.trace !== null) ctx.trace.blocks.set(cell, node)
   if (joined) return cell
   const spans = node.spans!
   if (spans.length === 2) place(ctx, paragraph, spans[0]!, spans[1]!)
@@ -106,6 +107,7 @@ function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
   const lineEnd = ctx.src.indexOf('\n', row.start)
   const joined = lineEnd >= 0 && lineEnd < row.end
   const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? lineEnd : row.end + 1) }
+  if (ctx.trace !== null) ctx.trace.blocks.set(out, row)
   if (row.aux !== 0) {
     // C2-B-167: the row attribute stands behind the closing pipe.
     const attributes = emptyAttributes()
@@ -127,7 +129,9 @@ function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): G
   let trailingEnd = 0
   for (const child of node.children!) {
     if (child.kind === COMMENT) {
-      groups.trailing.push(comment(ctx, child))
+      const out = comment(ctx, child)
+      if (ctx.trace !== null) ctx.trace.blocks.set(out, child)
+      groups.trailing.push(out)
       trailingEnd = child.end
       continue
     }

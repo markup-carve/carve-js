@@ -161,7 +161,10 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
       above.children!.push(fragment)
       owners.push(fragment)
     } else if (fragment.spans![0] !== fragment.spans![1]) {
-      owners[column]!.spans!.push(fragment.spans![0]!, fragment.spans![1]!)
+      const spans = owners[column]!.spans!
+      // C2-B-184, C2-L-021: the space stands between the text of the cell and the fragment, so an empty cell takes none.
+      if (spans.length === 2 && spans[0] === spans[1]) spans.length = 0
+      spans.push(fragment.spans![0]!, fragment.spans![1]!)
     }
   }
   above.end = row.end
@@ -195,7 +198,7 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
 }
 
 /** The source of `[start, end)` without the prefixes of the lines it crosses: its parts inside `spans`, joined by line feeds. */
-function contentSource(src: string, spans: number[], start: number, end: number): string {
+export function contentSource(src: string, spans: number[], start: number, end: number): string {
   const lines: string[] = []
   for (let at = 0; at < spans.length; at += 2) {
     const from = Math.max(start, spans[at]!)

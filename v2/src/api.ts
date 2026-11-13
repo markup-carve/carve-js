@@ -1,8 +1,10 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 import { type AstNode } from './ast.ts'
 import { buildDocument, type BuiltTree } from './ast-blocks.ts'
+import { type LayoutTrace } from './ast-inline.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
+import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
 import { scanBlocks } from './blocks.ts'
 import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
@@ -18,6 +20,11 @@ export interface ParseResult {
   document: AstNode
   /** C2-A-172: the diagnostics record, beside the tree. */
   diagnostics: Diagnostic[]
+}
+
+export interface LayoutResult extends ParseResult {
+  /** C2-L-001: the source-layout record, beside the tree. */
+  layout: SourceLayout
 }
 
 export interface RenderOutput {
@@ -48,14 +55,14 @@ const NO_PROFILE: ProfileRule = PROFILES.get('full')!
 const MAX_BYTES_PER_UNIT = 3
 
 /** The tree of `src` before resolution, with the folded sources of its headings. */
-function buildSource(src: string, positions: boolean): BuiltTree {
+function buildSource(src: string, positions: boolean, trace: LayoutTrace | null = null): BuiltTree {
   const blocks = acquireState()
   const inlines = acquireInlineState()
   try {
     scanBlocks(blocks, src)
     const root = buildTree(blocks.events, blocks.eventLength)
     readInlines(inlines, src, root, 0)
-    return buildDocument(src, root, positions)
+    return buildDocument(src, root, positions, undefined, trace)
   } finally {
     releaseInlineState(inlines)
     releaseState(blocks)
@@ -73,6 +80,19 @@ export function parseWithDiagnostics(src: string, options?: ParseOptions): Parse
 /** The resolved tree of `src` (spec/0.2/ast.md). */
 export function parse(src: string, options?: ParseOptions): AstNode {
   return parseWithDiagnostics(src, options).document
+}
+
+/**
+ * The resolved tree of `src` with its diagnostics and its source-layout record (spec/0.2/source-layout.md).
+ * The tree is the one `parse` gives (C2-L-003). Positions are always built, since the record states its ranges in them.
+ */
+export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
+  const settings = readOptions(options, 'parse')
+  const trace = createLayoutTrace()
+  const built = buildSource(src, true, trace)
+  const resolution = resolve(built.document, settings.headingIds, built.facts)
+  const diagnostics = locateFindings(built.document, resolution.findings)
+  return { document: built.document, diagnostics, layout: buildLayout(src, built.document, trace) }
 }
 
 /** C2-H-163: refuses a source that is longer than the profile accepts, in UTF-8 bytes. */

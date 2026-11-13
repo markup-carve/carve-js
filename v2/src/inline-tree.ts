@@ -22,7 +22,7 @@ export interface Attributes {
 /**
  * One field layout for every inline node. A node with inline content has `children`. `value` is
  * the text of a text node, the payload of a node without children and the alt source of an image.
- * `label` is the key of a reference (C2-I-079).
+ * `label` is the key of a reference (C2-I-079), and `aux` of a reference is the offset behind its label.
  */
 export interface InlineNode {
   kind: number
@@ -113,6 +113,7 @@ type ContentReader = (start: number, end: number) => string
 /** Closes a part of `host`: it goes into a field of the host. */
 function closePart(src: string, node: InlineNode, host: InlineNode, content: ContentReader): void {
   const value = node.value ?? ''
+  if (node.kind === LABEL) host.aux = node.end
   if (node.kind === ATTRIBUTE_BLOCK) addAttributes(src, host, node.start, node.end)
   // C2-I-067: a backslash before a parenthesis or a backslash is dropped; most destinations hold none.
   else if (node.kind === DESTINATION) host.destination = value.includes('\\') ? value.replaceAll(/\\([()\\])/g, '$1') : value

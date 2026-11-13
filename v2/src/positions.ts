@@ -11,7 +11,7 @@ const LOW_SURROGATE_END = 0xdfff
 const HIGH_SURROGATE_END = 0xdbff
 
 /** Bytes of the UTF-16 code unit `code` in UTF-8. A surrogate pair is four bytes, counted as two per half. */
-function unitBytes(code: number): number {
+export function unitBytes(code: number): number {
   if (code < ASCII_END) return 1
   if (code < TWO_BYTES_END) return 2
   return code >= HIGH_SURROGATE && code <= LOW_SURROGATE_END ? 2 : 3

@@ -3,7 +3,7 @@ import { type AstNode, AST_VERSION, type Marker } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, leafInlines, place, setAttributes, type TreeContext,
+  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
@@ -286,6 +286,7 @@ function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
   const out = BUILDERS.get(node.kind)!(ctx, node, flow, attributes)
   if (!own) setAttributes(out, attributes)
+  if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
   if (out.pos !== undefined) return out
   // C2-A-182: an include directive ends at its closing braces, before the spaces behind them.
   const end = node.kind === INCLUDE ? trimEnd(ctx.src, node.start, node.end) : node.end
@@ -302,7 +303,9 @@ function captionNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   markCaptionNumber(ctx, paragraph.children!)
   if (!ctx.positions) dropPositions(paragraph.children!)
   place(ctx, paragraph, node.spans![0]!, node.end)
-  return place(ctx, { type: 'caption', children: [paragraph] }, node.start, node.end)
+  const out: AstNode = { type: 'caption', children: [paragraph] }
+  if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
+  return place(ctx, out, node.start, node.end)
 }
 
 function dropPositions(nodes: AstNode[]): void {
@@ -417,9 +420,18 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
   return foldLabel(lines.join('\n'))
 }
 
-/** The public tree of `src` from its block tree, whose inline content has been read. */
-export function buildDocument(src: string, root: BlockNode, positions: boolean): BuiltTree {
-  const ctx: TreeContext = { src, positions, abbreviations: collectAbbreviations(src, root), markup: new Map(), headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set() }
+/**
+ * The public tree of `src` from its block tree, whose inline content has been read. `abbreviations`
+ * replaces the terms the source defines, for a source that is one block of a larger document (C2-W-089).
+ * `trace` takes what the source-layout record reads (C2-L-001).
+ */
+export function buildDocument(
+  src: string, root: BlockNode, positions: boolean, abbreviations?: Map<string, string>, trace: LayoutTrace | null = null,
+): BuiltTree {
+  const ctx: TreeContext = {
+    src, positions, abbreviations: abbreviations ?? collectAbbreviations(src, root), markup: new Map(), headingSpans: new Map(),
+    resolvable: false, resolvableLeaves: new Set(), trace,
+  }
   const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
   if (positions) {
     document.srcByteLength = utf8Length(src)
