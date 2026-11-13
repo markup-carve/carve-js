@@ -107,10 +107,10 @@ function captionInlines(caption: AstNode): AstNode[] {
   return caption.children?.[0]?.children ?? []
 }
 
-/** True for a figure or a figure group whose caption has a number mark. */
-function ownsNumber(node: AstNode): boolean {
-  if (node.caption === undefined || (node.type !== 'figure' && node.type !== 'figure_group')) return false
-  return captionInlines(node.caption).some((child) => child.type === 'caption_number')
+/** True for a figure or a figure group whose caption, `caption`, has a number mark. A table owns no number of an equation. */
+function ownsNumber(node: AstNode, caption: AstNode): boolean {
+  if (node.type !== 'figure' && node.type !== 'figure_group') return false
+  return captionInlines(caption).some((child) => child.type === 'caption_number')
 }
 
 const NAMING_KEYS = ['aria-label', 'aria-labelledby']
@@ -176,7 +176,7 @@ function visitChildren(walk: Walk, node: AstNode): void {
 /** The title, the children and the caption of a node that may carry a title or a caption, in that order (C2-A-025). */
 function visitSlots(walk: Walk, node: AstNode): void {
   if (Array.isArray(node.title)) for (const child of node.title) visit(walk, child, node)
-  const owns = node.caption !== undefined && ownsNumber(node)
+  const owns = node.caption !== undefined && ownsNumber(node, node.caption)
   if (owns) walk.numberedFigures++
   visitChildren(walk, node)
   if (owns) walk.numberedFigures--

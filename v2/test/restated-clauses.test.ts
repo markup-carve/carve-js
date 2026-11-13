@@ -8,6 +8,8 @@ import { generateRenderTables } from '../scripts/generate-render-tables.ts'
 import {
   type AstNode, CarveInputError, parse, parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics,
 } from '../src/index.ts'
+import { type Diagnostic, locateFindings } from '../src/diagnostics.ts'
+import { escapeText } from '../src/html-attributes.ts'
 import { slugify } from '../src/slug.ts'
 import { block, blocks, documentOf, paragraph, resolved, text } from './support/tree.ts'
 
@@ -96,7 +98,8 @@ describe('the include directive', () => {
   it('C2-B-201: braces, spaces, a path, a section, options, spaces and braces; a tab is no such space', () => {
     expect(block('{{ a.crv#s@shift:1 }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['shift', '1']] })
     expect(block('{{   a.crv   }} \t')).toEqual({ type: 'include', path: 'a.crv' })
-    expect(['{{\ta.crv }}', '{{a.crv }}', '{{ a.crv}}', '{{ a.crv\t}}', '{{ a.crv }} x', '{{ }}', '{{}}'].map(kind)).toEqual(Array(7).fill('paragraph'))
+    const refused = ['{{\ta.crv }}', '{{a.crv }}', '{{ a.crv}}', '{{ a.crv\t}}', '{{ a.crv }} x', '{{ }}', '{{}}', '{{ a.crv x}', '{  a.crv }}', '{{ a.crv }']
+    expect(refused.map(kind)).toEqual(Array(10).fill('paragraph'))
     // The closing braces are the first ones outside a quoted run.
     expect(block('{{ "a }} b" @rows:"1 }} 2" }}')).toEqual({ type: 'include', path: 'a }} b', options: [['rows', '1 }} 2']] })
   })
@@ -107,12 +110,16 @@ describe('the include directive', () => {
     expect(block('{{ "notes\\new.crv" }}').path).toBe('notes\\new.crv')
     expect(block('{{ "a \\" b" }}').path).toBe('a " b')
     expect(block('{{ “a\\.b c” }}').path).toBe('a\\.b c')
-    expect(['{{ "" }}', '{{ “” }}', '{{ a"b }}', '{{ a“b }}', '{{ "a }}'].map(kind)).toEqual(Array(5).fill('paragraph'))
+    expect(block('{{ "a" }}').path).toBe('a')
+    expect(block('{{ a.crv@code }}')).toEqual({ type: 'include', path: 'a.crv', options: [['code', '']] })
+    const refused = ['{{ "" }}', '{{ “” }}', '{{ “”x” }}', '{{ a"b }}', '{{ a“b }}', '{{ "a }}', '{{ a}b }}', '{{ #s }}', '{{ @code }}']
+    expect(refused.map(kind)).toEqual(Array(9).fill('paragraph'))
   })
 
   it('C2-B-203: a section is `#` and a name, and a directive holds at most one', () => {
     expect(block('{{ a.crv #_s-1 }}').section).toBe('_s-1')
     expect(block('{{ a.crv #1a }}').section).toBe('1a')
+    expect(block('{{ a.crv #z9Z0 }}').section).toBe('z9Z0')
     expect(['{{ a.crv #-s }}', '{{ a.crv # }}', '{{ a.crv #s.t }}', '{{ a.crv #s #t }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
   })
 
@@ -147,6 +154,14 @@ describe('the include directive', () => {
       ['lines', '1-2'], ['region', 'r'], ['rows', '1-2'], ['cols', '"a,b"'], ['shift', '1'], ['code', ''],
     ])
     expect(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}').options).toEqual([['rows', '1-2'], ['cols', '"a\\,b"']])
+    // A quoted value that is no list of names is a value like any other: its quotes go and its escapes are read.
+    const cols = (written: string): unknown => block(`{{ a.crv @cols:${written} }}`).options
+    expect(cols('"\\,"')).toEqual([['cols', '"\\,"']])
+    expect(cols('"a,,b"')).toEqual([['cols', 'a,,b']])
+    expect(cols('"a,"')).toEqual([['cols', 'a,']])
+    expect(cols('",a"')).toEqual([['cols', ',a']])
+    expect(cols('""')).toEqual([['cols', '']])
+    expect(cols("'a,b'")).toEqual([['cols', 'a,b']])
   })
 
   it('C2-A-182: an include node spans the directive from its opening braces to its closing braces', () => {
@@ -180,7 +195,9 @@ describe('caption numbering', () => {
     expect(captions([figure('*Figure* #'), figure('Figure{% c %} #'), figure('Figure #'), figure('figure #'), figure('Fig. #'), figure('#'), figure('#')].join('\n'))).toEqual([
       '<strong>Figure</strong> 1', 'Figure 2', 'Figure 3', 'figure 1', 'Fig. 1', '1', '2',
     ])
-    expect(captions([figure(':fig: #'), figure('#'), figure('*:fig:* #')].join('\n'))).toEqual([':fig: 1', '1', '<strong>:fig:</strong> 2'])
+    expect(captions([figure(':fig: #'), figure('#'), figure('*:fig:* #'), figure('#')].join('\n'))).toEqual([':fig: 1', '1', '<strong>:fig:</strong> 2', '2'])
+    // An index entry in the label gives nothing, as in a heading.
+    expect(captions([figure('Figure :index[e] #'), figure('Figure #')].join('\n'))).toEqual(['Figure <span class="ext-index">e</span> 1', 'Figure 2'])
     expect(captions([figure(':fig: #'), figure('Figure #')].join('\n'), { symbols: { fig: 'Figure' } })).toEqual(['Figure 1', 'Figure 2'])
   })
 
@@ -207,6 +224,16 @@ describe('caption numbering', () => {
     expect(html).toContain('<p><span class="math display" role="math">\\[x\\]</span> <span class="equation-number">Eq. 1</span></p>')
     expect(html).toContain('<figcaption>Eq. 2</figcaption>')
     expect(render('$$`x`\n^ Equation #')).toContain('<figcaption>Equation 1</figcaption>')
+    // A figure group owns the number like a figure, and a table does not.
+    const group: AstNode = { type: 'figure_group', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
+    const cell: AstNode = { type: 'table_cell', header: false, children: [paragraph(math())] }
+    const table: AstNode = {
+      type: 'table', columns: [{ type: 'table_column' }], children: [{ type: 'table_body', children: [{ type: 'table_row', children: [cell] }] }],
+      caption: caption(text('Eq. '), { type: 'caption_number' }),
+    }
+    const second = render(documentOf(group, table))
+    expect([...second.matchAll(/class="equation-number">([^<]*)</g)].map((match) => match[1])).toEqual(['Eq. 3'])
+    expect([...second.matchAll(/<(?:fig)?caption>([^<]*)</g)].map((match) => match[1])).toEqual(['Eq. 1', 'Eq. 2'])
   })
 })
 
@@ -283,6 +310,18 @@ describe('the table attributes', () => {
         { type: 'table_body', children: [{ type: 'table_row', children: [cell('a'), cell('b'), cell('c', { valign: 'baseline' })] }] },
       ],
     }
+    // A head cell that spans two rows covers its column in the second head row, so the cell of that row starts in the next one.
+    const spanned: AstNode = {
+      type: 'table', columns: [{ type: 'table_column' }, { type: 'table_column' }],
+      children: [{
+        type: 'table_head', children: [
+          { type: 'table_row', children: [cell('h', { header: true, rowspan: 2 }), cell('i', { header: true, align: 'right' })] },
+          { type: 'table_row', children: [cell('j', { header: true, align: 'center' })] },
+        ],
+      }],
+    }
+    render(documentOf(spanned))
+    expect(spanned.columns!.map((column) => column.resolvedAlign)).toEqual([undefined, 'center'])
     const html = render(documentOf(table))
     expect(html).toContain('<tr><td style="vertical-align: top;">a</td><td style="vertical-align: bottom;">b</td><td style="text-align: right; vertical-align: baseline;">c</td></tr>')
   })
@@ -339,6 +378,10 @@ describe('admonitions and directives', () => {
       `${first}<section role="doc-endnotes" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">N</p>\n  <p class="div-label">L</p>${notes}\n<aside class="admonition note" aria-labelledby="adm-2">\n  <p class="admonition-title" id="adm-2">T</p>\n</aside>`,
     )
     expect(render('a[^n]\n\n::: footnotes [L]\n:::\n\n[^n]: n')).toBe(`${first}<section role="doc-endnotes" aria-label="Footnotes">\n  <p class="div-label">L</p>${notes}`)
+    // Another directive before it, and a footnotes directive inside a container, do not take its place.
+    expect(render('::: toc "C"\n:::\n\n> ::: footnotes "Q"\n> :::\n\na[^n]\n\n::: footnotes "N"\n:::\n\n[^n]: n')).toContain('<section role="doc-endnotes" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">N</p>')
+    // A directive with no note to place counts no id.
+    expect(render('::: footnotes "N"\n:::\n\n::: note "T"\n:::')).toContain('<p class="admonition-title" id="adm-1">T</p>')
     // Inside a container the directive places nothing, and its title takes no id.
     expect(render('a[^n]\n\n> ::: footnotes "N"\n> :::\n\n[^n]: n')).toContain('<div class="footnotes">\n    <p class="admonition-title">N</p>\n  </div>')
   })
@@ -404,6 +447,7 @@ describe('the URL filter', () => {
     expect(attribute('srcset', 'a.png 1x, b.png 2x')).toBe(' srcset="a.png 1x, b.png 2x"')
     expect(attribute('imagesrcset', 'a,file:x')).toBe(' imagesrcset=""')
     expect(attribute('ping', '/a\tvbscript:x')).toBe(' ping=""')
+    expect(attribute('ping', '/a\rvbscript:x')).toBe(' ping=""')
     // A comma is no separator of `ping`, so the text before the first colon is not a scheme.
     expect(attribute('ping', '/a,vbscript:x')).toBe(' ping="/a,vbscript:x"')
     expect(attribute('attributionsrc', '/a /b')).toBe(' attributionsrc="/a /b"')
@@ -415,13 +459,29 @@ describe('the URL filter', () => {
   it('C2-H-162: a style that holds a pattern, after its escapes are decoded, its whitespace removed and its letters lowered, is written empty', () => {
     const blockedList = [
       'color: u\\72l(a)', 'background: URL (x)', 'x: u\\000072 l(a)', 'x: \\75 rl(a)', 'x: u\\r\\l(a)', 'width: EXPRESSION(1)', '@im\\port "x"',
-      'behavior : x', '-MOZ-binding: x', 'x: u\\\nrl(a)', 'x:ur\\6c(a)',
+      'behavior : x', '-MOZ-binding: x', 'x: u\\\nrl(a)', 'x:ur\\6c(a)', '@\\69mport "x"', '@imp\\6frt "x"', 'behavior\\3a x',
+      // An escape takes at most six digits, so the `e` behind these six is a character of its own.
+      'width: exp\\000072ession(1)',
     ]
     for (const blocked of blockedList) expect([blocked, attribute('style', blocked)]).toEqual([blocked, ' style=""'])
     for (const passing of ['color: red', 'COLOR: Red', 'x: curl', 'x: u\\0000720l(a)', 'x: \\110000rl(']) {
       expect([passing, attribute('style', passing)]).toEqual([passing, ` style="${passing}"`])
     }
     expect(render('{style="color: red" align=center}\nt')).toBe('<p style="color: red; text-align: center;">t</p>')
+  })
+})
+
+describe('text of 24 characters or more', () => {
+  const long = 'twenty-four characters. '
+
+  it('C2-H-002: is escaped like shorter text, also where the character stands first or last', () => {
+    for (const [char, entity] of [['&', '&amp;'], ['<', '&lt;'], ['>', '&gt;'], ['\u00a0', '&nbsp;']] as const) {
+      expect([char, escapeText(`${char}${long}`), escapeText(`${long}${char}`), escapeText(`${long}${char}${long}`)]).toEqual([
+        char, `${entity}${long}`, `${long}${entity}`, `${long}${entity}${long}`,
+      ])
+    }
+    expect(escapeText(long)).toBe(long)
+    expect(escapeText(`<${long.slice(0, 22)}`)).toBe(`&lt;${long.slice(0, 22)}`)
   })
 })
 
@@ -471,6 +531,12 @@ describe('the profiles', () => {
     expect(render('é'.repeat(5000), { profile: 'minimal' })).toHaveLength(5007)
     expect(() => render('a'.repeat(100001), { profile: 'comment' })).toThrow(CarveInputError)
     expect(render('a'.repeat(100001), { profile: 'article' })).toHaveLength(100008)
+  })
+
+  it('C2-H-163: the body of a note is not filtered where the profile has no notes, so nothing in it is reported', () => {
+    expect(degraded('a[^n]\n\n[^n]: note\n\n    # heading in the note', 'comment')).toEqual([
+      'profile-construct-degraded: Degraded a construct the profile "comment" does not allow: footnote_ref',
+    ])
   })
 
   it('C2-H-163: a supplied tree is filtered on a copy, and the tree of the caller keeps its nodes', () => {
@@ -609,6 +675,16 @@ describe('the position of a diagnostic', () => {
     expect(output.diagnostics.map((entry) => [entry.code, entry.path, entry.range])).toEqual([
       ['carrier-attribute-dropped', '/children/0/children/0', undefined], ['raw-format-dropped', '/children/0/children/1/pairs/0/base/0', undefined],
     ])
+  })
+})
+
+describe('a finding on a node that is not in the tree', () => {
+  it('C2-A-173: points at the document', () => {
+    const document = documentOf(paragraph('a'))
+    const stray = text('b')
+    const entry: Diagnostic = { code: 'x', severity: 'warning', channel: 'lint', message: 'm' }
+    expect(locateFindings(document, { entries: [entry], nodes: [stray] })).toEqual([{ ...entry, path: '' }])
+    expect(locateFindings(document, { entries: [{ ...entry }], nodes: [null] })).toEqual([{ ...entry, path: '' }])
   })
 })
 

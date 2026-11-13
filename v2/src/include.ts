@@ -175,18 +175,6 @@ function readShape(src: string, pos: number, end: number): Shape | null {
   return null
 }
 
-/** `N-M`: two decimal numbers without a leading zero, the first at least 1 and not above the second. */
-function isRange(value: string): boolean {
-  const hyphen = value.indexOf('-')
-  if (hyphen < 1 || hyphen === value.length - 1) return false
-  for (let p = 0; p < value.length; p++) if (p !== hyphen && !isDigit(value.charCodeAt(p))) return false
-  if (value.charCodeAt(0) === DIGIT_0 || value.charCodeAt(hyphen + 1) === DIGIT_0) return false
-  const first = value.slice(0, hyphen)
-  const second = value.slice(hyphen + 1)
-  // Without leading zeros the longer number is the larger, and two of one length compare as text.
-  return first.length < second.length || (first.length === second.length && first <= second)
-}
-
 function isIdentifier(value: string): boolean {
   return nameEnd(value, 0, value.length, startsKey) === value.length
 }
@@ -227,9 +215,10 @@ function isNameList(written: string): boolean {
   return length > 0
 }
 
+// The shapes a parse tells apart. A range is not among them: outside its shape, an option that takes
+// one leaves the include node a valid one leaves (C2-B-206), and telling the two apart is the expansion's job.
 const SHAPES = new Map<string, (value: string) => boolean>([
-  ['range', isRange], ['identifier', isIdentifier], ['range_or_names', isRange], ['signed_integer_or_auto', isShift],
-  ['language', isLanguage],
+  ['identifier', isIdentifier], ['signed_integer_or_auto', isShift], ['language', isLanguage],
 ])
 
 function isQuote(code: number): boolean {
@@ -247,8 +236,8 @@ function optionVerdict(key: string, written: string | null): string {
   // C2-B-206: a key that is not one of the six.
   if (rule === undefined) return 'paragraph'
   if (written === null) return rule.withoutValue
-  if (rule.value === 'range_or_names' && isNameList(written)) return 'valid'
-  return SHAPES.get(rule.value)!(valueText(written)) ? 'valid' : rule.outsideShape
+  const shape = SHAPES.get(rule.value)
+  return shape === undefined || shape(valueText(written)) ? 'valid' : rule.outsideShape
 }
 
 /** The options of `shape` as pairs in the order of C2-A-181, or null when one of them makes the line a paragraph (C2-B-206). */
