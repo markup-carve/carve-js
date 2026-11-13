@@ -38,12 +38,23 @@ export function removeLine(ctx: Context, id: string, line: number, message: stri
   change(ctx, id, lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '', message)
 }
 
-/** Puts `count` spaces before every line of `first` to `last` that is not blank. */
-export function indentLines(ctx: Context, id: string, first: number, last: number, count: number, message: string): void {
+/** Length of the first `depth` quote marks of `text` and the indentation after them. */
+export function bodyOffset(text: string, depth: number): number {
+  const marks = quotePrefix(text, depth).length
+  return marks + indentOf(text.slice(marks))
+}
+
+/**
+ * Puts `count` spaces before the content of every line of `first` to `last` that is not blank.
+ * The content starts after the `depth` quote marks of the container the lines stand in.
+ */
+export function indentLines(ctx: Context, id: string, first: number, last: number, count: number, message: string, depth = 0): void {
   if (count <= 0) return
   for (let line = first; line <= last; line++) {
-    if (isBlank(lineText(ctx.lines, line))) continue
-    const at = lineStart(ctx.lines, line)
+    const text = lineText(ctx.lines, line)
+    const marks = quotePrefix(text, depth).length
+    if (isBlank(text.slice(marks))) continue
+    const at = lineStart(ctx.lines, line) + (marks > 0 && text[marks] === ' ' ? marks + 1 : marks)
     change(ctx, id, at, at, ' '.repeat(count), message)
   }
 }

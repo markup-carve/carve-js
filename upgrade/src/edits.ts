@@ -18,27 +18,37 @@ function before(a: Edit, b: Edit): number {
   return a.sequence - b.sequence
 }
 
-/**
- * The edits that apply together, in source order. Two edits collide when their spans share a
- * character, or when one inserts inside the span of the other. Of two that collide, the entry
- * with the lower id stays; the other waits for the next pass, which reads the changed text. Two
- * insertions at one offset both apply, the lower entry id first, and both before a span replaced
- * from that offset on.
- */
-export function selectEdits(edits: Edit[]): Edit[] {
-  const byEntry = [...edits].sort((a, b) => (a.entry === b.entry ? before(a, b) : a.entry < b.entry ? -1 : 1))
-  const kept: Edit[] = []
-  for (const edit of byEntry) {
-    if (!kept.some((other) => collide(edit, other))) kept.push(edit)
-  }
-  return kept.sort(before)
-}
-
 function collide(a: Edit, b: Edit): boolean {
   if (a.start === a.end && b.start === b.end) return false
   if (a.start === a.end) return a.start > b.start && a.start < b.end
   if (b.start === b.end) return b.start > a.start && b.start < a.end
   return a.start < b.end && b.start < a.end
+}
+
+/**
+ * The edits that apply together, in source order. Two edits collide when their spans share a
+ * character, or when one inserts inside the span of the other. The edits are read in source
+ * order against the last span kept: of two that collide, the entry with the lower id stays, and
+ * the other is left out for good. Two insertions at one offset both apply, the lower entry id
+ * first, and both before a span replaced from that offset on.
+ */
+export function selectEdits(edits: Edit[]): Edit[] {
+  const ordered = [...edits].sort(before)
+  const dropped = new Set<Edit>()
+  // The kept replacement that reaches furthest: kept spans do not overlap, so only it can collide.
+  let last: Edit | null = null
+  for (const edit of ordered) {
+    if (last !== null && collide(edit, last)) {
+      if (edit.entry >= last.entry) {
+        dropped.add(edit)
+        continue
+      }
+      dropped.add(last)
+      last = null
+    }
+    if (edit.end > edit.start && (last === null || edit.end > last.end)) last = edit
+  }
+  return ordered.filter((edit) => !dropped.has(edit))
 }
 
 /** Applies `edits`, which `selectEdits` ordered, from the end of the text backward. */

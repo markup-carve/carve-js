@@ -5,7 +5,7 @@ import { change, type Context } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
-import { isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
+import { insideQuotes, isBlankInQuotes, isGap, quoteDepth, removeLine } from './lines.ts'
 
 interface Span {
   first: number
@@ -26,7 +26,9 @@ function definitionSpans(ctx: Context): Span[] {
       spans.push({ first: pos.startLine, last: pos.endLine })
     }
   }
-  return spans.sort((a, b) => a.first - b.first)
+  spans.sort((a, b) => a.first - b.first)
+  // Two definitions that open on one line, a note in the marker line of a note, are not moved.
+  return spans.filter((span, index) => span.first !== spans[index - 1]?.first && span.first !== spans[index + 1]?.first)
 }
 
 /** Length of what stands before the definition on its first line: quote marks and indentation. */
@@ -42,12 +44,17 @@ function belongs(ctx: Context, line: number, depth: number, indent: number): boo
   return depth > 0 || indentOf(text) >= indent
 }
 
-/** The last line of the container that holds the definition of `span`. */
-function containerEnd(ctx: Context, span: Span, depth: number, indent: number): number {
+/**
+ * The last line of the container that holds the definition of `span`. `ends` holds the answer
+ * for every later definition by its first line, so a run of definitions is read once.
+ */
+function containerEnd(ctx: Context, span: Span, depth: number, indent: number, ends: Map<number, number>): number {
   let end = span.last
   for (let line = span.last + 1; line <= ctx.lines.count; line++) {
     if (isBlank(lineText(ctx.lines, line))) continue
     if (!belongs(ctx, line, depth, indent)) break
+    const known = ends.get(line)
+    if (known !== undefined) return Math.max(end, known)
     end = line
   }
   return end
@@ -91,14 +98,15 @@ function hoistInPlace(ctx: Context, id: string, span: Span, cut: number, message
 }
 
 /** U-038, U-039: the definition moves to column 0, after the container it stood in. */
-function hoist(ctx: Context, span: Span): void {
+function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const text = lineText(ctx.lines, span.first)
   const cut = prefixLength(text)
   if (cut === 0) return
   const depth = quoteDepth(text)
   const id = entryOf(ctx, span, depth)
   const message = 'definition moved to column 0 outside its container'
-  const end = containerEnd(ctx, span, depth, cut)
+  const end = containerEnd(ctx, span, depth, cut, ends)
+  ends.set(span.first, end)
   if (end === span.last) {
     hoistInPlace(ctx, id, span, cut, message)
     return
@@ -126,7 +134,7 @@ function duplicates(ctx: Context, type: string, key: string, id: string): void {
 
 /** The label of a link definition line that 0.1 dropped for a later one, or null. */
 function droppedLabel(ctx: Context, line: number): string | null {
-  const text = lineText(ctx.lines, line)
+  const text = insideQuotes(lineText(ctx.lines, line)).trimStart()
   const close = text.indexOf(']: ')
   return isGap(ctx, line) && text.startsWith('[') && !text.startsWith('[^') && close > 1 ? text.slice(1, close) : null
 }
@@ -147,7 +155,9 @@ function droppedLinkDefinitions(ctx: Context): void {
 }
 
 export function definitions(ctx: Context): void {
-  for (const span of definitionSpans(ctx)) hoist(ctx, span)
+  const spans = definitionSpans(ctx)
+  const ends = new Map<number, number>()
+  for (let index = spans.length - 1; index >= 0; index--) hoist(ctx, spans[index]!, ends)
   droppedLinkDefinitions(ctx)
   duplicates(ctx, 'abbreviation_def', 'abbr', 'U-041')
 }

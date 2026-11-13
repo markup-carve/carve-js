@@ -4,7 +4,7 @@ import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
-import { attributeLinesAbove, dedentLines, indentLines, insideQuotes, isBlankInQuotes, isGap, removeAttribute } from './lines.ts'
+import { attributeLinesAbove, bodyOffset, dedentLines, indentLines, insideQuotes, isBlankInQuotes, isGap, removeAttribute } from './lines.ts'
 
 const SPACE = 0x20
 
@@ -34,14 +34,17 @@ function plusLine(ctx: Context, from: number, to: number): number {
 }
 
 /** U-014, U-015: a `+` line is text in 0.2 (C2-B-059); a blank line and the body's indent attach the block. */
-function plusInBody(ctx: Context, column: number, child: Node01, line: number): void {
+function plusInBody(ctx: Context, column: number, visit: Visit, line: number): void {
+  const child = visit.node
   const id = child.type === 'paragraph' ? 'U-015' : 'U-014'
   const message = '+ line replaced by a blank line, the block indented into its item'
   const text = lineText(ctx.lines, line)
   const keep = quotePrefix(text, quotesOfLine(text))
   change(ctx, id, lineStart(ctx.lines, line) + keep.length, lineEnd(ctx.lines, line), '', message)
   const first = child.pos!.startLine
-  indentLines(ctx, id, first, child.pos!.endLine, column - indentOf(lineText(ctx.lines, first)), message)
+  // The block is measured after the quote marks of the quotes its host stands in.
+  const depth = quotesOf(visit).length
+  indentLines(ctx, id, first, child.pos!.endLine, column - bodyOffset(lineText(ctx.lines, first), depth), message, depth)
 }
 
 function quotesOfLine(text: string): number {
@@ -74,29 +77,45 @@ function bodyColumn(ctx: Context, visit: Visit): number {
   return body && first !== undefined ? first.startColumn - 1 : -1
 }
 
-function plusLines(ctx: Context, visit: Visit): void {
+function plusLines(ctx: Context, visit: Visit, used: Set<number>): void {
   const above = visit.index > 0 ? visit.siblings[visit.index - 1]!.pos : undefined
   const child = visit.node
   if (above === undefined || visit.parent === null || !isContainer(visit.parent.node)) return
   const line = plusLine(ctx, above.endLine + 1, child.pos!.startLine)
   if (line === 0) return
   if (visit.parent.node.type === 'block_quote') {
-    if (visit.parent.node.fenced !== true) plusInQuote(ctx, visit.parent, child, line)
+    if (visit.parent.node.fenced === true) return
+    used.add(line)
+    plusInQuote(ctx, visit.parent, child, line)
     return
   }
   const column = bodyColumn(ctx, visit)
-  if (column >= 0) plusInBody(ctx, column, child, line)
+  if (column < 0) return
+  used.add(line)
+  plusInBody(ctx, column, visit, line)
 }
 
-/** U-017: an item may start with any block on its marker line (C2-B-057). */
+/**
+ * U-017: an item may start with any block on its marker line (C2-B-057), so the `+` after the
+ * marker goes. A paragraph joins the marker line from any column; another block only from the
+ * content column, where its later lines already stand. With no block, 0.1 left the item empty.
+ */
 function plusFirst(ctx: Context, item: Node01): void {
   const [, markerEnd] = markerSpan(ctx, item)
   const line = item.pos!.startLine
-  const first = item.children?.[0]?.pos
-  if (ctx.src.slice(markerEnd, lineEnd(ctx.lines, line)).trim() !== '+' || first === undefined || first.startLine !== line + 1) return
+  const end = lineEnd(ctx.lines, line)
+  if (ctx.src.slice(markerEnd, end).trim() !== '+') return
+  const message = '+ after the marker removed, the block moved to the marker line'
+  const first = item.children?.[0]
+  if (first === undefined) {
+    // A marker needs content (C2-B-061), and an empty braced comment is content that renders nothing (C2-I-025).
+    change(ctx, 'U-017', end - 1, end, '{%%}', '+ after the marker replaced by an empty comment, 0.1 left the item empty')
+    return
+  }
+  if (first.pos === undefined || first.pos.startLine !== line + 1) return
   const column = markerEnd + 1 - lineStart(ctx.lines, line)
-  if (first.startColumn - 1 !== column) return
-  change(ctx, 'U-017', markerEnd + 1, first.startOffset, '', '+ after the marker removed, the block moved to the marker line')
+  if (first.type !== 'paragraph' && first.pos.startColumn - 1 !== column) return
+  change(ctx, 'U-017', markerEnd + 1, first.pos.startOffset, '', message)
 }
 
 function itemsOf(list: Node01): Node01[] {
@@ -231,10 +250,10 @@ export function commentShift(ctx: Context, visit: Visit): number {
   return Math.max(0, contentColumn(ctx, item.node) - indentOf(lineText(ctx.lines, child.pos!.startLine)))
 }
 
-function listNode(ctx: Context, visit: Visit): void {
+function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
   const node = visit.node
   if (node.pos === undefined) return
-  plusLines(ctx, visit)
+  plusLines(ctx, visit, used)
   if (node.type === 'list') {
     tightness(ctx, visit)
     markerColumns(ctx, visit)
@@ -249,6 +268,16 @@ function listNode(ctx: Context, visit: Visit): void {
   }
 }
 
+/** A `+` line that attaches no block: 0.1 rendered nothing for it, 0.2 reads it as text (C2-B-059), so it goes. */
+function danglingPlus(ctx: Context, used: Set<number>): void {
+  for (let line = 1; line <= ctx.lines.count; line++) {
+    if (used.has(line) || !isGap(ctx, line) || lineText(ctx.lines, line).trim() !== '+') continue
+    change(ctx, 'U-014', lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '', '+ line that attaches no block removed, 0.1 rendered nothing for it')
+  }
+}
+
 export function lists(ctx: Context): void {
-  for (const visit of ctx.visits) listNode(ctx, visit)
+  const used = new Set<number>()
+  for (const visit of ctx.visits) listNode(ctx, visit, used)
+  danglingPlus(ctx, used)
 }

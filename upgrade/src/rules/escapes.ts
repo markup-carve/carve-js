@@ -67,30 +67,34 @@ function rowAttribute(ctx: Context, paragraph: Node01): void {
   }
 }
 
-/** The leaf on the nearest line above `line` that is not blank, when a blank line stands between. */
-function leafAboveBlank(ctx: Context, line: number): Visit | null {
+/** The leaf on the nearest line above `line` that is not blank. */
+function leafAbove(ctx: Context, line: number): Visit | null {
   let at = line - 1
-  if (at < 1 || !isBlank(lineText(ctx.lines, at))) return null
   while (at >= 1 && isBlank(lineText(ctx.lines, at))) at--
   return at >= 1 ? (ctx.blocks.leaf[at] ?? null) : null
 }
 
 /**
  * U-109: with no paragraph open, a line belongs to the item or footnote body whose marker it is
- * indented past (C2-B-025); 0.1 kept it only from the content column on.
+ * indented past (C2-B-025); 0.1 kept it only from the content column on. A block of the document
+ * that stands indented under an item or a footnote moves to column 0.
  */
 function shortIndent(ctx: Context, visit: Visit): void {
   const pos = visit.node.pos!
   const indent = indentOf(lineText(ctx.lines, pos.startLine))
   if (indent === 0 || visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
-  if (pos.startOffset !== lineStart(ctx.lines, pos.startLine) + indent) return
-  const above = leafAboveBlank(ctx, pos.startLine)
-  if (above === null) return
+  const above = leafAbove(ctx, pos.startLine)
+  if (above === null || isInside(above, visit)) return
   const item = ancestor(above, 'list_item')
   const body = above.siblings !== ctx.doc.children && above.parent!.node === ctx.doc
-  if ((item === null || isInside(visit, item)) && !body) return
-  const at = lineStart(ctx.lines, pos.startLine)
-  change(ctx, 'U-109', at, at + indent, '', 'line moved to column 0, where it stays outside the item or footnote above')
+  if (item === null && !body) return
+  const message = 'block moved to column 0, where it stays outside the item or footnote above'
+  // The later lines of a paragraph are lazy lines wherever they stand; another block moves whole.
+  const last = visit.node.type === 'paragraph' ? pos.startLine : pos.endLine
+  for (let line = pos.startLine; line <= last; line++) {
+    const cut = Math.min(indent, indentOf(lineText(ctx.lines, line)))
+    if (cut > 0) change(ctx, 'U-109', lineStart(ctx.lines, line), lineStart(ctx.lines, line) + cut, '', message)
+  }
 }
 
 /** U-102: a line indented past the heading marker continues the heading in 0.2 (C2-B-154). */
@@ -186,6 +190,9 @@ function delimiterInBraces(ctx: Context, visit: Visit): void {
   }
 }
 
+/** The blocks U-109 moves: a list has its own column rules (U-023) and a definition its own (U-039). */
+const SHORT_INDENT = new Set(['paragraph', 'block_quote', 'heading', 'code_block', 'table', 'thematic_break'])
+
 export function escapes(ctx: Context): void {
   const headings = headingTexts(ctx)
   for (let index = 0; index < ctx.visits.length; index++) {
@@ -200,7 +207,7 @@ export function escapes(ctx: Context): void {
       fenceOpenerAsText(ctx, node)
       letterMarkers(ctx, visit)
       rowAttribute(ctx, node)
-      shortIndent(ctx, visit)
     }
+    if (visit.parent !== null && SHORT_INDENT.has(node.type)) shortIndent(ctx, visit)
   }
 }

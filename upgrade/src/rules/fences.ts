@@ -2,6 +2,7 @@
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, lineEnd, lineStart, lineText } from '../source.ts'
+import { insideQuotes } from './lines.ts'
 import { commentShift } from './lists.ts'
 
 const PERCENT = 0x25
@@ -12,7 +13,8 @@ function commentCloser(ctx: Context, visit: Visit): void {
   const line = node.pos!.endLine
   if (node.block !== true || line === node.pos!.startLine) return
   const text = lineText(ctx.lines, line)
-  const indent = indentOf(text)
+  const marks = text.length - insideQuotes(text).length
+  const indent = marks + indentOf(text.slice(marks))
   let at = indent
   while (text.charCodeAt(at) === PERCENT) at++
   const rest = text.slice(at).trim()
@@ -20,8 +22,8 @@ function commentCloser(ctx: Context, visit: Visit): void {
   const start = lineStart(ctx.lines, line)
   const message = 'text after the comment closer moved into the comment'
   // The text goes to the end of the line above, so the closer line keeps its place and its indent.
-  const above = lineEnd(ctx.lines, line - 1)
   // The new line takes the indent U-026 gives the block, or it would leave the item.
+  const above = lineEnd(ctx.lines, line - 1)
   change(ctx, 'U-050', above, above, `\n${' '.repeat(commentShift(ctx, visit))}${text.slice(0, indent)}${rest}`, message)
   change(ctx, 'U-050', start + at, lineEnd(ctx.lines, line), '', message)
 }
@@ -53,29 +55,32 @@ function longestBareRun(content: string, code: number): number {
   return longest
 }
 
+/** The prefix of a closer line for the fence that opens at `start`: quote marks kept, a list marker as spaces. */
+function closerPrefix(ctx: Context, start: number, line: number): string {
+  let out = ''
+  for (let at = lineStart(ctx.lines, line); at < start; at++) out += ctx.src[at] === '>' || ctx.src[at] === '\t' ? ctx.src[at]! : ' '
+  return out
+}
+
 /**
  * U-049: 0.1 refused a closer at another indent and ran the block to the end of its container;
  * 0.2 has no column test (C2-B-109). A longer opener keeps the line in the body, and a closer is
  * added where 0.1 ended the block.
  */
 function indentedCloser(ctx: Context, node: Node01): void {
-  const { startLine, endLine } = node.pos!
-  const opener = lineText(ctx.lines, startLine)
-  const indent = indentOf(opener)
-  const code = opener.charCodeAt(indent)
-  const length = runLength(opener, indent, code)
-  if (length < 3 || typeof node.content !== 'string') return
-  const last = lineText(ctx.lines, endLine).trim()
+  const { startLine, endLine, startOffset: start } = node.pos!
+  const code = ctx.src.charCodeAt(start)
+  const length = runLength(ctx.src, start, code)
+  if (length < 3 || typeof node.content !== 'string' || (code !== 0x60 && code !== 0x7e)) return
+  const last = insideQuotes(lineText(ctx.lines, endLine)).trim()
   const closed = endLine > startLine && runLength(last, 0, code) === last.length && last.length >= length
   const longest = longestBareRun(node.content, code)
   if (closed || longest < length) return
   const run = String.fromCharCode(code).repeat(longest + 1)
-  const start = lineStart(ctx.lines, startLine) + indent
   const message = 'fence lengthened past the closer 0.1 refused for its indent, and closed where 0.1 ended it'
   change(ctx, 'U-049', start, start + length, run, message)
   const end = lineEnd(ctx.lines, endLine)
-  const tail = end === ctx.src.length ? '\n' + opener.slice(0, indent) + run : '\n' + opener.slice(0, indent) + run
-  change(ctx, 'U-049', end, end, tail, message)
+  change(ctx, 'U-049', end, end, '\n' + closerPrefix(ctx, start, startLine) + run, message)
 }
 
 /**

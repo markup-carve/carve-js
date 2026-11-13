@@ -1,4 +1,6 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
+import smartPunctuation from '../../../v2/data/smart-punctuation.json' with { type: 'json' }
+import { isAsciiLetter, isWordCharacter } from '../../../v2/src/unicode.ts'
 import { isInside } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
@@ -22,7 +24,8 @@ const BARE: Record<string, Bare> = {
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   const { startOffset: start, endOffset: end } = node.pos!
   if (ctx.src[start] !== bare.mark || ctx.src[end - 1] !== bare.mark || end - start < 2) return
-  change(ctx, bare.entry, start, start, '{', `bare ${bare.name} put in braces`)
+  // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
+  change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)
   change(ctx, bare.entry, end, end, '}', `bare ${bare.name} put in braces`)
 }
 
@@ -58,16 +61,24 @@ function isOpeningPlace(src: string, at: number): boolean {
   return before === 0x20 || before === 0x09 || before === 0x0a || before === 0x28 || before === 0x5b
 }
 
+const APOSTROPHE_WORDS = new Set(smartPunctuation.apostrophe_words.words)
+
+/** Whether the quote at `at` stands before a word 0.2 itself reads as an elision (C2-I-107). */
+function isElision(src: string, at: number): boolean {
+  let end = at + 1
+  while (end < src.length && isAsciiLetter(src.charCodeAt(end))) end++
+  return APOSTROPHE_WORDS.has(src.slice(at + 1, end).toLowerCase()) && !(end < src.length && src.charCodeAt(end) >= 0x80 && isWordCharacter(src.codePointAt(end)!))
+}
+
 /** U-071: 0.1 demoted an opening single quote with no closer; 0.2 never changes an emitted quote (C2-I-110). */
 function demotedQuote(ctx: Context, node: Node01): void {
   const start = node.pos!.startOffset
   if (node.kind !== 'right_single_quote' || ctx.src[start] !== "'" || !isOpeningPlace(ctx.src, start)) return
   const next = ctx.src.charCodeAt(start + 1)
-  if (Number.isNaN(next) || next === 0x20 || next === 0x0a) return
-  change(ctx, 'U-071', start, start + 1, '’', 'opening single quote that 0.1 printed as an apostrophe written as the apostrophe')
+  if (Number.isNaN(next) || next === 0x20 || next === 0x0a || isElision(ctx.src, start)) return
+  change(ctx, 'U-071', start, start + 1, '\u2019', 'opening single quote that 0.1 printed as an apostrophe written as the apostrophe')
 }
 
-const LETTER_OR_NUMBER = /[\p{L}\p{N}]/u
 const SIGILS = new Set(['tag', 'mention', 'inline_extension', 'symbol'])
 
 /** U-073: a sigil starts a form only after a character outside the letter-or-number class (C2-I-090). */
@@ -76,7 +87,7 @@ function sigil(ctx: Context, node: Node01): void {
   if (start === 0 || ctx.src.charCodeAt(start) === BRACE) return
   const low = ctx.src.charCodeAt(start - 1)
   const from = low >= 0xdc00 && low <= 0xdfff && start > 1 ? start - 2 : start - 1
-  if (!LETTER_OR_NUMBER.test(ctx.src.slice(from, start))) return
+  if (!isWordCharacter(ctx.src.codePointAt(from)!)) return
   note(ctx, 'U-073', node.pos!.startLine, 'a sigil form directly after a letter or number is text in 0.2')
 }
 
