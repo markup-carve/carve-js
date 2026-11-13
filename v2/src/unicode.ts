@@ -11,6 +11,7 @@ const LOW_SURROGATE = 0xdc00
 const SURROGATE_END = 0xe000
 const ZERO_WIDTH_JOINER = 0x200d
 const LETTER_OR_NUMBER = /[\p{L}\p{N}]/u
+const LETTER = /\p{L}/u
 const COMBINING = /[\p{M}\u{fe00}-\u{fe0f}\u{e0100}-\u{e01ef}]/u
 const FORMAT_OR_CONTROL = /[\p{Cc}\p{Cf}]/u
 
@@ -26,6 +27,12 @@ export function isAsciiDigit(code: number): boolean {
 export function isWordCharacter(code: number): boolean {
   if (code < ASCII) return isAsciiLetter(code) || isAsciiDigit(code)
   return LETTER_OR_NUMBER.test(String.fromCodePoint(code))
+}
+
+/** A Unicode letter (general category L). */
+export function isLetter(code: number): boolean {
+  if (code < ASCII) return isAsciiLetter(code)
+  return LETTER.test(String.fromCodePoint(code))
 }
 
 /** A space, a tab, a line break, or the edge of the content. */

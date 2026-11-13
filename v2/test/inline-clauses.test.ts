@@ -956,8 +956,9 @@ describe('more cases per clause', () => {
   })
 
   it('C2-I-107: the word ends where its letters end', () => {
-    expect(inline("'em2 x")).toBe('‹‘› "em2 x"')
+    expect(inline("'em2 x 'em_x 'em-x")).toBe('‹’› "em2 x " ‹’› "em_x " ‹’› "em-x"')
     expect(inline("'tisx y")).toBe('‹‘› "tisx y"')
+    expect(inline("'emé y")).toBe('‹‘› "emé y"')
   })
 
   it('C2-I-109: a link keeps the run of single quotes, and a footnote gives it back', () => {
@@ -969,7 +970,7 @@ describe('more cases per clause', () => {
     expect(inline('a\\ (--b)')).toBe('"a" nbsp "(" ‹–› "b)"')
     expect(inline('*a* (--b)')).toBe('strong["a"] " (--b)"')
     expect(inline('a', '(--b)')).toBe('"a" sb "(--b)"')
-    expect(inline('a \\"--b')).toBe('"a "--b"')
+    expect(inline('a \\"--b a \\(--b')).toBe('"a "" ‹–› "b a (" ‹–› "b"')
   })
 
   it('C2-I-116: a hyphen that belongs to a braced closer is no part of the run', () => {

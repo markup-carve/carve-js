@@ -10,7 +10,9 @@ import {
   SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_LEFT_SINGLE_QUOTE,
   SMART_RIGHT_DOUBLE_QUOTE, SMART_RIGHT_SINGLE_QUOTE, SMART_RIGHTWARDS_ARROW, SMART_RUNS,
 } from './inline-tables.ts'
-import { codePointAt, codePointBefore, isAsciiDigit, isAsciiLetter, isWhitespace, isWordCharacter, NO_CHARACTER } from './unicode.ts'
+import {
+  codePointAt, codePointBefore, isAsciiDigit, isAsciiLetter, isLetter, isWhitespace, isWordCharacter, NO_CHARACTER,
+} from './unicode.ts'
 
 const ASCII = 128
 const NO_BREAK_SPACE = 0xa0
@@ -63,11 +65,11 @@ function quoteOpens(previous: number, next: number): boolean {
   return !isWhitespace(next) && !inClass(next, CLASS_QUOTE_CLOSES_BEFORE)
 }
 
-/** C2-I-107: the length of the apostrophe word that starts at `pos`, or 0. */
+/** C2-I-107: the length of the apostrophe word that starts at `pos`, or 0. The word ends where its letters end. */
 function apostropheWord(text: string, pos: number, end: number): number {
   let p = pos
   while (p < end && p - pos <= LONGEST_WORD && isAsciiLetter(text.charCodeAt(p))) p++
-  if (p === pos || isWordCharacter(codePointAt(text, p, end))) return 0
+  if (p === pos || isLetter(codePointAt(text, p, end))) return 0
   return APOSTROPHE_WORDS.includes(text.slice(pos, p).toLowerCase()) ? p - pos : 0
 }
 

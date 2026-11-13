@@ -13,7 +13,6 @@ import {
 } from './inline-state.ts'
 import { BARE_MARKS, BRACED_MARKS, SMART_GLYPHS } from './inline-tables.ts'
 import { startOfContent, toSource, writeText } from './typography.ts'
-import { isWhitespace } from './unicode.ts'
 
 const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 const NO_BREAK_SPACE = 0xa0
@@ -187,8 +186,6 @@ function writeAtom(state: InlineState, at: number): number {
     state.previousAfterSpace = afterSpace
   } else {
     afterAtom(state, at, kind)
-    // C2-I-112: an escaped character is text, so what stood before it still counts.
-    if (kind === ESCAPE) state.previousAfterSpace = isWhitespace(previous)
   }
   return next
 }
