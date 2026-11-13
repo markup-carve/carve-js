@@ -72,7 +72,7 @@ describe('paragraphs and interrupters', () => {
     expect(blocks('- a', '        b', 'c')).toBe('ul(-)[li[p"a|b|c"]]')
     expect(blocks('> a', 'b', '> c')).toBe('quote[p"a|b|c"]')
     expect(blocks('- > a', '> b')).toBe('ul(-)[li[quote[p"a|> b"]]]')
-    expect(blocks('a', '= b', '> c', '***', '%% d')).toBe('p"a|= b|> c|***|%% d"')
+    expect(blocks('a', '= b', '> c', '%% d')).toBe('p"a|= b|> c|%% d"')
   })
 
   it('C2-B-013: a paragraph closes at a blank line, at an interrupter or with its container', () => {
@@ -393,6 +393,13 @@ describe('headings', () => {
 describe('thematic break', () => {
   it('C2-B-159: three or more stars and nothing else, at any indent', () => {
     expect(blocks('***')).toBe('hr')
+    // C2-B-200: a thematic break interrupts a paragraph, like a fence line.
+    expect(blocks('a', '***', 'b')).toBe('p"a" hr p"b"')
+    expect(blocks('a', '*** b')).toBe('p"a|*** b"')
+    expect(blocks('a', '**')).toBe('p"a|**"')
+    expect(blocks('- a', '***', 'b')).toBe('ul(-)[li[p"a"]] hr p"b"')
+    expect(blocks('- a', '  ***')).toBe('ul(-)[li[p"a" hr]]')
+    expect(blocks('> a', '***')).toBe('quote[p"a"] hr')
     expect(blocks('     ******  ')).toBe('hr')
     expect(blocks('**')).toBe('p"**"')
     expect(blocks('*** a')).toBe('p"*** a"')
@@ -465,9 +472,13 @@ describe('ordered lists with letters and roman numerals', () => {
 
   it('C2-B-040: a letter or roman marker with a dot needs two spaces', () => {
     expect(blocks('a.  x')).toBe('ol(a1.)[li[p"x"]]')
-    expect(blocks('a. x')).toBe('p"a. x"')
+    expect(blocks('a. x')).toBe('ol(a1.)[li[p"x"]]')
+    expect(blocks('A. Smith')).toBe('p"A. Smith"')
+    expect(blocks('I. Claudius')).toBe('p"I. Claudius"')
+    expect(blocks('A.  x')).toBe('ol(A1.)[li[p"x"]]')
+    expect(blocks('IV. x')).toBe('ol(I4.)[li[p"x"]]')
     expect(blocks('iv.  x')).toBe('ol(i4.)[li[p"x"]]')
-    expect(blocks('iv. x')).toBe('p"iv. x"')
+    expect(blocks('iv. x')).toBe('ol(i4.)[li[p"x"]]')
     expect(blocks('a) x')).toBe('ol(a1))[li[p"x"]]')
     expect(blocks('1. x')).toBe('ol(1.)[li[p"x"]]')
   })
@@ -564,6 +575,8 @@ describe('definitions', () => {
     expect(blocks('[a]: "t"')).toBe('def"[a]: "t""')
     expect(blocks('[a]: /u more')).toBe('p"[a]: /u more"')
     expect(blocks('[a]:/u')).toBe('p"[a]:/u"')
+    expect(blocks('[a]:   /u')).toBe('def"[a]:   /u"')
+    expect(blocks(':::   note', 'x', ':::')).toBe(blocks('::: note', 'x', ':::'))
   })
 
   it('C2-B-084: an abbreviation definition has a label of ASCII letters and digits and an expansion', () => {

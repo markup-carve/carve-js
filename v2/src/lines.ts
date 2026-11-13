@@ -156,8 +156,8 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 
 /** Offset after the spaces of the ordered marker whose delimiter is at `delimiter`, or -1. */
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
-  // C2-B-040: a letter or roman marker with a dot needs two spaces.
-  const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && !isDigit(src.charCodeAt(pos)) ? 2 : 1
+  // C2-B-040: one uppercase letter and a dot needs two spaces, so an initial stays text.
+  const spaces = src.charCodeAt(delimiter) === DOT && delimiter === pos + 1 && isUpper(src.charCodeAt(pos)) ? 2 : 1
   return afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
 }
 
@@ -326,7 +326,7 @@ export function footnoteMarkerEnd(src: string, pos: number, end: number): number
   return marker < 0 ? -1 : afterMarkerSpace(src, marker, end, 1)
 }
 
-/** C2-B-083: `[label]:`, a space, a URL without spaces that may be empty, and an optional quoted title. */
+/** C2-B-083: `[label]:`, one or more spaces, a URL without spaces that may be empty, and an optional quoted title. */
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
   const marker = labelEnd(src, pos, end, 1, true)
@@ -334,7 +334,6 @@ export function isLinkDefinition(src: string, pos: number, end: number): boolean
   let p = skipSpaces(src, marker + 1, end)
   // A destination or a title must follow: a label and a colon alone are text.
   if (p === end) return false
-  p = marker + 1
   while (p < end && !isSpaceOrTab(src.charCodeAt(p)) && src.charCodeAt(p) !== QUOTE_MARK) p++
   p = skipSpaces(src, p, end)
   if (p < end && src.charCodeAt(p) === QUOTE_MARK) p = quotedEnd(src, p, end)
