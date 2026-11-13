@@ -2,7 +2,7 @@
 // builder stores those, and this file turns them into lines, columns and UTF-8 byte offsets in
 // one walk over the finished tree.
 import { type AstNode, type Position } from './ast.ts'
-import { LF } from './chars.ts'
+import { BYTE_ORDER_MARK, LF } from './chars.ts'
 
 const ASCII_END = 0x80
 const TWO_BYTES_END = 0x800
@@ -102,6 +102,11 @@ function seek(cursor: Cursor, target: number): void {
     return
   }
   const src = cursor.src
+  // C2-B-165: a byte-order mark takes no column; its bytes still count.
+  if (cursor.offset === 0 && target > 0 && src.charCodeAt(0) === BYTE_ORDER_MARK) {
+    cursor.bytes += unitBytes(BYTE_ORDER_MARK)
+    cursor.offset = 1
+  }
   while (cursor.offset < target) {
     const code = src.charCodeAt(cursor.offset)
     cursor.bytes += unitBytes(code)

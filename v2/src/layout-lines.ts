@@ -1,6 +1,6 @@
 // Line geometry for the source-layout record (spec/0.2/source-layout.md): line bounds, the columns
 // of the block chapter, blank-line counts and UTF-8 byte offsets.
-import { CR, GREATER, SPACE } from './chars.ts'
+import { BYTE_ORDER_MARK, CR, GREATER, SPACE } from './chars.ts'
 import { skipSpaces } from './lines.ts'
 import { unitBytes } from './positions.ts'
 import { advanceColumn, isSpaceOrTab } from './source.ts'
@@ -30,7 +30,9 @@ interface Prefix {
 
 /** C2-B-003: reads at most `quotes` quote marks from `start`, each with its one space. */
 export function readPrefix(src: string, start: number, end: number, quotes: number): Prefix {
-  const prefix: Prefix = { pos: start, column: 0, origin: 0, marks: 0 }
+  // C2-B-165: a byte-order mark takes no column.
+  const from = start === 0 && src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : start
+  const prefix: Prefix = { pos: from, column: 0, origin: 0, marks: 0 }
   while (prefix.marks < quotes) {
     let pos = prefix.pos
     let column = prefix.column

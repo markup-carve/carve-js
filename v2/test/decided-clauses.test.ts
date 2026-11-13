@@ -1,7 +1,7 @@
 // The clauses that the specification commits "decide the cases the three engine lanes logged" and
 // "fix what the review of today's clauses found" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { render, type RenderOptions } from '../src/index.ts'
+import { parse, parseWithLayout, render, type RenderOptions } from '../src/index.ts'
 
 /** [clause id and subject, source, expected HTML, options]. */
 type Case = readonly [string, string, string, RenderOptions?]
@@ -34,4 +34,18 @@ describe('the rel of a link', () => {
     ['C2-H-167: the authored words come first, then the profile words not among them', '[x](/u){rel="ugc me"}',
       '<p><a href="/u" rel="ugc me nofollow">x</a></p>', { profile: 'comment' }],
   ])
+})
+
+describe('the byte-order mark', () => {
+  it('C2-B-165: the first character behind the mark has column 1, and offsets count the three bytes of the mark', () => {
+    const paragraph = parse('\uFEFFab *c*').children![0]!
+    expect(paragraph.pos).toEqual({ startLine: 1, startColumn: 1, startOffset: 3, endLine: 1, endColumn: 7, endOffset: 9 })
+    expect(paragraph.children![1]!.pos).toMatchObject({ startColumn: 4, startOffset: 6 })
+  })
+
+  it('C2-B-165: the columns of the layout record do not count the mark', () => {
+    const { layout } = parseWithLayout('\uFEFF- a\n- b')
+    const first = layout.nodes.find((entry) => entry.path === '/children/0/children/0')!
+    expect(first).toMatchObject({ startByte: 3, markerColumn: 0, contentColumn: 2 })
+  })
 })

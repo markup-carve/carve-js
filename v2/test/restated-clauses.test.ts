@@ -641,7 +641,7 @@ describe('the byte-order mark', () => {
     const heading = document.children![0]!
     expect(document.srcByteLength).toBe(9)
     expect([heading.pos!.startOffset, heading.pos!.endOffset, heading.pos!.startLine]).toEqual([3, 6, 1])
-    expect(heading.children).toEqual([{ type: 'text', value: 'T', pos: { startLine: 1, endLine: 1, startColumn: 4, endColumn: 5, startOffset: 5, endOffset: 6 } }])
+    expect(heading.children).toEqual([{ type: 'text', value: 'T', pos: { startLine: 1, endLine: 1, startColumn: 3, endColumn: 4, startOffset: 5, endOffset: 6 } }])
     expect(document.children![1]!.pos!.startOffset).toBe(8)
   })
 })
