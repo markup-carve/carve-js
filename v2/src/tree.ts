@@ -1,7 +1,10 @@
 import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
+import { scanInline } from './inline-scan.ts'
+import { type InlineState } from './inline-state.ts'
+import { buildInlineTree, type InlineNode, LINE } from './inline-tree.ts'
 import {
-  ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP, isLeaf, PARAGRAPH,
-  ROW, TABLE,
+  ATTRIBUTES, CAPTION, CELL, COMMENT, DIV, DOCUMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
+  HEADING, isLeaf, LINE_BLOCK, PARAGRAPH, ROW, TABLE, TERM,
 } from './kinds.ts'
 
 // The facts of a table are its head rows and, above FACT_SHIFT, its footer rows.
@@ -12,7 +15,9 @@ const ONE_BY_ONE = 1 | (1 << FACT_SHIFT)
 
 /**
  * One field layout for every block. A container has `children`, a leaf has `spans` (start, end pairs).
- * `attributes` holds the spans of the attribute lines the block took.
+ * `attributes` holds the spans of the attribute lines the block took. `inlines` is the inline
+ * content of a text leaf and of a cell, and one LINE node per line of a line block, once
+ * `readInlines` has run.
  */
 export interface BlockNode {
   kind: number
@@ -25,6 +30,7 @@ export interface BlockNode {
   children: BlockNode[] | null
   spans: number[] | null
   attributes: number[] | null
+  inlines: InlineNode[] | null
 }
 
 /** Builds the block tree from the first `length` ints of an event array. */
@@ -63,6 +69,7 @@ function enterNode(kind: number, flags: number, start: number, aux: number, pare
     kind, start, end: start, aux, flags, exitFlags: 0, facts: kind === CELL ? ONE_BY_ONE : 0,
     children: leaf ? null : [], spans: leaf ? [] : null,
     attributes: takes ? takeAttributes(parent!.children!) : null,
+    inlines: null,
   }
 }
 
@@ -185,4 +192,53 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
   }
   row.children = kept
   return owners
+}
+
+/** The source of `[start, end)` without the prefixes of the lines it crosses: its parts inside `spans`, joined by line feeds. */
+function contentSource(src: string, spans: number[], start: number, end: number): string {
+  const lines: string[] = []
+  for (let at = 0; at < spans.length; at += 2) {
+    const from = Math.max(start, spans[at]!)
+    const to = Math.min(end, spans[at + 1]!)
+    if (from < to) lines.push(src.slice(from, to))
+  }
+  return lines.join('\n')
+}
+
+function hasInlineContent(kind: number): boolean {
+  return kind === PARAGRAPH || kind === HEADING || kind === TERM || kind === CAPTION || kind === CELL
+}
+
+/** The inline nodes of the content `spans[from..to)` of a leaf. */
+function contentInlines(state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean): InlineNode[] {
+  scanInline(state, src, spans, from, to, depth, lineComments)
+  return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
+}
+
+/** C2-B-130, C2-B-144: each line of a line block is a content of its own, and `%%` is text in it. */
+function lineInlines(state: InlineState, src: string, spans: number[], depth: number): InlineNode[] {
+  const lines: InlineNode[] = []
+  for (let at = 0; at < spans.length; at += 2) {
+    lines.push({
+      kind: LINE, start: spans[at]!, end: spans[at + 1]!, flags: 0, aux: 0,
+      children: contentInlines(state, src, spans, at, at + 2, depth, false),
+      value: null, destination: null, title: null, label: null, attributes: null,
+    })
+  }
+  return lines
+}
+
+/**
+ * C2-I-001: reads the inline content of every text leaf and cell below `node`, after the block
+ * pass. `depth` is the number of open containers around `node` (C2-I-118).
+ */
+export function readInlines(state: InlineState, src: string, node: BlockNode, depth: number): void {
+  if (node.children !== null) {
+    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
+    for (const child of node.children) readInlines(state, src, child, inner)
+  } else if (hasInlineContent(node.kind)) {
+    node.inlines = contentInlines(state, src, node.spans!, 0, node.spans!.length, depth, true)
+  } else if (node.kind === LINE_BLOCK) {
+    node.inlines = lineInlines(state, src, node.spans!, depth)
+  }
 }
