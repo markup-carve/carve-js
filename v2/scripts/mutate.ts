@@ -23,13 +23,17 @@ const FILES = [
   'src/ast-json.ts', 'src/ast-lines.ts', 'src/ast-table.ts', 'src/ast-text.ts', 'src/ast-validate.ts', 'src/positions.ts',
   'src/resolve.ts', 'src/slug.ts', 'src/options.ts', 'src/html.ts', 'src/html-inline.ts', 'src/html-attributes.ts',
   'src/api.ts', 'src/include.ts', 'src/profile.ts', 'src/diagnostics.ts', 'src/delimited.ts',
+  'src/layout.ts', 'src/layout-facts.ts', 'src/layout-lines.ts', 'src/layout-table.ts', 'src/layout-validate.ts',
+  'src/write.ts', 'src/write-attributes.ts', 'src/write-blocks.ts', 'src/write-check.ts', 'src/write-inline.ts',
+  'src/write-lists.ts', 'src/write-state.ts', 'src/write-table.ts', 'src/format.ts', 'src/width.ts',
 ]
 const MAX_JOBS = 4
 const TESTS = [
   'test/clauses.test.ts', 'test/examples.test.ts', 'test/inline-clauses.test.ts', 'test/inline-examples.test.ts',
   'test/block-fixes.test.ts', 'test/ast-clauses.test.ts', 'test/positions.test.ts', 'test/resolve-clauses.test.ts',
   'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts', 'test/tree-details.test.ts',
-  'test/restated-clauses.test.ts', 'test/fast-paths.test.ts',
+  'test/restated-clauses.test.ts', 'test/fast-paths.test.ts', 'test/layout-clauses.test.ts', 'test/writer-clauses.test.ts',
+  'test/writer-layout.test.ts', 'test/writer-gates.test.ts',
 ]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.
