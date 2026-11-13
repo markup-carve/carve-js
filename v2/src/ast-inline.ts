@@ -1,18 +1,42 @@
-// The inline nodes of the public tree (spec/0.2/ast.md), from the inline tree of one content.
+// The inline nodes of the public tree (spec/0.2/ast.md), built straight from the events of the inline pass.
 import { type AstNode, type Attrs } from './ast.ts'
+import { type Attributes, attributeSink, foldLabel, NO_MEMO } from './ast-attributes.ts'
+import { readAttributeBlock, unescape } from './attributes.ts'
+import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
 import {
-  AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY,
-  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE,
-  INLINE_KIND_NAMES, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SOFT_BREAK, SYMBOL, TAG, XREF,
+  ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, DESTINATION, EDITORIAL, ESCAPE, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED,
+  FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION,
+  INLINE_FOOTNOTE, INLINE_KIND_NAMES, isInlineContainer, LABEL, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART,
+  SOFT_BREAK, SYMBOL, TAG, TITLE, XREF,
 } from './inline-kinds.ts'
+import { isPlainText, scanInline } from './inline-scan.ts'
+import { type InlineState } from './inline-state.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
-import { type Attributes, foldLabel, type InlineNode, TEXT } from './inline-tree.ts'
 import type { BlockNode } from './tree.ts'
+
+/**
+ * One open inline node while its events are read. `value` is the text of a node without children
+ * and the alt source of an image. `label` is the key of a reference (C2-I-079), and `aux` of a
+ * reference is the offset behind its label.
+ */
+export interface InlineFrame {
+  kind: number
+  start: number
+  end: number
+  flags: number
+  aux: number
+  children: AstNode[] | null
+  value: string | null
+  destination: string | null
+  title: string | null
+  label: string | null
+  attributes: Attributes | null
+}
 
 /** What the source-layout record reads beside the tree (C2-L-001). Filled only on request. */
 export interface LayoutTrace {
   blocks: Map<AstNode, BlockNode>
-  inlines: Map<AstNode, InlineNode>
+  inlines: Map<AstNode, InlineFrame>
   /** C2-L-020: per text node of a cell, pairs of the offset in its value and the source offset at which a fragment starts. */
   breaks: Map<AstNode, number[]>
 }
@@ -21,6 +45,10 @@ export interface LayoutTrace {
 export interface TreeContext {
   src: string
   positions: boolean
+  /** The state the inline pass of each content runs in. */
+  inline: InlineState
+  /** C2-I-118: the number of open containers around the block being built. */
+  depth: number
   /** C2-I-098: the expansion of each defined term. The first definition of a term wins (C2-B-085). */
   abbreviations: Map<string, string>
   /** The offset of the own markup of each block that took attribute lines (C2-A-148). */
@@ -80,7 +108,7 @@ export function commentValue(text: string, braced: boolean): string {
 }
 
 /** C2-A-105, C2-A-107: the target of a link or an image, direct or by reference. */
-function setTarget(out: AstNode, node: InlineNode, field: 'href' | 'src'): void {
+function setTarget(out: AstNode, node: InlineFrame, field: 'href' | 'src'): void {
   if ((node.flags & FLAG_REFERENCE) !== 0) {
     out.key = node.label ?? ''
     out.namespace = 'link'
@@ -91,7 +119,7 @@ function setTarget(out: AstNode, node: InlineNode, field: 'href' | 'src'): void 
   if (node.title !== null) out.tooltip = node.title
 }
 
-type LeafBuilder = (ctx: TreeContext, node: InlineNode) => AstNode
+type LeafBuilder = (ctx: TreeContext, node: InlineFrame) => AstNode
 
 function valueNode(type: string): LeafBuilder {
   return (_ctx, node) => ({ type, value: node.value ?? '' })
@@ -109,7 +137,6 @@ const LEAVES = new Map<number, LeafBuilder>([
   [SYMBOL, nameNode('symbol')],
   [NBSP, () => ({ type: 'non_breaking_space' })],
   [HARD_BREAK, () => ({ type: 'hard_break' })],
-  [SOFT_BREAK, () => ({ type: 'soft_break' })],
   [MATH, (_ctx, node) => ({ type: 'math', display: (node.flags & FLAG_DISPLAY) !== 0, value: node.value ?? '' })],
   [RAW_INLINE, (ctx, node) => ({
     type: 'raw_inline', format: ctx.src.slice(node.aux, ctx.src.indexOf('}', node.aux)), value: node.value ?? '',
@@ -139,25 +166,36 @@ const LEAVES = new Map<number, LeafBuilder>([
 ])
 
 /** A node with inline children: its type is the name of its kind, with the fields of a link and of an extension. */
-function parentNode(ctx: TreeContext, node: InlineNode, flow: number): AstNode {
+function parentNode(ctx: TreeContext, node: InlineFrame): AstNode {
   const out: AstNode = { type: INLINE_KIND_NAMES[node.kind - FIRST_INLINE_KIND]! }
   if (node.kind === LINK) setTarget(out, node, 'href')
   if (node.kind === INLINE_EXTENSION) out.name = ctx.src.slice(node.start + 1, node.aux)
-  out.children = inlineNodes(ctx, node.children!, flow)
+  out.children = node.children!
   return out
 }
 
-/** Adds text to `list`: adjacent runs are one text node (C2-A-040). */
+/** Adds text to `list`: adjacent runs are one text node (C2-A-040). A joined node has no position (C2-A-158). */
 export function addText(ctx: TreeContext, list: AstNode[], value: string, start: number, end: number): void {
   const last = list.length > 0 ? list[list.length - 1]! : null
   if (last !== null && last.type === 'text') {
     last.value += value
-    // The inline tree has joined the runs that are adjacent in the source, so these two are not (C2-A-158).
     delete last.pos
     return
   }
   const node: AstNode = { type: 'text', value }
   list.push(start < 0 ? node : place(ctx, node, start, end))
+}
+
+/**
+ * Adds a run of the inline pass to `list`. A run behind a text node of the pass extends it; behind
+ * text with no place in the source (`start` -1, as the space of a cell break), the node has none.
+ */
+function addRun(ctx: TreeContext, list: AstNode[], value: string, start: number, end: number): void {
+  const last = list.length > 0 ? list[list.length - 1]! : null
+  if (last === null || last.type !== 'text') return addText(ctx, list, value, start, end)
+  last.value += value
+  if (start < 0) delete last.pos
+  else if (last.pos !== undefined) last.pos.endOffset = end
 }
 
 function traceBreak(trace: LayoutTrace, text: AstNode, fragment: number): void {
@@ -166,7 +204,7 @@ function traceBreak(trace: LayoutTrace, text: AstNode, fragment: number): void {
   else breaks.push(text.value!.length, fragment)
 }
 
-function addBreak(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: number): void {
+function addBreak(ctx: TreeContext, list: AstNode[], node: InlineFrame, flow: number): void {
   const kind = flow & FLOW_KIND_MASK
   if (kind === FLOW_CELL) {
     addText(ctx, list, ' ', -1, -1)
@@ -178,36 +216,136 @@ function addBreak(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: num
 }
 
 /** True for a node that resolution reads: it carries an id, or it is a reference, a note or a cross-reference. */
-function isResolvable(node: InlineNode): boolean {
+function isResolvable(node: InlineFrame): boolean {
   if (node.attributes !== null && node.attributes.id !== null) return true
   return node.kind === XREF || node.kind === FOOTNOTE_REF || node.kind === INLINE_FOOTNOTE || (node.flags & FLAG_REFERENCE) !== 0
 }
 
-function addNode(ctx: TreeContext, list: AstNode[], node: InlineNode, flow: number): void {
-  const unplaced = (flow & FLOW_UNPLACED) !== 0
-  if (node.kind === TEXT) return addText(ctx, list, node.value ?? '', unplaced ? -1 : node.start, node.end)
+/** Adds the public node of the closed frame `node` to `list`. */
+function addNode(ctx: TreeContext, list: AstNode[], node: InlineFrame, flow: number): void {
   if (node.kind === SOFT_BREAK) return addBreak(ctx, list, node, flow)
   if (!ctx.resolvable && isResolvable(node)) ctx.resolvable = true
-  const out = node.children !== null ? parentNode(ctx, node, flow) : LEAVES.get(node.kind)!(ctx, node)
+  const out = node.children !== null ? parentNode(ctx, node) : LEAVES.get(node.kind)!(ctx, node)
   setAttributes(out, node.attributes)
   if (ctx.trace !== null) ctx.trace.inlines.set(out, node)
-  list.push(unplaced ? out : place(ctx, out, node.start, node.end))
+  list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, node.end))
 }
 
-/** The public nodes of the inline nodes of one content or of one node with inline children. */
-export function inlineNodes(ctx: TreeContext, nodes: InlineNode[], flow: number): AstNode[] {
-  const list: AstNode[] = []
-  for (const node of nodes) addNode(ctx, list, node, flow)
-  return list
+function isPart(kind: number): boolean {
+  return kind === ATTRIBUTE_BLOCK || kind === DESTINATION || kind === TITLE || kind === LABEL
+}
+
+/** The source of `[start, end)` without the prefixes of the lines it crosses: its parts inside `spans`, joined by line feeds. */
+export function contentSource(src: string, spans: number[], start: number, end: number): string {
+  const lines: string[] = []
+  for (let at = 0; at < spans.length; at += 2) {
+    const from = Math.max(start, spans[at]!)
+    const to = Math.min(end, spans[at + 1]!)
+    if (from < to) lines.push(src.slice(from, to))
+  }
+  return lines.join('\n')
+}
+
+/** C2-I-067: a backslash before a parenthesis or a backslash is dropped; most destinations hold none. */
+function destinationValue(value: string): string {
+  return value.includes('\\') ? value.replaceAll(/\\([()\\])/g, '$1') : value
+}
+
+/** Closes a part of `host`: it goes into a field of the host. */
+function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: InlineFrame): void {
+  const value = node.value ?? ''
+  if (node.kind === LABEL) host.aux = node.end
+  if (node.kind === ATTRIBUTE_BLOCK) {
+    host.attributes ??= { id: null, classes: [], language: null, keys: [] }
+    readAttributeBlock(ctx.src, node.start, node.end, NO_MEMO, attributeSink(host.attributes))
+  } else if (node.kind === DESTINATION) {
+    host.destination = destinationValue(value)
+  } else if (node.kind === TITLE) {
+    host.title = unescape(value, 0, value.length)
+  } else if ((host.flags & FLAG_COLLAPSED) !== 0) {
+    // C2-I-072: the label of a collapsed reference is the source of its own text.
+    host.label = foldLabel(contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))
+  } else {
+    host.label = foldLabel(value)
+  }
+}
+
+function openFrame(kind: number, start: number, flags: number, aux: number): InlineFrame {
+  return {
+    kind, start, end: start, flags, aux, children: isInlineContainer(kind) ? [] : null,
+    value: null, destination: null, title: null, label: null, attributes: null,
+  }
+}
+
+/** The start of a run of text in `flow`: none for a content joined from pieces (C2-A-158). */
+function runStart(flow: number, start: number): number {
+  return (flow & FLOW_UNPLACED) !== 0 ? -1 : start
+}
+
+/** Closes the frame `node` at `end` into `list`, the children of its parent `host` or the root. */
+function closeFrame(ctx: TreeContext, spans: number[], node: InlineFrame, host: InlineFrame | null, list: AstNode[], flow: number): void {
+  // C2-A-041: an escape is no node. Its character is text.
+  if (node.kind === ESCAPE) addRun(ctx, list, node.value ?? '', runStart(flow, node.start), node.end)
+  else if (isPart(node.kind)) closePart(ctx, spans, node, host!)
+  else addNode(ctx, list, node, flow)
+}
+
+/** Builds the public nodes of one content from the events of its inline pass. */
+function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): AstNode[] {
+  const { events, eventLength } = ctx.inline
+  const src = ctx.src
+  const root: AstNode[] = []
+  const open: InlineFrame[] = []
+  let top: InlineFrame | null = null
+  for (let at = 0; at < eventLength; at += EVENT_WIDTH) {
+    const tag = events[at]!
+    const a = events[at + 1]!
+    const b = events[at + 2]!
+    const type = eventType(tag)
+    if (type === ENTER) {
+      top = openFrame(eventKind(tag), a, eventFlags(tag), b)
+      open.push(top)
+    } else if (type === SPAN && top !== null && top.children === null) {
+      top.value = top.value === null ? src.slice(a, b) : `${top.value}\n${src.slice(a, b)}`
+    } else if (type === SPAN) {
+      addRun(ctx, top === null ? root : top.children!, src.slice(a, b), runStart(flow, a), b)
+    } else {
+      const node = open.pop()!
+      node.end = a
+      top = open.length > 0 ? open[open.length - 1]! : null
+      closeFrame(ctx, spans, node, top, top === null ? root : top.children!, flow)
+    }
+  }
+  return root
 }
 
 /**
- * The inline content of the leaf `leaf`, as `inlineNodes` gives it. The leaf is noted when its
- * content holds a node that resolution reads.
+ * C2-I-001: the public nodes of the content `spans[from..to)`. `lineComments` is false where `%%`
+ * is text (C2-B-130, C2-B-144).
  */
-export function leafInlines(ctx: TreeContext, leaf: AstNode, nodes: InlineNode[], flow: number): AstNode[] {
+export function contentNodes(ctx: TreeContext, spans: number[], from: number, to: number, lineComments: boolean, flow: number): AstNode[] {
+  // One line of plain text is one text node, with no pass over it.
+  if (to - from === 2 && isPlainText(ctx.src, spans[from]!, spans[from + 1]!)) {
+    const list: AstNode[] = []
+    addText(ctx, list, ctx.src.slice(spans[from], spans[from + 1]), runStart(flow, spans[from]!), spans[from + 1]!)
+    return list
+  }
+  scanInline(ctx.inline, ctx.src, spans, from, to, ctx.depth, lineComments)
+  return buildFromEvents(ctx, spans, flow)
+}
+
+/** The inline content of the leaf `leaf`, whose lines are `spans`. The leaf is noted when it holds a node that resolution reads. */
+export function leafInlines(ctx: TreeContext, leaf: AstNode, spans: number[], flow: number): AstNode[] {
   ctx.resolvable = false
-  const list = inlineNodes(ctx, nodes, flow)
+  const list = contentNodes(ctx, spans, 0, spans.length, true, flow)
   if (ctx.resolvable) ctx.resolvableLeaves.add(leaf)
+  return list
+}
+
+/** C2-B-130, C2-B-144: line `at` of a line block is a content of its own, and `%%` is text in it. */
+export function lineInlines(ctx: TreeContext, line: AstNode, spans: number[], at: number): AstNode[] {
+  ctx.resolvable = false
+  const list = contentNodes(ctx, spans, at, at + 2, false, FLOW_PLAIN)
+  if (ctx.resolvable) ctx.resolvableLeaves.add(line)
   return list
 }

@@ -2,7 +2,8 @@
 // in exactly one top-level range, the same events from a reused state, and no exception.
 // See support/inline-checks.ts.
 import { describe, expect, it } from 'vitest'
-import { acquireInlineState, buildInlineTree, parseTree, releaseInlineState, scanInline } from '../src/index.ts'
+import { acquireInlineState, releaseInlineState, scanInline } from '../src/index.ts'
+import { buildInlineTree, parseTree } from './support/inline-tree.ts'
 import { checkInlines } from './support/inline-checks.ts'
 import { enumerateContents, INLINE_TOKENS } from './support/inline-enumerate.ts'
 import { inlineShapeOf } from './support/inline-shape.ts'

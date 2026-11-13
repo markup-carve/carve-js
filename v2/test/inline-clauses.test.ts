@@ -1,9 +1,8 @@
 // One test or more for every clause of the inline chapter (spec/0.2/syntax-inline.md). Each test
 // names its clause id. Shape notation: see support/shape.ts and support/inline-shape.ts.
 import { describe, expect, it } from 'vitest'
-import {
-  acquireInlineState, buildInlineTree, FLAG_BRACED, MAX_DEPTH, parseTree, releaseInlineState, scanInline,
-} from '../src/index.ts'
+import { acquireInlineState, FLAG_BRACED, MAX_DEPTH, releaseInlineState, scanInline } from '../src/index.ts'
+import { buildInlineTree, parseTree } from './support/inline-tree.ts'
 import { checkInlines } from './support/inline-checks.ts'
 import { inlineShapeOf } from './support/inline-shape.ts'
 import { shape, treeShape } from './support/shape.ts'

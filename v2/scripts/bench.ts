@@ -24,9 +24,10 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
-  format, LINE_BLOCK, PARAGRAPH, parse, parseTree, parseWithLayout, releaseInlineState, releaseState, render, scanBlocks,
+  format, LINE_BLOCK, PARAGRAPH, parse, parseWithLayout, releaseInlineState, releaseState, render, scanBlocks,
   scanInline, TERM,
 } from '../src/index.ts'
+import { buildSource } from '../src/ast-blocks.ts'
 
 function option(name: string, fallback: string): string {
   const at = process.argv.indexOf(`--${name}`)
@@ -187,7 +188,7 @@ console.log(`Node ${process.version}, ${cpus()[0]?.model ?? 'unknown CPU'}, ${cp
 console.log(`Load average (1, 5, 15 min) at the start: ${load()}`)
 console.log(`${rounds} rounds per input, about ${sampleMicros / 1000} ms of CPU per sample, median in microseconds per parse`)
 console.log('')
-console.log('| Input | Bytes | Lines | Events | Scan | Scan and tree | Spike scan | Contents | Inline events | Inline scan | Tree with inlines |')
+console.log('| Input | Bytes | Lines | Events | Scan | Scan and tree | Spike scan | Contents | Inline events | Inline scan | Public tree |')
 console.log('|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|')
 
 /** One inline content: the spans of its leaf, the range of them it takes, and how it is read. */
@@ -243,7 +244,7 @@ for (const file of files) {
     }
   }
   const fullTree = (): void => {
-    parseTree(src)
+    buildSource(src, false)
   }
   sample(scan)
   sample(scanAndTree)

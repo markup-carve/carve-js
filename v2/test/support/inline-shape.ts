@@ -8,11 +8,12 @@
 //   nbsp  br (hard break)  sb (soft break)  ‹“› for a smart punctuation node, by its glyph
 //   A host with attributes has them behind it in the fixed order: span["s"]{#a .b :en k=v open=""}
 import {
-  type Attributes, AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED,
-  FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END, FLAG_REFERENCE, FOOTNOTE_REF, foldLabel, HARD_BREAK, IMAGE,
-  INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE, type InlineNode, LINE, LINK, LITERAL, MATH, MENTION, NBSP,
-  RAW_INLINE, SMART, SMART_GLYPHS, SOFT_BREAK, SYMBOL, TAG, TEXT, XREF,
+  type Attributes, AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY,
+  FLAG_EMAIL, FLAG_OPEN_END, FLAG_REFERENCE, FOOTNOTE_REF, foldLabel, HARD_BREAK, IMAGE, INLINE_COMMENT,
+  INLINE_EXTENSION, INLINE_FOOTNOTE, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SMART_GLYPHS, SOFT_BREAK,
+  SYMBOL, TAG, XREF,
 } from '../../src/index.ts'
+import { type InlineNode, LINE, TEXT } from './inline-tree.ts'
 
 const CONTAINER_NAMES = ['em', 'strong', 'u', 's', 'mark', 'sup', 'sub', 'ins', 'del', 'span']
 

@@ -18,7 +18,7 @@ import { join } from 'node:path'
 
 const FILES = [
   'src/blocks.ts', 'src/lines.ts', 'src/tree.ts', 'src/attributes.ts', 'src/inline-atoms.ts', 'src/inline-brackets.ts',
-  'src/inline-delimiters.ts', 'src/inline-emit.ts', 'src/inline-scan.ts', 'src/inline-tree.ts', 'src/typography.ts',
+  'src/inline-delimiters.ts', 'src/inline-emit.ts', 'src/inline-scan.ts', 'src/typography.ts',
   'src/unicode.ts', 'src/ast-abbreviations.ts', 'src/ast-attributes.ts', 'src/ast-blocks.ts', 'src/ast-inline.ts',
   'src/ast-json.ts', 'src/ast-lines.ts', 'src/ast-table.ts', 'src/ast-text.ts', 'src/ast-validate.ts', 'src/positions.ts',
   'src/resolve.ts', 'src/slug.ts', 'src/options.ts', 'src/html.ts', 'src/html-inline.ts', 'src/html-attributes.ts',

@@ -1,7 +1,6 @@
 import { scanBlocks } from './blocks.ts'
 import { acquireState, releaseState } from './state.ts'
-import { acquireInlineState, releaseInlineState } from './inline-state.ts'
-import { type BlockNode, buildTree, readInlines } from './tree.ts'
+import { type BlockNode, buildTree } from './tree.ts'
 
 export { scanBlocks } from './blocks.ts'
 export { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, EXIT, SPAN } from './events.ts'
@@ -10,11 +9,11 @@ export * from './dispatch.ts'
 export { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 export { columnAt, lineAt, lineEndAt } from './source.ts'
 export { acquireState, type BlockState, MAX_DEPTH, releaseState } from './state.ts'
-export { type BlockNode, buildTree, FACT_MASK, FACT_SHIFT, readInlines } from './tree.ts'
+export { type BlockNode, buildTree, FACT_MASK, FACT_SHIFT } from './tree.ts'
 export * from './inline-kinds.ts'
 export { scanInline } from './inline-scan.ts'
 export { acquireInlineState, type InlineState, releaseInlineState } from './inline-state.ts'
-export { type Attributes, buildInlineTree, foldLabel, type InlineNode, LINE, TEXT } from './inline-tree.ts'
+export { type Attributes, foldLabel } from './ast-attributes.ts'
 export { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
@@ -48,17 +47,5 @@ export function parseBlockTree(src: string): BlockNode {
     return buildTree(state.events, state.eventLength)
   } finally {
     releaseState(state)
-  }
-}
-
-/** Tree of `src`: the block tree with the inline content of every text leaf and cell. */
-export function parseTree(src: string): BlockNode {
-  const root = parseBlockTree(src)
-  const state = acquireInlineState()
-  try {
-    readInlines(state, src, root, 0)
-    return root
-  } finally {
-    releaseInlineState(state)
   }
 }

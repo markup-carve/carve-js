@@ -1,20 +1,15 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 import { type AstNode } from './ast.ts'
-import { buildDocument, type BuiltTree } from './ast-blocks.ts'
-import { type LayoutTrace } from './ast-inline.ts'
+import { type BuiltTree, buildSource } from './ast-blocks.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
-import { scanBlocks } from './blocks.ts'
-import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { utf8Length } from './positions.ts'
 import { applyProfile } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
-import { acquireState, releaseState } from './state.ts'
-import { buildTree, readInlines } from './tree.ts'
 
 export interface ParseResult {
   document: AstNode
@@ -54,21 +49,6 @@ export class CarveInputError extends Error {
 const NO_PROFILE: ProfileRule = PROFILES.get('full')!
 const MAX_BYTES_PER_UNIT = 3
 
-/** The tree of `src` before resolution, with the folded sources of its headings. */
-function buildSource(src: string, positions: boolean, trace: LayoutTrace | null = null): BuiltTree {
-  const blocks = acquireState()
-  const inlines = acquireInlineState()
-  try {
-    scanBlocks(blocks, src)
-    const root = buildTree(blocks.events, blocks.eventLength)
-    readInlines(inlines, src, root, 0)
-    return buildDocument(src, root, positions, undefined, trace)
-  } finally {
-    releaseInlineState(inlines)
-    releaseState(blocks)
-  }
-}
-
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
@@ -92,7 +72,7 @@ export function parse(src: string, options?: ParseOptions): AstNode {
 export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
-  const built = buildSource(src, true, trace)
+  const built = buildSource(src, true, null, trace)
   const resolution = resolve(built.document, settings.headingIds, built.facts)
   const diagnostics = locateFindings(built.document, resolution.findings)
   return { document: built.document, diagnostics, layout: buildLayout(src, built.document, trace) }

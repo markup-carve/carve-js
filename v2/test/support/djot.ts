@@ -2,9 +2,10 @@
 // tree, for the constructs whose rules the two languages share. Leaf text is left out.
 import { parse } from '@djot/djot'
 import {
-  type BlockNode, BULLET_LIST, CODE, CODE_SPAN, DOCUMENT, FLAG_STAR, FLAG_TIGHT, type InlineNode, ITEM, LINK, PARAGRAPH,
-  parseBlockTree, parseTree, QUOTE, STRONG, TEXT, THEMATIC_BREAK,
+  type BlockNode, BULLET_LIST, CODE, CODE_SPAN, DOCUMENT, FLAG_STAR, FLAG_TIGHT, ITEM, LINK, PARAGRAPH,
+  parseBlockTree, QUOTE, STRONG, THEMATIC_BREAK,
 } from '../../src/index.ts'
+import { type InlineNode, parseTree, TEXT } from './inline-tree.ts'
 
 interface DjotNode {
   tag: string

@@ -1,29 +1,23 @@
-// The inline tree of one content, built from the events of its inline pass.
-import { type AttributeMemo, type AttributeSink, readAttributeBlock, unescape } from './attributes.ts'
-import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
+// The block tree with an inline tree per content, for tests in shape notation. The engine builds
+// the public tree straight from the events; this reads the same events into nodes that keep every flag.
+import { type Attributes, attributeSink, foldLabel, NO_MEMO } from '../../src/ast-attributes.ts'
+import { contentSource } from '../../src/ast-inline.ts'
+import { readAttributeBlock, unescape } from '../../src/attributes.ts'
+import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from '../../src/events.ts'
 import {
   ATTRIBUTE_BLOCK, DESTINATION, ESCAPE, FLAG_COLLAPSED, IMAGE, isInlineContainer, LABEL, TITLE,
-} from './inline-kinds.ts'
+} from '../../src/inline-kinds.ts'
+import { isPlainText, scanInline } from '../../src/inline-scan.ts'
+import { acquireInlineState, type InlineState, releaseInlineState } from '../../src/inline-state.ts'
+import { CAPTION, CELL, DIV, DOCUMENT, HEADING, LINE_BLOCK, PARAGRAPH, TERM } from '../../src/kinds.ts'
+import { type BlockNode } from '../../src/tree.ts'
+import { parseBlockTree } from '../../src/index.ts'
 
 /** Kinds of the tree that no event has: a run of text, and one line of a line block. */
 export const TEXT = 61
 export const LINE = 62
 
-const NO_MEMO: AttributeMemo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
-
-/** The merged attribute blocks of a host, in the fixed order of C2-I-041. */
-export interface Attributes {
-  id: string | null
-  classes: string[]
-  language: string | null
-  keys: [string, string][]
-}
-
-/**
- * One field layout for every inline node. A node with inline content has `children`. `value` is
- * the text of a text node, the payload of a node without children and the alt source of an image.
- * `label` is the key of a reference (C2-I-079), and `aux` of a reference is the offset behind its label.
- */
+/** One node of an inline tree, with the fields the event stream gives it. */
 export interface InlineNode {
   kind: number
   start: number
@@ -45,48 +39,11 @@ function createNode(kind: number, start: number, flags: number, aux: number): In
   }
 }
 
-/** The node of the text `value`, which stands at `[start, end)` of the source. */
-export function textNode(value: string, start: number, end: number): InlineNode {
+function textNode(value: string, start: number, end: number): InlineNode {
   const node = createNode(TEXT, start, 0, 0)
   node.value = value
   node.end = end
   return node
-}
-
-/** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
-export function foldLabel(source: string): string {
-  return source.replaceAll(/[ \t\n]+/g, ' ').trim()
-}
-
-function sameName(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase()
-}
-
-/** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
-export function attributeSink(attributes: Attributes): AttributeSink {
-  const sink: AttributeSink = {
-    id: (name) => {
-      attributes.id = name
-    },
-    className: (name) => {
-      attributes.classes.push(name)
-    },
-    language: (tag) => {
-      attributes.language = tag
-    },
-    key: (key, value) => {
-      if (sameName(key, 'id')) return sink.id(value)
-      if (sameName(key, 'class')) {
-        for (const name of value.split(/[ \t]+/)) if (name !== '') attributes.classes.push(name)
-        return
-      }
-      // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
-      const earlier = attributes.keys.find((pair) => sameName(pair[0], key))
-      if (earlier === undefined) attributes.keys.push([key, value])
-      else earlier[1] = value
-    },
-  }
-  return sink
 }
 
 function addAttributes(src: string, host: InlineNode, start: number, end: number): void {
@@ -159,4 +116,58 @@ export function buildInlineTree(src: string, events: Int32Array, length: number,
     }
   }
   return root
+}
+
+/** A node of the block tree with the inline nodes of its content. */
+export interface TreeNode extends Omit<BlockNode, 'children'> {
+  children: TreeNode[] | null
+  inlines: InlineNode[] | null
+}
+
+function hasInlineContent(kind: number): boolean {
+  return kind === PARAGRAPH || kind === HEADING || kind === TERM || kind === CAPTION || kind === CELL
+}
+
+/** The inline nodes of the content `spans[from..to)` of a leaf. */
+function contentInlines(state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean): InlineNode[] {
+  if (to - from === 2 && isPlainText(src, spans[from]!, spans[from + 1]!)) return [textNode(src.slice(spans[from], spans[from + 1]), spans[from]!, spans[from + 1]!)]
+  scanInline(state, src, spans, from, to, depth, lineComments)
+  return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
+}
+
+/** C2-B-130, C2-B-144: each line of a line block is a content of its own, and `%%` is text in it. */
+function lineInlines(state: InlineState, src: string, spans: number[], depth: number): InlineNode[] {
+  const lines: InlineNode[] = []
+  for (let at = 0; at < spans.length; at += 2) {
+    const line = createNode(LINE, spans[at]!, 0, 0)
+    line.end = spans[at + 1]!
+    line.children = contentInlines(state, src, spans, at, at + 2, depth, false)
+    lines.push(line)
+  }
+  return lines
+}
+
+/** Reads the inline content of every text leaf and cell below `node`. `depth` is the number of open containers around it (C2-I-118). */
+function readInlines(state: InlineState, src: string, node: TreeNode, depth: number): void {
+  node.inlines = null
+  if (node.children !== null) {
+    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
+    for (const child of node.children) readInlines(state, src, child, inner)
+  } else if (hasInlineContent(node.kind)) {
+    node.inlines = contentInlines(state, src, node.spans!, 0, node.spans!.length, depth, true)
+  } else if (node.kind === LINE_BLOCK) {
+    node.inlines = lineInlines(state, src, node.spans!, depth)
+  }
+}
+
+/** The block tree of `src` with the inline content of every text leaf and cell. */
+export function parseTree(src: string): TreeNode {
+  const root = parseBlockTree(src) as TreeNode
+  const state = acquireInlineState()
+  try {
+    readInlines(state, src, root, 0)
+    return root
+  } finally {
+    releaseInlineState(state)
+  }
 }

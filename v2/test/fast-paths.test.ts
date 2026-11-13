@@ -3,8 +3,9 @@
 // does not walk into.
 import { describe, expect, it } from 'vitest'
 import {
-  acquireInlineState, buildInlineTree, type InlineNode, PARAGRAPH, parse, parseTree, parseWithDiagnostics, releaseInlineState, render, scanInline,
+  acquireInlineState, PARAGRAPH, parse, parseBlockTree, parseWithDiagnostics, releaseInlineState, render, scanInline,
 } from '../src/index.ts'
+import { buildInlineTree, type InlineNode, TEXT } from './support/inline-tree.ts'
 import { isPlainText } from '../src/inline-scan.ts'
 
 /** The inline nodes of the one-line content `text`, read by the inline pass with no shortcut. */
@@ -32,11 +33,14 @@ describe('a content of plain text', () => {
     let plain = 0
     const check = (text: string): void => {
       if (!isPlainText(text, 0, text.length)) return
-      const block = parseTree(text).children![0]!
+      const block = parseBlockTree(text).children![0]!
       // A text that the block pass reads as another block, or not as one line of a paragraph, is no such content.
       if (block.kind !== PARAGRAPH || block.spans![0] !== 0 || block.spans![1] !== text.length) return
       plain++
-      expect([text, block.inlines]).toEqual([text, fullPass(text)])
+      // The shortcut gives one text node of the whole line, and so does the pass.
+      const pass = fullPass(text).map((node) => [node.kind, node.value, node.start, node.end])
+      expect([text, pass]).toEqual([text, [[TEXT, text, 0, text.length]]])
+      expect([text, parse(text, { positions: false }).children![0]!.children]).toEqual([text, [{ type: 'text', value: text }]])
     }
     for (const first of PIECES) {
       check(first)

@@ -8,8 +8,9 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  acquireState, type AstNode, type BlockNode, type BlockState, parse, parseTree, render, type RenderOptions, scanBlocks,
+  acquireState, type AstNode, type BlockState, parse, render, type RenderOptions, scanBlocks,
 } from '../src/index.ts'
+import { parseTree, type TreeNode } from '../test/support/inline-tree.ts'
 import { EXAMPLES } from '../test/support/conformance.ts'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { INLINE_TOKENS } from '../test/support/inline-enumerate.ts'
@@ -17,7 +18,6 @@ import { INLINE_TOKENS } from '../test/support/inline-enumerate.ts'
 interface Engine {
   acquireState(): BlockState
   scanBlocks(state: BlockState, src: string): void
-  parseTree(src: string): BlockNode
   parse(src: string): AstNode
   render(input: string | AstNode, options?: RenderOptions): string
 }
@@ -30,6 +30,7 @@ const OPTION_SETS: readonly RenderOptions[] = [
 ]
 
 const other = await import(pathToFileURL(join(process.argv[2]!, 'src/index.ts')).href) as Engine
+const otherTree = await import(pathToFileURL(join(process.argv[2]!, 'test/support/inline-tree.ts')).href) as { parseTree(src: string): TreeNode }
 const mine = acquireState()
 const theirs = other.acquireState()
 
@@ -47,7 +48,7 @@ function sameEvents(src: string): boolean {
 
 function sameTree(src: string): boolean {
   try {
-    return JSON.stringify(other.parseTree(src)) === JSON.stringify(parseTree(src))
+    return JSON.stringify(otherTree.parseTree(src)) === JSON.stringify(parseTree(src))
   } catch {
     return false
   }

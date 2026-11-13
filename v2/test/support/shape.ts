@@ -10,12 +10,13 @@
 // p["a " strong["b"]], in the notation of support/inline-shape.ts.
 import {
   ABBREVIATION, type BlockNode, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION,
-  DESCRIPTION_LIST, DIV, DOCUMENT, FACT_MASK, FACT_SHIFT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES,
-  FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH,
-  FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER,
-  FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH,
-  parseBlockTree, parseTree, QUOTE, readDelimitedTable, ROW, TABLE, TERM, THEMATIC_BREAK,
+  DESCRIPTION_LIST, DIV, DOCUMENT, FACT_MASK, FACT_SHIFT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_DELIMITED,
+  FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
+  FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE,
+  FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, parseBlockTree, QUOTE,
+  readDelimitedTable, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from '../../src/index.ts'
+import { parseTree, type TreeNode } from './inline-tree.ts'
 import { inlineShapeOf } from './inline-shape.ts'
 
 export function shape(src: string): string {
@@ -126,7 +127,8 @@ function leafShape(src: string, node: BlockNode): string {
   if (node.kind === HEADING) name = `h${node.aux}`
   if (node.kind === CODE) name = codeName(node)
   if (node.kind === CELL) name = cellName(node)
-  if (node.inlines !== null) return `${name}[${inlineShapeOf(src, node.inlines)}]`
+  const inlines = (node as Partial<TreeNode>).inlines ?? null
+  if (inlines !== null) return `${name}[${inlineShapeOf(src, inlines)}]`
   return `${name}${(node.exitFlags & FLAG_UNCLOSED) !== 0 ? '!' : ''}"${text(src, node)}"`
 }
 

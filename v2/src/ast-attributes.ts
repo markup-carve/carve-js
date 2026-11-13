@@ -1,9 +1,52 @@
 // The attribute blocks a block took, read from their source spans into the fields of C2-A-032.
-import { type AttributeMemo, readAttributeBlock } from './attributes.ts'
+import { type AttributeMemo, type AttributeSink, readAttributeBlock } from './attributes.ts'
 import { BRACE_OPEN, GREATER, LESS, TILDE } from './chars.ts'
-import { type Attributes, attributeSink } from './inline-tree.ts'
 
-const NO_MEMO: AttributeMemo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+export const NO_MEMO: AttributeMemo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+
+/** The merged attribute blocks of a host, in the fixed order of C2-I-041. */
+export interface Attributes {
+  id: string | null
+  classes: string[]
+  language: string | null
+  keys: [string, string][]
+}
+
+/** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
+export function foldLabel(source: string): string {
+  return source.replaceAll(/[ \t\n]+/g, ' ').trim()
+}
+
+function sameName(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase()
+}
+
+/** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
+export function attributeSink(attributes: Attributes): AttributeSink {
+  const sink: AttributeSink = {
+    id: (name) => {
+      attributes.id = name
+    },
+    className: (name) => {
+      attributes.classes.push(name)
+    },
+    language: (tag) => {
+      attributes.language = tag
+    },
+    key: (key, value) => {
+      if (sameName(key, 'id')) return sink.id(value)
+      if (sameName(key, 'class')) {
+        for (const name of value.split(/[ \t]+/)) if (name !== '') attributes.classes.push(name)
+        return
+      }
+      // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
+      const earlier = attributes.keys.find((pair) => sameName(pair[0], key))
+      if (earlier === undefined) attributes.keys.push([key, value])
+      else earlier[1] = value
+    },
+  }
+  return sink
+}
 
 export function emptyAttributes(): Attributes {
   return { id: null, classes: [], language: null, keys: [] }

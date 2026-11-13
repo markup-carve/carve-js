@@ -3,29 +3,15 @@
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
 import { type AstNode, INLINE_PARENTS } from './ast.ts'
-import { buildDocument } from './ast-blocks.ts'
+import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
-import { scanBlocks } from './blocks.ts'
-import { acquireInlineState, releaseInlineState } from './inline-state.ts'
-import { acquireState, releaseState } from './state.ts'
-import { buildTree, readInlines } from './tree.ts'
 import { isAsciiPunctuation } from './write-attributes.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */
 export function parseChunk(src: string, abbreviations: Map<string, string>): AstNode {
-  const blocks = acquireState()
-  const inlines = acquireInlineState()
-  try {
-    scanBlocks(blocks, src)
-    const root = buildTree(blocks.events, blocks.eventLength)
-    readInlines(inlines, src, root, 0)
-    return buildDocument(src, root, true, abbreviations).document
-  } finally {
-    releaseInlineState(inlines)
-    releaseState(blocks)
-  }
+  return buildSource(src, true, abbreviations).document
 }
 
 /** One comparison of written blocks with their parse: what it asks the next write to change. */

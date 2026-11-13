@@ -1,11 +1,8 @@
 // The parts of one-line blocks that the block pass does not read: the title of an opener, the
 // fields of a link definition and of an include directive.
 import { type AstNode } from './ast.ts'
-import { FLOW_PLAIN, inlineNodes, type TreeContext } from './ast-inline.ts'
+import { contentNodes, FLOW_PLAIN, type TreeContext } from './ast-inline.ts'
 import { unescape } from './attributes.ts'
-import { scanInline } from './inline-scan.ts'
-import { acquireInlineState, releaseInlineState } from './inline-state.ts'
-import { buildInlineTree } from './inline-tree.ts'
 import { readInclude } from './include.ts'
 import { quotedEnd, skipSpaces } from './lines.ts'
 import { isSpaceOrTab } from './source.ts'
@@ -17,14 +14,12 @@ export function openerTitle(src: string, start: number, end: number): string {
 
 /** The inline content of `[start, end)`, one line of the source: the title of a div, an admonition or a directive. */
 export function captionChildren(ctx: TreeContext, start: number, end: number): AstNode[] {
-  const state = acquireInlineState()
-  try {
-    scanInline(state, ctx.src, [start, end], 0, 2, 0, false)
-    const nodes = buildInlineTree(ctx.src, state.events, state.eventLength, (from, to) => ctx.src.slice(from, to))
-    return inlineNodes(ctx, nodes, FLOW_PLAIN)
-  } finally {
-    releaseInlineState(state)
-  }
+  // The title is read at depth 0, whatever blocks are open around it.
+  const depth = ctx.depth
+  ctx.depth = 0
+  const nodes = contentNodes(ctx, [start, end], 0, 2, false, FLOW_PLAIN)
+  ctx.depth = depth
+  return nodes
 }
 
 /** C2-B-083: the destination and the optional quoted title behind the colon of a link definition. */

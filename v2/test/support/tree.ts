@@ -1,18 +1,17 @@
 // The public tree of a source for tests, with and without positions, and a reader of paths into it.
 import { type AstNode } from '../../src/ast.ts'
-import { buildDocument } from '../../src/ast-blocks.ts'
-import { parseTree } from '../../src/index.ts'
+import { buildSource } from '../../src/ast-blocks.ts'
 import { type HeadingIds } from '../../src/options.ts'
 import { resolve, type Resolution } from '../../src/resolve.ts'
 
 /** The tree of `src` before resolution, without positions. */
 export function tree(src: string): AstNode {
-  return buildDocument(src, parseTree(src), false).document
+  return buildSource(src, false).document
 }
 
 /** The tree of `src` before resolution, with positions. */
 export function placedTree(src: string): AstNode {
-  return buildDocument(src, parseTree(src), true).document
+  return buildSource(src, true).document
 }
 
 /** The blocks of `src`. */
@@ -52,7 +51,7 @@ export function documentOf(...children: AstNode[]): AstNode {
 
 /** The resolved tree of `src`, without positions, with what resolution returns beside it. */
 export function resolved(src: string, mode: HeadingIds = 'keep-case'): { document: AstNode, resolution: Resolution } {
-  const built = buildDocument(src, parseTree(src), false)
+  const built = buildSource(src, false)
   return { document: built.document, resolution: resolve(built.document, mode, built.facts) }
 }
 

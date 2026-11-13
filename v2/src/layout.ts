@@ -1,13 +1,13 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
 // second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
 import { type AstNode } from './ast.ts'
-import { type LayoutTrace } from './ast-inline.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
 import { type Facts, measureBlock } from './layout-facts.ts'
 import { blankLinesAfter, blankLinesBefore, byteOffsets } from './layout-lines.ts'
 import { cellRange, cellWraps, continuationRows, type TableRows, tableRows } from './layout-table.ts'
-import { type BlockNode, contentSource } from './tree.ts'
+import { contentSource, type LayoutTrace } from './ast-inline.ts'
+import { type BlockNode } from './tree.ts'
 
 export const LAYOUT_VERSION = 2
 

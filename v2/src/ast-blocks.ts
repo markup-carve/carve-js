@@ -1,24 +1,27 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
 import { type AstNode, AST_VERSION, type Marker } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
-import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
+import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, place, setAttributes, type TreeContext,
+  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, place, setAttributes,
+  type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
 import { DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
-import { type Attributes, foldLabel } from './inline-tree.ts'
+import { scanBlocks } from './blocks.ts'
+import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  DOCUMENT, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { orderedDelimiter, trimEnd } from './lines.ts'
 import { definitionLabel, readOpenerInfo } from './opener.ts'
 import { finishPositions, utf8Length } from './positions.ts'
-import { type BlockNode } from './tree.ts'
+import { acquireState, releaseState } from './state.ts'
+import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS, TASK_STATUS } from './tree-tables.ts'
 
 type BlockBuilder = (ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null) => AstNode
@@ -47,7 +50,7 @@ function bodyValue(src: string, spans: number[]): string {
 
 /** Gives the text leaf `out` its inline content, with the abbreviations in its text (C2-I-098). */
 function leafChildren(ctx: TreeContext, out: AstNode, node: BlockNode, flow: number): AstNode {
-  out.children = leafInlines(ctx, out, node.inlines ?? [], flow)
+  out.children = leafInlines(ctx, out, node.spans!, flow)
   if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
   return out
 }
@@ -113,12 +116,14 @@ function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
 
 /** C2-A-069: one `line` per line of the body; an empty line ends a stanza. */
 function lineBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
-  const lines = (node.inlines ?? []).map((line) => {
+  const spans = node.spans!
+  const lines: AstNode[] = []
+  for (let at = 0; at < spans.length; at += 2) {
     const out: AstNode = { type: 'line' }
-    out.children = leafInlines(ctx, out, line.children!, FLOW_PLAIN)
+    out.children = lineInlines(ctx, out, spans, at)
     if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
-    return place(ctx, out, line.start, line.end)
-  })
+    lines.push(place(ctx, out, spans[at]!, spans[at + 1]!))
+  }
   return { type: 'line_block', children: lines }
 }
 
@@ -284,7 +289,11 @@ function readsOwnAttributes(node: BlockNode): boolean {
 function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   const own = readsOwnAttributes(node)
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
+  // C2-I-118: the depth of a content counts the containers around it.
+  const container = node.kind > DOCUMENT && node.kind <= DIV
+  if (container) ctx.depth++
   const out = BUILDERS.get(node.kind)!(ctx, node, flow, attributes)
+  if (container) ctx.depth--
   if (!own) setAttributes(out, attributes)
   if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
   if (out.pos !== undefined) return out
@@ -420,23 +429,37 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
   return foldLabel(lines.join('\n'))
 }
 
-/**
- * The public tree of `src` from its block tree, whose inline content has been read. `abbreviations`
- * replaces the terms the source defines, for a source that is one block of a larger document (C2-W-089).
- * `trace` takes what the source-layout record reads (C2-L-001).
- */
-export function buildDocument(
-  src: string, root: BlockNode, positions: boolean, abbreviations?: Map<string, string>, trace: LayoutTrace | null = null,
-): BuiltTree {
-  const ctx: TreeContext = {
-    src, positions, abbreviations: abbreviations ?? collectAbbreviations(src, root), markup: new Map(), headingSpans: new Map(),
-    resolvable: false, resolvableLeaves: new Set(), trace,
-  }
+function buildDocument(ctx: TreeContext, root: BlockNode): BuiltTree {
+  const src = ctx.src
   const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
-  if (positions) {
+  if (ctx.positions) {
     document.srcByteLength = utf8Length(src)
     finishPositions(document, src)
   }
   const facts: ParseFacts = { headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves }
   return { document, facts }
+}
+
+/**
+ * The public tree of `src` before resolution, built from the events of the block pass and of the
+ * inline pass of each content. `abbreviations` replaces the terms the source defines, for a source
+ * that is one block of a larger document (C2-W-089). `trace` takes what the source-layout record reads (C2-L-001).
+ */
+export function buildSource(
+  src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
+): BuiltTree {
+  const blocks = acquireState()
+  const inline = acquireInlineState()
+  try {
+    scanBlocks(blocks, src)
+    const root = buildTree(blocks.events, blocks.eventLength)
+    const ctx: TreeContext = {
+      src, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(src, root), markup: new Map(),
+      headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace,
+    }
+    return buildDocument(ctx, root)
+  } finally {
+    releaseInlineState(inline)
+    releaseState(blocks)
+  }
 }

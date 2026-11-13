@@ -1,13 +1,12 @@
 // The tables of the public tree (C2-A-086 to C2-A-095): groups, rows, cells and columns, from
 // the rows of the block tree and from the rows of a delimited table.
 import { type AstNode } from './ast.ts'
-import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
+import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
   FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
-import { type Attributes } from './inline-tree.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { countValue } from './lines.ts'
 import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
@@ -65,7 +64,7 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
   const paragraph: AstNode = { type: 'cell_paragraph' }
-  paragraph.children = leafInlines(ctx, paragraph, node.inlines ?? [], flow)
+  paragraph.children = leafInlines(ctx, paragraph, node.spans!, flow)
   const cell: AstNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if ((node.facts & FACT_MASK) > 1) cell.colspan = node.facts & FACT_MASK
   if (node.facts >> FACT_SHIFT > 1) cell.rowspan = node.facts >> FACT_SHIFT
