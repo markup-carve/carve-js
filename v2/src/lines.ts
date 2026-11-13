@@ -334,11 +334,13 @@ export function quotedEnd(src: string, pos: number, end: number): number {
   return -1
 }
 
-/** C2-B-065: `*[label]:` with a label without spaces, a space and an expansion that is not empty. */
+/** C2-B-065: `*[label]:` with a label of ASCII letters and digits, a space and an expansion that is not empty. */
 export function isAbbreviation(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== STAR || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
-  const marker = labelEnd(src, pos, end, 2, false)
-  return marker >= 0 && afterMarkerSpace(src, marker, end, 1) >= 0
+  let p = pos + 2
+  while (p < end && (isDigit(src.charCodeAt(p)) || isLower(src.charCodeAt(p)) || isUpper(src.charCodeAt(p)))) p++
+  if (p === pos + 2 || p + 1 >= end || src.charCodeAt(p) !== BRACKET_CLOSE || src.charCodeAt(p + 1) !== COLON) return false
+  return afterMarkerSpace(src, p + 2, end, 1) >= 0
 }
 
 /** True when a definition of any of the three kinds stands at `pos` (C2-B-015). */

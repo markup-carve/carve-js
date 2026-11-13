@@ -83,13 +83,14 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
   const blank = state.pos >= end
 
   if (isOpaqueLeaf(state.leaf)) {
-    // C2-B-093, C2-B-095: a comment-only line is skipped by ownership, so it stays in the body.
-    if (matched === state.depth || (!blank && isLineComment(state.src, state.pos, end))) {
-      opaqueLine(state, lineStart, end, blank, matched === state.depth)
+    if (matched === state.depth) {
+      opaqueLine(state, lineStart, end, blank)
       return
     }
-    // C2-B-083: the leaf ends with its container.
+    // C2-B-083: the leaf ends with its container. C2-B-093: a comment line is no exception,
+    // so the containers that do not own this line close before it is read again.
     closeLeaf(state)
+    if (!blank) closeUnowned(state, matched, end)
   }
   if (blank) {
     // C2-B-029: a blank line without the mark ends a quote. C2-B-009: it ends nothing else.
@@ -194,8 +195,8 @@ function shapesAt(state: BlockState): number {
   return code < ASCII ? FIRST_CHARACTER_SHAPES[code]! : 0
 }
 
-/** A line of an open opaque leaf. `owned` is false for a comment line that the leaf's container does not own. */
-function opaqueLine(state: BlockState, lineStart: number, end: number, blank: boolean, owned: boolean): void {
+/** A line of an open opaque leaf that the leaf's container owns. */
+function opaqueLine(state: BlockState, lineStart: number, end: number, blank: boolean): void {
   const line = state.lineCount - 1
   if (blank) {
     // Held back: blank lines before the end of an unclosed leaf are not its content (C2-B-009).
@@ -212,7 +213,7 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     matchContainers(state, lineStart, end)
   }
   state.contentEnd = end
-  if (owned && isCloser(state, lineStart, end)) {
+  if (isCloser(state, lineStart, end)) {
     const kind = state.leaf
     writeEvent(state, eventTag(EXIT, kind, 0), end, 0)
     state.leaf = NO_LEAF

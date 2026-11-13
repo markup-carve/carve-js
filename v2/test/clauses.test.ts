@@ -409,9 +409,10 @@ describe('readings the chapter leaves open', () => {
     expect(blocks('  - a', '    1. b', '', '1. c')).toBe('ul(-)[li[p"a" ol(1.)[li[p"b"]]]] ol(1.)[li[p"c"]]')
   })
 
-  it('C2-B-095: a comment line never closes a fence, also outside the container of the fence', () => {
-    expect(blocks('- ```', '  x', '%% c', '  y')).toBe('ul(-)[li[code!"x|%% c|y"]]')
+  it('C2-B-093: a comment line the container of an open fence does not own ends that container', () => {
+    expect(blocks('- ```', '  x', '%% c', '  y')).toBe('ul(-)[li[code!"x"]] %"%% c" p"y"')
     expect(blocks('- ```', '  x', '  %% c', '  y')).toBe('ul(-)[li[code!"x|%% c|y"]]')
+    expect(blocks('> ```', '> x', '%% c', '> y')).toBe('quote[code!"x"] %"%% c" quote[p"y"]')
   })
 
   it('C2-B-096: with no leaf open in a quote, a comment line is a comment node', () => {
@@ -567,6 +568,8 @@ describe('definitions', () => {
   it('C2-B-065: an abbreviation definition has a label without spaces and an expansion', () => {
     expect(blocks('*[a]: b c')).toBe('abbr"*[a]: b c"')
     expect(blocks('*[a b]: c')).toBe('p"*[a b]: c"')
+    expect(blocks('*[a-b]: c')).toBe('p"*[a-b]: c"')
+    expect(blocks('*[A1]: c')).toBe('abbr"*[A1]: c"')
     expect(blocks('*[a]:')).toBe('p"*[a]:"')
   })
 
@@ -703,8 +706,9 @@ describe('divs, sigil divs and comment blocks', () => {
   })
 
   it('C2-B-093: in a line block and in a comment block a `%%` line is body text', () => {
-    expect(blocks('- ::: |', '  a', '%% c', '  b', '  :::')).toBe('ul(-)[li[lines"a|%% c|b"]]')
-    expect(blocks('- %%%', '  a', '%% c', '  %%%')).toBe('ul(-)[li[%%%"a|%% c"]]')
+    expect(blocks('- ::: |', '  a', '  %% c', '  b', '  :::')).toBe('ul(-)[li[lines"a|%% c|b"]]')
+    expect(blocks('- %%%', '  a', '  %% c', '  %%%')).toBe('ul(-)[li[%%%"a|%% c"]]')
+    expect(blocks('- ::: |', '  a', '%% c')).toBe('ul(-)[li[lines!"a"]] %"%% c"')
   })
 
   it('C2-B-131: a div counts toward the depth cap', () => {
@@ -869,6 +873,7 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('{x}}', 'y')).toBe('p"{x}}|y"')
     expect(blocks('{{ a }', 'y')).toBe('p"{{ a }|y"')
     expect(blocks('{{ a} }', 'y')).toBe('p"{{ a} }|y"')
+    expect(blocks('{{ a }x', 'y')).toBe('p"{{ a }x|y"')
   })
 
   it('C2-B-033: the last letter of the alphabet and the longest roman numeral', () => {
@@ -877,6 +882,8 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('A) x')).toBe('ol(A1))[li[p"x"]]')
     expect(blocks(`${'m'.repeat(15)}) x`)).toBe('ol(i15000))[li[p"x"]]')
     expect(blocks(`${'m'.repeat(16)}) x`)).toBe(`p"${'m'.repeat(16)}) x"`)
+    expect(blocks('ai) x')).toBe('p"ai) x"')
+    expect(blocks('ia) x')).toBe('p"ia) x"')
   })
 
   it('C2-B-039: a task box is three characters between brackets', () => {
@@ -886,6 +893,7 @@ describe('boundaries pinned by the mutation check', () => {
 
   it('C2-B-087, C2-B-088: a sigil stands alone after the run', () => {
     expect(blocks('::: |x', 'a', ':::')).toBe('div[p"a"]')
+    expect(blocks('::: |x y', 'a', ':::')).toBe('div[p"a"]')
     expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div[p"a"] p"^ c"')
   })
 
