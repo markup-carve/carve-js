@@ -62,17 +62,18 @@ function letterMarkers(style: string, delimiter: string, start: number, count: n
 
 /** C2-W-044: a decimal list with written numbers. Only the first marker carries a value (C2-B-041). */
 function numberedMarkers(delimiter: string, start: number, count: number): ListMarkers {
-  const moved = start > MAX_DECIMAL
-  const from = moved ? 1 : start
   const markers: string[] = []
-  for (let at = 0; at < count; at++) markers.push(`${from + at > MAX_DECIMAL ? 1 : from + at}${delimiter}`)
-  return { markers, start: moved ? String(start) : null }
+  for (let at = 0; at < count; at++) markers.push(`${start + at > MAX_DECIMAL ? 1 : start + at}${delimiter}`)
+  return { markers, start: null }
 }
 
-function decimalMarkers(w: Writer, node: AstNode, delimiter: string, start: number, count: number): ListMarkers {
+function decimalMarkers(w: Writer, node: AstNode, delimiter: string, authored: number, count: number): ListMarkers {
+  // C2-W-044, C2-B-219: a start of more than nine digits is neither a marker nor a start value, so the
+  // list is written from 1 and the readback reports the field.
+  const start = authored > MAX_DECIMAL ? 1 : authored
   // C2-L-031: a bare `)` is no marker. C2-L-030: with no fact a list with the period takes the bare dot.
   const bare = delimiter === '.' && (w.facts?.get(node)?.bare ?? true)
-  if (!bare && !(start > MAX_DECIMAL && delimiter === '.')) return numberedMarkers(delimiter, start, count)
+  if (!bare) return numberedMarkers(delimiter, start, count)
   return { markers: new Array<string>(count).fill('.'), start: start === 1 ? null : String(start) }
 }
 

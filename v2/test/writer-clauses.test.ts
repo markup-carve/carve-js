@@ -472,11 +472,11 @@ describe('canonical forms: blocks', () => {
     expect(write(parse('3) a\n4) b'))).toBe('3) a\n4) b\n')
   })
 
-  it('C2-W-044: a start value of more than nine digits stands in a start attribute', () => {
+  it('C2-W-044: a start value of more than nine digits has no spelling, and the list is written from 1', () => {
     const period = edited('1. a\n2. b', (blocks) => { blocks[0]!.marker!.start = 1234567890 })
-    expect(write(period)).toBe('{start=1234567890}\n. a\n. b\n')
+    expect(write(period)).toBe('. a\n. b\n')
     const paren = edited('1) a\n2) b', (blocks) => { blocks[0]!.marker!.start = 1234567890 })
-    expect(write(paren)).toBe('{start=1234567890}\n1) a\n2) b\n')
+    expect(write(paren)).toBe('1) a\n2) b\n')
   })
 
   it('C2-W-044: a later marker whose number would have more than nine digits is written as 1', () => {

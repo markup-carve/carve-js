@@ -1,7 +1,9 @@
 // The clauses that the specification commits "decide the cases the three engine lanes logged" and
 // "fix what the review of today's clauses found" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { format, parse, parseWithLayout, render, type RenderOptions } from '../src/index.ts'
+import {
+  type AstNode, format, parse, parseWithLayout, render, type RenderOptions, write, writeWithDiagnostics,
+} from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const FENCE = '```'
@@ -96,5 +98,51 @@ describe('the writer', () => {
     expect(format('a {%  %} b')).toBe('a {%%} b\n')
     expect(format('{% %}')).toBe('{%%}\n')
     expect(format('a {% x %} b')).toBe('a {% x %} b\n')
+  })
+})
+
+describe('the tree', () => {
+  it('C2-A-181: {{ a.crv @code }} gives the options [["code", ""]]', () => {
+    expect(parse('{{ a.crv @code }}', { positions: false }).children).toEqual([{ type: 'include', path: 'a.crv', options: [['code', '']] }])
+  })
+})
+
+describe('a start value of more than nine digits', () => {
+  const list = (delimiter: string): AstNode => ({
+    type: 'document', astVersion: '2.0', children: [{
+      type: 'list', marker: { kind: 'ordered', style: '1', delimiter, start: 1234567890 }, spacing: 'tight',
+      children: [{ type: 'list_item', children: [paragraph(text('a'))] }, { type: 'list_item', children: [paragraph(text('b'))] }],
+    }],
+  })
+
+  it('C2-W-044: a supplied tree is written from 1 and reported with field-unspellable', () => {
+    for (const [delimiter, carve] of [['.', '. a\n. b\n'], [')', '1) a\n2) b\n']]) {
+      const output = writeWithDiagnostics(list(delimiter!))
+      expect(output.source).toBe(carve)
+      expect(output.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+    }
+  })
+
+  it('C2-B-219: a start attribute of more than nine digits stays a key', () => {
+    const list = parse('{start=1234567890}\n. a', { positions: false }).children![0]!
+    expect(list.marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.' })
+    expect(list.attrs).toEqual({ keyValues: [['start', '1234567890']] })
+  })
+})
+
+describe('tables', () => {
+  it('C2-B-184: a code span across continuation rows keeps its line feed', () => {
+    const cell = parse('| `a | x |\n+ b` | y |', { positions: false }).children![0]!.children![0]!.children![0]!.children![0]!
+    expect(cell.children).toEqual([{ type: 'cell_paragraph', children: [{ type: 'code', value: 'a\nb' }] }])
+    expect(render('| `a | x |\n+ b` | y |')).toBe('<table>\n  <tbody>\n    <tr><td><code>a\nb</code></td><td>x y</td></tr>\n  </tbody>\n</table>')
+  })
+
+  it('C2-B-221: headRows is the declared count also past the last row, and the writer writes it back', () => {
+    const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
+    const document = parse(src, { positions: false })
+    expect(document.children![0]!.children).toHaveLength(1)
+    expect(document.children![0]!.children![0]!.headRows).toBe(5)
+    expect(format(src)).toBe(`${src}\n`)
+    expect(write(document)).toContain('header-rows=5')
   })
 })
