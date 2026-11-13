@@ -59,6 +59,8 @@ function scanners(): readonly (Scanner | undefined)[] {
 }
 
 const SCANNERS = scanners()
+// Whether a character has a scanner, as bytes: the scan asks this once per character of text.
+const STARTS_TOKEN = Uint8Array.from(SCANNERS, (scanner) => (scanner === undefined ? 0 : 1))
 
 function resetScan(state: InlineState): void {
   state.tokenLength = 0
@@ -93,8 +95,7 @@ export function scanInline(
   resetScan(state)
   for (let pos = 0; pos < end;) {
     const code = text.charCodeAt(pos)
-    const scanner = code < ASCII ? SCANNERS[code] : undefined
-    pos = scanner === undefined ? pos + 1 : scanner(state, pos)
+    pos = code < ASCII && STARTS_TOKEN[code] === 1 ? SCANNERS[code]!(state, pos) : pos + 1
   }
   failOpenBrackets(state)
   pairDelimiters(state)

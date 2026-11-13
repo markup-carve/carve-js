@@ -20,6 +20,8 @@ const LEFT_SINGLE = 0x2018
 const LEFT_DOUBLE = 0x201c
 const LONGEST_WORD = 6
 const NO_MATCH = -1
+// Whether a character can start a match, as bytes: the text is asked this once per character.
+const TRIGGERS = Uint8Array.from(CHARACTER_CLASSES, (classes) => ((classes & CLASS_SMART_TRIGGER) === 0 ? 0 : 1))
 
 /** Offset in the source of the offset `pos` of the content. Offsets are asked for in rising order. */
 export function toSource(state: InlineState, pos: number): number {
@@ -200,7 +202,7 @@ export function writeText(state: InlineState, from: number, to: number): void {
   let start = from
   for (let pos = from; pos < to;) {
     const code = text.charCodeAt(pos)
-    if (code >= ASCII || (CHARACTER_CLASSES[code]! & CLASS_SMART_TRIGGER) === 0) {
+    if (code >= ASCII || TRIGGERS[code] === 0) {
       pos++
       continue
     }
