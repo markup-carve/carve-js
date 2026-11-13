@@ -35,6 +35,9 @@ export {
   type Social, type UrlPolicy,
 } from './options.ts'
 export { stringOffsetOfByte, utf8Length } from './positions.ts'
+export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from './format.ts'
+export { type LayoutEntry, write, type WriteOptions, type WriteOutput, writeWithDiagnostics } from './write.ts'
+export { displayWidth } from './width.ts'
 export { type Diagnostic } from './diagnostics.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */

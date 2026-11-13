@@ -129,6 +129,34 @@ jobs:
       - name: Contents of up to four tokens
         run: npm run enumerate-tree:v2 -- tokens 4
 
+  writer-gates:
+    name: writer gates, examples, three lines and four tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The two gates of the writer on every input, with and without the source-layout record:
+      # the written form parses to the tree it was written from, and formatting it again gives
+      # the same bytes. Also: a canonical input stays as it is, and no escape is needless.
+      - name: Example inputs of the specification
+        run: npm run writer-gates:v2 -- examples
+
+      - name: Documents of up to three lines
+        run: npm run writer-gates:v2 -- lines 3
+
+      - name: Contents of up to four tokens
+        run: npm run writer-gates:v2 -- tokens 4
+
   stress-tree:
     name: tree and HTML stress shapes
     runs-on: ubuntu-latest
