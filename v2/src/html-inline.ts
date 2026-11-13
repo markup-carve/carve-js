@@ -1,7 +1,7 @@
 // The inline elements of C2-H-072 to C2-H-101.
 import { type AstNode, type Attrs, childrenOf, hrefOf, isBreak, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
-  attributeBlockText, attributes, destination, escapeText, loss, type Pair, type Render, type TagParts,
+  attributeBlockText, attributes, destination, escapeText, keyValue, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 
 type InlineWriter = (r: Render, node: AstNode) => string
@@ -108,14 +108,16 @@ function referenceCarriers(r: Render, node: AstNode): Pair[] {
 }
 
 /**
- * C2-H-163: the `rel` a profile writes on every link. The words of an authored `rel` stand before
- * the ones the profile adds, as in 0.1.
+ * C2-H-167: the one `rel` of a link, before the id: the authored words that pass C2-H-161, then the
+ * words of the profile that are not among them. No word, no attribute. Returns the node without its `rel` key.
  */
-function addRel(r: Render, node: AstNode, structural: Pair[]): void {
-  if (r.linkRel === '') return
-  const words = (authoredKey(node, 'rel') ?? '').split(' ').filter((word) => word !== '')
-  for (const word of r.linkRel.split(' ')) if (!words.includes(word)) words.push(word)
-  structural.push(['rel', words.join(' ')])
+function withRel(r: Render, node: AstNode, structural: Pair[]): AstNode {
+  const authored = authoredKey(node, 'rel')
+  if (authored === undefined && r.linkRel === '') return node
+  const words = authored === undefined ? [] : keyValue('rel', authored).split(' ').filter((word) => word !== '')
+  for (const word of r.linkRel.split(' ')) if (word !== '' && !words.includes(word)) words.push(word)
+  if (words.length > 0) structural.push(['rel', words.join(' ')])
+  return authored === undefined ? node : withoutKeys(node, ['rel'])
 }
 
 function link(r: Render, node: AstNode): string {
@@ -126,8 +128,7 @@ function link(r: Render, node: AstNode): string {
   const title = node.tooltip ?? definition?.title
   const structural: Pair[] = [['href', destination(r, hrefOf(node), node)]]
   if (typeof title === 'string') structural.push(['title', title])
-  const merged = withDefinition(node, definition)
-  addRel(r, merged, structural)
+  const merged = withRel(r, withDefinition(node, definition), structural)
   structural.push(...referenceCarriers(r, node))
   r.linkDepth++
   const html = children(r, node)
@@ -149,9 +150,9 @@ function autolink(r: Render, node: AstNode): string {
   const text = escapeText(node.text ?? hrefOf(node))
   if (r.linkDepth > 0) return text
   const structural: Pair[] = [['href', destination(r, hrefOf(node), node)]]
-  addRel(r, node, structural)
+  const written = withRel(r, node, structural)
   if (r.settings.roundtrip) structural.push(['data-carve-autolink', null])
-  return `<a${attributes(r, node, { structural })}>${text}</a>`
+  return `<a${attributes(r, written, { structural })}>${text}</a>`
 }
 
 function xref(r: Render, node: AstNode): string {
@@ -222,8 +223,8 @@ function social(sigil: string, type: 'mention' | 'tag'): InlineWriter {
     const parts: TagParts = { base: [type], classFirst: true }
     if (url === null) return `<span${attributes(r, node, parts)}>${text}</span>`
     const structural: Pair[] = [['href', destination(r, url, node)]]
-    addRel(r, node, structural)
-    return `<a${attributes(r, node, { ...parts, structural })}>${text}</a>`
+    const written = withRel(r, node, structural)
+    return `<a${attributes(r, written, { ...parts, structural })}>${text}</a>`
   }
 }
 

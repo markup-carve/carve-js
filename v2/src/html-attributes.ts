@@ -251,7 +251,7 @@ function hasDangerousCss(value: string): boolean {
 }
 
 /** C2-H-161, C2-H-162: the value of an authored key as it is written, which is empty when it fails a test. */
-function keyValue(name: string, value: string): string {
+export function keyValue(name: string, value: string): string {
   const commas = URL_LIST_ATTRIBUTES.get(name)
   // The whole value is tested too: a scheme split by a separator, `java script:`, fails as it does in a single URL.
   if (hasDeniedPrefix(value, 0, value.length) || (commas !== undefined && listHasDeniedPrefix(value, commas))) return ''
