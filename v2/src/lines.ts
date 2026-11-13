@@ -130,7 +130,28 @@ function digitsEnd(src: string, pos: number, end: number): number {
   return p - pos > MAX_ORDERED_DIGITS ? -1 : p
 }
 
-/** Offset after the one letter, or the two to nine roman letters of one case, at `pos`, or -1. */
+const CASE_BIT = 0x20
+
+/** Offset after one decimal place of a roman numeral: `one`, `five` and `ten` are its lowercase letters. */
+function romanPlaceEnd(src: string, pos: number, end: number, one: number, five: number, ten: number): number {
+  const first = pos < end ? src.charCodeAt(pos) | CASE_BIT : 0
+  const second = pos + 1 < end ? src.charCodeAt(pos + 1) | CASE_BIT : 0
+  if (first === one && (second === ten || second === five)) return pos + 2
+  let p = first === five ? pos + 1 : pos
+  const limit = p + 3
+  while (p < end && p < limit && (src.charCodeAt(p) | CASE_BIT) === one) p++
+  return p
+}
+
+/** C2-B-036: a roman numeral in its standard form, from 1 to 3999. */
+function isStandardRoman(src: string, pos: number, end: number): boolean {
+  let p = romanPlaceEnd(src, pos, end, 0x6d, 0, 0)
+  p = romanPlaceEnd(src, p, end, 0x63, 0x64, 0x6d)
+  p = romanPlaceEnd(src, p, end, 0x78, 0x6c, 0x63)
+  return romanPlaceEnd(src, p, end, 0x69, 0x76, 0x78) === end
+}
+
+/** Offset after the one letter, or the two to nine letters of one case that form a roman numeral, at `pos`, or -1. */
 function lettersEnd(src: string, pos: number, end: number): number {
   const lower = isLower(src.charCodeAt(pos))
   let roman = romanLetterValue(src.charCodeAt(pos)) > 0
@@ -141,7 +162,7 @@ function lettersEnd(src: string, pos: number, end: number): number {
     if (!roman || p - pos >= MAX_ORDERED_LETTERS) return -1
     p++
   }
-  return p
+  return p - pos === 1 || isStandardRoman(src, pos, p) ? p : -1
 }
 
 /**
@@ -419,7 +440,7 @@ export function isFrontmatterOpener(src: string, pos: number, end: number): bool
   let p = pos + FRONTMATTER_RUN
   const name = p < end && src.charCodeAt(p) === SPACE ? p + 1 : p
   if (startsWith(src, name, end, 'yaml') || startsWith(src, name, end, 'toml') || startsWith(src, name, end, 'json')) p = name + 4
-  return runLength(src, p, end, SPACE) === end - p
+  return skipSpaces(src, p, end) === end
 }
 
 /** C2-B-162: exactly `---` plus trailing spaces and tabs. */
