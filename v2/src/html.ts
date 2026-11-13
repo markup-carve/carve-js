@@ -1,5 +1,7 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
-import { type AstNode, DEFINITION_TYPES, type Marker } from './ast.ts'
+import {
+  type AstNode, childrenOf, colspanOf, columnsOf, DEFINITION_TYPES, keyOf, levelOf, type Marker, rowspanOf, valueOf,
+} from './ast.ts'
 import { blockText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
@@ -47,12 +49,12 @@ function tag(r: Render, node: AstNode | null, parts: TagParts = NO_PARTS): strin
 }
 
 function onlyComments(node: AstNode): boolean {
-  for (const child of node.children ?? []) if (child.type !== 'comment') return false
+  for (const child of childrenOf(node)) if (child.type !== 'comment') return false
   return true
 }
 
 /** The blocks of `nodes` that write something: the list itself where all of them do. */
-function visibleBlocks(nodes: AstNode[]): AstNode[] {
+function visibleBlocks(nodes: readonly AstNode[]): readonly AstNode[] {
   for (const node of nodes) if (!isVisible(node)) return nodes.filter(isVisible)
   return nodes
 }
@@ -66,7 +68,7 @@ function isVisible(node: AstNode): boolean {
 /** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
 function isBareImage(node: AstNode): boolean {
   if (node.blockImage !== true) return false
-  const image = (node.children ?? []).find((child) => child.type === 'image')
+  const image = (childrenOf(node)).find((child) => child.type === 'image')
   return image === undefined || image.key === undefined || image.src !== undefined
 }
 
@@ -75,12 +77,12 @@ function isTextParagraph(node: AstNode | undefined): node is AstNode {
   return node !== undefined && node.type === 'paragraph' && !isBareImage(node)
 }
 
-function writeBlocks(r: Render, nodes: AstNode[], level: number): void {
+function writeBlocks(r: Render, nodes: readonly AstNode[], level: number): void {
   for (const node of nodes) BLOCKS.get(node.type)?.(r, node, level)
 }
 
 /** C2-H-008: a body that writes nothing keeps one empty line between its tags. */
-function writeBody(r: Render, nodes: AstNode[], level: number): void {
+function writeBody(r: Render, nodes: readonly AstNode[], level: number): void {
   const before = r.count
   writeBlocks(r, nodes, level)
   if (r.count === before) rawLine(r, '')
@@ -89,7 +91,7 @@ function writeBody(r: Render, nodes: AstNode[], level: number): void {
 function container(name: string, parts: (r: Render, node: AstNode) => TagParts = () => ({})): BlockWriter {
   return (r, node, level) => {
     line(r, level, `<${name}${tag(r, node, parts(r, node))}>`)
-    writeBody(r, node.children ?? [], level + 1)
+    writeBody(r, childrenOf(node), level + 1)
     line(r, level, `</${name}>`)
   }
 }
@@ -97,12 +99,12 @@ function container(name: string, parts: (r: Render, node: AstNode) => TagParts =
 function paragraphHtml(r: Render, node: AstNode): string {
   const tail = r.backlinkHost === node ? r.backlinks : ''
   const open = isPlain(r, node) ? '<p>' : `<p${tag(r, node, { alignStyle: true })}>`
-  return `${open}${inlineHtml(r, node.children ?? [])}${tail}</p>`
+  return `${open}${inlineHtml(r, childrenOf(node))}${tail}</p>`
 }
 
 /** C2-H-122: in static mode a math block is its source as a code block. */
 function staticMathBlock(r: Render, node: AstNode): string {
-  const math = (node.children ?? []).find((child) => child.type === 'math')
+  const math = (childrenOf(node)).find((child) => child.type === 'math')
   const value = math?.value ?? ''
   return `<pre${tag(r, node)}><code class="language-math">${escapeText(value.endsWith('\n') ? value : `${value}\n`)}</code></pre>`
 }
@@ -113,7 +115,7 @@ function paragraph(r: Render, node: AstNode, level: number): void {
     line(r, level, staticMathBlock(r, node))
     return
   }
-  line(r, level, isBareImage(node) ? inlineHtml(r, node.children ?? []) : paragraphHtml(r, node))
+  line(r, level, isBareImage(node) ? inlineHtml(r, childrenOf(node)) : paragraphHtml(r, node))
 }
 
 function headingId(node: AstNode): string | undefined {
@@ -128,19 +130,19 @@ function idCarriers(r: Render, node: AstNode): Pair[] {
 
 /** C2-H-021: `h1` to `h6`, and above them a `div` that keeps the true level. `inSection`: the section carries the id. */
 function headingHtml(r: Render, node: AstNode, inSection: boolean): string {
-  const level = node.level ?? 1
+  const level = levelOf(node)
   const name = level <= MAX_HEADING_ELEMENT ? `h${level}` : 'div'
   // The heading of a section that carries no attribute of its own, which is the usual one.
-  if (inSection && level <= MAX_HEADING_ELEMENT && isPlain(r, node)) return `<${name}>${inlineHtml(r, node.children ?? [])}</${name}>`
+  if (inSection && level <= MAX_HEADING_ELEMENT && isPlain(r, node)) return `<${name}>${inlineHtml(r, childrenOf(node))}</${name}>`
   const structural: Pair[] = level <= MAX_HEADING_ELEMENT ? [] : [['role', 'heading'], ['aria-level', String(level)]]
   if (!inSection) structural.push(...idCarriers(r, node))
   const parts: TagParts = { structural, id: inSection ? null : headingId(node) ?? null, alignStyle: true }
-  return `<${name}${tag(r, node, parts)}>${inlineHtml(r, node.children ?? [])}</${name}>`
+  return `<${name}${tag(r, node, parts)}>${inlineHtml(r, childrenOf(node))}</${name}>`
 }
 
 /** C2-H-006: a quote whose only visible child is one paragraph is written on one line. */
 function quote(r: Render, node: AstNode, level: number): void {
-  const visible = visibleBlocks(node.children ?? [])
+  const visible = visibleBlocks(childrenOf(node))
   if (visible.length === 1 && isTextParagraph(visible[0])) {
     line(r, level, `<blockquote${tag(r, node)}>${paragraphHtml(r, visible[0])}</blockquote>`)
     return
@@ -165,14 +167,14 @@ function listParts(r: Render, node: AstNode): TagParts {
     // C2-H-138.
     if (node.spacing === 'tight') structural.push(['data-carve-tight', null])
   }
-  const tasks = (node.children ?? []).some((item) => item.task !== undefined)
+  const tasks = (childrenOf(node)).some((item) => item.task !== undefined)
   return tasks ? { structural, base: ['task-list'] } : { structural }
 }
 
 function list(r: Render, node: AstNode, level: number): void {
   const name = node.marker?.kind === 'ordered' ? 'ol' : 'ul'
   line(r, level, `<${name}${tag(r, node, listParts(r, node))}>`)
-  for (const item of node.children ?? []) listItem(r, item, level + 1, node.spacing === 'tight')
+  for (const item of childrenOf(node)) listItem(r, item, level + 1, node.spacing === 'tight')
   line(r, level, `</${name}>`)
 }
 
@@ -182,20 +184,20 @@ function itemOpen(r: Render, node: AstNode): string {
   if (task === undefined) return `<li${tag(r, node)}>`
   const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
   const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
-  const label = escapeAttribute(blockText(node.children ?? []))
+  const label = escapeAttribute(blockText(childrenOf(node)))
   return `<li${tag(r, node, { structural: state })}><input type="checkbox"${checked} disabled aria-label="${label}"> `
 }
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
 function listItem(r: Render, node: AstNode, level: number, tight: boolean): void {
-  const blocks = visibleBlocks(node.children ?? [])
+  const blocks = visibleBlocks(childrenOf(node))
   const first = blocks[0]
   let open = itemOpen(r, node)
   let rest = blocks
   if (isTextParagraph(first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
     const bare = tight && first.attrs === undefined && first.lang === undefined
-    open += bare ? inlineHtml(r, first.children ?? []) : paragraphHtml(r, first)
+    open += bare ? inlineHtml(r, childrenOf(first)) : paragraphHtml(r, first)
     rest = blocks.slice(1)
   }
   if (rest.length === 0) {
@@ -209,9 +211,9 @@ function listItem(r: Render, node: AstNode, level: number, tight: boolean): void
 
 /** C2-H-040: a description with one block writes a paragraph bare. */
 function description(r: Render, node: AstNode, level: number): void {
-  const blocks = (node.children ?? []).filter(isVisible)
+  const blocks = (childrenOf(node)).filter(isVisible)
   if (blocks.length <= 1 && (blocks.length === 0 || isTextParagraph(blocks[0]))) {
-    const text = blocks.length === 0 ? '' : inlineHtml(r, blocks[0]!.children ?? [])
+    const text = blocks.length === 0 ? '' : inlineHtml(r, childrenOf(blocks[0]!))
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
   }
@@ -236,7 +238,7 @@ function div(r: Render, node: AstNode, level: number): void {
   line(r, level, `<div${attrs === '' && r.settings.roundtrip ? ' data-carve-div' : attrs}>`)
   const before = r.count
   writeTitle(r, node, level + 1, null)
-  writeBlocks(r, node.children ?? [], level + 1)
+  writeBlocks(r, childrenOf(node), level + 1)
   if (r.count === before) rawLine(r, '')
   line(r, level, '</div>')
 }
@@ -259,16 +261,16 @@ function admonition(r: Render, node: AstNode, level: number): void {
   line(r, level, `<aside${tag(r, node, { base: ['admonition', node.kind ?? ''], generated: admonitionName(r, node, id) })}>`)
   const before = r.count
   writeTitle(r, node, level + 1, id)
-  writeBlocks(r, node.children ?? [], level + 1)
+  writeBlocks(r, childrenOf(node), level + 1)
   if (r.count === before) rawLine(r, '')
   line(r, level, '</aside>')
 }
 
 /** C2-H-065: a caption with one paragraph writes it bare; with several blocks every paragraph gets `<p>`. */
 function captionLine(r: Render, caption: AstNode, name: string, level: number): void {
-  const blocks = (caption.children ?? []).filter(isVisible)
+  const blocks = (childrenOf(caption)).filter(isVisible)
   if (blocks.length === 1 && isTextParagraph(blocks[0])) {
-    line(r, level, `<${name}>${inlineHtml(r, blocks[0].children ?? [])}</${name}>`)
+    line(r, level, `<${name}>${inlineHtml(r, childrenOf(blocks[0]))}</${name}>`)
     return
   }
   line(r, level, `<${name}>`)
@@ -279,7 +281,7 @@ function captionLine(r: Render, caption: AstNode, name: string, level: number): 
 function figureOf(r: Render, node: AstNode, level: number, base: string[]): void {
   line(r, level, `<figure${tag(r, node, { base })}>`)
   const before = r.count
-  for (const child of node.children ?? []) {
+  for (const child of childrenOf(node)) {
     // C2-H-064: each panel of a group.
     if (base.includes('carve-figure-group') && child.type === 'figure') figureOf(r, child, level + 1, ['carve-figure-panel'])
     else BLOCKS.get(child.type)?.(r, child, level + 1)
@@ -296,11 +298,11 @@ function preHtml(r: Render, node: AstNode, language: string | undefined, title: 
   if (title !== undefined && !authored) structural.push(['title', title])
   if (r.settings.roundtrip && node.groupLabel !== undefined) structural.push(['data-carve-label', node.groupLabel])
   const code = language === undefined ? '<code>' : `<code class="language-${escapeAttribute(language)}">`
-  return `<pre${tag(r, node, { structural })}>${code}${escapeText(node.value ?? '')}</code></pre>`
+  return `<pre${tag(r, node, { structural })}>${code}${escapeText(valueOf(node))}</code></pre>`
 }
 
 function codeBlock(r: Render, node: AstNode, level: number): void {
-  const title = Array.isArray(node.title) ? node.title.map((part) => part.value ?? '').join('') : undefined
+  const title = Array.isArray(node.title) ? node.title.map((part) => valueOf(part)).join('') : undefined
   line(r, level, preHtml(r, node, node.syntax, title))
 }
 
@@ -314,7 +316,7 @@ function rawBlock(r: Render, node: AstNode, level: number): void {
     line(r, level, preHtml(r, node, 'html', undefined))
     return
   }
-  const value = node.value ?? ''
+  const value = valueOf(node)
   rawLine(r, value.endsWith('\n') ? value.slice(0, -1) : value)
 }
 
@@ -326,10 +328,10 @@ function leadingSpaces(text: string): number {
 
 /** C2-H-043: the leading spaces of a line are written as `&nbsp;`, one per space. */
 function lineHtml(r: Render, node: AstNode): string {
-  const children = node.children ?? []
+  const children = childrenOf(node)
   const first = children[0]
   if (first?.type !== 'text') return inlineHtml(r, children)
-  const spaces = leadingSpaces(first.value ?? '')
+  const spaces = leadingSpaces(valueOf(first))
   return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: first.value!.slice(spaces) }, ...children.slice(1)])
 }
 
@@ -343,8 +345,8 @@ function lineBlock(r: Render, node: AstNode, level: number): void {
     if (stanza.length > 0) line(r, level + 1, `<p>${stanza.join('<br>\n')}</p>`)
     stanza = []
   }
-  for (const child of node.children ?? []) {
-    if ((child.children ?? []).length === 0) flush()
+  for (const child of childrenOf(node)) {
+    if ((childrenOf(child)).length === 0) flush()
     else stanza.push(lineHtml(r, child))
   }
   flush()
@@ -400,8 +402,8 @@ function cellStyle(cell: AstNode, column: AstNode | undefined, headValign: strin
 }
 
 function cellContent(r: Render, cell: AstNode): string {
-  const blocks = cell.children ?? []
-  if (blocks.every((block) => block.type === 'cell_paragraph')) return blocks.map((block) => inlineHtml(r, block.children ?? [])).join(' ')
+  const blocks = childrenOf(cell)
+  if (blocks.every((block) => block.type === 'cell_paragraph')) return blocks.map((block) => inlineHtml(r, childrenOf(block))).join(' ')
   // C2-A-175: blocks in a cell, which only a supplied tree holds.
   const inner: Render = { ...r, out: '', count: 0 }
   writeBlocks(inner, blocks, 0)
@@ -412,15 +414,15 @@ function cellContent(r: Render, cell: AstNode): string {
 function cellHtml(r: Render, cell: AstNode, column: AstNode | undefined, headValign: string | undefined, inHead: boolean): string {
   const name = cell.header === true ? 'th' : 'td'
   const structural: Pair[] = []
-  if ((cell.rowspan ?? 1) > 1) structural.push(['rowspan', String(cell.rowspan)])
-  if ((cell.colspan ?? 1) > 1) structural.push(['colspan', String(cell.colspan)])
+  if ((rowspanOf(cell)) > 1) structural.push(['rowspan', String(cell.rowspan)])
+  if ((colspanOf(cell)) > 1) structural.push(['colspan', String(cell.colspan)])
   if (cell.header === true) structural.push(['scope', inHead ? 'col' : 'row'])
   return `<${name}${attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })}>${cellContent(r, cell)}</${name}>`
 }
 
 /** The columns of a table, and the vertical mark each takes from the head (C2-B-213). */
 interface TableLayout {
-  columns: AstNode[]
+  columns: readonly AstNode[]
   headValign: (string | undefined)[]
 }
 
@@ -429,7 +431,7 @@ interface TableLayout {
  * (C2-A-092); a row with counts alone covers the positions its counts give (C2-A-093).
  */
 function rowHtml(r: Render, row: AstNode, layout: TableLayout, covered: number[], inHead: boolean): string {
-  const cells = row.children ?? []
+  const cells = childrenOf(row)
   const marked = cells.some((cell) => cell.span !== undefined)
   let html = ''
   let column = 0
@@ -437,15 +439,15 @@ function rowHtml(r: Render, row: AstNode, layout: TableLayout, covered: number[]
     while (!marked && (covered[column] ?? 0) > 0) covered[column++]!--
     if (cell.span === undefined) {
       html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead)
-      if (!marked) for (let more = 0; more < (cell.colspan ?? 1); more++) covered[column + more] = (cell.rowspan ?? 1) - 1
+      if (!marked) for (let more = 0; more < (colspanOf(cell)); more++) covered[column + more] = (rowspanOf(cell)) - 1
     }
-    column += marked ? 1 : cell.colspan ?? 1
+    column += marked ? 1 : colspanOf(cell)
   }
   return `<tr${tag(r, row)}>${html}</tr>`
 }
 
 function writeRows(r: Render, layout: TableLayout, group: AstNode, level: number, covered: number[]): void {
-  for (const row of group.children ?? []) {
+  for (const row of childrenOf(group)) {
     if (row.type === 'table_row') line(r, level, rowHtml(r, row, layout, covered, group.type === 'table_head'))
   }
 }
@@ -453,8 +455,8 @@ function writeRows(r: Render, layout: TableLayout, group: AstNode, level: number
 /** C2-H-060: true when a row span crosses the end of its group. */
 function spanCrossesGroup(groups: AstNode[]): boolean {
   for (const group of groups) {
-    const rows = (group.children ?? []).filter((row) => row.type === 'table_row')
-    const crosses = rows.some((row, index) => (row.children ?? []).some((cell) => index + (cell.rowspan ?? 1) > rows.length))
+    const rows = (childrenOf(group)).filter((row) => row.type === 'table_row')
+    const crosses = rows.some((row, index) => (childrenOf(row)).some((cell) => index + (rowspanOf(cell)) > rows.length))
     if (crosses) return true
   }
   return false
@@ -472,7 +474,7 @@ function writeGroups(r: Render, layout: TableLayout, groups: AstNode[], level: n
   }
   for (const group of groups) {
     // C2-H-055: an empty group is not written.
-    if (!(group.children ?? []).some((row) => row.type === 'table_row')) continue
+    if (!(childrenOf(group)).some((row) => row.type === 'table_row')) continue
     const name = GROUP_ELEMENTS.get(group.type)!
     line(r, level, `<${name}${tag(r, group)}>`)
     writeRows(r, layout, group, level + 1, [])
@@ -491,7 +493,7 @@ function percentText(width: number): string {
 }
 
 /** C2-H-152: one `<col>` per column when at least one column has a width. */
-function writeColumnGroup(r: Render, columns: AstNode[], level: number): void {
+function writeColumnGroup(r: Render, columns: readonly AstNode[], level: number): void {
   if (!columns.some((column) => column.width !== undefined)) return
   line(r, level, '<colgroup>')
   for (const column of columns) {
@@ -503,9 +505,9 @@ function writeColumnGroup(r: Render, columns: AstNode[], level: number): void {
 function table(r: Render, node: AstNode, level: number): void {
   line(r, level, `<table${tag(r, node)}>`)
   if (node.caption !== undefined) captionLine(r, node.caption, 'caption', level + 1)
-  const layout: TableLayout = { columns: node.columns ?? [], headValign: headMarks(node, 'valign') }
+  const layout: TableLayout = { columns: columnsOf(node), headValign: headMarks(node, 'valign') }
   writeColumnGroup(r, layout.columns, level + 1)
-  writeGroups(r, layout, (node.children ?? []).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
+  writeGroups(r, layout, (childrenOf(node)).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
   line(r, level, '</table>')
 }
 
@@ -515,7 +517,7 @@ const BLOCKS = new Map<string, BlockWriter>([
   ['block_quote', quote],
   ['list', list],
   ['definition_list', container('dl')],
-  ['definition_term', (r, node, level) => line(r, level, `<dt${tag(r, node)}>${inlineHtml(r, node.children ?? [])}</dt>`)],
+  ['definition_term', (r, node, level) => line(r, level, `<dt${tag(r, node)}>${inlineHtml(r, childrenOf(node))}</dt>`)],
   ['definition_description', description],
   ['div', div],
   ['directive', div],
@@ -550,12 +552,12 @@ function backlinksHtml(r: Render, note: Note): string {
 function noteCarriers(r: Render, note: Note): string {
   if (!r.settings.roundtrip) return ''
   if (note.definition === null) return ' data-carve-inline-footnote'
-  return ` data-carve-footnote-label="${escapeAttribute(note.definition.key ?? '')}"`
+  return ` data-carve-footnote-label="${escapeAttribute(keyOf(note.definition))}"`
 }
 
 function writeNote(r: Render, note: Note, level: number): void {
   // C2-H-090: the body of an inline footnote is one paragraph.
-  const blocks = note.definition?.children ?? [{ type: 'paragraph', children: note.inline!.children ?? [] }]
+  const blocks = note.definition?.children ?? [{ type: 'paragraph', children: [...childrenOf(note.inline!)] }]
   const visible = blocks.filter(isVisible)
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
@@ -598,12 +600,12 @@ function closeSections(r: Render, open: number[], level: number): void {
 
 /** C2-H-026, C2-H-027: a top-level heading opens a section that carries its id. */
 function openSection(r: Render, node: AstNode, open: number[]): void {
-  closeSections(r, open, node.level ?? 1)
+  closeSections(r, open, levelOf(node))
   const id = headingId(node)
   // Without the carriers of `roundtrip` a section carries its id and nothing else.
   const attrs = r.settings.roundtrip ? attributes(r, null, { structural: idCarriers(r, node), id: id ?? null }) : id === undefined ? '' : ` id="${escapeAttribute(id)}"`
   line(r, open.length, `<section${attrs}>`)
-  open.push(node.level ?? 1)
+  open.push(levelOf(node))
   line(r, open.length, headingHtml(r, node, true))
 }
 
@@ -612,13 +614,13 @@ function writeDocument(r: Render, document: AstNode): void {
   const open: number[] = []
   const hasNotes = r.resolution.notes.length > 0
   let placed = false
-  for (const node of document.children ?? []) {
+  for (const node of childrenOf(document)) {
     if (node.type === 'heading' && r.settings.sections) {
       openSection(r, node, open)
     } else if (isNotesDirective(node) && hasNotes && !placed) {
       placed = true
       // The blocks of the directive stand before the section, as in 0.1.
-      writeBlocks(r, node.children ?? [], open.length)
+      writeBlocks(r, childrenOf(node), open.length)
       writeNotes(r, open.length, node)
     } else {
       BLOCKS.get(node.type)?.(r, node, open.length)

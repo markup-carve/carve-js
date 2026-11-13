@@ -1,7 +1,7 @@
 // The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
 // form before the tree is resolved, so that a reference or a caption that is gone takes no number.
 // The specification does not state the degraded forms; they follow the 0.1 engine.
-import { type AstNode, DEFINITION_TYPES, INLINE_PARENTS } from './ast.ts'
+import { type AstNode, childrenOf, DEFINITION_TYPES, INLINE_PARENTS, keyOf, levelOf, pairsOf, valueOf } from './ast.ts'
 import { plainText } from './ast-text.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { type ProfileRule } from './render-tables.ts'
@@ -21,22 +21,22 @@ const MAX_HEADING_MARKS = 6
 function inlineText(node: AstNode): string {
   switch (node.type) {
     case 'image': return `[img: ${node.alt ?? ''}]`
-    case 'footnote_ref': return `[^${node.key ?? ''}]`
+    case 'footnote_ref': return `[^${keyOf(node)}]`
     case 'symbol': return `:${node.name ?? ''}:`
-    case 'xref': return `</#${node.key ?? ''}>`
-    case 'raw_inline': return node.value ?? ''
-    case 'inline_footnote': return inlinesText(node.children ?? [])
+    case 'xref': return `</#${keyOf(node)}>`
+    case 'raw_inline': return valueOf(node)
+    case 'inline_footnote': return inlinesText(childrenOf(node))
     default: return node.children === undefined ? plainText([node]) : inlinesText(node.children)
   }
 }
 
-function inlinesText(nodes: AstNode[]): string {
+function inlinesText(nodes: readonly AstNode[]): string {
   let out = ''
   for (const node of nodes) out += inlineText(node)
   return out
 }
 
-function joined(nodes: AstNode[], prefix: string): string {
+function joined(nodes: readonly AstNode[], prefix: string): string {
   const parts: string[] = []
   for (const node of nodes) {
     const text = UNWRITTEN.includes(node.type) ? '' : blockText(node)
@@ -52,26 +52,26 @@ function withoutLineEnd(value: string): string {
 /** The text of the title and of the blocks of a container, joined by spaces. */
 function containerText(node: AstNode): string {
   const title = Array.isArray(node.title) ? inlinesText(node.title) : ''
-  const rest = [joined(node.children ?? [], ''), node.caption === undefined ? '' : blockText(node.caption)]
+  const rest = [joined(childrenOf(node), ''), node.caption === undefined ? '' : blockText(node.caption)]
   return [title, ...rest].filter((part) => part !== '').join(' ')
 }
 
 function headingText(node: AstNode): string {
-  return `${'#'.repeat(Math.min(node.level ?? 1, MAX_HEADING_MARKS))} ${inlinesText(node.children ?? [])}`
+  return `${'#'.repeat(Math.min(levelOf(node), MAX_HEADING_MARKS))} ${inlinesText(childrenOf(node))}`
 }
 
 function rowText(node: AstNode): string {
-  return (node.children ?? []).filter((cell) => cell.span === undefined).map(blockText).join(' | ')
+  return (childrenOf(node)).filter((cell) => cell.span === undefined).map(blockText).join(' | ')
 }
 
 // The blocks whose degraded text is not that of their content alone: the mark of the kind stands in it, as 0.1 wrote it.
 const MARKED_TEXT = new Map<string, (node: AstNode) => string>([
   ['heading', headingText],
-  ['block_quote', (node) => `> ${joined(node.children ?? [], '')}`],
-  ['list', (node) => joined(node.children ?? [], '- ')],
+  ['block_quote', (node) => `> ${joined(childrenOf(node), '')}`],
+  ['list', (node) => joined(childrenOf(node), '- ')],
   ['thematic_break', () => '---'],
-  ['code_block', (node) => withoutLineEnd(node.value ?? '')],
-  ['raw_block', (node) => withoutLineEnd(node.value ?? '')],
+  ['code_block', (node) => withoutLineEnd(valueOf(node))],
+  ['raw_block', (node) => withoutLineEnd(valueOf(node))],
   ['table_row', rowText],
   ['include', (node) => `{{ ${node.path ?? ''} }}`],
 ])
@@ -80,7 +80,7 @@ const MARKED_TEXT = new Map<string, (node: AstNode) => string>([
 function blockText(node: AstNode): string {
   const marked = MARKED_TEXT.get(node.type)
   if (marked !== undefined) return marked(node)
-  return INLINE_PARENTS.includes(node.type) ? inlinesText(node.children ?? []) : containerText(node)
+  return INLINE_PARENTS.includes(node.type) ? inlinesText(childrenOf(node)) : containerText(node)
 }
 
 /** The inline content of the paragraph a degraded block becomes: a table keeps one line per row. */
@@ -90,8 +90,8 @@ function degradedInlines(node: AstNode): AstNode[] {
     return text === '' ? [] : [{ type: 'text', value: text }]
   }
   const out: AstNode[] = []
-  for (const group of node.children ?? []) {
-    for (const row of group.children ?? []) {
+  for (const group of childrenOf(node)) {
+    for (const row of childrenOf(group)) {
       if (row.type !== 'table_row') continue
       if (out.length > 0) out.push({ type: 'hard_break' })
       out.push({ type: 'text', value: blockText(row) })
@@ -148,7 +148,7 @@ function filterNode(filter: Filter, node: AstNode, depth: number): void {
     if (Array.isArray(list)) filterList(filter, list, false, depth)
   }
   if (node.caption !== undefined) filterNode(filter, node.caption, depth + 1)
-  for (const pair of node.pairs ?? []) {
+  for (const pair of pairsOf(node)) {
     filterList(filter, pair.base, false, depth)
     filterList(filter, pair.annotation, false, depth)
   }

@@ -1,6 +1,6 @@
 // The continuation rows of a pipe table for the source-layout record (C2-L-019 to C2-L-021): how
 // many each row has, and where each fragment starts in the content of its cell.
-import { type AstNode } from './ast.ts'
+import { type AstNode, rowspanOf } from './ast.ts'
 import { type LayoutTrace } from './ast-inline.ts'
 import { GREATER, PLUS } from './chars.ts'
 import { ROW } from './kinds.ts'
@@ -139,7 +139,7 @@ function walkList(walk: CellWalk, nodes: AstNode[], base: string): void {
 /** C2-L-020: the wraps of the cell at `path`, whose own row is row `home` of `table`. */
 export function cellWraps(src: string, trace: LayoutTrace, table: TableRows, home: number, node: AstNode, cell: BlockNode, path: string): Wrap[] {
   const walk: CellWalk = {
-    src, trace, table, home, spanning: (node.rowspan ?? 1) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
+    src, trace, table, home, spanning: (rowspanOf(node)) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
   }
   const content = node.children![0]?.children ?? []
   const base = `${path}/children/0/children`

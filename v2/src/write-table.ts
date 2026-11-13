@@ -1,6 +1,6 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
-import { type AstNode } from './ast.ts'
+import { type AstNode, childrenOf, columnsOf, valueOf } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
 import { emit, lose, type Writer } from './write-state.ts'
@@ -22,7 +22,7 @@ function isRow(node: AstNode): boolean {
 
 function rowsOf(table: AstNode, type: string): AstNode[] {
   const rows: AstNode[] = []
-  for (const group of table.children ?? []) if (group.type === type) for (const row of group.children ?? []) if (isRow(row)) rows.push(row)
+  for (const group of childrenOf(table)) if (group.type === type) for (const row of childrenOf(group)) if (isRow(row)) rows.push(row)
   return rows
 }
 
@@ -44,7 +44,7 @@ function columnEntry(column: AstNode, field: 'align' | 'width'): string {
 
 /** The value of `aligns` or `widths`: one entry per column up to the last column that has one (C2-B-211, C2-B-212). */
 function columnList(table: AstNode, field: 'align' | 'width'): string | null {
-  const columns = table.columns ?? []
+  const columns = columnsOf(table)
   let last = -1
   columns.forEach((column, at) => {
     if (column[field] !== undefined) last = at
@@ -67,11 +67,11 @@ function tableKeys(table: AstNode, first: readonly (readonly [string, string])[]
 
 /** The content of a cell on its lines: a line feed stands where a continuation row breaks it (C2-W-067). */
 function cellContent(w: Writer, cell: AstNode, flags: number): string {
-  const blocks = cell.children ?? []
+  const blocks = childrenOf(cell)
   // C2-A-175: blocks in a cell have no spelling.
   if (blocks.length > 1 || (blocks.length === 1 && blocks[0]!.type !== 'cell_paragraph')) lose(w, cell, null)
   // C2-W-012: the content of two former blocks is kept apart by a space.
-  const content = blocks.map((block) => writeInlines(w, block.children ?? [], flags | IN_CELL)).join(' ')
+  const content = blocks.map((block) => writeInlines(w, childrenOf(block), flags | IN_CELL)).join(' ')
   // C2-W-063: a cell whose content is only a span mark and that is no span takes an escape.
   return content === '^' || content === '<' ? `\\${content}` : content
 }
@@ -120,7 +120,7 @@ function writtenCell(w: Writer, row: AstNode, cell: AstNode, flags: number): Wri
 }
 
 function writtenRow(w: Writer, row: AstNode, flags: number): WrittenRow {
-  const cells = (row.children ?? []).map((cell) => writtenCell(w, row, cell, flags))
+  const cells = (childrenOf(row)).map((cell) => writtenCell(w, row, cell, flags))
   let below = w.facts?.get(row)?.continuationLines ?? 0
   for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
   const lines: string[][] = []
@@ -152,7 +152,7 @@ function emitRow(w: Writer, prefix: string, row: WrittenRow): void {
 }
 
 function lineComment(w: Writer, node: AstNode, prefix: string): void {
-  const value = node.value ?? ''
+  const value = valueOf(node)
   emit(w, prefix, value === '' ? '%%' : `%% ${value}`)
 }
 
@@ -161,9 +161,9 @@ function pipeTable(w: Writer, table: AstNode, prefix: string, flags: number): vo
   if (block !== '') emit(w, prefix, block)
   // The rows and the comments between them, in source order (C2-A-086).
   const entries: (WrittenRow | AstNode)[] = []
-  for (const group of table.children ?? []) {
+  for (const group of childrenOf(table)) {
     if (group.type === 'comment') entries.push(group)
-    else for (const row of group.children ?? []) entries.push(isRow(row) ? writtenRow(w, row, flags) : row)
+    else for (const row of childrenOf(group)) entries.push(isRow(row) ? writtenRow(w, row, flags) : row)
   }
   const rows = entries.filter((entry): entry is WrittenRow => 'lines' in entry)
   if (w.alignTables) alignColumns(rows)
@@ -176,19 +176,19 @@ function pipeTable(w: Writer, table: AstNode, prefix: string, flags: number): vo
 /** Whether `cell` holds what a cell of a delimited table can: plain text and nothing else (C2-B-180). */
 function isPlainCell(cell: AstNode, header: boolean): boolean {
   if (cell.header !== header || cell.span !== undefined || cell.align !== undefined || cell.attrs !== undefined || cell.lang !== undefined) return false
-  const blocks = cell.children ?? []
+  const blocks = childrenOf(cell)
   if (blocks.length !== 1 || blocks[0]!.type !== 'cell_paragraph') return false
-  const content = blocks[0]!.children ?? []
+  const content = childrenOf(blocks[0]!)
   return content.length === 0 || (content.length === 1 && content[0]!.type === 'text' && content[0]!.attrs === undefined)
 }
 
 function isPlainGroup(group: AstNode, header: boolean): boolean {
-  return (group.children ?? []).every((row) => isRow(row) && row.attrs === undefined && (row.children ?? []).every((cell) => isPlainCell(cell, header)))
+  return (childrenOf(group)).every((row) => isRow(row) && row.attrs === undefined && (childrenOf(row)).every((cell) => isPlainCell(cell, header)))
 }
 
 /** C2-L-006: whether a delimited table can hold `table`. */
 function fitsDelimited(table: AstNode): boolean {
-  const groups = table.children ?? []
+  const groups = childrenOf(table)
   const head = groups.filter((group) => group.type === 'table_head')
   const body = groups.filter((group) => group.type === 'table_body')
   if (head.length + body.length !== groups.length || head.length > 1 || body.length > 1) return false
@@ -211,8 +211,8 @@ function hasPlainGroups(groups: readonly AstNode[], headerBody: boolean): boolea
 }
 
 function holdsLineBreak(table: AstNode): boolean {
-  for (const group of table.children ?? []) {
-    for (const row of group.children ?? []) for (const cell of row.children ?? []) if (cell.children?.[0]?.children?.[0]?.value?.includes('\n') === true) return true
+  for (const group of childrenOf(table)) {
+    for (const row of childrenOf(group)) for (const cell of childrenOf(row)) if (cell.children?.[0]?.children?.[0]?.value?.includes('\n') === true) return true
   }
   return false
 }
@@ -220,11 +220,11 @@ function holdsLineBreak(table: AstNode): boolean {
 /** C2-W-066: the form of the table, `pipe`, `csv` or `tsv`. */
 function tableFormat(w: Writer, table: AstNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
-  const declares = (table.children ?? []).some((group) => group.headRows !== undefined)
+  const declares = (childrenOf(table)).some((group) => group.headRows !== undefined)
   const rows = rowsOf(table, 'table_head').length + rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length
   if (!fitsDelimited(table)) {
     // A pipe table needs a row (C2-L-036) and cannot declare its head rows (C2-A-088).
-    if (declares) for (const group of table.children ?? []) if (group.headRows !== undefined) lose(w, group, 'headRows')
+    if (declares) for (const group of childrenOf(table)) if (group.headRows !== undefined) lose(w, group, 'headRows')
     return 'pipe'
   }
   if (recorded === 'csv' || recorded === 'tsv') return recorded
@@ -251,12 +251,12 @@ function longestBacktickLine(lines: readonly string[]): number {
 function delimitedTable(w: Writer, table: AstNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = (table.children ?? []).find((group) => group.headRows !== undefined)?.headRows
+  const declared = (childrenOf(table)).find((group) => group.headRows !== undefined)?.headRows
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   emit(w, prefix, braceBlock(table, tableKeys(table, first)))
   const body: string[] = []
-  for (const group of table.children ?? []) {
-    for (const row of group.children ?? []) body.push((row.children ?? []).map((cell) => delimitedCell(cell, separator)).join(separator))
+  for (const group of childrenOf(table)) {
+    for (const row of childrenOf(group)) body.push((childrenOf(row)).map((cell) => delimitedCell(cell, separator)).join(separator))
   }
   const lines = body.join('\n').split('\n')
   const run = '`'.repeat(Math.max(MIN_RUN, longestBacktickLine(lines) + 1))

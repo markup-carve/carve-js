@@ -1,5 +1,5 @@
 // The brace block of a node (C2-W-047 to C2-W-050): the id, the classes, the language, the keys.
-import { type AstNode } from './ast.ts'
+import { type AstNode, classesOf, keyValuesOf } from './ast.ts'
 
 const UNDERSCORE = 95
 const HYPHEN = 45
@@ -73,11 +73,11 @@ export interface BlockParts {
 
 /** The names of the keys that `attrs` cannot hold as written. A caller reports them (C2-W-117). */
 export function unspellableKeys(node: AstNode): string[] {
-  return (node.attrs?.keyValues ?? []).filter((pair) => !isKey(pair[0])).map((pair) => pair[0])
+  return (keyValuesOf(node)).filter((pair) => !isKey(pair[0])).map((pair) => pair[0])
 }
 
 function classParts(node: AstNode, parts: string[], skip: readonly number[]): void {
-  const classes = node.attrs?.classes ?? []
+  const classes = classesOf(node)
   for (let at = 0; at < classes.length; at++) {
     if (skip.includes(at)) continue
     const name = classes[at]!
@@ -88,7 +88,7 @@ function classParts(node: AstNode, parts: string[], skip: readonly number[]): vo
 
 function keyParts(node: AstNode, parts: string[], first: readonly (readonly [string, string])[]): void {
   for (const [key, value] of first) parts.push(keyPart(key, value))
-  for (const [key, value] of node.attrs?.keyValues ?? []) if (isKey(key)) parts.push(keyPart(key, value))
+  for (const [key, value] of keyValuesOf(node)) if (isKey(key)) parts.push(keyPart(key, value))
 }
 
 /** C2-W-048: the brace block of `node`, or the empty string when it has nothing to write. */

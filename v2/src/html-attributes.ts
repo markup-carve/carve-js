@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type AstNode } from './ast.ts'
+import { type AstNode, classesOf, keyValuesOf } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
@@ -384,9 +384,9 @@ export function attributes(r: Render, node: AstNode | null, parts: TagParts): st
 export function attributeBlockText(node: AstNode): string {
   const parts: string[] = []
   if (node.attrs?.id !== undefined) parts.push(`#${node.attrs.id}`)
-  for (const name of node.attrs?.classes ?? []) parts.push(`.${name}`)
+  for (const name of classesOf(node)) parts.push(`.${name}`)
   if (node.lang !== undefined) parts.push(`:${node.lang}`)
-  for (const [key, value] of node.attrs?.keyValues ?? []) parts.push(keyText(key, value))
+  for (const [key, value] of keyValuesOf(node)) parts.push(keyText(key, value))
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 

@@ -161,3 +161,60 @@ export const INLINE_PARENTS: readonly string[] = [
   'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'span', 'link', 'inline_footnote',
   'inline_extension', 'small_caps',
 ]
+
+const NONE: readonly never[] = []
+
+/** The children of `node`, or none. */
+export function childrenOf(node: AstNode): readonly AstNode[] {
+  return node.children ?? NONE
+}
+
+/** The `value` of `node`, or the empty string. */
+export function valueOf(node: AstNode): string {
+  return node.value ?? ''
+}
+
+/** The `key` of a reference, a definition or a term, or the empty string. */
+export function keyOf(node: AstNode): string {
+  return node.key ?? ''
+}
+
+/** The `href` of a link, an autolink or a link definition, or the empty string. */
+export function hrefOf(node: AstNode): string {
+  return node.href ?? ''
+}
+
+/** The ruby pairs of `node`, or none. */
+export function pairsOf(node: AstNode): readonly RubyPair[] {
+  return node.pairs ?? NONE
+}
+
+/** The columns of a table, or none. */
+export function columnsOf(table: AstNode): readonly AstNode[] {
+  return table.columns ?? NONE
+}
+
+/** The classes of `node`, or none (C2-A-032). */
+export function classesOf(node: AstNode): readonly string[] {
+  return node.attrs?.classes ?? NONE
+}
+
+/** The key-value attributes of `node`, or none (C2-A-032). */
+export function keyValuesOf(node: AstNode): readonly [string, string][] {
+  return node.attrs?.keyValues ?? NONE
+}
+
+/** The columns a table cell covers: 1 unless it says otherwise (C2-A-092). */
+export function colspanOf(cell: AstNode): number {
+  return cell.colspan ?? 1
+}
+
+/** The rows a table cell covers: 1 unless it says otherwise (C2-A-092). */
+export function rowspanOf(cell: AstNode): number {
+  return cell.rowspan ?? 1
+}
+
+/** The level of a heading: 1 unless it says otherwise. */
+export function levelOf(heading: AstNode): number {
+  return heading.level ?? 1
+}

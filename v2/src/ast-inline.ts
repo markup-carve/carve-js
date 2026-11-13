@@ -1,5 +1,5 @@
 // The inline nodes of the public tree (spec/0.2/ast.md), built straight from the events of the inline pass.
-import { type AstNode, type Attrs } from './ast.ts'
+import { type AstNode, type Attrs, valueOf } from './ast.ts'
 import { type Attributes, attributeSink, foldLabel, NO_MEMO } from './ast-attributes.ts'
 import { readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
@@ -26,7 +26,9 @@ export interface InlineFrame {
   flags: number
   aux: number
   children: AstNode[] | null
-  value: string | null
+  value: string
+  /** Set once a span of the source has gone into `value`; each further span joins it behind a line feed. */
+  spanned: boolean
   destination: string | null
   title: string | null
   label: string | null
@@ -122,11 +124,11 @@ function setTarget(out: AstNode, node: InlineFrame, field: 'href' | 'src'): void
 type LeafBuilder = (ctx: TreeContext, node: InlineFrame) => AstNode
 
 function valueNode(type: string): LeafBuilder {
-  return (_ctx, node) => ({ type, value: node.value ?? '' })
+  return (_ctx, node) => ({ type, value: node.value })
 }
 
 function nameNode(type: string): LeafBuilder {
-  return (_ctx, node) => ({ type, name: node.value ?? '' })
+  return (_ctx, node) => ({ type, name: node.value })
 }
 
 const LEAVES = new Map<number, LeafBuilder>([
@@ -137,22 +139,22 @@ const LEAVES = new Map<number, LeafBuilder>([
   [SYMBOL, nameNode('symbol')],
   [NBSP, () => ({ type: 'non_breaking_space' })],
   [HARD_BREAK, () => ({ type: 'hard_break' })],
-  [MATH, (_ctx, node) => ({ type: 'math', display: (node.flags & FLAG_DISPLAY) !== 0, value: node.value ?? '' })],
+  [MATH, (_ctx, node) => ({ type: 'math', display: (node.flags & FLAG_DISPLAY) !== 0, value: node.value })],
   [RAW_INLINE, (ctx, node) => ({
-    type: 'raw_inline', format: ctx.src.slice(node.aux, ctx.src.indexOf('}', node.aux)), value: node.value ?? '',
+    type: 'raw_inline', format: ctx.src.slice(node.aux, ctx.src.indexOf('}', node.aux)), value: node.value,
   })],
   [INLINE_COMMENT, (_ctx, node) => {
     const braced = (node.flags & FLAG_BRACED) !== 0
-    return { type: 'comment', form: braced ? 'braced' : 'line', value: commentValue(node.value ?? '', braced) }
+    return { type: 'comment', form: braced ? 'braced' : 'line', value: commentValue(node.value, braced) }
   }],
   // C2-H-079: the destination of an email autolink is `mailto:` and the address; its text is the address.
   [AUTOLINK, (_ctx, node) => {
-    const body = node.value ?? ''
+    const body = node.value
     return (node.flags & FLAG_EMAIL) !== 0 ? { type: 'autolink', href: `mailto:${body}`, text: body } : { type: 'autolink', href: body }
   }],
-  [XREF, (_ctx, node) => ({ type: 'xref', key: node.value ?? '', namespace: 'heading' })],
-  [MENTION, (_ctx, node) => ({ type: 'mention', target: node.value ?? '', kind: 'user' })],
-  [FOOTNOTE_REF, (_ctx, node) => ({ type: 'footnote_ref', key: foldLabel(node.value ?? ''), namespace: 'footnote' })],
+  [XREF, (_ctx, node) => ({ type: 'xref', key: node.value, namespace: 'heading' })],
+  [MENTION, (_ctx, node) => ({ type: 'mention', target: node.value, kind: 'user' })],
+  [FOOTNOTE_REF, (_ctx, node) => ({ type: 'footnote_ref', key: foldLabel(node.value), namespace: 'footnote' })],
   [SMART, (ctx, node) => ({
     type: 'smart_punctuation', kind: SMART_KIND_NAMES[node.aux]!, glyph: SMART_GLYPHS[node.aux]!,
     source: ctx.src.slice(node.start, node.end),
@@ -160,7 +162,7 @@ const LEAVES = new Map<number, LeafBuilder>([
   [IMAGE, (_ctx, node) => {
     const out: AstNode = { type: 'image' }
     setTarget(out, node, 'src')
-    out.alt = node.value ?? ''
+    out.alt = node.value
     return out
   }],
 ])
@@ -200,8 +202,8 @@ function addRun(ctx: TreeContext, list: AstNode[], value: string, start: number,
 
 function traceBreak(trace: LayoutTrace, text: AstNode, fragment: number): void {
   const breaks = trace.breaks.get(text)
-  if (breaks === undefined) trace.breaks.set(text, [text.value!.length, fragment])
-  else breaks.push(text.value!.length, fragment)
+  if (breaks === undefined) trace.breaks.set(text, [valueOf(text).length, fragment])
+  else breaks.push(valueOf(text).length, fragment)
 }
 
 function addBreak(ctx: TreeContext, list: AstNode[], node: InlineFrame, flow: number): void {
@@ -253,7 +255,7 @@ function destinationValue(value: string): string {
 
 /** Closes a part of `host`: it goes into a field of the host. */
 function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: InlineFrame): void {
-  const value = node.value ?? ''
+  const value = node.value
   if (node.kind === LABEL) host.aux = node.end
   if (node.kind === ATTRIBUTE_BLOCK) {
     host.attributes ??= { id: null, classes: [], language: null, keys: [] }
@@ -273,7 +275,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
 function openFrame(kind: number, start: number, flags: number, aux: number): InlineFrame {
   return {
     kind, start, end: start, flags, aux, children: isInlineContainer(kind) ? [] : null,
-    value: null, destination: null, title: null, label: null, attributes: null,
+    value: '', spanned: false, destination: null, title: null, label: null, attributes: null,
   }
 }
 
@@ -285,7 +287,7 @@ function runStart(flow: number, start: number): number {
 /** Closes the frame `node` at `end` into `list`, the children of its parent `host` or the root. */
 function closeFrame(ctx: TreeContext, spans: number[], node: InlineFrame, host: InlineFrame | null, list: AstNode[], flow: number): void {
   // C2-A-041: an escape is no node. Its character is text.
-  if (node.kind === ESCAPE) addRun(ctx, list, node.value ?? '', runStart(flow, node.start), node.end)
+  if (node.kind === ESCAPE) addRun(ctx, list, node.value, runStart(flow, node.start), node.end)
   else if (isPart(node.kind)) closePart(ctx, spans, node, host!)
   else addNode(ctx, list, node, flow)
 }
@@ -306,7 +308,8 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): AstNo
       top = openFrame(eventKind(tag), a, eventFlags(tag), b)
       open.push(top)
     } else if (type === SPAN && top !== null && top.children === null) {
-      top.value = top.value === null ? src.slice(a, b) : `${top.value}\n${src.slice(a, b)}`
+      top.value = top.spanned ? `${top.value}\n${src.slice(a, b)}` : src.slice(a, b)
+      top.spanned = true
     } else if (type === SPAN) {
       addRun(ctx, top === null ? root : top.children!, src.slice(a, b), runStart(flow, a), b)
     } else {

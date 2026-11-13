@@ -2,7 +2,7 @@
 // headings, footnote numbers, heading ids, caption numbers, cross-references and column alignment.
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
-import { type AstNode } from './ast.ts'
+import { type AstNode, childrenOf, colspanOf, columnsOf, hrefOf, keyOf, keyValuesOf, rowspanOf } from './ast.ts'
 import { type ParseFacts } from './ast-blocks.ts'
 import { labelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
@@ -85,7 +85,7 @@ function useNote(walk: Walk, node: AstNode, definition: AstNode | null): void {
 }
 
 function visitFootnoteRef(walk: Walk, node: AstNode): void {
-  const definition = walk.footnotes.get(node.key ?? '')
+  const definition = walk.footnotes.get(keyOf(node))
   if (definition === undefined) delete node.number
   else useNote(walk, node, definition)
 }
@@ -117,7 +117,7 @@ const NAMING_KEYS = ['aria-label', 'aria-labelledby']
 
 /** C2-H-155: true when the attribute line names the node itself, so the renderer generates no name and no id. */
 export function hasAuthoredName(node: AstNode): boolean {
-  return (node.attrs?.keyValues ?? []).some(([key]) => NAMING_KEYS.includes(key.toLowerCase()))
+  return (keyValuesOf(node)).some(([key]) => NAMING_KEYS.includes(key.toLowerCase()))
 }
 
 function visitAdmonition(walk: Walk, node: AstNode): void {
@@ -200,14 +200,14 @@ function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
 
 /** The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered` counts the rows a cell above still spans. */
 function rowMarks(row: AstNode, field: 'align' | 'valign', covered: number[], marks: (string | undefined)[]): void {
-  const cells = row.children ?? []
+  const cells = childrenOf(row)
   const marked = cells.some((cell) => cell.span !== undefined)
   let column = 0
   for (const cell of cells) {
     while (!marked && (covered[column] ?? 0) > 0) covered[column++]!--
     if (cell[field] !== undefined) marks[column] = cell[field]
-    if (!marked) for (let more = 0; more < (cell.colspan ?? 1); more++) covered[column + more] = (cell.rowspan ?? 1) - 1
-    column += marked ? 1 : cell.colspan ?? 1
+    if (!marked) for (let more = 0; more < (colspanOf(cell)); more++) covered[column + more] = (rowspanOf(cell)) - 1
+    column += marked ? 1 : colspanOf(cell)
   }
 }
 
@@ -217,17 +217,17 @@ function rowMarks(row: AstNode, field: 'align' | 'valign', covered: number[], ma
  */
 export function headMarks(table: AstNode, field: 'align' | 'valign'): (string | undefined)[] {
   const marks: (string | undefined)[] = []
-  for (const group of table.children ?? []) {
+  for (const group of childrenOf(table)) {
     if (group.type !== 'table_head') continue
     const covered: number[] = []
-    for (const row of group.children ?? []) if (row.type === 'table_row') rowMarks(row, field, covered, marks)
+    for (const row of childrenOf(group)) if (row.type === 'table_row') rowMarks(row, field, covered, marks)
   }
   return marks
 }
 
 /** C2-B-213: the resolved alignment of a column is the mark of its head cell, or else what `aligns` spelled. */
 function alignColumns(table: AstNode): void {
-  const columns = table.columns ?? []
+  const columns = columnsOf(table)
   if (columns.length === 0) return
   const fromHead = headMarks(table, 'align')
   columns.forEach((column, at) => {
@@ -244,10 +244,10 @@ function collectDefinitions(document: AstNode, walk: Walk): void {
     ['footnote', walk.footnotes, 'duplicate-footnote-definition'],
     ['abbreviation_def', new Map<string, AstNode>(), 'duplicate-abbreviation-definition'],
   ]
-  for (const child of document.children ?? []) {
+  for (const child of childrenOf(document)) {
     for (const [type, table, code] of tables) {
       if (child.type !== type) continue
-      const key = child.key ?? ''
+      const key = keyOf(child)
       if (table.has(key)) report(walk.resolution, child, code, `${key} is defined more than once`)
       else table.set(key, child)
     }
@@ -265,7 +265,7 @@ function headingIndex(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): M
     if (mode === 'off' && heading.attrs?.id === undefined) continue
     const source = facts?.headingSource(heading)
     if (source !== undefined && !index.has(source)) index.set(source, heading)
-    const text = plainText(heading.children ?? [])
+    const text = plainText(childrenOf(heading))
     if (!index.has(text)) index.set(text, heading)
   }
   return index
@@ -307,7 +307,7 @@ function generateIds(walk: Walk, mode: HeadingIds, taken: Set<string>): void {
   for (const heading of walk.headings) {
     delete heading.generatedId
     if (mode === 'off' || heading.attrs?.id !== undefined) continue
-    const slug = slugify(plainText(heading.children ?? []), mode)
+    const slug = slugify(plainText(childrenOf(heading)), mode)
     let id = slug
     let suffix = suffixes.get(slug) ?? 1
     while (taken.has(id)) id = `${slug}-${++suffix}`
@@ -344,7 +344,7 @@ function setDestinations(walk: Walk, targets: Map<AstNode, AstNode>, kept: Set<A
     } else if (target.type === 'heading') {
       reference.href = `#${headingId(target)!}`
     } else {
-      reference[field] = target.href ?? ''
+      reference[field] = hrefOf(target)
     }
   }
 }
@@ -394,11 +394,11 @@ function resolveXrefs(walk: Walk): void {
   // The text of a heading is read only where a cross-reference may point at it.
   for (const heading of walk.xrefs.length === 0 ? [] : walk.headings) {
     const id = headingId(heading)
-    if (id !== undefined && !anchors.has(id)) anchors.set(id, plainText(heading.children ?? []))
+    if (id !== undefined && !anchors.has(id)) anchors.set(id, plainText(childrenOf(heading)))
   }
   numberCaptions(walk, anchors)
   for (const xref of walk.xrefs) {
-    const text = anchors.get(xref.key ?? '')
+    const text = anchors.get(keyOf(xref))
     if (text === undefined) {
       delete xref.href
       continue
@@ -441,7 +441,7 @@ export function resolve(
   for (let at = 0; at < resolution.notes.length; at++) {
     const note = resolution.notes[at]!
     const body = note.definition ?? note.inline!
-    for (const child of body.children ?? []) visit(walk, child, body)
+    for (const child of childrenOf(body)) visit(walk, child, body)
   }
   const kept = keptReferences(document, walk, facts)
   const targets = findTargets(walk, mode, facts)

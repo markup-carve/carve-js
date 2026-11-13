@@ -1,7 +1,7 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { type AstNode } from './ast.ts'
+import { type AstNode, childrenOf, keyOf, valueOf } from './ast.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
@@ -55,7 +55,7 @@ function seek(cursor: WrapCursor, value: string, offset: number): boolean {
 
 /** Whether the wrap at the byte `offset` of the text `node` fits the tree: a place behind the wraps before it, with the joining space before it, or the start of the value (C2-L-021). */
 function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
-  const value = node.value ?? ''
+  const value = valueOf(node)
   if (node.type !== 'text' || !seek(cursor, value, offset)) return false
   const fits = cursor.at === 0 ? cursor.points.length === 0 : cursor.at > (cursor.points[cursor.points.length - 1] ?? 0) && value[cursor.at - 1] === ' '
   if (fits) cursor.points.push(cursor.at)
@@ -97,8 +97,8 @@ function readLayout(w: Writer, document: AstNode, entries: readonly LayoutEntry[
 
 /** C2-B-085: the first definition of a term wins. */
 function readAbbreviations(w: Writer, document: AstNode): void {
-  for (const child of document.children ?? []) {
-    if (child.type === 'abbreviation_def' && !w.abbreviations.has(child.key ?? '')) w.abbreviations.set(child.key ?? '', child.expansion ?? '')
+  for (const child of childrenOf(document)) {
+    if (child.type === 'abbreviation_def' && !w.abbreviations.has(keyOf(child))) w.abbreviations.set(keyOf(child), child.expansion ?? '')
   }
 }
 
@@ -219,13 +219,13 @@ function compareGroup(w: Writer, document: AstNode, group: readonly AstNode[], f
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   const parsed = parseChunk(source, w.abbreviations)
-  compareBlocks(check, group, parsed.children ?? [], document)
+  compareBlocks(check, group, childrenOf(parsed), document)
   escapeOpeners(check, parsed, first ? 1 : 2)
   return check
 }
 
 function writeDocument(w: Writer, document: AstNode): string {
-  const nodes = document.children ?? []
+  const nodes = childrenOf(document)
   const out: string[] = []
   let before: AstNode | null = null
   let list: AstNode | null = null

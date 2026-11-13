@@ -1,5 +1,5 @@
 // The inline elements of C2-H-072 to C2-H-101.
-import { type AstNode } from './ast.ts'
+import { type AstNode, childrenOf, hrefOf, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
   attributeBlockText, attributes, destination, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
@@ -25,26 +25,26 @@ function isLineComment(node: AstNode | undefined): boolean {
  * C2-B-137: a comment-only line is skipped, so one line break around it is not written: the one
  * behind it, or the one before it when the content ends with the comment.
  */
-function isSkippedBreak(nodes: AstNode[], at: number): boolean {
+function isSkippedBreak(nodes: readonly AstNode[], at: number): boolean {
   const before = nodes[at - 2]
   if (isLineComment(nodes[at - 1]) && (before === undefined || isBreak(before))) return true
   const after = nodes[at + 2]
   return isLineComment(nodes[at + 1]) && (after === undefined || !isBreak(after))
 }
 
-export function inlineHtml(r: Render, nodes: AstNode[]): string {
+export function inlineHtml(r: Render, nodes: readonly AstNode[]): string {
   let out = ''
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
-    if (node.type === 'text') out += escapeText(node.value ?? '')
+    if (node.type === 'text') out += escapeText(valueOf(node))
     else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += WRITERS.get(node.type)?.(r, node) ?? ''
   }
   return out
 }
 
 function children(r: Render, node: AstNode): string {
-  return inlineHtml(r, node.children ?? [])
+  return inlineHtml(r, childrenOf(node))
 }
 
 function element(name: string, parts: TagParts = {}): InlineWriter {
@@ -57,7 +57,7 @@ function authoredKey(node: AstNode, name: string): string | undefined {
 
 /** A copy of `node` without the keys `names`, which an element takes as its name. */
 function withoutKeys(node: AstNode, names: string[]): AstNode {
-  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(key.toLowerCase()))
+  const keyValues = (keyValuesOf(node)).filter(([key]) => !names.includes(key.toLowerCase()))
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
@@ -99,7 +99,7 @@ function withDefinition(node: AstNode, definition: AstNode | undefined): AstNode
 
 /** C2-H-085: the label part of an unresolved reference, written from the key. */
 function labelText(node: AstNode): string {
-  return escapeText(`${node.form === 'collapsed' ? '[]' : `[${node.key ?? ''}]`}${attributeBlockText(node)}`)
+  return escapeText(`${node.form === 'collapsed' ? '[]' : `[${keyOf(node)}]`}${attributeBlockText(node)}`)
 }
 
 function referenceCarriers(r: Render, node: AstNode): Pair[] {
@@ -126,7 +126,7 @@ function link(r: Render, node: AstNode): string {
   if (node.key !== undefined && node.href === undefined) return `[${children(r, node)}]${labelText(node)}`
   const definition = node.key === undefined ? undefined : r.resolution.definitions.get(node.key)
   const title = node.tooltip ?? definition?.title
-  const structural: Pair[] = [['href', destination(r, node.href ?? '', node)]]
+  const structural: Pair[] = [['href', destination(r, hrefOf(node), node)]]
   if (typeof title === 'string') structural.push(['title', title])
   const merged = withDefinition(node, definition)
   addRel(r, merged, structural)
@@ -148,9 +148,9 @@ function image(r: Render, node: AstNode): string {
 }
 
 function autolink(r: Render, node: AstNode): string {
-  const text = escapeText(node.text ?? node.href ?? '')
+  const text = escapeText(node.text ?? hrefOf(node))
   if (r.linkDepth > 0) return text
-  const structural: Pair[] = [['href', destination(r, node.href ?? '', node)]]
+  const structural: Pair[] = [['href', destination(r, hrefOf(node), node)]]
   addRel(r, node, structural)
   if (r.settings.roundtrip) structural.push(['data-carve-autolink', null])
   return `<a${attributes(r, node, { structural })}>${text}</a>`
@@ -158,7 +158,7 @@ function autolink(r: Render, node: AstNode): string {
 
 function xref(r: Render, node: AstNode): string {
   // C2-H-086: unresolved, the characters as typed.
-  if (node.href === undefined) return escapeText(`</#${node.key ?? ''}>`)
+  if (node.href === undefined) return escapeText(`</#${keyOf(node)}>`)
   // C2-H-097: the generated text is plain text.
   const text = escapeText(r.resolution.xrefText.get(node) ?? '')
   if (r.linkDepth > 0) return text
@@ -170,7 +170,7 @@ function xref(r: Render, node: AstNode): string {
 /** C2-H-088: the anchor of a footnote reference or of an inline footnote. */
 function noteReference(r: Render, node: AstNode): string {
   const note = r.resolution.noteOf.get(node)
-  if (note === undefined) return escapeText(`[^${node.key ?? ''}]`)
+  if (note === undefined) return escapeText(`[^${keyOf(node)}]`)
   const structural: Pair[] = [['href', `#fn${note.number}`], ['role', 'doc-noteref']]
   if (r.settings.roundtrip && node.key !== undefined) structural.push(['data-carve-footnote-label', node.key])
   const tag = attributes(r, node, { structural, id: r.resolution.refIds.get(node)!, idFirst: true })
@@ -179,10 +179,10 @@ function noteReference(r: Render, node: AstNode): string {
 
 function math(r: Render, node: AstNode): string {
   // C2-H-122: static output has no client renderer, so an equation is its source as code.
-  if (r.settings.mode === 'static') return `<code${attributes(r, node, { base: ['language-math'] })}>${escapeText(node.value ?? '')}</code>`
+  if (r.settings.mode === 'static') return `<code${attributes(r, node, { base: ['language-math'] })}>${escapeText(valueOf(node))}</code>`
   const display = node.display === true
   const tag = attributes(r, node, { base: ['math', display ? 'display' : 'inline'], generated: [['role', 'math']] })
-  const value = escapeText(node.value ?? '')
+  const value = escapeText(valueOf(node))
   // C2-H-151: the number of a numbered equation, which only a supplied tree holds.
   const number = node.number === undefined || !display ? '' : ` <span class="equation-number">${escapeText(`${node.numberPrefix ?? ''} ${node.number}`)}</span>`
   return `<span${tag}>${display ? `\\[${value}\\]` : `\\(${value}\\)`}</span>${number}`
@@ -194,7 +194,7 @@ function rawInline(r: Render, node: AstNode): string {
     loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
     return ''
   }
-  const html = r.settings.rawHtml ? node.value ?? '' : escapeText(node.value ?? '')
+  const html = r.settings.rawHtml ? valueOf(node) : escapeText(valueOf(node))
   return r.settings.roundtrip ? `<span data-carve-raw="html">${html}</span>` : html
 }
 
@@ -236,13 +236,13 @@ function symbol(r: Render, node: AstNode): string {
 /** C2-H-049: a literal-text span is its escaped content, or a span when it carries attributes. */
 function literal(r: Render, node: AstNode): string {
   const tag = attributes(r, node, {})
-  const value = escapeText(node.value ?? '')
+  const value = escapeText(valueOf(node))
   return tag === '' ? value : `<span${tag}>${value}</span>`
 }
 
 /** C2-H-098, C2-H-099. */
 function abbreviation(r: Render, node: AstNode): string {
-  const term = escapeText(node.key ?? '')
+  const term = escapeText(keyOf(node))
   if (r.abbrDepth > 0 || node.expansion === undefined) return term
   return `<abbr${attributes(r, node, { structural: [['title', node.expansion]] })}>${term}</abbr>`
 }
@@ -256,7 +256,7 @@ function captionNumber(r: Render, node: AstNode): string {
 /** C2-H-142. */
 function ruby(r: Render, node: AstNode): string {
   let html = ''
-  for (const pair of node.pairs ?? []) {
+  for (const pair of pairsOf(node)) {
     html += `${inlineHtml(r, pair.base)}<rp>(</rp><rt>${inlineHtml(r, pair.annotation)}</rt><rp>)</rp>`
   }
   return `<ruby${attributes(r, node, {})}>${html}</ruby>`
@@ -271,11 +271,11 @@ function inlineExtension(r: Render, node: AstNode): string {
   const name = node.name ?? ''
   if (!name.includes('.')) return element('span', { base: [`ext-${name}`] })(r, node)
   loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
-  return inlineHtml(r, node.fallback ?? node.children ?? [])
+  return inlineHtml(r, node.fallback ?? childrenOf(node))
 }
 
 const WRITERS = new Map<string, InlineWriter>([
-  ['text', (_r, node) => escapeText(node.value ?? '')],
+  ['text', (_r, node) => escapeText(valueOf(node))],
   ['span', span],
   ['link', link],
   ['image', image],
@@ -283,11 +283,11 @@ const WRITERS = new Map<string, InlineWriter>([
   ['xref', xref],
   ['footnote_ref', noteReference],
   ['inline_footnote', noteReference],
-  ['code', (r, node) => `<code${attributes(r, node, {})}>${escapeText(node.value ?? '')}</code>`],
+  ['code', (r, node) => `<code${attributes(r, node, {})}>${escapeText(valueOf(node))}</code>`],
   ['literal_inline', literal],
   ['math', math],
   ['raw_inline', rawInline],
-  ['critic_comment', (r, node) => `<span${attributes(r, node, { base: ['critic-comment'] })}>${escapeText(node.value ?? '')}</span>`],
+  ['critic_comment', (r, node) => `<span${attributes(r, node, { base: ['critic-comment'] })}>${escapeText(valueOf(node))}</span>`],
   ['mention', social('@', 'mention')],
   ['tag', social('#', 'tag')],
   ['symbol', symbol],

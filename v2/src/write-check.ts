@@ -2,7 +2,7 @@
 // and compared with the tree they were written from. Where the parse reads a construct that the
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
-import { type AstNode, INLINE_PARENTS } from './ast.ts'
+import { type AstNode, childrenOf, INLINE_PARENTS, valueOf } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
 import { isAsciiPunctuation } from './write-attributes.ts'
@@ -124,7 +124,7 @@ function isEscaped(c: Check, node: AstNode, at: number): boolean {
 
 /** Asks for a backslash before the character `at` of the text node. False where that character takes none. */
 function escapeAt(c: Check, node: AstNode, at: number): boolean {
-  const value = node.value ?? ''
+  const value = valueOf(node)
   if (at < 0 || at >= value.length || !isAsciiPunctuation(value.charCodeAt(at)) || isEscaped(c, node, at)) return false
   c.escapes.push([node, at])
   mark(c, node, at, true)
@@ -154,7 +154,7 @@ function openerOffsets(value: string): number[] {
 function escapeLineStart(c: Check, nodes: readonly AstNode[], from: number, owner: AstNode): void {
   c.misaligned = true
   const first = nodes[from]
-  if (first?.type === 'text') for (const at of openerOffsets(first.value ?? '')) if (escapeAt(c, first, at)) return
+  if (first?.type === 'text') for (const at of openerOffsets(valueOf(first))) if (escapeAt(c, first, at)) return
   for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
     if (nodes[at]!.type === 'text' && escapeAt(c, nodes[at]!, 0)) return
   }
@@ -191,7 +191,7 @@ const CLOSING_MARKS = new Map([
  */
 function escapeEnd(c: Check, text: AstNode | null, braces: boolean): boolean {
   if (text === null) return false
-  const value = text.value ?? ''
+  const value = valueOf(text)
   if (value !== '' && JOINING.includes(value[value.length - 1]!) && escapeAt(c, text, value.length - 1)) return true
   return braces && escapeAt(c, text, value.lastIndexOf('{'))
 }
@@ -269,7 +269,7 @@ function openerShift(a: AstNode): number {
 
 /** The text of `e` holds, at `at`, what the parse read as the construct `a`. */
 function escapeOpener(c: Check, e: AstNode, at: number, a: AstNode): void {
-  const value = e.value ?? ''
+  const value = valueOf(e)
   let start = at
   // C2-I-023: a line comment takes the spaces before it.
   while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
@@ -299,7 +299,7 @@ function escapeMark(c: Check, nodes: readonly AstNode[], start: number, from: nu
       if (node.children !== undefined && escapeMark(c, node.children, 0, 0, mark)) return true
       continue
     }
-    const value = node.value ?? ''
+    const value = valueOf(node)
     for (let k = value.indexOf(mark, at === start ? from : 0); k >= 0; k = value.indexOf(mark, k + 1)) if (escapeAt(c, node, k)) return true
   }
   return false
@@ -323,7 +323,7 @@ function closedEarly(c: Check, es: readonly AstNode[], i: number, vi: number, ow
  */
 function openerLine(es: readonly AstNode[], from: number): number {
   let at = from
-  while (at + 2 < es.length && es[at]!.type === 'text' && isBreak(es[at + 1]) && isBraceLine(es[at]!.value ?? '')) at += 2
+  while (at + 2 < es.length && es[at]!.type === 'text' && isBreak(es[at + 1]) && isBraceLine(valueOf(es[at]!))) at += 2
   return at
 }
 
@@ -342,8 +342,8 @@ function endedEarly(c: Check, es: readonly AstNode[], i: number, owner: AstNode)
 
 /** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
 function matchCharacters(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
-  const value = e.value ?? ''
-  const other = a.value ?? ''
+  const value = valueOf(e)
+  const other = valueOf(a)
   const length = Math.min(value.length - at.vi, other.length - at.aj)
   for (let k = 0; k < length; k++) {
     if (value.charCodeAt(at.vi + k) === other.charCodeAt(at.aj + k)) continue
@@ -366,7 +366,7 @@ function matchCharacters(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean 
  */
 function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
   const e = es[at.i]!
-  const value = e.value ?? ''
+  const value = valueOf(e)
   const a = as[at.j]
   if (a === undefined) {
     if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
@@ -395,9 +395,9 @@ function stepOver(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: 
   const a = as[at.j]
   const spelled = writeInlines(c.w, [es[at.i]!], c.flags)
   // An escape in the node is one character of the text, so the two do not compare by length.
-  if (a?.type !== 'text' || spelled.includes('\\') || !(a.value ?? '').startsWith(spelled, at.aj)) return false
+  if (a?.type !== 'text' || spelled.includes('\\') || !(valueOf(a)).startsWith(spelled, at.aj)) return false
   at.aj += spelled.length
-  if (at.aj === (a.value ?? '').length) {
+  if (at.aj === (valueOf(a)).length) {
     at.j++
     at.aj = 0
   }
@@ -413,7 +413,7 @@ function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
   if (end < 0) return false
   at.vi = end
   at.j++
-  if (at.vi === (e.value ?? '').length) {
+  if (at.vi === (valueOf(e)).length) {
     at.i++
     at.vi = 0
   }
@@ -428,11 +428,11 @@ function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
 function readsNeighbor(c: Check, es: readonly AstNode[], i: number, a: AstNode): boolean {
   const e = es[i]!
   const next = textAt(es, i + 1)
-  if (next !== null && !sameValue(e.attrs, a.attrs) && (next.value ?? '').startsWith('{')) return escapeAt(c, next, 0)
+  if (next !== null && !sameValue(e.attrs, a.attrs) && (valueOf(next)).startsWith('{')) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   if (next !== null && escapeAt(c, next, 0)) return true
   const before = textAt(es, i - 1)
-  return before !== null && escapeAt(c, before, (before.value ?? '').length - 1)
+  return before !== null && escapeAt(c, before, (valueOf(before)).length - 1)
 }
 
 function textAt(nodes: readonly AstNode[], at: number): AstNode | null {
@@ -518,7 +518,7 @@ function compareRaw(c: Check, e: AstNode, a: AstNode): void {
   const probe = createCheck(c.w)
   probe.flags = c.flags
   compareFields(probe, e, a)
-  if (e.children !== undefined) compareInlines(probe, e.children, a.children ?? [], e)
+  if (e.children !== undefined) compareInlines(probe, e.children, childrenOf(a), e)
   // A difference behind another change of this round may come from that change, so the next round decides.
   if (changes(probe) + probe.losses.length > 0 && changes(c) === 0) changeForm(c, e)
   else if (changes(probe) + probe.losses.length > 0) c.misaligned = true
@@ -536,7 +536,7 @@ function compareInline(c: Check, e: AstNode, a: AstNode): void {
   const outer = c.flags
   if (e.type === 'emphasis') c.flags |= IN_EMPHASIS
   else if (e.type === 'strong') c.flags |= IN_STRONG
-  compareInlines(c, e.children, a.children ?? [], e)
+  compareInlines(c, e.children, childrenOf(a), e)
   c.flags = outer
 }
 
@@ -544,21 +544,21 @@ function compareInline(c: Check, e: AstNode, a: AstNode): void {
 function blockMismatch(c: Check, e: AstNode): void {
   c.misaligned = true
   // C2-W-092: the first line of a paragraph read as a block opener.
-  if (e.type === 'paragraph' && (e.children ?? []).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && (childrenOf(e)).length > 0) escapeLineStart(c, e.children!, 0, e)
   else c.losses.push([e, null])
 }
 
 /** The block `e` has no block in the parse: the block above it took its lines. */
 function missingBlock(c: Check, e: AstNode): void {
   // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
-  if (e.type === 'paragraph' && (e.children ?? []).length > 0) escapeLineStart(c, e.children!, 0, e)
+  if (e.type === 'paragraph' && (childrenOf(e)).length > 0) escapeLineStart(c, e.children!, 0, e)
   else if (hasOtherForm(c, e)) changeForm(c, e)
   else c.losses.push([e, null])
 }
 
 function hasSpanMarks(table: AstNode): boolean {
-  for (const group of table.children ?? []) {
-    for (const row of group.children ?? []) for (const cell of row.children ?? []) if (cell.span !== undefined) return true
+  for (const group of childrenOf(table)) {
+    for (const row of childrenOf(group)) for (const cell of childrenOf(row)) if (cell.span !== undefined) return true
   }
   return false
 }
@@ -582,8 +582,8 @@ function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
   if (e.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
   if (e.type === 'table_cell') c.flags |= IN_CELL
   compareFields(c, e, a)
-  if (INLINE_PARENTS.includes(e.type)) compareInlines(c, e.children ?? [], a.children ?? [], e)
-  else compareBlocks(c, e.children ?? [], a.children ?? [], e)
+  if (INLINE_PARENTS.includes(e.type)) compareInlines(c, childrenOf(e), childrenOf(a), e)
+  else compareBlocks(c, childrenOf(e), childrenOf(a), e)
   compareSlots(c, e, a)
   c.spanMarks = marks
   c.flags = flags
@@ -592,7 +592,7 @@ function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
 
 /** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
 function readStarts(node: AstNode, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
-  for (const block of node.children ?? []) {
+  for (const block of childrenOf(node)) {
     if (block.pos !== undefined) {
       lines.add(block.pos.startLine - offset)
       if (block.type === 'paragraph') paragraphs.add((block.pos.startLine - offset) * PLACE_COLUMNS + block.pos.startColumn - 1)
@@ -604,14 +604,14 @@ function readStarts(node: AstNode, offset: number, paragraphs: Set<number>, line
 
 /** Whether the text at the start of a line has the shape of a block opener: punctuation, or a marker of digits or letters. */
 function hasOpenerShape(node: AstNode | undefined): boolean {
-  const value = node?.type === 'text' ? node.value ?? '' : ''
+  const value = node?.type === 'text' ? valueOf(node) : ''
   if (value === '') return node !== undefined && node.type !== 'text'
   return !isAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 
 /** Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a block. */
 function escapeOpenerLines(c: Check, e: AstNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
-  const nodes = e.children ?? []
+  const nodes = childrenOf(e)
   const pending = (at: number): boolean => nodes[at] !== undefined && c.marks.has(nodes[at])
   if (!paragraphs.has(place) && hasOpenerShape(nodes[0]) && !pending(0)) escapeLineStart(c, nodes, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
@@ -644,7 +644,7 @@ export function compareBlocks(c: Check, es: readonly AstNode[], as: readonly Ast
   // What a lost block was written as has its own count of blocks.
   if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
   // A line of a line block that reads as its closer ends the block (C2-B-123).
-  if (owner.type === 'line_block' && as.length < es.length) escapeLineStart(c, es[as.length]!.children ?? [], 0, es[as.length]!)
+  if (owner.type === 'line_block' && as.length < es.length) escapeLineStart(c, childrenOf(es[as.length]!), 0, es[as.length]!)
   else if (es.length > as.length) missingBlock(c, es[as.length]!)
   else c.losses.push([owner, null])
 }

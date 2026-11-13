@@ -1,5 +1,5 @@
 // The diagnostics record (C2-A-172, C2-A-173): its entries, and the position each one takes from the node it is about.
-import { type AstNode } from './ast.ts'
+import { type AstNode, pairsOf } from './ast.ts'
 
 /** C2-A-173: one entry of the diagnostics record. */
 export interface Diagnostic {
@@ -50,7 +50,7 @@ function pushSlots(stack: Frame[], frame: Frame): void {
   const node = frame.node
   for (const name of NODE_LISTS) pushList(stack, node[name], frame, name)
   if (node.caption !== undefined) stack.push({ node: node.caption, above: frame, step: 'caption' })
-  ;(node.pairs ?? []).forEach((pair, at) => {
+  ;(pairsOf(node)).forEach((pair, at) => {
     for (const name of PAIR_LISTS) pushList(stack, pair[name], frame, `pairs/${at}/${name}`)
   })
   for (const [name, list] of Object.entries(node.slots ?? {})) pushList(stack, list, frame, `slots/${pointerKey(name)}`)

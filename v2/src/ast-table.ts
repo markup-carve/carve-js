@@ -1,6 +1,6 @@
 // The tables of the public tree (C2-A-086 to C2-A-095): groups, rows, cells and columns, from
 // the rows of the block tree and from the rows of a delimited table.
-import { type AstNode } from './ast.ts'
+import { type AstNode, colspanOf, rowspanOf } from './ast.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
   FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, place, setAttributes, type TreeContext,
@@ -95,8 +95,8 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
     const cell = cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
-    for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell('colspan'))
-    covered[column] = (cell.rowspan ?? 1) - 1
+    for (let more = 1; more < (colspanOf(cell)); more++) cells.push(coveredCell('colspan'))
+    covered[column] = (rowspanOf(cell)) - 1
   }
   takeCovered()
   return cells

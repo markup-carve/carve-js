@@ -1,6 +1,6 @@
 // The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
 // C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
-import { type AstNode } from './ast.ts'
+import { type AstNode, childrenOf, classesOf, hrefOf, keyOf, levelOf, valueOf } from './ast.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, writeContent, writeInlines } from './write-inline.ts'
@@ -39,7 +39,7 @@ function runsBelow(w: Writer, node: AstNode): number {
   const known = w.colonRuns.get(node)
   if (known !== undefined) return known
   let longest = 0
-  for (const child of node.children ?? []) {
+  for (const child of childrenOf(node)) {
     longest = Math.max(longest, hasColonRun(w, child) ? runsBelow(w, child) + 1 : runsBelow(w, child))
   }
   // A run has at least three colons, so the first level counts three.
@@ -79,7 +79,7 @@ function isLeftOpen(w: Writer, node: AstNode): boolean {
 
 /** The lines of a verbatim value. C2-W-033: a value with no final line break is written with one. */
 function valueLines(w: Writer, node: AstNode): string[] {
-  const value = node.value ?? ''
+  const value = valueOf(node)
   if (value === '') return []
   const lines = value.split('\n')
   if (lines[lines.length - 1] === '') lines.pop()
@@ -105,7 +105,7 @@ function openerTail(w: Writer, node: AstNode, title: string | null, spelled: str
 function codeTitle(node: AstNode): string | null {
   if (!Array.isArray(node.title)) return typeof node.title === 'string' ? node.title : null
   let text = ''
-  for (const part of node.title) text += part.value ?? ''
+  for (const part of node.title) text += valueOf(part)
   return text
 }
 
@@ -127,7 +127,7 @@ function codeBlock(w: Writer, node: AstNode, prefix: string): void {
 
 /** C2-W-059: a line comment, and a comment block with the shortest percent run its body allows. */
 function comment(w: Writer, node: AstNode, prefix: string): void {
-  const value = node.value ?? ''
+  const value = valueOf(node)
   attributeLine(w, node, prefix)
   if (node.form !== 'block') {
     if (value.includes('\n')) lose(w, node, 'value')
@@ -149,7 +149,7 @@ function frontmatter(w: Writer, node: AstNode, prefix: string): void {
 }
 
 function textLeaf(w: Writer, node: AstNode, prefix: string, flags: number, mark: string, indent: string): void {
-  if ((node.children ?? []).length === 0) return lose(w, node, null)
+  if ((childrenOf(node)).length === 0) return lose(w, node, null)
   attributeLine(w, node, prefix)
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
@@ -158,7 +158,7 @@ function textLeaf(w: Writer, node: AstNode, prefix: string, flags: number, mark:
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
 function heading(w: Writer, node: AstNode, prefix: string, flags: number): void {
-  let level = node.level ?? 1
+  let level = levelOf(node)
   if (level > MAX_HEADING_LEVEL) {
     lose(w, node, 'level')
     level = MAX_HEADING_LEVEL
@@ -203,17 +203,17 @@ function include(w: Writer, node: AstNode, prefix: string): void {
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */
 function linkDefinition(w: Writer, node: AstNode, prefix: string): void {
   attributeLine(w, node, prefix)
-  const href = node.href ?? ''
+  const href = hrefOf(node)
   if (href === '') lose(w, node, 'href')
   const title = typeof node.title === 'string' ? ` ${quoted(node.title)}` : ''
   // C2-W-022: a definition with no destination ends at its colon.
-  emit(w, prefix, `[${node.key ?? ''}]:${href === '' && title === '' ? '' : ' '}${href}${title}`)
+  emit(w, prefix, `[${keyOf(node)}]:${href === '' && title === '' ? '' : ' '}${href}${title}`)
 }
 
 /** C2-W-024, C2-W-027: the blocks of a body behind its marker, the first on the marker line. */
 function body(w: Writer, node: AstNode, prefix: string, flags: number, mark: string, width: number, tight: boolean): void {
   w.lead = (w.lead ?? prefix) + mark
-  writeBlocks(w, node.children ?? [], prefix + ' '.repeat(width), flags, tight)
+  writeBlocks(w, childrenOf(node), prefix + ' '.repeat(width), flags, tight)
   if (w.lead === null) return
   // C2-W-057: an empty body has no spelling.
   lose(w, node, null)
@@ -222,7 +222,7 @@ function body(w: Writer, node: AstNode, prefix: string, flags: number, mark: str
 
 function footnote(w: Writer, node: AstNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
-  body(w, node, prefix, flags, `[^${node.key ?? ''}]: `, 2, false)
+  body(w, node, prefix, flags, `[^${keyOf(node)}]: `, 2, false)
 }
 
 /** C2-B-040: a marker of one uppercase letter and a dot takes two spaces. */
@@ -246,7 +246,7 @@ function listAttributes(node: AstNode, start: string | null): string {
 }
 
 function list(w: Writer, node: AstNode, prefix: string, flags: number): void {
-  const items = node.children ?? []
+  const items = childrenOf(node)
   if (items.length === 0) return lose(w, node, null)
   const numbering = listMarkers(w, node)
   const block = listAttributes(node, numbering.start)
@@ -261,7 +261,7 @@ function list(w: Writer, node: AstNode, prefix: string, flags: number): void {
 
 /** C2-W-060, C2-W-114: terms and descriptions with no blank line between them. */
 function definitionList(w: Writer, node: AstNode, prefix: string, flags: number): void {
-  const entries = node.children ?? []
+  const entries = childrenOf(node)
   if (entries.length === 0) return lose(w, node, null)
   attributeLine(w, node, prefix)
   writeSiblings(w, entries, prefix, flags, ENTRIES)
@@ -280,7 +280,7 @@ function fenced(w: Writer, node: AstNode, prefix: string, opener: string, blankW
 /** C2-W-031, C2-W-082: a quote with `>` lines, or as a quote fence where the sidecar records that form. */
 function blockQuote(w: Writer, node: AstNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
-  const children = node.children ?? []
+  const children = childrenOf(node)
   if (isFenced(w, node)) return fenced(w, node, prefix, ' >', false, () => writeBlocks(w, children, prefix, flags, false))
   if (children.length === 0) return emit(w, prefix, '>')
   w.lead = `${w.lead ?? prefix}> `
@@ -301,19 +301,19 @@ function divName(node: AstNode): string | null {
 
 /** C2-W-081: the opener of a hard-break block stands for the class, which it adds last (C2-A-068). */
 function usesHardBreakOpener(w: Writer, node: AstNode): boolean {
-  const classes = node.attrs?.classes ?? []
+  const classes = classesOf(node)
   if (classes[classes.length - 1] !== HARD_BREAKS_CLASS || node.title !== undefined || node.groupLabel !== undefined) return false
   return w.facts?.get(node)?.hardBreakOpener ?? true
 }
 
 function div(w: Writer, node: AstNode, prefix: string, flags: number): void {
-  const classes = node.attrs?.classes ?? []
+  const classes = classesOf(node)
   if (usesHardBreakOpener(w, node)) {
     attributeLine(w, node, prefix, { skipClasses: [classes.length - 1] })
     // C2-W-080: behind the opener a hard break is the bare line ending. In the class form it keeps its backslash (C2-W-079).
-    return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, node.children ?? [], prefix, flags | BARE_BREAKS, false))
+    return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, childrenOf(node), prefix, flags | BARE_BREAKS, false))
   }
-  const write = (): void => writeBlocks(w, node.children ?? [], prefix, flags, false)
+  const write = (): void => writeBlocks(w, childrenOf(node), prefix, flags, false)
   const name = divName(node)
   attributeLine(w, node, prefix, name === null ? {} : { skipClasses: [0] })
   fenced(w, node, prefix, (name === null ? '' : ` ${name}`) + titleTail(w, node, flags), true, write)
@@ -324,18 +324,18 @@ function namedDiv(w: Writer, node: AstNode, prefix: string, flags: number): void
   attributeLine(w, node, prefix)
   if (node.tocTarget !== undefined) lose(w, node, 'tocTarget')
   const opener = ` ${node.kind ?? ''}${titleTail(w, node, flags)}`
-  fenced(w, node, prefix, opener, true, () => writeBlocks(w, node.children ?? [], prefix, flags, false))
+  fenced(w, node, prefix, opener, true, () => writeBlocks(w, childrenOf(node), prefix, flags, false))
 }
 
 /** C2-W-053: `^`, one space and the content, directly below the block. */
 function caption(w: Writer, node: AstNode | undefined, prefix: string, flags: number): void {
   if (node === undefined) return
   if (node.short !== undefined) lose(w, node, 'short')
-  const blocks = node.children ?? []
+  const blocks = childrenOf(node)
   // C2-W-012: the content of two former blocks is kept apart by a space.
   if (blocks.length !== 1) lose(w, node, null)
   const parts: string[] = []
-  for (const block of blocks) parts.push(writeContent(w, block.children ?? [], flags))
+  for (const block of blocks) parts.push(writeContent(w, childrenOf(block), flags))
   w.lead = `${w.lead ?? prefix}^ `
   emitLines(w, prefix, '  ', parts.join(' '))
 }
@@ -350,7 +350,7 @@ function trailingComments(nodes: readonly AstNode[]): number {
 /** C2-W-059: the comments between a figure group and its caption stand between the closer and the caption line. */
 function figureGroup(w: Writer, node: AstNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
-  const children = node.children ?? []
+  const children = childrenOf(node)
   const after = node.caption === undefined ? 0 : trailingComments(children)
   const inside = children.slice(0, children.length - after)
   fenced(w, node, prefix, ' figure', true, () => writeBlocks(w, inside, prefix, flags, false))
@@ -362,7 +362,7 @@ function figureGroup(w: Writer, node: AstNode, prefix: string, flags: number): v
 function figure(w: Writer, node: AstNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   if (node.kind !== undefined) lose(w, node, 'kind')
-  for (const child of node.children ?? []) writeBlock(w, child, prefix, flags)
+  for (const child of childrenOf(node)) writeBlock(w, child, prefix, flags)
   caption(w, node.caption, prefix, flags)
 }
 
@@ -370,14 +370,14 @@ function figure(w: Writer, node: AstNode, prefix: string, flags: number): void {
 function lineBlock(w: Writer, node: AstNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   fenced(w, node, prefix, ' |', false, () => {
-    for (const line of node.children ?? []) emit(w, prefix, writeContent(w, line.children ?? [], flags | BARE_BREAKS))
+    for (const line of childrenOf(node)) emit(w, prefix, writeContent(w, childrenOf(line), flags | BARE_BREAKS))
   })
 }
 
 /** C2-A-175: a node with no spelling of its own is its children, or its fallback. */
 function childrenOnly(w: Writer, node: AstNode, prefix: string, flags: number): void {
   lose(w, node, null)
-  writeBlocks(w, node.fallback ?? node.children ?? [], prefix, flags, false)
+  writeBlocks(w, node.fallback ?? childrenOf(node), prefix, flags, false)
 }
 
 function table(w: Writer, node: AstNode, prefix: string, flags: number): void {
@@ -400,7 +400,7 @@ const WRITERS = new Map<string, BlockWriter>([
   ['link_reference_definition', linkDefinition],
   ['abbreviation_def', (w, node, prefix) => {
     attributeLine(w, node, prefix)
-    emit(w, prefix, `*[${node.key ?? ''}]: ${node.expansion ?? ''}`)
+    emit(w, prefix, `*[${keyOf(node)}]: ${node.expansion ?? ''}`)
   }],
   ['footnote', footnote],
   ['list', list],
