@@ -2,8 +2,8 @@
 // tree, for the constructs whose rules the two languages share. Leaf text is left out.
 import { parse } from '@djot/djot'
 import {
-  type BlockNode, BULLET_LIST, CODE, DOCUMENT, FLAG_STAR, FLAG_TIGHT, ITEM, PARAGRAPH, parseBlockTree, QUOTE,
-  THEMATIC_BREAK,
+  type BlockNode, BULLET_LIST, CODE, CODE_SPAN, DOCUMENT, FLAG_STAR, FLAG_TIGHT, type InlineNode, ITEM, LINK, PARAGRAPH,
+  parseBlockTree, parseTree, QUOTE, STRONG, TEXT, THEMATIC_BREAK,
 } from '../../src/index.ts'
 
 interface DjotNode {
@@ -11,6 +11,8 @@ interface DjotNode {
   children?: DjotNode[]
   style?: string
   tight?: boolean
+  text?: string
+  destination?: string
 }
 
 export function djotStructure(src: string): string {
@@ -52,4 +54,56 @@ function carveShape(node: BlockNode): string {
     case ITEM: return `li[${children}]`
     default: return `?${node.kind}`
   }
+}
+
+// Inline structure of a document that is one paragraph, in a notation shared by the two
+// engines, for the constructs whose rules the two languages share: strong, code spans and links.
+//   "text"  strong[...]  code"x"  a(u)[...]  ref[...] for a reference, whatever its label
+// A text run starts with T until `joinRuns` merges it with its neighbors. Null when the document is not one paragraph.
+function joinRuns(parts: string[]): string {
+  const out: string[] = []
+  let text: string | null = null
+  for (const part of parts) {
+    if (part.startsWith('T')) {
+      text = (text ?? '') + part.slice(1)
+      continue
+    }
+    if (text !== null) out.push(JSON.stringify(text))
+    text = null
+    out.push(part)
+  }
+  if (text !== null) out.push(JSON.stringify(text))
+  return out.join(' ')
+}
+
+function djotInlineShape(node: DjotNode): string {
+  const children = joinRuns((node.children ?? []).map(djotInlineShape))
+  switch (node.tag) {
+    case 'str': return `T${node.text ?? ''}`
+    case 'strong': return `strong[${children}]`
+    case 'verbatim': return `code"${node.text ?? ''}"`
+    case 'link': return node.destination === undefined ? `ref[${children}]` : `a(${node.destination})[${children}]`
+    default: return `?${node.tag}`
+  }
+}
+
+export function djotInline(src: string): string | null {
+  const blocks = (parse(src) as DjotNode).children ?? []
+  return blocks.length === 1 && blocks[0]!.tag === 'para' ? joinRuns((blocks[0]!.children ?? []).map(djotInlineShape)) : null
+}
+
+function carveInlineShape(node: InlineNode): string {
+  const children = node.children === null ? '' : joinRuns(node.children.map(carveInlineShape))
+  switch (node.kind) {
+    case TEXT: return `T${node.value ?? ''}`
+    case STRONG: return `strong[${children}]`
+    case CODE_SPAN: return `code"${node.value ?? ''}"`
+    case LINK: return node.destination === null ? `ref[${children}]` : `a(${node.destination})[${children}]`
+    default: return `?${node.kind}`
+  }
+}
+
+export function carveInline(src: string): string | null {
+  const blocks = parseTree(src).children!
+  return blocks.length === 1 && blocks[0]!.inlines !== null ? joinRuns(blocks[0]!.inlines.map(carveInlineShape)) : null
 }
