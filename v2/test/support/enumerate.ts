@@ -1,7 +1,7 @@
 // Enumerates every document of up to `maxLines` lines over a small alphabet of line shapes.
 import { checkDocument } from './checks.ts'
 
-/** Line shapes for the constructs of the first slice: each marker at a few indents, and the lines that end blocks. */
+/** Line shapes for the implemented constructs: each marker at a few indents, and the lines that end blocks. */
 export const LINE_SHAPES = [
   '', 'a', '  a', '    a', '\ta',
   '- a', '  - a', '    - a', ' - a', '* a', '- [x] a', '-',
@@ -9,6 +9,9 @@ export const LINE_SHAPES = [
   '> a', '>', '  > a', '- > a',
   '```', '  ```', '~~~', '- ```',
   '= a', '***', '%% a', '  %% a',
+  ':: t', ': d', '  : d', 'a.  x', 'i) x',
+  '[^a]: x', '[a]: /u', '{.a}', '{{ x }}', '^ c', '![a](b)',
+  ':::', '::: x', '::: |', '%%%', '---',
 ] as const
 
 export interface EnumerationResult {

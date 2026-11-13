@@ -7,6 +7,7 @@ import { EVENT_WIDTH } from './events.ts'
 export const MAX_DEPTH = 200
 export const NO_LEAF = -1
 export const NO_LINE = -1
+export const NO_DEPTH = -1
 
 const INITIAL_EVENTS = 1024 * EVENT_WIDTH
 const INITIAL_LINES = 256
@@ -20,26 +21,38 @@ export interface BlockState {
   lineStarts: Int32Array
   lineCount: number
 
-  // Container stack, outermost first. `stackColumn` is the marker column of an item
-  // and `stackStyle` the enter flags of a list.
+  // Container stack, outermost first. `stackColumn` is the marker column of an item, a description
+  // or a footnote body, the column of a description list and the run length of a div.
+  // `stackStyle` holds the enter flags that are the kind of a list or of a div.
   stackKind: Uint8Array
   stackColumn: Int32Array
   stackStyle: Uint8Array
   stackLoose: Uint8Array
   depth: number
 
-  // The open leaf: NO_LEAF, PARAGRAPH or CODE.
+  // The open leaf: NO_LEAF, a text leaf or an opaque leaf.
   leaf: number
+  // The first line of the open text leaf and the number of its lines (C2-B-016, C2-B-109).
+  leafStart: number
+  leafEnd: number
+  leafLines: number
+  // Closer character, opener run length and opener column of the open opaque leaf.
   fenceChar: number
   fenceLength: number
   fenceColumn: number
-  // First of the blank lines at the end of an open fence that no later line has claimed yet.
+  // First of the blank lines at the end of an open opaque leaf that no later line has claimed yet.
   pendingBlankLine: number
 
   // Blank lines since the last line that was not blank (C2-B-044, C2-B-052).
   blankCount: number
   // End of the last line that belongs to a block. Closing blocks end here.
   contentEnd: number
+  // Stack depth at which the block directly above takes a caption, or NO_DEPTH (C2-B-101).
+  captionDepth: number
+  // Stack depth at which attribute lines are pending, or NO_DEPTH (C2-B-070).
+  attributesDepth: number
+  // The next enter event takes the pending attribute lines.
+  takeAttributes: boolean
 
   // Cursor in the current line. `column` counts from the start of the line (C2-B-005);
   // `origin` is the column after the innermost matched quote mark and `prefixEnd` its offset (C2-B-003).
@@ -62,12 +75,18 @@ function createState(): BlockState {
     stackLoose: new Uint8Array(MAX_DEPTH + 1),
     depth: 0,
     leaf: NO_LEAF,
+    leafStart: 0,
+    leafEnd: 0,
+    leafLines: 0,
     fenceChar: 0,
     fenceLength: 0,
     fenceColumn: 0,
     pendingBlankLine: NO_LINE,
     blankCount: 0,
     contentEnd: 0,
+    captionDepth: NO_DEPTH,
+    attributesDepth: NO_DEPTH,
+    takeAttributes: false,
     pos: 0,
     column: 0,
     origin: 0,

@@ -1,10 +1,13 @@
 // Properties that hold for every document, checked on the events of one block pass.
 // `checkDocument` returns the first violation as text, or null.
 import {
-  acquireState, type BlockState, buildTree, CODE, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT, isLeaf,
+  acquireState, type BlockState, buildTree, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT, isLeaf, isOpaqueLeaf,
   lineAt, lineEndAt, releaseState, scanBlocks, SPAN,
 } from '../../src/index.ts'
 import { shape, shapeOf } from './shape.ts'
+
+// A document that leaves every kind of container on the stack and every pending state set.
+const LEFTOVER = '[^a]: > - a\n\n  :: t\n  : - ::: x\n      {.a}\n      ```\n\n'
 
 export function checkDocument(src: string): string | null {
   const state = acquireState()
@@ -13,7 +16,8 @@ export function checkDocument(src: string): string | null {
     const failure = checkBalance(state) ?? checkOrder(state, src.length) ?? checkOwners(state, src)
     if (failure !== null) return failure
     const first = shapeOf(src, buildTree(state.events, state.eventLength))
-    // The same state again: nothing may leak from one parse into the next.
+    // The same state again, after another document: nothing may leak from one parse into the next.
+    scanBlocks(state, LEFTOVER)
     scanBlocks(state, src)
     if (shapeOf(src, buildTree(state.events, state.eventLength)) !== first) return 'a second parse differs'
     const terminated = src.endsWith('\n') ? src : `${src}\n`
@@ -63,27 +67,30 @@ function checkOrder(state: BlockState, length: number): string | null {
 
 /**
  * Every line has exactly one owner. A leaf owns the lines of its spans and the lines it starts
- * and ends on (a fence opener and closer, a thematic break). A line with no leaf must be blank
- * or hold only quote marks, and a blank line has an owner only inside a code block.
+ * and ends on (a fence opener and closer, a thematic break). A line with no leaf must be blank,
+ * hold only quote marks, or be a line a container starts or ends on (the opener and the closer
+ * of a div). A blank line has an owner only inside an opaque leaf.
  */
 function checkOwners(state: BlockState, src: string): string | null {
   const events = state.events
   const owner = new Int32Array(state.lineCount).fill(-1)
   const ownerKind = new Int32Array(state.lineCount).fill(-1)
+  const marked = new Uint8Array(state.lineCount)
   let leaf = -1
   let leafKind = -1
   for (let at = 0; at < state.eventLength; at += EVENT_WIDTH) {
     const tag = events[at]!
     const type = eventType(tag)
-    if (type === ENTER) {
-      if (!isLeaf(eventKind(tag))) continue
-      leaf = at
-      leafKind = eventKind(tag)
-    } else if (type === EXIT && !isLeaf(eventKind(tag))) {
+    if (state.lineCount === 0) continue
+    const line = lineAt(state.lineStarts, state.lineCount, events[at + 1]!)
+    if (type !== SPAN && !isLeaf(eventKind(tag))) {
+      marked[line] = 1
       continue
     }
-    if (state.lineCount === 0) return 'a leaf in a document without lines'
-    const line = lineAt(state.lineStarts, state.lineCount, events[at + 1]!)
+    if (type === ENTER) {
+      leaf = at
+      leafKind = eventKind(tag)
+    }
     if (owner[line] !== -1 && owner[line] !== leaf) return `line ${line + 1}: two owners`
     owner[line] = leaf
     ownerKind[line] = leafKind
@@ -98,8 +105,8 @@ function checkOwners(state: BlockState, src: string): string | null {
       if (char !== ' ' && char !== '\t') blank = false
       if (char !== ' ' && char !== '\t' && char !== '>') marksOnly = false
     }
-    if (owner[line] === -1 && !marksOnly) return `line ${line + 1}: no owner`
-    if (owner[line] !== -1 && blank && ownerKind[line] !== CODE) return `line ${line + 1}: a blank line with an owner`
+    if (owner[line] === -1 && !marksOnly && marked[line] === 0) return `line ${line + 1}: no owner`
+    if (owner[line] !== -1 && blank && !isOpaqueLeaf(ownerKind[line]!)) return `line ${line + 1}: a blank line with an owner`
   }
   return null
 }

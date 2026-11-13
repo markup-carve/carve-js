@@ -1,7 +1,7 @@
 // One test or more for every clause of the block chapter (spec/0.2/syntax-blocks.md) that the
 // first slice implements. Each test names its clause id. Shape notation: see support/shape.ts.
 import { describe, expect, it } from 'vitest'
-import { MAX_DEPTH } from '../src/index.ts'
+import { MAX_DEPTH, readOpenerInfo } from '../src/index.ts'
 import { checkDocument } from './support/checks.ts'
 import { shape } from './support/shape.ts'
 
@@ -76,15 +76,15 @@ describe('paragraphs and interrupters', () => {
 
   it('C2-B-012: a paragraph closes at a blank line, at an interrupter or with its container', () => {
     expect(blocks('a', '', 'b')).toBe('p"a" p"b"')
-    expect(blocks('a', '```')).toBe('p"a" code""')
+    expect(blocks('a', '```')).toBe('p"a" code!""')
     expect(blocks('- a', '- b')).toBe('ul(-)[li[p"a"] li[p"b"]]')
   })
 
   it('C2-B-013: a code fence line interrupts a paragraph and is then tested for ownership', () => {
     expect(blocks('a', '~~~', 'x', '~~~')).toBe('p"a" code"x"')
-    expect(blocks('- a', '  ```', '  x')).toBe('ul(-)[li[p"a" code"x"]]')
-    expect(blocks('- a', '```', 'x')).toBe('ul(-)[li[p"a"]] code"x"')
-    expect(blocks('> a', '```')).toBe('quote[p"a"] code""')
+    expect(blocks('- a', '  ```', '  x')).toBe('ul(-)[li[p"a" code!"x"]]')
+    expect(blocks('- a', '```', 'x')).toBe('ul(-)[li[p"a"]] code!"x"')
+    expect(blocks('> a', '```')).toBe('quote[p"a"] code!""')
   })
 
   it('C2-B-014: a list marker interrupts at an open list\'s column or past the item\'s marker', () => {
@@ -125,11 +125,11 @@ describe('container ownership and stripping', () => {
   })
 
   it('C2-B-025: the content of an item is stripped by at most its content column', () => {
-    expect(blocks('- ```', '    x', '  y', ' z')).toBe('ul(-)[li[code"  x|y|z"]]')
+    expect(blocks('- ```', '    x', '  y', ' z')).toBe('ul(-)[li[code!"  x|y|z"]]')
   })
 
   it('C2-B-026: the first line of a nested block sets its base column', () => {
-    expect(blocks('- a', '', '      ```', '      x', '    y')).toBe('ul(-)[li[p"a" code"x|y"]]')
+    expect(blocks('- a', '', '      ```', '      x', '    y')).toBe('ul(-)[li[p"a" code!"x|y"]]')
   })
 
   it('C2-B-027: fence content is stripped by at most the opener\'s indent', () => {
@@ -152,7 +152,7 @@ describe('block quotes', () => {
     expect(blocks('> a', '>', '> b')).toBe('quote[p"a" p"b"]')
     expect(blocks('> = a', 'b')).toBe('quote[h1"a"] p"b"')
     expect(blocks('- > a', '', '  > b')).toBe('ul(-)[li[quote[p"a"] quote[p"b"]]]')
-    expect(blocks('> ```', '> a', '', '> b')).toBe('quote[code"a"] quote[p"b"]')
+    expect(blocks('> ```', '> a', '', '> b')).toBe('quote[code!"a"] quote[p"b"]')
   })
 })
 
@@ -179,7 +179,7 @@ describe('lists', () => {
     expect(blocks('1234567890. a')).toBe('p"1234567890. a"')
     expect(blocks('7) a')).toBe('ol(7))[li[p"a"]]')
     expect(blocks('. a')).toBe('ol(.)[li[p"a"]]')
-    expect(blocks(') a')).toBe('ol())[li[p"a"]]')
+    expect(blocks(') a')).toBe('p") a"')
     expect(blocks('1: a')).toBe('p"1: a"')
   })
 
@@ -279,7 +279,7 @@ describe('lists', () => {
     expect(blocks('- a', '  - b', '', '- c')).toBe('ul(-,loose)[li[p"a" ul(-)[li[p"b"]]] li[p"c"]]')
     expect(blocks('- a', '', '  - b', '  - c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"] li[p"c"]]]]')
     expect(blocks('- a', '')).toBe('ul(-)[li[p"a"]]')
-    expect(blocks('- a', '- ```', '  x', '', '- c')).toBe('ul(-,loose)[li[p"a"] li[code"x"] li[p"c"]]')
+    expect(blocks('- a', '- ```', '  x', '', '- c')).toBe('ul(-,loose)[li[p"a"] li[code!"x"] li[p"c"]]')
   })
 
   it('C2-B-132: tightness is set when the list closes', () => {
@@ -307,11 +307,11 @@ describe('code fences', () => {
   })
 
   it('C2-B-083: an unclosed fence ends with its container and never turns back into text', () => {
-    expect(blocks('```', 'x')).toBe('code"x"')
-    expect(blocks('- ```', '  x', 'y')).toBe('ul(-)[li[code"x"]] p"y"')
-    expect(blocks('> ```', '> x', 'y')).toBe('quote[code"x"] p"y"')
-    expect(blocks('- ```', '  x', '', '', 'y')).toBe('ul(-)[li[code"x"]] p"y"')
-    expect(blocks('- ```', '  x', '', '  y')).toBe('ul(-)[li[code"x||y"]]')
+    expect(blocks('```', 'x')).toBe('code!"x"')
+    expect(blocks('- ```', '  x', 'y')).toBe('ul(-)[li[code!"x"]] p"y"')
+    expect(blocks('> ```', '> x', 'y')).toBe('quote[code!"x"] p"y"')
+    expect(blocks('- ```', '  x', '', '', 'y')).toBe('ul(-)[li[code!"x"]] p"y"')
+    expect(blocks('- ```', '  x', '', '  y')).toBe('ul(-)[li[code!"x||y"]]')
   })
 
   it('C2-B-084: the body of a code fence is not read for blocks', () => {
@@ -320,12 +320,12 @@ describe('code fences', () => {
 
   it('C2-B-086: a backtick run whose info string holds a backtick is not an opener', () => {
     expect(blocks('```a`b', 'x')).toBe('p"```a`b|x"')
-    expect(blocks('~~~a`b', 'x')).toBe('code"x"')
+    expect(blocks('~~~a`b', 'x')).toBe('code!"x"')
     expect(blocks('```js', 'x', '```')).toBe('code"x"')
   })
 
   it('C2-B-130: a fence opens whether or not a closer follows', () => {
-    expect(blocks('a', '', '```', '= b')).toBe('p"a" code"= b"')
+    expect(blocks('a', '', '```', '= b')).toBe('p"a" code!"= b"')
   })
 })
 
@@ -340,8 +340,8 @@ describe('comments', () => {
   })
 
   it('C2-B-094: after a marker a comment counts as content', () => {
-    expect(blocks('- %% c')).toBe('ul(-)[li[p"%% c"]]')
-    expect(blocks('> %% c')).toBe('quote[p"%% c"]')
+    expect(blocks('- %% c')).toBe('ul(-)[li[%"%% c"]]')
+    expect(blocks('> %% c')).toBe('quote[%"%% c"]')
     expect(blocks('= %% c')).toBe('h1"%% c"')
   })
 
@@ -395,7 +395,7 @@ describe('thematic break', () => {
     expect(blocks('     ******  ')).toBe('hr')
     expect(blocks('**')).toBe('p"**"')
     expect(blocks('*** a')).toBe('p"*** a"')
-    expect(blocks('---')).toBe('p"---"')
+    expect(blocks('a', '', '---')).toBe('p"a" p"---"')
     expect(blocks('* * *')).toBe('ul(*)[li[ul(*)[li[p"*"]]]]')
   })
 })
@@ -409,9 +409,9 @@ describe('readings the chapter leaves open', () => {
     expect(blocks('  - a', '    1. b', '', '1. c')).toBe('ul(-)[li[p"a" ol(1.)[li[p"b"]]]] ol(1.)[li[p"c"]]')
   })
 
-  it('C2-B-095: a comment line that the container of an open fence does not own closes the fence', () => {
-    expect(blocks('- ```', '  x', '%% c', '  y')).toBe('ul(-)[li[code"x" %"%% c" p"y"]]')
-    expect(blocks('- ```', '  x', '  %% c', '  y')).toBe('ul(-)[li[code"x|%% c|y"]]')
+  it('C2-B-095: a comment line never closes a fence, also outside the container of the fence', () => {
+    expect(blocks('- ```', '  x', '%% c', '  y')).toBe('ul(-)[li[code!"x|%% c|y"]]')
+    expect(blocks('- ```', '  x', '  %% c', '  y')).toBe('ul(-)[li[code!"x|%% c|y"]]')
   })
 
   it('C2-B-096: with no leaf open in a quote, a comment line is a comment node', () => {
@@ -430,5 +430,389 @@ describe('the fallback rule', () => {
     expect(blocks(`${marks}> a`)).toBe(`${'quote['.repeat(MAX_DEPTH)}p"> a"${']'.repeat(MAX_DEPTH)}`)
     const quotes = '> '.repeat(MAX_DEPTH - 1)
     expect(blocks(`${quotes}- a`)).toBe(`${'quote['.repeat(MAX_DEPTH - 1)}p"- a"${']'.repeat(MAX_DEPTH - 1)}`)
+  })
+})
+
+describe('ordered lists with letters and roman numerals', () => {
+  it('C2-B-033: a marker is one letter or a roman numeral, and a bare delimiter is the dot only', () => {
+    expect(blocks('a) x')).toBe('ol(a1))[li[p"x"]]')
+    expect(blocks('XIV) x')).toBe('ol(I14))[li[p"x"]]')
+    expect(blocks('ab) x')).toBe('p"ab) x"')
+    expect(blocks('iV) x')).toBe('p"iV) x"')
+    expect(blocks('a1) x')).toBe('p"a1) x"')
+  })
+
+  it('C2-B-034: the first marker alone fixes the style', () => {
+    expect(blocks('i) x')).toBe('ol(i1))[li[p"x"]]')
+    expect(blocks('I) x')).toBe('ol(I1))[li[p"x"]]')
+    expect(blocks('c) x')).toBe('ol(a3))[li[p"x"]]')
+    expect(blocks('v) x', 'vi) y')).toBe('ol(a22))[li[p"x"]] ol(i6))[li[p"y"]]')
+    expect(blocks('ii) x')).toBe('ol(i2))[li[p"x"]]')
+    expect(blocks('a) x', 'B) y')).toBe('ol(a1))[li[p"x"]] ol(A2))[li[p"y"]]')
+  })
+
+  it('C2-B-035: in a roman list a single roman letter is a sibling', () => {
+    expect(blocks('iv) x', 'v) y', 'vi) z')).toBe('ol(i4))[li[p"x"] li[p"y"] li[p"z"]]')
+    expect(blocks('i) x', 'b) y')).toBe('ol(i1))[li[p"x"]] ol(a2))[li[p"y"]]')
+  })
+
+  it('C2-B-036: in an alphabetic list every single letter is a sibling', () => {
+    expect(blocks('h) x', 'i) y', 'j) z')).toBe('ol(a8))[li[p"x"] li[p"y"] li[p"z"]]')
+    expect(blocks('h) x', 'ii) y')).toBe('ol(a8))[li[p"x"]] ol(i2))[li[p"y"]]')
+  })
+
+  it('C2-B-037: a letter or roman marker with a dot needs two spaces', () => {
+    expect(blocks('a.  x')).toBe('ol(a1.)[li[p"x"]]')
+    expect(blocks('a. x')).toBe('p"a. x"')
+    expect(blocks('iv.  x')).toBe('ol(i4.)[li[p"x"]]')
+    expect(blocks('iv. x')).toBe('p"iv. x"')
+    expect(blocks('a) x')).toBe('ol(a1))[li[p"x"]]')
+    expect(blocks('1. x')).toBe('ol(1.)[li[p"x"]]')
+  })
+
+  it('C2-B-038: the bare dot is of the kind of a decimal marker', () => {
+    expect(blocks('a.  x', '. y')).toBe('ol(a1.)[li[p"x"]] ol(.)[li[p"y"]]')
+  })
+})
+
+describe('description lists', () => {
+  it('C2-B-055: term lines and description lines at the list\'s column form a description list', () => {
+    expect(blocks(':: t', ': d')).toBe('dl[dt"t" dd[p"d"]]')
+    expect(blocks('  :: t', '  : d', '  :: u')).toBe('dl[dt"t" dd[p"d"] dt"u"]')
+    expect(blocks(':: t', ': d', '', '', ': e')).toBe('dl[dt"t" dd[p"d"] dd[p"e"]]')
+    expect(blocks(':: t', ': d', '', '', '', ': e')).toBe('dl[dt"t" dd[p"d"]] p": e"')
+    expect(blocks('::t')).toBe('p"::t"')
+    expect(blocks('::')).toBe('p"::"')
+  })
+
+  it('C2-B-056: terms alone are an entry, and a description line with no term above it is text', () => {
+    expect(blocks(':: t', ':: u')).toBe('dl[dt"t" dt"u"]')
+    expect(blocks(': d')).toBe('p": d"')
+    expect(blocks('- : d')).toBe('ul(-)[li[p": d"]]')
+  })
+
+  it('C2-B-057: a term is one leaf with lazy lines and takes no block opener', () => {
+    expect(blocks(':: t', '      more', '= not a heading')).toBe('dl[dt"t|more|= not a heading"]')
+    expect(blocks(':: > t')).toBe('dl[dt"> t"]')
+    expect(blocks(':: t', '  : indented')).toBe('dl[dt"t|: indented"]')
+  })
+
+  it('C2-B-058: a fence line below term text closes the description list, whatever its indent', () => {
+    expect(blocks(':: t', '    ```', '    x')).toBe('dl[dt"t"] code!"x"')
+    expect(blocks(':: t', ':::', 'x')).toBe('dl[dt"t"] div[p"x"]')
+  })
+
+  it('C2-B-059: after a blank line only a mark at the list\'s column continues a list that ends in a term', () => {
+    expect(blocks(':: t', '', '  x')).toBe('dl[dt"t"] p"x"')
+    expect(blocks(':: t', '', ': d')).toBe('dl[dt"t" dd[p"d"]]')
+    expect(blocks(':: t', '', ' : d')).toBe('dl[dt"t"] p": d"')
+  })
+
+  it('C2-B-060: a description may start with any block and owns lines indented past its mark', () => {
+    expect(blocks(':: t', ': = h', '', '  p', '', ' - x')).toBe('dl[dt"t" dd[h1"h" p"p" ul(-)[li[p"x"]]]]')
+    expect(blocks(':: t', ': :: u', '  : e')).toBe('dl[dt"t" dd[dl[dt"u" dd[p"e"]]]]')
+    expect(blocks(':: t', ': d', '', 'x')).toBe('dl[dt"t" dd[p"d"]] p"x"')
+  })
+
+  it('C2-B-015: a mark at the open description list\'s column interrupts term and description text', () => {
+    expect(blocks(':: t', ': d', 'lazy', ': e', ':: u')).toBe('dl[dt"t" dd[p"d|lazy"] dd[p"e"] dt"u"]')
+    expect(blocks(':: t', ': d', '  : not a mark')).toBe('dl[dt"t" dd[p"d|: not a mark"]]')
+    expect(blocks('a', ':: t')).toBe('p"a|:: t"')
+  })
+
+  it('C2-B-019: a mark without the mark of the quote the description list sits in is a lazy line', () => {
+    expect(blocks('> :: t', ': d')).toBe('quote[dl[dt"t|: d"]]')
+    expect(blocks('> :: t', '> : d')).toBe('quote[dl[dt"t" dd[p"d"]]]')
+  })
+
+  it('C2-B-021: a list marker at the column of a description list is a lazy line', () => {
+    expect(blocks(':: t', '- x')).toBe('dl[dt"t|- x"]')
+    expect(blocks(':: t', ': d', '- x')).toBe('dl[dt"t" dd[p"d|- x"]]')
+    expect(blocks(':: t', ': d', ' - x')).toBe('dl[dt"t" dd[p"d" ul(-)[li[p"x"]]]]')
+    expect(blocks('- a', '', '  :: t', '  : d', '- b')).toBe('ul(-)[li[p"a" dl[dt"t" dd[p"d"]]] li[p"b"]]')
+  })
+
+  it('C2-B-022: a term mark directly after paragraph text inside an item is a lazy line', () => {
+    expect(blocks('- a', '  :: t')).toBe('ul(-)[li[p"a|:: t"]]')
+    expect(blocks('- a', '', '  :: t')).toBe('ul(-)[li[p"a" dl[dt"t"]]]')
+  })
+})
+
+describe('definitions', () => {
+  it('C2-B-062: a definition stands at column 0 outside every container', () => {
+    expect(blocks('[a]: /u')).toBe('def"[a]: /u"')
+    expect(blocks(' [a]: /u')).toBe('p"[a]: /u"')
+    expect(blocks('> [a]: /u')).toBe('quote[p"[a]: /u"]')
+    expect(blocks('- [^a]: x')).toBe('ul(-)[li[p"[^a]: x"]]')
+    expect(blocks('::: x', '*[a]: b')).toBe('div[p"*[a]: b"]')
+  })
+
+  it('C2-B-063: a footnote definition holds its content and the blocks indented past its marker', () => {
+    expect(blocks('[^a]: x', '', ' y', '', 'z')).toBe('fn[p"x" p"y"] p"z"')
+    expect(blocks('[^a]: > q', '  - i')).toBe('fn[quote[p"q"] ul(-)[li[p"i"]]]')
+    expect(blocks('[^a]:')).toBe('p"[^a]:"')
+    expect(blocks('[^]: x')).toBe('p"[^]: x"')
+    expect(blocks('[^a b]: x')).toBe('p"[^a b]: x"')
+  })
+
+  it('C2-B-064: a link definition is one line with a URL without spaces and an optional quoted title', () => {
+    expect(blocks('[a b]: /u "t"', 'x')).toBe('def"[a b]: /u "t"" p"x"')
+    expect(blocks('[a]: ')).toBe('def"[a]: "')
+    expect(blocks('[a]:')).toBe('p"[a]:"')
+    expect(blocks('[a]: "t"')).toBe('def"[a]: "t""')
+    expect(blocks('[a]: /u more')).toBe('p"[a]: /u more"')
+    expect(blocks('[a]:/u')).toBe('p"[a]:/u"')
+  })
+
+  it('C2-B-065: an abbreviation definition has a label without spaces and an expansion', () => {
+    expect(blocks('*[a]: b c')).toBe('abbr"*[a]: b c"')
+    expect(blocks('*[a b]: c')).toBe('p"*[a b]: c"')
+    expect(blocks('*[a]:')).toBe('p"*[a]:"')
+  })
+
+  it('C2-B-015: a definition line at column 0 is a sibling of an open definition, and else a lazy line', () => {
+    expect(blocks('[^a]: x', '[^b]: y', '[c]: /u', '*[d]: e')).toBe('fn[p"x"] fn[p"y"] def"[c]: /u" abbr"*[d]: e"')
+    expect(blocks('a', '[c]: /u')).toBe('p"a|[c]: /u"')
+    expect(blocks('[^a]: x', 'lazy')).toBe('fn[p"x|lazy"]')
+  })
+
+  it('C2-B-014: a list marker indented past a footnote marker opens a list in the body', () => {
+    expect(blocks('[^a]: x', ' - i', '- j')).toBe('fn[p"x" ul(-)[li[p"i|- j"]]]')
+  })
+})
+
+describe('attribute lines', () => {
+  it('C2-B-068: one or more glued brace blocks, alone on the line', () => {
+    expect(blocks('{.a}', 'x')).toBe('{.a}p"x"')
+    expect(blocks('  {.a}{#b}  ', 'x')).toBe('{.a}{#b}p"x"')
+    expect(blocks('{.a} {.b}', 'x')).toBe('p"{.a} {.b}|x"')
+    expect(blocks('{.a} y', 'x')).toBe('p"{.a} y|x"')
+    expect(blocks('{k="}"}', 'x')).toBe('{k="}"}p"x"')
+    expect(blocks('{}', 'x')).toBe('p"{}|x"')
+  })
+
+  it('C2-B-069: the block that starts on the next line in the same container takes the line', () => {
+    expect(blocks('{.a}', '- x', '- y')).toBe('{.a}ul(-)[li[p"x"] li[p"y"]]')
+    expect(blocks('{.a}', '      = h')).toBe('{.a}h1"h"')
+    expect(blocks('> {.a}', '> x')).toBe('quote[{.a}p"x"]')
+    expect(blocks('- x', '', '  {.a}', '  - y')).toBe('ul(-)[li[p"x" {.a}ul(-)[li[p"y"]]]]')
+  })
+
+  it('C2-B-002, C2-B-070: an attribute line waits for the next line and is a paragraph when no block takes it', () => {
+    expect(blocks('{.a}')).toBe('p"{.a}"')
+    expect(blocks('{.a}', '', 'x')).toBe('p"{.a}" p"x"')
+    expect(blocks('> {.a}', 'x')).toBe('quote[p"{.a}"] p"x"')
+    expect(blocks('- x', '', '  {.a}', '- y')).toBe('ul(-)[li[p"x" p"{.a}"] li[p"y"]]')
+    expect(blocks('::: x', '{.a}', ':::')).toBe('div[p"{.a}"]')
+  })
+
+  it('C2-B-071: consecutive attribute lines merge', () => {
+    expect(blocks('{.a}', '{.b}', 'x')).toBe('{.a|.b}p"x"')
+    expect(blocks('{.a}', '', '{.b}', '{.c}', 'x')).toBe('p"{.a}" {.b|.c}p"x"')
+    expect(blocks('{.a}', '{.b}')).toBe('p"{.a}" p"{.b}"')
+  })
+
+  it('C2-B-073: every block takes an attribute line, a definition and a comment block included', () => {
+    expect(blocks('{.a}', '[b]: /u')).toBe('{.a}def"[b]: /u"')
+    expect(blocks('{.a}', '[^b]: x')).toBe('{.a}fn[p"x"]')
+    expect(blocks('{.a}', '%%%', 'x', '%%%')).toBe('{.a}%%%"x"')
+    expect(blocks('{.a}', '> x')).toBe('{.a}quote[p"x"]')
+    expect(blocks('{.a}', '```', 'x', '```')).toBe('{.a}code"x"')
+    expect(blocks('{.a}', ':: t')).toBe('{.a}dl[dt"t"]')
+    expect(blocks('{.a}', '***')).toBe('{.a}hr')
+  })
+
+  it('C2-B-074: a caption takes no attribute line', () => {
+    expect(blocks('```', 'x', '```', '{.a}', '^ c')).toBe('code"x" {.a}p"^ c"')
+  })
+
+  it('C2-B-075: an attribute line its container does not own closes it, and the lists around it are not adjacent', () => {
+    expect(blocks('- a', '', '{.x}', '- b')).toBe('ul(-)[li[p"a"]] {.x}ul(-)[li[p"b"]]')
+  })
+
+  it('C2-B-095: a comment-only line is skipped by a pending attribute line', () => {
+    expect(blocks('{.a}', '%% c', 'x')).toBe('%"%% c" {.a}p"x"')
+  })
+
+  it('C2-B-078, C2-B-079: the attributes of an item abut the marker and close on its line', () => {
+    expect(blocks('-{.i} b')).toBe('ul(-)[li{}[p"b"]]')
+    expect(blocks('1.{.i}{#j} b')).toBe('ol(1.)[li{}[p"b"]]')
+    expect(blocks('-{.i}b')).toBe('p"-{.i}b"')
+    expect(blocks('-{.i', '} b')).toBe('p"-{.i|} b"')
+    expect(blocks('- {.i} b')).toBe('ul(-)[li[p"{.i} b"]]')
+  })
+})
+
+describe('divs, sigil divs and comment blocks', () => {
+  it('C2-B-080: a colon run opens or closes a div and a percent run opens a comment block', () => {
+    expect(blocks('::: note', 'x', ':::')).toBe('div[p"x"]')
+    expect(blocks('%%%', 'x', '%%%', 'y')).toBe('%%%"x" p"y"')
+    expect(blocks('a', ':::', 'b')).toBe('p"a" div[p"b"]')
+    expect(blocks('a', '%%%', 'b')).toBe('p"a" %%%!"b"')
+  })
+
+  it('C2-B-081: the closer of a div stands on a line owned by the same container', () => {
+    expect(blocks('::: a', '- x', '  :::', '  y', ':::')).toBe('div[ul(-)[li[p"x" div[p"y"]]]]')
+    expect(blocks('> ::: a', '> x', '> :::', '> y')).toBe('quote[div[p"x"] p"y"]')
+    expect(blocks('::: a', 'x', '      :::', 'y')).toBe('div[p"x"] p"y"')
+  })
+
+  it('C2-B-082: the closer of a comment block is a bare run', () => {
+    expect(blocks('%%%', '%%% x', '%%%%', 'y')).toBe('%%%"%%% x" p"y"')
+  })
+
+  it('C2-B-083: an unclosed div or comment block ends with its container', () => {
+    expect(blocks('- ::: a', '  x', '', 'y')).toBe('ul(-)[li[div[p"x"]]] p"y"')
+    expect(blocks('> %%%', '> x', 'y')).toBe('quote[%%%!"x"] p"y"')
+    expect(blocks('::: a', 'x')).toBe('div[p"x"]')
+  })
+
+  it('C2-B-084: the body of a comment block is not read and the body of a div is read as blocks', () => {
+    expect(blocks('%%%', '- a', '```', '%%%')).toBe('%%%"- a|```"')
+    expect(blocks('::: a', '- a', '', '= h', ':::')).toBe('div[ul(-)[li[p"a"]] h1"h"]')
+  })
+
+  it('C2-B-087: the body of a line block is one leaf that knows only prefixes and the closer', () => {
+    expect(blocks('::: |', '- a', '  = b', '', '%% c', ':::', 'x')).toBe('lines"- a|  = b||%% c" p"x"')
+    expect(blocks('> ::: |', '>  a', '> :::')).toBe('quote[lines" a"]')
+    expect(blocks(':::: |', ':::', '::::')).toBe('lines":::"')
+    expect(blocks('- ::: |', '  a', 'b')).toBe('ul(-)[li[lines!"a"]] p"b"')
+  })
+
+  it('C2-B-088: a hard-break block and a quote fence are containers', () => {
+    expect(blocks('::: \\', '- a', ':::')).toBe('div(\\)[ul(-)[li[p"a"]]]')
+    expect(blocks('::: >', '= h', ':::')).toBe('div(>)[h1"h"]')
+    expect(blocks(':::>', 'x', ':::')).toBe('div(>)[p"x"]')
+  })
+
+  it('C2-B-089: a bare colon run closes the innermost div it is long enough for, or opens an anonymous div', () => {
+    expect(blocks('::::', ':::', 'x', ':::', '::::', 'y')).toBe('div[div[p"x"]] p"y"')
+    expect(blocks('::: a', ':::: b', 'x', ':::', 'y')).toBe('div[div[p"x"]] p"y"')
+    expect(blocks('::: a', ':::: b', 'x', '::::', 'y')).toBe('div[div[p"x"] p"y"]')
+    expect(blocks(':::', 'x')).toBe('div[p"x"]')
+  })
+
+  it('C2-B-090: a colon run followed by a name or a sigil always opens a div', () => {
+    expect(blocks('::: a', '::: b', 'x', ':::', ':::', 'y')).toBe('div[div[p"x"]] p"y"')
+    expect(blocks('::: a', ':::::::: |', 'x')).toBe('div[lines!"x"]')
+  })
+
+  it('C2-B-100: a comment block at column 0 between two list items ends the first list', () => {
+    expect(blocks('- a', '%%%', 'x', '%%%', '- b')).toBe('ul(-)[li[p"a"]] %%%"x" ul(-)[li[p"b"]]')
+    expect(blocks('- a', '  %%%', '  x', '  %%%', '- b')).toBe('ul(-)[li[p"a" %%%"x"] li[p"b"]]')
+  })
+
+  it('C2-B-093: in a line block and in a comment block a `%%` line is body text', () => {
+    expect(blocks('- ::: |', '  a', '%% c', '  b', '  :::')).toBe('ul(-)[li[lines"a|%% c|b"]]')
+    expect(blocks('- %%%', '  a', '%% c', '  %%%')).toBe('ul(-)[li[%%%"a|%% c"]]')
+  })
+
+  it('C2-B-131: a div counts toward the depth cap', () => {
+    const marks = '> '.repeat(MAX_DEPTH)
+    expect(blocks(`${marks}::: a`)).toBe(`${'quote['.repeat(MAX_DEPTH)}p"::: a"${']'.repeat(MAX_DEPTH)}`)
+  })
+})
+
+describe('the fence opener and titles', () => {
+  it('C2-B-085: an opener holds an optional word and an optional quoted title', () => {
+    const read = (src: string, run: number): [string, string, boolean] => {
+      const info = readOpenerInfo(src, run)
+      return [src.slice(info.wordStart, info.wordEnd), src.slice(info.titleStart, info.titleEnd), info.extra]
+    }
+    expect(read('```python "src/app.py"\ncode', 3)).toEqual(['python', 'src/app.py', false])
+    expect(read('~~~~\ncode', 4)).toEqual(['', '', false])
+    expect(read('::: note "A \\" B"', 3)).toEqual(['note', 'A \\" B', false])
+    expect(read('::: "Title"', 3)).toEqual(['', 'Title', false])
+    expect(read('```js extra words', 3)).toEqual(['js', '', true])
+    expect(read(':::: |\r\nx', 4)).toEqual(['|', '', false])
+    expect(blocks('```python "src/app.py"', 'code', '```')).toBe('code"code"')
+  })
+})
+
+describe('captions', () => {
+  it('C2-B-101: a caption line stands directly below its block and is owned by the same container', () => {
+    expect(blocks('```', 'x', '```', '^ c')).toBe('code"x" cap"c"')
+    expect(blocks('```', 'x', '```', '        ^   c')).toBe('code"x" cap"c"')
+    expect(blocks('```', 'x', '```', '', '^ c')).toBe('code"x" p"^ c"')
+    expect(blocks('- ```', '  x', '  ```', '  ^ c')).toBe('ul(-)[li[code"x" cap"c"]]')
+    expect(blocks('- ```', '  x', '  ```', '^ c')).toBe('ul(-)[li[code"x"]] p"^ c"')
+    expect(blocks('```', 'x', '```', '^c')).toBe('code"x" p"^c"')
+    expect(blocks('```', 'x', '```', '^ ')).toBe('code"x" p"^ "')
+    expect(blocks('^ c')).toBe('p"^ c"')
+    expect(blocks('= h', '^ c')).toBe('h1"h" p"^ c"')
+  })
+
+  it('C2-B-102: a code block, a quote, a quote fence, a figure group, an image and a math block take a caption', () => {
+    expect(blocks('> q', '^ c')).toBe('quote[p"q"] cap"c"')
+    expect(blocks('::: >', 'q', ':::', '^ c')).toBe('div(>)[p"q"] cap"c"')
+    expect(blocks('::: figure', 'x', ':::', '^ c')).toBe('div(figure)[p"x"] cap"c"')
+    expect(blocks('::: note', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
+    expect(blocks('![a](b)', '^ c')).toBe('img"![a](b)" cap"c"')
+    expect(blocks('$$`x`', '^ c')).toBe('p"$$`x`" cap"c"')
+    expect(blocks('%%%', 'x', '%%%', '^ c')).toBe('%%%"x" p"^ c"')
+  })
+
+  it('C2-B-103: a caption takes lazy lines and ends as a paragraph does', () => {
+    expect(blocks('> q', '^ c', '^ d', 'e', '', 'f')).toBe('quote[p"q"] cap"c|^ d|e" p"f"')
+    expect(blocks('```', 'x', '```', '^ c', '```', 'y')).toBe('code"x" cap"c" code!"y"')
+  })
+
+  it('C2-B-016: a caption line interrupts a paragraph only when it holds nothing but an image', () => {
+    expect(blocks('![a](b)', '^ c')).toBe('img"![a](b)" cap"c"')
+    expect(blocks('![a][r]{.x}', '^ c')).toBe('img"![a][r]{.x}" cap"c"')
+    expect(blocks('![a](b) t', '^ c')).toBe('p"![a](b) t|^ c"')
+    expect(blocks('![a](b)', '![c](d)', '^ c')).toBe('p"![a](b)|![c](d)|^ c"')
+    expect(blocks('a', '^ c')).toBe('p"a|^ c"')
+    expect(blocks('- ![a](b)', '  ^ c')).toBe('ul(-)[li[img"![a](b)" cap"c"]]')
+    expect(blocks('- ![a](b)', '^ c')).toBe('ul(-)[li[p"![a](b)|^ c"]]')
+  })
+
+  it('C2-B-017: a caption line without the mark closes a quote that ends in a paragraph and captions it', () => {
+    expect(blocks('> q', '> r', '^ c')).toBe('quote[p"q|r"] cap"c"')
+    expect(blocks('> q', '> ^ c')).toBe('quote[p"q|^ c"]')
+    expect(blocks('> - q', '^ c')).toBe('quote[ul(-)[li[p"q|^ c"]]]')
+    expect(blocks('- > q', '  ^ c')).toBe('ul(-)[li[quote[p"q"] cap"c"]]')
+  })
+
+  it('C2-B-095: a comment-only line does not separate a caption from its block', () => {
+    expect(blocks('```', 'x', '```', '%% n', '^ c')).toBe('code"x" %"%% n" cap"c"')
+  })
+})
+
+describe('one-line constructs', () => {
+  it('C2-B-108: an include directive is a block of one line and not an interrupter', () => {
+    expect(blocks('{{ a.crv }}', 'x')).toBe('inc"{{ a.crv }}" p"x"')
+    expect(blocks('x', '{{ a.crv }}')).toBe('p"x|{{ a.crv }}"')
+    expect(blocks('{{ a.crv }} x')).toBe('p"{{ a.crv }} x"')
+    expect(blocks('- {{ a.crv }}')).toBe('ul(-)[li[inc"{{ a.crv }}"]]')
+  })
+
+  it('C2-B-109, C2-B-132: a paragraph that closes holding nothing but one image is a block image', () => {
+    expect(blocks('![a](b)')).toBe('img"![a](b)"')
+    expect(blocks('![a](b)', 'x')).toBe('p"![a](b)|x"')
+    expect(blocks('![a](b) x')).toBe('p"![a](b) x"')
+    expect(blocks('![a [b]](c (d))')).toBe('img"![a [b]](c (d))"')
+    expect(blocks('[a](b)')).toBe('p"[a](b)"')
+  })
+})
+
+describe('frontmatter', () => {
+  it('C2-B-111: line 1 opens frontmatter when it is exactly three hyphens at column 0', () => {
+    expect(blocks('---', 'a: b', '---', 'x')).toBe('fm"a: b" p"x"')
+    expect(blocks('--- toml  ', 'a', '---')).toBe('fm"a"')
+    expect(blocks('﻿---', 'a', '---')).toBe('fm"a"')
+    expect(blocks('----', 'a')).toBe('p"----|a"')
+    expect(blocks(' ---', 'a')).toBe('p"---|a"')
+    expect(blocks('', '---', 'a')).toBe('p"---|a"')
+    expect(blocks('--- a b', 'x')).toBe('p"--- a b|x"')
+  })
+
+  it('C2-B-112: the closer is exactly three hyphens plus trailing spaces', () => {
+    expect(blocks('---', ' ---', '----', '--- x', '---  ', 'y')).toBe('fm" ---|----|--- x" p"y"')
+    expect(blocks('---', '- a', '', '> b', '---')).toBe('fm"- a||> b"')
+  })
+
+  it('C2-B-113: unclosed frontmatter runs to the end of the document and is marked', () => {
+    expect(blocks('---', 'a', '', 'b')).toBe('fm!"a||b"')
   })
 })
