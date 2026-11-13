@@ -78,10 +78,9 @@ function checkOwners(state: BlockState, src: string): string | null {
   const marked = new Uint8Array(state.lineCount)
   let leaf = -1
   let leafKind = -1
-  for (let at = 0; at < state.eventLength; at += EVENT_WIDTH) {
+  for (let at = 0; at < state.eventLength && state.lineCount > 0; at += EVENT_WIDTH) {
     const tag = events[at]!
     const type = eventType(tag)
-    if (state.lineCount === 0) continue
     const line = lineAt(state.lineStarts, state.lineCount, events[at + 1]!)
     if (type !== SPAN && !isLeaf(eventKind(tag))) {
       marked[line] = 1
@@ -96,16 +95,9 @@ function checkOwners(state: BlockState, src: string): string | null {
     ownerKind[line] = leafKind
   }
   for (let line = 0; line < state.lineCount; line++) {
-    const start = state.lineStarts[line]!
-    const end = lineEndAt(src, state.lineStarts, state.lineCount, line)
-    let blank = true
-    let marksOnly = true
-    for (let pos = start; pos < end; pos++) {
-      const char = src[pos]
-      if (char !== ' ' && char !== '\t') blank = false
-      if (char !== ' ' && char !== '\t' && char !== '>') marksOnly = false
-    }
-    if (owner[line] === -1 && !marksOnly && marked[line] === 0) return `line ${line + 1}: no owner`
+    const text = src.slice(state.lineStarts[line], lineEndAt(src, state.lineStarts, state.lineCount, line))
+    const blank = text.trim() === ''
+    if (owner[line] === -1 && marked[line] === 0 && text.replaceAll('>', '').trim() !== '') return `line ${line + 1}: no owner`
     if (owner[line] !== -1 && blank && !isOpaqueLeaf(ownerKind[line]!)) return `line ${line + 1}: a blank line with an owner`
   }
   return null

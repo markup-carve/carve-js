@@ -118,28 +118,37 @@ export function romanLetterValue(code: number): number {
   }
 }
 
+/** Offset after the one to nine digits at `pos`, or -1. */
+function digitsEnd(src: string, pos: number, end: number): number {
+  let p = pos
+  while (p < end && isDigit(src.charCodeAt(p))) p++
+  return p - pos > MAX_ORDERED_DIGITS ? -1 : p
+}
+
+/** Offset after the one letter, or the two or more roman letters of one case, at `pos`, or -1. */
+function lettersEnd(src: string, pos: number, end: number): number {
+  const lower = isLower(src.charCodeAt(pos))
+  let roman = romanLetterValue(src.charCodeAt(pos)) > 0
+  let p = pos + 1
+  // Two or more letters are a marker only as a roman numeral, so an ordinary word ends the test at once.
+  while (p < end && (lower ? isLower(src.charCodeAt(p)) : isUpper(src.charCodeAt(p)))) {
+    roman = roman && romanLetterValue(src.charCodeAt(p)) > 0
+    if (!roman || p - pos >= MAX_ROMAN_LETTERS) return -1
+    p++
+  }
+  return p
+}
+
 /**
  * Offset of the delimiter of the ordered marker at `pos`, or -1 (C2-B-033). Before it stand one
  * to nine digits, one letter, two or more roman letters of one case, or nothing before a dot.
  */
 export function orderedDelimiter(src: string, pos: number, end: number): number {
-  let p = pos
   const first = src.charCodeAt(pos)
-  if (isDigit(first)) {
-    while (p < end && isDigit(src.charCodeAt(p))) p++
-    if (p - pos > MAX_ORDERED_DIGITS) return -1
-  } else if (isLower(first) || isUpper(first)) {
-    const lower = isLower(first)
-    let roman = romanLetterValue(first) > 0
-    p++
-    // Two or more letters are a marker only as a roman numeral, so an ordinary word ends the test at once.
-    while (p < end && (lower ? isLower(src.charCodeAt(p)) : isUpper(src.charCodeAt(p)))) {
-      roman = roman && romanLetterValue(src.charCodeAt(p)) > 0
-      if (!roman || p - pos >= MAX_ROMAN_LETTERS) return -1
-      p++
-    }
-  }
-  if (p >= end) return -1
+  let p = pos
+  if (isDigit(first)) p = digitsEnd(src, pos, end)
+  else if (isLower(first) || isUpper(first)) p = lettersEnd(src, pos, end)
+  if (p < 0 || p >= end) return -1
   const delimiter = src.charCodeAt(p)
   if (delimiter === DOT) return p
   return delimiter === PAREN_CLOSE && p > pos ? p : -1

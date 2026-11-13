@@ -30,7 +30,7 @@ export default [{
   languageOptions: { parser: tseslint.parser },
   rules: { complexity: ['error', { max: 99 }] },
 }, {
-  // The 0.2 engine: the same typed rules, against its own project.
+  // The 0.2 engine: the same typed rules, against its own project, and a complexity cap of 15.
   files: ['v2/**/*.ts'],
   languageOptions: {
     parser: tseslint.parser,
@@ -41,5 +41,5 @@ export default [{
     },
   },
   plugins: { '@typescript-eslint': tseslint.plugin },
-  rules: { ...typedRules, complexity: ['error', { max: 99 }] },
+  rules: { ...typedRules, complexity: ['error', { max: 15 }] },
 }]

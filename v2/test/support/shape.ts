@@ -24,56 +24,62 @@ export function shapeOf(src: string, node: BlockNode): string {
 }
 
 function bare(src: string, node: BlockNode): string {
-  const flags = node.flags
-  const unclosed = (node.exitFlags & FLAG_UNCLOSED) !== 0 ? '!' : ''
+  return node.children === null ? leafShape(src, node) : containerShape(node, childShapes(src, node))
+}
+
+function containerShape(node: BlockNode, children: string): string {
   switch (node.kind) {
-    case DOCUMENT: return childShapes(src, node)
-    case QUOTE: return `quote[${childShapes(src, node)}]`
-    case BULLET_LIST: {
-      const parts = [(flags & FLAG_STAR) !== 0 ? '*' : '-']
-      if ((flags & FLAG_TASK) !== 0) parts.push('task')
-      if ((node.exitFlags & FLAG_TIGHT) === 0) parts.push('loose')
-      return `ul(${parts.join(',')})[${childShapes(src, node)}]`
-    }
-    case ORDERED_LIST: {
-      let style = ''
-      if ((flags & FLAG_ALPHA) !== 0) style = 'a'
-      if ((flags & FLAG_ROMAN) !== 0) style = 'i'
-      if ((flags & FLAG_UPPER) !== 0) style = style.toUpperCase()
-      const start = (flags & FLAG_AUTO) !== 0 ? '' : String(node.aux)
-      const delimiter = (flags & FLAG_PAREN) !== 0 ? ')' : '.'
-      const loose = (node.exitFlags & FLAG_TIGHT) === 0 ? ',loose' : ''
-      return `ol(${style}${start}${delimiter}${loose})[${childShapes(src, node)}]`
-    }
+    case DOCUMENT: return children
+    case QUOTE: return `quote[${children}]`
+    case BULLET_LIST: return `ul(${bulletStyle(node)})[${children}]`
+    case ORDERED_LIST: return `ol(${orderedStyle(node)})[${children}]`
     case ITEM: {
       const box = node.aux === 0 ? '' : `(${String.fromCharCode(node.aux)})`
-      return `li${box}${(flags & FLAG_MARKER_ATTRIBUTES) !== 0 ? '{}' : ''}[${childShapes(src, node)}]`
+      return `li${box}${(node.flags & FLAG_MARKER_ATTRIBUTES) !== 0 ? '{}' : ''}[${children}]`
     }
-    case DESCRIPTION_LIST: return `dl[${childShapes(src, node)}]`
-    case DESCRIPTION: return `dd[${childShapes(src, node)}]`
-    case FOOTNOTE: return `fn[${childShapes(src, node)}]`
-    case DIV: {
-      let sigil = ''
-      if ((flags & FLAG_HARD_BREAKS) !== 0) sigil = '(\\)'
-      if ((flags & FLAG_QUOTE_FENCE) !== 0) sigil = '(>)'
-      if ((flags & FLAG_FIGURE) !== 0) sigil = '(figure)'
-      return `div${sigil}[${childShapes(src, node)}]`
-    }
-    case PARAGRAPH: return `${(node.exitFlags & FLAG_IMAGE) !== 0 ? 'img' : 'p'}"${text(src, node)}"`
-    case TERM: return `dt"${text(src, node)}"`
-    case CAPTION: return `cap"${text(src, node)}"`
-    case HEADING: return `h${node.aux}"${text(src, node)}"`
-    case CODE: return `code${unclosed}"${text(src, node)}"`
-    case COMMENT_BLOCK: return `%%%${unclosed}"${text(src, node)}"`
-    case LINE_BLOCK: return `lines${unclosed}"${text(src, node)}"`
-    case FRONTMATTER: return `fm${unclosed}"${text(src, node)}"`
-    case COMMENT: return `%"${text(src, node)}"`
-    case INCLUDE: return `inc"${text(src, node)}"`
-    case LINK_DEFINITION: return `def"${text(src, node)}"`
-    case ABBREVIATION: return `abbr"${text(src, node)}"`
-    case THEMATIC_BREAK: return 'hr'
-    default: return `?${node.kind}`
+    case DESCRIPTION_LIST: return `dl[${children}]`
+    case DESCRIPTION: return `dd[${children}]`
+    case FOOTNOTE: return `fn[${children}]`
+    case DIV: return `div${divSigil(node.flags)}[${children}]`
+    default: return `?${node.kind}[${children}]`
   }
+}
+
+function bulletStyle(node: BlockNode): string {
+  const parts = [(node.flags & FLAG_STAR) !== 0 ? '*' : '-']
+  if ((node.flags & FLAG_TASK) !== 0) parts.push('task')
+  if ((node.exitFlags & FLAG_TIGHT) === 0) parts.push('loose')
+  return parts.join(',')
+}
+
+function orderedStyle(node: BlockNode): string {
+  const flags = node.flags
+  let style = ''
+  if ((flags & FLAG_ALPHA) !== 0) style = 'a'
+  if ((flags & FLAG_ROMAN) !== 0) style = 'i'
+  if ((flags & FLAG_UPPER) !== 0) style = style.toUpperCase()
+  const start = (flags & FLAG_AUTO) !== 0 ? '' : String(node.aux)
+  const delimiter = (flags & FLAG_PAREN) !== 0 ? ')' : '.'
+  return `${style}${start}${delimiter}${(node.exitFlags & FLAG_TIGHT) === 0 ? ',loose' : ''}`
+}
+
+function divSigil(flags: number): string {
+  if ((flags & FLAG_HARD_BREAKS) !== 0) return '(\\)'
+  if ((flags & FLAG_QUOTE_FENCE) !== 0) return '(>)'
+  return (flags & FLAG_FIGURE) !== 0 ? '(figure)' : ''
+}
+
+const LEAF_NAMES = new Map<number, string>([
+  [TERM, 'dt'], [CAPTION, 'cap'], [CODE, 'code'], [COMMENT_BLOCK, '%%%'], [LINE_BLOCK, 'lines'],
+  [FRONTMATTER, 'fm'], [COMMENT, '%'], [INCLUDE, 'inc'], [LINK_DEFINITION, 'def'], [ABBREVIATION, 'abbr'],
+])
+
+function leafShape(src: string, node: BlockNode): string {
+  if (node.kind === THEMATIC_BREAK) return 'hr'
+  let name = LEAF_NAMES.get(node.kind) ?? `?${node.kind}`
+  if (node.kind === PARAGRAPH) name = (node.exitFlags & FLAG_IMAGE) !== 0 ? 'img' : 'p'
+  if (node.kind === HEADING) name = `h${node.aux}`
+  return `${name}${(node.exitFlags & FLAG_UNCLOSED) !== 0 ? '!' : ''}"${text(src, node)}"`
 }
 
 function childShapes(src: string, node: BlockNode): string {
