@@ -75,15 +75,14 @@ function commentBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
   return { type: 'comment', form: 'block', value: lines.join('\n') }
 }
 
-/** C2-A-049: the format is the word on the opener, or `yaml`. */
+/** C2-A-049, C2-B-164: the format is the one word on the opener, glued or after one space, or `yaml`. */
 function frontmatterNode(ctx: TreeContext, node: BlockNode): AstNode {
   const src = ctx.src
-  // C2-B-164: the name is glued or stands after one space, and ends at the next space, tab or line end.
-  const word = src.charCodeAt(node.start + 3) === SPACE ? node.start + 4 : node.start + 3
-  let wordEnd = word
-  while (wordEnd < src.length && src.charCodeAt(wordEnd) > SPACE) wordEnd++
-  const format = wordEnd > word ? src.slice(word, wordEnd) : 'yaml'
-  return { type: 'frontmatter', format, value: bodyValue(src, node.spans!) }
+  let start = node.start + 3
+  if (src.charCodeAt(start) === SPACE) start++
+  let end = start
+  while (end < src.length && src[end] !== ' ' && src[end] !== '\t' && src[end] !== '\n' && src[end] !== '\r') end++
+  return { type: 'frontmatter', format: end > start ? src.slice(start, end) : 'yaml', value: bodyValue(src, node.spans!) }
 }
 
 function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
