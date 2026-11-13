@@ -1,7 +1,7 @@
 // One test or more for every clause of the inline chapter (spec/0.2/syntax-inline.md). Each test
 // names its clause id. Shape notation: see support/shape.ts and support/inline-shape.ts.
 import { describe, expect, it } from 'vitest'
-import { MAX_DEPTH } from '../src/index.ts'
+import { FLAG_BRACED, MAX_DEPTH, parseTree } from '../src/index.ts'
 import { checkInlines } from './support/inline-checks.ts'
 import { shape, treeShape } from './support/shape.ts'
 
@@ -709,7 +709,7 @@ describe('smart typography', () => {
     expect(inline("'tis 'Tis 'TWAS 'em 'cause 'til 'n 'bout 'twere 'twill 'twould 'tisn't 'twasn't")).toBe(
       '‹’› "tis " ‹’› "Tis " ‹’› "TWAS " ‹’› "em " ‹’› "cause " ‹’› "til " ‹’› "n " ‹’› "bout " ‹’› "twere " ‹’› "twill " ‹’› "twould " ‹’› "tisn" ‹’› "t " ‹’› "twasn" ‹’› "t"',
     )
-    expect(inline("'emily 'tisx 'em2")).toBe('‹‘› "emily " ‹’› "tisx " ‹’› "em2"')
+    expect(inline("'emily")).toBe('‹‘› "emily"')
   })
 
   it('C2-I-108: the word is quoted when a single quote and no letter or number follow it', () => {
@@ -819,5 +819,160 @@ describe('the display math line', () => {
     expect(shape('$$`a` b')).toBe('p"$$`a` b"')
     expect(shape('$$`a')).toBe('p"$$`a"')
     expect(tree('$$`a`{.c}')).toBe('math[dmath"a"{.c}]')
+  })
+})
+
+// Cases the mutation run asked for: each one is told apart from a small change of the scanner
+// that the tests above did not notice.
+describe('more cases per clause', () => {
+  it('C2-I-010: the edges of ASCII punctuation', () => {
+    expect(inline('\\0 \\9 \\A \\Z \\a \\z \\\x7f')).toBe('"\\0 \\9 \\A \\Z \\a \\z \\\x7f"')
+    expect(inline('{\\*a*')).toBe('"{*a*"')
+    expect(inline('a@\\*b* @\\*b* ]\\*b* a:\\*b* :\\*b*')).toBe('"a@*b* @*b* ]*b* a:*b* :*b*"')
+  })
+
+  it('C2-I-018: a literal-text span at the very end of the content', () => {
+    expect(inline('a!`')).toBe('"a" lit!""')
+  })
+
+  it('C2-I-021: the format name and a later node keep their source offsets in a container', () => {
+    expect(tree('> a `x`{=html} {--}')).toBe('quote[p["a " raw(html)"x" " " ‹–›]]')
+  })
+
+  it('C2-I-023: a line comment behind a no-break space, and a percent sign before other forms', () => {
+    expect(inline('x\\ %% c')).toBe('"x" nbsp %%" c"')
+    expect(inline('50%\\', 'b')).toBe('"50%" br "b"')
+    expect(inline('5%`a`')).toBe('"5%" code"a"')
+  })
+
+  it('C2-I-026: what stands behind a delimiter is read through braced comments only', () => {
+    expect(inline('x*{%%}')).toBe('"x*" {%}""')
+    expect(inline('*5%* {%c%}')).toBe('strong["5%"] " " {%}"c"')
+    expect(inline('*{a* b%}')).toBe('strong["{a"] " b%}"')
+    expect(inline('*{a%b* c%}')).toBe('strong["{a%b"] " c%}"')
+    expect(inline('*{%a*')).toBe('strong["{%a"]')
+    expect(inline('*5% off*')).toBe('strong["5% off"]')
+    expect(inline('x *}*')).toBe('"x " strong["}"]')
+  })
+
+  it('C2-I-033: the search for a closing quote of one kind says nothing about the other kind', () => {
+    expect(inline('[s]{a=\'x [t]{b="y"}')).toBe('"[s]{a=" ‹‘› "x " span["t"]{b=y}')
+    expect(inline('[s]{a="x [t]{b=\'y\'}')).toBe('"[s]{a=" ‹“› "x " span["t"]{b=y}')
+  })
+
+  it('C2-I-047: an ASCII letter at the end of the alphabet and a letter outside the basic plane are word characters', () => {
+    expect(inline('z*a* Z*a* *a*z *a*Z')).toBe('"z*a* Z*a* *a*z *a*Z"')
+    expect(inline('𝐀*a*')).toBe('"𝐀*a*"')
+    expect(inline('x 𝐀*a*')).toBe('"x 𝐀*a*"')
+    expect(inline('*a*𝐀')).toBe('"*a*𝐀"')
+    expect(inline('*a*𝐀 b')).toBe('"*a*𝐀 b"')
+    expect(inline('\u{10000}*a* *a*\u{10000}')).toBe('"\u{10000}*a* *a*\u{10000}"')
+    expect(inline('😀*a*😀')).toBe('"😀" strong["a"] "😀"')
+  })
+
+  it('C2-I-049: a run before a backslash', () => {
+    expect(inline('a**\\', 'b')).toBe('"a**" br "b"')
+  })
+
+  it('C2-I-053: an entry that left the stack does not disturb the entries around it', () => {
+    expect(inline('/a *b {_c c/d e/ f_} {^h^} g*')).toBe('"/a " strong["b " u["c c/d e/ f"] " " sup["h"] " g"]')
+    expect(inline('/a *b {_c c/d e/ {^h^} f_} g*')).toBe('"/a " strong["b " u["c c/d e/ " sup["h"] " f"] " g"]')
+    expect(inline('/a *b c/d e/ {^h {,i,}^} g*')).toBe('"/a " strong["b c/d e/ " sup["h " sub["i"]] " g"]')
+  })
+
+  it('C2-I-055: the enter event tells the braced form from the bare one', () => {
+    const [bare, , braced] = parseTree('*a* {*b*}').children![0]!.inlines!
+    expect([bare!.flags & FLAG_BRACED, braced!.flags & FLAG_BRACED]).toEqual([0, FLAG_BRACED])
+  })
+
+  it('C2-I-067: an escaped backslash in a destination', () => {
+    expect(inline('[a](\\\\))')).toBe('a(\\)["a"] ")"')
+  })
+
+  it('C2-I-068: a title stays on its line and follows a space, not a tab', () => {
+    expect(inline('[a](/u "T', ')')).toBe('"[a](/u " ‹“› "T" sb ")"')
+    expect(inline('[a](/u\t"T")')).toBe('"[a](/u\t" ‹“› "T" ‹”› ")"')
+  })
+
+  it('C2-I-073: the shapes next to an autolink that are none', () => {
+    expect(inline('<a:\uffff>')).toBe('auto"a:\uffff"')
+    expect(inline('<a>b.cd>')).toBe('"<a>b.cd>"')
+    expect(inline('<a@*b.cd>')).toBe('"<a@*b.cd>"')
+    expect(inline('<a@b.cd e>')).toBe('"<a@b.cd e>"')
+    expect(inline('</<a:b>')).toBe('"</" auto"a:b"')
+  })
+
+  it('C2-I-076: a label that starts with an escaped bracket', () => {
+    expect(inline('[a][\\]b]')).toBe('ref(\\]b)["a"]')
+  })
+
+  it('C2-I-087: behind a footnote reference that fails the caret is read as usual', () => {
+    expect(inline('{^a [^}')).toBe('sup["a ["]')
+  })
+
+  it('C2-I-092: a dot at the end of the content and at the start of a name', () => {
+    expect(inline('@a.b')).toBe('@"a.b"')
+    expect(inline('@.a')).toBe('"@.a"')
+  })
+
+  it('C2-I-093: behind a colon that starts no form the scan goes on', () => {
+    expect(inline('a:`b` :`c`')).toBe('"a:" code"b" " :" code"c"')
+    expect(inline('@`b` #`c` ]`d`')).toBe('"@" code"b" " #" code"c" " ]" code"d"')
+  })
+
+  it('C2-I-096: behind a cross-reference that fails the slash is a delimiter like any other', () => {
+    expect(inline('</#a b/')).toBe('"<" em[#"a" " b"]')
+    expect(inline('</#> a/')).toBe('"<" em["#> a"]')
+    expect(inline('</#a</#b c/')).toBe('"<" em[#"a" "<"] #"b" " c/"')
+  })
+
+  it('C2-I-103: a soft break does not take the space of a no-break space', () => {
+    expect(inline('a\\ ', 'b')).toBe('"a" nbsp sb "b"')
+  })
+
+  it('C2-I-104: what a quote sees before it', () => {
+    expect(inline('\\["a"')).toBe('"[" ‹“› "a" ‹”›')
+    expect(inline('`(`"a"')).toBe('code"(" ‹”› "a" ‹”›')
+    expect(inline('a "{%c%}"b')).toBe('"a " ‹“› {%}"c" ‹“› "b"')
+  })
+
+  it('C2-I-106: a backslash that follows the quote is a character like any other', () => {
+    expect(inline('a/"\\', 'b')).toBe('"a/" ‹“› br "b"')
+  })
+
+  it('C2-I-107: the word ends where its letters end', () => {
+    expect(inline("'em2 x")).toBe('‹‘› "em2 x"')
+    expect(inline("'tisx y")).toBe('‹‘› "tisx y"')
+  })
+
+  it('C2-I-109: a link keeps the run of single quotes, and a footnote gives it back', () => {
+    expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›')
+    expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›]')
+  })
+
+  it('C2-I-112: what stands before the character before a hyphen run', () => {
+    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(" ‹–› "b)"')
+    expect(inline('*a* (--b)')).toBe('strong["a"] " (--b)"')
+    expect(inline('a', '(--b)')).toBe('"a" sb "(--b)"')
+    expect(inline('a \\"--b')).toBe('"a "--b"')
+  })
+
+  it('C2-I-116: a hyphen that belongs to a braced closer is no part of the run', () => {
+    expect(inline('{-a---}')).toBe('del["a" ‹–›]')
+    expect(inline('{-<---}')).toBe('del[‹←›]')
+    expect(inline('a <-->- b')).toBe('"a " ‹↔› "- b"')
+    expect(inline('{=<=}')).toBe('mark["<"]')
+  })
+
+  it('C2-I-118: what an opener past the cap leaves behind', () => {
+    const deep = '{^'.repeat(MAX_DEPTH)
+    const close = '^}'.repeat(MAX_DEPTH)
+    const inner = (src: string): string => inline(src).slice('sup['.repeat(MAX_DEPTH).length, -']'.repeat(MAX_DEPTH).length)
+    expect(inner(`${deep}[a](/u) *b* [c][d] [e]{.f}${close}`)).toBe('"[a](/u) *b* [c][d] [e]{.f}"')
+    expect(inner(`${deep}^[a]\`c\` :n[b]\`d\`${close}`)).toBe('"^[a]" code"c" " :n[b]" code"d"')
+    const spans = inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`)
+    expect(spans.slice('span['.repeat(MAX_DEPTH).length, 'span['.repeat(MAX_DEPTH).length + 9)).toBe('"[x"]{.c}')
+    expect(spans.endsWith(']{.c} "]{.c}"')).toBe(true)
+    expect(inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)).toContain('span["[[" strong["a"] "]"]{.c}')
   })
 })

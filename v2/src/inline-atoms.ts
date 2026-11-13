@@ -251,7 +251,7 @@ export function scanBrace(state: InlineState, pos: number): number {
   const text = state.text
   const block = readAttributeBlock(text, pos, state.end, state, null)
   if (block !== NONE) {
-    pushToken(state, ATTRIBUTE_BLOCK, pos, block, pos + 1, block - 1, 0, NONE)
+    pushToken(state, ATTRIBUTE_BLOCK, pos, block, NONE, NONE, 0, NONE)
     return block
   }
   const next = codeAt(state, pos + 1)

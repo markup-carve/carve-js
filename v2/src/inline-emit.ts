@@ -13,6 +13,7 @@ import {
 } from './inline-state.ts'
 import { BARE_MARKS, BRACED_MARKS, SMART_GLYPHS } from './inline-tables.ts'
 import { startOfContent, toSource, writeText } from './typography.ts'
+import { isWhitespace } from './unicode.ts'
 
 const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 const NO_BREAK_SPACE = 0xa0
@@ -151,16 +152,13 @@ function writeClose(state: InlineState, at: number): number {
   return closeHost(state, next, kind, end)
 }
 
-/** What typography sees before it, behind a node with no children. */
+/** What typography sees before it, behind a node with no children that is no word character (C2-I-104). */
 function afterAtom(state: InlineState, at: number, kind: number): void {
   const tokens = state.tokens
-  state.previousAfterSpace = false
   if (kind === SOFT_BREAK || kind === HARD_BREAK) state.previous = LF
   else if (kind === NBSP) state.previous = NO_BREAK_SPACE
   else if (kind === ESCAPE) state.previous = state.text.charCodeAt(tokens[at + TOKEN_A]!)
   else if (kind === SMART) state.previous = SMART_GLYPHS[tokens[at + TOKEN_D]!]!.codePointAt(0)!
-  // C2-I-026: a comment counts as nothing for its neighbors.
-  else if (kind !== INLINE_COMMENT) state.previous = LOWER_A
 }
 
 function writeAtom(state: InlineState, at: number): number {
@@ -181,9 +179,17 @@ function writeAtom(state: InlineState, at: number): number {
   writeInlineEvent(state, eventTag(ENTER, kind, tokens[at + TOKEN_C]!), toSource(state, start), kind === SMART || kind === RAW_INLINE ? aux : 0)
   if (tokens[at + TOKEN_A] !== NONE) writePieces(state, tokens[at + TOKEN_A]!, tokens[at + TOKEN_B]!)
   const previous = state.previous
+  const afterSpace = state.previousAfterSpace
   const next = closeHost(state, at + TOKEN_WIDTH, kind, end)
-  if (kind === INLINE_COMMENT) state.previous = previous
-  else afterAtom(state, at, kind)
+  if (kind === INLINE_COMMENT) {
+    // C2-I-026: a comment counts as nothing for its neighbors.
+    state.previous = previous
+    state.previousAfterSpace = afterSpace
+  } else {
+    afterAtom(state, at, kind)
+    // C2-I-112: an escaped character is text, so what stood before it still counts.
+    if (kind === ESCAPE) state.previousAfterSpace = isWhitespace(previous)
+  }
   return next
 }
 

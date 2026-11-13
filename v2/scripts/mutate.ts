@@ -1,10 +1,13 @@
 // Mutation check: applies small semantic mutations to the scanner sources, one at a time, on
 // temporary copies of v2/, runs the clause and example tests on each and lists the survivors.
-//   node v2/scripts/mutate.ts [--jobs N] [--only TEXT] [--shard K/N]
+//   node v2/scripts/mutate.ts [--jobs N] [--only TEXT] [--shard K/N] [--files A,B] [--seconds N]
 // A survivor is a mutation no test notices. Each survivor is then compared with the unchanged
-// engine on every document of up to three lines over the enumerator alphabet: when the events
+// engine on every document of up to three lines over the enumerator alphabet, and on every
+// content of up to three tokens over the alphabet of inline tokens: when the events or the trees
 // differ, a test is missing and the smallest differing document is printed; when they are the
 // same, the mutation changes nothing those documents can show.
+// `--files` names the sources to mutate (default: all of them), `--seconds` the time one test
+// run may take before it counts as failed, which is how a mutation that never ends is killed.
 // At most four test runners work at a time, each in one process, and all of them are killed
 // when this script ends or is interrupted.
 import { type ChildProcess, spawn } from 'node:child_process'
@@ -12,9 +15,15 @@ import { cpSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const FILES = ['src/blocks.ts', 'src/lines.ts', 'src/tree.ts']
+const FILES = [
+  'src/blocks.ts', 'src/lines.ts', 'src/tree.ts', 'src/attributes.ts', 'src/inline-atoms.ts', 'src/inline-brackets.ts',
+  'src/inline-delimiters.ts', 'src/inline-emit.ts', 'src/inline-scan.ts', 'src/inline-tree.ts', 'src/typography.ts',
+  'src/unicode.ts',
+]
 const MAX_JOBS = 4
-const TESTS = ['test/clauses.test.ts', 'test/examples.test.ts']
+const TESTS = [
+  'test/clauses.test.ts', 'test/examples.test.ts', 'test/inline-clauses.test.ts', 'test/inline-examples.test.ts',
+]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.
 const OPERATORS: readonly (readonly [string, string])[] = [
@@ -104,7 +113,7 @@ async function survives(copy: string, original: Map<string, string>, mutation: M
   for (const [file, text] of original) writeFileSync(join(copy, file), file === mutation.file ? mutation.text : text)
   const vitest = join(copy, 'node_modules/.bin/vitest')
   const args = ['run', '--root', copy, '--pool=forks', '--poolOptions.forks.singleFork', ...TESTS]
-  if ((await run(vitest, args, 90)).code !== 0) return false
+  if ((await run(vitest, args, seconds)).code !== 0) return false
   const compared = await run(process.execPath, [join(v2, 'scripts/compare-events.ts'), copy], 120)
   mutation.witness = compared.code === 0 ? '' : compared.output.trim() || '(the mutated engine did not finish)'
   return true
@@ -114,8 +123,10 @@ const v2 = join(import.meta.dirname, '..')
 const only = option('only', '')
 const jobs = Math.min(MAX_JOBS, Math.max(1, Number(option('jobs', String(MAX_JOBS)))))
 const [shard, shards] = option('shard', '1/1').split('/').map(Number) as [number, number]
+const seconds = Number(option('seconds', '90'))
+const files = option('files', FILES.join(',')).split(',')
 const original = new Map(FILES.map((file) => [file, readFileSync(join(v2, file), 'utf8')]))
-const mutations = FILES.flatMap((file) => mutationsOf(v2, file))
+const mutations = files.flatMap((file) => mutationsOf(v2, file))
   .filter((mutation) => `${mutation.file}:${mutation.line} ${mutation.before}`.includes(only))
   .filter((_, index) => index % shards === shard - 1)
 const survivors: Mutation[] = []

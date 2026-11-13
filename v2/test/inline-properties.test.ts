@@ -81,3 +81,48 @@ describe('reused state', () => {
     expect(treeShape(src).split('strong[').length - 1).toBe(12)
   })
 })
+
+describe('what the events hold', () => {
+  /** The events of the content `src`, read on a state that has read `before` first. */
+  function eventsAfter(before: string, src: string): number[] {
+    const state = acquireInlineState()
+    try {
+      scanInline(state, before, [0, before.length], 0, 2, 0, true)
+      scanInline(state, src, [0, src.length], 0, 2, 0, true)
+      return Array.from(state.events.subarray(0, state.eventLength))
+    } finally {
+      releaseInlineState(state)
+    }
+  }
+
+  it('the tokens of an earlier content are not read', () => {
+    // Each first content leaves a token behind the last token of the second one.
+    for (const [before, src] of [['`a`{.c}', '`a`'], ['[a][b]', '^[a]'], ['[a](/u)', ':n[a]'], ['^[a]{.c}', '^[a]']]) {
+      expect(eventsAfter(before!, src!), src).toEqual(eventsAfter('', src!))
+    }
+  })
+
+  it('a node with no payload has no span', () => {
+    expect(eventsAfter('', 'x`').length).toBe(3 * 3)
+    expect(eventsAfter('', '{%%}').length).toBe(2 * 3)
+  })
+
+  it('a break at the end of the content ends where the content ends', () => {
+    const src = 'x\\ '
+    const hardBreak = parseTree(src).children![0]!.inlines![1]!
+    expect([hardBreak.start, hardBreak.end]).toEqual([1, 2])
+  })
+
+  it('a line comment at the start of a content', () => {
+    const src = '%% c\nd'
+    const state = acquireInlineState()
+    try {
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, true)
+      expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('%%" c" sb "d"')
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, false)
+      expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('"%% c" sb "d"')
+    } finally {
+      releaseInlineState(state)
+    }
+  })
+})

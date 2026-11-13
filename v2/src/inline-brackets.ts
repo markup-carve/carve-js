@@ -161,7 +161,7 @@ function attributeRun(state: InlineState, pos: number): number {
     // C2-I-040: the block with no part is valid only here.
     if (end === NONE) end = emptyBlockEnd(text, pos, state.end)
     if (end === NONE) return pos
-    pushToken(state, ATTRIBUTE_BLOCK, pos, end, pos + 1, end - 1, 0, NONE)
+    pushToken(state, ATTRIBUTE_BLOCK, pos, end, NONE, NONE, 0, NONE)
     pos = end
   }
 }
