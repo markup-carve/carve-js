@@ -33,7 +33,7 @@ const TESTS = [
   'test/block-fixes.test.ts', 'test/ast-clauses.test.ts', 'test/positions.test.ts', 'test/resolve-clauses.test.ts',
   'test/html-clauses.test.ts', 'test/conformance.test.ts', 'test/public-interface.test.ts', 'test/tree-details.test.ts',
   'test/restated-clauses.test.ts', 'test/fast-paths.test.ts', 'test/layout-clauses.test.ts', 'test/writer-clauses.test.ts',
-  'test/writer-layout.test.ts', 'test/writer-gates.test.ts', 'test/writer-details.test.ts',
+  'test/writer-layout.test.ts', 'test/writer-gates.test.ts', 'test/writer-details.test.ts', 'test/writer-block-details.test.ts',
 ]
 
 // [text to find, replacement]: flipped and shifted comparisons, off-by-one offsets, swapped connectives.
