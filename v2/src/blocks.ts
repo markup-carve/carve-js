@@ -121,7 +121,8 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
       // C2-B-012: a lazy line, whatever its indent or prefix.
       writeEvent(state, SPAN_TAG, state.pos, end)
       state.contentEnd = end
-      state.leafLines++
+      // C2-B-157: a comment-only line below a block image or a math block does not count.
+      if (!isLineComment(state.src, state.pos, end)) state.leafLines++
       return
     }
     closeLeaf(state)

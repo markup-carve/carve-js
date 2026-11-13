@@ -1,7 +1,7 @@
 // The text after the run of a fence or div opener (C2-B-117, C2-B-119): an optional word (the
 // language, the name or the sigil), an optional quoted title and an optional label in brackets.
 // Read on demand, not by the block pass. The label of a definition is read the same way.
-import { BRACKET_CLOSE, BRACKET_OPEN, CARET, CR, LF, QUOTE_MARK, STAR } from './chars.ts'
+import { BACKSLASH, BRACKET_CLOSE, BRACKET_OPEN, CARET, CR, LF, QUOTE_MARK, STAR } from './chars.ts'
 import { quotedEnd, skipSpaces } from './lines.ts'
 import { isSpaceOrTab } from './source.ts'
 
@@ -60,6 +60,7 @@ export function definitionLabel(src: string, pos: number): [number, number] {
   const first = src.charCodeAt(pos)
   if (first === STAR || src.charCodeAt(start) === CARET) start++
   let end = start
-  while (src.charCodeAt(end) !== BRACKET_CLOSE) end++
+  // C2-I-076: the label runs to the next bracket that no backslash escapes.
+  while (src.charCodeAt(end) !== BRACKET_CLOSE) end += src.charCodeAt(end) === BACKSLASH ? 2 : 1
   return [start, end]
 }
