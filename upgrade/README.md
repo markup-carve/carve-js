@@ -38,6 +38,10 @@ exists. The self-check adds `upgrade-mismatch` for a difference no entry explain
 `U-019` summary line that counts the later paragraphs of list items that gain a paragraph
 element in 0.2.
 
+The entries `X-001` and `X-002` are the tool's own: a bidirectional control in text or code is
+removed and U+0000 is written as U+FFFD, because 0.1 did that in its output and the 0.2
+specification has no clause for either.
+
 Two edits that touch the same characters: the entry with the lower id applies, the other is
 reported as `upgrade-conflict`.
 

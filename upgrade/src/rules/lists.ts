@@ -1,5 +1,5 @@
 // Contract 2.2: lists. `+` lines, tightness, marker columns and marker spellings.
-import { isContainer, quotesOf } from '../blocks.ts'
+import { ancestor, isContainer, isInside, quotesOf } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
@@ -95,27 +95,66 @@ function plusLines(ctx: Context, visit: Visit, used: Set<number>): void {
   plusInBody(ctx, column, visit, line)
 }
 
+/** Whether the line after `line` holds something that stands outside `host`. */
+function leavesHost(ctx: Context, host: Visit, line: number): boolean {
+  if (line >= ctx.lines.count || isBlank(lineText(ctx.lines, line + 1))) return false
+  const next = ctx.blocks.leaf[line + 1]
+  if (next === null || next === undefined) return true
+  // A marker at an open list's column ends the paragraph by itself (C2-B-015).
+  const item = ancestor(next, 'list_item')
+  return !isInside(next, host) && (item === null || item.node.pos!.startLine !== line + 1)
+}
+
+/**
+ * The `+` of a host that 0.1 left empty goes: an item keeps an empty braced comment, because a
+ * marker needs content (C2-B-061) and the comment renders nothing (C2-I-025). What follows
+ * outside the host gets a blank line, or it would be a lazy line of the host in 0.2.
+ */
+function emptyFirst(ctx: Context, host: Visit, from: number, text: string): void {
+  const line = host.node.pos!.startLine
+  const message = '+ of a first block that attaches nothing removed, 0.1 left the container empty'
+  change(ctx, 'U-017', from, lineEnd(ctx.lines, line), text, message)
+  const outer = host.node.type === 'list_item' ? host.parent! : host
+  if (leavesHost(ctx, outer, line)) change(ctx, 'U-017', lineStart(ctx.lines, line + 1), lineStart(ctx.lines, line + 1), '\n', message)
+}
+
 /**
  * U-017: an item may start with any block on its marker line (C2-B-057), so the `+` after the
  * marker goes. A paragraph joins the marker line from any column; another block only from the
- * content column, where its later lines already stand. With no block, 0.1 left the item empty.
+ * content column, where its later lines already stand.
  */
-function plusFirst(ctx: Context, item: Node01): void {
+function plusFirst(ctx: Context, visit: Visit): void {
+  const item = visit.node
   const [, markerEnd] = markerSpan(ctx, item)
   const line = item.pos!.startLine
   const end = lineEnd(ctx.lines, line)
   if (ctx.src.slice(markerEnd, end).trim() !== '+') return
-  const message = '+ after the marker removed, the block moved to the marker line'
   const first = item.children?.[0]
   if (first === undefined) {
-    // A marker needs content (C2-B-061), and an empty braced comment is content that renders nothing (C2-I-025).
-    change(ctx, 'U-017', end - 1, end, '{%%}', '+ after the marker replaced by an empty comment, 0.1 left the item empty')
+    emptyFirst(ctx, visit, end - 1, '{%%}')
     return
   }
   if (first.pos === undefined || first.pos.startLine !== line + 1) return
   const column = markerEnd + 1 - lineStart(ctx.lines, line)
   if (first.type !== 'paragraph' && first.pos.startColumn - 1 !== column) return
-  change(ctx, 'U-017', markerEnd + 1, first.pos.startOffset, '', message)
+  change(ctx, 'U-017', markerEnd + 1, first.pos.startOffset, '', '+ after the marker removed, the block moved to the marker line')
+}
+
+/** U-017 in a quote: a `+` after the quote mark attached the first block of the quote. */
+function plusFirstInQuote(ctx: Context, visit: Visit): void {
+  const quote = visit.node
+  const line = quote.pos!.startLine
+  const text = lineText(ctx.lines, line)
+  const inner = insideQuotes(text)
+  if (quote.fenced === true || inner.trim() !== '+' || inner.length === text.length) return
+  const plus = lineStart(ctx.lines, line) + text.lastIndexOf('+')
+  const first = quote.children?.[0]
+  if (first === undefined) {
+    emptyFirst(ctx, visit, lineStart(ctx.lines, line) + text.lastIndexOf('>') + 1, '')
+    return
+  }
+  if (first.pos === undefined || first.pos.startLine !== line + 1 || first.type !== 'paragraph') return
+  change(ctx, 'U-017', plus, first.pos.startOffset, '', '+ after the quote mark removed, the paragraph moved to the line of the mark')
 }
 
 function itemsOf(list: Node01): Node01[] {
@@ -262,7 +301,9 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
       longNumber(ctx, node)
     }
   } else if (node.type === 'list_item') {
-    plusFirst(ctx, node)
+    plusFirst(ctx, visit)
+  } else if (node.type === 'block_quote') {
+    plusFirstInQuote(ctx, visit)
   } else if (node.type === 'comment') {
     indentLines(ctx, 'U-026', node.pos.startLine, node.pos.endLine, commentShift(ctx, visit), 'comment block indented into the item above')
   }

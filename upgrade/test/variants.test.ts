@@ -78,6 +78,17 @@ const VARIANTS: Variant[] = [
   { entries: 'U-021', input: '- one\n\n  # H\n', output: '- one\n\n  # H\n', check: 'explained', stable: true },
   { entries: '', input: 'Text[^a].\n\n[^a]: first\n\n  > quote two spaces\n', output: 'Text[^a].\n\n[^a]: first\n\n  > quote two spaces\n', check: 'pass', stable: true },
   { entries: 'U-014', input: '- a\n+\n\npara\n', output: '- a\n\npara\n', check: 'pass', stable: true },
+  // A first-block `+` in a quote, and a container the `+` left empty.
+  { entries: 'U-017', input: '> +\n', output: '>\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '> +\nq\n', output: '> q\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '> +\n flush\n', output: '>\n\n flush\n', check: 'pass', stable: true },
+  { entries: 'U-017 U-109', input: '- +\n flush\n', output: '- {%%}\n\nflush\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '- +\n- b\n', output: '- {%%}\n- b\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '* * +\nx\n', output: '* * {%%}\n\nx\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '> > +\n> b\n', output: '> > b\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '- +\n{x}\n- c\n', output: '- {%%}\n\n{x}\n- c\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '> +\n\nafter\n', output: '>\n\nafter\n', check: 'pass', stable: true },
+  { entries: 'U-017', input: '- a\n  - +\npara\n', output: '- a\n  - {%%}\n\npara\n', check: 'pass', stable: true },
 ]
 
 describe('variants of the contract inputs', () => {
@@ -91,6 +102,24 @@ describe('variants of the contract inputs', () => {
       expect(upgrade(result.output).output === result.output).toBe(variant.stable)
     })
   }
+
+  it('takes a bidirectional control out of text and code, as 0.1 did in its output (X-001)', () => {
+    const result = upgrade('a\u202eb `c\u2066d`\n')
+    expect([result.output, result.check]).toEqual(['ab `cd`\n', 'pass'])
+    expect(result.records.map((record) => [record.entry, record.class, record.lint])).toEqual([
+      ['X-001', 'rewrite', 'bidi-control-in-source'], ['X-001', 'rewrite', 'bidi-control-in-source'],
+    ])
+  })
+
+  it('leaves a bidirectional control in a destination, where it changes what the value tests as', () => {
+    const input = '[x](\u202ejavascript:alert(1))\n'
+    expect(upgrade(input).output).toBe(input)
+  })
+
+  it('writes U+0000 as U+FFFD, as 0.1 rendered it (X-002)', () => {
+    const result = upgrade('a\u0000b\n')
+    expect([result.output, result.check]).toEqual(['a\ufffdb\n', 'pass'])
+  })
 
   it('an earlier definition of a key is removed in a quote too (U-040)', () => {
     const result = upgrade('> a\n>\n> [r]: /one\n\n> b\n>\n> [r]: /two\n\n[x][r]\n')

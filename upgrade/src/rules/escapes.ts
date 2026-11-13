@@ -1,5 +1,5 @@
 // Contract 3: text that 0.1 left text and 0.2 reads as a construct.
-import { ancestor, isInside } from '../blocks.ts'
+import { ancestor } from '../blocks.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
@@ -83,11 +83,11 @@ function shortIndent(ctx: Context, visit: Visit): void {
   const pos = visit.node.pos!
   const indent = indentOf(lineText(ctx.lines, pos.startLine))
   if (indent === 0 || visit.parent!.node !== ctx.doc || visit.siblings !== ctx.doc.children) return
+  // Under a list of the document, also an empty one, or under the body of a footnote.
+  const list = visit.index > 0 && visit.siblings[visit.index - 1]!.type === 'list'
   const above = leafAbove(ctx, pos.startLine)
-  if (above === null || isInside(above, visit)) return
-  const item = ancestor(above, 'list_item')
-  const body = above.siblings !== ctx.doc.children && above.parent!.node === ctx.doc
-  if (item === null && !body) return
+  const body = above !== null && above.siblings !== ctx.doc.children && above.parent!.node === ctx.doc
+  if (!list && !body) return
   const message = 'block moved to column 0, where it stays outside the item or footnote above'
   // The later lines of a paragraph are lazy lines wherever they stand; another block moves whole.
   const last = visit.node.type === 'paragraph' ? pos.startLine : pos.endLine

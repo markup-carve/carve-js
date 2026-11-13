@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { compareHtml } from '../src/compare.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from '../src/edits.ts'
-import { ENTRIES, upgrade } from '../src/index.ts'
+import { ENTRIES, EXTENSIONS, upgrade } from '../src/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from '../src/source.ts'
 
 function edit(start: number, end: number, text: string, entry: string, sequence = 0): Edit {
@@ -101,6 +101,8 @@ describe('the report', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
     // U-048 is `none` by the ruling of 2026-11-13, so one rewrite less and one none more than the summary table.
     expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([93, 49, 13, 12, 19])
+    // The tool's own entries, for cases the specification does not decide, stand apart.
+    expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002'])
   })
 
   it('gives every record the entry id, the class, the line of the input and the lint rule', () => {

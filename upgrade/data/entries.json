@@ -94,5 +94,9 @@
     {"id": "U-112", "name": "label that starts with a caret", "class": "escape", "lint": []},
     {"id": "U-113", "name": "markup inside an unresolved reference", "class": "escape", "lint": ["unresolved-reference-link"]},
     {"id": "U-114", "name": "new spellings that 0.1 already had", "class": "none", "lint": []}
+  ],
+  "extensions": [
+    {"id": "X-001", "name": "bidirectional control in the source", "class": "rewrite", "lint": ["bidi-control-in-source"]},
+    {"id": "X-002", "name": "U+0000 in the source", "class": "rewrite", "lint": []}
   ]
 }

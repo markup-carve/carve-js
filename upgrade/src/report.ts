@@ -21,7 +21,13 @@ export interface ReportRecord {
 
 export const ENTRIES: readonly Entry[] = entryTable.entries as Entry[]
 
-const BY_ID = new Map(ENTRIES.map((entry) => [entry.id, entry]))
+/**
+ * Entries of the tool itself, for cases the specification does not decide and the tool keeps as
+ * 0.1 rendered them. They are not part of the contract.
+ */
+export const EXTENSIONS: readonly Entry[] = entryTable.extensions as Entry[]
+
+const BY_ID = new Map([...ENTRIES, ...EXTENSIONS].map((entry) => [entry.id, entry]))
 
 export function entryOf(id: string): Entry {
   const entry = BY_ID.get(id)
