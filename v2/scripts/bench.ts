@@ -1,4 +1,5 @@
-// CPU time of the block pass per parse. CI runs it and prints the numbers; nothing fails on them.
+// CPU time of the block pass and of the inline pass per parse. CI runs it and prints the numbers;
+// nothing fails on them.
 //   node v2/scripts/bench.ts [--corpus DIR] [--realistic DIR] [--files A,B] [--spike DIR] [--rounds N] [--sample-ms N]
 // `--corpus` holds small.crv and large.crv of carve-bench (default: ../carve-bench/corpus),
 // `--realistic` the Track D documents guide.crv, migration.crv and contract.crv
@@ -9,7 +10,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { cpus, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { acquireState, buildTree, EVENT_WIDTH, releaseState, scanBlocks } from '../src/index.ts'
+import {
+  acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
+  LINE_BLOCK, PARAGRAPH, parseTree, releaseInlineState, releaseState, scanBlocks, scanInline, TERM,
+} from '../src/index.ts'
 
 function option(name: string, fallback: string): string {
   const at = process.argv.indexOf(`--${name}`)
@@ -78,13 +82,37 @@ console.log(`Node ${process.version}, ${cpus()[0]?.model ?? 'unknown CPU'}, ${cp
 console.log(`Load average (1, 5, 15 min) at the start: ${load()}`)
 console.log(`${rounds} rounds per input, about ${sampleMicros / 1000} ms of CPU per sample, median in microseconds per parse`)
 console.log('')
-console.log('| Input | Bytes | Lines | Events | Scan | Scan and tree | Spike scan |')
-console.log('|---|--:|--:|--:|--:|--:|--:|')
+console.log('| Input | Bytes | Lines | Events | Scan | Scan and tree | Spike scan | Contents | Inline events | Inline scan | Tree with inlines |')
+console.log('|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|')
+
+/** One inline content: the spans of its leaf, the range of them it takes, and how it is read. */
+interface Content {
+  spans: number[]
+  from: number
+  to: number
+  depth: number
+  lineComments: boolean
+}
+
+/** The contents the inline pass reads in the tree below `node`, as src/tree.ts finds them. */
+function contentsOf(node: BlockNode, depth: number, out: Content[]): Content[] {
+  const spans = node.spans ?? []
+  if (node.children !== null) {
+    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
+    for (const child of node.children) contentsOf(child, inner, out)
+  } else if (node.kind === LINE_BLOCK) {
+    for (let at = 0; at < spans.length; at += 2) out.push({ spans, from: at, to: at + 2, depth, lineComments: false })
+  } else if ([PARAGRAPH, HEADING, TERM, CAPTION, CELL].includes(node.kind)) {
+    out.push({ spans, from: 0, to: spans.length, depth, lineComments: true })
+  }
+  return out
+}
 
 const state = acquireState()
+const inlineState = acquireInlineState()
 for (const file of files) {
   if (!existsSync(file)) {
-    console.log(`| ${file} | missing | | | | | |`)
+    console.log(`| ${file} | missing | | | | | | | | | |`)
     continue
   }
   const src = readFileSync(file, 'utf8')
@@ -98,15 +126,35 @@ for (const file of files) {
     spikeSink!.reset()
     new spike!.BlockScanner(src, spikeSink!).scan()
   }
+  // The inline pass alone: every content of the document, on one reused state, with no tree built.
+  scanBlocks(state, src)
+  const contents = contentsOf(buildTree(state.events, state.eventLength), 0, [])
+  let inlineEvents = 0
+  const inlineScan = (): void => {
+    inlineEvents = 0
+    for (const content of contents) {
+      scanInline(inlineState, src, content.spans, content.from, content.to, content.depth, content.lineComments)
+      inlineEvents += inlineState.eventLength
+    }
+  }
+  const fullTree = (): void => {
+    parseTree(src)
+  }
   sample(scan)
   sample(scanAndTree)
+  sample(inlineScan)
+  sample(fullTree)
   if (spike !== null) sample(spikeScan)
   const scanTimes: number[] = []
   const treeTimes: number[] = []
   const spikeTimes: number[] = []
+  const inlineTimes: number[] = []
+  const fullTimes: number[] = []
   for (let round = 0; round < rounds; round++) {
     scanTimes.push(sample(scan))
     treeTimes.push(sample(scanAndTree))
+    inlineTimes.push(sample(inlineScan))
+    fullTimes.push(sample(fullTree))
     if (spike !== null) spikeTimes.push(sample(spikeScan))
   }
   scanBlocks(state, src)
@@ -114,9 +162,11 @@ for (const file of files) {
   console.log(
     `| ${name} | ${Buffer.byteLength(src)} | ${state.lineCount} | ${state.eventLength / EVENT_WIDTH} | ` +
     `${median(scanTimes).toFixed(2)} | ${median(treeTimes).toFixed(2)} | ` +
-    `${spike === null ? '' : median(spikeTimes).toFixed(2)} |`,
+    `${spike === null ? '' : median(spikeTimes).toFixed(2)} | ${contents.length} | ${inlineEvents / EVENT_WIDTH} | ` +
+    `${median(inlineTimes).toFixed(2)} | ${median(fullTimes).toFixed(2)} |`,
   )
 }
 releaseState(state)
+releaseInlineState(inlineState)
 console.log('')
 console.log(`Load average at the end: ${load()}`)

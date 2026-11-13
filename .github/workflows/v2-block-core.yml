@@ -95,5 +95,5 @@ jobs:
       - run: npm ci
 
       # A shared runner is not idle, so there is no threshold yet.
-      - name: Block pass, CPU time per parse
+      - name: Block pass and inline pass, CPU time per parse
         run: npm run bench:v2 -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20
