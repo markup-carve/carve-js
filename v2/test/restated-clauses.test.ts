@@ -448,6 +448,9 @@ describe('the URL filter', () => {
     expect(attribute('imagesrcset', 'a,file:x')).toBe(' imagesrcset=""')
     expect(attribute('ping', '/a\tvbscript:x')).toBe(' ping=""')
     expect(attribute('ping', '/a\rvbscript:x')).toBe(' ping=""')
+    // The whole value is tested as well, so a separator inside a scheme does not hide it.
+    expect(attribute('ping', 'java script:alert(1)')).toBe(' ping=""')
+    expect(attribute('srcset', 'java\tscript:x 1x, ok.png 2x')).toBe(' srcset=""')
     // A comma is no separator of `ping`, so the text before the first colon is not a scheme.
     expect(attribute('ping', '/a,vbscript:x')).toBe(' ping="/a,vbscript:x"')
     expect(attribute('attributionsrc', '/a /b')).toBe(' attributionsrc="/a /b"')
