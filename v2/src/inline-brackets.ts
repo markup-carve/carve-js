@@ -168,19 +168,18 @@ function attributeRun(state: InlineState, pos: number): number {
 
 /** Pushes the closing bracket at `pos` of the pair that `open` starts and that forms a node of `kind`. */
 function closePair(state: InlineState, open: number, pos: number, kind: number): void {
-  const tokens = state.tokens
   // C2-I-074: the alt text of an image is source, so the tokens inside it are dropped.
   if (kind === IMAGE) state.tokenLength = open + TOKEN_WIDTH
   const close = pushToken(state, TOKEN_CLOSE, pos, pos + 1, open, NONE, 0, NONE)
-  tokens[open + TOKEN_B] = close
-  tokens[open + TOKEN_C] = kind
+  // Read the array behind the push, which may have replaced it.
+  state.tokens[open + TOKEN_B] = close
+  state.tokens[open + TOKEN_C] = kind
 }
 
 /** What is glued to the closing bracket at `pos` decides the construct (C2-I-006). Returns the offset behind it, or NONE. */
 function closeConstruct(state: InlineState, open: number, pos: number): number {
-  const tokens = state.tokens
   const text = state.text
-  const image = tokens[open + TOKEN_A] === OPEN_IMAGE
+  const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
   const next = pos + 1 < state.end ? text.charCodeAt(pos + 1) : NONE
   if (next === PAREN_OPEN) {
     const end = linkTail(state, pos + 1)
@@ -190,7 +189,7 @@ function closeConstruct(state: InlineState, open: number, pos: number): number {
     return end
   }
   if (next === BRACKET_OPEN) {
-    const end = referenceLabel(state, pos + 1, tokens[open + TOKEN_END]!, pos)
+    const end = referenceLabel(state, pos + 1, state.tokens[open + TOKEN_END]!, pos)
     if (end === NONE) return NONE
     closePair(state, open, pos, image ? IMAGE : LINK)
     pushToken(state, LABEL, pos + 1, end, pos + 2, end - 1, end === pos + 3 ? FLAG_COLLAPSED : 0, NONE)
@@ -199,7 +198,7 @@ function closeConstruct(state: InlineState, open: number, pos: number): number {
   if (next !== BRACE_OPEN) return NONE
   if (readAttributeBlock(text, pos + 1, state.end, state, null) === NONE && emptyBlockEnd(text, pos + 1, state.end) === NONE) return NONE
   // C2-I-074: before a span the `!` is text.
-  if (image) tokens[open + TOKEN_START]!++
+  if (image) state.tokens[open + TOKEN_START]!++
   closePair(state, open, pos, BRACKET_SPAN)
   return attributeRun(state, pos + 1)
 }
@@ -207,9 +206,8 @@ function closeConstruct(state: InlineState, open: number, pos: number): number {
 /** C2-I-006: a closing bracket pairs with the nearest open one. With none it is text. */
 export function scanBracketClose(state: InlineState, pos: number): number {
   if (state.bracketDepth === 0) return pos + 1
-  const tokens = state.tokens
   const open = state.brackets[--state.bracketDepth]!
-  const form = tokens[open + TOKEN_A]!
+  const form = state.tokens[open + TOKEN_A]!
   if (form >= OPEN_FOOTNOTE) {
     closePair(state, open, pos, form === OPEN_FOOTNOTE ? INLINE_FOOTNOTE : INLINE_EXTENSION)
     return pos + 1
@@ -217,7 +215,7 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   const end = closeConstruct(state, open, pos)
   if (end !== NONE) return end
   // C2-I-065: the pair forms no construct. It is text and bounds nothing.
-  tokens[open] = TOKEN_TEXT
+  state.tokens[open] = TOKEN_TEXT
   return pos + 1
 }
 

@@ -234,13 +234,14 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
   // C2-I-050: the mark of a comment opener before a combining mark is text.
   if (isJoining(codePointAt(text, pos + 2, state.end))) return pos + 2
   if (editorial ? state.editorialCloserMissing : state.commentCloserMissing) return pos + 2
-  // An editorial comment holds at least one character.
-  const close = text.indexOf(editorial ? '#}' : '%}', editorial ? pos + 3 : pos + 2)
+  const close = text.indexOf(editorial ? '#}' : '%}', pos + 2)
   if (close < 0 || close + 2 > state.end) {
     if (editorial) state.editorialCloserMissing = true
     else state.commentCloserMissing = true
     return pos + 2
   }
+  // C2-I-063: an editorial comment holds at least one character before the first closer.
+  if (editorial && close === pos + 2) return pos + 2
   pushToken(state, kind, pos, close + 2, pos + 2, close, editorial ? 0 : FLAG_BRACED, NONE)
   return close + 2
 }

@@ -18,13 +18,14 @@ const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 const NO_BREAK_SPACE = 0xa0
 const MAX_FOOTNOTES = 256
 
-/** Writes `[start, end)` of the content as source spans, one per line. */
+/** Writes `[start, end)` of the content as source spans, one per line, also for a line that holds nothing. */
 function writePieces(state: InlineState, start: number, end: number): void {
   const text = state.text
   while (start < end) {
     let lineEnd = text.indexOf('\n', start)
     if (lineEnd < 0 || lineEnd > end) lineEnd = end
-    if (lineEnd > start) writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, start), toSource(state, lineEnd))
+    writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, start), toSource(state, lineEnd))
+    if (lineEnd + 1 === end) writeInlineEvent(state, eventTag(SPAN, 0, 0), toSource(state, end), toSource(state, end))
     start = lineEnd + 1
   }
 }

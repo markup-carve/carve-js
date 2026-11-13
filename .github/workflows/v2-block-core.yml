@@ -36,6 +36,27 @@ jobs:
       - name: Enumerate
         run: npm run enumerate:v2 -- 4
 
+  enumerate-inline:
+    name: inline enumerator, five tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Every content of up to five tokens over the alphabet of inline tokens,
+      # through the property checks of the inline pass.
+      - name: Enumerate
+        run: npm run enumerate-inline:v2 -- 5
+
   benchmark:
     name: benchmark (prints, never fails on a number)
     runs-on: ubuntu-latest
