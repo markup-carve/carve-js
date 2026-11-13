@@ -807,6 +807,11 @@ describe('captions', () => {
     expect(blocks('> q', '^ c')).toBe('quote[p"q"] cap"c"')
     expect(blocks('::: >', 'q', ':::', '^ c')).toBe('div(>)[p"q"] cap"c"')
     expect(blocks('::: figure', 'x', ':::', '^ c')).toBe('div(figure)[p"x"] cap"c"')
+    // C2-B-127: with a title or a label the opener is a plain div, which takes no caption.
+    expect(blocks('::: figure "T"', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
+    // C2-B-159: trailing spaces do not stop a thematic break. C2-B-087: a footnote marker line starts with any block.
+    expect(blocks('*** ', 'next')).toBe('hr p"next"')
+    expect(blocks('[^n]: > q')).toBe('fn[quote[p"q"]]')
     expect(blocks('::: note', 'x', ':::', '^ c')).toBe('div[p"x"] p"^ c"')
     expect(blocks('![a](b)', '^ c')).toBe('img"![a](b)" cap"c"')
     expect(blocks('$$`x`', '^ c')).toBe('math"$$`x`" cap"c"')

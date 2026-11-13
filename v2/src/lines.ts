@@ -278,13 +278,14 @@ export function divSigil(src: string, pos: number, end: number): number {
   return at < end && isSigil(src, at, end) ? src.charCodeAt(at) : 0
 }
 
-/** True when the word after the colon run that ends at `pos` is `figure` (C2-B-127). */
+/** True when the colon run that ends at `pos` is followed by `figure` and nothing else (C2-B-127). */
 export function isFigureName(src: string, pos: number, end: number): boolean {
   const at = skipSpaces(src, pos, end)
   const name = 'figure'
   if (at + name.length > end) return false
   for (let p = 0; p < name.length; p++) if (src.charCodeAt(at + p) !== name.charCodeAt(p)) return false
-  return at + name.length === end || isSpaceOrTab(src.charCodeAt(at + name.length))
+  // C2-B-127: with a title or a label the opener is a plain div.
+  return skipSpaces(src, at + name.length, end) === end
 }
 
 /** C2-B-159: three or more stars and nothing else. */
