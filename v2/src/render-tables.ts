@@ -33,7 +33,8 @@ export const SLUG_REVERSED: ReadonlyMap<string, string> = new Map([
 
 /** C2-H-159: the ranges of code points that are removed from a destination before its scheme is read. */
 export const PROBE_REMOVED: readonly (readonly [number, number])[] = [
-  [0,32], [127,160], [5760,5760], [8192,8202], [8232,8233], [8239,8239], [8287,8287], [12288,12288], [65279,65279],
+  [0,32], [127,160], [5760,5760], [8192,8202], [8232,8233], [8234,8238], [8239,8239], [8287,8287], [8294,8297], [12288,12288],
+  [65279,65279],
 ]
 
 /** C2-H-161: the attribute names that are never written, and the prefixes of such names. */
@@ -77,8 +78,8 @@ export const PROFILES: ReadonlyMap<string, ProfileRule> = new Map([
     deniedInline: null,
     allowedBlock: ["block_quote","code_block","list","list_item","paragraph"],
     allowedInline: [
-      "code", "delete", "emphasis", "hard_break", "highlight", "inline_extension", "insert", "link", "literal_inline", "mention",
-      "soft_break", "strike", "strong", "subscript", "superscript", "text", "underline",
+      "autolink", "code", "delete", "emphasis", "hard_break", "highlight", "inline_extension", "insert", "link", "literal_inline",
+      "mention", "soft_break", "strike", "strong", "subscript", "superscript", "text", "underline",
     ],
     linkRel: "nofollow ugc",
     maxNesting: 4,

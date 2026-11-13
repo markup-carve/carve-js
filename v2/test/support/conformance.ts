@@ -45,10 +45,7 @@ export function exampleOptions(example: SpecExample): RenderOptions {
 }
 
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
-export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
-  // The example is unverified and writes `header-rows="1"` on the table, which C2-H-153 says is read and not written.
-  ['syntax-blocks.md:219', 'the example contradicts C2-H-153; the clause is implemented'],
-])
+export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>()
 
 export function exampleId(example: SpecExample): string {
   return `${example.file}:${example.number}`

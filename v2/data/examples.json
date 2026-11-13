@@ -1781,7 +1781,7 @@
   "label": "unverified",
   "flags": [],
   "input": "{header-rows=1}\n| a |\n| b |",
-  "html": "<table header-rows=\"1\">\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>"
+  "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>"
  },
  {
   "file": "syntax-blocks.md",
