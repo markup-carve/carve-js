@@ -980,6 +980,7 @@ describe('tables', () => {
     expect(blocks('| a |')).toBe('table[tr[td"a"]]')
     expect(blocks('  | a | b |  ')).toBe('table[tr[td"a" td"b"]]')
     expect(blocks('||')).toBe('table[tr[td""]]')
+    expect(blocks('| a ||')).toBe('table[tr[td"a" td""]]')
     expect(blocks('|')).toBe('p"|"')
     expect(blocks('| a')).toBe('p"| a"')
     expect(blocks('a | b |')).toBe('p"a | b |"')
@@ -1060,6 +1061,8 @@ describe('tables', () => {
     expect(blocks('| 1 | 2 |', '+ < |= x |{.r}')).toBe('table[tr[td"1" td"2"]] p"+ < |= x |{.r}"')
     expect(blocks('| 1 |', '+ = a |')).toBe('table[tr[td"1|= a"]]')
     expect(blocks('| 1 |', '+a |')).toBe('table[tr[td"1|a"]]')
+    expect(blocks('| 1 |', '+|')).toBe('table[tr[td"1"]]')
+    expect(blocks('| 1 | 2 |', '+ a |b |')).toBe('table[tr[td"1|a" td"2|b"]]')
   })
 
   it('C2-B-184: a fragment joins the cell that covers its column after the span marks are resolved', () => {
@@ -1122,6 +1125,7 @@ describe('tables', () => {
 describe('raw blocks and the caption number', () => {
   it('C2-B-116: a code fence whose info string is `=` and a format name is a raw block', () => {
     expect(blocks('```=html', '<b>', '```')).toBe('raw"<b>"')
+    expect(blocks('```=Xml', '<b>', '```')).toBe('raw"<b>"')
     expect(blocks('```= html', '<b>', '```')).toBe('code"<b>"')
     expect(blocks('```html', '<b>', '```')).toBe('code"<b>"')
     expect(blocks('```=html', '%% c', '```')).toBe('raw"%% c"')
