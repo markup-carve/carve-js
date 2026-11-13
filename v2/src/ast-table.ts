@@ -57,9 +57,9 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   return attributes
 }
 
-function cellNode(ctx: TreeContext, node: BlockNode): AstNode {
-  // C2-A-158: a cell that a continuation row joined has no position, and neither has its content.
-  const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end)
+function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
+  // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
+  const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
   const paragraph: AstNode = { type: 'cell_paragraph', children: inlineNodes(ctx, node.inlines ?? [], flow) }
   const cell: AstNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
@@ -78,7 +78,7 @@ function cellNode(ctx: TreeContext, node: BlockNode): AstNode {
  * The cells of one row with the cells of its span marks back at their columns (C2-A-092).
  * `covered` holds, per column, how many further rows a cell above still spans.
  */
-function rowCells(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode[] {
+function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): AstNode[] {
   const cells: AstNode[] = []
   const takeCovered = (): void => {
     while (cells.length < covered.length && covered[cells.length]! > 0) {
@@ -88,7 +88,7 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode[
   }
   for (const node of row.children!) {
     takeCovered()
-    const cell = cellNode(ctx, node)
+    const cell = cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
     for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell('colspan'))
@@ -99,7 +99,9 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode[
 }
 
 function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
-  const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered) }
+  const lineEnd = ctx.src.indexOf('\n', row.start)
+  const joined = lineEnd >= 0 && lineEnd < row.end
+  const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? lineEnd : row.end + 1) }
   if (row.aux !== 0) {
     // C2-B-167: the row attribute stands behind the closing pipe.
     const attributes = emptyAttributes()
@@ -107,8 +109,7 @@ function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
     setAttributes(out, attributes)
   }
   // C2-A-158: a row that a continuation row joined has no position.
-  const lineEnd = ctx.src.indexOf('\n', row.start)
-  return lineEnd >= 0 && lineEnd < row.end ? out : place(ctx, out, row.start, row.end)
+  return joined ? out : place(ctx, out, row.start, row.end)
 }
 
 function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): Groups {

@@ -140,6 +140,9 @@ describe('invariants', () => {
     expect(show(row.children![0]!.pos)).toBe('none')
     expect(show((at(row, 'children.0.children.0') as AstNode).pos)).toBe('none')
     expect(show(row.children![1]!.pos)).toBe('1:6-1:9@5-8')
+    // C2-B-176: a fragment past the last column forms a cell, which stands on the line of the continuation row.
+    const formed = at(placedTree('| a |\n+ b | c |'), 'children.0.children.0.children.0.children.1') as AstNode
+    expect([formed.children![0]!.children, formed.pos]).toEqual([[{ type: 'text', value: 'c' }], undefined])
   })
 
   it('C2-A-158: a table column, a caption number and the cells of a delimited table have no position', () => {
