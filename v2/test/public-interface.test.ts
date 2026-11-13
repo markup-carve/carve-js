@@ -33,7 +33,7 @@ describe('the public interface', () => {
 
   it('the diagnostics record comes beside the tree and beside the HTML (C2-A-172)', () => {
     const parsed: { document: AstNode, diagnostics: Diagnostic[] } = engine.parseWithDiagnostics('{#a}\nx\n\n{#a}\ny')
-    expect(parsed.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([['duplicate-id', 'lint']])
+    expect(parsed.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([['duplicate-id', 'parse']])
     expect(JSON.stringify(parsed.document)).not.toContain('duplicate')
     const rendered = engine.renderWithDiagnostics('{{ a.crv }}')
     expect(rendered.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([['include-unresolved', 'render-loss']])

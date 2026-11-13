@@ -18,12 +18,37 @@ export const EXAMPLES = JSON.parse(readFileSync(join(import.meta.dirname, '../..
 /**
  * The options an example is rendered with, where they are not the defaults. Example 23 of the
  * HTML document stands in the section on the roundtrip carriers and shows the output with them.
- * The flag `--no-raw-html` of example 11 is the default of 0.2 (C2-H-127).
  */
 export const EXAMPLE_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map([['html.md:23', { roundtrip: true }]])
 
+/**
+ * The options each flag behind the label of an example stands for. `--no-raw-html` is the default
+ * of 0.2 (C2-H-127), and `lowercaseHeadingIds` is the 0.1 name of the value the flag beside it gives.
+ */
+export const FLAG_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map<string, RenderOptions>([
+  ['--no-raw-html', {}],
+  ['lowercaseHeadingIds', { headingIds: 'lower' }],
+  ['which is headingIds: lower', { headingIds: 'lower' }],
+  ['--profile comment', { profile: 'comment' }],
+  ['--profile minimal', { profile: 'minimal' }],
+])
+
+/** The options of an example: those of its flags, then those listed for it. A flag with no entry is an error. */
+export function exampleOptions(example: SpecExample): RenderOptions {
+  let options: RenderOptions = {}
+  for (const flag of example.flags) {
+    const found = FLAG_OPTIONS.get(flag)
+    if (found === undefined) throw new Error(`${exampleId(example)}: the flag ${flag} has no options`)
+    options = { ...options, ...found }
+  }
+  return { ...options, ...EXAMPLE_OPTIONS.get(exampleId(example)) }
+}
+
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
-export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([])
+export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
+  // The example is unverified and writes `header-rows="1"` on the table, which C2-H-153 says is read and not written.
+  ['syntax-blocks.md:219', 'the example contradicts C2-H-153; the clause is implemented'],
+])
 
 export function exampleId(example: SpecExample): string {
   return `${example.file}:${example.number}`
@@ -32,7 +57,7 @@ export function exampleId(example: SpecExample): string {
 /** The HTML of an example, or the error its render threw as text. */
 export function renderExample(example: SpecExample): string {
   try {
-    return render(example.input, EXAMPLE_OPTIONS.get(exampleId(example)))
+    return render(example.input, exampleOptions(example))
   } catch (error) {
     return `threw ${String(error)}`
   }

@@ -15,7 +15,7 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { orderedDelimiter } from './lines.ts'
+import { orderedDelimiter, trimEnd } from './lines.ts'
 import { definitionLabel, readOpenerInfo } from './opener.ts'
 import { finishPositions, utf8Length } from './positions.ts'
 import { type BlockNode } from './tree.ts'
@@ -257,10 +257,12 @@ function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   const out = BUILDERS.get(node.kind)!(ctx, node, flow, attributes)
   if (!own) setAttributes(out, attributes)
   if (out.pos !== undefined) return out
+  // C2-A-182: an include directive ends at its closing braces, before the spaces behind them.
+  const end = node.kind === INCLUDE ? trimEnd(ctx.src, node.start, node.end) : node.end
   // C2-A-148: a block that took attribute lines starts at the first of them.
-  if (node.attributes === null || node.attributes.length === 0 || !ctx.positions) return place(ctx, out, node.start, node.end)
+  if (node.attributes === null || node.attributes.length === 0 || !ctx.positions) return place(ctx, out, node.start, end)
   ctx.markup.set(out, node.start)
-  return place(ctx, out, node.attributes[0]!, node.end)
+  return place(ctx, out, node.attributes[0]!, end)
 }
 
 /** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-150). */
@@ -366,8 +368,8 @@ function collectAbbreviations(src: string, root: BlockNode): Map<string, string>
 
 export interface BuiltTree {
   document: AstNode
-  /** The folded source of the text of each heading, which resolution reads (C2-I-084). */
-  headingSources: Map<AstNode, string>
+  /** The folded source of the text of each heading, which resolution reads (C2-I-084). Null for a supplied tree. */
+  headingSources: Map<AstNode, string> | null
 }
 
 /** The public tree of `src` from its block tree, whose inline content has been read. */

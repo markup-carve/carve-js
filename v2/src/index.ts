@@ -19,7 +19,7 @@ export { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
 export {
-  CarveRenderError, parse, type ParseResult, parseWithDiagnostics, render, type RenderOutput, renderWithDiagnostics,
+  CarveInputError, CarveRenderError, parse, type ParseResult, parseWithDiagnostics, render, type RenderOutput, renderWithDiagnostics,
 } from './api.ts'
 export {
   AST_VERSION, type AstNode, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
@@ -32,7 +32,7 @@ export {
   type Social, type UrlPolicy,
 } from './options.ts'
 export { stringOffsetOfByte, utf8Length } from './positions.ts'
-export { type Diagnostic } from './resolve.ts'
+export { type Diagnostic } from './diagnostics.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */
 export function parseBlockTree(src: string): BlockNode {

@@ -13,7 +13,8 @@ const ZERO_WIDTH_JOINER = 0x200d
 const LETTER_OR_NUMBER = /[\p{L}\p{N}]/u
 const LETTER = /\p{L}/u
 const COMBINING = /[\p{M}\u{fe00}-\u{fe0f}\u{e0100}-\u{e01ef}]/u
-const FORMAT_OR_CONTROL = /[\p{Cc}\p{Cf}]/u
+// C2-I-122: the characters outside ASCII that are no URL characters.
+const NO_URL_CHARACTER = /[\p{Cc}\p{Cf}\p{White_Space}]/u
 
 export function isAsciiLetter(code: number): boolean {
   return (code >= LOWER_A && code <= LOWER_Z) || (code >= UPPER_A && code <= UPPER_Z)
@@ -53,9 +54,9 @@ export function isJoining(code: number): boolean {
   return code === ZERO_WIDTH_JOINER || COMBINING.test(String.fromCodePoint(code))
 }
 
-/** C2-I-073: a character outside ASCII that a URL may hold. */
+/** C2-I-122: a character outside ASCII that a URL may hold: no whitespace, no control and no format character. */
 export function isUrlCharacter(code: number): boolean {
-  return !FORMAT_OR_CONTROL.test(String.fromCodePoint(code))
+  return !NO_URL_CHARACTER.test(String.fromCodePoint(code))
 }
 
 export function isAsciiPunctuation(code: number): boolean {

@@ -248,7 +248,10 @@ describe('links, images and references', () => {
 
   it('C2-H-082, C2-H-132: the denial is reported with the severity error', () => {
     expect(renderWithDiagnostics('[a](javascript:x)').diagnostics).toEqual([
-      { code: 'destination-denied', severity: 'error', channel: 'render-loss', message: 'the destination javascript:x is denied by the URL policy' },
+      {
+        code: 'destination-denied', severity: 'error', channel: 'render-loss', message: 'the destination javascript:x is denied by the URL policy',
+        path: '/children/0/children/0',
+      },
     ])
   })
 })
@@ -333,10 +336,12 @@ describe('options', () => {
     expect(() => render('a', { sections: 'yes' } as unknown as RenderOptions)).toThrow('option sections: not a boolean')
   })
 
-  it('C2-H-122: an unknown value of mode is refused, and the static mode is not offered yet', () => {
+  it('C2-H-122: an unknown value of mode is refused, and in static mode an equation is its source as code', () => {
     expect(() => render('a', { mode: 'print' } as unknown as RenderOptions)).toThrow('option mode: unknown value "print"')
-    expect(() => render('a', { mode: 'static' })).toThrow(CarveOptionError)
     expect(render('a', { mode: 'interactive' })).toBe('<p>a</p>')
+    expect(render('a $`x<1`{.c}', { mode: 'static' })).toBe('<p>a <code class="language-math c">x&lt;1</code></p>')
+    expect(render('{#e}\n$$`E`', { mode: 'static' })).toBe('<pre id="e"><code class="language-math">E\n</code></pre>')
+    expect(render('$$`E`')).toBe('<p><span class="math display" role="math">\\[E\\]</span></p>')
   })
 
   it('C2-H-123, C2-H-137: renderers, extensions and includes are refused while the engine offers none', () => {
@@ -352,9 +357,9 @@ describe('options', () => {
     expect(render(documentOf(paragraph({ type: 'link', href: ' Java\tScript:x', children: [text('a')] })))).toBe('<p><a href="">a</a></p>')
   })
 
-  it('C2-H-129: the restricted profiles are not offered yet and are refused', () => {
-    expect(() => render('a', { profile: 'comment' })).toThrow('option profile: only full is offered by this engine')
-    expect(render('a', { profile: 'full' })).toBe('<p>a</p>')
+  it('C2-H-129: an unknown profile is refused, and the full profile accepts everything', () => {
+    expect(() => render('a', { profile: 'strict' } as unknown as RenderOptions)).toThrow('option profile: unknown value "strict"')
+    expect(render('# a', { profile: 'full' })).toBe('<section id="a">\n  <h1>a</h1>\n</section>')
   })
 
   it('C2-H-130, C2-A-174: strictLosses turns a render loss into an error, and the render returns no output', () => {

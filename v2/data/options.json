@@ -7,7 +7,7 @@
       "read_by": "format",
       "type": "boolean",
       "default": false,
-      "clauses": ["C2-H-137", "C2-W-068"]
+      "clauses": ["C2-H-137", "C2-W-068", "C2-W-118", "C2-W-119"]
     },
     {
       "name": "extensions",
@@ -59,7 +59,7 @@
         "admonitionExample": "Example",
         "admonitionQuote": "Quote"
       },
-      "clauses": ["C2-H-125", "C2-H-137"]
+      "clauses": ["C2-H-125", "C2-H-137", "C2-H-155"]
     },
     {
       "name": "mode",
@@ -87,7 +87,7 @@
       "type": "enum",
       "values": ["full", "article", "comment", "minimal"],
       "default": "full",
-      "clauses": ["C2-H-129", "C2-H-137"]
+      "clauses": ["C2-H-129", "C2-H-137", "C2-H-163"]
     },
     {
       "name": "rawHtml",
@@ -209,7 +209,7 @@
           "jar"
         ]
       },
-      "clauses": ["C2-H-128", "C2-H-137"]
+      "clauses": ["C2-H-128", "C2-H-137", "C2-H-159", "C2-H-160"]
     }
   ]
 }

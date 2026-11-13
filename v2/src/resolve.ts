@@ -3,18 +3,12 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import { type AstNode } from './ast.ts'
-import { plainText } from './ast-text.ts'
+import { labelText, plainText } from './ast-text.ts'
+import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
 import { slugify } from './slug.ts'
 
-/** C2-A-173: one entry of the diagnostics record. `path` is an RFC 6901 pointer into the tree. */
-export interface Diagnostic {
-  code: string
-  severity: 'error' | 'warning'
-  channel: 'parse' | 'render-loss' | 'lint'
-  message: string
-  path?: string
-}
+export { type Diagnostic } from './diagnostics.ts'
 
 /** One numbered footnote: a definition that a reference uses, or an inline footnote. */
 export interface Note {
@@ -32,11 +26,16 @@ export interface Resolution {
   refIds: Map<AstNode, string>
   /** The generated text of each resolved cross-reference (C2-H-096). */
   xrefText: Map<AstNode, string>
+  /** C2-H-156: the generated id of the title of each admonition and of the directive that places the notes. */
+  labelIds: Map<AstNode, string>
+  /** The findings of resolution, each with its node. `diagnostics` is the list of its entries. */
+  findings: Findings
   diagnostics: Diagnostic[]
 }
 
+/** One taker of a sequence number: a caption with its host, or a numbered equation of a supplied tree (C2-H-151). */
 interface CaptionUse {
-  caption: AstNode
+  caption: AstNode | null
   host: AstNode
   panel: boolean
 }
@@ -49,12 +48,20 @@ interface Walk {
   xrefs: AstNode[]
   captions: CaptionUse[]
   identified: AstNode[]
+  /** C2-H-156: the titled admonitions and the titled top-level `footnotes` directives, in the order of the walk. */
+  titled: AstNode[]
+  /** C2-H-093: the first top-level `footnotes` directive. */
+  notesDirective: AstNode | null
+  /** C2-H-151: the figures and figure groups around the node that is visited whose caption has a number mark. */
+  numberedFigures: number
+  symbols: Readonly<Record<string, string>>
 }
 
 type Visitor = (walk: Walk, node: AstNode, parent: AstNode | null) => void
 
-function report(resolution: Resolution, code: string, message: string): void {
-  resolution.diagnostics.push({ code, severity: 'warning', channel: 'lint', message })
+/** C2-W-113: a duplicate is a finding of the parse channel, reported on the later node. */
+function report(resolution: Resolution, node: AstNode, code: string, message: string): void {
+  addFinding(resolution.findings, node, { code, severity: 'warning', channel: 'parse', message })
 }
 
 /** C2-H-087, C2-H-088: the note of a reference takes the next number at its first reference. */
@@ -85,6 +92,41 @@ function visitHost(walk: Walk, node: AstNode, parent: AstNode | null): void {
   if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel: parent?.type === 'figure_group' })
 }
 
+/** C2-H-151: a display equation with a prefix takes a number, unless the caption of a figure around it owns the number. */
+function visitMath(walk: Walk, node: AstNode): void {
+  delete node.number
+  if (node.display === true && node.numberPrefix !== undefined && walk.numberedFigures === 0) {
+    walk.captions.push({ caption: null, host: node, panel: false })
+  }
+}
+
+function captionInlines(caption: AstNode): AstNode[] {
+  return caption.children?.[0]?.children ?? []
+}
+
+/** True for a figure or a figure group whose caption has a number mark. */
+function ownsNumber(node: AstNode): boolean {
+  if (node.caption === undefined || (node.type !== 'figure' && node.type !== 'figure_group')) return false
+  return captionInlines(node.caption).some((child) => child.type === 'caption_number')
+}
+
+const NAMING_KEYS = ['aria-label', 'aria-labelledby']
+
+/** C2-H-155: true when the attribute line names the node itself, so the renderer generates no name and no id. */
+export function hasAuthoredName(node: AstNode): boolean {
+  return (node.attrs?.keyValues ?? []).some(([key]) => NAMING_KEYS.includes(key.toLowerCase()))
+}
+
+function visitAdmonition(walk: Walk, node: AstNode): void {
+  if (Array.isArray(node.title) && !hasAuthoredName(node)) walk.titled.push(node)
+}
+
+function visitDirective(walk: Walk, node: AstNode, parent: AstNode | null): void {
+  if (node.kind !== 'footnotes' || parent?.type !== 'document') return
+  walk.notesDirective ??= node
+  if (Array.isArray(node.title)) walk.titled.push(node)
+}
+
 function visitReference(walk: Walk, node: AstNode): void {
   if (node.key !== undefined) walk.references.push(node)
 }
@@ -99,6 +141,9 @@ const VISITORS = new Map<string, Visitor>([
   ['figure', visitHost],
   ['figure_group', visitHost],
   ['table', visitHost],
+  ['math', visitMath],
+  ['admonition', visitAdmonition],
+  ['directive', visitDirective],
 ])
 
 /**
@@ -112,24 +157,47 @@ function visit(walk: Walk, node: AstNode, parent: AstNode | null): void {
   if (node.attrs?.id !== undefined) walk.identified.push(node)
   if (node.type === 'inline_footnote' || node.type === 'footnote') return
   if (Array.isArray(node.title)) for (const child of node.title) visit(walk, child, node)
+  const owns = ownsNumber(node)
+  if (owns) walk.numberedFigures++
   if (node.children !== undefined) for (const child of node.children) visit(walk, child, node)
+  if (owns) walk.numberedFigures--
   if (node.caption !== undefined) visit(walk, node.caption, node)
 }
 
-/** C2-A-089: the alignment of a column is the one its source spelled, or that of its last head cell that has one. */
-function alignColumns(table: AstNode): void {
-  const columns = table.columns ?? []
-  const fromHead: (string | undefined)[] = []
+/** The marks of one head row, each at the column its cell starts in (C2-A-092, C2-A-093). `covered` counts the rows a cell above still spans. */
+function rowMarks(row: AstNode, field: 'align' | 'valign', covered: number[], marks: (string | undefined)[]): void {
+  const cells = row.children ?? []
+  const marked = cells.some((cell) => cell.span !== undefined)
+  let column = 0
+  for (const cell of cells) {
+    while (!marked && (covered[column] ?? 0) > 0) covered[column++]!--
+    if (cell[field] !== undefined) marks[column] = cell[field]
+    if (!marked) for (let more = 0; more < (cell.colspan ?? 1); more++) covered[column + more] = (cell.rowspan ?? 1) - 1
+    column += marked ? 1 : cell.colspan ?? 1
+  }
+}
+
+/**
+ * C2-B-213: the mark each column takes from the head, on one axis: that of the last head cell
+ * that starts in the column and has one. A cell that spans several columns marks only the first.
+ */
+export function headMarks(table: AstNode, field: 'align' | 'valign'): (string | undefined)[] {
+  const marks: (string | undefined)[] = []
   for (const group of table.children ?? []) {
     if (group.type !== 'table_head') continue
-    for (const row of group.children ?? []) {
-      (row.children ?? []).forEach((cell, column) => {
-        if (cell.align !== undefined) fromHead[column] = cell.align
-      })
-    }
+    const covered: number[] = []
+    for (const row of group.children ?? []) if (row.type === 'table_row') rowMarks(row, field, covered, marks)
   }
+  return marks
+}
+
+/** C2-B-213: the resolved alignment of a column is the mark of its head cell, or else what `aligns` spelled. */
+function alignColumns(table: AstNode): void {
+  const columns = table.columns ?? []
+  if (columns.length === 0) return
+  const fromHead = headMarks(table, 'align')
   columns.forEach((column, at) => {
-    const align = column.align ?? fromHead[at]
+    const align = fromHead[at] ?? column.align
     if (align === undefined) delete column.resolvedAlign
     else column.resolvedAlign = align
   })
@@ -146,7 +214,7 @@ function collectDefinitions(document: AstNode, walk: Walk): void {
     for (const [type, table, code] of tables) {
       if (child.type !== type) continue
       const key = child.key ?? ''
-      if (table.has(key)) report(walk.resolution, code, `${key} is defined more than once`)
+      if (table.has(key)) report(walk.resolution, child, code, `${key} is defined more than once`)
       else table.set(key, child)
     }
   }
@@ -187,7 +255,7 @@ function reserveIds(walk: Walk, targets: Map<AstNode, AstNode>, kept: Set<AstNod
     // An unresolved reference renders its attribute block as text, so its id is no id of the document.
     if (node.key !== undefined && (node.type === 'link' || node.type === 'image') && !targets.has(node) && !kept.has(node)) continue
     const id = node.attrs!.id!
-    if (taken.has(id)) report(walk.resolution, 'duplicate-id', `the id ${id} is used more than once`)
+    if (taken.has(id)) report(walk.resolution, node, 'duplicate-id', `the id ${id} is used more than once`)
     else taken.add(id)
   }
   return taken
@@ -209,6 +277,23 @@ function generateIds(walk: Walk, mode: HeadingIds, taken: Set<string>): void {
   }
 }
 
+/**
+ * C2-H-156: `adm-1`, `adm-2` and so on, in the order of the walk, which has the bodies of the notes
+ * behind the document. A directive counts only when it places the footnote section.
+ */
+function generateLabelIds(walk: Walk, taken: Set<string>): void {
+  const resolution = walk.resolution
+  let count = 0
+  for (const node of walk.titled) {
+    if (node.type === 'directive' && (node !== walk.notesDirective || resolution.notes.length === 0)) continue
+    const base = `adm-${++count}`
+    let id = base
+    for (let suffix = 2; taken.has(id); suffix++) id = `${base}-${suffix}`
+    taken.add(id)
+    resolution.labelIds.set(node, id)
+  }
+}
+
 function setDestinations(walk: Walk, targets: Map<AstNode, AstNode>, kept: Set<AstNode>): void {
   for (const reference of walk.references) {
     const field = reference.type === 'link' ? 'href' : 'src'
@@ -224,16 +309,30 @@ function setDestinations(walk: Walk, targets: Map<AstNode, AstNode>, kept: Set<A
   }
 }
 
-/** The label of a caption: the plain text before its number mark, without trailing whitespace (C2-B-150). */
-function captionLabel(children: AstNode[], mark: number): string {
-  return plainText(children.slice(0, mark)).trimEnd()
+/** C2-B-208: the sequence key of a caption: the plain text of its label, which is what stands before the mark, without trailing whitespace. */
+function captionKey(walk: Walk, children: AstNode[], mark: number): string {
+  return labelText(children.slice(0, mark), walk.symbols).trimEnd()
 }
 
-/** C2-H-066: each caption takes the next number of the sequence its label selects. A panel caption takes none. */
+/** C2-H-149: the next number of the sequence of `key`. */
+function nextNumber(sequences: Map<string, number>, key: string): number {
+  const n = (sequences.get(key) ?? 0) + 1
+  sequences.set(key, n)
+  return n
+}
+
+/**
+ * C2-H-149, C2-H-151: each caption with a mark and each numbered equation takes the next number of
+ * the sequence of its key, in the order of the walk. A panel caption takes none (C2-H-066).
+ */
 function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
   const sequences = new Map<string, number>()
   for (const use of walk.captions) {
-    const children = use.caption.children?.[0]?.children ?? []
+    if (use.caption === null) {
+      use.host.number = nextNumber(sequences, use.host.numberPrefix!)
+      continue
+    }
+    const children = captionInlines(use.caption)
     const mark = children.findIndex((child) => child.type === 'caption_number')
     if (mark < 0) continue
     const number = children[mark]!
@@ -241,9 +340,8 @@ function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
       delete number.n
       continue
     }
-    const label = captionLabel(children, mark)
-    const n = (sequences.get(label) ?? 0) + 1
-    sequences.set(label, n)
+    const label = captionKey(walk, children, mark)
+    const n = nextNumber(sequences, label)
     number.n = n
     const id = use.host.attrs?.id
     if (id !== undefined && !anchors.has(id)) anchors.set(id, label === '' ? String(n) : `${label} ${n}`)
@@ -282,12 +380,20 @@ function keptReferences(document: AstNode, walk: Walk, sources: Map<AstNode, str
 /**
  * Resolves `document` in place. `sources` holds the folded source of each heading of a tree that
  * was parsed from source; without it a heading matches by its plain text alone (C2-I-084).
+ * `symbols` is the table of a render, which the key of a caption sequence reads (C2-B-208).
  */
-export function resolve(document: AstNode, mode: HeadingIds, sources: Map<AstNode, string> | null): Resolution {
+export function resolve(
+  document: AstNode, mode: HeadingIds, sources: Map<AstNode, string> | null, symbols: Readonly<Record<string, string>> = {},
+): Resolution {
+  const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
-    definitions: new Map(), notes: [], noteOf: new Map(), refIds: new Map(), xrefText: new Map(), diagnostics: [],
+    definitions: new Map(), notes: [], noteOf: new Map(), refIds: new Map(), xrefText: new Map(), labelIds: new Map(),
+    findings, diagnostics: findings.entries,
   }
-  const walk: Walk = { resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [] }
+  const walk: Walk = {
+    resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
+    notesDirective: null, numberedFigures: 0, symbols,
+  }
   collectDefinitions(document, walk)
   visit(walk, document, null)
   // C2-H-025: the content of the notes follows the document body, in the order of the footnote numbers.
@@ -298,7 +404,9 @@ export function resolve(document: AstNode, mode: HeadingIds, sources: Map<AstNod
   }
   const kept = keptReferences(document, walk, sources)
   const targets = findTargets(walk, headingIndex(walk, mode, sources))
-  generateIds(walk, mode, reserveIds(walk, targets, kept))
+  const taken = reserveIds(walk, targets, kept)
+  generateIds(walk, mode, taken)
+  generateLabelIds(walk, taken)
   setDestinations(walk, targets, kept)
   resolveXrefs(walk)
   document.stages = ['referenceResolution', 'tableAlignment']

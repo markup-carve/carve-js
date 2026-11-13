@@ -140,7 +140,7 @@ export interface AstNode {
   rowspan?: number
   align?: string
   valign?: string
-  width?: string
+  width?: number
   resolvedAlign?: string
   authored?: true
 }

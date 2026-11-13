@@ -74,7 +74,7 @@ function span(r: Render, node: AstNode): string {
     const value = authoredKey(node, key)!
     // An authored `title` or `datetime` wins over the derived one.
     const derived: Pair[] = target === null || (outermost && authoredKey(node, target) !== undefined) ? [] : [[target, value]]
-    html = `<${key}${attributes(r, outermost ? rest : null, { structural: derived })}>${html}</${key}>`
+    html = `<${key}${attributes(r, outermost ? rest : null, { structural: derived, origin: node })}>${html}</${key}>`
   })
   return html
 }
@@ -108,35 +108,49 @@ function referenceCarriers(r: Render, node: AstNode): Pair[] {
   return carriers
 }
 
+/**
+ * C2-H-163: the `rel` a profile writes on every link. The words of an authored `rel` stand before
+ * the ones the profile adds, as in 0.1.
+ */
+function addRel(r: Render, node: AstNode, structural: Pair[]): void {
+  if (r.linkRel === '') return
+  const words = (authoredKey(node, 'rel') ?? '').split(' ').filter((word) => word !== '')
+  for (const word of r.linkRel.split(' ')) if (!words.includes(word)) words.push(word)
+  structural.push(['rel', words.join(' ')])
+}
+
 function link(r: Render, node: AstNode): string {
   // C2-H-081: a link inside link text writes its content and no element.
   if (r.linkDepth > 0) return children(r, node)
   if (node.key !== undefined && node.href === undefined) return `[${children(r, node)}]${labelText(node)}`
   const definition = node.key === undefined ? undefined : r.resolution.definitions.get(node.key)
   const title = node.tooltip ?? definition?.title
-  const structural: Pair[] = [['href', destination(r, node.href ?? '')]]
+  const structural: Pair[] = [['href', destination(r, node.href ?? '', node)]]
   if (typeof title === 'string') structural.push(['title', title])
+  const merged = withDefinition(node, definition)
+  addRel(r, merged, structural)
   structural.push(...referenceCarriers(r, node))
   r.linkDepth++
   const html = children(r, node)
   r.linkDepth--
-  return `<a${attributes(r, withDefinition(node, definition), { structural })}>${html}</a>`
+  return `<a${attributes(r, merged, { structural, origin: node })}>${html}</a>`
 }
 
 function image(r: Render, node: AstNode): string {
   if (node.key !== undefined && node.src === undefined) return `![${escapeText(node.alt ?? '')}]${labelText(node)}`
   const definition = node.key === undefined ? undefined : r.resolution.definitions.get(node.key)
   const title = node.tooltip ?? definition?.title
-  const structural: Pair[] = [['src', destination(r, node.src ?? '')], ['alt', node.alt ?? '']]
+  const structural: Pair[] = [['src', destination(r, node.src ?? '', node)], ['alt', node.alt ?? '']]
   if (typeof title === 'string') structural.push(['title', title])
   structural.push(...referenceCarriers(r, node))
-  return `<img${attributes(r, withDefinition(node, definition), { structural })}>`
+  return `<img${attributes(r, withDefinition(node, definition), { structural, origin: node })}>`
 }
 
 function autolink(r: Render, node: AstNode): string {
   const text = escapeText(node.text ?? node.href ?? '')
   if (r.linkDepth > 0) return text
-  const structural: Pair[] = [['href', destination(r, node.href ?? '')]]
+  const structural: Pair[] = [['href', destination(r, node.href ?? '', node)]]
+  addRel(r, node, structural)
   if (r.settings.roundtrip) structural.push(['data-carve-autolink', null])
   return `<a${attributes(r, node, { structural })}>${text}</a>`
 }
@@ -163,16 +177,20 @@ function noteReference(r: Render, node: AstNode): string {
 }
 
 function math(r: Render, node: AstNode): string {
+  // C2-H-122: static output has no client renderer, so an equation is its source as code.
+  if (r.settings.mode === 'static') return `<code${attributes(r, node, { base: ['language-math'] })}>${escapeText(node.value ?? '')}</code>`
   const display = node.display === true
   const tag = attributes(r, node, { base: ['math', display ? 'display' : 'inline'], generated: [['role', 'math']] })
   const value = escapeText(node.value ?? '')
-  return `<span${tag}>${display ? `\\[${value}\\]` : `\\(${value}\\)`}</span>`
+  // C2-H-151: the number of a numbered equation, which only a supplied tree holds.
+  const number = node.number === undefined || !display ? '' : ` <span class="equation-number">${escapeText(`${node.numberPrefix ?? ''} ${node.number}`)}</span>`
+  return `<span${tag}>${display ? `\\[${value}\\]` : `\\(${value}\\)`}</span>${number}`
 }
 
 /** C2-H-051, C2-H-053, C2-H-054: raw HTML is escaped unless `rawHtml` is on, and any other format is dropped. */
 function rawInline(r: Render, node: AstNode): string {
   if (node.format !== 'html') {
-    loss(r, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
+    loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
     return ''
   }
   const html = r.settings.rawHtml ? node.value ?? '' : escapeText(node.value ?? '')
@@ -200,7 +218,9 @@ function social(sigil: string, type: 'mention' | 'tag'): InlineWriter {
     const url = r.linkDepth > 0 ? null : socialUrl(r, type, name)
     const parts: TagParts = { base: [type], classFirst: true }
     if (url === null) return `<span${attributes(r, node, parts)}>${text}</span>`
-    return `<a${attributes(r, node, { ...parts, structural: [['href', destination(r, url)]] })}>${text}</a>`
+    const structural: Pair[] = [['href', destination(r, url, node)]]
+    addRel(r, node, structural)
+    return `<a${attributes(r, node, { ...parts, structural })}>${text}</a>`
   }
 }
 
@@ -249,7 +269,7 @@ function ruby(r: Render, node: AstNode): string {
 function inlineExtension(r: Render, node: AstNode): string {
   const name = node.name ?? ''
   if (!name.includes('.')) return element('span', { base: [`ext-${name}`] })(r, node)
-  loss(r, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
+  loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
   return inlineHtml(r, node.fallback ?? node.children ?? [])
 }
 

@@ -431,7 +431,7 @@ describe('tables', () => {
   it('C2-A-089, C2-A-090: one column per position up to the widest row; a column the source spelled is authored', () => {
     expect(block('| a | b |\n| c |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }])
     expect(block('{aligns="left,center" widths="30,70"}\n| a | b |').columns).toEqual([
-      { type: 'table_column', align: 'left', width: '30', authored: true }, { type: 'table_column', align: 'center', width: '70', authored: true },
+      { type: 'table_column', align: 'left', width: 0.3, authored: true }, { type: 'table_column', align: 'center', width: 0.7, authored: true },
     ])
   })
 

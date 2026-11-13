@@ -2,12 +2,15 @@
 // Read on demand from the code node, not by the block pass. Cells are copied, because a quoted
 // cell is not a span of the source: a doubled quote stands for one.
 import { TAB } from './chars.ts'
-import { attributeValueStart, decimalValue, digitRunEnd, isWord } from './lines.ts'
+import { attributeKeyValue, countValue, isWord } from './lines.ts'
 import type { BlockNode } from './tree.ts'
 
 export interface DelimitedTable {
   rows: string[][]
+  // C2-B-209, C2-B-210: the count `header-rows` gives, or 1 when it is absent or no count.
   headRows: number
+  // C2-A-088: true when `header-rows` gives a count.
+  declared: boolean
   // C2-B-181: a quote that never closes. Its cell holds the rest of the body.
   malformed: boolean
 }
@@ -19,19 +22,20 @@ export function readDelimitedTable(src: string, node: BlockNode): DelimitedTable
   const spans = node.spans!
   const lines: string[] = []
   for (let at = 0; at < spans.length; at += 2) lines.push(src.slice(spans[at], spans[at + 1]))
-  const table: DelimitedTable = { rows: [], headRows: headRows(src, node), malformed: false }
+  const count = headRows(src, node)
+  const table: DelimitedTable = { rows: [], headRows: count < 0 ? 1 : count, declared: count >= 0, malformed: false }
   readRows(lines.join('\n'), separator, table)
   return table
 }
 
-/** C2-B-179: `header-rows` sets the number of head rows; without it there is one. */
+/** C2-B-179: the count of the last `header-rows` on the attribute lines, or -1. */
 function headRows(src: string, node: BlockNode): number {
   const attributes = node.attributes ?? []
+  let value: string | null = null
   for (let at = 0; at < attributes.length; at += 2) {
-    const value = attributeValueStart(src, attributes[at]!, attributes[at + 1]!, 'header-rows')
-    if (value >= 0) return decimalValue(src, value, digitRunEnd(src, value, attributes[at + 1]!))
+    value = attributeKeyValue(src, attributes[at]!, attributes[at + 1]!, 'header-rows') ?? value
   }
-  return 1
+  return countValue(value)
 }
 
 function readRows(body: string, separator: string, table: DelimitedTable): void {

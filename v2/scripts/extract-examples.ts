@@ -1,7 +1,7 @@
 // Writes data/examples.json from the `compare` containers of the four documents of the 0.2
-// specification that hold examples, and copies the data files the tree and the renderer read.
+// specification that hold examples, and copies every data file this engine keeps a copy of.
 //   node v2/scripts/extract-examples.ts <path to spec/0.2>
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export interface SpecExample {
@@ -15,7 +15,6 @@ export interface SpecExample {
 }
 
 const FILES = ['syntax-blocks.md', 'syntax-inline.md', 'html.md', 'ast.md']
-const DATA = ['div-names.json', 'options.json', 'task-states.json']
 const HEADER = /^Example (\d+) \((generated|unverified)([^)]*)\)\s*$/
 const FENCE = /^(`{3,})(\w*)\s*$/
 
@@ -60,6 +59,8 @@ if (process.argv[1] === import.meta.filename) {
   const data = join(import.meta.dirname, '../data')
   const examples = FILES.flatMap((file) => examplesOf(file, readFileSync(join(spec, file), 'utf8')))
   writeFileSync(join(data, 'examples.json'), `${JSON.stringify(examples, null, 1)}\n`)
-  for (const name of DATA) copyFileSync(join(spec, 'data', name), join(data, name))
-  console.log(`${examples.length} examples`)
+  // The generated tables in src/ are written from these copies; run the generate scripts after a copy changes.
+  const copies = readdirSync(data).filter((name) => name.endsWith('.json') && existsSync(join(spec, 'data', name)))
+  for (const name of copies) copyFileSync(join(spec, 'data', name), join(data, name))
+  console.log(`${examples.length} examples, ${copies.length} data files`)
 }

@@ -1265,6 +1265,14 @@
  },
  {
   "file": "syntax-blocks.md",
+  "number": 231,
+  "label": "generated",
+  "flags": [],
+  "input": "%% #region intro\n%% carve-lint-disable-next-line empty-link-destination\nSee [a]().\n\nSee [b](). %% carve-lint-disable-line\n\nSee [c]().\n%% #endregion intro",
+  "html": "<p>See <a href=\"\">a</a>.</p>\n<p>See <a href=\"\">b</a>.</p>\n<p>See <a href=\"\">c</a>.</p>"
+ },
+ {
+  "file": "syntax-blocks.md",
   "number": 159,
   "label": "generated",
   "flags": [],
@@ -1502,6 +1510,22 @@
   "flags": [],
   "input": "$$`x^2`\nmore",
   "html": "<p><span class=\"math display\" role=\"math\">\\[x^2\\]</span>\nmore</p>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 227,
+  "label": "unverified",
+  "flags": [],
+  "input": "{{ \"my file.crv\"   #Intro @shift:1 @lines:1-5 }}",
+  "html": "<p>{{ \"my file.crv\" #Intro @lines:1-5 @shift:1 }}</p>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 228,
+  "label": "generated",
+  "flags": [],
+  "input": "{{ a.crv @shift:x }}",
+  "html": "<p>{{ a.crv <span class=\"mention\"><strong>@shift</strong></span>:x }}</p>"
  },
  {
   "file": "syntax-blocks.md",
@@ -1766,6 +1790,22 @@
   "flags": [],
   "input": "{table}\n```csv\na,b\n1,\"2\n3,4\n```",
   "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th><th scope=\"col\">b</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td><td>2\n3,4</td></tr>\n  </tbody>\n</table>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 229,
+  "label": "generated",
+  "flags": [],
+  "input": "{aligns=\"left,left,center\" widths=\"25,25\"}\n|={>} Name |={<} Qty |= Note |\n| tea |{~} 2 | hot |\n| milk | 3 | cold |",
+  "html": "<table>\n  <colgroup>\n    <col style=\"width: 25%;\">\n    <col style=\"width: 25%;\">\n    <col>\n  </colgroup>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: right;\">Name</th><th scope=\"col\" style=\"text-align: left;\">Qty</th><th scope=\"col\" style=\"text-align: center;\">Note</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: right;\">tea</td><td style=\"text-align: center;\">2</td><td style=\"text-align: center;\">hot</td></tr>\n    <tr><td style=\"text-align: right;\">milk</td><td style=\"text-align: left;\">3</td><td style=\"text-align: center;\">cold</td></tr>\n  </tbody>\n</table>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 230,
+  "label": "generated",
+  "flags": [],
+  "input": "{table}\n```csv\nName,Price\ntea,2\n```\n\n{table header-rows=0}\n```csv\na,b\n```\n\n{table header-rows=5}\n```csv\na,b\nc,d\n```",
+  "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">Name</th><th scope=\"col\">Price</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>tea</td><td>2</td></tr>\n  </tbody>\n</table>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n<table>\n  <tbody>\n    <tr><th scope=\"row\">a</th><th scope=\"row\">b</th></tr>\n    <tr><th scope=\"row\">c</th><th scope=\"row\">d</th></tr>\n  </tbody>\n</table>"
  },
  {
   "file": "syntax-blocks.md",
@@ -2337,6 +2377,14 @@
  },
  {
   "file": "syntax-inline.md",
+  "number": 108,
+  "label": "generated",
+  "flags": [],
+  "input": "<https://例え.jp/パス?q=1#f> <h:x> <a@b.co.uk> <x+y@b-c.de>\n\n<1a:x> <http://a b> <http://a|b> <a@b.c1> <a_b@c_d.e-f>",
+  "html": "<p><a href=\"https://例え.jp/パス?q=1#f\">https://例え.jp/パス?q=1#f</a> <a href=\"h:x\">h:x</a> <a href=\"mailto:a@b.co.uk\">a@b.co.uk</a> <a href=\"mailto:x+y@b-c.de\">x+y@b-c.de</a></p>\n<p>&lt;1a:x&gt; &lt;http://a b&gt; &lt;http://a|b&gt; &lt;a@b.c1&gt; &lt;a_b@c_d.e-f&gt;</p>"
+ },
+ {
+  "file": "syntax-inline.md",
   "number": 67,
   "label": "generated",
   "flags": [],
@@ -2697,6 +2745,25 @@
  },
  {
   "file": "html.md",
+  "number": 24,
+  "label": "generated",
+  "flags": [],
+  "input": "# Hello, World!\n\n# Don't stop -- go\n\n# Café 日本語\n\n# 2nd *try*\n\n# ***\n\n# Hello-World",
+  "html": "<section id=\"Hello-World\">\n  <h1>Hello, World!</h1>\n</section>\n<section id=\"Don-t-stop-go\">\n  <h1>Don’t stop – go</h1>\n</section>\n<section id=\"Café-日本語\">\n  <h1>Café 日本語</h1>\n</section>\n<section id=\"s-2nd-try\">\n  <h1>2nd <strong>try</strong></h1>\n</section>\n<section id=\"s\">\n  <h1>***</h1>\n</section>\n<section id=\"Hello-World-2\">\n  <h1>Hello-World</h1>\n</section>"
+ },
+ {
+  "file": "html.md",
+  "number": 25,
+  "label": "generated",
+  "flags": [
+   "lowercaseHeadingIds",
+   "which is headingIds: lower"
+  ],
+  "input": "# Ärger mit ΣΑΣ\n\n# İstanbul Straße",
+  "html": "<section id=\"ärger-mit-σασ\">\n  <h1>Ärger mit ΣΑΣ</h1>\n</section>\n<section id=\"i̇stanbul-straße\">\n  <h1>İstanbul Straße</h1>\n</section>"
+ },
+ {
+  "file": "html.md",
   "number": 5,
   "label": "generated",
   "flags": [],
@@ -2745,6 +2812,22 @@
  },
  {
   "file": "html.md",
+  "number": 28,
+  "label": "generated",
+  "flags": [],
+  "input": "::: note\nPlain.\n:::\n\n::: warning \"Be careful\"\nBody.\n:::\n\n::: tip [Tab]\nLabeled.\n:::\n\n::: custom \"Title\"\nc\n:::\n\n::: toc \"Contents\"\n:::\n\n::: index\n:::",
+  "html": "<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>Plain.</p>\n</aside>\n<aside class=\"admonition warning\" aria-labelledby=\"adm-1\">\n  <p class=\"admonition-title\" id=\"adm-1\">Be careful</p>\n  <p>Body.</p>\n</aside>\n<aside class=\"admonition tip\" aria-label=\"Tip\">\n  <p class=\"div-label\">Tab</p>\n  <p>Labeled.</p>\n</aside>\n<div class=\"custom\">\n  <p class=\"admonition-title\">Title</p>\n  <p>c</p>\n</div>\n<div class=\"toc\">\n  <p class=\"admonition-title\">Contents</p>\n</div>\n<div class=\"index\">\n\n</div>"
+ },
+ {
+  "file": "html.md",
+  "number": 29,
+  "label": "generated",
+  "flags": [],
+  "input": "Text[^1].\n\n::: footnotes \"Notes\"\n:::\n\n[^1]: A note.\n\n::: footnotes\n:::",
+  "html": "<p>Text<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<section role=\"doc-endnotes\" aria-labelledby=\"adm-1\">\n  <p class=\"admonition-title\" id=\"adm-1\">Notes</p>\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>A note.<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n<div class=\"footnotes\">\n\n</div>"
+ },
+ {
+  "file": "html.md",
   "number": 11,
   "label": "generated",
   "flags": [
@@ -2776,6 +2859,22 @@
   "flags": [],
   "input": "::: figure\n![a](a.png)\n^ (a) First\n\n![b](b.png)\n^ (b) Second\n:::\n^ Figure #: Both",
   "html": "<figure class=\"carve-figure-group\">\n  <figure class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(a) First</figcaption>\n  </figure>\n  <figure class=\"carve-figure-panel\">\n    <img src=\"b.png\" alt=\"b\">\n    <figcaption>(b) Second</figcaption>\n  </figure>\n  <figcaption>Figure 1: Both</figcaption>\n</figure>"
+ },
+ {
+  "file": "html.md",
+  "number": 26,
+  "label": "generated",
+  "flags": [],
+  "input": "![a](a.png)\n^ Figure #: One\n\n![b](b.png)\n^ *Figure* #. Two # more\n\n![c](c.png)\n^ Fig. # Three\n\n![d](d.png)\n^ figure #: Four\n\n![e](e.png)\n^ Figure \\#5",
+  "html": "<figure>\n  <img src=\"a.png\" alt=\"a\">\n  <figcaption>Figure 1: One</figcaption>\n</figure>\n<figure>\n  <img src=\"b.png\" alt=\"b\">\n  <figcaption><strong>Figure</strong> 2. Two # more</figcaption>\n</figure>\n<figure>\n  <img src=\"c.png\" alt=\"c\">\n  <figcaption>Fig. 1 Three</figcaption>\n</figure>\n<figure>\n  <img src=\"d.png\" alt=\"d\">\n  <figcaption>figure 1: Four</figcaption>\n</figure>\n<figure>\n  <img src=\"e.png\" alt=\"e\">\n  <figcaption>Figure #5</figcaption>\n</figure>"
+ },
+ {
+  "file": "html.md",
+  "number": 27,
+  "label": "generated",
+  "flags": [],
+  "input": "See[^a].\n\n![a](a.png)\n^ Table #: Body\n\n[^a]: Note.\n\n    | x |\n    ^ Table #: In the note\n\n[^b]: Unused.\n\n    | y |\n    ^ Table #: Never",
+  "html": "<p>See<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a>.</p>\n<figure>\n  <img src=\"a.png\" alt=\"a\">\n  <figcaption>Table 1: Body</figcaption>\n</figure>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>Note.</p>\n      <table>\n        <caption>Table 2: In the note</caption>\n        <tbody>\n          <tr><td>x</td></tr>\n        </tbody>\n      </table>\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
  },
  {
   "file": "html.md",
@@ -2848,5 +2947,33 @@
   "flags": [],
   "input": "# H\n\n[x][r] </#H> <https://example.org> a[^n] ^[inl]\n\n:::\nin\n:::\n\n[r]: /u\n[^n]: N.",
   "html": "<section data-carve-generated-id id=\"H\">\n  <h1>H</h1>\n  <p><a href=\"/u\" data-carve-ref=\"r\">x</a> <a href=\"#H\" data-carve-xref>H</a> <a href=\"https://example.org\" data-carve-autolink>https://example.org</a> a<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\" data-carve-footnote-label=\"n\"><sup>1</sup></a> <a id=\"fnref2\" href=\"#fn2\" role=\"doc-noteref\"><sup>2</sup></a></p>\n  <div data-carve-div>\n    <p>in</p>\n  </div>\n</section>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\" data-carve-footnote-label=\"n\">\n      <p>N.<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\" data-carve-inline-footnote>\n      <p>inl<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "file": "html.md",
+  "number": 30,
+  "label": "generated",
+  "flags": [],
+  "input": "[bad](javascript:alert(1)) <JavaScript:x> [ok](/a#b) ![p](data:image/png;base64,AA)\n\n{title=\"Shell: bash\" onclick=\"x()\" style=\"color: u\\72l(a)\"}\nText.",
+  "html": "<p><a href=\"\">bad</a> <a href=\"\">JavaScript:x</a> <a href=\"/a#b\">ok</a> <img src=\"\" alt=\"p\"></p>\n<p title=\"\" style=\"\">Text.</p>"
+ },
+ {
+  "file": "html.md",
+  "number": 31,
+  "label": "generated",
+  "flags": [
+   "--profile comment"
+  ],
+  "input": "See [docs](https://x.org) and *bold*.",
+  "html": "<p>See <a href=\"https://x.org\" rel=\"nofollow ugc\">docs</a> and <strong>bold</strong>.</p>"
+ },
+ {
+  "file": "html.md",
+  "number": 32,
+  "label": "generated",
+  "flags": [
+   "--profile minimal"
+  ],
+  "input": "See [docs](https://x.org) and *bold*.",
+  "html": "<p>See docs and <strong>bold</strong>.</p>"
  }
 ]

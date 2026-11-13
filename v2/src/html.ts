@@ -1,12 +1,14 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
 import { type AstNode, DEFINITION_TYPES, type Marker } from './ast.ts'
 import { blockText } from './ast-text.ts'
+import { type Findings } from './diagnostics.ts'
 import {
   attributes, escapeAttribute, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
-import { type Diagnostic, type Note, type Resolution } from './resolve.ts'
+import { PROFILES } from './render-tables.ts'
+import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
 
 type BlockWriter = (r: Render, node: AstNode, level: number) => void
@@ -74,8 +76,19 @@ function paragraphHtml(r: Render, node: AstNode, parts: TagParts = {}): string {
   return `<p${tag(r, node, { alignStyle: true, ...parts })}>${inlineHtml(r, node.children ?? [])}${tail}</p>`
 }
 
+/** C2-H-122: in static mode a math block is its source as a code block. */
+function staticMathBlock(r: Render, node: AstNode): string {
+  const math = (node.children ?? []).find((child) => child.type === 'math')
+  const value = math?.value ?? ''
+  return `<pre${tag(r, node)}><code class="language-math">${escapeText(value.endsWith('\n') ? value : `${value}\n`)}</code></pre>`
+}
+
 function paragraph(r: Render, node: AstNode, level: number): void {
   if (onlyComments(node)) return
+  if (node.blockMath === true && r.settings.mode === 'static') {
+    line(r, level, staticMathBlock(r, node))
+    return
+  }
   line(r, level, isBareImage(node) ? inlineHtml(r, node.children ?? []) : paragraphHtml(r, node))
 }
 
@@ -181,19 +194,22 @@ function description(r: Render, node: AstNode, level: number): void {
   line(r, level, '</dd>')
 }
 
-function titleParagraph(r: Render, node: AstNode, level: number, id: string | null): void {
-  if (!Array.isArray(node.title)) return
-  line(r, level, `<p class="admonition-title"${id === null ? '' : ` id="${id}"`}>${inlineHtml(r, node.title)}</p>`)
+/** C2-H-154: the title of the opener and then its label, each only when the author wrote it. */
+function writeTitle(r: Render, node: AstNode, level: number, id: string | null): void {
+  if (Array.isArray(node.title)) {
+    line(r, level, `<p class="admonition-title"${id === null ? '' : ` id="${escapeAttribute(id)}"`}>${inlineHtml(r, node.title)}</p>`)
+  }
+  if (node.groupLabel !== undefined) line(r, level, `<p class="div-label">${escapeText(node.groupLabel)}</p>`)
 }
 
-/** C2-H-042: a div and a directive are `<div>`; a title is its first child. */
+/** C2-H-042, C2-H-157, C2-H-158: a div, and a directive that places nothing, are `<div>` with no name. */
 function div(r: Render, node: AstNode, level: number): void {
   const base = node.type === 'directive' && node.kind !== undefined ? [node.kind] : []
   const attrs = tag(r, node, { base, alignStyle: true })
   // C2-H-114: a div with no other attribute.
   line(r, level, `<div${attrs === '' && r.settings.roundtrip ? ' data-carve-div' : attrs}>`)
   const before = r.lines.length
-  titleParagraph(r, node, level + 1, null)
+  writeTitle(r, node, level + 1, null)
   writeBlocks(r, node.children ?? [], level + 1)
   if (r.lines.length === before) r.lines.push('')
   line(r, level, '</div>')
@@ -203,16 +219,20 @@ function capitalized(word: string): string {
   return word === '' ? word : word[0]!.toUpperCase() + word.slice(1)
 }
 
-/** An admonition is an `aside` that its title labels, or else the name of its kind (CARVE-P9, as in 0.1). */
+/** C2-H-155: the title names the element, or else the `labels` string of the kind; an authored name stops both. */
+function admonitionName(r: Render, node: AstNode, id: string | null): Pair[] {
+  if (id !== null) return [['aria-labelledby', id]]
+  if (hasAuthoredName(node)) return []
+  const kind = capitalized(node.kind ?? '')
+  return [['aria-label', r.settings.labels[`admonition${kind}`] ?? kind]]
+}
+
+/** C2-H-154: an admonition is `<aside>` with the classes `admonition` and its kind. */
 function admonition(r: Render, node: AstNode, level: number): void {
-  const kind = node.kind ?? ''
-  const titled = Array.isArray(node.title)
-  const id = titled ? `adm-${++r.admonitions}` : null
-  const label = r.settings.labels[`admonition${capitalized(kind)}`] ?? capitalized(kind)
-  const generated: Pair[] = [id === null ? ['aria-label', label] : ['aria-labelledby', id]]
-  line(r, level, `<aside${tag(r, node, { base: ['admonition', kind], generated })}>`)
+  const id = r.resolution.labelIds.get(node) ?? null
+  line(r, level, `<aside${tag(r, node, { base: ['admonition', node.kind ?? ''], generated: admonitionName(r, node, id) })}>`)
   const before = r.lines.length
-  titleParagraph(r, node, level + 1, id)
+  writeTitle(r, node, level + 1, id)
   writeBlocks(r, node.children ?? [], level + 1)
   if (r.lines.length === before) r.lines.push('')
   line(r, level, '</aside>')
@@ -261,7 +281,7 @@ function codeBlock(r: Render, node: AstNode, level: number): void {
 /** C2-H-050, C2-H-053, C2-H-054, C2-H-134. */
 function rawBlock(r: Render, node: AstNode, level: number): void {
   if (node.format !== 'html') {
-    loss(r, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
+    loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
     return
   }
   if (!r.settings.rawHtml) {
@@ -306,31 +326,51 @@ function lineBlock(r: Render, node: AstNode, level: number): void {
   line(r, level, '</div>')
 }
 
-/** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text. */
+/** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */
+function quoted(value: string): string {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+const BARE_PATH_ENDS = [' ', '#', '@', '}', '"', '“']
+const BARE_VALUE_ENDS = [' ', '\t', '@', '}']
+
+function holdsAny(value: string, characters: readonly string[]): boolean {
+  return characters.some((character) => value.includes(character))
+}
+
+/** One option of a directive: the key alone for no value, and a value quoted where the bare form does not hold it. */
+function includeOption(name: string, value: string): string {
+  if (value === '') return `@${name}`
+  // C2-A-181: a list of column names keeps the quotes it was written in.
+  const bare = !holdsAny(value, BARE_VALUE_ENDS) || (name === 'cols' && value.startsWith('"'))
+  return `@${name}:${bare ? value : quoted(value)}`
+}
+
+/** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: AstNode, level: number): void {
   const path = node.path ?? ''
-  const parts = [path.includes(' ') ? `"${path}"` : path]
+  const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
   if (node.section !== undefined) parts.push(`#${node.section}`)
-  for (const [name, value] of node.options ?? []) parts.push(name === '' ? value : `@${name}:${value}`)
-  loss(r, 'include-unresolved', `the include of ${path} was not expanded`)
+  for (const [name, value] of node.options ?? []) parts.push(includeOption(name, value))
+  loss(r, node, 'include-unresolved', `the include of ${path} was not expanded`)
   line(r, level, `<p>${escapeText(`{{ ${parts.join(' ')} }}`)}</p>`)
 }
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */
 function blockExtension(r: Render, node: AstNode, level: number): void {
-  loss(r, 'extension-fallback-rendered', `the extension ${node.name ?? ''} is rendered through its fallback`)
+  loss(r, node, 'extension-fallback-rendered', `the extension ${node.name ?? ''} is rendered through its fallback`)
   writeBlocks(r, node.fallback ?? [], level)
 }
 
 // ---- tables ----
 
-function cellStyle(cell: AstNode, column: AstNode | undefined): string {
+/** C2-B-213: each axis on its own: the mark of the cell, then that of the head cell of its column, then the column. */
+function cellStyle(cell: AstNode, column: AstNode | undefined, headValign: string | undefined): string {
   const align = cell.align ?? column?.resolvedAlign ?? column?.align
-  const valign = cell.valign ?? column?.valign
-  const declarations: string[] = []
-  if (align !== undefined) declarations.push(`text-align: ${align};`)
-  if (valign !== undefined) declarations.push(`vertical-align: ${valign};`)
-  return declarations.join(' ')
+  const valign = cell.valign ?? headValign ?? column?.valign
+  let declarations = align === undefined ? '' : `text-align: ${align};`
+  if (valign !== undefined) declarations += `${declarations === '' ? '' : ' '}vertical-align: ${valign};`
+  return declarations
 }
 
 function cellContent(r: Render, cell: AstNode): string {
@@ -339,25 +379,30 @@ function cellContent(r: Render, cell: AstNode): string {
   // C2-A-175: blocks in a cell, which only a supplied tree holds.
   const inner: Render = { ...r, lines: [] }
   writeBlocks(inner, blocks, 0)
-  r.admonitions = inner.admonitions
   return inner.lines.join('\n')
 }
 
 /** C2-H-056 to C2-H-058. */
-function cellHtml(r: Render, cell: AstNode, column: AstNode | undefined, inHead: boolean): string {
+function cellHtml(r: Render, cell: AstNode, column: AstNode | undefined, headValign: string | undefined, inHead: boolean): string {
   const name = cell.header === true ? 'th' : 'td'
   const structural: Pair[] = []
   if ((cell.rowspan ?? 1) > 1) structural.push(['rowspan', String(cell.rowspan)])
   if ((cell.colspan ?? 1) > 1) structural.push(['colspan', String(cell.colspan)])
   if (cell.header === true) structural.push(['scope', inHead ? 'col' : 'row'])
-  return `<${name}${attributes(r, cell, { structural, style: cellStyle(cell, column) })}>${cellContent(r, cell)}</${name}>`
+  return `<${name}${attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })}>${cellContent(r, cell)}</${name}>`
+}
+
+/** The columns of a table, and the vertical mark each takes from the head (C2-B-213). */
+interface TableLayout {
+  columns: AstNode[]
+  headValign: (string | undefined)[]
 }
 
 /**
  * The cells of one row with their columns. A row with span marks holds one cell per column
  * (C2-A-092); a row with counts alone covers the positions its counts give (C2-A-093).
  */
-function rowHtml(r: Render, row: AstNode, columns: AstNode[], covered: number[], inHead: boolean): string {
+function rowHtml(r: Render, row: AstNode, layout: TableLayout, covered: number[], inHead: boolean): string {
   const cells = row.children ?? []
   const marked = cells.some((cell) => cell.span !== undefined)
   let html = ''
@@ -365,7 +410,7 @@ function rowHtml(r: Render, row: AstNode, columns: AstNode[], covered: number[],
   for (const cell of cells) {
     while (!marked && (covered[column] ?? 0) > 0) covered[column++]!--
     if (cell.span === undefined) {
-      html += cellHtml(r, cell, columns[column], inHead)
+      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead)
       if (!marked) for (let more = 0; more < (cell.colspan ?? 1); more++) covered[column + more] = (cell.rowspan ?? 1) - 1
     }
     column += marked ? 1 : cell.colspan ?? 1
@@ -373,9 +418,9 @@ function rowHtml(r: Render, row: AstNode, columns: AstNode[], covered: number[],
   return `<tr${tag(r, row)}>${html}</tr>`
 }
 
-function writeRows(r: Render, table: AstNode, group: AstNode, level: number, covered: number[]): void {
+function writeRows(r: Render, layout: TableLayout, group: AstNode, level: number, covered: number[]): void {
   for (const row of group.children ?? []) {
-    if (row.type === 'table_row') line(r, level, rowHtml(r, row, table.columns ?? [], covered, group.type === 'table_head'))
+    if (row.type === 'table_row') line(r, level, rowHtml(r, row, layout, covered, group.type === 'table_head'))
   }
 }
 
@@ -391,11 +436,11 @@ function spanCrossesGroup(groups: AstNode[]): boolean {
 
 const GROUP_ELEMENTS = new Map([['table_head', 'thead'], ['table_body', 'tbody'], ['table_foot', 'tfoot']])
 
-function writeGroups(r: Render, table: AstNode, groups: AstNode[], level: number): void {
+function writeGroups(r: Render, layout: TableLayout, groups: AstNode[], level: number): void {
   if (spanCrossesGroup(groups)) {
     const covered: number[] = []
     line(r, level, '<tbody>')
-    for (const group of groups) writeRows(r, table, group, level + 1, covered)
+    for (const group of groups) writeRows(r, layout, group, level + 1, covered)
     line(r, level, '</tbody>')
     return
   }
@@ -404,17 +449,27 @@ function writeGroups(r: Render, table: AstNode, groups: AstNode[], level: number
     if (!(group.children ?? []).some((row) => row.type === 'table_row')) continue
     const name = GROUP_ELEMENTS.get(group.type)!
     line(r, level, `<${name}${tag(r, group)}>`)
-    writeRows(r, table, group, level + 1, [])
+    writeRows(r, layout, group, level + 1, [])
     line(r, level, `</${name}>`)
   }
 }
 
-/** C2-H-059: the widths of the columns, as in 0.1. */
+const PERCENT_DIGITS = 10
+
+/** C2-H-152: the width times 100 as a decimal number without trailing zeros. */
+function percentText(width: number): string {
+  const text = (width * 100).toFixed(PERCENT_DIGITS)
+  let end = text.length
+  while (text[end - 1] === '0') end--
+  return text.slice(0, text[end - 1] === '.' ? end - 1 : end)
+}
+
+/** C2-H-152: one `<col>` per column when at least one column has a width. */
 function writeColumnGroup(r: Render, columns: AstNode[], level: number): void {
   if (!columns.some((column) => column.width !== undefined)) return
   line(r, level, '<colgroup>')
   for (const column of columns) {
-    line(r, level + 1, column.width === undefined ? '<col>' : `<col style="width: ${escapeAttribute(column.width)}%;">`)
+    line(r, level + 1, column.width === undefined ? '<col>' : `<col style="width: ${percentText(column.width)}%;">`)
   }
   line(r, level, '</colgroup>')
 }
@@ -422,8 +477,9 @@ function writeColumnGroup(r: Render, columns: AstNode[], level: number): void {
 function table(r: Render, node: AstNode, level: number): void {
   line(r, level, `<table${tag(r, node)}>`)
   if (node.caption !== undefined) captionLine(r, node.caption, 'caption', level + 1)
-  writeColumnGroup(r, node.columns ?? [], level + 1)
-  writeGroups(r, node, (node.children ?? []).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
+  const layout: TableLayout = { columns: node.columns ?? [], headValign: headMarks(node, 'valign') }
+  writeColumnGroup(r, layout.columns, level + 1)
+  writeGroups(r, layout, (node.children ?? []).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
   line(r, level, '</table>')
 }
 
@@ -485,10 +541,15 @@ function writeNote(r: Render, note: Note, level: number): void {
   line(r, level, '</li>')
 }
 
-/** C2-H-089: the footnotes in one section, in number order. */
-function writeNotes(r: Render, level: number): void {
-  const label = escapeAttribute(r.settings.labels['endnotes'] ?? '')
-  line(r, level, `<section role="doc-endnotes" aria-label="${label}">`)
+/**
+ * C2-H-089: the footnotes in one section, in number order. C2-H-158: the title and the label of
+ * the directive that places it are its first children, and a title names it.
+ */
+function writeNotes(r: Render, level: number, directive: AstNode | null): void {
+  const id = directive === null ? undefined : r.resolution.labelIds.get(directive)
+  const name = id === undefined ? `aria-label="${escapeAttribute(r.settings.labels['endnotes'] ?? '')}"` : `aria-labelledby="${escapeAttribute(id)}"`
+  line(r, level, `<section role="doc-endnotes" ${name}>`)
+  if (directive !== null) writeTitle(r, directive, level + 1, id ?? null)
   line(r, level + 1, '<hr>')
   line(r, level + 1, '<ol>')
   for (const note of r.resolution.notes) writeNote(r, note, level + 2)
@@ -527,24 +588,27 @@ function writeDocument(r: Render, document: AstNode): void {
       openSection(r, node, open)
     } else if (isNotesDirective(node) && hasNotes && !placed) {
       placed = true
-      writeNotes(r, open.length)
+      // The blocks of the directive stand before the section, as in 0.1.
+      writeBlocks(r, node.children ?? [], open.length)
+      writeNotes(r, open.length, node)
     } else {
       BLOCKS.get(node.type)?.(r, node, open.length)
     }
   }
   closeSections(r, open, 0)
-  if (hasNotes && !placed) writeNotes(r, 0)
+  if (hasNotes && !placed) writeNotes(r, 0, null)
 }
 
 export interface RenderResult {
   html: string
-  losses: Diagnostic[]
+  losses: Findings
 }
 
-/** The HTML fragment of a resolved tree (C2-H-001). */
-export function renderDocument(document: AstNode, settings: Settings, resolution: Resolution): RenderResult {
+/** The HTML fragment of a resolved tree (C2-H-001). `losses` takes the losses of the render. */
+export function renderDocument(document: AstNode, settings: Settings, resolution: Resolution, losses: Findings): RenderResult {
   const r: Render = {
-    settings, resolution, lines: [], losses: [], admonitions: 0, linkDepth: 0, abbrDepth: 0, backlinkHost: null, backlinks: '',
+    settings, resolution, lines: [], losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
+    backlinkHost: null, backlinks: '',
   }
   writeDocument(r, document)
   return { html: r.lines.join('\n'), losses: r.losses }

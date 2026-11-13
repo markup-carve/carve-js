@@ -114,16 +114,19 @@ describe('resolution results', () => {
     expect(resolved('a').document.stages).toEqual(['referenceResolution', 'tableAlignment'])
   })
 
-  it('C2-A-089: resolvedAlign is the alignment a column spells, or that of its last head cell that has one', () => {
+  it('C2-A-089, C2-B-213: resolvedAlign is the mark of the last head cell of the column that has one, or else the alignment the column spells', () => {
     expect(resolved('|={>} a |= b |\n|={~} c |= d |\n| e | f |').document.children![0]!.columns).toEqual([
       { type: 'table_column', resolvedAlign: 'center' }, { type: 'table_column' },
     ])
-    expect(at(resolved('{aligns="left"}\n|={>} a |').document, 'children.0.columns.0.resolvedAlign')).toBe('left')
+    expect(resolved('{aligns="left,center"}\n|={>} a |= b |').document.children![0]!.columns).toEqual([
+      { type: 'table_column', align: 'left', authored: true, resolvedAlign: 'right' },
+      { type: 'table_column', align: 'center', authored: true, resolvedAlign: 'center' },
+    ])
   })
 
   it('C2-A-005, C2-A-039, C2-A-172, C2-A-173: a duplicate id is reported in the diagnostics record with a code, a severity, a message and a channel, and nothing in the tree marks it', () => {
     const { document, resolution } = resolved('{#a}\nx\n\n{#a}\ny')
-    expect(resolution.diagnostics).toEqual([{ code: 'duplicate-id', severity: 'warning', channel: 'lint', message: 'the id a is used more than once' }])
+    expect(resolution.diagnostics).toEqual([{ code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'the id a is used more than once' }])
     expect(document.children!.map((node) => node.attrs)).toEqual([{ id: 'a' }, { id: 'a' }])
   })
 

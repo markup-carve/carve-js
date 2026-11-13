@@ -12,6 +12,7 @@ export const PAREN_OPEN = 40
 export const PAREN_CLOSE = 41
 export const STAR = 42
 export const PLUS = 43
+export const COMMA = 44
 export const HYPHEN = 45
 export const DOT = 46
 export const SLASH = 47

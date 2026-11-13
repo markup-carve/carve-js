@@ -1,11 +1,12 @@
 // Line-shape tests. Each reads character codes of the source between `pos` and `end`
 // (the end of the line) and copies nothing.
-import { readAttributeBlock } from './attributes.ts'
+import { type AttributeSink, readAttributeBlock } from './attributes.ts'
 import {
   BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DIGIT_9, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
+import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
 
 const MAX_HEADING_LEVEL = 6
@@ -82,12 +83,9 @@ export function isAttributeLine(src: string, pos: number, end: number): boolean 
   return p === blocksEnd
 }
 
-/** C2-B-156: `{{ ... }}` alone on its line. */
+/** C2-B-156, C2-B-201, C2-B-206: an include directive alone on its line. */
 export function isIncludeLine(src: string, pos: number, end: number): boolean {
-  if (pos + 4 > end || src.charCodeAt(pos) !== BRACE_OPEN || src.charCodeAt(pos + 1) !== BRACE_OPEN) return false
-  let last = end
-  while (last > pos && isSpaceOrTab(src.charCodeAt(last - 1))) last--
-  return last - pos >= 4 && src.charCodeAt(last - 1) === BRACE_CLOSE && src.charCodeAt(last - 2) === BRACE_CLOSE
+  return readInclude(src, pos, end) !== null
 }
 
 /** Offset after the space of the bullet marker at `pos`, or -1. Brace blocks may abut the marker (C2-B-034, C2-B-101). */
@@ -468,28 +466,37 @@ export function isWord(src: string, pos: number, end: number, word: string): boo
   return startsWith(src, pos, end, word) && (pos + word.length === end || isSpaceOrTab(src.charCodeAt(pos + word.length)))
 }
 
+const MAX_COUNT_DIGITS = 9
+
 /**
- * Offset of the value of `key` in the brace blocks between `pos` and `end`: behind `key=`, or behind
- * a bare `key`. -1 when the key is not there. A key starts a brace block or stands after a space.
+ * The value of the key `key` on the attribute lines between `pos` and `end`, or null when no block
+ * there holds it. The last one written counts (C2-A-035), and a bare key has the empty value.
  */
-export function attributeValueStart(src: string, pos: number, end: number, key: string): number {
-  for (let p = pos + 1; p + key.length <= end; p++) {
-    const before = src.charCodeAt(p - 1)
-    if (before !== BRACE_OPEN && before !== SPACE) continue
-    let at = 0
-    while (at < key.length && src.charCodeAt(p + at) === key.charCodeAt(at)) at++
-    if (at < key.length) continue
-    const after = src.charCodeAt(p + at)
-    if (after === EQUALS) return p + at + 1
-    if (after === SPACE || after === BRACE_CLOSE) return p + at
+export function attributeKeyValue(src: string, pos: number, end: number, key: string): string | null {
+  const found: { value: string | null } = { value: null }
+  const ignore = (): void => undefined
+  const sink: AttributeSink = {
+    id: ignore, className: ignore, language: ignore,
+    key: (name, value) => {
+      if (name === key) found.value = value
+    },
   }
-  return -1
+  const memo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+  let p = pos
+  while (p < end) {
+    const after = src.charCodeAt(p) === BRACE_OPEN ? readAttributeBlock(src, p, end, memo, sink) : -1
+    p = after < 0 ? p + 1 : after
+  }
+  return found.value
 }
 
-/** Offset after the digits at `pos`. */
-export function digitRunEnd(src: string, pos: number, end: number): number {
-  while (pos < end && isDigit(src.charCodeAt(pos))) pos++
-  return pos
+/** C2-B-210: the count that `value` spells: one or more digits, or 1 for the empty value. -1 for any other value and for null. */
+export function countValue(value: string | null): number {
+  if (value === null) return -1
+  if (value === '') return 1
+  for (let p = 0; p < value.length; p++) if (!isDigit(value.charCodeAt(p))) return -1
+  // A count past any table takes every row, so its size is capped and not parsed.
+  return value.length > MAX_COUNT_DIGITS ? 10 ** MAX_COUNT_DIGITS : decimalValue(value, 0, value.length)
 }
 
 /**

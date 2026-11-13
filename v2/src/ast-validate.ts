@@ -122,7 +122,7 @@ const RULES = new Map<string, Rule>([
 const STRINGS = [
   'key', 'namespace', 'expansion', 'kind', 'groupLabel', 'href', 'text', 'name', 'version', 'raw', 'syntax', 'form',
   'tocTarget', 'generatedId', 'src', 'alt', 'tooltip', 'targetKind', 'resourceId', 'path', 'section', 'spacing',
-  'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'width', 'resolvedAlign',
+  'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
   'mode', 'locatorLabel', 'locatorValue', 'value', 'astVersion', 'lang',
 ]
 const INTEGERS = ['n', 'number', 'level', 'headRows', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
@@ -243,7 +243,13 @@ function checkEnum(type: string, name: string, value: Value, path: string): void
   if (values !== undefined && !values.includes(value as string)) fail(path, `unknown value ${JSON.stringify(value)}`)
 }
 
+/** C2-B-212: a fraction of the table width, above 0 and at most 1. */
+function isWidth(value: Value): boolean {
+  return typeof value === 'number' && value > 0 && value <= 1
+}
+
 function checkScalar(type: string, name: string, value: Value, path: string): boolean {
+  if (name === 'width') return isWidth(value) || fail(path, 'not a fraction above 0 and at most 1')
   if (TRUE_ONLY.includes(name)) return value === true || fail(path, 'not true')
   if (BOOLEANS.includes(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
   if (INTEGERS.includes(name)) return (Number.isInteger(value) && (value as number) >= 0) || fail(path, 'not a count')

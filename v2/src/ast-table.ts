@@ -5,13 +5,16 @@ import { emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from '.
 import {
   FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, inlineNodes, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { EQUALS, GREATER, LESS } from './chars.ts'
+import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
 import { type Attributes } from './inline-tree.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
+import { countValue } from './lines.ts'
 import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
 
-const ALIGN_WORDS = new Map([['left', 'left'], ['right', 'right'], ['center', 'center'], ['l', 'left'], ['r', 'right'], ['c', 'center']])
+// C2-B-211: the entries of `aligns` that set an alignment.
+const ALIGN_WORDS = ['left', 'right', 'center']
+const MAX_WIDTH = 100
 
 type CommentBuilder = (ctx: TreeContext, node: BlockNode) => AstNode
 
@@ -147,18 +150,32 @@ function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): G
   return groups
 }
 
-/** C2-A-089: one column per position up to the widest row, with what `aligns` and `widths` spell (C2-B-187). */
+/** C2-B-212: a decimal number above 0 and at most 100 as a fraction of the table width, or undefined. */
+function columnWidth(entry: string): number | undefined {
+  let dots = 0
+  for (let at = 0; at < entry.length; at++) {
+    const code = entry.charCodeAt(at)
+    if (code === DOT) dots++
+    else if (code < DIGIT_0 || code > DIGIT_9) return undefined
+  }
+  // Digits with at most one dot between them: `25` and `30.5`, and not `.5`, `5.` or `1e2`.
+  if (entry === '' || dots > 1 || entry.startsWith('.') || entry.endsWith('.')) return undefined
+  const percent = Number(entry)
+  return percent > 0 && percent <= MAX_WIDTH ? percent / MAX_WIDTH : undefined
+}
+
+/** C2-A-089: one column per position up to the widest row, with what `aligns` and `widths` spell (C2-B-211, C2-B-212). */
 function columnNodes(width: number, aligns: string | null, widths: string | null): AstNode[] {
   const alignList = aligns === null ? [] : aligns.split(',')
   const widthList = widths === null ? [] : widths.split(',')
   const columns: AstNode[] = []
   for (let at = 0; at < width; at++) {
     const column: AstNode = { type: 'table_column' }
-    const align = ALIGN_WORDS.get((alignList[at] ?? '').trim())
-    const columnWidth = (widthList[at] ?? '').trim()
-    if (align !== undefined) column.align = align
-    if (columnWidth !== '') column.width = columnWidth
-    if (align !== undefined || columnWidth !== '') column.authored = true
+    const align = (alignList[at] ?? '').trim()
+    const fraction = columnWidth((widthList[at] ?? '').trim())
+    if (ALIGN_WORDS.includes(align)) column.align = align
+    if (fraction !== undefined) column.width = fraction
+    if (column.align !== undefined || fraction !== undefined) column.authored = true
     columns.push(column)
   }
   return columns
@@ -170,8 +187,10 @@ function groupNode(ctx: TreeContext, groups: Groups, type: string, rows: AstNode
   return range === undefined ? group : place(ctx, group, range[0], range[1])
 }
 
+/** C2-H-153: `aligns`, `widths`, `header-rows` and `footer-rows` are read here and are no attributes of the table. */
 function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): AstNode {
   takeKey(attributes, 'footer-rows')
+  takeKey(attributes, 'header-rows')
   const table: AstNode = { type: 'table', columns: columnNodes(groups.width, takeKey(attributes, 'aligns'), takeKey(attributes, 'widths')), children: [] }
   if (groups.head.length > 0) table.children!.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.body.length > 0) table.children!.push(groupNode(ctx, groups, 'table_body', groups.body))
@@ -199,17 +218,22 @@ function delimitedRow(cells: string[], header: boolean): AstNode {
 /** C2-B-180: a `csv` or `tsv` fence that the `table` attribute marks. Its cells are plain text with no position (C2-A-158). */
 export function delimitedTableNode(ctx: TreeContext, node: BlockNode): AstNode {
   const source = readDelimitedTable(ctx.src, node)
-  const groups = emptyGroups()
-  source.rows.forEach((cells, index) => {
-    const header = index < source.headRows
-    groups.width = Math.max(groups.width, cells.length)
-    ;(header ? groups.head : groups.body).push(delimitedRow(cells, header))
-  })
+  const rows = source.rows
   const attributes = readAttributeLines(ctx.src, node.attributes)
   takeKey(attributes, 'table')
-  const declared = takeKey(attributes, 'header-rows') !== null
+  // C2-B-209: a count past the last row gives no head, and every cell is a header cell.
+  const allHeaders = source.headRows > rows.length
+  const head = allHeaders ? 0 : source.headRows
+  // C2-B-187: the footer rows are counted among the rows below the head.
+  const footer = Math.min(Math.max(0, countValue(takeKey(attributes, 'footer-rows'))), Math.max(0, rows.length - head))
+  const groups = emptyGroups()
+  rows.forEach((cells, index) => {
+    groups.width = Math.max(groups.width, cells.length)
+    const group = index < head ? groups.head : index < rows.length - footer ? groups.body : groups.foot
+    group.push(delimitedRow(cells, allHeaders || index < head))
+  })
   const table = tableOf(ctx, groups, attributes)
   // C2-A-088: a body whose partition the source declared carries `headRows`.
-  if (declared) for (const group of table.children!) if (group.type === 'table_body') group.headRows = source.headRows
+  if (source.declared) for (const group of table.children!) if (group.type === 'table_body') group.headRows = source.headRows
   return table
 }

@@ -158,7 +158,7 @@ describe('more edges', () => {
   it('an object with more fields than another is not equal to it, and an empty quoted option value is empty', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1 } }), documentOf({ ...paragraph(), data: { a: 1, b: 2 } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1 } }))).toBe(false)
-    expect(block('{{ a.crv @k:"" @m:"x" }}').options).toEqual([['k', ''], ['m', 'x']])
+    expect(block('{{ a.crv @rows:"" @region:"x" }}').options).toEqual([['region', 'x'], ['rows', '']])
   })
 })
 
@@ -282,16 +282,17 @@ describe('equality in detail', () => {
 })
 
 describe('one-line blocks in detail', () => {
-  it('an include directive reads quoted values, a part that is no option, and an at-sign that starts the next option', () => {
-    expect(block('{{ a.crv @x:"p q" @y:\'r s\' @z:1@w:2 }}').options).toEqual([['x', 'p q'], ['y', 'r s'], ['z', '1'], ['w', '2']])
-    expect(block('{{ a.crv plain @:v @k: x:y }}').options).toEqual([['', 'plain'], ['', '@:v'], ['k', ''], ['', 'x:y']])
-    expect(block('{{ a.crv @k:"a \\" @b" }}').options).toEqual([['k', 'a " @b']])
-    expect(block('{{ a.crv @k:"x }}').options).toEqual([['k', '"x']])
-    expect(block('{{ a.crv @k:" }}').options).toEqual([['k', '"']])
-    expect(block('{{ a.crv#s@k:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['k', 'v']] })
+  it('an include directive reads quoted values and an at-sign that starts the next option, and a part that is no option makes it text', () => {
+    expect(block('{{ a.crv @cols:"p q" @code:\'r+s\' @shift:1@lines:2-3 }}').options).toEqual([['lines', '2-3'], ['cols', '"p q"'], ['shift', '1'], ['code', 'r+s']])
+    expect(block('{{ a.crv plain @code }}').type).toBe('paragraph')
+    expect(block('{{ a.crv @:v }}').type).toBe('paragraph')
+    expect(block('{{ a.crv @rows: }}').type).toBe('paragraph')
+    expect(block('{{ a.crv @rows:"a \\" @b" }}').options).toEqual([['rows', 'a " @b']])
+    expect(block('{{ a.crv @rows:"x }}').type).toBe('paragraph')
+    expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['code', 'v']] })
     expect(block('{{ "a \\" b.crv" #s }}')).toEqual({ type: 'include', path: 'a " b.crv', section: 's' })
     expect(block('{{ a.crv }}  ')).toEqual({ type: 'include', path: 'a.crv' })
-    expect(render('{{ a.crv plain @k:v }}')).toBe('<p>{{ a.crv plain @k:v }}</p>')
+    expect(render('{{ a.crv   @code:v }}')).toBe('<p>{{ a.crv @code:v }}</p>')
   })
 
   it('a link definition reads a title behind its destination, and one with no destination', () => {
@@ -318,7 +319,7 @@ describe('one-line blocks in detail', () => {
 
   it('a column is authored when the source spells its alignment or its width', () => {
     expect(block('{aligns="left"}\n| a | b |').columns).toEqual([{ type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }])
-    expect(block('{widths=",40"}\n| a | b |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column', width: '40', authored: true }])
+    expect(block('{widths=",40"}\n| a | b |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column', width: 0.4, authored: true }])
   })
 
   it('an inline footnote in a joined cell keeps its content, and text joined from two lines has no position', () => {

@@ -22,8 +22,8 @@ import {
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
-  attributeValueStart, braceBlocksEnd, bulletMarkerEnd, captionContentStart, continuationClosingPipe, decimalValue,
-  descriptionMarkEnd, digitRunEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
+  attributeKeyValue, braceBlocksEnd, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
+  decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, isRawInfo, isThematicBreak, isWord, nextPipe, orderedDelimiter,
@@ -68,7 +68,9 @@ export function scanBlocks(state: BlockState, src: string): void {
     const next = lineEnd + 1
     if (lineEnd > lineStart && src.charCodeAt(lineEnd - 1) === CR) lineEnd--
     addLine(state, lineStart)
-    if (lineStart > 0 || !openFrontmatter(state, lineEnd)) scanLine(state, lineStart, lineEnd)
+    if (lineStart > 0) scanLine(state, lineStart, lineEnd)
+    // C2-B-165: a byte-order mark is skipped before line 1 is read, whatever the line holds.
+    else if (!openFrontmatter(state, lineEnd)) scanLine(state, src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0, lineEnd)
     lineStart = next
   }
   closeTo(state, 1)
@@ -610,7 +612,7 @@ function openFence(state: BlockState, end: number): boolean {
   let flags = isRawInfo(src, info, end) ? FLAG_RAW : 0
   // C2-B-180: a `csv` or `tsv` fence that the `table` attribute marks is a delimited table.
   if (state.takeAttributes && (isWord(src, info, end, 'csv') || isWord(src, info, end, 'tsv'))) {
-    if (attributeValueStart(src, state.attributesStart, state.attributesEnd, 'table') >= 0) flags = FLAG_DELIMITED
+    if (attributeKeyValue(src, state.attributesStart, state.attributesEnd, 'table') !== null) flags = FLAG_DELIMITED
   }
   writeEvent(state, enterTag(state, CODE, flags), state.pos, length)
   openOpaqueLeaf(state, CODE, src.charCodeAt(state.pos), length)
@@ -624,8 +626,8 @@ function openTable(state: BlockState, end: number): boolean {
   if (closing < 0) return false
   state.tableFooterRows = 0
   if (state.takeAttributes) {
-    const value = attributeValueStart(src, state.attributesStart, state.attributesEnd, 'footer-rows')
-    if (value >= 0) state.tableFooterRows = decimalValue(src, value, Math.min(digitRunEnd(src, value, end), value + 4))
+    // C2-B-210: a value that is no count has no effect.
+    state.tableFooterRows = Math.max(0, countValue(attributeKeyValue(src, state.attributesStart, state.attributesEnd, 'footer-rows')))
   }
   writeEvent(state, enterTag(state, TABLE, 0), state.pos, 0)
   state.leaf = TABLE

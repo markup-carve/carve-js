@@ -968,7 +968,8 @@ describe('boundaries pinned by the mutation check', () => {
 
   it('C2-B-139, C2-B-156: a braced comment and a lone brace pair are no attribute line and no include', () => {
     expect(blocks('{% c %}', 'x')).toBe('p"{% c %}|x"')
-    expect(blocks('{{}}', 'x')).toBe('inc"{{}}" p"x"')
+    // C2-B-201: a directive holds a path between spaces.
+    expect(blocks('{{}}', 'x')).toBe('p"{{}}|x"')
     expect(blocks('{{ a }}  ', 'x')).toBe('inc"{{ a }}  " p"x"')
     expect(blocks('{x}}', 'y')).toBe('p"{x}}|y"')
     expect(blocks('{{ a }', 'y')).toBe('p"{{ a }|y"')

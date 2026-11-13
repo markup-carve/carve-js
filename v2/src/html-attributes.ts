@@ -1,7 +1,10 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
 import { type AstNode } from './ast.ts'
+import { addFinding, type Findings } from './diagnostics.ts'
+import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
-import { type Diagnostic, type Resolution } from './resolve.ts'
+import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
+import { type Resolution } from './resolve.ts'
 
 /** The state of one render. */
 export interface Render {
@@ -9,9 +12,9 @@ export interface Render {
   resolution: Resolution
   /** The output, one entry per line. */
   lines: string[]
-  losses: Diagnostic[]
-  /** The titled admonitions written so far, for their label ids. */
-  admonitions: number
+  losses: Findings
+  /** C2-H-163: the `rel` value the profile writes on every link, or the empty string. */
+  linkRel: string
   /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
   linkDepth: number
   abbrDepth: number
@@ -45,6 +48,8 @@ export interface TagParts {
   bare?: boolean
   /** A block element, which carries its source line under `sourceLines` (C2-H-016). */
   block?: boolean
+  /** The node of the tree a loss is reported on, where the node given is a copy of it. */
+  origin?: AstNode
 }
 
 // C2-H-115: the reserved names of the carriers.
@@ -54,14 +59,18 @@ const CARRIERS = new Set([
   'data-carve-abbreviations', 'data-carve-label', 'data-carve-tight', 'data-carve-xref', 'data-carve-caption-number',
   'data-carve-div', 'data-carve-line-block', 'data-carve-src',
 ])
-const BLOCKED_NAMES = new Set(['srcdoc', 'formaction'])
-const CSS_NEEDLES = ['expression(', 'url(', '@import', 'behavior:', '-moz-binding']
+const DENIED_BY_DEFAULT: ReadonlySet<string> = new Set(DEFAULT_DENIED_SCHEMES)
 const ALIGN_VALUES = ['left', 'right', 'center']
 const SPACE_CODE = 32
 const GREATER_CODE = 62
 const NO_BREAK_SPACE_CODE = 0xa0
 const DELETE_CODE = 0x7f
-const C1_END = 0x9f
+const COLON_CODE = 58
+const COMMA_CODE = 44
+const BACKSLASH_CODE = 92
+const MAX_ESCAPE_DIGITS = 6
+const MAX_CODE_POINT = 0x10ffff
+const REPLACEMENT = '\ufffd'
 
 /** C2-H-002: the three markup characters and the no-break space. */
 export function escapeText(text: string): string {
@@ -105,33 +114,40 @@ export function escapeAttribute(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
-export function loss(r: Render, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
-  r.losses.push({ code, severity, channel: 'render-loss', message })
+/** C2-H-132: a render loss on `node`, or on the document when it is null. */
+export function loss(r: Render, node: AstNode | null, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
+  addFinding(r.losses, node, { code, severity, channel: 'render-loss', message })
+}
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
 }
 
 function isSchemeCharacter(code: number): boolean {
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 43 || code === 45 || code === 46
+  return isAsciiLetter(code) || (code >= 48 && code <= 57) || code === 43 || code === 45 || code === 46
 }
 
-/** A reader drops control characters and whitespace before it reads a scheme, so they are skipped here. */
-function isIgnoredInScheme(code: number): boolean {
-  return code <= SPACE_CODE || (code >= DELETE_CODE && code <= C1_END) || code === 0xa0 || code === 0x2028 || code === 0x2029
+/** C2-H-159: a character that is removed from a destination before its scheme is read. */
+function isProbeRemoved(code: number): boolean {
+  if (code > SPACE_CODE && code < DELETE_CODE) return false
+  for (const [from, to] of PROBE_REMOVED) if (code >= from && code <= to) return true
+  return false
 }
 
-/** The scheme of `url` in lower case, or the empty string when it has none. */
+/** C2-H-159: the scheme of `url` in lower case, or the empty string when it has none. */
 function schemeOf(url: string): string {
   let scheme = ''
   for (let at = 0; at < url.length; at++) {
     const code = url.charCodeAt(at)
-    if (code === 58) return scheme === '' || !/[a-z]/.test(scheme[0]!) ? '' : scheme
-    if (isIgnoredInScheme(code)) continue
-    if (!isSchemeCharacter(code)) return ''
+    if (isProbeRemoved(code)) continue
+    if (code === COLON_CODE) return scheme
+    if (scheme === '' ? !isAsciiLetter(code) : !isSchemeCharacter(code)) return ''
     scheme += url[at]!.toLowerCase()
   }
   return ''
 }
 
-/** C2-H-128: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
+/** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
 export function schemePasses(r: Render, url: string): boolean {
   const scheme = schemeOf(url)
   if (scheme === '') return true
@@ -139,28 +155,93 @@ export function schemePasses(r: Render, url: string): boolean {
   return settings.allowed !== null ? settings.allowed.has(scheme) : !settings.denied!.has(scheme)
 }
 
-/** C2-H-082: a destination the policy denies is written as the empty string, and the denial is reported. */
-export function destination(r: Render, url: string): string {
+/** C2-H-160: a destination the policy denies is written as the empty string, and the denial is reported on `node`. */
+export function destination(r: Render, url: string, node: AstNode): string {
   if (schemePasses(r, url)) return url
-  loss(r, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
+  loss(r, node, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
   return ''
 }
 
-function hasDangerousCss(value: string): boolean {
-  let compact = ''
-  for (const char of value) if (char.trim() !== '') compact += char.toLowerCase()
-  return CSS_NEEDLES.some((needle) => compact.includes(needle))
+/** C2-H-161: true when the text of `value[start, end)` before its first colon is a scheme of the default deny list. */
+function hasDeniedPrefix(value: string, start: number, end: number): boolean {
+  let prefix = ''
+  for (let at = start; at < end; at++) {
+    const code = value.charCodeAt(at)
+    if (code === COLON_CODE) return DENIED_BY_DEFAULT.has(prefix)
+    if (!isProbeRemoved(code)) prefix += value[at]!.toLowerCase()
+  }
+  return false
 }
 
-/** The value of an authored key as it is written: blanked when it holds a denied scheme or a URL function in a style. */
-function keyValue(r: Render, name: string, value: string): string {
-  if (!schemePasses(r, value)) return ''
+function isAsciiWhitespace(code: number): boolean {
+  return code === SPACE_CODE || (code >= 9 && code <= 13 && code !== 11)
+}
+
+/** C2-H-161: true when one entry of a list of URLs fails the test. `commas` also separate entries. */
+function listHasDeniedPrefix(value: string, commas: boolean): boolean {
+  let start = 0
+  for (let at = 0; at <= value.length; at++) {
+    const code = at < value.length ? value.charCodeAt(at) : SPACE_CODE
+    if (!isAsciiWhitespace(code) && !(commas && code === COMMA_CODE)) continue
+    if (hasDeniedPrefix(value, start, at)) return true
+    start = at + 1
+  }
+  return false
+}
+
+function hexValue(code: number): number {
+  if (code >= 48 && code <= 57) return code - 48
+  const lower = code | 32
+  return lower >= 97 && lower <= 102 ? lower - 87 : -1
+}
+
+/** C2-H-162: the character a CSS escape at `at`, behind the backslash, stands for, and the offset behind the escape. */
+function cssEscape(value: string, at: number): [string, number] {
+  let code = 0
+  let p = at
+  while (p < value.length && p - at < MAX_ESCAPE_DIGITS && hexValue(value.charCodeAt(p)) >= 0) code = code * 16 + hexValue(value.charCodeAt(p++))
+  if (p === at) {
+    // A backslash before a line break stands for nothing, and before any other character for that character.
+    const next = value[at] ?? ''
+    return [next === '\n' ? '' : next, at + 1]
+  }
+  // One whitespace character behind the digits belongs to the escape.
+  if (p < value.length && isAsciiWhitespace(value.charCodeAt(p))) p++
+  return [code === 0 || code > MAX_CODE_POINT ? REPLACEMENT : String.fromCodePoint(code), p]
+}
+
+/** C2-H-162: `value` with its CSS escapes decoded, its whitespace removed and its ASCII letters in lower case. */
+function cssProbe(value: string): string {
+  let decoded = ''
+  for (let at = 0; at < value.length;) {
+    if (value.charCodeAt(at) !== BACKSLASH_CODE) {
+      decoded += value[at++]!
+      continue
+    }
+    const [char, next] = cssEscape(value, at + 1)
+    decoded += char
+    at = next
+  }
+  let compact = ''
+  for (const char of decoded) if (char.trim() !== '') compact += char.toLowerCase()
+  return compact
+}
+
+function hasDangerousCss(value: string): boolean {
+  const probe = cssProbe(value)
+  return STYLE_PATTERNS.some((pattern) => probe.includes(pattern))
+}
+
+/** C2-H-161, C2-H-162: the value of an authored key as it is written, which is empty when it fails a test. */
+function keyValue(name: string, value: string): string {
+  const commas = URL_LIST_ATTRIBUTES.get(name)
+  if (commas === undefined ? hasDeniedPrefix(value, 0, value.length) : listHasDeniedPrefix(value, commas)) return ''
   return name === 'style' && hasDangerousCss(value) ? '' : value
 }
 
-/** C2-H-128: event handlers and the injection sinks are removed whatever their value. */
+/** C2-H-161: event handlers and the injection sinks are not written, whatever their value. */
 function isBlockedName(name: string): boolean {
-  return name.startsWith('on') || BLOCKED_NAMES.has(name)
+  return DROPPED_NAMES.includes(name) || DROPPED_PREFIXES.some((prefix) => name.startsWith(prefix))
 }
 
 function withDeclaration(style: string, declaration: string): string {
@@ -206,20 +287,20 @@ function styleDeclarations(keys: [string, string][], parts: TagParts): string {
   return declarations
 }
 
-function addKeys(r: Render, list: AttributeList, keys: [string, string][], parts: TagParts): void {
+function addKeys(r: Render, list: AttributeList, keys: [string, string][], parts: TagParts, origin: AstNode | null): void {
   const declarations = styleDeclarations(keys, parts)
   const hasStyle = keys.some(([key]) => key.toLowerCase() === 'style')
   for (const [key, value] of keys) {
     const name = key.toLowerCase()
     if (isBlockedName(name) || list.has(name)) continue
     if (r.settings.roundtrip && CARRIERS.has(name)) {
-      loss(r, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
+      loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
     } else if (name === 'style') {
-      list.add(key, declarations === '' ? keyValue(r, name, value) : withDeclaration(keyValue(r, name, value), declarations))
+      list.add(key, declarations === '' ? keyValue(name, value) : withDeclaration(keyValue(name, value), declarations))
     } else if (name === 'align' && parts.alignStyle === true && ALIGN_VALUES.includes(value)) {
       if (!hasStyle) list.add('style', declarations)
     } else {
-      list.add(key, keyValue(r, name, value))
+      list.add(key, keyValue(name, value))
     }
   }
   if (declarations !== '') list.add('style', declarations)
@@ -242,7 +323,8 @@ function addAuthored(r: Render, list: AttributeList, node: AstNode | null, parts
   const authored = parts.bare === true ? null : node
   addClasses(list, node, parts)
   if (authored?.lang !== undefined) list.add('lang', authored.lang)
-  addKeys(r, list, authored?.attrs?.keyValues ?? [], parts)
+  const keys = authored?.attrs?.keyValues
+  if (keys !== undefined || parts.style !== undefined) addKeys(r, list, keys ?? [], parts, parts.origin ?? node)
 }
 
 /** C2-H-009: the attributes of one element, each with a leading space. */

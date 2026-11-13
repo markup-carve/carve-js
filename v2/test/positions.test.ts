@@ -51,7 +51,8 @@ describe('the six integers', () => {
   })
 
   it('C2-A-141: a byte-order mark and every carriage return are counted as they stand', () => {
-    expect(placed('﻿a\r\n\r\nb *c*\r\n', 'children.0')).toBe('1:1-1:3@0-4')
+    // C2-B-165: the mark is skipped, so the paragraph starts behind it, and its bytes and its column are counted.
+    expect(placed('﻿a\r\n\r\nb *c*\r\n', 'children.0')).toBe('1:2-1:3@3-4')
     expect(placed('﻿a\r\n\r\nb *c*\r\n', 'children.1.children.1')).toBe('3:3-3:6@10-13')
   })
 
