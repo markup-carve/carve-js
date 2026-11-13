@@ -55,7 +55,7 @@ function sameName(a: string, b: string): boolean {
 }
 
 /** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
-function attributeSink(attributes: Attributes): AttributeSink {
+export function attributeSink(attributes: Attributes): AttributeSink {
   const sink: AttributeSink = {
     id: (name) => {
       attributes.id = name
