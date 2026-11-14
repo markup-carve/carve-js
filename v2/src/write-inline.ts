@@ -368,13 +368,13 @@ function writePart(w: Writer, nodes: readonly Node[], at: number, end: number, f
 }
 
 /**
- * The spelling of `nodes[at, end)` behind `out`. C2-W-069: a bare mark glued to the same mark
+ * The spelling of `nodes[at, end)` behind the character `before`. C2-W-069: a bare mark glued to the same mark
  * before it makes one run and opens nothing, so the node is braced.
  */
-function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, out: string): string {
+function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, before: number): string {
   const node = nodes[at]!
   const part = writePart(w, nodes, at, end, flags)
-  if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.startsWith('{') || !out.endsWith(part[0]!)) return part
+  if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
   w.forms.set(node, 1)
   return writePart(w, nodes, at, end, flags)
 }
@@ -383,20 +383,27 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
   let lineStart = true
+  // The last character of `out`, kept apart for the same reason.
+  let last = -1
   for (let at = 0; at < nodes.length;) {
     const node = nodes[at]!
     // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
-    if (node.type === 'comment' && node.form !== 'braced' && !lineStart) out += ' '
+    if (node.type === 'comment' && node.form !== 'braced' && !lineStart) {
+      out += ' '
+      last = SPACE
+    }
     // C2-L-021: a fragment of a continuation row starts at this node; the joining space is the line break.
     if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) {
       out = `${out.endsWith(' ') ? out.slice(0, -1) : out}\n`
       lineStart = true
+      last = 10
     }
     const end = partEnd(w, nodes, at)
     if (node.type === 'text') doubleLastBackslash(w, node, nodes, end, flags)
-    const part = gluedPart(w, nodes, at, end, flags, out)
+    const part = gluedPart(w, nodes, at, end, flags, last)
     out += part
-    if (part !== '') lineStart = part.charCodeAt(part.length - 1) === 10
+    last = part === '' ? last : part.charCodeAt(part.length - 1)
+    lineStart = last === 10 || (lineStart && part === '')
     at = end
   }
   return out
