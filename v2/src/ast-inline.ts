@@ -20,7 +20,7 @@ import type { BlockNode } from './tree.ts'
 
 /**
  * One open inline node while its events are read. `value` is the text of a node without children
- * and the alt source of an image. `label` is the key of a reference (C2-I-079), and `aux` of a
+ * and the alt source of an image. `key` is the folded label of a reference (C2-I-079), and `aux` of a
  * reference is the offset behind its label.
  */
 export interface InlineFrame {
@@ -35,7 +35,7 @@ export interface InlineFrame {
   spanned: boolean
   destination: string | null
   title: string | null
-  label: string | null
+  key: string | null
   attributes: Attributes | null
 }
 
@@ -120,7 +120,7 @@ function referenceForm(node: InlineFrame): 'collapsed' | 'full' {
 /** C2-A-105, C2-A-107: an image, its target direct or by reference. */
 function imageNode(node: InlineFrame): ImageNode {
   if ((node.flags & FLAG_REFERENCE) !== 0) {
-    return { type: 'image', key: node.label ?? '', namespace: 'link', form: referenceForm(node), alt: node.value }
+    return { type: 'image', key: node.key ?? '', namespace: 'link', form: referenceForm(node), alt: node.value }
   }
   const out: ImageNode = { type: 'image', src: node.destination ?? '' }
   if (node.title !== null) out.tooltip = node.title
@@ -131,7 +131,7 @@ function imageNode(node: InlineFrame): ImageNode {
 /** C2-A-105, C2-A-107: a link, its target direct or by reference. */
 function linkNode(node: InlineFrame, children: Inline[]): LinkNode {
   if ((node.flags & FLAG_REFERENCE) !== 0) {
-    return { type: 'link', key: node.label ?? '', namespace: 'link', form: referenceForm(node), children }
+    return { type: 'link', key: node.key ?? '', namespace: 'link', form: referenceForm(node), children }
   }
   const href = node.destination ?? ''
   return node.title === null ? { type: 'link', href, children } : { type: 'link', href, tooltip: node.title, children }
@@ -278,16 +278,16 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
     host.title = unescape(value, 0, value.length)
   } else if ((host.flags & FLAG_COLLAPSED) !== 0) {
     // C2-I-072: the label of a collapsed reference is the source of its own text.
-    host.label = foldLabel(contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))
+    host.key = foldLabel(contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))
   } else {
-    host.label = foldLabel(value)
+    host.key = foldLabel(value)
   }
 }
 
 function openFrame(kind: number, start: number, flags: number, aux: number): InlineFrame {
   return {
     kind, start, end: start, flags, aux, children: isInlineContainer(kind) ? [] : null,
-    value: '', spanned: false, destination: null, title: null, label: null, attributes: null,
+    value: '', spanned: false, destination: null, title: null, key: null, attributes: null,
   }
 }
 
