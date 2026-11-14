@@ -1,6 +1,6 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, parse, render, stringOffsetOfByte, utf8Length, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, format, parse, render, stringOffsetOfByte, utf8Length, write, writeWithDiagnostics } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
@@ -156,5 +156,27 @@ describe('option values', () => {
     expect(() => render('x', { social: { mentionUrl: 1 } } as never)).toThrow(CarveOptionError)
     expect(() => render('x', { social: { other: '' } } as never)).toThrow(CarveOptionError)
     expect(render('x', { symbols: {}, labels: {}, social: null })).toBe('<p>x</p>')
+  })
+})
+
+describe('the spelling of an include directive', () => {
+  it('C2-B-202, C2-W-058: a path is bare where the bare form holds it, an apostrophe included', () => {
+    expect(format("{{ a'b.crv }}\n")).toBe("{{ a'b.crv }}\n")
+    expect(format('{{ "a b.crv" }}\n')).toBe('{{ "a b.crv" }}\n')
+    expect(format('{{ "a#b.crv" }}\n')).toBe('{{ "a#b.crv" }}\n')
+    expect(format('{{ a\\b.crv }}\n')).toBe('{{ a\\b.crv }}\n')
+  })
+
+  it('C2-H-171, C2-W-058: the renderer shows the directive as the writer writes it', () => {
+    for (const source of ["{{ a'b.crv }}", '{{ "a b.crv" }}', '{{ a.crv #s @lines:1-2 @code }}', '{{ a.crv @lines:"1 - 2" }}', '{{ a.crv @lines:1"2 }}']) {
+      expect(render(source)).toBe(`<p>${format(source).trimEnd()}</p>`)
+    }
+    expect(format('{{ a.crv @lines:1"2 }}')).toBe('{{ a.crv @lines:1"2 }}\n')
+  })
+
+  it('C2-B-204: a value that starts with a quote is written in quotes, so it reads back as the same value', () => {
+    const tree = JSON.stringify({ type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', options: [['lines', "'1"]] }] })
+    expect(write(decodeTree(tree))).toBe('{{ a.crv @lines:"\'1" }}\n')
+    expect(parse(write(decodeTree(tree))).children[0]).toMatchObject({ options: [['lines', "'1"]] })
   })
 })

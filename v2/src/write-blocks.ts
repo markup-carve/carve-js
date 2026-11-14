@@ -8,6 +8,7 @@ import {
   type ParagraphNode, type RawBlockNode, type TableNode,
 } from './ast.ts'
 import { plainText } from './ast-text.ts'
+import { includeSource } from './include.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
@@ -180,41 +181,12 @@ function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): v
   textLeaf(w, node, prefix, flags, `${'='.repeat(level)} `, ' '.repeat(level + 1))
 }
 
-function isBarePath(path: string): boolean {
-  if (path === '') return false
-  for (const char of path) if (' \t#@{}"\'\\'.includes(char)) return false
-  return true
-}
-
-const INCLUDE_OPTIONS: readonly string[] = ['lines', 'region', 'rows', 'cols', 'shift', 'code']
-
-function optionRank(name: string): number {
-  const rank = INCLUDE_OPTIONS.indexOf(name)
-  return rank < 0 ? INCLUDE_OPTIONS.length : rank
-}
-
-function includeOption(pair: readonly [string, string]): string {
-  const [key, value] = pair
-  // C2-A-181: a part that is no option is kept as its text.
-  if (key === '') return value
-  if (value === '') return `@${key}`
-  // C2-W-058: a list of column names kept its quotes and gets no second pair.
-  const stored = key === 'cols' && value.startsWith('"')
-  return `@${key}:${!stored && (value.includes(' ') || value.includes('"')) ? quoted(value) : value}`
-}
-
-/** C2-W-058: one space inside each brace pair and between the parts: the path, the section, the options. */
+/** C2-W-058: an include directive in the spelling the renderer shows too (C2-H-171). */
 function include(w: Writer, node: IncludeNode, prefix: string): void {
-  const path = node.path
   attributeLine(w, node, prefix)
-  if (path.includes('\n')) lose(w, node, 'path')
-  let out = `{{ ${isBarePath(path) ? path : `"${path.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`}`
-  const section = node.section
-  if (section !== undefined) out += ` #${section}`
-  // C2-W-058: the six options in the order of the directive grammar, then every other option in the order of the node.
-  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
-  for (const pair of options) out += ` ${includeOption(pair)}`
-  emit(w, prefix, `${out} }}`)
+  // C2-B-202, C2-W-117: an empty path and a path with a line break have no spelling.
+  if (node.path === '' || node.path.includes('\n')) lose(w, node, 'path')
+  emit(w, prefix, includeSource(node))
 }
 
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */

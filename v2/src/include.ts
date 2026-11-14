@@ -276,18 +276,30 @@ function quoted(value: string): string {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
-const BARE_PATH_ENDS = [' ', '#', '@', '}', '"', '“']
-const BARE_VALUE_ENDS = [' ', '\t', '@', '}']
+/** C2-B-202, C2-W-058: whether `path` is written bare, which holds where it reads back as the same path. */
+function isBarePath(path: string): boolean {
+  if (path === '') return false
+  for (let at = 0; at < path.length; at++) if (endsBarePath(path.charCodeAt(at))) return false
+  return true
+}
 
-function holdsAny(value: string, characters: readonly string[]): boolean {
-  return characters.some((character) => value.includes(character))
+/**
+ * C2-B-204, C2-H-171: whether an option value is written bare. A bare value holds no space, tab, `@` or `}`, and
+ * does not start with a quote, which would open a quoted value.
+ */
+function isBareValue(value: string): boolean {
+  if (isQuote(value.charCodeAt(0))) return false
+  for (let at = 0; at < value.length; at++) if (endsValue(value.charCodeAt(at))) return false
+  return true
 }
 
 /** One option of a directive: the key alone for no value, and a value quoted where the bare form does not hold it. */
 function includeOption(name: string, value: string): string {
+  // C2-A-181: a part of a supplied tree that is no option is kept as its text.
+  if (name === '') return value
   if (value === '') return `@${name}`
   // C2-A-181: a list of column names keeps the quotes it was written in.
-  const bare = !holdsAny(value, BARE_VALUE_ENDS) || (name === 'cols' && value.startsWith('"'))
+  const bare = (name === 'cols' && value.startsWith('"')) || isBareValue(value)
   return `@${name}:${bare ? value : quoted(value)}`
 }
 
@@ -298,10 +310,10 @@ function optionRank(name: string): number {
   return rank < 0 ? OPTION_ORDER.length : rank
 }
 
-/** C2-H-133, C2-H-171: the source text of an include directive, as the renderer writes it, written as in C2-W-058. */
+/** C2-W-058, C2-H-133, C2-H-171: the one spelling of an include directive, which the writer writes and the renderer shows. */
 export function includeSource(node: IncludeNode): string {
   const path = node.path
-  const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
+  const parts = [isBarePath(path) ? path : quoted(path)]
   if (node.section !== undefined) parts.push(`#${node.section}`)
   // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.
   const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
