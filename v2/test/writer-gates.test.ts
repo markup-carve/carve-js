@@ -4,8 +4,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LINE_SHAPES } from './support/enumerate.ts'
-import { INLINE_TOKENS } from './support/inline-enumerate.ts'
-import { checkWriter, enumerateWriter } from './support/writer-checks.ts'
+import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
+import { checkWriter, enumerateWriter, randomWriter, seededRandom } from './support/writer-checks.ts'
 
 interface Example {
   file: string
@@ -31,5 +31,20 @@ describe('the gates of the writer', () => {
 
   it('C2-W-016: a code span whose later line would open a block is refused, not written wrong', () => {
     expect(checkWriter('  - a\n- ```\n- a')).toBe('refused')
+  })
+})
+
+describe('the gates of the writer on its own token alphabet', () => {
+  it('C2-W-002, C2-W-003: every content of up to 2 writer tokens, escaped backticks, escaped delimiters and code spans included', () => {
+    for (const tokens of [1, 2]) expect(enumerateWriter(WRITER_TOKENS, tokens, '', 'x').failures).toEqual([])
+  })
+
+  it('C2-W-002, C2-W-003: a seeded random run of contents and documents', () => {
+    const contents = randomWriter(2000, seededRandom(1), (random) => {
+      let out = 'x'
+      for (let count = 5 + Math.floor(random() * 5); count > 0; count--) out += WRITER_TOKENS[Math.floor(random() * WRITER_TOKENS.length)]!
+      return out
+    })
+    expect(contents.failures).toEqual([])
   })
 })

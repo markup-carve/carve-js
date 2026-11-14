@@ -7,6 +7,12 @@ export const INLINE_TOKENS = [
   '{*', '*}', '{/', '/}', '{-', '-}', '{=', '=}', '{%', '%}', '{#', '#}', '%%', '<a:b>', '<', '@', '-', '"', "'", '|',
 ] as const
 
+/**
+ * The tokens of the writer gates: the inline tokens, an escaped backtick, an escaped delimiter of
+ * each kind and a code span, which the escapes of the writer must keep apart from what stands beside them.
+ */
+export const WRITER_TOKENS: readonly string[] = [...INLINE_TOKENS, '\\`', ...[...'*/_~=^,+-'].map((mark) => `\\${mark}`), '`a`']
+
 export interface InlineEnumerationResult {
   contents: number
   failures: string[]

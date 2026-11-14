@@ -253,6 +253,7 @@ type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) 
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   escapeInside,
+  (c, es, i) => escapeContentConstruct(c, es[i]!),
   (c, es, i, attempt) => {
     if (!hasOtherForm(c, es[i]!)) return false
     for (const escape of attempt.escapes) {
@@ -267,6 +268,24 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeInside,
   (c, es, i) => escapeInContent(c, es[i]!),
 ]
+
+/**
+ * C2-W-088: the content of `e`, written and parsed on its own, holds a construct that the tree
+ * does not, such as a code span that runs on over the closing mark of `e`. The opener of the
+ * leftmost one takes the backslash. A content that does not read as one paragraph tells nothing.
+ */
+function escapeContentConstruct(c: Check, e: Node): boolean {
+  if (!('children' in e) || e.children.length === 0) return false
+  // The probe has its own attempts and losses, so what it finds in the content stays out of this round.
+  const probe = createCheck({ ...c.w, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) })
+  probe.flags = c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : 0)
+  const parsed = parseChunk(`${writeInlines(probe.w, e.children, probe.flags)}\n`, c.w.abbreviations).children
+  const block = parsed[0]
+  if (parsed.length !== 1 || block?.type !== 'paragraph') return false
+  compareInlines(probe, e.children, block.children, e)
+  for (const [node, at] of probe.escapes) if (escapeAt(c, node, at)) return true
+  return false
+}
 
 /** How far behind the start of the construct `a` its opener takes the backslash (C2-W-090, C2-W-099). */
 function openerShift(a: Node): number {
@@ -446,10 +465,17 @@ function skipConstruct(c: Check, e: TextNode, a: Node, at: Cursor): boolean {
 function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Node): boolean {
   const next = textAt(es, i + 1)
   if (next !== null && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
+  // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
+  if (next !== null && next.value.startsWith('`') && endsInRun(e) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   if (next !== null && escapeAt(c, next, 0)) return true
   const before = textAt(es, i - 1)
   return before !== null && escapeAt(c, before, before.value.length - 1)
+}
+
+/** Whether the spelling of `node` ends in the closing backtick run of a code span. */
+function endsInRun(node: Node): boolean {
+  return (node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && node.attrs === undefined
 }
 
 function textAt(nodes: readonly Node[], at: number): TextNode | null {

@@ -1,6 +1,6 @@
 // What one run of the writer holds (spec/0.2/writer.md): the lines written so far, the escapes
 // and spellings the reparse asked for (C2-W-089), the facts of the sidecar and the losses.
-import { type Node, type ParagraphNode, type TextNode } from './ast.ts'
+import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
@@ -50,13 +50,15 @@ export interface Writer {
   kindsBelow: Map<Node, number>
   /** C2-I-098: the expansion of each term the document defines. */
   abbreviations: Map<string, string>
+  /** The parse of the group of blocks as it was last written (C2-W-089). */
+  parsed: DocumentNode | null
 }
 
 export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean): Writer {
   return {
     lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
-    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(),
+    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), parsed: null,
   }
 }
 

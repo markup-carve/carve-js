@@ -461,3 +461,84 @@ export function enumerateWriter(
     choice[at]!++
   }
 }
+
+export interface GateResult {
+  /** A gate that failed, or null. */
+  failure: string | null
+  /** The losses the writer reported (C2-W-011), or null where it reported none. */
+  losses: string | null
+  refused: boolean
+}
+
+/**
+ * The gates alone, without the slow reference of C2-W-088: a written form that the writer reports
+ * no loss for parses to the tree (C2-W-002), writing its parse again gives the same bytes
+ * (C2-W-003), and formatting the formatted source gives the same bytes. A reported loss is no
+ * failure of a gate; it is returned apart, since only some trees have no spelling (C2-W-011).
+ */
+export function checkGates(src: string): GateResult {
+  const tree = parse(src)
+  const formatted = formatWithDiagnostics(src)
+  const found = formatted.diagnostics.filter((entry) => entry.channel === 'render-loss')
+  const refused = isRefusal(tree, found)
+  const named = found.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
+  const losses = found.length === 0 || refused ? null : `the writer reports ${named}`
+  return { failure: refused ? null : gateFailure(tree, formatted.source, found.length > 0), losses, refused }
+}
+
+function gateFailure(tree: DocumentNode, source: string, lossy: boolean): string | null {
+  if (!lossy && !treesEqual(tree, parse(source))) return `C2-W-002, ${show(source)} parses to another tree and no loss is reported`
+  const again = format(source)
+  if (again !== source) return `format(format(x)) is ${show(again)}, format(x) is ${show(source)}`
+  const plain = write(tree)
+  const rewritten = write(parse(plain))
+  return rewritten === plain ? null : `C2-W-003, ${show(plain)} is written again as ${show(rewritten)}`
+}
+
+/** A seeded generator of numbers in [0, 1), so that a failing run can be repeated (mulberry32). */
+export function seededRandom(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+export interface RandomRunResult {
+  documents: number
+  refused: number
+  failures: string[]
+  failureCount: number
+  losses: string[]
+  lossCount: number
+}
+
+/** Checks `count` sources that `build` makes from the generator, with `checkGates`. */
+export function randomWriter(
+  count: number, random: () => number, build: (random: () => number) => string, maxReported = MAX_REPORTED,
+): RandomRunResult {
+  const result: RandomRunResult = { documents: 0, refused: 0, failures: [], failureCount: 0, losses: [], lossCount: 0 }
+  for (let at = 0; at < count; at++) {
+    const src = build(random)
+    result.documents++
+    let gates: GateResult
+    try {
+      gates = checkGates(src)
+    } catch (error) {
+      gates = { failure: `threw ${String(error)}`, losses: null, refused: false }
+    }
+    if (gates.refused) result.refused++
+    if (gates.failure !== null) {
+      result.failureCount++
+      if (result.failures.length < maxReported) result.failures.push(`${show(src)}: ${gates.failure}`)
+    }
+    if (gates.losses !== null) {
+      result.lossCount++
+      if (result.losses.length < maxReported) result.losses.push(`${show(src)}: ${gates.losses}`)
+    }
+  }
+  return result
+}

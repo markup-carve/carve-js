@@ -343,7 +343,13 @@ function writeInline(w: Writer, node: Node, flags: number): string {
 /** The source of a list of inline nodes. */
 /** The end of the part that starts at `nodes[at]`: a run of code spans, or the node alone. */
 function partEnd(w: Writer, nodes: readonly Node[], at: number): number {
-  return nodes[at]!.type === 'code' && nodes[at + 1]?.type === 'code' ? codeRunEnd(w, nodes, at) : at + 1
+  return joinsNextCode(nodes, at) ? codeRunEnd(w, nodes, at) : at + 1
+}
+
+/** C2-W-112: the code span `nodes[at]` has the code span behind it glued to it, with no attribute block between. */
+function joinsNextCode(nodes: readonly Node[], at: number): boolean {
+  const node = nodes[at]!
+  return node.type === 'code' && braceBlock(node) === '' && nodes[at + 1]?.type === 'code'
 }
 
 /** The written form of the part `nodes[at..end)`. */
@@ -388,7 +394,7 @@ export function writeContent(w: Writer, nodes: readonly Node[], flags: number): 
 /** C2-W-112: the end of the run of code spans that starts at `from`. Each span behind the first is reported. */
 function codeRunEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
-  while (end < nodes.length && nodes[end]!.type === 'code') lose(w, nodes[end++]!, null)
+  while (joinsNextCode(nodes, end - 1)) lose(w, nodes[end++]!, null)
   return end
 }
 
@@ -399,5 +405,6 @@ function codeRun(nodes: readonly Node[], from: number, end: number): string {
     const node = nodes[at]
     if (node?.type === 'code') value += node.value
   }
-  return codeSpan(value) + braceBlock(nodes[from]!)
+  // Only the last span of the run can have an attribute block, which then stands behind the run.
+  return codeSpan(value) + braceBlock(nodes[end - 1]!)
 }

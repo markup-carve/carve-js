@@ -299,6 +299,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
  */
 function writeGroup(w: Writer, document: DocumentNode, from: number, first: boolean): number {
   const nodes = document.children
+  const reported = w.losses.entries.length
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
@@ -306,7 +307,26 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     w.lead = null
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
-    if (w.lines.length === 0 || !settle(w, document, group, first)) return end
+    if (w.lines.length === 0) return end
+    if (!settle(w, document, group, first)) {
+      if (w.losses.entries.length === reported) reportUnread(w, group)
+      return end
+    }
+  }
+}
+
+/**
+ * C2-W-002, C2-W-011: the finished group is compared with its blocks once more. A block that the
+ * comparison of the rounds let pass and that reads back as another tree is reported as a loss, so
+ * no output reads back differently without a report.
+ */
+function reportUnread(w: Writer, group: readonly Node[]): void {
+  const parsed = w.parsed?.children ?? []
+  for (let at = 0; at < Math.max(group.length, parsed.length); at++) {
+    const block = parsed[at]
+    if (block !== undefined && at < group.length && treesEqual(group[at]!, block)) continue
+    lose(w, group[Math.min(at, group.length - 1)]!, null)
+    return
   }
 }
 
@@ -314,6 +334,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   const parsed = parseChunk(source, w.abbreviations)
+  w.parsed = parsed
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
   return check

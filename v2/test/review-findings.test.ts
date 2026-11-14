@@ -283,3 +283,36 @@ describe('the depth cap over blocks and inlines together', () => {
     expect(inQuotes(198, [':: t', ': d'])[0]!.children.map((node) => node.type)).toEqual(['definition_term', 'definition_description'])
   })
 })
+
+describe('writer output that read back as another tree', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-W-002, C2-W-003: a backtick in emphasis keeps its escape, so the emphasis stays bare and reads back', () => {
+    const source = `/${BACKSLASH}${BACKTICK}:/`
+    expect(format(source)).toBe(`${source}\n`)
+    expect(format(`*${BACKSLASH}${BACKTICK}:*`)).toBe(`*${BACKSLASH}${BACKTICK}:*\n`)
+    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-002, C2-W-003: a backtick behind a code span is escaped, so the span does not take it', () => {
+    const source = `${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}`
+    expect(format(source)).toBe(`${source}\n`)
+    expect(format(`${source}b`)).toBe(`${source}b\n`)
+    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-112: a code span with an attribute block is not joined to the code span behind it', () => {
+    const source = `x${BACKTICK}a${BACKTICK}{.c}${BACKTICK}a${BACKTICK}`
+    expect(format(source)).toBe(`${source}\n`)
+    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-011: an output that reads back as another tree always carries a report', () => {
+    for (const source of ['a\r', `${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}`, `/${BACKSLASH}${BACKTICK}:/`]) {
+      const output = writeWithDiagnostics(parse(source))
+      const tree = (text: string): string => JSON.stringify(parse(text, { positions: false }).children)
+      const same = tree(output.source) === tree(source)
+      expect(same || output.diagnostics.length > 0).toBe(true)
+    }
+  })
+})
