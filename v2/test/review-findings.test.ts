@@ -609,3 +609,28 @@ describe('every option is checked against its declared type first', () => {
     expect(() => parse('x', { extensions: [{ name: 'a.b' }] })).toThrow('option extensions: not offered by this engine')
   })
 })
+
+describe('what the random writer gate found after the third review', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-W-088: a construct that runs on over the closing mark of emphasis takes its escape, so the bare form stays', () => {
+    for (const source of [`/^${BACKSLASH}[/}]`, `/${BACKSLASH}:n[/}]`, `/${BACKSLASH}[^*/.]`, `{=^${BACKSLASH}[=}*]`]) {
+      expect(format(source)).toBe(`${source}\n`)
+    }
+  })
+
+  it('C2-W-088: a content that needs one escape after another takes them all', () => {
+    expect(format(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*`)).toBe(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*\n`)
+    expect(format(`{- |${BACKSLASH}${BACKTICK}a-}`)).toBe(`{- |${BACKSLASH}${BACKTICK}a-}\n`)
+  })
+
+  it('C2-W-016: a CR behind spaces at the end of a line, and a line of only a CR, are refused at the text', () => {
+    const codes = (source: string): string[] => formatWithDiagnostics(source).diagnostics.filter((entry) => entry.channel === 'render-loss').map((entry) => entry.code)
+    expect(codes('a \r')).toEqual(['field-unspellable'])
+    expect(codes('a\n\r')).toEqual(['field-unspellable'])
+  })
+
+  it('C2-W-088: a bracket run stops at a bracket of another opener', () => {
+    expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
+  })
+})

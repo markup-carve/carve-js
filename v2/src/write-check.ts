@@ -307,6 +307,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeContentConstruct(c, es[i]!),
+  escapeAcrossCloser,
   escapeInside,
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
@@ -326,29 +327,109 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeInContent(c, es[i]!),
 ]
 
+/** The flags the content of `e` is written with. */
+function contentFlags(c: Check, e: Node): number {
+  return c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : 0)
+}
+
+// The rounds of one probe: past it, the step runs again in the next round of the writer.
+const MAX_PROBE_ROUNDS = 32
+
+/**
+ * C2-W-088 on the inlines `expected` of `e` written and parsed on their own: while the parse holds a
+ * construct that the tree does not, the opener of the leftmost one takes the backslash and they are
+ * parsed again. The escapes that `takes` accepts go to `c` as escapes of this round. Null where the
+ * inlines do not read as one paragraph, which tells nothing; otherwise whether an escape was asked for.
+ */
+type Takes = (node: TextNode, at: number) => boolean
+
+function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: number, takes: Takes = () => true): boolean | null {
+  // The probe has its own attempts, losses and escapes, so what it finds stays out of this round until it is taken over.
+  const w = { ...c.w, escapes: new Map(c.w.escapes), attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) }
+  let found = false
+  for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
+    const source = `${writeInlines(w, expected, flags)}\n`
+    const parsed = parseChunk(source, c.w.abbreviations).children
+    const block = parsed[0]
+    if (parsed.length !== 1 || block?.type !== 'paragraph') return round === 0 ? null : found
+    const probe = createCheck(w)
+    probe.flags = flags
+    probe.source = source
+    compareInlines(probe, expected, block.children, e)
+    extendChains(probe)
+    const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
+    if (taken.length === 0) return found
+    found = true
+    for (const [node, at] of taken) w.escapes.set(node, [...(w.escapes.get(node) ?? []), at].sort((x, y) => x - y))
+  }
+  return found
+}
+
 /**
  * C2-W-088: the content of `e`, written and parsed on its own, holds a construct that the tree
  * does not, such as a code span that runs on over the closing mark of `e`. The opener of the
- * leftmost one takes the backslash. A content that does not read as one paragraph tells nothing.
+ * leftmost one takes the backslash, then that of the next. A content that does not read as one
+ * paragraph tells nothing.
  */
 function escapeContentConstruct(c: Check, e: Node): boolean {
   if (!('children' in e) || e.children.length === 0) return false
-  // The probe has its own attempts and losses, so what it finds in the content stays out of this round.
-  const probe = createCheck({ ...c.w, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) })
-  probe.flags = c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : 0)
   // A content that opens a block on its own line is read again behind a word, which opens none, and
   // then with its line breaks as spaces, so that no later line opens one either.
   const word: Node = { type: 'text', value: 'x' }
   const flat = e.children.map((node): Node => (node.type === 'soft_break' ? { type: 'text', value: ' ' } : node))
   for (const expected of [e.children, [word, ...e.children], [word, ...flat]]) {
-    const parsed = parseChunk(`${writeInlines(probe.w, expected, probe.flags)}\n`, c.w.abbreviations).children
-    const block = parsed[0]
-    if (parsed.length !== 1 || block?.type !== 'paragraph') continue
-    compareInlines(probe, expected, block.children, e)
-    for (const [node, at] of probe.escapes) if (escapeAt(c, node, at)) return true
-    return false
+    const found = probeEscapes(c, e, expected, contentFlags(c, e))
+    if (found !== null) return found
   }
   return false
+}
+
+/**
+ * C2-W-088: a construct that opens in the content of the paired node `es[i]` and runs on over its
+ * closing mark into the inlines behind it, as `^[` in emphasis before a `]` behind it, keeps the
+ * node from forming. The content, the closing mark as text and the inlines behind it are probed together.
+ */
+function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  if (!isPairedMark(e) || !textsBelow(e).some((text) => opensAcross(text.value))) return false
+  const flags = contentFlags(c, e)
+  const spelled = writeInlines(c.w, [e], c.flags)
+  const content = writeInlines(c.w, e.children, flags)
+  const closer: Node = { type: 'text', value: spelled.slice(spelled.length - (spelled.length - content.length) / 2) }
+  const word: Node = { type: 'text', value: 'x' }
+  let end = i + 1
+  while (end < es.length && end - i <= MAX_ACROSS && !isBreak(es[end])) end++
+  const inlines = [...e.children, closer, ...es.slice(i + 1, end)]
+  // The stand-ins for markup take no escape, and neither does a mark of the node in its content,
+  // which asks for the braced form instead (C2-W-069).
+  const mark = CLOSING_MARKS.get(e.type)
+  const own = new Set(textsBelow(e))
+  const takes = (node: TextNode, at: number): boolean => node !== closer && node !== word && !(own.has(node) && node.value[at] === mark)
+  // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
+  return probeEscapes(c, e, inlines, flags, takes) === true || probeEscapes(c, e, [word, ...inlines], flags, takes) === true
+}
+
+// The inlines behind a node that a probe across its closing mark reads, at most.
+const MAX_ACROSS = 16
+
+/** Whether `value` holds the opener of a construct that can run on over a closing mark: a bracket, a backtick, `<`, `{`, `$` or `:`. */
+function opensAcross(value: string): boolean {
+  for (const opener of '[`<{$:') if (value.includes(opener)) return true
+  return false
+}
+
+/** The text nodes below `node`. */
+function textsBelow(node: Node): TextNode[] {
+  return childNodes(node).flatMap((child) => (child.type === 'text' ? [child] : textsBelow(child)))
+}
+
+// The nodes spelled with one mark before and one after their content, or with a brace around those marks.
+const PAIRED_MARKS: readonly string[] = [
+  'emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete',
+]
+
+function isPairedMark(node: Node): node is Node & { children: Node[] } {
+  return PAIRED_MARKS.includes(node.type) && 'children' in node
 }
 
 /**
