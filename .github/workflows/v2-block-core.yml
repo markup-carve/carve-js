@@ -132,6 +132,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run test:lint:v2
 
       # Every example of the block chapter, the inline chapter and the HTML document, rendered and
       # compared byte for byte. Prints the number per document and per label, and fails when an
