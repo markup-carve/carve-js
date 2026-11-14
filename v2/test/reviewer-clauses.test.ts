@@ -64,3 +64,20 @@ describe('list markers in prose', () => {
     expect(format('. . . and then silence')).toBe('. . . and then silence\n')
   })
 })
+
+describe('smart typography', () => {
+  it('C2-I-117: the plus-minus sign needs its exact run', () => {
+    expect(render('C++-style')).toBe('<p>C++-style</p>')
+    expect(render('x+-+')).toBe('<p>x+-+</p>')
+    expect(render('a +-- b')).toBe('<p>a +– b</p>')
+    expect(render('5 +- 1')).toBe('<p>5 ± 1</p>')
+    expect(render('*a*+- b')).toBe('<p><strong>a</strong>± b</p>')
+    expect(format('C++-style')).toBe('C++-style\n')
+  })
+
+  it('C2-I-108: the word n is exempt, so it keeps both apostrophes', () => {
+    expect(render("Rock 'n' roll")).toBe('<p>Rock ’n’ roll</p>')
+    expect(render("Rock 'N' roll")).toBe('<p>Rock ’N’ roll</p>')
+    expect(render("say 'em' now")).toBe('<p>say ‘em’ now</p>')
+  })
+})

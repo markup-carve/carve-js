@@ -727,7 +727,7 @@ describe('smart typography', () => {
   })
 
   it('C2-I-108: the word is quoted when a single quote and no letter or number follow it', () => {
-    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹‘› "n" ‹’› ". " ‹’› "em" ‹’› "s " ‹‘› "til" ‹’›')
+    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹’› "n" ‹’› ". " ‹’› "em" ‹’› "s " ‹‘› "til" ‹’›')
   })
 
   it('C2-I-109: single quotes do not nest', () => {

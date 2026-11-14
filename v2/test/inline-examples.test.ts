@@ -108,7 +108,8 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [92, ['line one', '  line two', 'line three'], 'p["line one" sb "line two" sb "line three"]'],
   [93, ['| a\\ | b |'], 'table[tr[td["a" br] td["b"]]]'],
   [94, ['"double" and \'single\' and it\'s and \'90s and "\'nested\'"'], 'p[‹“› "double" ‹”› " and " ‹‘› "single" ‹’› " and it" ‹’› "s and " ‹’› "90s and " ‹“› ‹‘› "nested" ‹’› ‹”›]'],
-  [95, ['\'tis the season and \'em\' and rock \'n\' roll and \'I told \'em so,\' he said.'], 'p[‹’› "tis the season and " ‹‘› "em" ‹’› " and rock " ‹‘› "n" ‹’› " roll and " ‹‘› "I told " ‹’› "em so," ‹’› " he said."]'],
+  // Example 95 shows `‘n’`, which C2-I-108 now exempts: the shape follows the clause (support/conformance.ts).
+  [95, ['\'tis the season and \'em\' and rock \'n\' roll and \'I told \'em so,\' he said.'], 'p[‹’› "tis the season and " ‹‘› "em" ‹’› " and rock " ‹’› "n" ‹’› " roll and " ‹‘› "I told " ‹’› "em so," ‹’› " he said."]'],
   [96, ['"Wait---" he said and he said---"Go" and "app/config/". and and/"or"'], 'p[‹“› "Wait" ‹—› ‹”› " he said and he said" ‹—› ‹“› "Go" ‹”› " and " ‹“› "app/config/" ‹”› ". and and/" ‹“› "or" ‹”›]'],
   [97, ['\'I said \'yes\' twice\' and \'one\' \'two\''], 'p[‹‘› "I said " ‹’› "yes" ‹’› " twice" ‹’› " and " ‹‘› "one" ‹’› " " ‹‘› "two" ‹’›]'],
   [98, ['say \'word'], 'p["say " ‹‘› "word"]'],

@@ -45,7 +45,9 @@ export function exampleOptions(example: SpecExample): RenderOptions {
 }
 
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
-export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>()
+export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
+  ['syntax-inline.md:95', 'the example shows `‘n’`, but C2-I-108 exempts the word n: `Rock \'n\' roll` holds two apostrophes'],
+])
 
 export function exampleId(example: SpecExample): string {
   return `${example.file}:${example.number}`

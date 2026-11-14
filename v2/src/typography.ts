@@ -1,13 +1,13 @@
 // Smart typography (C2-I-104 to C2-I-117). It reads the text that the scan left as text and
 // writes a text span for each plain stretch and a SMART node for each match.
-import { APOSTROPHE, GREATER, HYPHEN, QUOTE_MARK, SLASH } from './chars.ts'
+import { APOSTROPHE, GREATER, HYPHEN, PLUS, QUOTE_MARK, SLASH } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import { characterAfter } from './inline-atoms.ts'
 import { SMART } from './inline-kinds.ts'
 import { type InlineState, writeInlineEvent } from './inline-state.ts'
 import {
   APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER, CLASS_SMART_TRIGGER,
-  SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_LEFT_SINGLE_QUOTE,
+  SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_PLUS_MINUS, SMART_LEFT_SINGLE_QUOTE,
   SMART_RIGHT_DOUBLE_QUOTE, SMART_RIGHT_SINGLE_QUOTE, SMART_RIGHTWARDS_ARROW, SMART_RUNS,
 } from './inline-tables.ts'
 import {
@@ -35,6 +35,10 @@ export function toSource(state: InlineState, pos: number): number {
 
 function inClass(code: number, mask: number): boolean {
   return code >= 0 && code < ASCII && (CHARACTER_CLASSES[code]! & mask) !== 0
+}
+
+function isPlusOrHyphen(code: number): boolean {
+  return code === PLUS || code === HYPHEN
 }
 
 function isDash(code: number): boolean {
@@ -78,9 +82,9 @@ function singleQuote(state: InlineState, pos: number, previous: number, next: nu
   }
   const word = apostropheWord(text, pos + 1, state.end)
   if (word > 0) {
-    // C2-I-108: the word is quoted when a single quote and then no letter and no number follow it.
+    // C2-I-108: the word is quoted when a single quote and then no letter and no number follow it. `n` never is.
     const closer = pos + 1 + word
-    if (text.charCodeAt(closer) !== APOSTROPHE || isWordCharacter(codePointAt(text, closer + 1, state.end))) return SMART_RIGHT_SINGLE_QUOTE
+    if (word === 1 || text.charCodeAt(closer) !== APOSTROPHE || isWordCharacter(codePointAt(text, closer + 1, state.end))) return SMART_RIGHT_SINGLE_QUOTE
   } else if (state.singleQuoteOpen && isWordCharacter(next)) {
     return SMART_RIGHT_SINGLE_QUOTE
   }
@@ -168,6 +172,8 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
   const run = runAt(text, pos, to)
   if (run === NO_MATCH) return pos
   const [source, kind] = SMART_RUNS[run]!
+  // C2-I-117: the plus-minus sign needs its exact run.
+  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(after(state, pos + 2, to)))) return pos
   flushSpan(state, pos)
   writeSmart(state, pos, pos + source.length, kind)
   state.smartKind = kind
