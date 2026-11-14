@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, format, type Inline, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
+import { referenceForm } from './support/writer-checks.ts'
 
 const CONTROLS = '‪‮⁦⁩'
 const TICK = '`'
@@ -234,5 +235,28 @@ describe('the layout record', () => {
     expect(entry('> a\n>\n> %% c', '/children/0/children/1')?.markerColumn).toBe(0)
     expect(entry('  > a\n  >\n  > %% c', '/children/0/children/1')?.markerColumn).toBe(2)
     expect(entry('> a\n>\n%% c', '/children/0/children/1')).not.toHaveProperty('markerColumn')
+  })
+})
+
+describe('the escapes of a text as one procedure', () => {
+  function written(value: string): string {
+    return write(documentOf(paragraph(text(value))))
+  }
+
+  it('C2-W-088, C2-W-091: x<a:b>=} is written x\\<a:b\\>=}, the form of the procedure', () => {
+    const form = written('x<a:b>=}')
+    expect(form).toBe('x\\<a:b\\>=}\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
+  it('C2-W-091: x(/u)(/u)/ is written x(\\/u)(\\/u)/, the third slash first and then the first', () => {
+    const form = written('x(/u)(/u)/')
+    expect(form).toBe('x(\\/u)(\\/u)/\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
+  it('C2-W-088: a backslash the procedure does not place is a defect, and so is a missing one', () => {
+    expect(referenceForm('\\.x\n', parse('.x'))).toEqual({ form: '.x\n' })
+    expect(referenceForm('x<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toEqual({ form: 'x\\<a:b\\>=}\n' })
   })
 })
