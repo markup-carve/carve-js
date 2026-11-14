@@ -260,3 +260,33 @@ describe('the escapes of a text as one procedure', () => {
     expect(referenceForm('x<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toEqual({ form: 'x\\<a:b\\>=}\n' })
   })
 })
+
+describe('the other clauses of the eight commits', () => {
+  it('C2-H-169: the footnotes directive writes no attribute and is named by its title also with an authored aria-label', () => {
+    const html = render('a[^n]\n\n[^n]: note\n\n::: footnotes "Notes" {aria-label="X" .c #d}\npre\n:::')
+    expect(html).toContain('<p>pre</p>\n<section role="doc-endnotes" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">Notes</p>')
+    expect(html).not.toContain('aria-label="X"')
+    expect(html).not.toContain('class="c"')
+  })
+
+  it('C2-B-184: an editorial comment, math, a literal and a raw span join a continuation row with a line feed', () => {
+    const cell = (src: string): unknown => parse(src, { positions: false }).children?.[0]
+    expect(JSON.stringify(cell('| {#a | b |\n+ x#} | c |'))).toContain('"value":"a\\nx"')
+    expect(JSON.stringify(cell(`| $${TICK}a | b |\n+ b${TICK} | c |`))).toContain('"value":"a\\nb"')
+    expect(JSON.stringify(cell(`| !${TICK}a | b |\n+ b${TICK} | c |`))).toContain('"value":"a\\nb"')
+    expect(JSON.stringify(cell(`| ${TICK}a | b |\n+ b${TICK}{=html} | c |`))).toContain('"value":"a\\nb"')
+  })
+
+  it('C2-B-184: ordinary text joins a continuation row with a space', () => {
+    expect(render('| a | b |\n+ x | c |')).toContain('<td>a x</td><td>b c</td>')
+  })
+
+  it('C2-L-052: continuationStyle stands on an item, a description and a footnote, and on no other block', () => {
+    const styles = (src: string): string[] => parseWithLayout(src).layout.nodes
+      .filter((node) => node.continuationStyle !== undefined).map((node) => `${node.path}=${node.continuationStyle!}`)
+    expect(styles('- a')).toEqual(['/children/0/children/0=marker_line'])
+    expect(styles(':: t\n: d\n  e')).toEqual(['/children/0/children/1=indent'])
+    expect(styles('[^n]: a\n  b')).toEqual(['/children/0=lazy'])
+    expect(styles('> a\n  b')).toEqual([])
+  })
+})
