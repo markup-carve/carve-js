@@ -16,6 +16,7 @@ import { writeEvents } from './inline-emit.ts'
 import { type InlineState, NONE, setContent } from './inline-state.ts'
 import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
+import { BIDI_FIRST, BIDI_LAST, holdsBidiControl, isBidiControl } from './unicode.ts'
 
 type Scanner = (state: InlineState, pos: number) => number
 
@@ -126,7 +127,17 @@ export function scanInline(
   resetScan(state)
   for (let pos = 0; pos < end;) {
     const code = text.charCodeAt(pos)
-    pos = code < ASCII && STARTS_TOKEN[code] === 1 ? SCANNERS[code]!(state, pos) : pos + 1
+    if (code >= ASCII) {
+      if (code >= BIDI_FIRST && code <= BIDI_LAST && isBidiControl(code)) state.bidi = true
+      pos++
+    } else if (STARTS_TOKEN[code] === 1) {
+      const next = SCANNERS[code]!(state, pos)
+      // C2-H-172: what a scanner stepped over can still end up as text.
+      if (next > pos + 1 && !state.bidi) state.bidi = holdsBidiControl(text, pos + 1, next)
+      pos = next
+    } else {
+      pos++
+    }
   }
   failOpenBrackets(state)
   pairDelimiters(state)

@@ -426,6 +426,8 @@ export interface ParseFacts {
   headingSource: (heading: AstNode) => string | undefined
   /** The leaves with inline content that holds an id, a reference, a note or a cross-reference. */
   resolvableLeaves: ReadonlySet<AstNode>
+  /** C2-H-172: whether the inline content of the source holds a bidirectional control. */
+  bidi: boolean
 }
 
 /** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
@@ -452,6 +454,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
   }
   const facts: ParseFacts = {
     headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
+    bidi: ctx.inline.bidi,
   }
   return { document, facts }
 }
@@ -468,6 +471,7 @@ export function buildSource(
   const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
   const blocks = acquireState()
   const inline = acquireInlineState()
+  inline.bidi = false
   try {
     scanBlocks(blocks, text)
     const root = buildTree(blocks.events, blocks.eventLength)

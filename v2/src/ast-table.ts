@@ -10,6 +10,7 @@ import { readDelimitedTable } from './delimited.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { countValue } from './lines.ts'
 import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
+import { holdsBidiControl } from './unicode.ts'
 
 // C2-B-211: the entries of `aligns` that set an alignment.
 const ALIGN_WORDS = ['left', 'right', 'center']
@@ -247,6 +248,8 @@ function delimitedRow(cells: string[], header: boolean): AstNode {
 export function delimitedTableNode(ctx: TreeContext, node: BlockNode): AstNode {
   const source = readDelimitedTable(ctx.src, node)
   const rows = source.rows
+  // C2-H-172: the cells are text that the inline scan does not read.
+  if (!ctx.inline.bidi) ctx.inline.bidi = holdsBidiControl(ctx.src, node.start, node.end)
   const attributes = readAttributeLines(ctx.src, node.attributes)
   takeKey(attributes, 'table')
   // C2-B-209: a count past the last row gives no head, and every cell is a header cell.

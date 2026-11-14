@@ -33,6 +33,8 @@ export interface ResolvedTree {
   readonly resolution: Resolution
   /** C2-H-130: what the profile took out of the tree, in the render-loss channel. */
   readonly losses: Findings
+  /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
+  readonly bidi: boolean
 }
 
 export interface RenderOutput {
@@ -91,13 +93,15 @@ function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const losses: Findings = { entries: [], nodes: [] }
   if (rule !== NO_PROFILE) applyProfile(parsed.document, settings.profile, rule, losses)
   const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols)
-  return { document: parsed.document, settings, resolution, losses }
+  // A degraded node turns source that the inline scan did not read into text.
+  const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
+  return { document: parsed.document, settings, resolution, losses, bidi }
 }
 
 /** The render stage. It writes the resolved tree and changes nothing in it, so it can run more than once. */
 function renderStage(resolved: ResolvedTree): { html: string, losses: Findings } {
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
-  return renderDocument(resolved.document, resolved.settings, resolved.resolution, losses)
+  return renderDocument(resolved.document, resolved.settings, resolved.resolution, losses, resolved.bidi)
 }
 
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */

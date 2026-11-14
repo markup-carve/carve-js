@@ -5,7 +5,7 @@ import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
 import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
 import { type Resolution } from './resolve.ts'
-import { isAsciiLetter } from './unicode.ts'
+import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
 
 /** The state of one render. */
 export interface Render {
@@ -24,6 +24,8 @@ export interface Render {
   /** The paragraph that takes the backlinks of the note that is written, and their text (C2-H-091). */
   backlinkHost: AstNode | null
   backlinks: string
+  /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
+  bidi: boolean
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */
@@ -100,14 +102,6 @@ export function escapeText(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
-const BIDI_EMBEDDINGS_FIRST = 0x202a
-const BIDI_EMBEDDINGS_LAST = 0x202e
-const BIDI_ISOLATES_FIRST = 0x2066
-const BIDI_ISOLATES_LAST = 0x2069
-
-function isBidiControl(code: number): boolean {
-  return (code >= BIDI_EMBEDDINGS_FIRST && code <= BIDI_EMBEDDINGS_LAST) || (code >= BIDI_ISOLATES_FIRST && code <= BIDI_ISOLATES_LAST)
-}
 
 /** C2-H-172: true when `text` holds a bidirectional control. Nine searches are cheaper than a look at each character. */
 function hasBidiControl(text: string): boolean {
@@ -117,8 +111,16 @@ function hasBidiControl(text: string): boolean {
 }
 
 /**
- * C2-H-002 and C2-H-172: the content of a text node, a code span or a code block, escaped and without
- * its bidirectional controls. A short text is read once for both.
+ * C2-H-002 and C2-H-172: a text node or a code span, escaped and, unless the render knows that the
+ * inline content holds none, without its bidirectional controls.
+ */
+export function escapeTextNode(r: Render, text: string): string {
+  return r.bidi ? escapeContent(text) : escapeText(text)
+}
+
+/**
+ * C2-H-002 and C2-H-172: the content of a code block, escaped and without its bidirectional
+ * controls. A short text is read once for both.
  */
 export function escapeContent(text: string): string {
   if (text.length >= SEARCH_LENGTH && !hasBidiControl(text)) return escapeText(text)
@@ -126,7 +128,7 @@ export function escapeContent(text: string): string {
   let from = 0
   for (let at = 0; at < text.length; at++) {
     const code = text.charCodeAt(at)
-    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE && code < BIDI_EMBEDDINGS_FIRST) continue
+    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE && code < BIDI_FIRST) continue
     const entity = textEntity(code)
     if (entity === '' && !isBidiControl(code)) continue
     out += text.slice(from, at) + entity

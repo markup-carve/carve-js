@@ -89,3 +89,23 @@ export function codePointBefore(text: string, pos: number): number {
   const lead = text.charCodeAt(pos - 2)
   return lead >= HIGH_SURROGATE && lead < LOW_SURROGATE ? text.codePointAt(pos - 2)! : code
 }
+
+/** C2-H-172: the bidirectional embeddings, overrides and isolates lie in this range. */
+export const BIDI_FIRST = 0x202a
+export const BIDI_LAST = 0x2069
+const BIDI_EMBEDDINGS_LAST = 0x202e
+const BIDI_ISOLATES_FIRST = 0x2066
+
+/** C2-H-172: U+202A to U+202E and U+2066 to U+2069. */
+export function isBidiControl(code: number): boolean {
+  return (code >= BIDI_FIRST && code <= BIDI_EMBEDDINGS_LAST) || (code >= BIDI_ISOLATES_FIRST && code <= BIDI_LAST)
+}
+
+/** C2-H-172: true when `text[start, end)` holds a bidirectional control. */
+export function holdsBidiControl(text: string, start: number, end: number): boolean {
+  for (let at = start; at < end; at++) {
+    const code = text.charCodeAt(at)
+    if (code >= BIDI_FIRST && code <= BIDI_LAST && isBidiControl(code)) return true
+  }
+  return false
+}

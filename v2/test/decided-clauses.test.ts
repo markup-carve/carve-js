@@ -89,6 +89,12 @@ describe('the bidirectional controls', () => {
     expect(render(documentOf(paragraph(text(`x${controls}y`))))).toBe('<p>xy</p>')
   })
 
+  it('C2-H-172: they are not written where a scanner stepped over them or in the cells of a delimited table', () => {
+    expect(render(`a\n{footer-rows=1${controls}}`)).toBe('<p>a\n{footer-rows=1}</p>')
+    expect(render(`a {_k=v${controls}_} b`)).toBe('<p>a {_k=v_} b</p>')
+    expect(render(`{table}\n${FENCE}csv\na${controls},b\n${FENCE}`)).toContain('<th scope="col">a</th>')
+  })
+
   it('C2-H-172: raw HTML that is written as markup keeps them', () => {
     expect(render(`${FENCE}=html\n<b>${controls}</b>\n${FENCE}`, { rawHtml: true })).toBe(`<b>${controls}</b>`)
   })

@@ -650,11 +650,16 @@ interface RenderResult {
   losses: Findings
 }
 
-/** The HTML fragment of a resolved tree (C2-H-001). `losses` takes the losses of the render. */
-export function renderDocument(document: AstNode, settings: Settings, resolution: Resolution, losses: Findings): RenderResult {
+/**
+ * The HTML fragment of a resolved tree (C2-H-001). `losses` takes the losses of the render; `bidi` is
+ * false where its text nodes are known to hold no bidirectional control (C2-H-172).
+ */
+export function renderDocument(
+  document: AstNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean,
+): RenderResult {
   const r: Render = {
     settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
-    backlinkHost: null, backlinks: '',
+    backlinkHost: null, backlinks: '', bidi,
   }
   writeDocument(r, document)
   return { html: r.out.slice(1), losses: r.losses }
