@@ -1,0 +1,11 @@
+[
+  { "name": "nested inline formatting", "html": "<p><strong>one <em>two <code>three</code></em></strong></p>" },
+  { "name": "table groups and spans", "html": "<table><thead><tr><th scope=\"col\" colspan=\"2\">Head</th></tr></thead><tbody><tr><td rowspan=\"2\">A</td><td>B</td></tr><tr><td>C</td></tr></tbody><tfoot><tr><td colspan=\"2\">Foot</td></tr></tfoot></table>" },
+  { "name": "definition list", "html": "<dl><dt>Term</dt><dd><p>Definition</p></dd></dl>" },
+  { "name": "figure caption", "html": "<figure><img src=\"chart.png\" alt=\"Bars\"><figcaption>A chart</figcaption></figure>" },
+  { "name": "details", "html": "<details><summary>More</summary><p>Hidden content</p></details>" },
+  { "name": "language code", "html": "<pre><code class=\"language-rust\">fn main() {}\n</code></pre>" },
+  { "name": "GitHub task list", "html": "<ul class=\"contains-task-list\"><li class=\"task-list-item\"><input type=\"checkbox\" checked disabled> Done</li></ul>" },
+  { "name": "generated footnotes", "html": "<p>Note<sup class=\"footnote-ref\"><a href=\"#fn1\" id=\"fnref1\">1</a></sup></p><section class=\"footnotes\" role=\"doc-endnotes\"><ol><li id=\"fn1\"><p>Text <a href=\"#fnref1\" role=\"doc-backlink\">↩</a></p></li></ol></section>" },
+  { "name": "image descriptions", "html": "<p><img src=\"photo.jpg\" alt=\"A dog\" title=\"Portrait\" longdesc=\"details.html\"></p>" }
+]

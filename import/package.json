@@ -1,0 +1,40 @@
+{
+  "name": "@markup-carve/carve-import",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "carve-import": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --root . --config vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@djot/djot": "0.3.2",
+    "mdast-util-directive": "3.1.0",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-frontmatter": "2.0.1",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-math": "3.0.0",
+    "micromark": "^4.0.3",
+    "micromark-extension-directive": "4.0.0",
+    "micromark-extension-frontmatter": "2.0.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-math": "3.1.0",
+    "parse5": "7.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.20",
+    "commonmark.json": "^0.31.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
