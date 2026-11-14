@@ -1,4 +1,5 @@
 // The include directive (C2-B-201 to C2-B-206): its shape on one line, and what its options make of the line.
+import { type IncludeNode } from './ast.ts'
 import { unescape } from './attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
@@ -298,8 +299,8 @@ function optionRank(name: string): number {
 }
 
 /** C2-H-133, C2-H-171: the source text of an include directive, as the renderer writes it, written as in C2-W-058. */
-export function includeSource(node: { path?: string, section?: string, options?: readonly (readonly [string, string])[] }): string {
-  const path = node.path ?? ''
+export function includeSource(node: IncludeNode): string {
+  const path = node.path
   const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
   if (node.section !== undefined) parts.push(`#${node.section}`)
   // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.

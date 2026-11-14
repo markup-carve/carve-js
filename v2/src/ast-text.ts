@@ -1,6 +1,6 @@
 // The plain text of inline nodes (C2-H-143): what a heading id, a task label, a caption label
 // and the text of a cross-reference are made of. A node gives the literal text it carries or nothing.
-import { type AstNode, asNode, handle, type Inline, type Node, type NodeHandlers, type RubyNode } from './ast.ts'
+import { type Block, handle, type Inline, isInlineParent, type NodeHandlers, type RubyNode } from './ast.ts'
 
 const NO_BREAK_SPACE = ' '
 
@@ -32,7 +32,7 @@ const TEXT_OF: NodeHandlers<string> = {
 }
 
 /** C2-H-143: the text of a node type that gives text of its own, or undefined for one that does not. */
-function ownText(node: Node): string | undefined {
+function ownText(node: Inline): string | undefined {
   return handle(TEXT_OF, node.type, node, undefined)
 }
 
@@ -40,27 +40,26 @@ function ownText(node: Node): string | undefined {
 const SILENT = ['footnote_ref', 'inline_footnote', 'xref', 'symbol', 'raw_inline', 'critic_comment', 'comment', 'citation_group']
 
 /** The text of one node: its own, or nothing, or else that of its inline children. */
-function textOf(node: Node): string {
+function textOf(node: Inline): string {
   const own = ownText(node)
   if (own !== undefined) return own
-  return !('children' in node) || SILENT.includes(node.type) ? '' : plainText(node.children)
+  return isInlineParent(node) && !SILENT.includes(node.type) ? plainText(node.children) : ''
 }
 
 /**
  * C2-B-208: the plain text of the label of a caption. It is that of a heading, except that a
  * symbol gives the text the caption writes for it (C2-H-101): its entry in `symbols`, or its source.
  */
-export function labelText(nodes: readonly AstNode[], symbols: Readonly<Record<string, string>>): string {
+export function captionLabelText(nodes: readonly Inline[], symbols: Readonly<Record<string, string>>): string {
   let out = ''
-  for (const loose of nodes) {
-    const node = asNode(loose)
+  for (const node of nodes) {
     if (node.type === 'symbol') {
       out += symbolText(node.name, symbols)
       continue
     }
     const own = ownText(node)
     if (own !== undefined) out += own
-    else if ('children' in node && !SILENT.includes(node.type)) out += labelText(node.children, symbols)
+    else if (isInlineParent(node) && !SILENT.includes(node.type)) out += captionLabelText(node.children, symbols)
   }
   return out
 }
@@ -69,17 +68,16 @@ function symbolText(name: string, symbols: Readonly<Record<string, string>>): st
   return Object.hasOwn(symbols, name) ? symbols[name]! : `:${name}:`
 }
 
-export function plainText(nodes: readonly AstNode[] | readonly Inline[]): string {
+export function plainText(nodes: readonly Inline[]): string {
   let out = ''
-  for (const node of nodes) out += textOf(asNode(node))
+  for (const node of nodes) out += textOf(node)
   return out
 }
 
 /** The plain text of the blocks of an item, for the label of its task box: the text of its leaves, joined by spaces. */
-export function blockText(nodes: readonly AstNode[]): string {
+export function blockText(nodes: readonly Block[]): string {
   const parts: string[] = []
-  for (const loose of nodes) {
-    const node = asNode(loose)
+  for (const node of nodes) {
     if (node.type === 'paragraph' || node.type === 'heading') parts.push(plainText(node.children))
   }
   return parts.join(' ')

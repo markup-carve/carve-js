@@ -3,14 +3,14 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import {
-  type AbbreviationDefNode, type AdmonitionNode, type AstNode, type CaptionNode, type DirectiveNode, type DivNode,
+  type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
   type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode, handle,
   type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode,
   type LinkReferenceDefinitionNode, type MathNode, type Node, type NodeHandlers, type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
 import { type ParseFacts } from './ast-blocks.ts'
-import { labelText, plainText } from './ast-text.ts'
+import { captionLabelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
 import { slugify } from './slug.ts'
@@ -29,12 +29,12 @@ export interface Note {
 export interface Resolution {
   definitions: Map<string, LinkReferenceDefinitionNode>
   notes: Note[]
-  noteOf: Map<AstNode, Note>
-  refIds: Map<AstNode, string>
+  noteOf: Map<Node, Note>
+  refIds: Map<Node, string>
   /** The generated text of each resolved cross-reference (C2-H-096). */
-  xrefText: Map<AstNode, string>
+  xrefText: Map<Node, string>
   /** C2-H-156: the generated id of the title of each admonition and of the directive that places the notes. */
-  labelIds: Map<AstNode, string>
+  labelIds: Map<Node, string>
   /** The findings of resolution, each with its node. `diagnostics` is the list of its entries. */
   findings: Findings
   diagnostics: Diagnostic[]
@@ -413,7 +413,7 @@ function setDestinations(walk: Walk, targets: Map<Reference, Target>, kept: Set<
  * the mark, without trailing whitespace.
  */
 function captionKey(walk: Walk, children: Inline[], mark: number): string {
-  return labelText(children.slice(0, mark), walk.symbols).trimEnd()
+  return captionLabelText(children.slice(0, mark), walk.symbols).trimEnd()
 }
 
 /** C2-H-149: the next number of the sequence of `key`. */

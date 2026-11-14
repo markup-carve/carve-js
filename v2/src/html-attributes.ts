@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type AstNode, classesOf, keyValuesOf } from './ast.ts'
+import { type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
@@ -22,7 +22,7 @@ export interface Render {
   linkDepth: number
   abbrDepth: number
   /** The paragraph that takes the backlinks of the note that is written, and their text (C2-H-091). */
-  backlinkHost: AstNode | null
+  backlinkHost: ParagraphNode | null
   backlinks: string
   /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
   bidi: boolean
@@ -54,7 +54,7 @@ export interface TagParts {
   /** A block element, which carries its source line under `sourceLines` (C2-H-016). */
   block?: boolean
   /** The node of the tree a loss is reported on, where the node given is a copy of it. */
-  origin?: AstNode
+  origin?: Node
 }
 
 // C2-H-115: the reserved names of the carriers.
@@ -166,7 +166,7 @@ export function escapeAttribute(text: string): string {
 }
 
 /** C2-H-132: a render loss on `node`, or on the document when it is null. */
-export function loss(r: Render, node: AstNode | null, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
+export function loss(r: Render, node: Node | null, code: string, message: string, severity: 'error' | 'warning' = 'warning'): void {
   addFinding(r.losses, node, { code, severity, channel: 'render-loss', message })
 }
 
@@ -210,7 +210,7 @@ function schemePasses(r: Render, url: string): boolean {
 }
 
 /** C2-H-160: a destination the policy denies is written as the empty string, and the denial is reported on `node`. */
-export function destination(r: Render, url: string, node: AstNode): string {
+export function destination(r: Render, url: string, node: Node): string {
   if (schemePasses(r, url)) return url
   loss(r, node, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
   return ''
@@ -328,7 +328,7 @@ class AttributeList {
   }
 }
 
-function addClasses(list: AttributeList, node: AstNode | null, parts: TagParts): void {
+function addClasses(list: AttributeList, node: Node | null, parts: TagParts): void {
   const authored = parts.bare === true ? [] : node?.attrs?.classes ?? []
   if (authored.length === 0 && parts.base === undefined && parts.last === undefined) return
   // A class that occurs twice is written once, at its first place, as in 0.1.
@@ -337,10 +337,10 @@ function addClasses(list: AttributeList, node: AstNode | null, parts: TagParts):
 }
 
 /** The declarations that follow the authored style: the alignment of C2-H-015 and those the element gives. */
-function styleDeclarations(keys: [string, string][], parts: TagParts): string {
+function styleDeclarations(keyValues: [string, string][], parts: TagParts): string {
   let declarations = parts.style ?? ''
   if (parts.alignStyle !== true) return declarations
-  for (const [key, value] of keys) {
+  for (const [key, value] of keyValues) {
     if (key.toLowerCase() === 'align' && ALIGN_VALUES.includes(value)) declarations = `text-align: ${value};`
   }
   return declarations
@@ -358,8 +358,8 @@ function styleValue(value: string, declarations: string): string {
   return declarations === '' ? written : withDeclaration(written, declarations)
 }
 
-function addKey(
-  r: Render, list: AttributeList, [key, value]: [string, string], parts: TagParts, style: StyleFacts, origin: AstNode | null,
+function addKeyValue(
+  r: Render, list: AttributeList, [key, value]: [string, string], parts: TagParts, style: StyleFacts, origin: Node | null,
 ): void {
   const name = key.toLowerCase()
   if (isBlockedName(name) || list.has(name)) return
@@ -371,35 +371,36 @@ function addKey(
   if (!style.hasStyle) list.add('style', style.declarations)
 }
 
-function addKeys(r: Render, list: AttributeList, keys: [string, string][], parts: TagParts, origin: AstNode | null): void {
-  const style: StyleFacts = { declarations: styleDeclarations(keys, parts), hasStyle: keys.some(([key]) => key.toLowerCase() === 'style') }
-  for (const pair of keys) addKey(r, list, pair, parts, style, origin)
+function addKeyValues(r: Render, list: AttributeList, keyValues: [string, string][], parts: TagParts, origin: Node | null): void {
+  const hasStyle = keyValues.some(([key]) => key.toLowerCase() === 'style')
+  const style: StyleFacts = { declarations: styleDeclarations(keyValues, parts), hasStyle }
+  for (const pair of keyValues) addKeyValue(r, list, pair, parts, style, origin)
   if (style.declarations !== '') list.add('style', style.declarations)
 }
 
 /** The id an element writes: the one its parts name, or the authored one. */
-function writtenId(node: AstNode | null, parts: TagParts): string | undefined {
+function writtenId(node: Node | null, parts: TagParts): string | undefined {
   if (parts.id !== undefined) return parts.id ?? undefined
   return parts.bare === true ? undefined : node?.attrs?.id
 }
 
 /** C2-H-016: the source line of a block element, or null. */
-function sourceLine(r: Render, node: AstNode | null, parts: TagParts): string | null {
+function sourceLine(r: Render, node: Node | null, parts: TagParts): string | null {
   if (!r.settings.sourceLines || parts.block !== true || node?.pos === undefined) return null
   return String(node.pos.startLine)
 }
 
 /** The authored parts behind the id: the classes, the language and the keys. */
-function addAuthored(r: Render, list: AttributeList, node: AstNode | null, parts: TagParts): void {
+function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: TagParts): void {
   const authored = parts.bare === true ? null : node
   addClasses(list, node, parts)
   if (authored?.lang !== undefined) list.add('lang', authored.lang)
-  const keys = authored?.attrs?.keyValues
-  if (keys !== undefined || parts.style !== undefined) addKeys(r, list, keys ?? [], parts, parts.origin ?? node)
+  const keyValues = authored?.attrs?.keyValues
+  if (keyValues !== undefined || parts.style !== undefined) addKeyValues(r, list, keyValues ?? [], parts, parts.origin ?? node)
 }
 
 /** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
-function isStructuralOnly(r: Render, node: AstNode | null, parts: TagParts): boolean {
+function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolean {
   if (node !== null && parts.bare !== true && (node.attrs !== undefined || node.lang !== undefined)) return false
   if (parts.id !== undefined && parts.id !== null) return false
   if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
@@ -414,7 +415,7 @@ function structuralText(pairs: Pair[]): string {
 }
 
 /** C2-H-009: the attributes of one element, each with a leading space. */
-export function attributes(r: Render, node: AstNode | null, parts: TagParts): string {
+export function attributes(r: Render, node: Node | null, parts: TagParts): string {
   if (isStructuralOnly(r, node, parts)) return structuralText(parts.structural ?? [])
   const list = new AttributeList()
   const id = writtenId(node, parts)
@@ -432,12 +433,13 @@ export function attributes(r: Render, node: AstNode | null, parts: TagParts): st
 }
 
 /** C2-H-139: the attribute block of an unresolved reference as text, in the fixed order. */
-export function attributeBlockText(node: AstNode): string {
+export function attributeBlockText(node: Node): string {
   const parts: string[] = []
-  if (node.attrs?.id !== undefined) parts.push(`#${node.attrs.id}`)
-  for (const name of classesOf(node)) parts.push(`.${name}`)
+  const attrs = node.attrs
+  if (attrs?.id !== undefined) parts.push(`#${attrs.id}`)
+  for (const name of attrs?.classes ?? []) parts.push(`.${name}`)
   if (node.lang !== undefined) parts.push(`:${node.lang}`)
-  for (const [key, value] of keyValuesOf(node)) parts.push(keyText(key, value))
+  for (const [key, value] of attrs?.keyValues ?? []) parts.push(keyText(key, value))
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`
 }
 
