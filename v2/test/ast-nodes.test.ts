@@ -16,7 +16,8 @@ it('each node type of the validator has an interface with exactly its fields', (
   for (const [type, [content, required, optional]] of NODE_TABLE.RULES) {
     const body = new RegExp(`export interface ${interfaceName(type)} extends NodeBase \\{\\n([\\s\\S]*?)\\n\\}`).exec(source)
     expect(body, type).not.toBeNull()
-    const fields = body![1]!.split('\n').map((line) => line.trim().split(':')[0]!)
+    const fields = body![1]!.split('\n').map((line) => line.trim()).filter((line) => !line.startsWith('|'))
+      .map((line) => line.split(':')[0]!)
     const expected = ['type', ...(content === 'none' ? [] : ['children']), ...required, ...optional.map((name) => `${name}?`)]
     expect(fields, type).toEqual(expected)
   }

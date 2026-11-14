@@ -20,6 +20,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ast-schema-crosscheck:
+    name: 0.2 AST schema agreement, 100,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: next2
+          path: carve
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install spec cross-check dependencies
+        run: npm ci --allow-git=all
+        working-directory: carve
+
+      - name: Schema and reader cross-check
+        run: AST_FUZZ_COUNT=100000 node scripts/spec2-ast-crosscheck.mjs ..
+        working-directory: carve
+        continue-on-error: true
+
+      - name: Require explained cross-check results
+        run: node v2/scripts/check-ast-crosscheck.ts _AST_CROSSCHECK_FINDINGS.json.gz
+
   enumerate:
     name: enumerator, four lines
     runs-on: ubuntu-latest

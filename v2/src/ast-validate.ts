@@ -571,9 +571,11 @@ function checkLinkFields(node: Fields, type: string, path: string): void {
 }
 
 function checkExtensionName(node: Fields, type: string, path: string, walk: Walk): void {
-  const name = node['name'] as string
+  const name = node['name']
+  if (typeof name !== 'string') fail(`${path}/name`, 'not an extension name')
   const qualified = name.includes('.')
-  if (!validName(name, type === 'block_extension')) fail(`${path}/name`, 'not an extension name')
+  const unqualifiedSource = type === 'inline_extension' && name.startsWith('_') && validSegment(`a${name.slice(1)}`)
+  if (!validName(name, type === 'block_extension') && !unqualifiedSource) fail(`${path}/name`, 'not an extension name')
   if (qualified && !walk.tree.declarations.has(name)) fail(`${path}/name`, 'an undeclared extension name')
   if (qualified && node['fallback'] === undefined) fail(`${path}/fallback`, 'a required field is missing')
 }

@@ -20,6 +20,7 @@ describe('AST 2.0 reader checks', () => {
     const inline = (name: string, fallback?: unknown[]) => documentOf(paragraph({ type: 'inline_extension', name,
       children: [], ...(fallback === undefined ? {} : { fallback }) } as never))
     expect(refusal(inline('kbd'))).toBeNull()
+    expect(refusal(inline('_'))).toBeNull()
     expect(refusal(inline('bad..name'))).toContain('not an extension name')
     expect(refusal(inline('demo.widget', []))).toContain('an undeclared extension name')
     expect(refusal({ ...inline('demo.widget', []), extensions: [{ name: 'demo.widget', required: false }] })).toBeNull()
