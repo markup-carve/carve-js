@@ -259,9 +259,10 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
     if (own < rank) left.set(text, offsets)
     else if (text === node) left.set(text, offsets.filter((offset) => offset < at))
   }
-  const without = groupTree(w, group, first, left)
+  // Built before the first write, which may add the doubled backslash of C2-W-097 to the lists it reads.
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
+  const without = groupTree(w, group, first, left)
   const asked = !treesEqual(groupTree(w, group, first, escaped), without)
   w.escapes = placed
   w.lines = lines

@@ -217,6 +217,16 @@ function escapeBefore(c: Check, es: readonly Node[], i: number): boolean {
 }
 
 /**
+ * C2-W-099, C2-W-093: a content that starts with the mark of its own opener continues the run of
+ * that mark, as `{-` and a hyphen read as a dash, so the first character of the content takes the backslash.
+ */
+function escapeContentStart(c: Check, e: Node): boolean {
+  const mark = CLOSING_MARKS.get(e.type)
+  const first = 'children' in e ? e.children[0] : undefined
+  return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
+}
+
+/**
  * Asks for the escape of the first character of the text behind `es[i]`, which can read on into its
  * markup: a name character behind a mention or a tag, a mark behind a closing mark, or the neighbor
  * that decides a smart punctuation mark (C2-I-104, C2-W-125).
@@ -264,6 +274,7 @@ type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) 
 // escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
+  (c, es, i) => escapeContentStart(c, es[i]!),
   (c, es, i) => escapeContentConstruct(c, es[i]!),
   escapeInside,
   escapeAfter,
@@ -402,8 +413,8 @@ function isBraceLine(node: Node | undefined): boolean {
 
 /** The content of `owner` ended in the parse before the expected node `es[i]`. */
 function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void {
-  // C2-W-097: a backslash at the end of the text before took the markup of this node.
-  if (i > 0 && escapeEnd(c, lastText(es[i - 1]), false)) return
+  // C2-W-097: a backslash at the end of the text before took the markup of this node. A line break has no markup to take.
+  if (i > 0 && !isBreak(es[i]) && escapeEnd(c, lastText(es[i - 1]), false)) return
   // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
   if (i > 0 && isBreak(es[i - 1])) escapeLineStart(c, es, openerLine(es, i), owner)
   else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, i, 0, owner)
@@ -457,8 +468,11 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   at.i++
   at.vi = 0
   if (at.aj === 0 || es[at.i]?.type === 'text') return true
-  // The parse has more text here: the node after the text did not form.
-  if (es[at.i] === undefined) c.losses.push([owner, null])
+  // The parse has more text here: the node after the text did not form. At the end of the content
+  // the closing mark did not close, as a mark of the content glued to it makes a longer run (C2-W-093).
+  if (es[at.i] === undefined) {
+    if (!escapeInContent(c, owner)) c.losses.push([owner, null])
+  }
   else if (at.j + 1 >= as.length && isPaired(owner)) closedEarly(c, es, at.i, 0, owner)
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
   return false

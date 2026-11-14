@@ -440,5 +440,19 @@ describe('what the four-token writer gate found', () => {
 
   it('C2-W-088: a construct inside the content takes its escape before the end of the content', () => {
     expect(format(`x(/u)${BACKSLASH}${BACKTICK}[^/`)).toBe(`x(/u)${BACKSLASH}${BACKTICK}[^/\n`)
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/`)).toBe(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/\n`)
+  })
+
+  it('C2-W-093: a closing mark at the end of the content, glued to the closer, takes the backslash', () => {
+    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe(`x(/u)${BACKSLASH}//${BACKSLASH}{/\n`)
+    expect(format(`x(/u)${BACKSLASH}//}/`)).toBe(`x(/u)${BACKSLASH}//}/\n`)
+  })
+
+  it('C2-W-099: a content that starts with the mark of its opener continues the run, so its first hyphen is escaped', () => {
+    expect(format(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}`)).toBe(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}\n`)
+  })
+
+  it('C2-W-092: a text that ends before a line break takes no escape for the markup of the next line', () => {
+    expect(format(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}`)).toBe(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}${BACKTICK}\n`)
   })
 })
