@@ -4,7 +4,9 @@
 //   node v2/scripts/fuzz-tree.ts [--count N] [--seed S] [--report N]
 // A mutation picks one object or list anywhere in the tree, positions included, and then deletes a field, sets
 // it to null, a number, a list, an object or a long string, adds an unknown field, swaps the type of a node, or
-// nests a node in itself 300 levels deep. The same seed gives the same mutants.
+// nests a node in itself 300 levels deep. One mutant in ten instead sets a field of fixed values to a value that
+// is valid for another node type (C2-A-050): if the reader accepts it, it must render as the tree it came from.
+// The same seed gives the same mutants.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CarveTreeError, decodeTree, encodeTree, parse, render, write } from '../src/index.ts'
@@ -19,6 +21,7 @@ type Json = null | boolean | number | string | Json[] | { [name: string]: Json }
 type Container = Json[] | { [name: string]: Json }
 
 const NEST_DEPTH = 300
+const ENUM_SHARE = 0.1
 const LONG_STRING = 'x'.repeat(1 << 16)
 const TYPES = [...NODE_TABLE.RULES.keys(), 'rubyPair', 'escaped_text', 'unknown']
 const COMMON = ['attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
@@ -173,6 +176,62 @@ function mutate(next: () => number, tree: Json, nodes: readonly Json[]): [Json, 
   return [copy, Array.isArray(target) ? mutateList(next, target, nodes) : mutateObject(next, target, nodes)]
 }
 
+/** Every value an enum field takes on any node type, by field name. */
+const ENUM_VALUES = new Map<string, Set<string>>()
+for (const [key, values] of NODE_TABLE.ENUMS) {
+  const field = key.slice(key.indexOf('.') + 1)
+  const all = ENUM_VALUES.get(field) ?? new Set<string>()
+  for (const value of values) all.add(value)
+  ENUM_VALUES.set(field, all)
+}
+
+/** The values the node table allows for `field` on a node of `type`. */
+function enumValues(type: string, field: string): readonly string[] {
+  return NODE_TABLE.ENUMS.get(`${type}.${field}`) ?? NODE_TABLE.ENUMS.get(`*.${field}`) ?? []
+}
+
+/**
+ * Sets one enum field of a node of a copy of `tree` to a value that the node table allows on another
+ * node type and not on this one. Null where the tree has no such field.
+ */
+function swapEnum(next: () => number, tree: Json): [Json, string] | null {
+  const copy = structuredClone(tree)
+  const choices: [{ [name: string]: Json }, string, string[]][] = []
+  for (const value of containers(copy, [])) {
+    if (Array.isArray(value) || typeof value['type'] !== 'string') continue
+    for (const field of Object.keys(value)) {
+      const all = ENUM_VALUES.get(field)
+      if (all === undefined || typeof value[field] !== 'string') continue
+      const own = enumValues(value['type'], field)
+      const others = [...all].filter((option) => !own.includes(option))
+      if (others.length > 0) choices.push([value, field, others])
+    }
+  }
+  if (choices.length === 0) return null
+  const [target, field, others] = pick(next, choices)
+  const value = pick(next, others)
+  target[field] = value
+  return [copy, `set ${String(target['type'])}.${field} to ${JSON.stringify(value)}`]
+}
+
+/** An accepted mutant of `swapEnum` holds a value the node table refuses, so it must render as the tree it came from. */
+function checkEnum(mutant: Json, original: Json, what: string, counts: Counts): void {
+  const json = JSON.stringify(mutant)
+  let document
+  try {
+    document = decodeTree(json)
+  } catch (error) {
+    if (error instanceof CarveTreeError && pathLeadsInto(mutant, error.path)) counts.refused++
+    else counts.bugs.push(`decode, ${what}: ${describeError(error)}\n    ${json.slice(0, 400)}`)
+    return
+  }
+  counts.accepted++
+  counts.swapsAccepted++
+  if (render(document) !== render(decodeTree(JSON.stringify(original)))) {
+    counts.bugs.push(`accepted a value of another node type that changes the HTML, ${what}\n    ${json.slice(0, 400)}`)
+  }
+}
+
 /** Whether every step of `path` but the last leads to a value of `tree`. */
 function pathLeadsInto(tree: Json, path: string): boolean {
   if (path === '') return true
@@ -194,6 +253,9 @@ interface Counts {
   accepted: number
   refused: number
   bugs: string[]
+  /** The mutants of `swapEnum`, and how many of them the reader accepted. */
+  swaps: number
+  swapsAccepted: number
 }
 
 function check(mutant: Json, what: string, counts: Counts): void {
@@ -231,14 +293,22 @@ if (process.argv[1] === import.meta.filename) {
   const trees = [...parsed, ...Array.from({ length: parsed.length }, (_, at) => SEEDS[at % SEEDS.length]!)]
   const nodes = trees.flatMap((tree) => containers(tree, []).filter((value) => !Array.isArray(value) && typeof value['type'] === 'string'))
   const next = random(seed)
-  const counts: Counts = { mutants: 0, accepted: 0, refused: 0, bugs: [] }
+  const counts: Counts = { mutants: 0, accepted: 0, refused: 0, bugs: [], swaps: 0, swapsAccepted: 0 }
   const started = Date.now()
   for (; counts.mutants < count; counts.mutants++) {
-    const [mutant, what] = mutate(next, pick(next, trees), nodes)
+    const tree = pick(next, trees)
+    const swapped = next() < ENUM_SHARE ? swapEnum(next, tree) : null
+    if (swapped !== null) {
+      counts.swaps++
+      checkEnum(swapped[0], tree, swapped[1], counts)
+      continue
+    }
+    const [mutant, what] = mutate(next, tree, nodes)
     check(mutant, what, counts)
   }
   console.log(`${counts.mutants} mutants of ${trees.length} trees (seed ${seed}): ${counts.refused} refused with a path, `
-    + `${counts.accepted} accepted, ${counts.bugs.length} failures, ${Date.now() - started} ms`)
+    + `${counts.accepted} accepted, ${counts.bugs.length} failures, ${Date.now() - started} ms; `
+    + `${counts.swaps} of them set a value of another node type, ${counts.swapsAccepted} of those accepted`)
   for (const bug of counts.bugs.slice(0, report)) console.log(`  ${bug}`)
   process.exitCode = counts.bugs.length > 0 ? 1 : 0
 }

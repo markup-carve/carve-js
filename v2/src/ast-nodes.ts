@@ -15,7 +15,7 @@ export interface NodeBase {
 export interface AbbreviationNode extends NodeBase {
   type: "abbreviation"
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "abbr"
   expansion?: string
 }
 
@@ -23,7 +23,7 @@ export interface AbbreviationDefNode extends NodeBase {
   type: "abbreviation_def"
   expansion: string
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "abbr"
 }
 
 export interface AdmonitionNode extends NodeBase {
@@ -78,7 +78,7 @@ export interface CitationNode extends NodeBase {
   type: "citation"
   key: string
   suppressAuthor: boolean
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "citation"
   prefix?: Inline[]
   locator?: Inline[]
   locatorLabel?: string
@@ -93,7 +93,7 @@ export interface CitationDefinitionNode extends NodeBase {
   type: "citation_definition"
   children: Inline[]
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "citation"
 }
 
 export interface CitationGroupNode extends NodeBase {
@@ -195,13 +195,13 @@ export interface FootnoteNode extends NodeBase {
   type: "footnote"
   children: Block[]
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "footnote"
 }
 
 export interface FootnoteRefNode extends NodeBase {
   type: "footnote_ref"
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "footnote"
   number?: number
 }
 
@@ -235,7 +235,7 @@ export interface ImageNode extends NodeBase {
   tooltip?: string
   targetKind?: "url" | "wiki" | "doc" | "xref"
   key?: string
-  namespace?: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace?: "link"
   resourceId?: string
   form?: "full" | "collapsed"
 }
@@ -287,7 +287,7 @@ export interface LinkNode extends NodeBase {
   tooltip?: string
   targetKind?: "url" | "wiki" | "doc" | "xref"
   key?: string
-  namespace?: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace?: "link"
   form?: "full" | "collapsed"
 }
 
@@ -295,7 +295,7 @@ export interface LinkReferenceDefinitionNode extends NodeBase {
   type: "link_reference_definition"
   href: string
   key: string
-  namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
+  namespace: "link"
   title?: string
 }
 
@@ -728,6 +728,15 @@ export const FIELD_VALUES = {
   "figure.kind": ["image", "table", "listing", "equation", "other"],
   "admonition.kind": ["note", "tip", "warning", "danger", "info", "success", "example", "quote"],
   "*.namespace": ["link", "footnote", "citation", "abbr", "heading"],
+  "link.namespace": ["link"],
+  "image.namespace": ["link"],
+  "link_reference_definition.namespace": ["link"],
+  "footnote_ref.namespace": ["footnote"],
+  "footnote.namespace": ["footnote"],
+  "abbreviation.namespace": ["abbr"],
+  "abbreviation_def.namespace": ["abbr"],
+  "citation.namespace": ["citation"],
+  "citation_definition.namespace": ["citation"],
 } as const
 
 /** Whether `value` is one of the values of `field`. */

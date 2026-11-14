@@ -407,3 +407,15 @@ describe('one walker over every slot that holds nodes', () => {
     expect(refusal(inParagraph(slot('a/b')))).toBe('/children/0/children/0/slots/a~1b/0: paragraph does not stand here')
   })
 })
+
+describe('fields checked against the node type they stand on', () => {
+  it('C2-A-103, C2-A-117, C2-A-170: a reference or a definition in the namespace of another node type is refused at decode', () => {
+    const link = { type: 'link', key: 'r', namespace: 'footnote', form: 'full', children: [{ type: 'text', value: 'x' }] }
+    expect(refusal(inParagraph(link))).toBe('/children/0/children/0/namespace: unknown value "footnote"')
+    expect(refusal(inParagraph({ type: 'footnote_ref', key: 'n', namespace: 'link' }))).toBe('/children/0/children/0/namespace: unknown value "link"')
+    expect(refusal(inParagraph({ type: 'abbreviation', key: 'A', namespace: 'heading' }))).toBe('/children/0/children/0/namespace: unknown value "heading"')
+    const definition = { type: 'document', astVersion: '2.0', children: [{ type: 'link_reference_definition', key: 'r', namespace: 'abbr', href: '/u' }] }
+    expect(refusal(definition)).toBe('/children/0/namespace: unknown value "abbr"')
+    expect(refusal(inParagraph({ ...link, namespace: 'link' }))).toBeNull()
+  })
+})

@@ -157,6 +157,16 @@ const ENUMS = new Map<string, readonly string[]>([
   ['figure.kind', ['image', 'table', 'listing', 'equation', 'other']],
   ['admonition.kind', ['note', 'tip', 'warning', 'danger', 'info', 'success', 'example', 'quote']],
   ['*.namespace', ['link', 'footnote', 'citation', 'abbr', 'heading']],
+  // C2-A-077 to C2-A-079, C2-A-103, C2-A-117, C2-A-121: the namespace of each reference and definition.
+  ['link.namespace', ['link']],
+  ['image.namespace', ['link']],
+  ['link_reference_definition.namespace', ['link']],
+  ['footnote_ref.namespace', ['footnote']],
+  ['footnote.namespace', ['footnote']],
+  ['abbreviation.namespace', ['abbr']],
+  ['abbreviation_def.namespace', ['abbr']],
+  ['citation.namespace', ['citation']],
+  ['citation_definition.namespace', ['citation']],
 ])
 const STAGES = ['referenceResolution', 'tableAlignment']
 const ORDERED_STYLES = ['1', 'a', 'A', 'i', 'I']
