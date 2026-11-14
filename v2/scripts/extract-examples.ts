@@ -15,6 +15,7 @@ export interface SpecExample {
 }
 
 const FILES = ['syntax-blocks.md', 'syntax-inline.md', 'html.md', 'ast.md']
+const NEW_DATA = ['ast-results.json', 'ast-schema.json', 'layout-schema.json', 'node-slots.json']
 const HEADER = /^Example (\d+) \((generated|unverified)([^)]*)\)\s*$/
 const FENCE = /^(`{3,})(\w*)\s*$/
 
@@ -60,7 +61,8 @@ if (process.argv[1] === import.meta.filename) {
   const examples = FILES.flatMap((file) => examplesOf(file, readFileSync(join(spec, file), 'utf8')))
   writeFileSync(join(data, 'examples.json'), `${JSON.stringify(examples, null, 1)}\n`)
   // The generated tables in src/ are written from these copies; run the generate scripts after a copy changes.
-  const copies = readdirSync(data).filter((name) => name.endsWith('.json') && existsSync(join(spec, 'data', name)))
+  const copies = [...new Set([...readdirSync(data), ...NEW_DATA])]
+    .filter((name) => name.endsWith('.json') && existsSync(join(spec, 'data', name)))
   for (const name of copies) copyFileSync(join(spec, 'data', name), join(data, name))
   console.log(`${examples.length} examples, ${copies.length} data files`)
 }

@@ -3,11 +3,16 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { generateAstTables } from '../scripts/generate-ast-tables.ts'
 import { generateOptionTables } from '../scripts/generate-option-tables.ts'
 import { generateTreeTables } from '../scripts/generate-tree-tables.ts'
 
 const root = join(import.meta.dirname, '..')
 const read = (path: string): string => readFileSync(join(root, path), 'utf8')
+
+it('src/ast-tables.ts is what scripts/generate-ast-tables.ts writes', () => {
+  expect(read('src/ast-tables.ts')).toBe(generateAstTables(read('data/ast-results.json'), read('data/node-slots.json')))
+})
 
 it('src/tree-tables.ts is what scripts/generate-tree-tables.ts writes', () => {
   expect(read('src/tree-tables.ts')).toBe(generateTreeTables(read('data/div-names.json'), read('data/task-states.json')))
@@ -25,7 +30,10 @@ const specPresent = existsSync(join(specData, 'options.json'))
 it.skipIf(!specPresent)(
   specPresent ? 'the copied data files equal the spec files' : `no spec data files at ${specData}: comparison skipped`,
   () => {
-    for (const name of ['div-names.json', 'options.json', 'task-states.json']) {
+    for (const name of [
+      'ast-results.json', 'ast-schema.json', 'div-names.json', 'layout-schema.json', 'node-slots.json',
+      'options.json', 'task-states.json',
+    ]) {
       expect(read(`data/${name}`)).toBe(readFileSync(join(specData, name), 'utf8'))
     }
   },
