@@ -15,19 +15,37 @@ type InlineWriter = (node: InlineParent, r: Render) => string
 // C2-H-075: the keys that name an element, from inside out, and the attribute the value of each becomes.
 const SEMANTIC_KEYS: readonly (readonly [string, string | null])[] = [['abbr', 'title'], ['time', 'datetime'], ['kbd', null]]
 
-function isLineComment(node: Inline | undefined): boolean {
-  return node?.type === 'comment' && node.form === 'line'
+/** A space or tab only text, which a comment-only line may hold beside its comments. */
+function isBlank(value: string): boolean {
+  for (let p = 0; p < value.length; p++) {
+    const code = value.charCodeAt(p)
+    if (code !== 0x20 && code !== 0x09) return false
+  }
+  return true
 }
 
 /**
- * C2-B-137: a comment-only line is skipped, so one line break around it is not written: the one
- * behind it, or the one before it when the content ends with the comment.
+ * Whether the line that starts beside `from` and runs in the direction `step` holds only comments and spaces, with
+ * at least one comment. `atEnd` asks in addition that the line ends the content and not at a break.
+ */
+function isCommentOnlyLine(nodes: readonly Inline[], from: number, step: number, atEnd: boolean): boolean {
+  let comment = false
+  let at = from
+  for (; at >= 0 && at < nodes.length; at += step) {
+    const node = nodes[at]!
+    if (node.type === 'comment') comment = true
+    else if (isBreak(node)) break
+    else if (node.type !== 'text' || !isBlank(node.value)) return false
+  }
+  return comment && (!atEnd || at === nodes.length)
+}
+
+/**
+ * C2-H-069: a comment-only line takes one line break around it with it: the one behind it, or the one before it
+ * when the content ends with the comment. Each line is read at most twice, from the break on either side.
  */
 function isSkippedBreak(nodes: readonly Inline[], at: number): boolean {
-  const before = nodes[at - 2]
-  if (isLineComment(nodes[at - 1]) && (before === undefined || isBreak(before))) return true
-  const after = nodes[at + 2]
-  return isLineComment(nodes[at + 1]) && (after === undefined || !isBreak(after))
+  return isCommentOnlyLine(nodes, at - 1, -1, false) || isCommentOnlyLine(nodes, at + 1, 1, true)
 }
 
 export function inlineHtml(r: Render, nodes: readonly Inline[]): string {

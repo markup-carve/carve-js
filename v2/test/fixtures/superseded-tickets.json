@@ -98,7 +98,7 @@
    "C2-H-069"
   ],
   "input": "- x\n  - a\n  {#i}\n  {% c %}\n  - q\n",
-  "html": "<ul>\n  <li>x\n    <ul>\n      <li>a\n{#i}\n</li>\n      <li>q</li>\n    </ul>\n  </li>\n</ul>"
+  "html": "<ul>\n  <li>x\n    <ul>\n      <li>a\n{#i}</li>\n      <li>q</li>\n    </ul>\n  </li>\n</ul>"
  },
  {
   "ticket": "carve#6004",
@@ -668,6 +668,19 @@
   "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>b\n- s</dd>\n  </dl>\n</blockquote>"
  },
  {
+  "ticket": "carve#5912",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-012",
+   "C2-B-020",
+   "C2-B-024",
+   "C2-B-139",
+   "C2-H-069"
+  ],
+  "input": "> :: t\n> : b\n> {% c %}\n- s\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>b\n- s</dd>\n  </dl>\n</blockquote>"
+ },
+ {
   "ticket": "carve#5903",
   "verdict": "gone",
   "clauses": [
@@ -773,6 +786,20 @@
   ],
   "input": "> [^n]: b\n> c\n- s\n\nx[^n]\n",
   "html": "<blockquote><p>[^n]: b\nc\n- s</p></blockquote>\n<p>x[^n]</p>"
+ },
+ {
+  "ticket": "carve#5893",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-020",
+   "C2-B-024",
+   "C2-B-139",
+   "C2-H-069"
+  ],
+  "input": "> [^n]: b\n> {% c\n>   z %}\n- s\n\nx[^n]\n",
+  "html": "<blockquote><p>[^n]: b\n- s</p></blockquote>\n<p>x[^n]</p>"
  },
  {
   "ticket": "carve-js#4986",
@@ -1021,7 +1048,7 @@
    "C2-B-012"
   ],
   "input": "> - b\n> {% c\n>   z %}\n- s\n",
-  "html": "<blockquote>\n  <ul>\n    <li>b\n\n- s</li>\n  </ul>\n</blockquote>"
+  "html": "<blockquote>\n  <ul>\n    <li>b\n- s</li>\n  </ul>\n</blockquote>"
  },
  {
   "ticket": "carve-js#4913",
@@ -1055,7 +1082,7 @@
    "C2-B-140"
   ],
   "input": "1. x\n   1. +\n      {% x %}\n\n      q\n",
-  "html": "<ol>\n  <li>x\n    <ol>\n      <li>+\n\n        <p>q</p>\n      </li>\n    </ol>\n  </li>\n</ol>"
+  "html": "<ol>\n  <li>x\n    <ol>\n      <li>+\n        <p>q</p>\n      </li>\n    </ol>\n  </li>\n</ol>"
  },
  {
   "ticket": "carve-php#5184",
@@ -1228,7 +1255,7 @@
    "C2-H-069"
   ],
   "input": "- - p\n\n    {% a\n     m\n     z %}\nq\n",
-  "html": "<ul>\n  <li>\n    <ul>\n      <li>p\n        <p>\nq</p>\n      </li>\n    </ul>\n  </li>\n</ul>"
+  "html": "<ul>\n  <li>\n    <ul>\n      <li>p\n        <p>q</p>\n      </li>\n    </ul>\n  </li>\n</ul>"
  },
  {
   "ticket": "carve-rs#4291",
@@ -1255,7 +1282,7 @@
    "C2-H-069"
   ],
   "input": "> - +\n> {% c %}\n",
-  "html": "<blockquote>\n  <ul>\n    <li>+\n</li>\n  </ul>\n</blockquote>"
+  "html": "<blockquote>\n  <ul>\n    <li>+</li>\n  </ul>\n</blockquote>"
  },
  {
   "ticket": "carve-rs#4285",
@@ -1343,7 +1370,7 @@
    "C2-I-088"
   ],
   "input": "> - > {% a\n>   >  z %}\n> q\n",
-  "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>\nq</p></blockquote>\n    </li>\n  </ul>\n</blockquote>"
+  "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>q</p></blockquote>\n    </li>\n  </ul>\n</blockquote>"
  },
  {
   "ticket": "carve-rs#4242",

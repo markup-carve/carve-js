@@ -81,3 +81,19 @@ describe('smart typography', () => {
     expect(render("say 'em' now")).toBe('<p>say ‘em’ now</p>')
   })
 })
+
+describe('comment-only lines', () => {
+  it('C2-H-069: a line of comments of any form and spaces takes one line break around it with it', () => {
+    expect(render('a\n{% c %}\nb')).toBe('<p>a\nb</p>')
+    expect(render('a\n{% c %} %% x\nb')).toBe('<p>a\nb</p>')
+    expect(render('a\n{% c %}')).toBe('<p>a</p>')
+    expect(render('{% c %}\nb')).toBe('<p>b</p>')
+    expect(render('a\n{% c\nd %}\nb')).toBe('<p>a\nb</p>')
+    expect(render('> :: t\n> : b\n> {% c %}\n- s')).toBe('<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>b\n- s</dd>\n  </dl>\n</blockquote>')
+  })
+
+  it('C2-H-069: a line that holds text beside a comment keeps both breaks', () => {
+    expect(render('a {% c %}\nb')).toBe('<p>a \nb</p>')
+    expect(render('a\n{% c %} x\nb')).toBe('<p>a\n x\nb</p>')
+  })
+})
