@@ -29,7 +29,7 @@ const WRITER_SHAPES: readonly Shape[] = [
   ['rows with a continuation row', (size) => '| a | b |\n+ c | d |\n'.repeat(size)],
   ['numbered items', (size) => { let out = ''; for (let at = 1; at <= size; at++) out += `${at}. a\n`; return out }],
   ['quote fences', (size) => '::: >\na\n:::\n\n'.repeat(size)],
-  ['tilde fences', (size) => '~~~\nx\n~~~\n\n'.repeat(size)],
+  ['tilde runs, which are text (C2-B-108)', (size) => '~~~\nx\n~~~\n\n'.repeat(size)],
   // Each backtick opens a code span, and each bracket takes the closer once the one beside it is
   // escaped, so these escapes reveal each other one at a time; the writer places them in one round.
   ['escaped backticks in one text', (size) => `x${'\\`'.repeat(size)}z`],
