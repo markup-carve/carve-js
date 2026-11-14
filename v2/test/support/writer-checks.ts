@@ -6,7 +6,8 @@ import { type Diagnostic } from '../../src/diagnostics.ts'
 import { unitBytes } from '../../src/positions.ts'
 import { isNode } from './nodes.ts'
 
-const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline']
+// C2-W-016: the inline leaves whose later lines are lines of the leaf.
+const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline', 'comment', 'critic_comment']
 
 function nodeAt(tree: DocumentNode, path: string): Node | undefined {
   let at: unknown = tree

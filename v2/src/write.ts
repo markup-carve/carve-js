@@ -184,8 +184,44 @@ function applyChanges(w: Writer, check: Check): boolean {
   addEscapes(w, check.escapes)
   for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
   if (check.escapes.length + check.forms.length + check.retracted.length > 0) return true
+  for (const [node] of check.losses) refuseLeafLines(w, node, 0)
   for (const [node, field] of check.losses) lose(w, node, field)
   return false
+}
+
+// C2-W-016: the inline leaves whose later lines are lines of the leaf.
+const LINE_LEAVES: readonly string[] = ['code', 'literal_inline', 'math', 'raw_inline', 'comment', 'critic_comment']
+
+function isAsciiAlphanumeric(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+/** Whether a line of `value` after the first starts as a block opener can: with a mark, or a number before `.` or `)`. */
+function hasOpenerLine(value: string): boolean {
+  for (let at = value.indexOf('\n'); at >= 0; at = value.indexOf('\n', at + 1)) {
+    let start = at + 1
+    while (value[start] === ' ' || value[start] === '\t') start++
+    if (start >= value.length || value[start] === '\n') continue
+    if (!isAsciiAlphanumeric(value.charCodeAt(start))) return true
+    let end = start
+    while (end < value.length && isAsciiAlphanumeric(value.charCodeAt(end))) end++
+    if (value[end] === '.' || value[end] === ')') return true
+  }
+  return false
+}
+
+/**
+ * C2-W-016: a lost inline node holds a leaf whose later line would open a block. No spelling keeps
+ * that value, so the leaf is refused with `field-unspellable`.
+ */
+function refuseLeafLines(w: Writer, node: Node, depth: number): void {
+  if (depth > MAX_LEAF_DEPTH || node.type === 'paragraph' || node.type === 'list_item') return
+  if (LINE_LEAVES.includes(node.type)) {
+    const value = 'value' in node && typeof node.value === 'string' ? node.value : ''
+    if (hasOpenerLine(value)) lose(w, node, 'value')
+    return
+  }
+  for (const child of childNodes(node)) refuseLeafLines(w, child, depth + 1)
 }
 
 /** Whether `node` is written into one group with the block `before` above it. */
@@ -220,6 +256,8 @@ function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, 
  * all, so that the number of rounds stays linear in the size of the group.
  */
 const MAX_ORDERED_ESCAPES = 4
+// The nesting of inline nodes stays under the depth cap of the parser.
+const MAX_LEAF_DEPTH = 200
 
 /** C2-W-091: the first of `escapes` in written order. */
 function leftmost(group: readonly Node[], escapes: readonly [TextNode, number][]): [TextNode, number] {
