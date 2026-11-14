@@ -106,7 +106,7 @@ describe('what the writer cannot spell', () => {
     expect(write(section)).toBe('a\n\nb\n')
     expect(losses(section)).toEqual(['structure-unspellable /children/0'])
 
-    const ruby = documentOf(paragraph({ type: 'ruby', pairs: [{ type: 'rubyPair', base: [text('漢')], annotation: [text('kan')] }] }))
+    const ruby = documentOf(paragraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: [text('漢')], annotation: [text('kan')] }] }))
     expect(write(ruby)).toBe('漢(kan)\n')
     expect(losses(ruby)).toEqual(['structure-unspellable /children/0/children/0'])
 
@@ -223,10 +223,10 @@ describe('what the writer cannot spell', () => {
   })
 
   it('C2-W-015: a block image is written as the image alone on its line', () => {
-    const tree = documentOf({ type: 'paragraph', blockImage: true, children: [{ type: 'image', src: 'u', alt: 'i' }] })
+    const tree = documentOf({ type: 'paragraph', role: 'image', children: [{ type: 'image', src: 'u', alt: 'i' }] })
     expect(write(tree)).toBe('![i](u)\n')
     expect(losses(tree)).toEqual([])
-    expect(ofType(parse(write(tree)).children[0], 'paragraph').blockImage).toBe(true)
+    expect(ofType(parse(write(tree)).children[0], 'paragraph').role).toBe('image')
     expect(format('{#i}\n![i](u "t")')).toBe('{#i}\n![i](u "t")\n')
   })
 
@@ -247,7 +247,7 @@ describe('what the writer cannot spell', () => {
   })
 
   it('C2-W-115: a math block is its display math span alone on its line, below its attribute line', () => {
-    const tree = documentOf({ type: 'paragraph', blockMath: true, attrs: { classes: ['m'] }, children: [{ type: 'math', display: true, value: 'x' }] })
+    const tree = documentOf({ type: 'paragraph', role: 'math', attrs: { classes: ['m'] }, children: [{ type: 'math', display: true, value: 'x' }] })
     expect(write(tree)).toBe('{.m}\n$$`x`\n')
     expect(treesEqual(parse(write(tree)), tree)).toBe(true)
   })
@@ -801,7 +801,7 @@ describe('canonical forms: inline', () => {
   })
 
   it('C2-W-075: a key that starts with a caret or an at-sign has one space before it', () => {
-    const link = (key: string): LinkNode => ({ type: 'link', key, namespace: 'link', form: 'full', children: [text('a')] })
+    const link = (key: string): LinkNode => ({ type: 'link', key, namespace: 'link', refForm: 'full', children: [text('a')] })
     const tree = documentOf(paragraph(link('^b'), ' ', link('@d')))
     expect(write(tree)).toBe('[a][ ^b] [a][ @d]\n')
     expect(treesEqual(parse(write(tree)), tree)).toBe(true)

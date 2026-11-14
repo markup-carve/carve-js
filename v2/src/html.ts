@@ -81,7 +81,7 @@ function isVisible(node: Node): boolean {
 
 /** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
 function isBareImage(node: ParagraphNode): boolean {
-  if (node.blockImage !== true) return false
+  if (node.role !== 'image') return false
   // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
   for (const child of node.children) if (child.type === 'image') return child.key === undefined || child.src !== undefined
   return false
@@ -138,7 +138,7 @@ function staticMathBlock(r: Render, node: ParagraphNode): string {
 
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
   if (onlyComments(node.children)) return
-  if (node.blockMath === true && r.settings.mode === 'static') {
+  if (node.role === 'math' && r.settings.mode === 'static') {
     line(r, level, staticMathBlock(r, node))
     return
   }

@@ -53,7 +53,7 @@ const RULES = new Map<string, Rule>([
   ['block_quote', ['blocks', [], []]],
   ['caption', ['blocks', [], ['short']]],
   ['caption_number', ['none', [], ['n']]],
-  ['cell_paragraph', ['inlines', [], ['blockImage']]],
+  ['cell_paragraph', ['inlines', [], []]],
   ['citation', [
     'none', ['key', 'suppressAuthor', 'namespace'],
     ['prefix', 'locator', 'locatorLabel', 'locatorValue', 'suffix', 'mode', 'number', 'useIndex'],
@@ -83,25 +83,26 @@ const RULES = new Map<string, Rule>([
   ['hard_break', ['none', [], []]],
   ['heading', ['inlines', ['level'], ['generatedId']]],
   ['highlight', ['inlines', [], []]],
-  ['image', ['none', [], ['src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'form']]],
+  ['image', ['none', [], ['src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm']]],
   ['include', ['none', ['path'], ['section', 'options']]],
   ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
   ['line', ['inlines', [], []]],
   ['line_block', [['line'], [], []]],
-  ['link', ['inlines', [], ['href', 'tooltip', 'targetKind', 'key', 'namespace', 'form']]],
-  ['link_reference_definition', ['none', ['href', ...REFERENCE], ['title']]],
+  ['link', ['inlines', [], ['href', 'tooltip', 'targetKind', 'key', 'namespace', 'refForm']]],
+  ['link_reference_definition', ['none', ['href', ...REFERENCE], ['tooltip']]],
   ['list', [['list_item'], ['marker', 'spacing'], []]],
   ['list_item', ['blocks', [], ['task']]],
   ['literal_inline', ['none', ['value'], []]],
   ['math', ['none', ['display', 'value'], ['number', 'numberPrefix']]],
   ['mention', ['none', ['target', 'kind'], ['label']]],
   ['non_breaking_space', ['none', [], []]],
-  ['paragraph', ['inlines', [], ['blockImage', 'blockMath']]],
+  ['paragraph', ['inlines', [], ['role']]],
   ['raw_block', ['none', ['format', 'value'], []]],
   ['raw_inline', ['none', ['format', 'value'], []]],
   ['ruby', ['none', ['pairs'], []]],
+  ['ruby_pair', ['none', ['base', 'annotation'], []]],
   ['section', ['blocks', [], ['level']]],
   ['small_caps', ['inlines', [], []]],
   ['smart_punctuation', ['none', ['kind', 'source'], ['glyph']]],
@@ -123,28 +124,29 @@ const RULES = new Map<string, Rule>([
   ['text', ['none', ['value'], []]],
   ['thematic_break', ['none', [], []]],
   ['underline', ['inlines', [], []]],
-  ['xref', ['none', REFERENCE, ['href', 'form']]],
+  ['xref', ['none', REFERENCE, ['href', 'display']]],
 ])
 
 const STRINGS = [
   'key', 'namespace', 'expansion', 'kind', 'groupLabel', 'href', 'text', 'name', 'version', 'raw', 'syntax', 'form',
   'tocTarget', 'generatedId', 'src', 'alt', 'tooltip', 'targetKind', 'resourceId', 'path', 'section', 'spacing',
   'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
-  'mode', 'locatorLabel', 'locatorValue', 'value', 'astVersion', 'lang',
+  'mode', 'locatorLabel', 'locatorValue', 'value', 'astVersion', 'lang', 'refForm', 'role',
 ]
 const INTEGERS = ['n', 'number', 'level', 'headRows', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
 const BOOLEANS = ['display', 'header', 'decorative', 'suppressAuthor', 'useIndex']
-const TRUE_ONLY = ['blockImage', 'blockMath', 'authored']
-const INLINE_SLOTS = ['short', 'prefix', 'locator', 'suffix']
+const TRUE_ONLY = ['authored']
+const INLINE_SLOTS = ['short', 'prefix', 'locator', 'suffix', 'base', 'annotation']
 const POSITION_FIELDS = ['startLine', 'endLine', 'startColumn', 'endColumn', 'startOffset', 'endOffset']
 
 // The values of the fields that take one of a fixed set, by node type and field; `*` is every type.
 const ENUMS = new Map<string, readonly string[]>([
   ['*.dir', ['ltr', 'rtl', 'auto']],
   ['comment.form', ['block', 'line', 'braced']],
-  ['link.form', ['full', 'collapsed']],
-  ['image.form', ['full', 'collapsed']],
-  ['xref.form', ['number', 'page', 'title', 'full']],
+  ['link.refForm', ['full', 'collapsed']],
+  ['image.refForm', ['full', 'collapsed']],
+  ['xref.display', ['number', 'page', 'title', 'full']],
+  ['paragraph.role', ['image', 'math']],
   ['list.spacing', ['tight', 'loose']],
   ['table_cell.span', ['rowspan', 'colspan']],
   ['table_cell.align', ['left', 'right', 'center']],
@@ -268,6 +270,11 @@ function isWidth(value: Value): boolean {
 }
 
 function checkScalar(type: string, name: string, value: Value, path: string): boolean {
+  if (type === 'xref' && name === 'display') {
+    requireString(value, path)
+    checkEnum(type, name, value, path)
+    return true
+  }
   if (name === 'width') return isWidth(value) || fail(path, 'not a fraction above 0 and at most 1')
   if (TRUE_ONLY.includes(name)) return value === true || fail(path, 'not true')
   if (BOOLEANS.includes(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
@@ -298,26 +305,13 @@ function nodeList(content: Content): FieldCheck {
   return (value, path, walk) => checkList(value, path, content, walk)
 }
 
-function checkTitle(value: Value, path: string, walk: Walk, node: Fields): void {
-  // C2-A-077: the title of a link definition is a string; every other title is a list of inlines.
-  if (node['type'] === 'link_reference_definition') requireString(value, path)
-  else checkList(value, path, 'inlines', walk)
+function checkTitle(value: Value, path: string, walk: Walk): void {
+  checkList(value, path, 'inlines', walk)
 }
 
 function checkStages(value: Value, path: string): void {
   requireArray(value, path).forEach((stage, index) => {
     if (!STAGES.includes(stage as string)) fail(`${path}/${index}`, 'unknown stage')
-  })
-}
-
-const RUBY_PAIR_FIELDS = ['type', 'base', 'annotation']
-
-function checkPairsOfRuby(value: Value, path: string, walk: Walk): void {
-  requireArray(value, path).forEach((pair, index) => {
-    if (!isRecord(pair) || pair['type'] !== 'rubyPair') fail(`${path}/${index}`, 'not a rubyPair')
-    for (const name of Object.keys(pair)) if (!RUBY_PAIR_FIELDS.includes(name)) fail(`${path}/${index}/${name}`, 'not a field of rubyPair')
-    checkList(pair['base'], `${path}/${index}/base`, 'inlines', walk)
-    checkList(pair['annotation'], `${path}/${index}/annotation`, 'inlines', walk)
   })
 }
 
@@ -391,7 +385,7 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
     checkList(value, path, node['type'] === 'block_extension' ? 'blocks' : 'inlines', inner)
   }],
   ['columns', nodeList(['table_column'])],
-  ['pairs', checkPairsOfRuby],
+  ['pairs', nodeList(['ruby_pair'])],
   ['slots', checkSlots],
   ['stages', checkStages],
   ['resources', checkResources],
@@ -415,8 +409,8 @@ function checkList(value: Value, path: string, content: Content, walk: Walk): vo
 /** C2-A-105, C2-A-120 and the other rules that tie two fields of one node together. */
 function checkDependencies(node: Fields, type: string, path: string): void {
   if (type === 'link' || type === 'image') {
-    const present = ['key', 'namespace', 'form'].filter((name) => node[name] !== undefined).length
-    if (present !== 0 && present !== 3) fail(path, 'key, namespace and form stand together or not at all')
+    const present = ['key', 'namespace', 'refForm'].filter((name) => node[name] !== undefined).length
+    if (present !== 0 && present !== 3) fail(path, 'key, namespace and refForm stand together or not at all')
   }
   if (type === 'citation_group' && node['mode'] !== undefined) {
     const items = node['children'] as Fields[]

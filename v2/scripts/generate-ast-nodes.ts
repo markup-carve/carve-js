@@ -40,7 +40,7 @@ const SPECIAL = new Map<string, (type: string) => string>([
   ['caption', () => 'CaptionNode'],
   ['fallback', (type) => (type === 'block_extension' ? 'Block[]' : 'Inline[]')],
   ['columns', () => 'TableColumnNode[]'],
-  ['pairs', () => 'RubyPair[]'],
+  ['pairs', () => 'RubyPairNode[]'],
   ['slots', () => 'Record<string, Node[]>'],
   ['stages', () => `(${literals(STAGES)})[]`],
   ['resources', () => 'Resource[]'],
@@ -69,7 +69,7 @@ export function generateAstNodes(): string {
   const types = [...RULES.keys()]
   const lines = [
     '// Generated from the node table of src/ast-validate.ts by scripts/generate-ast-nodes.ts. Do not edit.',
-    "import { type Attrs, type ExtensionDeclaration, type Marker, type Position, type Resource, type RubyPair, type Task } from './ast.ts'",
+    "import { type Attrs, type ExtensionDeclaration, type Marker, type Position, type Resource, type Task } from './ast.ts'",
     '',
     '/** C2-A-027: the fields every node may carry. */',
     'export interface NodeBase {',

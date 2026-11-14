@@ -1,5 +1,5 @@
 // Generated from the node table of src/ast-validate.ts by scripts/generate-ast-nodes.ts. Do not edit.
-import { type Attrs, type ExtensionDeclaration, type Marker, type Position, type Resource, type RubyPair, type Task } from './ast.ts'
+import { type Attrs, type ExtensionDeclaration, type Marker, type Position, type Resource, type Task } from './ast.ts'
 
 /** C2-A-027: the fields every node may carry. */
 export interface NodeBase {
@@ -71,7 +71,6 @@ export interface CaptionNumberNode extends NodeBase {
 export interface CellParagraphNode extends NodeBase {
   type: "cell_paragraph"
   children: Inline[]
-  blockImage?: true
 }
 
 export interface CitationNode extends NodeBase {
@@ -237,7 +236,7 @@ export interface ImageNode extends NodeBase {
   key?: string
   namespace?: "link"
   resourceId?: string
-  form?: "full" | "collapsed"
+  refForm?: "full" | "collapsed"
 }
 
 export interface IncludeNode extends NodeBase {
@@ -288,7 +287,7 @@ export interface LinkNode extends NodeBase {
   targetKind?: "url" | "wiki" | "doc" | "xref"
   key?: string
   namespace?: "link"
-  form?: "full" | "collapsed"
+  refForm?: "full" | "collapsed"
 }
 
 export interface LinkReferenceDefinitionNode extends NodeBase {
@@ -296,7 +295,7 @@ export interface LinkReferenceDefinitionNode extends NodeBase {
   href: string
   key: string
   namespace: "link"
-  title?: string
+  tooltip?: string
 }
 
 export interface ListNode extends NodeBase {
@@ -339,8 +338,7 @@ export interface NonBreakingSpaceNode extends NodeBase {
 export interface ParagraphNode extends NodeBase {
   type: "paragraph"
   children: Inline[]
-  blockImage?: true
-  blockMath?: true
+  role?: "image" | "math"
 }
 
 export interface RawBlockNode extends NodeBase {
@@ -357,7 +355,13 @@ export interface RawInlineNode extends NodeBase {
 
 export interface RubyNode extends NodeBase {
   type: "ruby"
-  pairs: RubyPair[]
+  pairs: RubyPairNode[]
+}
+
+export interface RubyPairNode extends NodeBase {
+  type: "ruby_pair"
+  base: Inline[]
+  annotation: Inline[]
 }
 
 export interface SectionNode extends NodeBase {
@@ -485,7 +489,7 @@ export interface XrefNode extends NodeBase {
   key: string
   namespace: "link" | "footnote" | "citation" | "abbr" | "heading"
   href?: string
-  form?: "number" | "page" | "title" | "full"
+  display?: "number" | "page" | "title" | "full"
 }
 
 /** The node types that stand in a list of blocks. */
@@ -602,6 +606,7 @@ export type Node =
   | RawBlockNode
   | RawInlineNode
   | RubyNode
+  | RubyPairNode
   | SectionNode
   | SmallCapsNode
   | SmartPunctuationNode
@@ -678,6 +683,7 @@ export interface NodeOfType {
   raw_block: RawBlockNode
   raw_inline: RawInlineNode
   ruby: RubyNode
+  ruby_pair: RubyPairNode
   section: SectionNode
   small_caps: SmallCapsNode
   smart_punctuation: SmartPunctuationNode
@@ -713,9 +719,10 @@ export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeO
 export const FIELD_VALUES = {
   "*.dir": ["ltr", "rtl", "auto"],
   "comment.form": ["block", "line", "braced"],
-  "link.form": ["full", "collapsed"],
-  "image.form": ["full", "collapsed"],
-  "xref.form": ["number", "page", "title", "full"],
+  "link.refForm": ["full", "collapsed"],
+  "image.refForm": ["full", "collapsed"],
+  "xref.display": ["number", "page", "title", "full"],
+  "paragraph.role": ["image", "math"],
   "list.spacing": ["tight", "loose"],
   "table_cell.span": ["rowspan", "colspan"],
   "table_cell.align": ["left", "right", "center"],

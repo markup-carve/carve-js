@@ -196,7 +196,7 @@ function destination(value: string): string {
 
 /** C2-W-075: the label of a reference, from the tree. */
 function referenceLabel(node: LinkNode | ImageNode, key: string): string {
-  if (node.form === 'collapsed') return '[]'
+  if (node.refForm === 'collapsed') return '[]'
   // C2-I-078: a label that starts with a caret or an at-sign is no reference label; the space folds away.
   return key.startsWith('^') || key.startsWith('@') ? `[ ${labelText(key)}]` : `[${labelText(key)}]`
 }

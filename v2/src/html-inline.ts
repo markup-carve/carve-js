@@ -128,13 +128,13 @@ function withDefinition<N extends LinkNode | ImageNode>(node: N, definition: Lin
 
 /** C2-H-085: the label part of an unresolved reference, written from its key. */
 function unresolvedLabel(node: LinkNode | ImageNode, key: string): string {
-  return escapeText(`${node.form === 'collapsed' ? '[]' : `[${key}]`}${attributeBlockText(node)}`)
+  return escapeText(`${node.refForm === 'collapsed' ? '[]' : `[${key}]`}${attributeBlockText(node)}`)
 }
 
 function referenceCarriers(r: Render, node: LinkNode | ImageNode, key: string | undefined): Pair[] {
   if (!r.settings.roundtrip || key === undefined) return []
   const carriers: Pair[] = [['data-carve-ref', key]]
-  if (node.form === 'collapsed') carriers.push(['data-carve-ref-collapsed', null])
+  if (node.refForm === 'collapsed') carriers.push(['data-carve-ref-collapsed', null])
   return carriers
 }
 
@@ -158,7 +158,7 @@ function link(node: LinkNode, r: Render): string {
   const href = node.href
   if (key !== undefined && href === undefined) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
   const definition = key === undefined ? undefined : r.resolution.definitions.get(key)
-  const title = node.tooltip ?? definition?.title
+  const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
   if (title !== undefined) structural.push(['title', title])
   const merged = withRel(r, withDefinition(node, definition), structural)
@@ -175,7 +175,7 @@ function image(node: ImageNode, r: Render): string {
   const alt = node.alt ?? ''
   if (key !== undefined && src === undefined) return `![${escapeText(alt)}]${unresolvedLabel(node, key)}`
   const definition = key === undefined ? undefined : r.resolution.definitions.get(key)
-  const title = node.tooltip ?? definition?.title
+  const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['src', destination(r, src ?? '', node)], ['alt', alt]]
   if (title !== undefined) structural.push(['title', title])
   structural.push(...referenceCarriers(r, node, key))

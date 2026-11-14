@@ -26,7 +26,7 @@ export function linkDefinitionFields(src: string, pos: number, end: number, key:
   const quote = p + 1 < end ? src.charCodeAt(p + 1) : 0
   if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return out
   const after = quotedEnd(src, p + 1, end, quote)
-  if (after >= 0) out.title = unescape(src, p + 2, after - 1)
+  if (after >= 0) out.tooltip = unescape(src, p + 2, after - 1)
   return out
 }
 

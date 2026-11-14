@@ -52,7 +52,7 @@ describe('the heading slug', () => {
     expect(ids('# a{% c %}b[^n] ^[note] </#x> :sym: `<b>`{=html} {# cc #}\n\n[^n]: n')).toEqual(['ab'])
     expect(ids('# *a* _b_ {+c+} [d]{.e} [f](g) :x[h] :index[i]')).toEqual(['a-b-c-d-f-h'])
     expect(headingId({ type: 'mention', target: 't', kind: 'user', label: 'Shown' })).toBe('t')
-    expect(headingId({ type: 'ruby', pairs: [{ type: 'rubyPair', base: [text('b')], annotation: [text('a')] }] })).toBe('b-a')
+    expect(headingId({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: [text('b')], annotation: [text('a')] }] })).toBe('b-a')
     expect(headingId({ type: 'abbreviation', key: 'HTML', namespace: 'abbr', expansion: 'x' })).toBe('HTML')
     expect(headingId({ type: 'citation_group', raw: '[@a]', children: [] })).toBe('s')
   })
@@ -678,7 +678,7 @@ describe('the position of a diagnostic', () => {
 
   it('C2-A-173: a finding on a supplied tree has the path alone, also where its node is a copy the renderer made', () => {
     const span: SpanNode = { type: 'span', attrs: { keyValues: [['kbd', ''], ['data-carve-ref', 'x']] }, children: [text('k')] }
-    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [{ type: 'raw_inline', format: 'tex', value: 'x' }], annotation: [text('a')] }] }
+    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [{ type: 'raw_inline', format: 'tex', value: 'x' }], annotation: [text('a')] }] }
     const output = renderWithDiagnostics(documentOf(paragraph(span, ruby)), { roundtrip: true })
     expect(output.diagnostics.map((entry) => [entry.code, entry.path, entry.range])).toEqual([
       ['carrier-attribute-dropped', '/children/0/children/0', undefined], ['raw-format-dropped', '/children/0/children/1/pairs/0/base/0', undefined],

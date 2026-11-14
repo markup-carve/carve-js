@@ -310,7 +310,7 @@ describe('facts moved out of the tree', () => {
     expect(facts).toEqual([
       ['/children/0/children/0', '[a][ B  c ]'], ['/children/0/children/2', '[d][]'], ['/children/0/children/4', '[e][f]'],
     ])
-    expect(resolvePointer(result.document, '/children/0/children/0')).toMatchObject({ type: 'link', key: 'B c', form: 'full' })
+    expect(resolvePointer(result.document, '/children/0/children/0')).toMatchObject({ type: 'link', key: 'B c', refForm: 'full' })
     // A reference that crosses lines of a quote is held without the quote marks.
     expect(entry('> [a\n> b][c]\n', '/children/0/children/0/children/0')!.rawRef).toBe('[a\nb][c]')
   })
@@ -546,8 +546,8 @@ describe('defaults, from the side of the record', () => {
 
   it('C2-L-040: the tree of a reference holds what a writer needs with no record: the text, the key and the form', () => {
     const link = resolvePointer(parse('[a][ B ] [c][]\n'), '/children/0/children/0')
-    expect(link).toMatchObject({ key: 'B', form: 'full', children: [{ type: 'text', value: 'a' }] })
-    expect(resolvePointer(parse('[a][ B ] [c][]\n'), '/children/0/children/2')).toMatchObject({ key: 'c', form: 'collapsed' })
+    expect(link).toMatchObject({ key: 'B', refForm: 'full', children: [{ type: 'text', value: 'a' }] })
+    expect(resolvePointer(parse('[a][ B ] [c][]\n'), '/children/0/children/2')).toMatchObject({ key: 'c', refForm: 'collapsed' })
   })
 
   it('C2-L-041: blank lines, content columns and the frontmatter opener are recorded as typed', () => {

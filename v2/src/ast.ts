@@ -40,12 +40,6 @@ export interface Task {
   status: string
 }
 
-export interface RubyPair {
-  type: 'rubyPair'
-  base: Inline[]
-  annotation: Inline[]
-}
-
 export interface ExtensionDeclaration {
   name: string
   required: boolean
@@ -99,7 +93,7 @@ const BLOCK_PARENT_TYPES: ReadonlySet<string> = new Set(BLOCK_PARENTS)
 export interface NodeSlots {
   readonly type: string
   readonly children?: readonly Node[]
-  readonly title?: Inline[] | string
+  readonly title?: Inline[]
   readonly caption?: CaptionNode
 }
 
@@ -110,10 +104,9 @@ export function childNodes(node: NodeSlots): readonly Node[] {
   return node.children ?? NO_NODES
 }
 
-/** The inline title of `node`, where it has one (C2-A-024). The title of a link definition is a string and no slot. */
+/** C2-A-024: the inline title of `node`, where it has one. */
 export function titleOf(node: NodeSlots): Inline[] | undefined {
-  const title = node.title
-  return typeof title === 'string' ? undefined : title
+  return node.title
 }
 
 /** The caption of `node`, where it has one (C2-A-024). */

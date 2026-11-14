@@ -80,7 +80,7 @@ describe('reading a supplied tree', () => {
   it('C2-A-132: references are counted in every slot that holds nodes, ruby pairs and extension slots included', () => {
     const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
     const images = (count: number): unknown[] => Array.from({ length: count }, () => ({ type: 'image', resourceId: 'r' }))
-    const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'rubyPair', base: images(count), annotation: [] }] }), resources })
+    const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: images(count), annotation: [] }] }), resources })
     expect(refusal(ruby(4096))).toBeNull()
     expect(refusal(ruby(4097))).toBe('/children/0/children/0/pairs/0/base/4096: more than 4096 resource references')
     const slots = (count: number): unknown => ({ ...inParagraph({ type: 'inline_extension', name: 'a.b', children: [], slots: { s: images(count) } }), resources })
@@ -89,7 +89,7 @@ describe('reading a supplied tree', () => {
   })
 
   it('C2-A-028: a ruby pair is closed', () => {
-    expect(refusal(inParagraph({ type: 'ruby', pairs: [{ type: 'rubyPair', base: [], annotation: [], x: 1 }] }))).toBe('/children/0/children/0/pairs/0/x: not a field of rubyPair')
+    expect(refusal(inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: [], annotation: [], x: 1 }] }))).toBe('/children/0/children/0/pairs/0/x: not a field of ruby_pair')
   })
 })
 
@@ -410,14 +410,14 @@ describe('folding and trimming keep the characters the specification keeps', () 
 })
 
 describe('one walker over every slot that holds nodes', () => {
-  const reference = { type: 'link', key: 'r', namespace: 'link', form: 'full', children: [{ type: 'text', value: 'x' }] }
+  const reference = { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
   const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
   const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
     type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [inline] }, ...more],
   }))
 
   it('C2-A-024, C2-A-025: resolution reads a reference in a ruby base and in an extension fallback', () => {
-    const ruby = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [reference], annotation: [{ type: 'text', value: 'a' }] }] }
+    const ruby = { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [reference], annotation: [{ type: 'text', value: 'a' }] }] }
     expect(render(supplied(ruby, definition))).toBe('<p><ruby><a href="/u">x</a><rp>(</rp><rt>a</rt><rp>)</rp></ruby></p>')
     expect(render(supplied({ type: 'inline_extension', name: 'a.b', children: [], fallback: [reference] }, definition))).toBe('<p><a href="/u">x</a></p>')
   })
@@ -444,7 +444,7 @@ describe('one walker over every slot that holds nodes', () => {
 
 describe('fields checked against the node type they stand on', () => {
   it('C2-A-103, C2-A-117, C2-A-170: a reference or a definition in the namespace of another node type is refused at decode', () => {
-    const link = { type: 'link', key: 'r', namespace: 'footnote', form: 'full', children: [{ type: 'text', value: 'x' }] }
+    const link = { type: 'link', key: 'r', namespace: 'footnote', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
     expect(refusal(inParagraph(link))).toBe('/children/0/children/0/namespace: unknown value "footnote"')
     expect(refusal(inParagraph({ type: 'footnote_ref', key: 'n', namespace: 'link' }))).toBe('/children/0/children/0/namespace: unknown value "link"')
     expect(refusal(inParagraph({ type: 'abbreviation', key: 'A', namespace: 'heading' }))).toBe('/children/0/children/0/namespace: unknown value "heading"')

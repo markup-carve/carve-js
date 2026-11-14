@@ -356,8 +356,8 @@ describe('definitions', () => {
   })
 
   it('C2-A-077: a link definition carries the folded label, its destination and an optional title', () => {
-    expect(block('[a  b]: /u "T"')).toEqual({ type: 'link_reference_definition', key: 'a b', namespace: 'link', href: '/u', title: 'T' })
-    expect(ofType(block('[a]: /u'), 'link_reference_definition').title).toBeUndefined()
+    expect(block('[a  b]: /u "T"')).toEqual({ type: 'link_reference_definition', key: 'a b', namespace: 'link', href: '/u', tooltip: 'T' })
+    expect(ofType(block('[a]: /u'), 'link_reference_definition').tooltip).toBeUndefined()
     expect(block('[a]:').type).toBe('paragraph')
   })
 
@@ -383,7 +383,7 @@ describe('figures and captions', () => {
 
   it('C2-A-082: a table carries its caption; an image, a code block, a quote and a math block are wrapped in a figure', () => {
     expect(block('![a](b)\n^ c')).toEqual({
-      type: 'figure', children: [{ ...paragraph({ type: 'image', src: 'b', alt: 'a' }), blockImage: true }], caption: caption('c'),
+      type: 'figure', children: [{ ...paragraph({ type: 'image', src: 'b', alt: 'a' }), role: 'image' }], caption: caption('c'),
     })
     expect(types([block('```\n```\n^ c'), block('> q\n^ c'), block('$$`x`\n^ c'), block('| a |\n^ c')])).toEqual(['figure', 'figure', 'figure', 'table'])
     expect(types(childrenOf(block('```\n```\n%% x\n^ c')))).toEqual(['code_block', 'comment'])
@@ -584,24 +584,24 @@ describe('citations, extension nodes and resources', () => {
 })
 
 describe('facts set at close', () => {
-  it('C2-A-136: a paragraph that closed as one block image line carries blockImage', () => {
-    expect(ofType(block('![a](b)'), 'paragraph').blockImage).toBe(true)
-    expect(ofType(block('![a](b)\n%% c'), 'paragraph').blockImage).toBe(true)
-    expect(ofType(block('![a](b) x'), 'paragraph').blockImage).toBeUndefined()
-    expect(ofType(block('![a\nb][c]'), 'paragraph').blockImage).toBeUndefined()
+  it('C2-A-136: a paragraph that closed as one block image line carries role', () => {
+    expect(ofType(block('![a](b)'), 'paragraph').role).toBe('image')
+    expect(ofType(block('![a](b)\n%% c'), 'paragraph').role).toBe('image')
+    expect(ofType(block('![a](b) x'), 'paragraph').role).toBeUndefined()
+    expect(ofType(block('![a\nb][c]'), 'paragraph').role).toBeUndefined()
     expect(refusal(documentOf({ type: 'image', src: 'b' } as unknown as Block))).toBe('/children/0: image does not stand here')
   })
 
-  it('C2-A-184: a paragraph that closed as one display math line carries blockMath', () => {
-    expect(block('$$`x`')).toEqual({ ...paragraph({ type: 'math', display: true, value: 'x' }), blockMath: true })
-    expect(ofType(block('$`x`'), 'paragraph').blockMath).toBeUndefined()
-    expect(ofType(block('$$`x\ny`'), 'paragraph').blockMath).toBeUndefined()
+  it('C2-A-184: a paragraph that closed as one display math line carries role', () => {
+    expect(block('$$`x`')).toEqual({ ...paragraph({ type: 'math', display: true, value: 'x' }), role: 'math' })
+    expect(ofType(block('$`x`'), 'paragraph').role).toBeUndefined()
+    expect(ofType(block('$$`x\ny`'), 'paragraph').role).toBeUndefined()
   })
 
   it('C2-A-185: the five facts set at close are in the tree and take part in equality', () => {
     expect(treesEqual(tree('- a\n- b'), tree('- a\n\n- b'))).toBe(false)
     expect(treesEqual(tree('![a](b)'), tree('![a](b) '))).toBe(true)
-    expect(treesEqual(documentOf({ ...paragraph(), blockImage: true }), documentOf(paragraph()))).toBe(false)
+    expect(treesEqual(documentOf({ ...paragraph(), role: 'image' }), documentOf(paragraph()))).toBe(false)
     expect(treesEqual(tree('| a |\n| b |'), tree('{footer-rows=1}\n| a |\n| b |'))).toBe(false)
     expect(treesEqual(tree('| a |\n^ c'), tree('| a |\n\n^ c'))).toBe(false)
   })
@@ -698,7 +698,7 @@ describe('reading a tree', () => {
     expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'cell_wrap' } as unknown as Inline))))).toThrow(CarveTreeError)
   })
 
-  it('C2-A-105: on a link or an image the key, the namespace and the form stand together', () => {
-    expect(refusal(documentOf(paragraph({ type: 'link', key: 'a', namespace: 'link', children: [] })))).toBe('/children/0/children/0: key, namespace and form stand together or not at all')
+  it('C2-A-105: on a link or an image the key, the namespace and refForm stand together', () => {
+    expect(refusal(documentOf(paragraph({ type: 'link', key: 'a', namespace: 'link', children: [] })))).toBe('/children/0/children/0: key, namespace and refForm stand together or not at all')
   })
 })

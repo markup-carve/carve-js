@@ -39,7 +39,7 @@ export {
 } from './api.ts'
 export {
   AST_VERSION, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
-  type Resource, type RubyPair, type Task,
+  type Resource, type Task,
 } from './ast.ts'
 export type * from './ast-nodes.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'

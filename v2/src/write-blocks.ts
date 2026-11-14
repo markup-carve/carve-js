@@ -204,7 +204,7 @@ function linkDefinition(w: Writer, node: LinkReferenceDefinitionNode, prefix: st
   attributeLine(w, node, prefix)
   const href = node.href
   if (href === '') lose(w, node, 'href')
-  const authored = node.title
+  const authored = node.tooltip
   const title = authored === undefined ? '' : ` ${quoted(authored)}`
   // C2-W-022: a definition with no destination ends at its colon.
   emit(w, prefix, `[${node.key}]:${href === '' && title === '' ? '' : ' '}${href}${title}`)

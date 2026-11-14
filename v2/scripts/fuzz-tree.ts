@@ -23,7 +23,7 @@ type Container = Json[] | { [name: string]: Json }
 const NEST_DEPTH = 300
 const ENUM_SHARE = 0.1
 const LONG_STRING = 'x'.repeat(1 << 16)
-const TYPES = [...NODE_TABLE.RULES.keys(), 'rubyPair', 'escaped_text', 'unknown']
+const TYPES = [...NODE_TABLE.RULES.keys(), 'ruby_pair', 'escaped_text', 'unknown']
 const COMMON = ['attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
 
 /** The fields a node of `type` may carry (C2-A-050), so a mutation reaches past the check for unknown fields. */
@@ -52,7 +52,7 @@ const SEEDS: Json[] = [
             type: 'inline_extension', name: 'x', payload: [{ format: 'application/json', value: { a: [1] } }], fallback: [TEXT],
             slots: { s: [TEXT] }, resourceIds: ['r'], children: [TEXT],
           },
-          { type: 'ruby', pairs: [{ type: 'rubyPair', base: [TEXT], annotation: [TEXT] }] },
+          { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [TEXT], annotation: [TEXT] }] },
           { type: 'image', resourceId: 'r', alt: 'a', tooltip: 't' },
           { type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', number: 1 },
           {
@@ -63,8 +63,8 @@ const SEEDS: Json[] = [
               },
             ],
           },
-          { type: 'link', key: 'k', namespace: 'link', form: 'full', href: '/u', children: [TEXT] },
-          { type: 'xref', key: 'h', namespace: 'heading', href: '#h', form: 'title' },
+          { type: 'link', key: 'k', namespace: 'link', refForm: 'full', href: '/u', children: [TEXT] },
+          { type: 'xref', key: 'h', namespace: 'heading', href: '#h', display: 'title' },
         ],
       },
       { type: 'code_block', value: 'x\n', syntax: 'js', title: [{ type: 'emphasis', children: [TEXT] }], groupLabel: 'g' },
@@ -112,7 +112,7 @@ function replacement(next: () => number, node: Json, nodes: readonly Json[]): Js
   const values: Json[] = [
     null, 7, -1, 1.5, 0, true, '', LONG_STRING, 'r', 'javascript:x', '2.0', 'html', [], [null], [{}], [7], ['r'], [node],
     [other], other, {}, { a: null }, { format: 'text/plain', value: null }, [{ format: 'x', value: 'y' }],
-    [{ type: 'rubyPair', base: [other], annotation: [] }], [['k', 'v']], [['id', 'x']], { keyValues: [['k', 7]] },
+    [{ type: 'ruby_pair', base: [other], annotation: [] }], [['k', 'v']], [['id', 'x']], { keyValues: [['k', 7]] },
   ]
   return pick(next, values)
 }

@@ -22,17 +22,17 @@ describe('references', () => {
   })
 
   it('C2-A-104: the key is the folded label, and case is kept', () => {
-    expect(resolvedInlines('[x][a  b\n c]\n\n[a b c]: /u')[0]).toEqual({ type: 'link', key: 'a b c', namespace: 'link', form: 'full', href: '/u', children: [text('x')] })
+    expect(resolvedInlines('[x][a  b\n c]\n\n[a b c]: /u')[0]).toEqual({ type: 'link', key: 'a b c', namespace: 'link', refForm: 'full', href: '/u', children: [text('x')] })
     expect(ofType(resolvedInlines('[x][A]\n\n[a]: /u')[0], 'link').href).toBeUndefined()
   })
 
   it('C2-A-105: a reference carries its form, exactly when it carries a key', () => {
-    expect(resolvedInlines('[a][b] [c][] [d](e)').filter((node) => node.type === 'link').map((node) => node.form)).toEqual(['full', 'collapsed', undefined])
+    expect(resolvedInlines('[a][b] [c][] [d](e)').filter((node) => node.type === 'link').map((node) => node.refForm)).toEqual(['full', 'collapsed', undefined])
     expect(ofType(resolvedInlines('[c *d*][]')[0], 'link').key).toBe('c *d*')
   })
 
   it('C2-A-106: a resolution result is added beside the authored construct', () => {
-    expect(resolvedInlines('[a][b]\n\n[b]: /u')[0]).toEqual({ type: 'link', key: 'b', namespace: 'link', form: 'full', href: '/u', children: [text('a')] })
+    expect(resolvedInlines('[a][b]\n\n[b]: /u')[0]).toEqual({ type: 'link', key: 'b', namespace: 'link', refForm: 'full', href: '/u', children: [text('a')] })
   })
 
   it('C2-A-107: an absent destination means unresolved, and the empty string a destination that is empty', () => {
@@ -43,9 +43,9 @@ describe('references', () => {
 
   it('C2-A-108: an unresolved reference is still a link or an image node with its children, key, form and attrs', () => {
     expect(resolvedInlines('[*a*][nope]{.c}')[0]).toEqual({
-      type: 'link', key: 'nope', namespace: 'link', form: 'full', children: [{ type: 'strong', children: [text('a')] }], attrs: { classes: ['c'] },
+      type: 'link', key: 'nope', namespace: 'link', refForm: 'full', children: [{ type: 'strong', children: [text('a')] }], attrs: { classes: ['c'] },
     })
-    expect(resolvedInlines('![a][nope] x')[0]).toEqual({ type: 'image', key: 'nope', namespace: 'link', form: 'full', alt: 'a' })
+    expect(resolvedInlines('![a][nope] x')[0]).toEqual({ type: 'image', key: 'nope', namespace: 'link', refForm: 'full', alt: 'a' })
   })
 
   it('C2-A-109: a link reference is looked up in the definitions first and then in the headings; an image is not', () => {
@@ -139,11 +139,11 @@ describe('resolution results', () => {
   })
 
   it('a supplied tree resolves by the plain text of its headings, and keeps a destination an earlier resolution published', () => {
-    const link: LinkNode = { type: 'link', key: 'T', namespace: 'link', form: 'collapsed', children: [text('T')] }
+    const link: LinkNode = { type: 'link', key: 'T', namespace: 'link', refForm: 'collapsed', children: [text('T')] }
     const supplied = documentOf({ type: 'heading', level: 1, children: [text('T')] }, paragraph(link))
     resolve(supplied, 'keep-case', null)
     expect(link.href).toBe('#T')
-    const kept: LinkNode = { type: 'link', key: 'gone', namespace: 'link', form: 'full', href: '#x', children: [] }
+    const kept: LinkNode = { type: 'link', key: 'gone', namespace: 'link', refForm: 'full', href: '#x', children: [] }
     resolve({ ...documentOf(paragraph(kept)), stages: ['referenceResolution'] }, 'keep-case', null)
     expect(kept.href).toBe('#x')
     resolve(documentOf(paragraph(kept)), 'keep-case', null)

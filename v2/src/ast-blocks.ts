@@ -78,9 +78,9 @@ function paragraphNode(ctx: TreeContext, node: BlockNode, flow: number): Paragra
   const children = leafChildren(ctx, node, flow)
   const out: ParagraphNode = noteLeaf(ctx, { type: 'paragraph', children })
   // C2-A-136, C2-A-184: the mark needs the shape of the line and the one node the inline pass made of it.
-  if ((node.exitFlags & FLAG_IMAGE) !== 0 && holdsOnly(children, (child) => child.type === 'image')) out.blockImage = true
+  if ((node.exitFlags & FLAG_IMAGE) !== 0 && holdsOnly(children, (child) => child.type === 'image')) out.role = 'image'
   if ((node.exitFlags & FLAG_BLOCK_MATH) !== 0 && holdsOnly(children, (child) => child.type === 'math' && child.display)) {
-    out.blockMath = true
+    out.role = 'math'
   }
   return out
 }

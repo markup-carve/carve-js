@@ -203,7 +203,7 @@ describe('inline elements', () => {
   ])
 
   it('C2-H-142: small_caps, ruby and section reach the renderer in a supplied tree', () => {
-    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [text('漢')], annotation: [text('kan')] }] }
+    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [text('漢')], annotation: [text('kan')] }] }
     const section: SectionNode = { type: 'section', children: [paragraph({ type: 'small_caps', children: [text('a')] }, ruby)] }
     expect(render(documentOf(section))).toBe(
       '<section>\n  <p><span class="smallcaps">a</span><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p>\n</section>',

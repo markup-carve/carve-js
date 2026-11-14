@@ -548,7 +548,7 @@ function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
 function isChainOpener(a: Node): boolean {
   if (a.type === 'footnote_ref') return true
   if (a.type !== 'link' && a.type !== 'image' && a.type !== 'span' && a.type !== 'inline_footnote') return false
-  return !('key' in a && a.key !== undefined) || ('form' in a && (a.form === 'full' || a.form === 'collapsed'))
+  return !('key' in a && a.key !== undefined) || ('refForm' in a && (a.refForm === 'full' || a.refForm === 'collapsed'))
 }
 
 /** Whether the content of `node`, its text or the alternative text of an image, holds `]`, which may close a bracket of it. */

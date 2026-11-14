@@ -125,7 +125,7 @@ function referenceForm(node: InlineFrame): 'collapsed' | 'full' {
 /** C2-A-105, C2-A-107: an image, its target direct or by reference. */
 function imageNode(node: InlineFrame): ImageNode {
   if ((node.flags & FLAG_REFERENCE) !== 0) {
-    return { type: 'image', key: node.key ?? '', namespace: 'link', form: referenceForm(node), alt: node.value }
+    return { type: 'image', key: node.key ?? '', namespace: 'link', refForm: referenceForm(node), alt: node.value }
   }
   const out: ImageNode = { type: 'image', src: node.destination ?? '' }
   if (node.title !== null) out.tooltip = node.title
@@ -136,7 +136,7 @@ function imageNode(node: InlineFrame): ImageNode {
 /** C2-A-105, C2-A-107: a link, its target direct or by reference. */
 function linkNode(node: InlineFrame, children: Inline[]): LinkNode {
   if ((node.flags & FLAG_REFERENCE) !== 0) {
-    return { type: 'link', key: node.key ?? '', namespace: 'link', form: referenceForm(node), children }
+    return { type: 'link', key: node.key ?? '', namespace: 'link', refForm: referenceForm(node), children }
   }
   const href = node.destination ?? ''
   return node.title === null ? { type: 'link', href, children } : { type: 'link', href, tooltip: node.title, children }

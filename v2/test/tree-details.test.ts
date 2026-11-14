@@ -217,9 +217,9 @@ describe('the reader at its bounds', () => {
     expect(refusal(include([['a', 'b']]))).toBeNull()
     for (const bad of [[['a']], [['a', 1]], [[1, 'b']], ['ab'], [['a', 'b', 'c']]]) expect(refusal(include(bad))).toBe('/children/0/options/0: not a pair of two strings')
     const ruby = (pair: unknown): DocumentNode => documentOf(paragraph({ type: 'ruby', pairs: [pair] } as unknown as Inline))
-    expect(refusal(ruby({ type: 'rubyPair', base: [text('a')], annotation: [] }))).toBeNull()
-    expect(refusal(ruby({ type: 'pair', base: [], annotation: [] }))).toBe('/children/0/children/0/pairs/0: not a rubyPair')
-    expect(refusal(ruby('x'))).toBe('/children/0/children/0/pairs/0: not a rubyPair')
+    expect(refusal(ruby({ type: 'ruby_pair', base: [text('a')], annotation: [] }))).toBeNull()
+    expect(refusal(ruby({ type: 'pair', base: [], annotation: [] }))).toBe('/children/0/children/0/pairs/0: unknown node type pair')
+    expect(refusal(ruby('x'))).toBe('/children/0/children/0/pairs/0: not a node')
   })
 
   it('checks the slots and the fallback of an extension node by its role, and the fields that depend on each other', () => {
@@ -230,8 +230,8 @@ describe('the reader at its bounds', () => {
     expect(refusal(documentOf(blockNode))).toBeNull()
     expect(refusal(documentOf({ ...blockNode, slots: { s: [text('x')] } }))).toBe('/children/0/slots/s/0: text does not stand here')
     const link = (fields: Partial<LinkNode>): string | null => refusal(documentOf(paragraph({ type: 'link', children: [], ...fields })))
-    expect([link({}), link({ key: 'a', namespace: 'link', form: 'full' })]).toEqual([null, null])
-    for (const fields of [{ key: 'a' }, { namespace: 'link' }, { form: 'full' }, { key: 'a', form: 'full' }, { namespace: 'link', form: 'full' }] satisfies Partial<LinkNode>[]) expect(link(fields)).not.toBeNull()
+    expect([link({}), link({ key: 'a', namespace: 'link', refForm: 'full' })]).toEqual([null, null])
+    for (const fields of [{ key: 'a' }, { namespace: 'link' }, { refForm: 'full' }, { key: 'a', refForm: 'full' }, { namespace: 'link', refForm: 'full' }] satisfies Partial<LinkNode>[]) expect(link(fields)).not.toBeNull()
     const ordered = (marker: object): string | null => refusal(documentOf({ type: 'list', marker, spacing: 'tight', children: [] } as unknown as Block))
     expect([ordered({ kind: 'ordered' }), ordered({ kind: 'ordered', style: 'a', delimiter: ')', start: 3 })]).toEqual([null, null])
     expect([ordered({ kind: 'ordered', style: 'x' }), ordered({ kind: 'ordered', delimiter: ':' }), ordered({ kind: 'ordered', start: 1.5 })].every((reason) => reason !== null)).toBe(true)
@@ -242,7 +242,7 @@ describe('equality in detail', () => {
   const link = (fields: Partial<LinkNode>): DocumentNode => documentOf(paragraph({ type: 'link', children: [], ...fields }))
 
   it('a destination is a resolution result only on a reference use', () => {
-    const reference = { key: 'a', namespace: 'link', form: 'full' } satisfies Partial<LinkNode>
+    const reference = { key: 'a', namespace: 'link', refForm: 'full' } satisfies Partial<LinkNode>
     expect(treesEqual(link({ ...reference, href: '/u' }), link(reference))).toBe(true)
     expect(treesEqual(link({ href: '/u' }), link({ href: '/v' }))).toBe(false)
     expect(treesEqual(link({ href: '/u' }), link({}))).toBe(false)
@@ -306,7 +306,7 @@ describe('one-line blocks in detail', () => {
   })
 
   it('a link definition reads a title behind its destination, and a quoted destination', () => {
-    expect(block('[a]: /u "T \\" x"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u', title: 'T " x' })
+    expect(block('[a]: /u "T \\" x"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u', tooltip: 'T " x' })
     expect(block('[a]: "T"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '"T"' })
     expect(block('[a]: /u ')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u' })
   })
@@ -322,9 +322,9 @@ describe('one-line blocks in detail', () => {
   it('only a plain div with the class is a hard-break block, and a block image or math block holds nothing else', () => {
     expect(at(block('{.hardbreaks}\n::: note\na\nb\n:::'), 'children.0.children.1.type')).toBe('soft_break')
     expect(at(block('::: \\\n> a\n> b\n:::'), 'children.0.children.0.children.1.type')).toBe('hard_break')
-    expect(ofType(block('![a](b)\\'), 'paragraph').blockImage).toBeUndefined()
-    expect(ofType(block('$$`x` `y`'), 'paragraph').blockMath).toBeUndefined()
-    expect(ofType(block('$`x`'), 'paragraph').blockMath).toBeUndefined()
+    expect(ofType(block('![a](b)\\'), 'paragraph').role).toBeUndefined()
+    expect(ofType(block('$$`x` `y`'), 'paragraph').role).toBeUndefined()
+    expect(ofType(block('$`x`'), 'paragraph').role).toBeUndefined()
   })
 
   it('a column is authored when the source spells its alignment or its width', () => {
