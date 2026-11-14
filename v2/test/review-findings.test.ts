@@ -241,3 +241,22 @@ describe('counts that once shared an integer', () => {
     expect(groups(`{footer-rows=65537}\n${'| a |\n'.repeat(65540)}`)).toEqual(['table_body 3', 'table_foot 65537'])
   })
 })
+
+describe('a lone CR', () => {
+  it('C2-B-010: a lone CR at the end of the input is part of the line', () => {
+    expect(render('a\r')).toBe('<p>a\r</p>')
+    expect(parse('a\r').srcByteLength).toBe(2)
+    expect(parse('a\r', { positions: false }).children).toEqual([{ type: 'paragraph', children: [{ type: 'text', value: 'a\r' }] }])
+    expect(render('a\r\n')).toBe('<p>a</p>')
+    expect(render('- a\r')).toBe('<ul>\n  <li>a\r</li>\n</ul>')
+  })
+
+  it('C2-B-010: a lone CR in an opener line is title text, not the end of the line', () => {
+    expect(parse('::: note "a\rb"\nx\n:::\n').children[0]).toMatchObject({ type: 'admonition', title: [{ type: 'text', value: 'a\rb' }] })
+    expect(parse('::: note "a"\r\nx\n:::\n').children[0]).toMatchObject({ type: 'admonition', title: [{ type: 'text', value: 'a' }] })
+  })
+
+  it('C2-B-010, C2-W-011: a text that ends a line with a lone CR has no spelling, and the writer reports it', () => {
+    expect(writeWithDiagnostics(parse('a\r')).diagnostics.map((finding) => finding.channel)).toEqual(['render-loss'])
+  })
+})

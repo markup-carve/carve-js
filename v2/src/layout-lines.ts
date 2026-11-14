@@ -16,8 +16,9 @@ export function lineStartOf(src: string, pos: number): number {
 /** The offset behind the last character of the line that holds `pos`, before its line ending. */
 export function lineEndOf(src: string, pos: number): number {
   const feed = src.indexOf('\n', pos)
-  const end = feed < 0 ? src.length : feed
-  return end > pos && src.charCodeAt(end - 1) === CR ? end - 1 : end
+  if (feed < 0) return src.length
+  // C2-B-010: only a CR before an LF ends the line with it.
+  return feed > pos && src.charCodeAt(feed - 1) === CR ? feed - 1 : feed
 }
 
 /** Where a line stands behind its quote marks: the offset, the column from the start of the line and the column that counts as 0. */

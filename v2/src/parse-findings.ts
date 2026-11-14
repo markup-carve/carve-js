@@ -2,6 +2,7 @@
 // C2-B-181): each is noted with its node while the tree is built, and its message is written only when the
 // diagnostics are asked for. The texts are those of the catalog (spec/0.2/data/lint-rules.json).
 import { type Node } from './ast.ts'
+import { CR, LF, SPACE, TAB } from './chars.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { CODE, COMMENT_BLOCK, DIV, FRONTMATTER, LINE_BLOCK } from './kinds.ts'
 import { lineFeedAt } from './source.ts'
@@ -29,13 +30,13 @@ const DIV_WORDS: Readonly<Record<string, string>> = {
 const MALFORMED = 'This marked CSV/TSV fence has malformed quoting. It stays a table, and the cell with the unclosed quote holds the '
   + 'rest of the fence body.'
 
-function isSpace(code: number): boolean {
-  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d
-}
-
-/** True when only spaces, tabs and line breaks stand from `pos` to `end`. */
+/** True when only spaces, tabs and line breaks stand from `pos` to `end`. A lone CR is content (C2-B-010). */
 function onlySpaces(src: string, pos: number, end: number): boolean {
-  for (let p = pos; p < end; p++) if (!isSpace(src.charCodeAt(p))) return false
+  for (let p = pos; p < end; p++) {
+    const code = src.charCodeAt(p)
+    if (code === SPACE || code === TAB || code === LF) continue
+    if (code !== CR || src.charCodeAt(p + 1) !== LF) return false
+  }
   return true
 }
 

@@ -66,7 +66,8 @@ export function scanBlocks(state: BlockState, src: string): void {
     let lineEnd = src.indexOf('\n', lineStart)
     if (lineEnd < 0) lineEnd = length
     const next = lineEnd + 1
-    if (lineEnd > lineStart && src.charCodeAt(lineEnd - 1) === CR) lineEnd--
+    // C2-B-010: a CR is part of the line unless an LF follows it.
+    if (lineEnd < length && lineEnd > lineStart && src.charCodeAt(lineEnd - 1) === CR) lineEnd--
     addLine(state, lineStart)
     if (lineStart > 0) scanLine(state, lineStart, lineEnd)
     // C2-B-165: a byte-order mark is skipped before line 1 is read, whatever the line holds.

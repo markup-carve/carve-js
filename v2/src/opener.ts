@@ -62,7 +62,9 @@ function readLabel(src: string, p: number, end: number, info: OpenerInfo): numbe
 /** Reads the opener line from `pos`, the offset behind the run. */
 export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   let end = pos
-  while (end < src.length && src.charCodeAt(end) !== LF && src.charCodeAt(end) !== CR) end++
+  while (end < src.length && src.charCodeAt(end) !== LF) end++
+  // C2-B-010: a lone CR is content; only the CR of a CR LF ends the line.
+  if (end < src.length && end > pos && src.charCodeAt(end - 1) === CR) end--
   const info: OpenerInfo = {
     wordStart: -1, wordEnd: -1, titleStart: -1, titleEnd: -1, labelStart: -1, labelEnd: -1, extra: false, extraStart: -1,
   }
