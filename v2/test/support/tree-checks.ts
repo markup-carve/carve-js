@@ -1,7 +1,7 @@
 // Properties of the public tree and of the HTML of every document. `checkTree` returns the first
 // violation as text, or null.
 import {
-  type AstNode, decodeTree, encodeTree, parse, type Position, render, treesEqual, validateTree,
+  decodeTree, encodeTree, type Node, parse, type Position, render, treesEqual, validateTree,
 } from '../../src/index.ts'
 
 const VOID_ELEMENTS = ['hr', 'img', 'br', 'input', 'col']
@@ -9,11 +9,11 @@ const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^\s"=<>/]+(?:="[^"]*")?)*)\s*>/
 const ATTRIBUTE = /\s+([^\s"=<>/]+)(?:="[^"]*")?/g
 
 /** The slots of a node that hold positioned nodes, in the order a walker visits them (C2-A-025). */
-function slotLists(node: AstNode): AstNode[][] {
-  const lists: AstNode[][] = []
-  if (node.children !== undefined) lists.push(node.children)
-  if (Array.isArray(node.title)) lists.push(node.title)
-  if (node.caption !== undefined) lists.push([node.caption])
+function slotLists(node: Node): (readonly Node[])[] {
+  const lists: (readonly Node[])[] = []
+  if ('children' in node) lists.push(node.children)
+  if ('title' in node && Array.isArray(node.title)) lists.push(node.title)
+  if ('caption' in node && node.caption !== undefined) lists.push([node.caption])
   return lists
 }
 
@@ -49,24 +49,26 @@ function checkPosition(pos: Position, table: Map<number, [number, number]>, path
   return null
 }
 
-function isBreak(node: AstNode): boolean {
+function isBreak(node: Node): boolean {
   return node.type === 'soft_break' || node.type === 'hard_break'
 }
 
 /** C2-A-145, C2-A-146: siblings are ordered and disjoint; a comment before a block that took attribute lines is exempt. */
-function checkSiblings(list: AstNode[], path: string): string | null {
-  let last: AstNode | null = null
+function checkSiblings(list: readonly Node[], path: string): string | null {
+  let last: Node | null = null
+  let lastEnd = 0
   for (const node of list) {
     if (node.pos === undefined) continue
     const exempt = last !== null && (last.type === 'comment' || (isBreak(last) && isBreak(node)))
-    if (last !== null && !exempt && last.pos!.endOffset > node.pos.startOffset) return `${path}: ${last.type} overlaps ${node.type}`
+    if (last !== null && !exempt && lastEnd > node.pos.startOffset) return `${path}: ${last.type} overlaps ${node.type}`
     last = node
+    lastEnd = node.pos.endOffset
   }
   return null
 }
 
 /** C2-A-144: a child lies inside the nearest ancestor that has a position. */
-function checkNode(node: AstNode, outer: Position | null, table: Map<number, [number, number]>, path: string): string | null {
+function checkNode(node: Node, outer: Position | null, table: Map<number, [number, number]>, path: string): string | null {
   const pos = node.pos
   if (pos !== undefined) {
     const failure = checkPosition(pos, table, path)
@@ -81,7 +83,7 @@ function checkNode(node: AstNode, outer: Position | null, table: Map<number, [nu
   return null
 }
 
-function checkList(list: AstNode[], outer: Position | null, table: Map<number, [number, number]>, path: string): string | null {
+function checkList(list: readonly Node[], outer: Position | null, table: Map<number, [number, number]>, path: string): string | null {
   for (let at = 0; at < list.length; at++) {
     const failure = checkNode(list[at]!, outer, table, `${path}/${at}`)
     if (failure !== null) return failure

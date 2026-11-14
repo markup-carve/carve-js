@@ -1,14 +1,14 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { type AstNode, asNode, childrenOf, keyOf, valueOf } from './ast.ts'
+import { captionOf, type DocumentNode, isRecord, type Node, type TextNode, titleOf } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
-import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
+import { childNodes, createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -28,14 +28,19 @@ export interface WriteOutput {
   diagnostics: Diagnostic[]
 }
 
+/** Whether `value`, read at a pointer into a valid tree, is a node. */
+function isNode(value: unknown): value is Node {
+  return isRecord(value) && typeof value['type'] === 'string'
+}
+
 /** The node at the RFC 6901 pointer `path`, or null (C2-L-010). */
-function nodeAt(document: AstNode, path: string): AstNode | null {
+function nodeAt(document: DocumentNode, path: string): Node | null {
   let at: unknown = document
   for (const part of path.split('/').slice(1)) {
     if (typeof at !== 'object' || at === null) return null
-    at = (at as Record<string, unknown>)[part]
+    at = Reflect.get(at, part)
   }
-  return typeof at === 'object' && at !== null && !Array.isArray(at) ? at as AstNode : null
+  return isNode(at) ? at : null
 }
 
 /** How far the wraps of one text node have been read: a byte offset of its value and the string offset of it. */
@@ -59,9 +64,9 @@ function seek(cursor: WrapCursor, value: string, offset: number): boolean {
  * Whether the wrap at the byte `offset` of the text `node` fits the tree: a place behind the wraps
  * before it, with the joining space before it, or the start of the value (C2-L-021).
  */
-function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
-  const value = valueOf(node)
-  if (node.type !== 'text' || !seek(cursor, value, offset)) return false
+function addWrap(cursor: WrapCursor, node: TextNode, offset: number): boolean {
+  const value = node.value
+  if (!seek(cursor, value, offset)) return false
   const last = cursor.points[cursor.points.length - 1] ?? 0
   const fits = cursor.at === 0 ? cursor.points.length === 0 : cursor.at > last && value[cursor.at - 1] === ' '
   if (fits) cursor.points.push(cursor.at)
@@ -72,14 +77,14 @@ function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
  * C2-L-021: whether the wrap at offset 0 of the node at `path`, which is not text, can mark its start: it stands in the
  * content of `cell`, first or behind text that ends in the joining space.
  */
-function startsFragment(document: AstNode, cell: AstNode, path: string): boolean {
+function startsFragment(document: DocumentNode, cell: Node, path: string): boolean {
   const cut = path.lastIndexOf('/children/')
   const parent = cut < 0 ? null : nodeAt(document, path.slice(0, cut))
-  if (parent === null || parent !== cell.children?.[0]) return false
+  if (parent === null || parent !== childNodes(cell)[0]) return false
   const at = Number(path.slice(cut + '/children/'.length))
   if (at === 0) return true
-  const before = childrenOf(parent)[at - 1]!
-  return before.type === 'text' && valueOf(before).endsWith(' ')
+  const before = childNodes(parent)[at - 1]
+  return before?.type === 'text' && before.value.endsWith(' ')
 }
 
 /**
@@ -87,17 +92,17 @@ function startsFragment(document: AstNode, cell: AstNode, path: string): boolean
  * start, and the nodes whose start is such a place. C2-L-006: a wrap that names no node of the
  * cell, or a place with no joining space before it, contradicts the tree, and then the cell keeps no wrap.
  */
-function readWraps(w: Writer, document: AstNode, cell: AstNode, entry: LayoutEntry): void {
-  const cursors = new Map<AstNode, WrapCursor>()
-  const starts: AstNode[] = []
+function readWraps(w: Writer, facts: Map<Node, WriterFacts>, document: DocumentNode, cell: Node, entry: LayoutEntry): void {
+  const cursors = new Map<TextNode, WrapCursor>()
+  const starts: Node[] = []
   let path = ''
-  let node: AstNode | null = null
+  let node: Node | null = null
   for (const wrap of entry.wraps ?? []) {
     // The wraps of one cell mostly name one text node, so its pointer is resolved once.
     if (wrap.path !== path || node === null) node = nodeAt(document, wrap.path)
     path = wrap.path
     if (node === null || !placeWrap(document, cell, node, wrap, cursors, starts)) {
-      w.facts!.set(cell, { ...entry, wraps: [] })
+      facts.set(cell, { ...entry, wraps: [] })
       return
     }
   }
@@ -109,9 +114,10 @@ function readWraps(w: Writer, document: AstNode, cell: AstNode, entry: LayoutEnt
 
 /** Records one wrap of a cell: a place in a text node, or the start of another node. False where it contradicts the tree. */
 function placeWrap(
-  document: AstNode, cell: AstNode, node: AstNode, wrap: Wrap, cursors: Map<AstNode, WrapCursor>, starts: AstNode[],
+  document: DocumentNode, cell: Node, node: Node, wrap: Wrap, cursors: Map<TextNode, WrapCursor>, starts: Node[],
 ): boolean {
-  if (node.type !== 'text' && wrap.offset === 0 && !starts.includes(node) && startsFragment(document, cell, wrap.path)) {
+  if (node.type !== 'text') {
+    if (wrap.offset !== 0 || starts.includes(node) || !startsFragment(document, cell, wrap.path)) return false
     starts.push(node)
     return true
   }
@@ -121,23 +127,23 @@ function placeWrap(
   return true
 }
 
-function readLayout(w: Writer, document: AstNode, entries: readonly LayoutEntry[]): void {
+function readLayout(w: Writer, facts: Map<Node, WriterFacts>, document: DocumentNode, entries: readonly LayoutEntry[]): void {
   for (const entry of entries) {
     const node = nodeAt(document, entry.path)
     if (node === null) continue
-    w.facts!.set(node, entry)
-    if (entry.wraps !== undefined && entry.wraps.length > 0) readWraps(w, document, node, entry)
+    facts.set(node, entry)
+    if (entry.wraps !== undefined && entry.wraps.length > 0) readWraps(w, facts, document, node, entry)
   }
 }
 
 /** C2-B-085: the first definition of a term wins. */
-function readAbbreviations(w: Writer, document: AstNode): void {
-  for (const child of childrenOf(document)) {
-    if (child.type === 'abbreviation_def' && !w.abbreviations.has(keyOf(child))) w.abbreviations.set(keyOf(child), child.expansion ?? '')
+function readAbbreviations(w: Writer, document: DocumentNode): void {
+  for (const child of document.children) {
+    if (child.type === 'abbreviation_def' && !w.abbreviations.has(child.key)) w.abbreviations.set(child.key, child.expansion)
   }
 }
 
-function addEscape(w: Writer, node: AstNode, at: number): void {
+function addEscape(w: Writer, node: TextNode, at: number): void {
   const list = w.escapes.get(node) ?? []
   let place = list.length
   while (place > 0 && list[place - 1]! > at) place--
@@ -145,7 +151,7 @@ function addEscape(w: Writer, node: AstNode, at: number): void {
   w.escapes.set(node, list)
 }
 
-function removeEscape(w: Writer, node: AstNode, at: number): boolean {
+function removeEscape(w: Writer, node: TextNode, at: number): boolean {
   const list = w.escapes.get(node) ?? []
   const place = list.indexOf(at)
   if (place >= 0) list.splice(place, 1)
@@ -171,7 +177,7 @@ function applyChanges(w: Writer, check: Check): boolean {
 }
 
 /** Whether `node` is written into one group with the block `before` above it. */
-function joinsGroup(w: Writer, before: AstNode, node: AstNode): boolean {
+function joinsGroup(w: Writer, before: Node, node: Node): boolean {
   // C2-B-016: a description mark reads differently below a description list, also behind a blank line.
   if (node.type === 'paragraph') return before.type === 'definition_list'
   return node.type === 'comment' && blankLinesBetween(w, before, null, node, false) === 0
@@ -181,19 +187,21 @@ function joinsGroup(w: Writer, before: AstNode, node: AstNode): boolean {
  * The end of the group of blocks that starts at `from`: the blocks behind it that no blank line
  * separates from it, and what the block before reads differently.
  */
-function groupEnd(w: Writer, nodes: readonly AstNode[], from: number): number {
+function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
   while (end < nodes.length && joinsGroup(w, nodes[end - 1]!, nodes[end]!)) end++
   return end
 }
 
 /** The text nodes below `nodes` in the order in which they are written. */
-function textOrder(nodes: readonly AstNode[], order: Map<AstNode, number>): Map<AstNode, number> {
+function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, number> {
   for (const node of nodes) {
     if (node.type === 'text') order.set(node, order.size)
-    if (Array.isArray(node.title)) textOrder(node.title, order)
-    if (node.children !== undefined) textOrder(node.children, order)
-    if (node.caption !== undefined) textOrder([node.caption], order)
+    const title = titleOf(node)
+    if (title !== undefined) textOrder(title, order)
+    if ('children' in node) textOrder(node.children, order)
+    const caption = captionOf(node)
+    if (caption !== undefined) textOrder([caption], order)
   }
   return order
 }
@@ -206,7 +214,7 @@ function textOrder(nodes: readonly AstNode[], order: Map<AstNode, number>): Map<
 const MAX_ORDERED_ESCAPES = 4
 
 /** C2-W-091: the first of `escapes` in written order. */
-function leftmost(group: readonly AstNode[], escapes: readonly [AstNode, number][]): [AstNode, number] {
+function leftmost(group: readonly Node[], escapes: readonly [TextNode, number][]): [TextNode, number] {
   const order = textOrder(group, new Map())
   let best = escapes[0]!
   for (const escape of escapes) {
@@ -218,7 +226,7 @@ function leftmost(group: readonly AstNode[], escapes: readonly [AstNode, number]
 }
 
 /** The tree of the group written with the escapes `escapes`. */
-function groupTree(w: Writer, group: readonly AstNode[], first: boolean, escapes: Map<AstNode, number[]>): AstNode {
+function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: Map<TextNode, number[]>): DocumentNode {
   w.escapes = escapes
   w.lines = []
   w.lead = null
@@ -231,14 +239,14 @@ function groupTree(w: Writer, group: readonly AstNode[], first: boolean, escapes
  * C2-W-088, C2-W-091: whether the test asks for the escape `at` of `node`: with the escapes to its
  * left in place and none to its right, the group parses to another tree without it.
  */
-function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: AstNode, at: number): boolean {
+function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNode, at: number): boolean {
   const placed = w.escapes
   const lines = w.lines
   const lead = w.lead
   const starts = new Map(w.starts)
   const order = textOrder(group, new Map())
   const rank = order.get(node) ?? -1
-  const left = new Map<AstNode, number[]>()
+  const left = new Map<TextNode, number[]>()
   for (const [text, offsets] of placed) {
     const own = order.get(text) ?? -1
     if (own < rank) left.set(text, offsets)
@@ -247,7 +255,7 @@ function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: Ast
   const without = groupTree(w, group, first, left)
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
-  const asked = !treesEqual(asNode(groupTree(w, group, first, escaped)), asNode(without))
+  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
   w.escapes = placed
   w.lines = lines
   w.lead = lead
@@ -261,7 +269,7 @@ function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: Ast
  * false when the group reads back as its blocks. C2-W-091: an escape stays once placed, and an
  * escape that a node which did not form asks for is placed only where the test asks for it.
  */
-function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean): boolean {
+function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
   let dropped = false
   // Each test writes the group twice; a round with more trials places them all, as it does escapes.
@@ -289,8 +297,8 @@ function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: 
  * C2-W-089: the group is parsed again and written again until it reads back as its blocks.
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
-function writeGroup(w: Writer, document: AstNode, from: number, first: boolean): number {
-  const nodes = childrenOf(document)
+function writeGroup(w: Writer, document: DocumentNode, from: number, first: boolean): number {
+  const nodes = document.children
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
@@ -302,17 +310,17 @@ function writeGroup(w: Writer, document: AstNode, from: number, first: boolean):
   }
 }
 
-function compareGroup(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean): Check {
+function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): Check {
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   const parsed = parseChunk(source, w.abbreviations)
-  compareBlocks(check, group, childrenOf(parsed), document)
+  compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
   return check
 }
 
 /** The last block of `nodes[from..to)` that is no comment, or `list` where all of them are comments. */
-function lastBlock(nodes: readonly AstNode[], from: number, to: number, list: AstNode | null): AstNode | null {
+function lastBlock(nodes: readonly Node[], from: number, to: number, list: Node | null): Node | null {
   for (let at = to - 1; at >= from; at--) if (nodes[at]!.type !== 'comment') return nodes[at]!
   return list
 }
@@ -322,11 +330,11 @@ function addLines(out: string[], lines: readonly string[], blanks: number): void
   for (const line of lines) out.push(line)
 }
 
-function writeDocument(w: Writer, document: AstNode): string {
-  const nodes = childrenOf(document)
+function writeDocument(w: Writer, document: DocumentNode): string {
+  const nodes = document.children
   const out: string[] = []
-  let before: AstNode | null = null
-  let list: AstNode | null = null
+  let before: Node | null = null
+  let list: Node | null = null
   for (let at = 0; at < nodes.length;) {
     const from = at
     at = writeGroup(w, document, from, out.length === 0)
@@ -342,9 +350,11 @@ function writeDocument(w: Writer, document: AstNode): string {
 }
 
 /** Writes a tree that is known to be valid. */
-export function writeTree(document: AstNode, options: WriteOptions | undefined): WriteOutput {
-  const w = createWriter(options?.layout === undefined ? null : new Map(), options?.alignTables === true)
-  if (options?.layout !== undefined) readLayout(w, document, options.layout.nodes)
+export function writeTree(document: DocumentNode, options: WriteOptions | undefined): WriteOutput {
+  const layout = options?.layout
+  const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
+  const w = createWriter(facts, options?.alignTables === true)
+  if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   const source = writeDocument(w, document)
   // C2-W-103: a finding of the writer has the path of its node.
@@ -352,12 +362,12 @@ export function writeTree(document: AstNode, options: WriteOptions | undefined):
 }
 
 /** The canonical Carve source of a tree, with what could not be written (C2-W-011). The tree is validated first. */
-export function writeWithDiagnostics(document: AstNode, options?: WriteOptions): WriteOutput {
+export function writeWithDiagnostics(document: DocumentNode, options?: WriteOptions): WriteOutput {
   validateTree(document)
   return writeTree(document, options)
 }
 
 /** The canonical Carve source of a tree (C2-W-001). */
-export function write(document: AstNode, options?: WriteOptions): string {
+export function write(document: DocumentNode, options?: WriteOptions): string {
   return writeWithDiagnostics(document, options).source
 }

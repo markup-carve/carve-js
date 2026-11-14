@@ -1,9 +1,12 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
-import { type AstNode, childrenOf, hrefOf, keyOf, pairsOf, valueOf } from './ast.ts'
+import {
+  type AutolinkNode, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
+  type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode,
+} from './ast.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
-import { lose, trimEnd, type Writer } from './write-state.ts'
+import { childNodes, lose, trimEnd, type Writer } from './write-state.ts'
 
 /** The content stands in a table cell: a pipe in text takes a backslash (C2-W-098). */
 export const IN_CELL = 1
@@ -17,7 +20,10 @@ const PIPE = 124
 const SPACE = 32
 const BACKTICK = 96
 
-type InlineWriter = (w: Writer, node: AstNode, flags: number) => string
+/** A writer per inline node type, each of which reads a node of its own type. */
+type InlineWriters = { [T in keyof NodeOfType]?: (w: Writer, node: NodeOfType[T], flags: number) => string }
+
+type InlineWriter = (w: Writer, node: InlineParent, flags: number) => string
 
 /** C2-W-097: a backslash that the next character of the same text would make an escape is written twice. */
 function doubles(value: string, at: number): boolean {
@@ -27,7 +33,7 @@ function doubles(value: string, at: number): boolean {
 }
 
 /** The text `value[from, to)` with the backslashes it needs. */
-function escaped(w: Writer, node: AstNode, value: string, from: number, to: number, cell: boolean): string {
+function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, cell: boolean): string {
   const escapes = w.escapes.get(node) ?? []
   let out = ''
   let next = firstFrom(escapes, from)
@@ -66,8 +72,8 @@ export function firstFrom(offsets: readonly number[], from: number): number {
  * The offset in the value of the text `node` behind the `bytes` UTF-8 bytes of its spelling that
  * start at the offset `from`, or -1 where no character of the value ends there.
  */
-export function spelledEnd(w: Writer, node: AstNode, from: number, bytes: number, cell: boolean): number {
-  const value = valueOf(node)
+export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: number, cell: boolean): number {
+  const value = node.value
   const escapes = w.escapes.get(node) ?? []
   let next = firstFrom(escapes, from)
   let rest = bytes
@@ -81,8 +87,8 @@ export function spelledEnd(w: Writer, node: AstNode, from: number, bytes: number
   return rest === 0 ? at : -1
 }
 
-function textNode(w: Writer, node: AstNode, flags: number): string {
-  const value = valueOf(node)
+function textNode(w: Writer, node: TextNode, flags: number): string {
+  const value = node.value
   const cell = (flags & IN_CELL) !== 0
   const points = cell ? w.wrapPoints?.get(node) : undefined
   if (points === undefined && !w.escapes.has(node) && !value.includes('\\') && !(cell && value.includes('|'))) return value
@@ -97,22 +103,22 @@ function textNode(w: Writer, node: AstNode, flags: number): string {
 }
 
 /** Whether emphasis (bit 1) and strong (bit 2) occur below `node` (C2-W-070). */
-function kindsBelow(w: Writer, node: AstNode): number {
+function kindsBelow(w: Writer, node: Node): number {
   const known = w.kindsBelow.get(node)
   if (known !== undefined) return known
   let kinds = 0
-  for (const child of childrenOf(node)) {
+  for (const child of childNodes(node)) {
     if (child.type === 'emphasis') kinds |= 1
     else if (child.type === 'strong') kinds |= 2
-    if (child.children !== undefined) kinds |= kindsBelow(w, child)
+    if ('children' in child) kinds |= kindsBelow(w, child)
   }
   w.kindsBelow.set(node, kinds)
   return kinds
 }
 
 /** C2-W-116: a node that needs content and has none is left out. */
-function contentOf(w: Writer, node: AstNode, flags: number): string | null {
-  if (childrenOf(node).length > 0) return writeInlines(w, childrenOf(node), flags)
+function contentOf(w: Writer, node: InlineParent, flags: number): string | null {
+  if (node.children.length > 0) return writeInlines(w, node.children, flags)
   lose(w, node, null)
   return null
 }
@@ -191,9 +197,8 @@ function destination(value: string): string {
 }
 
 /** C2-W-075: the label of a reference, from the tree. */
-function referenceLabel(node: AstNode): string {
+function referenceLabel(node: LinkNode | ImageNode, key: string): string {
   if (node.form === 'collapsed') return '[]'
-  const key = keyOf(node)
   // C2-I-078: a label that starts with a caret or an at-sign is no reference label; the space folds away.
   return key.startsWith('^') || key.startsWith('@') ? `[ ${labelText(key)}]` : `[${labelText(key)}]`
 }
@@ -204,14 +209,16 @@ function labelText(key: string): string {
 }
 
 /** C2-W-073, C2-W-074: the link tail, or the label of a reference. */
-function target(node: AstNode, field: 'href' | 'src'): string {
-  if (node.key !== undefined) return referenceLabel(node)
-  const title = node.tooltip === undefined ? '' : ` ${quoted(node.tooltip)}`
-  return `(${destination(node[field] ?? '')}${title})`
+function target(node: LinkNode | ImageNode, href: string | undefined): string {
+  const key = node.key
+  if (key !== undefined) return referenceLabel(node, key)
+  const tooltip = node.tooltip
+  const title = tooltip === undefined ? '' : ` ${quoted(tooltip)}`
+  return `(${destination(href ?? '')}${title})`
 }
 
 /** C2-W-075, C2-W-084: the verbatim text of a reference, where the sidecar holds it and the reparse did not refuse it. */
-function rawReference(w: Writer, node: AstNode, flags: number): string | null {
+function rawReference(w: Writer, node: LinkNode | ImageNode, flags: number): string | null {
   if (node.key === undefined || (w.forms.get(node) ?? 0) > 0) return null
   const raw = w.facts?.get(node)?.rawRef
   if (raw === undefined) return null
@@ -222,109 +229,118 @@ function rawReference(w: Writer, node: AstNode, flags: number): string | null {
   return raw.replaceAll(/[ \t]+\n/g, '\n')
 }
 
-function linkNode(w: Writer, node: AstNode, flags: number): string {
+function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
-  return `[${writeInlines(w, childrenOf(node), flags)}]${target(node, 'href')}`
+  return `[${writeInlines(w, node.children, flags)}]${target(node, node.href)}`
 }
 
-function imageNode(w: Writer, node: AstNode, flags: number): string {
-  return rawReference(w, node, flags) ?? `![${node.alt ?? ''}]${target(node, 'src')}`
+function imageNode(w: Writer, node: ImageNode, flags: number): string {
+  return rawReference(w, node, flags) ?? `![${node.alt ?? ''}]${target(node, node.src)}`
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */
-function autolinkNode(w: Writer, node: AstNode): string {
-  const href = hrefOf(node)
-  if (node.text === undefined) return `<${href}>`
-  if (href !== `mailto:${node.text}`) lose(w, node, 'text')
+function autolinkNode(w: Writer, node: AutolinkNode): string {
+  const href = node.href
+  const text = node.text
+  if (text === undefined) return `<${href}>`
+  if (href !== `mailto:${text}`) lose(w, node, 'text')
   return href.startsWith('mailto:') ? `<${href.slice(7)}>` : `<${href}>`
 }
 
-function mentionNode(w: Writer, node: AstNode): string {
+function mentionNode(w: Writer, node: MentionNode): string {
   if (node.label !== undefined) lose(w, node, 'label')
   else if (node.kind !== 'user') lose(w, node, 'kind')
-  return `@${node.target ?? ''}`
+  return `@${node.target}`
 }
 
 /** C2-W-059: the comment forms that inline content holds. */
-function commentNode(_w: Writer, node: AstNode): string {
-  const value = valueOf(node)
+function commentNode(_w: Writer, node: CommentNode): string {
+  const value = node.value
   if (node.form === 'braced') return bracedComment(value)
   return value === '' ? '%%' : `%% ${value}`
 }
 
-function abbreviationNode(w: Writer, node: AstNode): string {
-  const key = keyOf(node)
+function abbreviationNode(w: Writer, node: NodeOfType['abbreviation']): string {
+  const key = node.key
   // C2-W-117: without a definition of its key the word reads back as text.
   if (!w.abbreviations.has(key)) lose(w, node, null)
   return key
 }
 
 /** C2-A-175: ruby is each base with its annotation in parentheses. */
-function rubyNode(w: Writer, node: AstNode, flags: number): string {
+function rubyNode(w: Writer, node: RubyNode, flags: number): string {
   lose(w, node, null)
   let out = ''
-  for (const pair of pairsOf(node)) out += `${writeInlines(w, pair.base, flags)}(${writeInlines(w, pair.annotation, flags)})`
+  for (const pair of node.pairs) out += `${writeInlines(w, pair.base, flags)}(${writeInlines(w, pair.annotation, flags)})`
   return out
 }
 
 /** C2-A-175: a node with no spelling of its own is its children, or its fallback. */
-function childrenOnly(w: Writer, node: AstNode, flags: number): string {
+function childrenOnly(w: Writer, node: Node, flags: number): string {
   lose(w, node, null)
-  return writeInlines(w, node.fallback ?? childrenOf(node), flags)
+  const fallback = 'fallback' in node ? node.fallback : undefined
+  return writeInlines(w, fallback ?? childNodes(node), flags)
 }
 
-function hardBreak(_w: Writer, _node: AstNode, flags: number): string {
+function hardBreak(_w: Writer, _node: Node, flags: number): string {
   return (flags & BARE_BREAKS) !== 0 ? '\n' : '\\\n'
 }
 
-const WRITERS = new Map<string, InlineWriter>([
-  ['text', textNode],
-  ['soft_break', () => '\n'],
-  ['hard_break', hardBreak],
-  ['emphasis', paired('/', 1, IN_EMPHASIS)],
-  ['strong', paired('*', 2, IN_STRONG)],
-  ['underline', braced('_', '_')],
-  ['strike', braced('~', '~')],
-  ['highlight', braced('=', '=')],
-  ['superscript', braced('^', '^')],
-  ['subscript', braced(',', ',')],
-  ['insert', braced('+', '+')],
-  ['delete', braced('-', '-')],
-  ['critic_comment', (_w, node) => `{#${valueOf(node)}#}`],
-  ['span', (w, node, flags) => `[${writeInlines(w, childrenOf(node), flags)}]`],
-  ['link', linkNode],
-  ['image', imageNode],
-  ['inline_footnote', (w, node, flags) => `^[${writeInlines(w, childrenOf(node), flags)}]`],
-  ['inline_extension', (w, node, flags) => `:${node.name ?? ''}[${writeInlines(w, childrenOf(node), flags)}]`],
-  ['footnote_ref', (_w, node) => `[^${labelText(keyOf(node))}]`],
-  ['code', (_w, node) => codeSpan(valueOf(node))],
-  ['literal_inline', (_w, node) => `!${codeSpan(valueOf(node))}`],
-  ['math', (_w, node) => `${node.display === true ? '$$' : '$'}${codeSpan(valueOf(node))}`],
-  ['raw_inline', (_w, node) => `${codeSpan(valueOf(node))}{=${node.format ?? ''}}`],
-  ['symbol', (_w, node) => `:${node.name ?? ''}:`],
-  ['mention', mentionNode],
-  ['tag', (_w, node) => `#${node.name ?? ''}`],
-  ['autolink', autolinkNode],
-  ['xref', (_w, node) => `</#${keyOf(node)}>`],
-  ['non_breaking_space', () => '\\ '],
-  ['smart_punctuation', (_w, node) => node.source ?? ''],
-  ['abbreviation', abbreviationNode],
-  // The mark of a caption number is the first bare `#` of the caption (C2-B-150).
-  ['caption_number', () => '#'],
-  ['comment', commentNode],
-  ['small_caps', childrenOnly],
-  ['citation_group', (w, node) => {
-    lose(w, node, null)
-    return node.raw ?? ''
-  }],
-  ['ruby', rubyNode],
-])
+function citationGroup(w: Writer, node: CitationGroupNode): string {
+  lose(w, node, null)
+  return node.raw
+}
 
-function writeInline(w: Writer, node: AstNode, flags: number): string {
-  const writer = WRITERS.get(node.type)
-  if (writer === undefined) return childrenOnly(w, node, flags)
-  const out = writer(w, node, flags)
+const WRITERS: InlineWriters = {
+  text: textNode,
+  soft_break: () => '\n',
+  hard_break: hardBreak,
+  emphasis: paired('/', 1, IN_EMPHASIS),
+  strong: paired('*', 2, IN_STRONG),
+  underline: braced('_', '_'),
+  strike: braced('~', '~'),
+  highlight: braced('=', '='),
+  superscript: braced('^', '^'),
+  subscript: braced(',', ','),
+  insert: braced('+', '+'),
+  delete: braced('-', '-'),
+  critic_comment: (_w, node) => `{#${node.value}#}`,
+  span: (w, node, flags) => `[${writeInlines(w, node.children, flags)}]`,
+  link: linkNode,
+  image: imageNode,
+  inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
+  inline_extension: (w, node, flags) => `:${node.name}[${writeInlines(w, node.children, flags)}]`,
+  footnote_ref: (_w, node) => `[^${labelText(node.key)}]`,
+  code: (_w, node) => codeSpan(node.value),
+  literal_inline: (_w, node) => `!${codeSpan(node.value)}`,
+  math: (_w, node) => `${node.display ? '$$' : '$'}${codeSpan(node.value)}`,
+  raw_inline: (_w, node) => `${codeSpan(node.value)}{=${node.format}}`,
+  symbol: (_w, node) => `:${node.name}:`,
+  mention: mentionNode,
+  tag: (_w, node) => `#${node.name}`,
+  autolink: autolinkNode,
+  xref: (_w, node) => `</#${node.key}>`,
+  non_breaking_space: () => '\\ ',
+  smart_punctuation: (_w, node) => node.source,
+  abbreviation: abbreviationNode,
+  // The mark of a caption number is the first bare `#` of the caption (C2-B-150).
+  caption_number: () => '#',
+  comment: commentNode,
+  small_caps: childrenOnly,
+  citation_group: citationGroup,
+  ruby: rubyNode,
+}
+
+/** The source of `node` by the writer of its type, or null where its type has none. */
+function writeOwn<T extends keyof NodeOfType>(w: Writer, type: T, node: NodeOfType[T], flags: number): string | null {
+  const writer = WRITERS[type]
+  return writer === undefined ? null : writer(w, node, flags)
+}
+
+function writeInline(w: Writer, node: Node, flags: number): string {
+  const out = writeOwn(w, node.type, node, flags)
+  if (out === null) return childrenOnly(w, node, flags)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
   const block = braceBlock(node)
   return node.type === 'span' && block === '' ? `${out}{}` : out + block
@@ -332,19 +348,19 @@ function writeInline(w: Writer, node: AstNode, flags: number): string {
 
 /** The source of a list of inline nodes. */
 /** The end of the part that starts at `nodes[at]`: a run of code spans, or the node alone. */
-function partEnd(w: Writer, nodes: readonly AstNode[], at: number): number {
+function partEnd(w: Writer, nodes: readonly Node[], at: number): number {
   return nodes[at]!.type === 'code' && nodes[at + 1]?.type === 'code' ? codeRunEnd(w, nodes, at) : at + 1
 }
 
 /** The written form of the part `nodes[at..end)`. */
-function writePart(w: Writer, nodes: readonly AstNode[], at: number, end: number, flags: number): string {
+function writePart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number): string {
   const node = nodes[at]!
   const part = end > at + 1 ? codeRun(nodes, at, end) : writeInline(w, node, flags)
   // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
   return node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
 }
 
-export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number): string {
+export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
   let lineStart = true
@@ -367,7 +383,7 @@ export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number
 }
 
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */
-export function writeContent(w: Writer, nodes: readonly AstNode[], flags: number): string {
+export function writeContent(w: Writer, nodes: readonly Node[], flags: number): string {
   const out = writeInlines(w, nodes, flags)
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') return trimEnd(out)
@@ -376,15 +392,18 @@ export function writeContent(w: Writer, nodes: readonly AstNode[], flags: number
 }
 
 /** C2-W-112: the end of the run of code spans that starts at `from`. Each span behind the first is reported. */
-function codeRunEnd(w: Writer, nodes: readonly AstNode[], from: number): number {
+function codeRunEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
   while (end < nodes.length && nodes[end]!.type === 'code') lose(w, nodes[end++]!, null)
   return end
 }
 
 /** C2-W-112: code spans with nothing between them have no spelling, so their content is written as one span. */
-function codeRun(nodes: readonly AstNode[], from: number, end: number): string {
+function codeRun(nodes: readonly Node[], from: number, end: number): string {
   let value = ''
-  for (let at = from; at < end; at++) value += valueOf(nodes[at]!)
+  for (let at = from; at < end; at++) {
+    const node = nodes[at]
+    if (node?.type === 'code') value += node.value
+  }
   return codeSpan(value) + braceBlock(nodes[from]!)
 }

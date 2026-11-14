@@ -1,5 +1,5 @@
 // The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
-// node type, told apart by `type`; `AstNode` is the loose view of any node, in which every field is optional.
+// node type, told apart by `type`.
 import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node } from './ast-nodes.ts'
 
 export type * from './ast-nodes.ts'
@@ -60,96 +60,6 @@ export interface Resource {
   size?: number
 }
 
-/** Any node, with every field of every type optional. A node of type `T` is a `NodeOfType[T]`. */
-export interface AstNode {
-  type: string
-  children?: AstNode[]
-  value?: string
-  // The common fields (C2-A-027).
-  attrs?: Attrs
-  data?: Record<string, unknown>
-  pos?: Position
-  segments?: Position[]
-  metadata?: Record<string, unknown>
-  dir?: string
-  lang?: string
-  // The root (C2-A-008, C2-A-009).
-  astVersion?: string
-  srcByteLength?: number
-  extensions?: ExtensionDeclaration[]
-  stages?: string[]
-  resources?: Resource[]
-  // Secondary slots (C2-A-024).
-  caption?: AstNode
-  short?: AstNode[]
-  title?: AstNode[] | string
-  fallback?: AstNode[]
-  slots?: Record<string, AstNode[]>
-  pairs?: RubyPair[]
-  prefix?: AstNode[]
-  locator?: AstNode[]
-  suffix?: AstNode[]
-  // Fields of single node types, in the order of the node table (C2-A-050).
-  key?: string
-  namespace?: string
-  expansion?: string
-  kind?: string
-  groupLabel?: string
-  href?: string
-  text?: string
-  name?: string
-  version?: string
-  props?: Record<string, unknown>
-  payload?: { format: string, value: string }[]
-  resourceIds?: string[]
-  n?: number
-  blockImage?: true
-  blockMath?: true
-  locatorLabel?: string
-  locatorValue?: string
-  suppressAuthor?: boolean
-  mode?: string
-  number?: number
-  useIndex?: boolean
-  raw?: string
-  syntax?: string
-  form?: string
-  tocTarget?: string
-  level?: number
-  generatedId?: string
-  src?: string
-  alt?: string
-  decorative?: boolean
-  tooltip?: string
-  targetKind?: string
-  resourceId?: string
-  path?: string
-  section?: string
-  options?: [string, string][]
-  marker?: Marker
-  spacing?: string
-  task?: Task
-  display?: boolean
-  numberPrefix?: string
-  target?: string
-  label?: string
-  format?: string
-  glyph?: string
-  source?: string
-  columns?: AstNode[]
-  headRows?: number
-  rowHeadColumns?: number
-  header?: boolean
-  span?: string
-  colspan?: number
-  rowspan?: number
-  align?: string
-  valign?: string
-  width?: number
-  resolvedAlign?: string
-  authored?: true
-}
-
 /** C2-A-012: the envelope a tree travels in at a storage or process boundary. */
 export interface Envelope {
   astVersion: string
@@ -182,71 +92,6 @@ const BLOCK_PARENTS: readonly BlockParent['type'][] = [
 
 const BLOCK_PARENT_TYPES: ReadonlySet<string> = new Set(BLOCK_PARENTS)
 
-const NONE: readonly never[] = []
-
-/**
- * The typed view of a node of a tree the parser built or `validateTree` accepted, which has the
- * shape the node table gives its type. Readers narrow it by `type`.
- */
-export function asNode(node: AstNode): Node {
-  return node as Node
-}
-
-/** The children of `node`, or none. */
-export function childrenOf(node: AstNode): readonly AstNode[] {
-  return node.children ?? NONE
-}
-
-/** The `value` of `node`, or the empty string. */
-export function valueOf(node: AstNode): string {
-  return node.value ?? ''
-}
-
-/** The `key` of a reference, a definition or a term, or the empty string. */
-export function keyOf(node: AstNode): string {
-  return node.key ?? ''
-}
-
-/** The `href` of a link, an autolink or a link definition, or the empty string. */
-export function hrefOf(node: AstNode): string {
-  return node.href ?? ''
-}
-
-/** The ruby pairs of `node`, or none. */
-export function pairsOf(node: AstNode): readonly RubyPair[] {
-  return node.pairs ?? NONE
-}
-
-/** The columns of a table, or none. */
-export function columnsOf(table: AstNode): readonly AstNode[] {
-  return table.columns ?? NONE
-}
-
-/** The classes of `node`, or none (C2-A-032). */
-export function classesOf(node: AstNode): readonly string[] {
-  return node.attrs?.classes ?? NONE
-}
-
-/** The key-value attributes of `node`, or none (C2-A-032). */
-export function keyValuesOf(node: AstNode): readonly [string, string][] {
-  return node.attrs?.keyValues ?? NONE
-}
-
-/** The columns a table cell covers: 1 unless it says otherwise (C2-A-092). */
-export function colspanOf(cell: AstNode): number {
-  return cell.colspan ?? 1
-}
-
-/** The rows a table cell covers: 1 unless it says otherwise (C2-A-092). */
-export function rowspanOf(cell: AstNode): number {
-  return cell.rowspan ?? 1
-}
-
-/** The level of a heading: 1 unless it says otherwise. */
-export function levelOf(heading: AstNode): number {
-  return heading.level ?? 1
-}
-
 /** The inline title of `node`, where it has one (C2-A-024). The title of a link definition is a string and no slot. */
 export function titleOf(node: Node): Inline[] | undefined {
   return 'title' in node && Array.isArray(node.title) ? node.title : undefined
@@ -268,7 +113,7 @@ export function isBlockParent(node: Node): node is BlockParent {
 }
 
 /** A soft or a hard line break. */
-export function isBreak(node: AstNode | undefined): boolean {
+export function isBreak(node: Node | undefined): boolean {
   return node !== undefined && (node.type === 'soft_break' || node.type === 'hard_break')
 }
 

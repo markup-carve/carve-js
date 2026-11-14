@@ -1,6 +1,6 @@
 // What one run of the writer holds (spec/0.2/writer.md): the lines written so far, the escapes
 // and spellings the reparse asked for (C2-W-089), the facts of the sidecar and the losses.
-import { type AstNode } from './ast.ts'
+import { type Node, type ParagraphNode, type TextNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
@@ -17,7 +17,7 @@ export interface WriterFacts {
 /** One node that did not read back, and how far the writer is in the ways to make it form. */
 export interface Attempt {
   step: number
-  escapes: [AstNode, number][]
+  escapes: [TextNode, number][]
 }
 
 export interface Writer {
@@ -26,33 +26,33 @@ export interface Writer {
   /** What the next line starts with instead of its prefix: the markers of the items it opens (C2-W-027). */
   lead: string | null
   /** C2-W-088: the offsets in the value of a text node that take a backslash, in ascending order. */
-  escapes: Map<AstNode, number[]>
+  escapes: Map<TextNode, number[]>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
-  forms: Map<AstNode, number>
+  forms: Map<Node, number>
   /** Where each paragraph of the group being written starts: its line in `lines` and its column, as one number. */
-  starts: Map<AstNode, number>
+  starts: Map<ParagraphNode, number>
   /** What the reparse has tried for a node that did not form: the step it is at, and the escapes of that step. */
-  attempts: Map<AstNode, Attempt>
-  facts: Map<AstNode, WriterFacts> | null
+  attempts: Map<Node, Attempt>
+  facts: Map<Node, WriterFacts> | null
   /** C2-L-020: the offsets in the value of a text node at which the fragment of a continuation row starts. */
-  wrapPoints: Map<AstNode, number[]> | null
+  wrapPoints: Map<TextNode, number[]> | null
   /** C2-L-021: the nodes of a cell whose start is the start of the fragment of a continuation row. */
-  wrapStarts: Set<AstNode> | null
+  wrapStarts: Set<Node> | null
   alignTables: boolean
   /** C2-W-005: the output starts with one blank line, because its first block reads differently on line 1 (C2-B-161). */
   blankFirst: boolean
   /** C2-W-011: what could not be written, one entry per node. */
   losses: Findings
-  lost: Set<AstNode>
+  lost: Set<Node>
   /** The longest colon run among the fenced containers below a node (C2-W-039). */
-  colonRuns: Map<AstNode, number>
+  colonRuns: Map<Node, number>
   /** Whether emphasis (1) and strong (2) occur below a node (C2-W-070). */
-  kindsBelow: Map<AstNode, number>
+  kindsBelow: Map<Node, number>
   /** C2-I-098: the expansion of each term the document defines. */
   abbreviations: Map<string, string>
 }
 
-export function createWriter(facts: Map<AstNode, WriterFacts> | null, alignTables: boolean): Writer {
+export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean): Writer {
   return {
     lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
@@ -74,7 +74,7 @@ function trimmedLength(line: string): number {
 export const PLACE_COLUMNS = 8192
 
 /** Notes where the paragraph `node` starts, for the test of its lines after a parse (C2-W-092). */
-export function notePlace(w: Writer, node: AstNode, prefix: string): void {
+export function notePlace(w: Writer, node: ParagraphNode, prefix: string): void {
   const head = w.lead ?? prefix
   // Columns count code points, so only a prefix of markers and spaces is measured by its length.
   for (let at = 0; at < head.length; at++) if (head.charCodeAt(at) > 127) return
@@ -106,8 +106,15 @@ export function emitLines(w: Writer, prefix: string, indent: string, text: strin
   }
 }
 
+const NONE: readonly never[] = []
+
+/** The children of `node`, or none: for a node of a type the reader has not narrowed. */
+export function childNodes(node: Node): readonly Node[] {
+  return 'children' in node ? node.children : NONE
+}
+
 /** C2-W-011, C2-W-117: records that `node`, or its field `field`, could not be written. One entry per node. */
-export function lose(w: Writer, node: AstNode, field: string | null): void {
+export function lose(w: Writer, node: Node, field: string | null): void {
   if (w.lost.has(node)) return
   w.lost.add(node)
   const message = field === null

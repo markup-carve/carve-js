@@ -8,7 +8,7 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  acquireState, type AstNode, type BlockState, parse, render, type RenderOptions, scanBlocks,
+  acquireState, type BlockState, type DocumentNode, parse, render, type RenderOptions, scanBlocks,
 } from '../src/index.ts'
 import { parseTree, type TreeNode } from '../test/support/inline-tree.ts'
 import { EXAMPLES } from '../test/support/conformance.ts'
@@ -18,8 +18,8 @@ import { INLINE_TOKENS } from '../test/support/inline-enumerate.ts'
 interface Engine {
   acquireState(): BlockState
   scanBlocks(state: BlockState, src: string): void
-  parse(src: string): AstNode
-  render(input: string | AstNode, options?: RenderOptions): string
+  parse(src: string): DocumentNode
+  render(input: string | DocumentNode, options?: RenderOptions): string
 }
 
 // The defaults, every switch the other way, and the output of a decoded tree.

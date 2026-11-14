@@ -1,5 +1,5 @@
 // The diagnostics record (C2-A-172, C2-A-173): its entries, and the position each one takes from the node it is about.
-import { type AstNode, pairsOf } from './ast.ts'
+import { captionOf, type DocumentNode, type Node, titleOf } from './ast.ts'
 
 /** C2-A-173: one entry of the diagnostics record. */
 export interface Diagnostic {
@@ -16,29 +16,24 @@ export interface Diagnostic {
 /** Entries, each with the node it is about, or null for the document. The positions are filled in once, at the end. */
 export interface Findings {
   entries: Diagnostic[]
-  nodes: (AstNode | null)[]
+  nodes: (Node | null)[]
 }
 
-export function addFinding(findings: Findings, node: AstNode | null, entry: Diagnostic): void {
+export function addFinding(findings: Findings, node: Node | null, entry: Diagnostic): void {
   findings.entries.push(entry)
   findings.nodes.push(node)
 }
 
-// The fields that hold nodes, besides `children`: one node, a list, or the two lists of each ruby pair.
-const NODE_LISTS = ['children', 'title', 'fallback', 'short', 'prefix', 'locator', 'suffix', 'columns'] as const
-const PAIR_LISTS = ['base', 'annotation'] as const
-
 /** A node on the way down, with the step that leads to it from the node above. The pointer is spelled only for a node that is wanted. */
 interface Frame {
-  node: AstNode
+  node: Node
   above: Frame | null
   step: string
 }
 
-function pushList(stack: Frame[], list: unknown, above: Frame, slot: string): void {
-  if (!Array.isArray(list)) return
-  const nodes = list as AstNode[]
-  for (let at = nodes.length - 1; at >= 0; at--) stack.push({ node: nodes[at]!, above, step: `${slot}/${at}` })
+function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Frame, slot: string): void {
+  if (list === undefined) return
+  for (let at = list.length - 1; at >= 0; at--) stack.push({ node: list[at]!, above, step: `${slot}/${at}` })
 }
 
 /** RFC 6901: `~` and `/` in a key are written as `~0` and `~1`. */
@@ -46,14 +41,30 @@ function pointerKey(key: string): string {
   return key.replaceAll('~', '~0').replaceAll('/', '~1')
 }
 
+/** The fields that hold nodes: the lists, the caption, the two lists of each ruby pair and the named slots. */
 function pushSlots(stack: Frame[], frame: Frame): void {
   const node = frame.node
-  for (const name of NODE_LISTS) pushList(stack, node[name], frame, name)
-  if (node.caption !== undefined) stack.push({ node: node.caption, above: frame, step: 'caption' })
-  ;pairsOf(node).forEach((pair, at) => {
-    for (const name of PAIR_LISTS) pushList(stack, pair[name], frame, `pairs/${at}/${name}`)
-  })
-  for (const [name, list] of Object.entries(node.slots ?? {})) pushList(stack, list, frame, `slots/${pointerKey(name)}`)
+  if ('children' in node) pushList(stack, node.children, frame, 'children')
+  pushList(stack, titleOf(node), frame, 'title')
+  if ('fallback' in node) pushList(stack, node.fallback, frame, 'fallback')
+  if (node.type === 'caption') pushList(stack, node.short, frame, 'short')
+  if (node.type === 'citation') {
+    pushList(stack, node.prefix, frame, 'prefix')
+    pushList(stack, node.locator, frame, 'locator')
+    pushList(stack, node.suffix, frame, 'suffix')
+  }
+  if (node.type === 'table') pushList(stack, node.columns, frame, 'columns')
+  const caption = captionOf(node)
+  if (caption !== undefined) stack.push({ node: caption, above: frame, step: 'caption' })
+  if (node.type === 'ruby') {
+    node.pairs.forEach((pair, at) => {
+      pushList(stack, pair.base, frame, `pairs/${at}/base`)
+      pushList(stack, pair.annotation, frame, `pairs/${at}/annotation`)
+    })
+  }
+  if ('slots' in node && node.slots !== undefined) {
+    for (const [name, list] of Object.entries(node.slots)) pushList(stack, list, frame, `slots/${pointerKey(name)}`)
+  }
 }
 
 /** The pointer of the node of `frame`: the steps from the document down to it. */
@@ -64,8 +75,8 @@ function pointerOf(frame: Frame): string {
 }
 
 /** The pointer of each node of `wanted` that stands in the tree below `document`. */
-function pointers(document: AstNode, wanted: Set<AstNode>): Map<AstNode, string> {
-  const found = new Map<AstNode, string>()
+function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, string> {
+  const found = new Map<Node, string>()
   const stack: Frame[] = [{ node: document, above: null, step: '' }]
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
@@ -80,17 +91,17 @@ function pointers(document: AstNode, wanted: Set<AstNode>): Map<AstNode, string>
  * node where it has one. An entry about the document, or about a node that is not in the tree,
  * points at the document. The tree is walked once, and only when there is an entry.
  */
-export function locateFindings(document: AstNode, findings: Findings): Diagnostic[] {
+export function locateFindings(document: DocumentNode, findings: Findings): Diagnostic[] {
   const { entries, nodes } = findings
   if (entries.length === 0) return entries
-  const wanted = new Set<AstNode>()
+  const wanted = new Set<Node>()
   for (const node of nodes) if (node !== null) wanted.add(node)
   const found = pointers(document, wanted)
   entries.forEach((entry, at) => {
     const node = nodes[at] ?? null
     const path = node === null ? undefined : found.get(node)
     entry.path = path ?? ''
-    const pos = path === undefined ? undefined : node!.pos
+    const pos = path === undefined || node === null ? undefined : node.pos
     if (pos !== undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
   })
   return entries

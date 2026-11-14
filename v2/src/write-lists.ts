@@ -1,5 +1,5 @@
 // The markers of a list (C2-W-042 to C2-W-045) and whether two lists would read as one (C2-W-028).
-import { type AstNode } from './ast.ts'
+import { type ListNode, type Node } from './ast.ts'
 import { type Writer } from './write-state.ts'
 
 /** C2-B-036: a number marker has at most nine digits, and a roman numeral at most nine letters. */
@@ -67,7 +67,7 @@ function numberedMarkers(delimiter: string, start: number, count: number): ListM
   return { markers, start: null }
 }
 
-function decimalMarkers(w: Writer, node: AstNode, delimiter: string, authored: number, count: number): ListMarkers {
+function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: number, count: number): ListMarkers {
   // C2-W-044, C2-B-219: a start of more than nine digits is neither a marker nor a start value, so the
   // list is written from 1 and the readback reports the field.
   const start = authored > MAX_DECIMAL ? 1 : authored
@@ -78,10 +78,10 @@ function decimalMarkers(w: Writer, node: AstNode, delimiter: string, authored: n
 }
 
 /** The markers of the items of `node`, and the start value for its attribute line. */
-export function listMarkers(w: Writer, node: AstNode): ListMarkers {
-  const count = node.children?.length ?? 0
+export function listMarkers(w: Writer, node: ListNode): ListMarkers {
+  const count = node.children.length
   const marker = node.marker
-  if (marker?.kind !== 'ordered') return { markers: new Array<string>(count).fill(marker?.char ?? '-'), start: null }
+  if (marker.kind !== 'ordered') return { markers: new Array<string>(count).fill(marker.char ?? '-'), start: null }
   const style = marker.style ?? '1'
   const delimiter = marker.delimiter ?? '.'
   const start = marker.start ?? 1
@@ -92,15 +92,15 @@ function isUpper(style: string): boolean {
   return style !== style.toLowerCase()
 }
 
-function markerStyle(list: AstNode): string {
-  return list.marker?.style ?? '1'
+function markerStyle(list: ListNode): string {
+  return list.marker.style ?? '1'
 }
 
-function markerDelimiter(list: AstNode): string {
-  return list.marker?.delimiter ?? '.'
+function markerDelimiter(list: ListNode): string {
+  return list.marker.delimiter ?? '.'
 }
 
-function sameOrderedKind(a: AstNode, b: AstNode): boolean {
+function sameOrderedKind(a: ListNode, b: ListNode): boolean {
   const first = markerStyle(a)
   const second = markerStyle(b)
   if (markerDelimiter(a) !== markerDelimiter(b)) return false
@@ -109,14 +109,14 @@ function sameOrderedKind(a: AstNode, b: AstNode): boolean {
 }
 
 /** C2-B-049, C2-B-053: whether the list `b` directly after the list `a` would continue it. */
-export function sameListKind(a: AstNode, b: AstNode): boolean {
+export function sameListKind(a: Node, b: Node): boolean {
   if (a.type === 'definition_list') return b.type === 'definition_list'
-  if (a.type !== 'list' || b.type !== 'list' || a.marker?.kind !== b.marker?.kind) return false
-  return sameTaskKind(a, b) && (a.marker?.kind === 'ordered' ? sameOrderedKind(a, b) : a.marker?.char === b.marker?.char)
+  if (a.type !== 'list' || b.type !== 'list' || a.marker.kind !== b.marker.kind) return false
+  return sameTaskKind(a, b) && (a.marker.kind === 'ordered' ? sameOrderedKind(a, b) : a.marker.char === b.marker.char)
 }
 
 /** C2-B-049: an item matches a list also in being a task item or not. */
-function sameTaskKind(a: AstNode, b: AstNode): boolean {
-  const last = a.children?.[a.children.length - 1]
-  return (last?.task === undefined) === (b.children?.[0]?.task === undefined)
+function sameTaskKind(a: ListNode, b: ListNode): boolean {
+  const last = a.children[a.children.length - 1]
+  return (last?.task === undefined) === (b.children[0]?.task === undefined)
 }

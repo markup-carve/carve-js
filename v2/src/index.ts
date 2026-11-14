@@ -38,7 +38,7 @@ export {
   parseWithLayout, render, type RenderOutput, renderTree, renderWithDiagnostics, type ResolvedTree, resolveTree,
 } from './api.ts'
 export {
-  AST_VERSION, type AstNode, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
+  AST_VERSION, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
   type Resource, type RubyPair, type Task,
 } from './ast.ts'
 export type * from './ast-nodes.ts'

@@ -1,5 +1,5 @@
 // The brace block of a node (C2-W-047 to C2-W-050): the id, the classes, the language, the keys.
-import { type AstNode, classesOf, keyValuesOf } from './ast.ts'
+import { type Node } from './ast.ts'
 import { UNDERSCORE } from './chars.ts'
 import { isAsciiLetter, isAsciiNameCharacter, isAsciiPunctuation } from './unicode.ts'
 
@@ -54,8 +54,9 @@ export interface BlockParts {
   skipClasses?: readonly number[]
 }
 
-function classParts(node: AstNode, parts: string[], skip: readonly number[]): void {
-  const classes = classesOf(node)
+const NONE: readonly never[] = []
+
+function classParts(classes: readonly string[], parts: string[], skip: readonly number[]): void {
   for (let at = 0; at < classes.length; at++) {
     if (skip.includes(at)) continue
     const name = classes[at]!
@@ -64,19 +65,24 @@ function classParts(node: AstNode, parts: string[], skip: readonly number[]): vo
   }
 }
 
-function keyParts(node: AstNode, parts: string[], first: readonly (readonly [string, string])[]): void {
+function keyParts(keyValues: readonly [string, string][], parts: string[], first: readonly (readonly [string, string])[]): void {
   for (const [key, value] of first) parts.push(keyPart(key, value))
-  for (const [key, value] of keyValuesOf(node)) if (isKey(key)) parts.push(keyPart(key, value))
+  for (const [key, value] of keyValues) if (isKey(key)) parts.push(keyPart(key, value))
+}
+
+function idPart(id: string | undefined, parts: string[]): void {
+  if (id !== undefined) parts.push(isName(id) ? `#${id}` : `id=${quoted(id)}`)
 }
 
 /** C2-W-048: the brace block of `node`, or the empty string when it has nothing to write. */
-export function braceBlock(node: AstNode, extra?: BlockParts): string {
+export function braceBlock(node: Node, extra?: BlockParts): string {
   const parts: string[] = []
-  const id = node.attrs?.id
-  if (id !== undefined) parts.push(isName(id) ? `#${id}` : `id=${quoted(id)}`)
-  classParts(node, parts, extra?.skipClasses ?? [])
-  if (node.lang !== undefined) parts.push(`:${node.lang}`)
-  keyParts(node, parts, extra?.keys ?? [])
+  const attrs = node.attrs
+  if (attrs !== undefined) idPart(attrs.id, parts)
+  classParts(attrs?.classes ?? NONE, parts, extra?.skipClasses ?? [])
+  const lang = node.lang
+  if (lang !== undefined) parts.push(`:${lang}`)
+  keyParts(attrs?.keyValues ?? NONE, parts, extra?.keys ?? [])
   const mark = extra?.mark ?? ''
   if (mark !== '') parts.unshift(mark)
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`

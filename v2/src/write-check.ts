@@ -2,34 +2,37 @@
 // and compared with the tree they were written from. Where the parse reads a construct that the
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
-import { type AstNode, asNode, childrenOf, isBreak, isInlineParent, isRecord, valueOf } from './ast.ts'
+import {
+  captionOf, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node, type ParagraphNode,
+  type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
+} from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
-import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { type Attempt, childNodes, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */
-export function parseChunk(src: string, abbreviations: Map<string, string>): AstNode {
+export function parseChunk(src: string, abbreviations: Map<string, string>): DocumentNode {
   return buildSource(src, true, abbreviations).document
 }
 
 /** One comparison of written blocks with their parse: what it asks the next write to change. */
 export interface Check {
   w: Writer
-  escapes: [AstNode, number][]
+  escapes: [TextNode, number][]
   /** Escapes of an earlier round that did not help and are taken back (C2-W-088). */
-  retracted: [AstNode, number][]
+  retracted: [TextNode, number][]
   /** The escapes among `escapes` that a node which did not form asked for, which the test of C2-W-088 decides. */
-  trials: [AstNode, number][]
+  trials: [TextNode, number][]
   /** The escapes asked for and the escapes taken back, by text node, for the test whether an offset is escaped. */
-  marks: Map<AstNode, Map<number, boolean>>
-  forms: AstNode[]
-  respelled: Set<AstNode>
+  marks: Map<TextNode, Map<number, boolean>>
+  forms: Node[]
+  respelled: Set<Node>
   /** A block read back as another block, so the blocks behind it were not compared one by one. */
   misaligned: boolean
   /** What no change repairs. It is reported when a round asks for no change. */
-  losses: [AstNode, string | null][]
+  losses: [Node, string | null][]
   /** The flags the content under comparison was written with: in a table cell, inside emphasis, inside strong. */
   flags: number
   /** C2-A-093: the counts of a cell are a resolution result in a table that has span marks. */
@@ -51,7 +54,6 @@ function changes(c: Check): number {
 // C2-A-162: positions and the results of resolution are not compared.
 const SKIPPED: readonly string[] = ['pos', 'segments', 'srcByteLength', 'stages', 'generatedId', 'resolvedAlign', 'n']
 const NODE_SLOTS: readonly string[] = ['children', 'caption']
-const REFERENCE_USES: readonly string[] = ['link', 'image', 'xref']
 const NUMBERED: readonly string[] = ['footnote_ref', 'inline_footnote']
 
 type Fields = Record<string, unknown>
@@ -72,10 +74,14 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /** Whether equality compares the field `name` of `node` here, apart from its node slots (C2-A-161, C2-A-162). */
-function isCompared(c: Check, node: AstNode, name: string): boolean {
+function isReference(node: Node): boolean {
+  return (node.type === 'link' || node.type === 'image' || node.type === 'xref') && node.key !== undefined
+}
+
+function isCompared(c: Check, node: Node, name: string): boolean {
   if (SKIPPED.includes(name) || NODE_SLOTS.includes(name)) return false
-  if (name === 'title') return !Array.isArray(node.title)
-  if ((name === 'href' || name === 'src') && node.key !== undefined && REFERENCE_USES.includes(node.type)) return false
+  if (name === 'title') return titleOf(node) === undefined
+  if ((name === 'href' || name === 'src') && isReference(node)) return false
   if (name === 'number' && NUMBERED.includes(node.type)) return false
   return !(c.spanMarks && (name === 'colspan' || name === 'rowspan'))
 }
@@ -84,7 +90,7 @@ function sameField(name: string, a: unknown, b: unknown): boolean {
   if (name !== 'marker' || a === undefined || b === undefined) return sameValue(a, b)
   // C2-A-058: a start of 1 is the same as none.
   const normal = (marker: unknown): Fields => {
-    const fields = { ...(marker as Fields) }
+    const fields: Fields = isRecord(marker) ? { ...marker } : {}
     if (fields['start'] === 1) delete fields['start']
     return fields
   }
@@ -92,31 +98,31 @@ function sameField(name: string, a: unknown, b: unknown): boolean {
 }
 
 /** The name of the first field in which `e` and `a` differ, or null. */
-function differingField(c: Check, e: AstNode, a: AstNode): string | null {
-  const left = e as unknown as Fields
-  const right = a as unknown as Fields
-  for (const name in left) {
-    if (left[name] !== undefined && isCompared(c, e, name) && !sameField(name, left[name], right[name])) return name
+function differingField(c: Check, e: Node, a: Node): string | null {
+  // Every node is a record; the guard gives the fields of both by name.
+  if (!isRecord(e) || !isRecord(a)) return null
+  for (const name in e) {
+    if (e[name] !== undefined && isCompared(c, e, name) && !sameField(name, e[name], a[name])) return name
   }
-  for (const name in right) {
-    if (right[name] !== undefined && left[name] === undefined && isCompared(c, a, name)) return name
+  for (const name in a) {
+    if (a[name] !== undefined && e[name] === undefined && isCompared(c, a, name)) return name
   }
   return null
 }
 
 /** Asks for the other spelling of `node`. */
-function changeForm(c: Check, node: AstNode): void {
+function changeForm(c: Check, node: Node): void {
   c.forms.push(node)
   c.respelled.add(node)
 }
 
-function mark(c: Check, node: AstNode, at: number, escaped: boolean): void {
+function mark(c: Check, node: TextNode, at: number, escaped: boolean): void {
   const marks = c.marks.get(node) ?? new Map<number, boolean>()
   marks.set(at, escaped)
   c.marks.set(node, marks)
 }
 
-function isEscaped(c: Check, node: AstNode, at: number): boolean {
+function isEscaped(c: Check, node: TextNode, at: number): boolean {
   const asked = c.marks.get(node)?.get(at)
   if (asked !== undefined) return asked
   const written = c.w.escapes.get(node) ?? []
@@ -124,8 +130,8 @@ function isEscaped(c: Check, node: AstNode, at: number): boolean {
 }
 
 /** Asks for a backslash before the character `at` of the text node. False where that character takes none. */
-function escapeAt(c: Check, node: AstNode, at: number): boolean {
-  const value = valueOf(node)
+function escapeAt(c: Check, node: TextNode, at: number): boolean {
+  const value = node.value
   if (at < 0 || at >= value.length || !isAsciiPunctuation(value.charCodeAt(at)) || isEscaped(c, node, at)) return false
   c.escapes.push([node, at])
   mark(c, node, at, true)
@@ -148,29 +154,34 @@ function openerOffsets(value: string): number[] {
 }
 
 /** The line that starts at `nodes[from]` opened a block: escapes its opener (C2-W-090, C2-W-092). */
-function escapeLineStart(c: Check, nodes: readonly AstNode[], from: number, owner: AstNode): void {
+function escapeLineStart(c: Check, nodes: readonly Node[], from: number, owner: Node): void {
   c.misaligned = true
   const first = nodes[from]
-  if (first?.type === 'text') for (const at of openerOffsets(valueOf(first))) if (escapeAt(c, first, at)) return
+  if (first?.type === 'text') for (const at of openerOffsets(first.value)) if (escapeAt(c, first, at)) return
   for (let at = from + 1; at < nodes.length && !isBreak(nodes[at]); at++) {
-    if (nodes[at]!.type === 'text' && escapeAt(c, nodes[at]!, 0)) return
+    const node = nodes[at]
+    if (node?.type === 'text' && escapeAt(c, node, 0)) return
   }
   // The markup of the first node of the line reads as a block opener: its other spelling may not (C2-W-005).
   if (first !== undefined && hasOtherForm(c, first)) changeForm(c, first)
   else c.losses.push([first ?? owner, null])
 }
 
-function hasOtherForm(c: Check, node: AstNode): boolean {
+function hasOtherForm(c: Check, node: Node): boolean {
   if ((c.w.forms.get(node) ?? 0) > 0 || c.respelled.has(node)) return false
   if (node.type === 'emphasis' || node.type === 'strong' || node.type === 'comment') return true
-  return node.key !== undefined && c.w.facts?.get(node)?.rawRef !== undefined
+  return 'key' in node && node.key !== undefined && c.w.facts?.get(node)?.rawRef !== undefined
 }
 
 /** The last text node below `node`, or `node` itself where it is one. */
-function lastText(node: AstNode | undefined): AstNode | null {
+function lastText(node: Node | undefined): TextNode | null {
   let at = node
-  while (at !== undefined && at.type !== 'text') at = at.children?.[at.children.length - 1]
-  return at ?? null
+  for (;;) {
+    if (at === undefined) return null
+    if (at.type === 'text') return at
+    const children = childNodes(at)
+    at = children[children.length - 1]
+  }
 }
 
 /** The characters that read on into markup that stands directly behind them: `\\(`, `![`, `^[`, `$` and a backtick run. */
@@ -186,28 +197,29 @@ const CLOSING_MARKS = new Map([
  * character that joins that markup, or else before its last opening brace, which may open a brace
  * form that takes the markup (C2-I-043).
  */
-function escapeEnd(c: Check, text: AstNode | null, braces: boolean): boolean {
+function escapeEnd(c: Check, text: TextNode | null, braces: boolean): boolean {
   if (text === null) return false
-  const value = valueOf(text)
+  const value = text.value
   if (value !== '' && JOINING.includes(value[value.length - 1]!) && escapeAt(c, text, value.length - 1)) return true
   return braces && escapeAt(c, text, value.lastIndexOf('{'))
 }
 
 /** Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it. */
-function escapeInContent(c: Check, e: AstNode): boolean {
+function escapeInContent(c: Check, e: Node): boolean {
   const mark = CLOSING_MARKS.get(e.type)
-  if (mark === undefined || e.children === undefined) return false
+  if (mark === undefined || !('children' in e)) return false
   return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
 
 /** Asks for the escape that keeps the text before `es[i]` from reading on into its opening markup. */
-function escapeBefore(c: Check, es: readonly AstNode[], i: number): boolean {
+function escapeBefore(c: Check, es: readonly Node[], i: number): boolean {
   return escapeEnd(c, i > 0 ? lastText(es[i - 1]) : null, true)
 }
 
 /** Asks for the escape that keeps the end of the content of `es[i]` from reading on into its closing markup. */
-function escapeInside(c: Check, es: readonly AstNode[], i: number): boolean {
-  return escapeEnd(c, es[i]!.children === undefined ? null : lastText(es[i]), true)
+function escapeInside(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]
+  return escapeEnd(c, e !== undefined && 'children' in e ? lastText(e) : null, true)
 }
 
 /**
@@ -216,7 +228,7 @@ function escapeInside(c: Check, es: readonly AstNode[], i: number): boolean {
  * then the escapes again, then an escape of its closing mark in its content. An escape that did
  * not help is taken back (C2-W-088).
  */
-function respell(c: Check, es: readonly AstNode[], i: number): boolean {
+function respell(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]!
   // A node that the writer reported as lost when it wrote it reads back as something else, and nothing repairs that.
   if (c.w.lost.has(e)) return false
@@ -236,7 +248,7 @@ function respell(c: Check, es: readonly AstNode[], i: number): boolean {
   return false
 }
 
-type RespellStep = (c: Check, es: readonly AstNode[], i: number, attempt: Attempt) => boolean
+type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
 
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
@@ -257,19 +269,18 @@ const RESPELL_STEPS: readonly RespellStep[] = [
 ]
 
 /** How far behind the start of the construct `a` its opener takes the backslash (C2-W-090, C2-W-099). */
-function openerShift(a: AstNode): number {
-  const type = a.type
-  if (type === 'image' || type === 'literal_inline' || type === 'inline_footnote') return 1
-  if (type === 'math') return a.display === true ? 2 : 1
-  if (type !== 'smart_punctuation') return 0
-  const source = a.source ?? ''
+function openerShift(a: Node): number {
+  if (a.type === 'image' || a.type === 'literal_inline' || a.type === 'inline_footnote') return 1
+  if (a.type === 'math') return a.display ? 2 : 1
+  if (a.type !== 'smart_punctuation') return 0
+  const source = a.source
   // The second hyphen, also of the braced en dash `{--}` (C2-I-043).
   return source.startsWith('{-') ? 2 : source.startsWith('-') ? 1 : 0
 }
 
 /** The text of `e` holds, at `at`, what the parse read as the construct `a`. */
-function escapeOpener(c: Check, e: AstNode, at: number, a: AstNode): void {
-  const value = valueOf(e)
+function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
+  const value = e.value
   let start = at
   // C2-I-023: a line comment takes the spaces before it.
   while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
@@ -287,19 +298,19 @@ interface Cursor {
   anchorByte: number
 }
 
-function isPaired(node: AstNode): boolean {
+function isPaired(node: Node): node is EmphasisNode | StrongNode {
   return node.type === 'emphasis' || node.type === 'strong'
 }
 
 /** Asks for a backslash before the first bare `mark` in the text below `nodes`, from the offset `from` of the first node on. */
-function escapeMark(c: Check, nodes: readonly AstNode[], start: number, from: number, mark: string): boolean {
+function escapeMark(c: Check, nodes: readonly Node[], start: number, from: number, mark: string): boolean {
   for (let at = start; at < nodes.length; at++) {
     const node = nodes[at]!
     if (node.type !== 'text') {
-      if (node.children !== undefined && escapeMark(c, node.children, 0, 0, mark)) return true
+      if ('children' in node && escapeMark(c, node.children, 0, 0, mark)) return true
       continue
     }
-    const value = valueOf(node)
+    const value = node.value
     for (let k = value.indexOf(mark, at === start ? from : 0); k >= 0; k = value.indexOf(mark, k + 1)) if (escapeAt(c, node, k)) return true
   }
   return false
@@ -310,7 +321,7 @@ function escapeMark(c: Check, nodes: readonly AstNode[], start: number, from: nu
  * delimiter in the content closed it. C2-W-069: the braced form holds such content; where the
  * node is braced already, the delimiter takes a backslash (C2-W-093).
  */
-function closedEarly(c: Check, es: readonly AstNode[], i: number, vi: number, owner: AstNode): void {
+function closedEarly(c: Check, es: readonly Node[], i: number, vi: number, owner: Node): void {
   const mark = CLOSING_MARKS.get(owner.type)
   if (isPaired(owner) && hasOtherForm(c, owner)) changeForm(c, owner)
   else if (mark === undefined || !escapeMark(c, es, i, vi, mark)) c.losses.push([owner, null])
@@ -321,18 +332,18 @@ function closedEarly(c: Check, es: readonly AstNode[], i: number, vi: number, ow
  * hold. C2-B-102: a block takes the attribute lines directly above it, so the line that opened
  * the block is the first one behind such lines.
  */
-function openerLine(es: readonly AstNode[], from: number): number {
+function openerLine(es: readonly Node[], from: number): number {
   let at = from
-  while (at + 2 < es.length && es[at]!.type === 'text' && isBreak(es[at + 1]) && isBraceLine(valueOf(es[at]!))) at += 2
+  while (at + 2 < es.length && isBraceLine(es[at]) && isBreak(es[at + 1])) at += 2
   return at
 }
 
-function isBraceLine(value: string): boolean {
-  return value.startsWith('{') && value.endsWith('}')
+function isBraceLine(node: Node | undefined): boolean {
+  return node?.type === 'text' && node.value.startsWith('{') && node.value.endsWith('}')
 }
 
 /** The content of `owner` ended in the parse before the expected node `es[i]`. */
-function endedEarly(c: Check, es: readonly AstNode[], i: number, owner: AstNode): void {
+function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void {
   // C2-W-097: a backslash at the end of the text before took the markup of this node.
   if (i > 0 && escapeEnd(c, lastText(es[i - 1]), false)) return
   if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, i, 0, owner)
@@ -341,9 +352,9 @@ function endedEarly(c: Check, es: readonly AstNode[], i: number, owner: AstNode)
 }
 
 /** Steps over the characters that the expected text `e` and the parsed text `a` share at the cursor. False where they differ. */
-function matchCharacters(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
-  const value = valueOf(e)
-  const other = valueOf(a)
+function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolean {
+  const value = e.value
+  const other = a.value
   const length = Math.min(value.length - at.vi, other.length - at.aj)
   for (let k = 0; k < length; k++) {
     if (value.charCodeAt(at.vi + k) === other.charCodeAt(at.aj + k)) continue
@@ -365,14 +376,14 @@ function matchCharacters(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean 
  * be compared further.
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
-function parseEndsInText(c: Check, es: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
+function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
   if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
   else c.losses.push([owner, null])
   return false
 }
 
 /** The text node `es[at.i]` is matched to its end; the parse may hold more text behind it. */
-function afterTextNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
+function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
   at.i++
   at.vi = 0
   if (at.aj === 0 || es[at.i]?.type === 'text') return true
@@ -383,9 +394,8 @@ function afterTextNode(c: Check, es: readonly AstNode[], as: readonly AstNode[],
   return false
 }
 
-function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
-  const e = es[at.i]!
-  const value = valueOf(e)
+function matchText(c: Check, e: TextNode, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
+  const value = e.value
   const a = as[at.j]
   if (a === undefined) return parseEndsInText(c, es, at, owner)
   if (a.type !== 'text') return skipConstruct(c, e, a, at)
@@ -398,13 +408,13 @@ function matchText(c: Check, es: readonly AstNode[], as: readonly AstNode[], at:
  * there, so that one round also finds what behind it did not read back (C2-W-091). False where
  * the text of the parse does not hold the node as it was written.
  */
-function stepOver(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor): boolean {
+function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
   const a = as[at.j]
   const spelled = writeInlines(c.w, [es[at.i]!], c.flags)
   // An escape in the node is one character of the text, so the two do not compare by length.
-  if (a?.type !== 'text' || spelled.includes('\\') || !valueOf(a).startsWith(spelled, at.aj)) return false
+  if (a?.type !== 'text' || spelled.includes('\\') || !a.value.startsWith(spelled, at.aj)) return false
   at.aj += spelled.length
-  if (at.aj === valueOf(a).length) {
+  if (at.aj === a.value.length) {
     at.j++
     at.aj = 0
   }
@@ -413,14 +423,15 @@ function stepOver(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: 
 }
 
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
-function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
+function skipConstruct(c: Check, e: TextNode, a: Node, at: Cursor): boolean {
   escapeOpener(c, e, at.vi, a)
-  if (a.pos === undefined) return false
-  const end = spelledEnd(c.w, e, at.vi, a.pos.endOffset - a.pos.startOffset, (c.flags & IN_CELL) !== 0)
+  const pos = a.pos
+  if (pos === undefined) return false
+  const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, (c.flags & IN_CELL) !== 0)
   if (end < 0) return false
   at.vi = end
   at.j++
-  if (at.vi === valueOf(e).length) {
+  if (at.vi === e.value.length) {
     at.i++
     at.vi = 0
   }
@@ -432,28 +443,26 @@ function skipConstruct(c: Check, e: AstNode, a: AstNode, at: Cursor): boolean {
  * backslash. C2-I-036: a brace block in the text behind a host was read as its attributes.
  * C2-I-105: the side a quote opens to, and the length of a dash, follow from the characters around.
  */
-function readsNeighbor(c: Check, es: readonly AstNode[], i: number, a: AstNode): boolean {
-  const e = es[i]!
+function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Node): boolean {
   const next = textAt(es, i + 1)
-  if (next !== null && !sameValue(e.attrs, a.attrs) && valueOf(next).startsWith('{')) return escapeAt(c, next, 0)
-  if (e.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
+  if (next !== null && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
+  if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   if (next !== null && escapeAt(c, next, 0)) return true
   const before = textAt(es, i - 1)
-  return before !== null && escapeAt(c, before, valueOf(before).length - 1)
+  return before !== null && escapeAt(c, before, before.value.length - 1)
 }
 
-function textAt(nodes: readonly AstNode[], at: number): AstNode | null {
+function textAt(nodes: readonly Node[], at: number): TextNode | null {
   const node = nodes[at]
   return node?.type === 'text' ? node : null
 }
 
-function isLostCode(c: Check, node: AstNode | undefined): boolean {
+function isLostCode(c: Check, node: Node | undefined): boolean {
   return node !== undefined && node.type === 'code' && c.w.lost.has(node)
 }
 
 /** Compares an expected node that is no text with the parse. Returns false where the lists cannot be compared further. */
-function matchNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor, owner: AstNode): boolean {
-  const e = es[at.i]!
+function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], at: Cursor, owner: Node): boolean {
   const a = as[at.j]
   if (a === undefined) {
     endedEarly(c, es, at.i, owner)
@@ -467,7 +476,7 @@ function matchNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at:
     at.j++
     return true
   }
-  if (readsNeighbor(c, es, at.i, a)) return false
+  if (readsNeighbor(c, e, es, at.i, a)) return false
   compareInline(c, e, a)
   at.i++
   at.j++
@@ -475,7 +484,7 @@ function matchNode(c: Check, es: readonly AstNode[], as: readonly AstNode[], at:
 }
 
 /** Notes the place of the cursor where both lists start a node there. A line break ends the line the offsets hold on. */
-function setAnchor(es: readonly AstNode[], as: readonly AstNode[], at: Cursor): void {
+function setAnchor(es: readonly Node[], as: readonly Node[], at: Cursor): void {
   if (at.vi !== 0 || at.aj !== 0) return
   const pos = as[at.j]?.pos
   if (isBreak(es[at.i])) at.anchor = -1
@@ -492,7 +501,7 @@ function setAnchor(es: readonly AstNode[], as: readonly AstNode[], at: Cursor): 
  * other deviations of the line (C2-W-091). False where there is no such place.
  */
 /** The first parsed node from `j` on that starts at `offset` or later. */
-function firstNodeFrom(as: readonly AstNode[], j: number, offset: number): number {
+function firstNodeFrom(as: readonly Node[], j: number, offset: number): number {
   while (j < as.length && (as[j]!.pos?.startOffset ?? -1) < offset) j++
   return j
 }
@@ -505,7 +514,7 @@ function resumeAt(at: Cursor, i: number, j: number): boolean {
   return true
 }
 
-function resync(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cursor): boolean {
+function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor): boolean {
   const failed = as[at.j]?.pos
   if (at.anchor < 0 || failed === undefined) return false
   let offset = at.anchorByte
@@ -518,75 +527,84 @@ function resync(c: Check, es: readonly AstNode[], as: readonly AstNode[], at: Cu
   return false
 }
 
-function compareInlines(c: Check, es: readonly AstNode[], as: readonly AstNode[], owner: AstNode): void {
+function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const at: Cursor = { i: 0, vi: 0, j: 0, aj: 0, anchor: -1, anchorByte: 0 }
   while (at.i < es.length) {
     setAnchor(es, as, at)
-    const more = es[at.i]!.type === 'text' ? matchText(c, es, as, at, owner) : matchNode(c, es, as, at, owner)
+    const e = es[at.i]!
+    const more = e.type === 'text' ? matchText(c, e, es, as, at, owner) : matchNode(c, e, es, as, at, owner)
     if (!more && !resync(c, es, as, at)) return
   }
   if (at.j < as.length) c.losses.push([owner, null])
 }
 
 /** Compares a node that the writer took from the sidecar as it was typed: any difference sends it back to the tree form. */
-function compareRaw(c: Check, e: AstNode, a: AstNode): void {
+function compareRaw(c: Check, e: Node, a: Node): void {
   const probe = createCheck(c.w)
   probe.flags = c.flags
   compareFields(probe, e, a)
-  if (e.children !== undefined) compareInlines(probe, e.children, childrenOf(a), e)
+  if ('children' in e) compareInlines(probe, e.children, childNodes(a), e)
   // A difference behind another change of this round may come from that change, so the next round decides.
   if (changes(probe) + probe.losses.length > 0 && changes(c) === 0) changeForm(c, e)
   else if (changes(probe) + probe.losses.length > 0) c.misaligned = true
 }
 
-function compareFields(c: Check, e: AstNode, a: AstNode): void {
+function compareFields(c: Check, e: Node, a: Node): void {
   const field = differingField(c, e, a)
   if (field !== null) c.losses.push([e, field])
 }
 
-function compareInline(c: Check, e: AstNode, a: AstNode): void {
-  if (e.key !== undefined && hasOtherForm(c, e)) return compareRaw(c, e, a)
+function compareInline(c: Check, e: Node, a: Node): void {
+  if ('key' in e && e.key !== undefined && hasOtherForm(c, e)) return compareRaw(c, e, a)
   compareFields(c, e, a)
-  if (e.children === undefined) return
+  if (!('children' in e)) return
   const outer = c.flags
   if (e.type === 'emphasis') c.flags |= IN_EMPHASIS
   else if (e.type === 'strong') c.flags |= IN_STRONG
-  compareInlines(c, e.children, childrenOf(a), e)
+  compareInlines(c, e.children, childNodes(a), e)
   c.flags = outer
 }
 
 /** The block `e` read back as a block of another type. */
-function blockMismatch(c: Check, e: AstNode): void {
+function blockMismatch(c: Check, e: Node): void {
   c.misaligned = true
   // C2-W-092: the first line of a paragraph read as a block opener.
-  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, childrenOf(e), 0, e)
+  if (e.type === 'paragraph' && e.children.length > 0) escapeLineStart(c, e.children, 0, e)
   else c.losses.push([e, null])
 }
 
 /** The block `e` has no block in the parse: the block above it took its lines. */
-function missingBlock(c: Check, e: AstNode): void {
+function missingBlock(c: Check, e: Node): void {
   // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
-  if (e.type === 'paragraph' && childrenOf(e).length > 0) escapeLineStart(c, childrenOf(e), 0, e)
+  if (e.type === 'paragraph' && e.children.length > 0) escapeLineStart(c, e.children, 0, e)
   else if (hasOtherForm(c, e)) changeForm(c, e)
   else c.losses.push([e, null])
 }
 
-function hasSpanMarks(table: AstNode): boolean {
-  for (const group of childrenOf(table)) {
-    for (const row of childrenOf(group)) for (const cell of childrenOf(row)) if (cell.span !== undefined) return true
+function hasSpanMarks(table: TableNode): boolean {
+  for (const group of table.children) {
+    if (group.type !== 'comment' && group.children.some(rowHasSpanMarks)) return true
   }
   return false
 }
 
-function compareSlots(c: Check, e: AstNode, a: AstNode): void {
-  if (Array.isArray(e.title)) compareInlines(c, e.title, Array.isArray(a.title) ? a.title : [], e)
-  else if (Array.isArray(a.title)) c.losses.push([e, 'title'])
-  if (e.caption !== undefined && a.caption !== undefined) compareBlock(c, e.caption, a.caption)
-  else if (e.caption !== a.caption) c.losses.push([e.caption ?? e, e.caption === undefined ? 'caption' : null])
+function rowHasSpanMarks(row: TableRowNode | CommentNode): boolean {
+  return row.type === 'table_row' && row.children.some((cell) => cell.span !== undefined)
+}
+
+function compareSlots(c: Check, e: Node, a: Node): void {
+  const title = titleOf(e)
+  const parsedTitle = titleOf(a)
+  if (title !== undefined) compareInlines(c, title, parsedTitle ?? [], e)
+  else if (parsedTitle !== undefined) c.losses.push([e, 'title'])
+  const caption = captionOf(e)
+  const parsedCaption = captionOf(a)
+  if (caption !== undefined && parsedCaption !== undefined) compareBlock(c, caption, parsedCaption)
+  else if (caption !== parsedCaption) c.losses.push([caption ?? e, caption === undefined ? 'caption' : null])
 }
 
 /** Compares one block with its parse. Returns false where the blocks behind it cannot be compared. */
-function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
+function compareBlock(c: Check, e: Node, a: Node): boolean {
   if (c.w.lost.has(e)) return true
   if (e.type !== a.type) {
     blockMismatch(c, e)
@@ -594,11 +612,11 @@ function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
   }
   const marks = c.spanMarks
   const flags = c.flags
-  if (e.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
+  if (e.type === 'table' && a.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
   if (e.type === 'table_cell') c.flags |= IN_CELL
   compareFields(c, e, a)
-  if (isInlineParent(asNode(e))) compareInlines(c, childrenOf(e), childrenOf(a), e)
-  else compareBlocks(c, childrenOf(e), childrenOf(a), e)
+  if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
+  else compareBlocks(c, childNodes(e), childNodes(a), e)
   compareSlots(c, e, a)
   c.spanMarks = marks
   c.flags = flags
@@ -606,34 +624,40 @@ function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
 }
 
 /** The places at which the parse `node` has a paragraph, and the lines at which it has a block, from the blocks below it. */
-function readStarts(node: AstNode, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
-  for (const block of childrenOf(node)) {
-    if (block.pos !== undefined) {
-      lines.add(block.pos.startLine - offset)
-      if (block.type === 'paragraph') paragraphs.add((block.pos.startLine - offset) * PLACE_COLUMNS + block.pos.startColumn - 1)
+function readStarts(node: Node, offset: number, paragraphs: Set<number>, lines: Set<number>): void {
+  for (const block of childNodes(node)) {
+    const pos = block.pos
+    if (pos !== undefined) {
+      lines.add(pos.startLine - offset)
+      if (block.type === 'paragraph') paragraphs.add((pos.startLine - offset) * PLACE_COLUMNS + pos.startColumn - 1)
     }
-    if (!isInlineParent(asNode(block))) readStarts(block, offset, paragraphs, lines)
-    if (block.caption !== undefined) readStarts(block.caption, offset, paragraphs, lines)
+    if (!isInlineParent(block)) readStarts(block, offset, paragraphs, lines)
+    const caption = captionOf(block)
+    if (caption !== undefined) readStarts(caption, offset, paragraphs, lines)
   }
 }
 
 /** Whether the text at the start of a line has the shape of a block opener: punctuation, or a marker of digits or letters. */
-function hasOpenerShape(node: AstNode | undefined): boolean {
-  const value = node?.type === 'text' ? valueOf(node) : ''
+function hasOpenerShape(node: Node | undefined): boolean {
+  const value = node?.type === 'text' ? node.value : ''
   if (value === '') return node !== undefined && node.type !== 'text'
   return !isAsciiAlphanumeric(value.charCodeAt(0)) || openerOffsets(value).length > 1
 }
 
+/** Whether the escapes of this round already touch `node`. */
+function isPending(c: Check, node: Node | undefined): boolean {
+  return node?.type === 'text' && c.marks.has(node)
+}
+
 /** Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a block. */
-function escapeOpenerLines(c: Check, e: AstNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
-  const nodes = childrenOf(e)
-  const pending = (at: number): boolean => nodes[at] !== undefined && c.marks.has(nodes[at])
-  if (!paragraphs.has(place) && hasOpenerShape(nodes[0]) && !pending(0)) escapeLineStart(c, nodes, 0, e)
+function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
+  const nodes = e.children
+  if (!paragraphs.has(place) && hasOpenerShape(nodes[0]) && !isPending(c, nodes[0])) escapeLineStart(c, nodes, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
   for (let at = 0; at < nodes.length; at++) {
     if (!isBreak(nodes[at])) continue
     line++
-    if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !pending(at + 1)) escapeLineStart(c, nodes, at + 1, e)
+    if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
   }
 }
 
@@ -643,7 +667,7 @@ function escapeOpenerLines(c: Check, e: AstNode, place: number, paragraphs: Set<
  * `parsed` has one, so that one round escapes all of them (C2-W-092). `offset` is the line of
  * the parse at which the group starts.
  */
-export function escapeOpeners(c: Check, parsed: AstNode, offset: number): void {
+export function escapeOpeners(c: Check, parsed: DocumentNode, offset: number): void {
   if (!c.misaligned) return
   const paragraphs = new Set<number>()
   const lines = new Set<number>()
@@ -654,14 +678,15 @@ export function escapeOpeners(c: Check, parsed: AstNode, offset: number): void {
 }
 
 /** Compares the blocks `es` of `owner`, as they were written, with their parse `as`. */
-export function compareBlocks(c: Check, es: readonly AstNode[], as: readonly AstNode[], owner: AstNode): void {
+export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const before = changes(c)
   const count = Math.min(es.length, as.length)
   for (let at = 0; at < count; at++) if (!compareBlock(c, es[at]!, as[at]!)) return
   // What a lost block was written as has its own count of blocks.
   if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
   // A line of a line block that reads as its closer ends the block (C2-B-123).
-  if (owner.type === 'line_block' && as.length < es.length) escapeLineStart(c, childrenOf(es[as.length]!), 0, es[as.length]!)
+  const missing = es[as.length]
+  if (owner.type === 'line_block' && missing !== undefined) escapeLineStart(c, childNodes(missing), 0, missing)
   else if (es.length > as.length) missingBlock(c, es[as.length]!)
   else c.losses.push([owner, null])
 }
