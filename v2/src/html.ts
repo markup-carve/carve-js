@@ -6,7 +6,7 @@ import {
   type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
   type TableCellNode, type TableColumnNode, type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
 } from './ast.ts'
-import { blockText } from './ast-text.ts'
+import { blockText, plainText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
   attributes, escapeAttribute, escapeText, loss, type Pair, type Render, type TagParts,
@@ -341,7 +341,8 @@ function preHtml(r: Render, node: CodeBlockNode | RawBlockNode, language: string
 }
 
 function codeBlock(r: Render, node: CodeBlockNode, level: number): void {
-  const title = node.title?.map((part) => ('value' in part ? part.value : '')).join('')
+  // C2-H-048: a supplied tree may hold any inline title, which the attribute takes as plain text (C2-H-143).
+  const title = node.title === undefined ? undefined : plainText(node.title)
   line(r, level, preHtml(r, node, node.syntax, title, node.groupLabel))
 }
 

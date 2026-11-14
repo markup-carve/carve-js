@@ -1,6 +1,6 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, parse, render } from '../src/index.ts'
+import { CarveTreeError, decodeTree, parse, render, writeWithDiagnostics } from '../src/index.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -97,5 +97,22 @@ describe('the attribute filter', () => {
   it('C2-H-161: an authored class and the language of a supplied tree pass the filter too', () => {
     expect(render('[x]{.a class="javascript:x"}')).toBe('<p><span class="a">x</span></p>')
     expect(render(decodeTree(JSON.stringify(inParagraph({ type: 'span', lang: 'javascript:x', children: [{ type: 'text', value: 'x' }] }))))).toBe('<p><span lang="">x</span></p>')
+  })
+})
+
+describe('the title of a code block', () => {
+  const titled = JSON.stringify({
+    type: 'document', astVersion: '2.0',
+    children: [{ type: 'code_block', value: 'a\n', title: [{ type: 'emphasis', children: [{ type: 'text', value: 'Hi' }] }, { type: 'text', value: ' there' }] }],
+  })
+
+  it('C2-A-073, C2-H-048: an inline title of a supplied tree is the title attribute as plain text', () => {
+    expect(render(decodeTree(titled))).toBe('<pre title="Hi there"><code>a\n</code></pre>')
+  })
+
+  it('C2-W-117: the writer writes it as text and reports the markup it cannot spell', () => {
+    const output = writeWithDiagnostics(decodeTree(titled))
+    expect(output.source).toBe('``` "Hi there"\na\n```\n')
+    expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
   })
 })

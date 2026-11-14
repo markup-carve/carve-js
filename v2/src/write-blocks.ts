@@ -7,6 +7,7 @@ import {
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
   type ParagraphNode, type RawBlockNode, type TableNode,
 } from './ast.ts'
+import { plainText } from './ast-text.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
@@ -112,12 +113,12 @@ function openerTail(
   return out
 }
 
-function codeTitle(node: CodeBlockNode): string | null {
+/** C2-B-120: a title of the opener is text. Other inline nodes, which a supplied tree may hold, are written as their plain text. */
+function codeTitle(w: Writer, node: CodeBlockNode): string | null {
   const title = node.title
   if (title === undefined) return null
-  let text = ''
-  for (const part of title) if ('value' in part) text += part.value
-  return text
+  if (title.some((part) => part.type !== 'text')) lose(w, node, 'title')
+  return plainText(title)
 }
 
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
@@ -127,7 +128,7 @@ function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
   let info = node.type === 'raw_block' ? `=${node.format}` : node.syntax ?? ''
   if (node.type === 'code_block') {
-    const title = codeTitle(node)
+    const title = codeTitle(w, node)
     // C2-B-120: the title reads escapes, as a quoted attribute value does.
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
