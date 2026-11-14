@@ -112,11 +112,5 @@ function sameOrderedKind(a: ListNode, b: ListNode): boolean {
 export function sameListKind(a: Node, b: Node): boolean {
   if (a.type === 'definition_list') return b.type === 'definition_list'
   if (a.type !== 'list' || b.type !== 'list' || a.marker.kind !== b.marker.kind) return false
-  return sameTaskKind(a, b) && (a.marker.kind === 'ordered' ? sameOrderedKind(a, b) : a.marker.char === b.marker.char)
-}
-
-/** C2-B-049: an item matches a list also in being a task item or not. */
-function sameTaskKind(a: ListNode, b: ListNode): boolean {
-  const last = a.children[a.children.length - 1]
-  return (last?.task === undefined) === (b.children[0]?.task === undefined)
+  return a.marker.kind === 'ordered' ? sameOrderedKind(a, b) : a.marker.char === b.marker.char
 }

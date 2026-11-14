@@ -228,10 +228,10 @@ function footnote(w: Writer, node: FootnoteNode, prefix: string, flags: number):
   body(w, node, prefix, flags, `[^${node.key}]: `, 2, false)
 }
 
-/** C2-B-040: a marker of one uppercase letter and a dot takes two spaces. */
+/** C2-W-025, C2-B-040: an uppercase marker with a dot, a letter or a roman numeral, takes two spaces. */
 function markerGap(marker: string): string {
   const code = marker.charCodeAt(0)
-  return marker.length === 2 && marker[1] === '.' && code >= 65 && code <= 90 ? '  ' : ' '
+  return marker.length >= 2 && marker.endsWith('.') && code >= 65 && code <= 90 ? '  ' : ' '
 }
 
 function listItem(w: Writer, node: ListItemNode, prefix: string, flags: number, marker: string, tight: boolean): void {

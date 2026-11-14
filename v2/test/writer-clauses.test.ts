@@ -232,7 +232,7 @@ describe('what the writer cannot spell', () => {
 
   it('C2-W-016: a code span whose later line would open a block is refused with field-unspellable', () => {
     expect(losses(documentOf(paragraph(code('a\n::: x'))))).toContain('field-unspellable /children/0/children/0')
-    expect(checkWriter('  - a\n- ```\n- a')).toBe('refused')
+    expect(checkWriter('[^a]: a\n- ```\n- a')).toBe('refused')
     expect(losses(documentOf(paragraph(code('a\nb'))))).toEqual([])
   })
 
@@ -309,9 +309,20 @@ describe('layout', () => {
     expect(format('  - a\n  - b')).toBe('- a\n- b\n')
   })
 
-  it('C2-W-025: one space follows a marker, two a marker of one uppercase letter and a dot', () => {
+  it('C2-W-025: one space follows a marker, two an uppercase marker with a dot, and the content column moves with it', () => {
     expect(format('-   a')).toBe('- a\n')
     expect(format('A.  a\n    b\nB.  c')).toBe('A.  a\n    b\nB.  c\n')
+    expect(format('II.  a\n     b\nIII.  c')).toBe('II.  a\n     b\nIII.  c\n')
+    expect(format('MD.  x\n\n     - y')).toBe('MD.  x\n     - y\n')
+    expect(format('II)  a')).toBe('II) a\n')
+    expect(format('ii.  a')).toBe('ii. a\n')
+    expect(format('II\\. a')).toBe('II. a\n')
+  })
+
+  it('C2-B-049: items with and without a task box are written as one list, and two such lists keep their boundary', () => {
+    expect(format('- [ ] a\n- b\n- [x] c')).toBe('- [ ] a\n- b\n- [x] c\n')
+    expect(format('- [ ] a\n\n\n\n- b')).toBe('- [ ] a\n\n\n\n- b\n')
+    expect(checkWriter('- a\n\n\n\n- [x] b')).toBeNull()
   })
 
   it('C2-W-026: a continuation line that would read as a list marker is kept text by an escape', () => {
