@@ -31,8 +31,8 @@ function attributeShape(attributes: Attributes | null): string {
   const parts: string[] = []
   if (attributes.id !== null) parts.push(`#${attributes.id}`)
   for (const name of attributes.classes) parts.push(`.${name}`)
-  if (attributes.language !== null) parts.push(`:${attributes.language}`)
-  for (const [key, value] of attributes.keys) parts.push(`${key}=${/^[^ "]+$/.test(value) ? value : quoted(value)}`)
+  if (attributes.lang !== null) parts.push(`:${attributes.lang}`)
+  for (const [key, value] of attributes.keyValues) parts.push(`${key}=${/^[^ "]+$/.test(value) ? value : quoted(value)}`)
   return `{${parts.join(' ')}}`
 }
 

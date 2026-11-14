@@ -47,7 +47,7 @@ function textNode(value: string, start: number, end: number): InlineNode {
 }
 
 function addAttributes(src: string, host: InlineNode, start: number, end: number): void {
-  host.attributes ??= { id: null, classes: [], language: null, keys: [] }
+  host.attributes ??= { id: null, classes: [], lang: null, keyValues: [] }
   readAttributeBlock(src, start, end, emptyMemo(), attributeSink(host.attributes))
 }
 

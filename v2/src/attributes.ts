@@ -24,7 +24,7 @@ export function emptyMemo(): AttributeMemo {
 export interface AttributeSink {
   id(name: string): void
   className(name: string): void
-  language(tag: string): void
+  lang(tag: string): void
   key(key: string, value: string): void
 }
 
@@ -86,7 +86,7 @@ function readLanguage(text: string, pos: number, end: number, sink: AttributeSin
     if (after === p + 1) return NONE
     p = after
   }
-  if (sink !== null) sink.language(text.slice(pos, p))
+  if (sink !== null) sink.lang(text.slice(pos, p))
   return p
 }
 

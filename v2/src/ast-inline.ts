@@ -4,7 +4,7 @@ import {
   type InsertNode, type LinkNode, type Node, type SpanNode, type StrikeNode, type StrongNode, type SubscriptNode,
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
-import { type Attributes, attributeSink, foldLabel } from './ast-attributes.ts'
+import { type Attributes, attributeSink, emptyAttributes, foldLabel } from './ast-attributes.ts'
 import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
@@ -96,9 +96,9 @@ export function setAttributes(node: Node, attributes: Attributes | null): void {
   const attrs: Attrs = {}
   if (attributes.id !== null) attrs.id = attributes.id
   if (attributes.classes.length > 0) attrs.classes = attributes.classes
-  if (attributes.keys.length > 0) attrs.keyValues = attributes.keys
+  if (attributes.keyValues.length > 0) attrs.keyValues = attributes.keyValues
   if (attrs.id !== undefined || attrs.classes !== undefined || attrs.keyValues !== undefined) node.attrs = attrs
-  if (attributes.language !== null) node.lang = attributes.language
+  if (attributes.lang !== null) node.lang = attributes.lang
 }
 
 /** C2-A-074: the text of a comment without the one space behind its opener and, for the braced form, before its closer. */
@@ -270,7 +270,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
   const value = node.value
   if (node.kind === LABEL) host.aux = node.end
   if (node.kind === ATTRIBUTE_BLOCK) {
-    host.attributes ??= { id: null, classes: [], language: null, keys: [] }
+    host.attributes ??= emptyAttributes()
     readAttributeBlock(ctx.src, node.start, node.end, emptyMemo(), attributeSink(host.attributes))
   } else if (node.kind === DESTINATION) {
     host.destination = destinationValue(value)

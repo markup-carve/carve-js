@@ -474,7 +474,7 @@ export function attributeKeyValue(src: string, pos: number, end: number, key: st
   const found: { value: string | null } = { value: null }
   const ignore = (): void => undefined
   const sink: AttributeSink = {
-    id: ignore, className: ignore, language: ignore,
+    id: ignore, className: ignore, lang: ignore,
     key: (name, value) => {
       if (name === key) found.value = value
     },

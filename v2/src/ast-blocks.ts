@@ -171,7 +171,7 @@ function orderedMarker(node: BlockNode, attributes: Attributes | null): Marker {
   const marker: Marker = { kind: 'ordered', style, delimiter: (flags & FLAG_PAREN) !== 0 ? ')' : '.' }
   let start = (flags & FLAG_AUTO) === 0 ? node.aux : 1
   // C2-B-045: the attribute decides over the number of the first marker, and is then no key of the list.
-  const authored = attributes?.keys.find((pair) => pair[0] === 'start')
+  const authored = attributes?.keyValues.find((pair) => pair[0] === 'start')
   const fromKey = authored === undefined ? -1 : startValue(authored[1], style.toLowerCase())
   if (fromKey >= 0) {
     start = fromKey

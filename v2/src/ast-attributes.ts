@@ -6,8 +6,8 @@ import { BRACE_OPEN, GREATER, LESS, TILDE } from './chars.ts'
 export interface Attributes {
   id: string | null
   classes: string[]
-  language: string | null
-  keys: [string, string][]
+  lang: string | null
+  keyValues: [string, string][]
 }
 
 /** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
@@ -28,8 +28,8 @@ export function attributeSink(attributes: Attributes): AttributeSink {
     className: (name) => {
       attributes.classes.push(name)
     },
-    language: (tag) => {
-      attributes.language = tag
+    lang: (tag) => {
+      attributes.lang = tag
     },
     key: (key, value) => {
       if (sameName(key, 'id')) return sink.id(value)
@@ -38,8 +38,8 @@ export function attributeSink(attributes: Attributes): AttributeSink {
         return
       }
       // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
-      const earlier = attributes.keys.find((pair) => sameName(pair[0], key))
-      if (earlier === undefined) attributes.keys.push([key, value])
+      const earlier = attributes.keyValues.find((pair) => sameName(pair[0], key))
+      if (earlier === undefined) attributes.keyValues.push([key, value])
       else earlier[1] = value
     },
   }
@@ -47,7 +47,7 @@ export function attributeSink(attributes: Attributes): AttributeSink {
 }
 
 export function emptyAttributes(): Attributes {
-  return { id: null, classes: [], language: null, keys: [] }
+  return { id: null, classes: [], lang: null, keyValues: [] }
 }
 
 /** C2-B-093: adds the glued blocks that start at `pos` to `attributes` and returns the offset behind them. */
@@ -81,7 +81,7 @@ export function readAttributeLines(src: string, spans: number[] | null): Attribu
 /** Removes the key `name` from `attributes` and returns its value, or null when it is not there. */
 export function takeKey(attributes: Attributes | null, name: string): string | null {
   if (attributes === null) return null
-  const at = attributes.keys.findIndex((pair) => pair[0] === name)
+  const at = attributes.keyValues.findIndex((pair) => pair[0] === name)
   if (at < 0) return null
-  return attributes.keys.splice(at, 1)[0]![1]
+  return attributes.keyValues.splice(at, 1)[0]![1]
 }
