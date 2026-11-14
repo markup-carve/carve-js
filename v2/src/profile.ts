@@ -1,7 +1,7 @@
 // The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
 // form (C2-H-165) before the tree is resolved, so that a reference or a caption that is gone takes no number.
 import {
-  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, type HeadingNode, type Inline,
+  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, forEachSlot, type HeadingNode, type Inline,
   isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
   type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
@@ -209,24 +209,20 @@ function filterChildren(filter: Filter, node: Node, depth: number): void {
   else if ('children' in node) filterList<Node>(filter, node.children, true, depth, keep)
 }
 
-/** Filters the lists of `node`, whose nodes stand at `depth`: its children, its inline slots, its caption and its ruby pairs. */
+/**
+ * Filters the lists of `node`, whose nodes stand at `depth`: every slot that holds nodes (C2-A-024),
+ * the fallback and the named slots of an extension included, which the renderer writes too.
+ */
 function filterNode(filter: Filter, node: Node, depth: number): void {
-  filterChildren(filter, node, depth)
-  const title = titleOf(node)
-  if (title !== undefined) filterList<Inline>(filter, title, false, depth, degradedInline)
-  if (node.type === 'caption' && node.short !== undefined) filterList<Inline>(filter, node.short, false, depth, degradedInline)
-  if (node.type === 'citation') {
-    for (const slot of [node.prefix, node.locator, node.suffix]) {
-      if (slot !== undefined) filterList<Inline>(filter, slot, false, depth, degradedInline)
-    }
-  }
-  const caption = captionOf(node)
-  if (caption !== undefined) filterNode(filter, caption, depth + 1)
-  if (node.type !== 'ruby') return
-  for (const pair of node.pairs) {
-    filterList<Inline>(filter, pair.base, false, depth, degradedInline)
-    filterList<Inline>(filter, pair.annotation, false, depth, degradedInline)
-  }
+  const blocks = node.type === 'block_extension'
+  forEachSlot(node, (nodes, step, single) => {
+    // The slots are the node's own lists; the walk hands them on read-only, and the filter edits them in place.
+    const list = nodes as Node[]
+    if (step === 'children') filterChildren(filter, node, depth)
+    else if (single) filterNode(filter, list[0]!, depth + 1)
+    else if (blocks && step !== 'title') filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
+    else filterList<Inline>(filter, list as Inline[], false, depth, degradedInline)
+  })
 }
 
 /**

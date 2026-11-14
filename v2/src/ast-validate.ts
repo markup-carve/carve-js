@@ -1,6 +1,6 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
-import { AST_VERSION, type DocumentNode, isRecord } from './ast.ts'
+import { AST_VERSION, type DocumentNode, isRecord, pointerKey } from './ast.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
@@ -314,7 +314,7 @@ function checkPairsOfRuby(value: Value, path: string, walk: Walk): void {
 function checkSlots(value: Value, path: string, walk: Walk, node: Fields): void {
   if (!isRecord(value)) fail(path, 'slots is not an object')
   const content = node['type'] === 'block_extension' ? 'blocks' : 'inlines'
-  for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${name}`, content, walk)
+  for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${pointerKey(name)}`, content, walk)
 }
 
 /** C2-A-122: a list of alternatives, each with a media type in `format` and the extension's own data in `value`. */

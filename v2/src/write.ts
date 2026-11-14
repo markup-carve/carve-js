@@ -1,7 +1,7 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { captionOf, childNodes, type DocumentNode, isRecord, type Node, type TextNode, titleOf } from './ast.ts'
+import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
@@ -34,12 +34,12 @@ function isNode(value: unknown): value is Node {
   return isRecord(value) && typeof value['type'] === 'string'
 }
 
-/** The node at the RFC 6901 pointer `path`, or null (C2-L-010). */
+/** The node at the RFC 6901 pointer `path`, or null (C2-L-010). Each token is decoded: `~1` is `/`, `~0` is `~`. */
 function nodeAt(document: DocumentNode, path: string): Node | null {
   let at: unknown = document
   for (const part of path.split('/').slice(1)) {
     if (typeof at !== 'object' || at === null) return null
-    at = Reflect.get(at, part)
+    at = Reflect.get(at, pointerToken(part))
   }
   return isNode(at) ? at : null
 }
@@ -191,15 +191,11 @@ function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   return end
 }
 
-/** The text nodes below `nodes` in the order in which they are written. */
+/** The text nodes below `nodes` in the order in which they are written: a title before the children. */
 function textOrder(nodes: readonly Node[], order: Map<Node, number>): Map<Node, number> {
   for (const node of nodes) {
     if (node.type === 'text') order.set(node, order.size)
-    const title = titleOf(node)
-    if (title !== undefined) textOrder(title, order)
-    if ('children' in node) textOrder(node.children, order)
-    const caption = captionOf(node)
-    if (caption !== undefined) textOrder([caption], order)
+    forEachSlot(node, (slot) => void textOrder(slot, order), SOURCE_ORDER)
   }
   return order
 }

@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { CarveTreeError, decodeTree, foldLabel, format, parse, render, stringOffsetOfByte, utf8Length, write, writeWithDiagnostics } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
+import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -371,5 +372,38 @@ describe('folding and trimming keep the characters the specification keeps', () 
   it('C2-B-084: the expansion of an abbreviation keeps a no-break space at its ends', () => {
     expect(parse('*[A]:  x ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: ' x ' })
     expect(parse('*[A]: x  ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: 'x' })
+  })
+})
+
+describe('one walker over every slot that holds nodes', () => {
+  const reference = { type: 'link', key: 'r', namespace: 'link', form: 'full', children: [{ type: 'text', value: 'x' }] }
+  const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
+  const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [inline] }, ...more],
+  }))
+
+  it('C2-A-024, C2-A-025: resolution reads a reference in a ruby base and in an extension fallback', () => {
+    const ruby = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [reference], annotation: [{ type: 'text', value: 'a' }] }] }
+    expect(render(supplied(ruby, definition))).toBe('<p><ruby><a href="/u">x</a><rp>(</rp><rt>a</rt><rp>)</rp></ruby></p>')
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', children: [], fallback: [reference] }, definition))).toBe('<p><a href="/u">x</a></p>')
+  })
+
+  it('C2-H-129: a profile filters the fallback of an extension, which the renderer writes', () => {
+    const link = { type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', children: [], fallback: [link] }), { profile: 'minimal' })).toBe('<p>x</p>')
+  })
+
+  it('C2-H-024, C2-L-011: numbers count in document order, so a footnote in a title comes before one in the body', () => {
+    const html = render('::: note "T^[t]"\nb^[b]\n:::')
+    expect(html.indexOf('fnref1')).toBeLessThan(html.indexOf('fnref2'))
+    expect(html).toContain('T<a id="fnref1"')
+  })
+
+  it('C2-L-010: a pointer step of a named slot is encoded, and a token is decoded in the order RFC 6901 gives', () => {
+    expect(pointerKey('a/b~c')).toBe('a~1b~0c')
+    expect(pointerToken('a~1b~0c')).toBe('a/b~c')
+    expect(pointerToken('~01')).toBe('~1')
+    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a.b', children: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
+    expect(refusal(inParagraph(slot('a/b')))).toBe('/children/0/children/0/slots/a~1b/0: paragraph does not stand here')
   })
 })

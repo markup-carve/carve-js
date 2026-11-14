@@ -1,5 +1,5 @@
 // The diagnostics record (C2-A-172, C2-A-173): its entries, and the position each one takes from the node it is about.
-import { captionOf, type DocumentNode, type Node, titleOf } from './ast.ts'
+import { type DocumentNode, forEachSlot, type Node } from './ast.ts'
 
 /** C2-A-173: one entry of the diagnostics record. */
 export interface Diagnostic {
@@ -36,35 +36,14 @@ function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Fram
   for (let at = list.length - 1; at >= 0; at--) stack.push({ node: list[at]!, above, step: `${slot}/${at}` })
 }
 
-/** RFC 6901: `~` and `/` in a key are written as `~0` and `~1`. */
-function pointerKey(key: string): string {
-  return key.replaceAll('~', '~0').replaceAll('/', '~1')
-}
-
-/** The fields that hold nodes: the lists, the caption, the two lists of each ruby pair and the named slots. */
+/** The fields that hold nodes (C2-A-024), and the columns of a table, which are nodes too. */
 function pushSlots(stack: Frame[], frame: Frame): void {
   const node = frame.node
-  if ('children' in node) pushList(stack, node.children, frame, 'children')
-  pushList(stack, titleOf(node), frame, 'title')
-  if ('fallback' in node) pushList(stack, node.fallback, frame, 'fallback')
-  if (node.type === 'caption') pushList(stack, node.short, frame, 'short')
-  if (node.type === 'citation') {
-    pushList(stack, node.prefix, frame, 'prefix')
-    pushList(stack, node.locator, frame, 'locator')
-    pushList(stack, node.suffix, frame, 'suffix')
-  }
+  forEachSlot(node, (nodes, step, single) => {
+    if (single) stack.push({ node: nodes[0]!, above: frame, step })
+    else pushList(stack, nodes, frame, step)
+  })
   if (node.type === 'table') pushList(stack, node.columns, frame, 'columns')
-  const caption = captionOf(node)
-  if (caption !== undefined) stack.push({ node: caption, above: frame, step: 'caption' })
-  if (node.type === 'ruby') {
-    node.pairs.forEach((pair, at) => {
-      pushList(stack, pair.base, frame, `pairs/${at}/base`)
-      pushList(stack, pair.annotation, frame, `pairs/${at}/annotation`)
-    })
-  }
-  if ('slots' in node && node.slots !== undefined) {
-    for (const [name, list] of Object.entries(node.slots)) pushList(stack, list, frame, `slots/${pointerKey(name)}`)
-  }
 }
 
 /** The pointer of the node of `frame`: the steps from the document down to it. */

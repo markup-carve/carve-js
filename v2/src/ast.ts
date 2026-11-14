@@ -121,6 +121,62 @@ export function captionOf(node: NodeSlots): CaptionNode | undefined {
   return node.caption
 }
 
+/** RFC 6901: `~` and `/` in a key are written as `~0` and `~1` (C2-L-010). */
+export function pointerKey(key: string): string {
+  return key.replaceAll('~', '~0').replaceAll('/', '~1')
+}
+
+/** RFC 6901: a reference token with `~1` and `~0` read back as `/` and `~`, in that order. */
+export function pointerToken(token: string): string {
+  return token.includes('~') ? token.replaceAll('~1', '/').replaceAll('~0', '~') : token
+}
+
+/** Visits one slot of a node: its nodes, and its step in a pointer. A single node, the caption, comes as a list of one. */
+export type SlotVisitor = (nodes: readonly Node[], step: string, single: boolean) => void
+
+/** The order of a walk: that of C2-A-025, or that of the source, in which a title stands before the children. */
+export const SPEC_ORDER = 0
+export const SOURCE_ORDER = 1
+
+/**
+ * C2-A-024, C2-A-025: visits every slot of `node` that holds nodes: `children` first, then `caption`,
+ * `short`, `prefix`, `locator` and `suffix`, the `base` and `annotation` of each ruby pair, `title`,
+ * `fallback` and each named slot. In source order the title comes first. Strings, URLs, data and
+ * payloads are no slots. Every walk over the nodes of a tree goes through this.
+ */
+export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER): void {
+  const fields = node as unknown as Readonly<Record<string, unknown>>
+  const title = titleOf(node)
+  if (order === SOURCE_ORDER && title !== undefined) visit(title, 'title', false)
+  const children = (node as NodeSlots).children
+  if (children !== undefined) visit(children, 'children', false)
+  const caption = captionOf(node)
+  if (caption !== undefined) visit([caption], 'caption', true)
+  visitInlineSlots(node, visit)
+  if (order === SPEC_ORDER && title !== undefined) visit(title, 'title', false)
+  const fallback = fields['fallback'] as readonly Node[] | undefined
+  if (fallback !== undefined) visit(fallback, 'fallback', false)
+  const slots = fields['slots'] as Readonly<Record<string, readonly Node[]>> | undefined
+  if (slots !== undefined) for (const name in slots) visit(slots[name]!, `slots/${pointerKey(name)}`, false)
+}
+
+/** The inline slots of a caption, a citation and ruby, in the order of C2-A-024. */
+function visitInlineSlots(node: Node, visit: SlotVisitor): void {
+  if (node.type === 'caption' && node.short !== undefined) visit(node.short, 'short', false)
+  if (node.type === 'citation') {
+    for (const name of ['prefix', 'locator', 'suffix'] as const) {
+      const list = node[name]
+      if (list !== undefined) visit(list, name, false)
+    }
+  }
+  if (node.type === 'ruby') {
+    node.pairs.forEach((pair, at) => {
+      visit(pair.base, `pairs/${at}/base`, false)
+      visit(pair.annotation, `pairs/${at}/annotation`, false)
+    })
+  }
+}
+
 /** Whether `node` is of type `type`. */
 export function isNodeOfType<T extends keyof NodeOfType>(node: Node, type: T): node is NodeOfType[T] {
   return node.type === type
