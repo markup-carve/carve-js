@@ -2,9 +2,10 @@
 // JSON form and of a reader. The clauses on resolution are in resolve-clauses.test.ts, those on
 // positions in positions.test.ts.
 import { describe, expect, it } from 'vitest'
-import { type AstNode } from '../src/ast.ts'
+import { type Block, type CaptionNode, type CitationNode, type CodeBlockNode, type DivNode, type DocumentNode, type FootnoteNode, type Inline, type InlineExtensionNode, type ListItemNode, type ListNode, type Node, type ParagraphNode, type TableCellNode, type TableRowNode } from '../src/ast.ts'
 import { decodeTree, encodeEnvelope, encodeTree, treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError, MAX_TREE_DEPTH, validateTree } from '../src/ast-validate.ts'
+import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 import { at, block, blocks, documentOf, inlines, paragraph, placedTree, text, tree } from './support/tree.ts'
 
 /** The reason a reader gives for refusing `document`, with the path, or null when it accepts it. */
@@ -18,7 +19,7 @@ function refusal(document: unknown): string | null {
   }
 }
 
-function types(nodes: AstNode[]): string[] {
+function types(nodes: readonly Node[]): string[] {
   return nodes.map((node) => node.type)
 }
 
@@ -44,7 +45,7 @@ describe('root, envelope and versions', () => {
   it('C2-A-008, C2-A-011: the root is a document with children and the version; definitions and frontmatter are children', () => {
     const root = tree('---\na: b\n---\n\ntext\n\n[r]: /u\n[^n]: x\n*[A]: b')
     expect([root.type, root.astVersion]).toEqual(['document', '2.0'])
-    expect(types(root.children!)).toEqual(['frontmatter', 'paragraph', 'link_reference_definition', 'footnote', 'abbreviation_def'])
+    expect(types(root.children)).toEqual(['frontmatter', 'paragraph', 'link_reference_definition', 'footnote', 'abbreviation_def'])
   })
 
   it('C2-A-009: no other root field is allowed', () => {
@@ -59,7 +60,7 @@ describe('root, envelope and versions', () => {
 
   it('C2-A-012, C2-A-013: an envelope wraps the tree and does not change it', () => {
     const root = tree('a')
-    const envelope = JSON.parse(encodeEnvelope(root)) as { astVersion: string, document: AstNode }
+    const envelope = JSON.parse(encodeEnvelope(root)) as { astVersion: string, document: DocumentNode }
     expect(envelope.astVersion).toBe('2.0')
     expect(envelope.document).toEqual(root)
     expect(decodeTree(encodeEnvelope(root))).toEqual(root)
@@ -78,8 +79,8 @@ describe('root, envelope and versions', () => {
   it('C2-A-018, C2-A-020: a higher major version, an unknown required extension, an unknown field and an unknown type are refused', () => {
     expect(refusal({ ...documentOf(), astVersion: '3.0' })).toBe('/astVersion: major version 3 is not read by this engine')
     expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.x', required: true }] })).toBe('/extensions/0: an unknown required extension')
-    expect(refusal(documentOf({ type: 'paragraph', children: [], extra: 1 } as AstNode))).toBe('/children/0/extra: not a field of paragraph')
-    expect(refusal(documentOf({ type: 'marquee', children: [] }))).toBe('/children/0: unknown node type marquee')
+    expect(refusal(documentOf({ type: 'paragraph', children: [], extra: 1 } as unknown as Block))).toBe('/children/0/extra: not a field of paragraph')
+    expect(refusal(documentOf({ type: 'marquee', children: [] } as unknown as Block))).toBe('/children/0: unknown node type marquee')
   })
 
   it('C2-A-019: a higher minor version is accepted', () => {
@@ -89,13 +90,13 @@ describe('root, envelope and versions', () => {
 
 describe('node grammar', () => {
   it('C2-A-021: every node is an object with a type', () => {
-    expect(refusal(documentOf({ children: [] } as unknown as AstNode))).toBe('/children/0: a node without a type')
-    expect(refusal(documentOf('text' as unknown as AstNode))).toBe('/children/0: not a node')
+    expect(refusal(documentOf({ children: [] } as unknown as Block))).toBe('/children/0: a node without a type')
+    expect(refusal(documentOf('text' as unknown as Block))).toBe('/children/0: not a node')
   })
 
   it('C2-A-022, C2-A-023: children is the content slot and value the literal payload', () => {
     expect(block('a `b`')).toEqual(paragraph('a ', { type: 'code', value: 'b' }))
-    expect(refusal(documentOf({ type: 'thematic_break', children: [] }))).toBe('/children/0/children: thematic_break holds no children')
+    expect(refusal(documentOf({ type: 'thematic_break', children: [] } as unknown as Block))).toBe('/children/0/children: thematic_break holds no children')
   })
 
   it('C2-A-024: content with another role sits in a named slot', () => {
@@ -106,16 +107,16 @@ describe('node grammar', () => {
 
   it('C2-A-027, C2-A-031: the common fields are allowed on every node, and dir is one of three values', () => {
     expect(refusal(documentOf({ type: 'paragraph', children: [], dir: 'rtl', lang: 'ar', metadata: {}, data: {} }))).toBeNull()
-    expect(refusal(documentOf({ type: 'paragraph', children: [], dir: 'up' }))).toBe('/children/0/dir: unknown value "up"')
+    expect(refusal(documentOf({ type: 'paragraph', children: [], dir: 'up' } as unknown as Block))).toBe('/children/0/dir: unknown value "up"')
   })
 
   it('C2-A-028: nodes are closed', () => {
-    expect(refusal(documentOf({ type: 'heading', level: 1, children: [], marker: { kind: 'bullet', char: '-' } }))).toBe('/children/0/marker: not a field of heading')
+    expect(refusal(documentOf({ type: 'heading', level: 1, children: [], marker: { kind: 'bullet', char: '-' } } as unknown as Block))).toBe('/children/0/marker: not a field of heading')
   })
 
   it('C2-A-029, C2-A-030: data and metadata are kept without being read', () => {
-    const node: AstNode = { type: 'paragraph', children: [], data: { 'org.example.x': { type: 'nonsense' } }, metadata: { a: [1, 'b'] } }
-    expect(decodeTree(encodeTree(documentOf(node))).children![0]).toEqual(node)
+    const node: ParagraphNode = { type: 'paragraph', children: [], data: { 'org.example.x': { type: 'nonsense' } }, metadata: { a: [1, 'b'] } }
+    expect(decodeTree(encodeTree(documentOf(node))).children[0]).toEqual(node)
   })
 })
 
@@ -174,15 +175,15 @@ describe('text and literal payload', () => {
   })
 
   it('C2-A-045, C2-A-046: the value of a fence holds every line with its break, also where the fence is unclosed', () => {
-    expect(block('```\na\n```').value).toBe('a\n')
-    expect(block('```\n```').value).toBe('')
-    expect(block('```\na').value).toBe('a\n')
-    expect(block('> ```\n> a\n>  b\n> ```').children![0]!.value).toBe('a\n b\n')
+    expect(ofType(block('```\na\n```'), 'code_block').value).toBe('a\n')
+    expect(ofType(block('```\n```'), 'code_block').value).toBe('')
+    expect(ofType(block('```\na'), 'code_block').value).toBe('a\n')
+    expect(ofType(childrenOf(block('> ```\n> a\n>  b\n> ```'))[0], 'code_block').value).toBe('a\n b\n')
   })
 
   it('C2-A-047: a supplied code block keeps a value with no final break', () => {
-    const node: AstNode = { type: 'code_block', value: 'a' }
-    expect(decodeTree(encodeTree(documentOf(node))).children![0]).toEqual(node)
+    const node: CodeBlockNode = { type: 'code_block', value: 'a' }
+    expect(decodeTree(encodeTree(documentOf(node))).children[0]).toEqual(node)
   })
 
   it('C2-A-048: the value of a raw block follows the rules of a code block', () => {
@@ -191,11 +192,11 @@ describe('text and literal payload', () => {
 
   it('C2-A-049: frontmatter is the first child, with its format and its text as written', () => {
     expect(block('---\na: b\n---')).toEqual({ type: 'frontmatter', format: 'yaml', value: 'a: b\n' })
-    expect(block('---toml\na = 1\n---').format).toBe('toml')
-    expect(block('---json\n{}').value).toBe('{}\n')
-    expect([block('--- json\n{}').format, block('---ini-2  \r\na\r\n---').format, block('---\r\na\r\n---').format]).toEqual(['json', 'ini-2', 'yaml'])
-    expect(block('---markdown\nx\n---').format).toBe('markdown')
-    expect(block('--- toml\nx\n---').format).toBe('toml')
+    expect(ofType(block('---toml\na = 1\n---'), 'frontmatter').format).toBe('toml')
+    expect(ofType(block('---json\n{}'), 'frontmatter').value).toBe('{}\n')
+    expect([ofType(block('--- json\n{}'), 'frontmatter').format, ofType(block('---ini-2  \r\na\r\n---'), 'frontmatter').format, ofType(block('---\r\na\r\n---'), 'frontmatter').format]).toEqual(['json', 'ini-2', 'yaml'])
+    expect(ofType(block('---markdown\nx\n---'), 'frontmatter').format).toBe('markdown')
+    expect(ofType(block('--- toml\nx\n---'), 'frontmatter').format).toBe('toml')
     expect(refusal(documentOf(paragraph('a'), { type: 'frontmatter', format: 'yaml', value: '' }))).toBe('/children/1: frontmatter is not the first child')
   })
 })
@@ -203,20 +204,20 @@ describe('text and literal payload', () => {
 describe('node types', () => {
   it('C2-A-050: a tree that holds another core type is refused, the three retired ones included', () => {
     for (const type of ['escaped_text', 'critic_substitution', 'cell_wrap']) {
-      expect(refusal(documentOf(paragraph({ type, value: 'x' })))).toBe(`/children/0/children/0: unknown node type ${type}`)
+      expect(refusal(documentOf(paragraph({ type, value: 'x' } as unknown as Inline)))).toBe(`/children/0/children/0: unknown node type ${type}`)
     }
   })
 
   it('C2-A-051: a type that exists only inside its container is refused anywhere else', () => {
-    expect(refusal(documentOf({ type: 'list_item', children: [] }))).toBe('/children/0: list_item does not stand here')
-    expect(refusal(documentOf(paragraph({ type: 'paragraph', children: [] })))).toBe('/children/0/children/0: paragraph does not stand here')
-    expect(refusal(documentOf({ type: 'block_quote', children: [text('a')] }))).toBe('/children/0/children/0: text does not stand here')
+    expect(refusal(documentOf({ type: 'list_item', children: [] } as unknown as Block))).toBe('/children/0: list_item does not stand here')
+    expect(refusal(documentOf(paragraph({ type: 'paragraph', children: [] } as unknown as Inline)))).toBe('/children/0/children/0: paragraph does not stand here')
+    expect(refusal(documentOf({ type: 'block_quote', children: [text('a')] } as unknown as Block))).toBe('/children/0/children/0: text does not stand here')
   })
 
   it('C2-A-052: a definition stands only among the children of the document, at its place', () => {
     expect(types(blocks('a\n\n[r]: /u\n\nb'))).toEqual(['paragraph', 'link_reference_definition', 'paragraph'])
-    const footnote: AstNode = { type: 'footnote', key: 'n', namespace: 'footnote', children: [] }
-    expect(refusal(documentOf({ type: 'block_quote', children: [footnote] }))).toBe('/children/0/children/0: footnote does not stand here')
+    const footnote: FootnoteNode = { type: 'footnote', key: 'n', namespace: 'footnote', children: [] }
+    expect(refusal(documentOf({ type: 'block_quote', children: [footnote] } as unknown as Block))).toBe('/children/0/children/0: footnote does not stand here')
   })
 })
 
@@ -225,24 +226,24 @@ describe('lists and tasks', () => {
     expect(block('- a')).toEqual({
       type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [{ type: 'list_item', children: [paragraph('a')] }],
     })
-    expect(blocks('- a\n* b').map((list) => list.marker!.char)).toEqual(['-', '*'])
+    expect(blocks('- a\n* b').map((list) => ofType(list, 'list').marker.char)).toEqual(['-', '*'])
   })
 
   it('C2-A-056, C2-A-058: an ordered marker has a style, a delimiter and a start, which is omitted when it is 1', () => {
-    expect(block('2. a').marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 2 })
-    expect(block('1) a').marker).toEqual({ kind: 'ordered', style: '1', delimiter: ')' })
-    expect(block('. a').marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.' })
-    expect(block('iv.  a').marker).toEqual({ kind: 'ordered', style: 'i', delimiter: '.', start: 4 })
-    expect(block('B) a').marker).toEqual({ kind: 'ordered', style: 'A', delimiter: ')', start: 2 })
+    expect(ofType(block('2. a'), 'list').marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 2 })
+    expect(ofType(block('1) a'), 'list').marker).toEqual({ kind: 'ordered', style: '1', delimiter: ')' })
+    expect(ofType(block('. a'), 'list').marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.' })
+    expect(ofType(block('iv.  a'), 'list').marker).toEqual({ kind: 'ordered', style: 'i', delimiter: '.', start: 4 })
+    expect(ofType(block('B) a'), 'list').marker).toEqual({ kind: 'ordered', style: 'A', delimiter: ')', start: 2 })
   })
 
   it('C2-A-057: a marker that carries fields of both kinds is invalid', () => {
-    const list: AstNode = { type: 'list', marker: { kind: 'bullet', char: '-', start: 2 }, spacing: 'tight', children: [] }
+    const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-', start: 2 }, spacing: 'tight', children: [] }
     expect(refusal(documentOf(list))).toBe('/children/0/marker/start: a field of the other kind of marker')
   })
 
   it('C2-A-058: equality drops a start of 1', () => {
-    const list = (start?: number): AstNode => documentOf({
+    const list = (start?: number): DocumentNode => documentOf({
       type: 'list', marker: start === undefined ? { kind: 'ordered' } : { kind: 'ordered', start }, spacing: 'tight', children: [],
     })
     expect(treesEqual(list(1), list())).toBe(true)
@@ -250,20 +251,20 @@ describe('lists and tasks', () => {
   })
 
   it('C2-A-059: spacing is tight or loose, set when the list closes', () => {
-    expect(block('- a\n- b').spacing).toBe('tight')
-    expect(block('- a\n\n- b').spacing).toBe('loose')
-    expect(block('- a\n\n  b').spacing).toBe('tight')
+    expect(ofType(block('- a\n- b'), 'list').spacing).toBe('tight')
+    expect(ofType(block('- a\n\n- b'), 'list').spacing).toBe('loose')
+    expect(ofType(block('- a\n\n  b'), 'list').spacing).toBe('tight')
   })
 
   it('C2-A-060, C2-A-061: a task item carries its mark and the status that follows from it', () => {
-    const marks = blocks('- [ ] a\n- [x] a\n- [X] a\n- [_] a\n- [-] a\n- [/] a\n- [!] a\n- [>] a\n- [?] a')[0]!.children!.map((item) => item.task)
+    const marks = ofType(blocks('- [ ] a\n- [x] a\n- [X] a\n- [_] a\n- [-] a\n- [/] a\n- [!] a\n- [>] a\n- [?] a')[0], 'list').children.map((item) => item.task)
     expect(marks).toEqual([
       { mark: ' ', status: 'todo' }, { mark: 'x', status: 'done' }, { mark: 'x', status: 'done' }, { mark: '_', status: 'todo' },
       { mark: '-', status: 'canceled' }, { mark: '/', status: 'in-progress' }, { mark: '!', status: 'blocked' },
       { mark: '>', status: 'partial' }, { mark: '?', status: 'other' },
     ])
-    const item: AstNode = { type: 'list_item', children: [], task: { mark: 'x', status: 'todo' } }
-    const list: AstNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item] }
+    const item: ListItemNode = { type: 'list_item', children: [], task: { mark: 'x', status: 'todo' } }
+    const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item] }
     expect(refusal(documentOf(list))).toBe('/children/0/children/0/task/status: the status does not follow from the mark')
   })
 })
@@ -300,7 +301,7 @@ describe('quotes, divs and their sigil forms', () => {
   })
 
   it('C2-A-068: a hard-break block is a div with the class hardbreaks in which every line end is a hard break', () => {
-    const expected: AstNode = {
+    const expected: DivNode = {
       type: 'div', children: [paragraph('a', { type: 'hard_break' }, 'b')], attrs: { classes: ['hardbreaks'] },
     }
     expect(block('::: \\\na\nb\n:::')).toEqual(expected)
@@ -336,7 +337,7 @@ describe('headings, thematic breaks and code', () => {
 
 describe('comments', () => {
   it('C2-A-074: a comment carries its form and its value without the one space behind its opener', () => {
-    expect(block('> %% a  ').children).toEqual([{ type: 'comment', form: 'line', value: 'a' }])
+    expect(childrenOf(block('> %% a  '))).toEqual([{ type: 'comment', form: 'line', value: 'a' }])
     expect(inlines('x {%  a  %} y')[1]).toEqual({ type: 'comment', form: 'braced', value: ' a ' })
     expect(inlines('x %%a')[1]).toEqual({ type: 'comment', form: 'line', value: 'a' })
     expect(block('%%%\na\n b\n%%%')).toEqual({ type: 'comment', form: 'block', value: 'a\n b' })
@@ -345,7 +346,7 @@ describe('comments', () => {
 
   it('C2-A-075: the comment of a comment-only line is a child of the open leaf, or else of the innermost open container', () => {
     expect(inlines('a\n%% c\nb').map((node) => node.type)).toEqual(['text', 'soft_break', 'comment', 'soft_break', 'text'])
-    expect(types(block('> a\n>\n> %% c').children!)).toEqual(['paragraph', 'comment'])
+    expect(types(childrenOf(block('> a\n>\n> %% c')))).toEqual(['paragraph', 'comment'])
   })
 })
 
@@ -356,7 +357,7 @@ describe('definitions', () => {
 
   it('C2-A-077: a link definition carries the folded label, its destination and an optional title', () => {
     expect(block('[a  b]: /u "T"')).toEqual({ type: 'link_reference_definition', key: 'a b', namespace: 'link', href: '/u', title: 'T' })
-    expect(block('[a]: /u').title).toBeUndefined()
+    expect(ofType(block('[a]: /u'), 'link_reference_definition').title).toBeUndefined()
     expect(block('[a]:').type).toBe('paragraph')
   })
 
@@ -374,7 +375,7 @@ describe('definitions', () => {
 })
 
 describe('figures and captions', () => {
-  const caption = (...children: (AstNode | string)[]): AstNode => ({ type: 'caption', children: [paragraph(...children)] })
+  const caption = (...children: (Inline | string)[]): CaptionNode => ({ type: 'caption', children: [paragraph(...children)] })
 
   it('C2-A-081: a caption holds blocks, and no short form is derived', () => {
     expect(at(block('| a |\n^ c *d*'), 'caption')).toEqual(caption('c ', { type: 'strong', children: [text('d')] }))
@@ -385,18 +386,18 @@ describe('figures and captions', () => {
       type: 'figure', children: [{ ...paragraph({ type: 'image', src: 'b', alt: 'a' }), blockImage: true }], caption: caption('c'),
     })
     expect(types([block('```\n```\n^ c'), block('> q\n^ c'), block('$$`x`\n^ c'), block('| a |\n^ c')])).toEqual(['figure', 'figure', 'figure', 'table'])
-    expect(types(block('```\n```\n%% x\n^ c').children!)).toEqual(['code_block', 'comment'])
-    expect(types(block('| a |\n%% x\n^ c').children!)).toEqual(['table_body', 'comment'])
-    expect(types(block('| a |\n%% x').children!)).toEqual(['table_body', 'comment'])
+    expect(types(childrenOf(block('```\n```\n%% x\n^ c')))).toEqual(['code_block', 'comment'])
+    expect(types(childrenOf(block('| a |\n%% x\n^ c')))).toEqual(['table_body', 'comment'])
+    expect(types(childrenOf(block('| a |\n%% x')))).toEqual(['table_body', 'comment'])
   })
 
   it('C2-A-083: a parsed figure makes no claim about its kind', () => {
-    expect(block('> q\n^ c').kind).toBeUndefined()
+    expect(ofType(block('> q\n^ c'), 'figure').kind).toBeUndefined()
   })
 
   it('C2-A-084, C2-A-085: a figure group carries its blocks in source order and the caption of the group', () => {
-    const group = block('::: figure\n![a](b)\n^ one\n\n| x |\n^ two\n:::\n^ both')
-    expect(types(group.children!)).toEqual(['figure', 'table'])
+    const group = ofType(block('::: figure\n![a](b)\n^ one\n\n| x |\n^ two\n:::\n^ both'), 'figure_group')
+    expect(types(group.children)).toEqual(['figure', 'table'])
     expect(at(group, 'children.1.caption')).toEqual(caption('two'))
     expect(group.caption).toEqual(caption('both'))
   })
@@ -408,8 +409,8 @@ describe('figures and captions', () => {
 })
 
 describe('tables', () => {
-  const cell = (value: string, header = false): AstNode => ({ type: 'table_cell', header, children: [{ type: 'cell_paragraph', children: value === '' ? [] : [text(value)] }] })
-  const row = (...cells: AstNode[]): AstNode => ({ type: 'table_row', children: cells })
+  const cell = (value: string, header = false): TableCellNode => ({ type: 'table_cell', header, children: [{ type: 'cell_paragraph', children: value === '' ? [] : [text(value)] }] })
+  const row = (...cells: TableCellNode[]): TableRowNode => ({ type: 'table_row', children: cells })
 
   it('C2-A-086, C2-A-087: a table holds groups of rows of cells; the leading rows of header cells are its head', () => {
     expect(block('|= h |\n| a |\n%% c\n| b |')).toEqual({
@@ -419,8 +420,8 @@ describe('tables', () => {
         { type: 'table_body', children: [row(cell('a')), { type: 'comment', form: 'line', value: 'c' }, row(cell('b'))] },
       ],
     })
-    expect(types(block('{footer-rows=1}\n| a |\n| b |').children!)).toEqual(['table_body', 'table_foot'])
-    expect(types(block('|= h |\n%% c\n| a |').children![0]!.children!)).toEqual(['table_row', 'comment'])
+    expect(types(childrenOf(block('{footer-rows=1}\n| a |\n| b |')))).toEqual(['table_body', 'table_foot'])
+    expect(types(childrenOf(childrenOf(block('|= h |\n%% c\n| a |'))[0]))).toEqual(['table_row', 'comment'])
   })
 
   it('C2-A-088: a body whose partition the source declared carries headRows', () => {
@@ -429,23 +430,23 @@ describe('tables', () => {
   })
 
   it('C2-A-089, C2-A-090: one column per position up to the widest row; a column the source spelled is authored', () => {
-    expect(block('| a | b |\n| c |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }])
-    expect(block('{aligns="left,center" widths="30,70"}\n| a | b |').columns).toEqual([
+    expect(ofType(block('| a | b |\n| c |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }])
+    expect(ofType(block('{aligns="left,center" widths="30,70"}\n| a | b |'), 'table').columns).toEqual([
       { type: 'table_column', align: 'left', width: 0.3, authored: true }, { type: 'table_column', align: 'center', width: 0.7, authored: true },
     ])
   })
 
   it('C2-A-091: a cell of a pipe table holds one cell_paragraph', () => {
     expect(at(block('| *a* |'), 'children.0.children.0.children.0.children.0.children.0.type')).toBe('strong')
-    const blocksInCell: AstNode = { type: 'table_cell', header: false, children: [paragraph('a')] }
+    const blocksInCell: TableCellNode = { type: 'table_cell', header: false, children: [paragraph('a')] }
     expect(refusal(documentOf({ type: 'table', columns: [], children: [{ type: 'table_body', children: [row(blocksInCell)] }] }))).toBeNull()
   })
 
   it('C2-A-092: a span mark leaves a cell with the mark, and the covering cell holds the count; a failed mark is an ordinary cell', () => {
-    const rows = at(block('| a | < |\n| ^ | b |'), 'children.0.children') as AstNode[]
+    const rows = childrenOf(childrenOf(block('| a | < |\n| ^ | b |'))[0])
     expect(rows[0]).toEqual(row({ ...cell('a'), colspan: 2 }, { type: 'table_cell', header: false, span: 'colspan', children: [] }))
     expect(rows[1]).toEqual(row(cell(''), cell('b')))
-    const down = at(block('| a |\n| ^ |'), 'children.0.children') as AstNode[]
+    const down = childrenOf(childrenOf(block('| a |\n| ^ |'))[0])
     expect(down).toEqual([row({ ...cell('a'), rowspan: 2 }), row({ type: 'table_cell', header: false, span: 'rowspan', children: [] })])
   })
 
@@ -510,7 +511,7 @@ describe('inline nodes', () => {
 
   it('C2-A-114: a link or an image may carry targetKind for a target that is no URL', () => {
     expect(refusal(documentOf(paragraph({ type: 'link', href: 'Page', targetKind: 'wiki', children: [] })))).toBeNull()
-    expect(refusal(documentOf(paragraph({ type: 'image', src: 'x', targetKind: 'ftp' })))).toBe('/children/0/children/0/targetKind: unknown value "ftp"')
+    expect(refusal(documentOf(paragraph({ type: 'image', src: 'x', targetKind: 'ftp' } as unknown as Inline)))).toBe('/children/0/children/0/targetKind: unknown value "ftp"')
   })
 
   it('C2-A-043: every string holds literal Unicode, and a private-use character has no special meaning', () => {
@@ -528,18 +529,18 @@ describe('inline nodes', () => {
   })
 
   it('C2-I-098, C2-I-099: a defined term in ordinary text is an abbreviation node, as a whole word only', () => {
-    const term: AstNode = { type: 'abbreviation', key: 'HTML', namespace: 'abbr', expansion: 'x' }
-    expect(blocks('*[HTML]: x\n\nHTML, /HTML/ HTMLs `HTML` éHTML')[1]!.children).toEqual([
+    const term: Inline = { type: 'abbreviation', key: 'HTML', namespace: 'abbr', expansion: 'x' }
+    expect(inlinesOf(blocks('*[HTML]: x\n\nHTML, /HTML/ HTMLs `HTML` éHTML')[1])).toEqual([
       term, text(', '), { type: 'emphasis', children: [term] }, text(' HTMLs '), { type: 'code', value: 'HTML' }, text(' éHTML'),
     ])
-    expect(blocks('*[HT]: x\n\n{*HT*}ML')[1]!.children).toEqual([{ type: 'strong', children: [text('HT')] }, text('ML')])
+    expect(inlinesOf(blocks('*[HT]: x\n\n{*HT*}ML')[1])).toEqual([{ type: 'strong', children: [text('HT')] }, text('ML')])
   })
 })
 
 describe('citations, extension nodes and resources', () => {
   it('C2-A-118, C2-A-120: a citation stands only in a group, and a group mode needs a mode on every item', () => {
-    const citation: AstNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
-    expect(refusal(documentOf(paragraph(citation)))).toBe('/children/0/children/0: citation does not stand here')
+    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
+    expect(refusal(documentOf(paragraph(citation as unknown as Inline)))).toBe('/children/0/children/0: citation does not stand here')
     expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', children: [citation] })))).toBeNull()
     expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', mode: 'paren', children: [citation] })))).toBe('/children/0/children/0: a group mode needs a mode on every citation')
   })
@@ -549,17 +550,17 @@ describe('citations, extension nodes and resources', () => {
   })
 
   it('C2-A-122, C2-A-125, C2-A-126: a block extension carries a fallback of block content', () => {
-    expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [] }))).toBe('/children/0/fallback: a required field is missing')
-    expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [text('x')] }))).toBe('/children/0/fallback/0: text does not stand here')
+    expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [] } as unknown as Block))).toBe('/children/0/fallback: a required field is missing')
+    expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [text('x')] } as unknown as Block))).toBe('/children/0/fallback/0: text does not stand here')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('x')] }))).toBeNull()
   })
 
   it('C2-A-128: reading a tree keeps payload, props and data as they are and runs nothing in them', () => {
-    const node: AstNode = {
+    const node: InlineExtensionNode = {
       type: 'inline_extension', name: 'org.example.x', children: [], fallback: [text('f')],
       props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { type: 'link' } },
     }
-    expect(decodeTree(encodeTree(documentOf(paragraph(node)))).children![0]!.children![0]).toEqual(node)
+    expect(inlinesOf(decodeTree(encodeTree(documentOf(paragraph(node)))).children[0])[0]).toEqual(node)
   })
 
   it('C2-A-132: a reader bounds metadata nesting, resource references and fallback nesting', () => {
@@ -567,9 +568,9 @@ describe('citations, extension nodes and resources', () => {
     for (let level = 0; level < 70; level++) metadata = { a: metadata }
     expect(refusal(documentOf({ ...paragraph(), metadata }))).toMatch(/metadata is nested deeper than 64 levels$/)
     const references = Array.from({ length: 5000 }, (_unused, index) => `r${index}`)
-    const extension: AstNode = { type: 'inline_extension', name: 'org.example.x', children: [], resourceIds: references }
+    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.x', children: [], resourceIds: references }
     expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
-    let nested: AstNode = text('x')
+    let nested: Inline = text('x')
     for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'org.example.x', children: [], fallback: [nested] }
     expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 extension nodes$/)
   })
@@ -584,17 +585,17 @@ describe('citations, extension nodes and resources', () => {
 
 describe('facts set at close', () => {
   it('C2-A-136: a paragraph that closed as one block image line carries blockImage', () => {
-    expect(block('![a](b)').blockImage).toBe(true)
-    expect(block('![a](b)\n%% c').blockImage).toBe(true)
-    expect(block('![a](b) x').blockImage).toBeUndefined()
-    expect(block('![a\nb][c]').blockImage).toBeUndefined()
-    expect(refusal(documentOf({ type: 'image', src: 'b' }))).toBe('/children/0: image does not stand here')
+    expect(ofType(block('![a](b)'), 'paragraph').blockImage).toBe(true)
+    expect(ofType(block('![a](b)\n%% c'), 'paragraph').blockImage).toBe(true)
+    expect(ofType(block('![a](b) x'), 'paragraph').blockImage).toBeUndefined()
+    expect(ofType(block('![a\nb][c]'), 'paragraph').blockImage).toBeUndefined()
+    expect(refusal(documentOf({ type: 'image', src: 'b' } as unknown as Block))).toBe('/children/0: image does not stand here')
   })
 
   it('C2-A-184: a paragraph that closed as one display math line carries blockMath', () => {
     expect(block('$$`x`')).toEqual({ ...paragraph({ type: 'math', display: true, value: 'x' }), blockMath: true })
-    expect(block('$`x`').blockMath).toBeUndefined()
-    expect(block('$$`x\ny`').blockMath).toBeUndefined()
+    expect(ofType(block('$`x`'), 'paragraph').blockMath).toBeUndefined()
+    expect(ofType(block('$$`x\ny`'), 'paragraph').blockMath).toBeUndefined()
   })
 
   it('C2-A-185: the five facts set at close are in the tree and take part in equality', () => {
@@ -613,7 +614,7 @@ describe('facts set at close', () => {
 
   it('C2-A-186: a parsed item, description, term or heading with nothing else holds a comment node; a quote may be empty', () => {
     expect(at(block('- %% c'), 'children.0.children')).toEqual([{ type: 'comment', form: 'line', value: 'c' }])
-    expect(block('# %% c').children).toEqual([{ type: 'comment', form: 'line', value: 'c' }])
+    expect(childrenOf(block('# %% c'))).toEqual([{ type: 'comment', form: 'line', value: 'c' }])
     expect(block('>')).toEqual({ type: 'block_quote', children: [] })
   })
 
@@ -674,14 +675,14 @@ describe('reading a tree', () => {
   })
 
   it('C2-A-169, C2-A-170: an unknown field is refused at any node, at decode', () => {
-    expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'text', value: 'a', bold: true } as AstNode))))).toThrow('/children/0/children/0/bold: not a field of text')
-    expect(refusal(documentOf({ ...paragraph(), pos: null } as unknown as AstNode))).toBe('/children/0/pos: a field without a value')
+    expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'text', value: 'a', bold: true } as unknown as Inline))))).toThrow('/children/0/children/0/bold: not a field of text')
+    expect(refusal(documentOf({ ...paragraph(), pos: null } as unknown as Block))).toBe('/children/0/pos: a field without a value')
   })
 
   it('C2-A-171: a reader accepts every tree its parser makes at the nesting cap and refuses deeper input', () => {
     expect(refusal(placedTree(`${'> '.repeat(250)}a ${'{*'.repeat(250)}b${'*}'.repeat(250)}`))).toBeNull()
     expect(refusal(placedTree(`${'- '.repeat(250)}a`))).toBeNull()
-    let deep: AstNode = paragraph('a')
+    let deep: Block = paragraph('a')
     for (let level = 0; level <= MAX_TREE_DEPTH; level++) deep = { type: 'block_quote', children: [deep] }
     expect(refusal(documentOf(deep))).toMatch(/nested deeper than a parser can produce$/)
   })
@@ -689,12 +690,12 @@ describe('reading a tree', () => {
   it('C2-A-142, C2-A-157: pos may name the file it is measured in, and segments holds ranges in the shape of pos', () => {
     const pos = { startLine: 1, endLine: 1, startColumn: 1, endColumn: 2, startOffset: 0, endOffset: 1 }
     expect(refusal(documentOf({ ...paragraph(), pos: { ...pos, file: 'part.crv' }, segments: [pos, pos] }))).toBeNull()
-    expect(refusal(documentOf({ ...paragraph(), segments: [{ ...pos, endOffset: undefined }] } as unknown as AstNode))).toBe('/children/0/segments/0/endOffset: not an integer')
+    expect(refusal(documentOf({ ...paragraph(), segments: [{ ...pos, endOffset: undefined }] } as unknown as Block))).toBe('/children/0/segments/0/endOffset: not an integer')
     expect(refusal(documentOf({ ...paragraph(), pos: { ...pos, startOffset: 5 } }))).toBe('/children/0/pos: the start lies behind the end')
   })
 
   it('C2-A-176: a tree that holds a retired node type is refused, not migrated', () => {
-    expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'cell_wrap' }))))).toThrow(CarveTreeError)
+    expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'cell_wrap' } as unknown as Inline))))).toThrow(CarveTreeError)
   })
 
   it('C2-A-105: on a link or an image the key, the namespace and the form stand together', () => {

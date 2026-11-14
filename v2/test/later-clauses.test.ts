@@ -1,13 +1,13 @@
 // The clauses that the specification commits after "fix what the review of today's clauses found"
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, format, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
+import { type DocumentNode, format, type Inline, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const CONTROLS = '‪‮⁦⁩'
 const TICK = '`'
 
-function inline(node: AstNode): AstNode {
+function inline(node: Inline): DocumentNode {
   return documentOf(paragraph(node))
 }
 

@@ -1,6 +1,6 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
 // second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
-import { type AstNode } from './ast.ts'
+import { captionOf, type DocumentNode, type FigureNode, type Node, type TableCellNode, titleOf } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
 import { type Facts, measureBlock } from './layout-facts.ts'
@@ -94,7 +94,7 @@ function lineEndings(src: string): SourceLayout['lineEndings'] {
 }
 
 /** C2-L-012, C2-L-013: the range of a node is its `pos`, and otherwise runs from its first piece to its last. */
-function addEntry(walk: Walk, node: AstNode, path: string, start: number, end: number, facts: Facts): void {
+function addEntry(walk: Walk, node: Node, path: string, start: number, end: number, facts: Facts): void {
   const pos = node.pos
   walk.nodes.push({
     path,
@@ -115,7 +115,7 @@ function firstOffset(origin: BlockNode): number {
 }
 
 /** C2-L-019. */
-function visitRow(walk: Walk, node: AstNode, path: string, origin: BlockNode, frame: Frame): Frame {
+function visitRow(walk: Walk, node: Node, path: string, origin: BlockNode, frame: Frame): Frame {
   const row = frame.table?.index.get(origin) ?? -1
   if (frame.table === null || row < 0) return frame
   const count = continuationRows(walk.src, frame.table, row).length / 2
@@ -123,7 +123,7 @@ function visitRow(walk: Walk, node: AstNode, path: string, origin: BlockNode, fr
   return { ...frame, row }
 }
 
-function visitCell(walk: Walk, node: AstNode, path: string, origin: BlockNode, frame: Frame): Frame {
+function visitCell(walk: Walk, node: TableCellNode, path: string, origin: BlockNode, frame: Frame): Frame {
   if (frame.table !== null && frame.row >= 0) {
     const wraps = cellWraps(walk.src, walk.trace, frame.table, frame.row, node, origin, path)
     if (wraps.length > 0) {
@@ -134,12 +134,13 @@ function visitCell(walk: Walk, node: AstNode, path: string, origin: BlockNode, f
   return { ...frame, spans: origin.spans }
 }
 
-function visitBlock(walk: Walk, node: AstNode, path: string, origin: BlockNode, frame: Frame): Frame {
+function visitBlock(walk: Walk, node: Node, path: string, origin: BlockNode, frame: Frame): Frame {
   if (origin.kind === ROW) return visitRow(walk, node, path, origin, frame)
-  if (origin.kind === CELL) return visitCell(walk, node, path, origin, frame)
+  if (origin.kind === CELL && node.type === 'table_cell') return visitCell(walk, node, path, origin, frame)
   const start = firstOffset(origin)
   // C2-A-154: a table and a figure group end behind their caption.
-  const caption = node.caption === undefined ? undefined : walk.trace.blocks.get(node.caption)
+  const captionNode = captionOf(node)
+  const caption = captionNode === undefined ? undefined : walk.trace.blocks.get(captionNode)
   const end = caption === undefined ? origin.end : Math.max(origin.end, caption.end)
   const facts: Facts = {}
   measureBlock(walk.src, node, origin, frame.quotes, facts)
@@ -155,8 +156,8 @@ function visitBlock(walk: Walk, node: AstNode, path: string, origin: BlockNode, 
 }
 
 /** A figure is made of the block it holds and the caption below it, and has no block of its own. */
-function visitFigure(walk: Walk, node: AstNode, path: string, frame: Frame): Frame {
-  const first = node.children?.[0]
+function visitFigure(walk: Walk, node: FigureNode, path: string, frame: Frame): Frame {
+  const first = node.children[0]
   const target = first === undefined ? undefined : walk.trace.blocks.get(first)
   const caption = node.caption === undefined ? undefined : walk.trace.blocks.get(node.caption)
   if (target === undefined || caption === undefined) return frame
@@ -168,8 +169,8 @@ function visitFigure(walk: Walk, node: AstNode, path: string, frame: Frame): Fra
 }
 
 /** C2-L-022: the reference of a link or an image, from its opening bracket to the bracket that closes its label. */
-function visitInline(walk: Walk, node: AstNode, path: string, frame: Frame): void {
-  if (node.key === undefined || (node.type !== 'link' && node.type !== 'image')) return
+function visitInline(walk: Walk, node: Node, path: string, frame: Frame): void {
+  if ((node.type !== 'link' && node.type !== 'image') || node.key === undefined) return
   const origin = walk.trace.inlines.get(node)
   if (origin === undefined || origin.aux === 0) return
   const start = node.type === 'image' ? origin.start + 1 : origin.start
@@ -178,24 +179,26 @@ function visitInline(walk: Walk, node: AstNode, path: string, frame: Frame): voi
   addEntry(walk, node, path, origin.start, origin.end, { rawRef })
 }
 
-function visit(walk: Walk, node: AstNode, path: string, frame: Frame): void {
+function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   const origin = walk.trace.blocks.get(node)
   let inner = frame
   if (origin !== undefined) inner = visitBlock(walk, node, path, origin, frame)
   else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
   else visitInline(walk, node, path, frame)
   // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
-  if (Array.isArray(node.title)) visitList(walk, node.title, `${path}/title`, inner)
-  if (node.children !== undefined) visitList(walk, node.children, `${path}/children`, inner)
-  if (node.caption !== undefined) visit(walk, node.caption, `${path}/caption`, inner)
+  const title = titleOf(node)
+  if (title !== undefined) visitList(walk, title, `${path}/title`, inner)
+  if ('children' in node) visitList(walk, node.children, `${path}/children`, inner)
+  const caption = captionOf(node)
+  if (caption !== undefined) visit(walk, caption, `${path}/caption`, inner)
 }
 
-function visitList(walk: Walk, nodes: AstNode[], base: string, frame: Frame): void {
+function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Frame): void {
   for (let index = 0; index < nodes.length; index++) visit(walk, nodes[index]!, `${base}/${index}`, frame)
 }
 
 /** The record of `src` for `document`, the tree that was built with `trace`. */
-export function buildLayout(src: string, document: AstNode, trace: LayoutTrace): SourceLayout {
+export function buildLayout(src: string, document: DocumentNode, trace: LayoutTrace): SourceLayout {
   const walk: Walk = { src, trace, bytes: byteOffsets(src), nodes: [] }
   visit(walk, document, '', { start: 0, end: src.length, quotes: 0, open: false, spans: null, table: null, row: -1 })
   return {

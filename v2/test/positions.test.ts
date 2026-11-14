@@ -1,8 +1,9 @@
 // Positions (C2-A-138 to C2-A-160): lines and columns from 1, columns in code points, offsets in
 // UTF-8 bytes of the original source, ends exclusive.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, type Position } from '../src/ast.ts'
+import { type Node, type Position } from '../src/ast.ts'
 import { stringOffsetOfByte, utf8Length } from '../src/positions.ts'
+import { asNode, childrenOf, ofType } from './support/nodes.ts'
 import { at, block, blocks, placedTree, tree } from './support/tree.ts'
 
 /** A position as `line:column-line:column@start-end`. */
@@ -12,7 +13,7 @@ function show(pos: Position | undefined): string {
 }
 
 function placed(src: string, path: string): string {
-  return show((at(placedTree(src), path) as AstNode).pos)
+  return show(asNode(at(placedTree(src), path)).pos)
 }
 
 /** The source bytes a position spans, decoded. */
@@ -34,7 +35,7 @@ describe('the six integers', () => {
 
   it('C2-A-140, C2-A-141: the example of the tree document', () => {
     // The text `é!` behind the two characters of a no-break space: a column per code point, two bytes for the accented letter.
-    expect((at(placedTree('\\ é!'), 'children.0.children.1') as AstNode).pos).toEqual({
+    expect(asNode(at(placedTree('\\ é!'), 'children.0.children.1')).pos).toEqual({
       startLine: 1, endLine: 1, startColumn: 3, endColumn: 5, startOffset: 2, endOffset: 5,
     })
     expect(placed('ab {*é!*}', 'children.0.children.1.children.0')).toBe('1:6-1:8@5-8')
@@ -46,7 +47,7 @@ describe('the six integers', () => {
     expect(placed(src, 'children.0.children.3')).toBe('1:11-1:14@22-25')
     expect(placed(src, 'children.1')).toBe('3:1-3:10@27-42')
     expect(placed(src, 'children.1.children.0.children.1')).toBe('3:7-3:10@39-42')
-    const emphasis = at(placedTree(src), 'children.1.children.0.children.1') as AstNode
+    const emphasis = asNode(at(placedTree(src), 'children.1.children.0.children.1'))
     expect(slice(src, emphasis.pos!)).toBe('/y/')
   })
 
@@ -58,12 +59,12 @@ describe('the six integers', () => {
 
   it('C2-A-141: every offset falls on a code point boundary and spans the source of its node', () => {
     const src = '# Ünï 😀\n\n- [x] ａ *ｂ* — `ｃ` [d](é) ![e](f)\n\n| é | 😀 |\n'
-    const visit = (node: AstNode): void => {
+    const visit = (node: Node): void => {
       if (node.pos !== undefined) expect(() => slice(src, node.pos!)).not.toThrow()
-      for (const child of node.children ?? []) visit(child)
+      for (const child of 'children' in node ? node.children : []) visit(child)
     }
     visit(placedTree(src))
-    const strong = at(placedTree(src), 'children.1.children.0.children.0.children.1') as AstNode
+    const strong = asNode(at(placedTree(src), 'children.1.children.0.children.0.children.1'))
     expect(slice(src, strong.pos!)).toBe('*ｂ*')
   })
 
@@ -93,7 +94,7 @@ describe('invariants', () => {
   })
 
   it('C2-A-145: the comment between an attribute line and its block lies inside the span of that block', () => {
-    const [comment, paragraph] = blocks('x').length > 0 ? placedTree('{.a}\n%% c\ntext').children! : []
+    const [comment, paragraph] = blocks('x').length > 0 ? placedTree('{.a}\n%% c\ntext').children : []
     expect(show(comment!.pos)).toBe('2:1-2:5@5-9')
     expect(show(paragraph!.pos)).toBe('1:1-3:5@0-14')
   })
@@ -136,21 +137,21 @@ describe('invariants', () => {
   })
 
   it('C2-A-156, C2-A-158: a node joined from pieces of several lines omits pos', () => {
-    const row = at(placedTree('| a | b |\n+ c | |'), 'children.0.children.0.children.0') as AstNode
+    const row = asNode(at(placedTree('| a | b |\n+ c | |'), 'children.0.children.0.children.0'))
     expect(row.pos).toBeUndefined()
-    expect(show(row.children![0]!.pos)).toBe('none')
-    expect(show((at(row, 'children.0.children.0') as AstNode).pos)).toBe('none')
-    expect(show(row.children![1]!.pos)).toBe('1:6-1:9@5-8')
+    expect(show(asNode(at(row, 'children.0')).pos)).toBe('none')
+    expect(show(asNode(at(row, 'children.0.children.0')).pos)).toBe('none')
+    expect(show(asNode(at(row, 'children.1')).pos)).toBe('1:6-1:9@5-8')
     // C2-B-176: a fragment past the last column forms a cell, which stands on the line of the continuation row.
-    const formed = at(placedTree('| a |\n+ b | c |'), 'children.0.children.0.children.0.children.1') as AstNode
-    expect([formed.children![0]!.children, formed.pos]).toEqual([[{ type: 'text', value: 'c' }], undefined])
+    const formed = asNode(at(placedTree('| a |\n+ b | c |'), 'children.0.children.0.children.0.children.1'))
+    expect([childrenOf(asNode(at(formed, 'children.0'))), formed.pos]).toEqual([[{ type: 'text', value: 'c' }], undefined])
   })
 
   it('C2-A-158: a table column, a caption number and the cells of a delimited table have no position', () => {
-    const table = block('x').type === 'paragraph' ? placedTree('| a |\n^ T #').children![0]! : null
-    expect(show(table!.columns![0]!.pos)).toBe('none')
-    expect(show((at(table, 'caption.children.0.children.1') as AstNode).pos)).toBe('none')
-    expect(show((at(placedTree('{table}\n```csv\na\n```'), 'children.0.children.0.children.0.children.0') as AstNode).pos)).toBe('none')
+    const table = block('x').type === 'paragraph' ? ofType(placedTree('| a |\n^ T #').children[0], 'table') : null
+    expect(show(table!.columns[0]!.pos)).toBe('none')
+    expect(show(asNode(at(table, 'caption.children.0.children.1')).pos)).toBe('none')
+    expect(show(asNode(at(placedTree('{table}\n```csv\na\n```'), 'children.0.children.0.children.0.children.0')).pos)).toBe('none')
   })
 
   it('C2-A-182: an include node spans the directive', () => {

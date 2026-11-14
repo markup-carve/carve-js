@@ -1,6 +1,6 @@
 // The continuation rows of a pipe table for the source-layout record (C2-L-019 to C2-L-021): how
 // many each row has, and where each fragment starts in the content of its cell.
-import { type AstNode, childrenOf, rowspanOf, valueOf } from './ast.ts'
+import { type Inline, isInlineParent, type TableCellNode } from './ast.ts'
 import { type LayoutTrace } from './ast-inline.ts'
 import { GREATER, PLUS } from './chars.ts'
 import { ROW } from './kinds.ts'
@@ -81,8 +81,7 @@ function addWrap(walk: CellWalk, fragment: number, path: string, offset: number)
 }
 
 /** C2-L-021: a joining space is the character before the offset, which counts UTF-8 bytes of the value. */
-function textWraps(walk: CellWalk, node: AstNode, path: string, breaks: number[]): void {
-  const value = valueOf(node)
+function textWraps(walk: CellWalk, value: string, path: string, breaks: number[]): void {
   let from = 0
   let bytes = 0
   for (let at = 0; at < breaks.length; at += 2) {
@@ -93,8 +92,7 @@ function textWraps(walk: CellWalk, node: AstNode, path: string, breaks: number[]
 }
 
 /** A node with a value that crosses lines, a code span for one, holds each break as a line feed. */
-function valueWraps(walk: CellWalk, node: AstNode, path: string, start: number, end: number): void {
-  const value = valueOf(node)
+function valueWraps(walk: CellWalk, value: string, path: string, start: number, end: number): void {
   const spans = walk.spans
   while (walk.spanAt < spans.length && spans[walk.spanAt]! <= start) walk.spanAt += 2
   let feed = -1
@@ -115,36 +113,36 @@ function startsPiece(walk: CellWalk, offset: number): boolean {
   return walk.spanAt < spans.length && spans[walk.spanAt] === offset
 }
 
-function walkList(walk: CellWalk, nodes: readonly AstNode[], base: string): void {
+function walkList(walk: CellWalk, nodes: readonly Inline[], base: string): void {
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const path = `${base}/${at}`
     const breaks = walk.trace.breaks.get(node)
     const origin = walk.trace.inlines.get(node)
-    if (breaks !== undefined) {
-      textWraps(walk, node, path, breaks)
+    if (breaks !== undefined && node.type === 'text') {
+      textWraps(walk, node.value, path, breaks)
     } else if (origin === undefined) {
       continue
     } else if (node.type === 'hard_break') {
       // A hard break leaves no joining space: the fragment starts at offset 0 of the node behind it.
       if (at + 1 < nodes.length && startsPiece(walk, origin.end)) addWrap(walk, origin.end, `${base}/${at + 1}`, 0)
-    } else if (node.children !== undefined) {
+    } else if (isInlineParent(node)) {
       walkList(walk, node.children, `${path}/children`)
-    } else if (typeof node.value === 'string') {
-      valueWraps(walk, node, path, origin.start, origin.end)
+    } else if ('value' in node) {
+      valueWraps(walk, node.value, path, origin.start, origin.end)
     }
   }
 }
 
 /** C2-L-020: the wraps of the cell at `path`, whose own row is row `home` of `table`. */
 export function cellWraps(
-  src: string, trace: LayoutTrace, table: TableRows, home: number, node: AstNode, cell: BlockNode, path: string,
+  src: string, trace: LayoutTrace, table: TableRows, home: number, node: TableCellNode, cell: BlockNode, path: string,
 ): Wrap[] {
   const walk: CellWalk = {
-    src, trace, table, home, spanning: (rowspanOf(node)) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
+    src, trace, table, home, spanning: (node.rowspan ?? 1) > 1, spans: cell.spans!, spanAt: 2, row: home, line: 0, wraps: [],
   }
-  const paragraph = childrenOf(node)[0]
-  const content = paragraph === undefined ? [] : childrenOf(paragraph)
+  const paragraph = node.children[0]
+  const content = paragraph !== undefined && isInlineParent(paragraph) ? paragraph.children : []
   const base = `${path}/children/0/children`
   // C2-L-021: a cell whose first piece stands in a continuation row starts with that fragment, at offset 0.
   if (content.length > 0 && cell.spans!.length > 0 && cell.spans![0]! >= lineEndOf(src, table.rows[home]!.start)) {

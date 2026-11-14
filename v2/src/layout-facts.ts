@@ -1,6 +1,6 @@
 // The facts of the source-layout record that one block states about itself (C2-L-016 to C2-L-018,
 // C2-L-023 to C2-L-028, C2-L-045), read from the block tree and the source.
-import { type AstNode } from './ast.ts'
+import { type Node } from './ast.ts'
 import { COLON, GREATER, HYPHEN, STAR } from './chars.ts'
 import {
   ABBREVIATION, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DIV, FLAG_AUTO, FLAG_HARD_BREAKS, FLAG_UNCLOSED,
@@ -23,7 +23,7 @@ export type Facts = Omit<NodeLayout, 'path' | 'startByte' | 'endByte'>
 const FRONTMATTER_RUN = 3
 
 /** `quotes` is the number of open quotes with a mark around the block (C2-B-003). */
-type Measure = (src: string, node: AstNode, origin: BlockNode, quotes: number, facts: Facts) => void
+type Measure = (src: string, node: Node, origin: BlockNode, quotes: number, facts: Facts) => void
 
 function setMarker(src: string, start: number, end: number, quotes: number, facts: Facts): void {
   facts.markerRaw = src.slice(start, end)
@@ -226,6 +226,6 @@ const MEASURES = new Map<number, Measure>([
 ])
 
 /** Adds to `facts` what the block `origin` of the node `node` states about its own spelling. */
-export function measureBlock(src: string, node: AstNode, origin: BlockNode, quotes: number, facts: Facts): void {
+export function measureBlock(src: string, node: Node, origin: BlockNode, quotes: number, facts: Facts): void {
   MEASURES.get(origin.kind)?.(src, node, origin, quotes, facts)
 }

@@ -2,8 +2,10 @@
 // "fix what the review of today's clauses found" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
 import {
-  type AstNode, format, parse, parseWithLayout, render, type RenderOptions, treesEqual, write, writeWithDiagnostics,
+  type Block, type DocumentNode, format, type ListItemNode, type ListNode, parse, parseWithLayout, render, type RenderOptions,
+  treesEqual, write, writeWithDiagnostics,
 } from '../src/index.ts'
+import { childrenOf, ofType } from './support/nodes.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 import { unaskedEscape } from './support/writer-checks.ts'
 
@@ -44,9 +46,9 @@ describe('the rel of a link', () => {
 
 describe('the byte-order mark', () => {
   it('C2-B-165: the first character behind the mark has column 1, and offsets count the three bytes of the mark', () => {
-    const paragraph = parse('\uFEFFab *c*').children![0]!
+    const paragraph = ofType(parse('\uFEFFab *c*').children[0], 'paragraph')
     expect(paragraph.pos).toEqual({ startLine: 1, startColumn: 1, startOffset: 3, endLine: 1, endColumn: 7, endOffset: 9 })
-    expect(paragraph.children![1]!.pos).toMatchObject({ startColumn: 4, startOffset: 6 })
+    expect(paragraph.children[1]?.pos).toMatchObject({ startColumn: 4, startOffset: 6 })
   })
 
   it('C2-B-165: the columns of the layout record do not count the mark', () => {
@@ -115,7 +117,7 @@ describe('the tree', () => {
 })
 
 describe('a start value of more than nine digits', () => {
-  const list = (delimiter: string): AstNode => ({
+  const list = (delimiter: string): DocumentNode => ({
     type: 'document', astVersion: '2.0', children: [{
       type: 'list', marker: { kind: 'ordered', style: '1', delimiter, start: 1234567890 }, spacing: 'tight',
       children: [{ type: 'list_item', children: [paragraph(text('a'))] }, { type: 'list_item', children: [paragraph(text('b'))] }],
@@ -131,7 +133,7 @@ describe('a start value of more than nine digits', () => {
   })
 
   it('C2-B-219: a start attribute of more than nine digits stays a key', () => {
-    const list = parse('{start=1234567890}\n. a', { positions: false }).children![0]!
+    const list = ofType(parse('{start=1234567890}\n. a', { positions: false }).children[0], 'list')
     expect(list.marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.' })
     expect(list.attrs).toEqual({ keyValues: [['start', '1234567890']] })
   })
@@ -139,7 +141,8 @@ describe('a start value of more than nine digits', () => {
 
 describe('tables', () => {
   it('C2-B-184: a code span across continuation rows keeps its line feed', () => {
-    const cell = parse('| `a | x |\n+ b` | y |', { positions: false }).children![0]!.children![0]!.children![0]!.children![0]!
+    const table = parse('| `a | x |\n+ b` | y |', { positions: false }).children[0]
+    const cell = ofType(childrenOf(childrenOf(childrenOf(table)[0])[0])[0], 'table_cell')
     expect(cell.children).toEqual([{ type: 'cell_paragraph', children: [{ type: 'code', value: 'a\nb' }] }])
     expect(render('| `a | x |\n+ b` | y |')).toBe('<table>\n  <tbody>\n    <tr><td><code>a\nb</code></td><td>x y</td></tr>\n  </tbody>\n</table>')
   })
@@ -147,8 +150,9 @@ describe('tables', () => {
   it('C2-B-221: headRows is the declared count also past the last row, and the writer writes it back', () => {
     const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
     const document = parse(src, { positions: false })
-    expect(document.children![0]!.children).toHaveLength(1)
-    expect(document.children![0]!.children![0]!.headRows).toBe(5)
+    const table = ofType(document.children[0], 'table')
+    expect(table.children).toHaveLength(1)
+    expect(ofType(table.children[0], 'table_body').headRows).toBe(5)
     expect(format(src)).toBe(`${src}\n`)
     expect(write(document)).toContain('header-rows=5')
   })
@@ -186,12 +190,12 @@ describe('the other clauses of the two commits', () => {
     parseWithLayout(src).layout.nodes.find((node) => node.path === path) as Record<string, unknown> | undefined
 
   it('C2-B-220: a widths entry is digits with an optional dot and digits; .5, 5., 1e1 and +5 set no width', () => {
-    const table = parse(`{table widths="30.5,5,.5,5.,1e1,+5"}\n${FENCE}csv\na,b,c,d,e,f\n${FENCE}`, { positions: false }).children![0]!
-    expect(table.columns!.map((column) => column.width)).toEqual([0.305, 0.05, undefined, undefined, undefined, undefined])
+    const table = ofType(parse(`{table widths="30.5,5,.5,5.,1e1,+5"}\n${FENCE}csv\na,b,c,d,e,f\n${FENCE}`, { positions: false }).children[0], 'table')
+    expect(table.columns.map((column) => column.width)).toEqual([0.305, 0.05, undefined, undefined, undefined, undefined])
   })
 
   it('C2-A-089: resolvedAlign is the mark of the last head cell before the aligns entry', () => {
-    const table = parse('{aligns="right"}\n|={<} a |\n| b |', { positions: false }).children![0]!
+    const table = ofType(parse('{aligns="right"}\n|={<} a |\n| b |', { positions: false }).children[0], 'table')
     expect(table.columns).toEqual([{ type: 'table_column', align: 'right', authored: true, resolvedAlign: 'left' }])
   })
 
@@ -231,7 +235,8 @@ describe('the other clauses of the two commits', () => {
 
   it('C2-H-170: the caption of a table takes its number before an equation in a cell of that table', () => {
     const document = parse('| a | x |\n^ Table # cap', { positions: false })
-    document.children![0]!.children![0]!.children![0]!.children![1]!.children![0]!.children = [{ type: 'math', display: true, value: 'e', numberPrefix: 'Table' }]
+    const cell = childrenOf(childrenOf(childrenOf(document.children[0])[0])[0])[1]
+    ofType(childrenOf(cell)[0], 'cell_paragraph').children = [{ type: 'math', display: true, value: 'e', numberPrefix: 'Table' }]
     const html = render(document)
     expect(html).toContain('<caption>Table 1 cap</caption>')
     expect(html).toContain('<span class="equation-number">Table 2</span>')
@@ -239,7 +244,7 @@ describe('the other clauses of the two commits', () => {
 
   it('C2-H-171: an option value with a space, a tab, @ or } stands in quotes, and the options stand in the order of C2-W-058', () => {
     expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:a,,b }}</p>')
-    const document: AstNode = {
+    const document: DocumentNode = {
       type: 'document', astVersion: '2.0',
       children: [{ type: 'include', path: 'a.crv', options: [['region', 'x y'], ['shift', 'a@b'], ['code', 'c}d'], ['lines', '1-2']] }],
     }
@@ -264,7 +269,7 @@ describe('the other clauses of the two commits', () => {
   })
 
   it('C2-W-120: a first class of the shape of a div name names the div, any other stands on the attribute line', () => {
-    const div = (name: string): AstNode => ({ type: 'document', astVersion: '2.0', children: [{ type: 'div', attrs: { classes: [name] }, children: [paragraph(text('x'))] }] })
+    const div = (name: string): DocumentNode => ({ type: 'document', astVersion: '2.0', children: [{ type: 'div', attrs: { classes: [name] }, children: [paragraph(text('x'))] }] })
     expect(write(div('my-box'))).toBe('::: my-box\nx\n:::\n')
     expect(write(div('note'))).toBe('{.note}\n:::\nx\n:::\n')
     expect(write(div('a.b'))).toBe('{class="a.b"}\n:::\nx\n:::\n')
@@ -275,9 +280,9 @@ describe('the other clauses of the two commits', () => {
   })
 
   it('C2-W-122, C2-W-123: a comment between two lists, behind the open fence of the first, then three blank lines', () => {
-    const item = (blocks: AstNode[]): AstNode => ({ type: 'list_item', children: blocks })
-    const list = (blocks: AstNode[]): AstNode => ({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item(blocks)] })
-    const document: AstNode = {
+    const item = (blocks: Block[]): ListItemNode => ({ type: 'list_item', children: blocks })
+    const list = (blocks: Block[]): ListNode => ({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item(blocks)] })
+    const document: DocumentNode = {
       type: 'document', astVersion: '2.0',
       children: [list([paragraph(text('a')), { type: 'code_block', value: 'x\n' }]), { type: 'comment', form: 'line', value: 'c' }, list([paragraph(text('b'))])],
     }
@@ -287,7 +292,7 @@ describe('the other clauses of the two commits', () => {
   })
 
   it('C2-W-124: a frontmatter format that is no format name is reported at the frontmatter as structure-unspellable', () => {
-    const document: AstNode = {
+    const document: DocumentNode = {
       type: 'document', astVersion: '2.0', children: [{ type: 'frontmatter', format: 'Not A Name', value: 'k: v\n' }, paragraph(text('x'))],
     }
     expect(writeWithDiagnostics(document).diagnostics.map((item) => [item.code, item.path])).toEqual([['structure-unspellable', '/children/0']])

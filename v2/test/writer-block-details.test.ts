@@ -1,6 +1,7 @@
 // Edges of the block writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
 import { format, parse, treesEqual, write } from '../src/index.ts'
+import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 
 const TICK = '`'
 const FENCE = TICK.repeat(3)
@@ -80,6 +81,7 @@ describe('continuation rows', () => {
     stays(src)
     const plain = write(parse(src))
     expect(plain).toBe(`${src}\n`)
-    expect(parse(src).children![0]!.children![0]!.children![0]!.children![0]!.children![0]!.children![0]!.value).toBe('a\nb')
+    const cell = childrenOf(childrenOf(childrenOf(childrenOf(parse(src))[0])[0])[0])[0]
+    expect(ofType(inlinesOf(childrenOf(cell)[0])[0], 'code').value).toBe('a\nb')
   })
 })

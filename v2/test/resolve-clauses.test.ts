@@ -2,11 +2,12 @@
 // are published in the tree (C2-A-133 to C2-A-135), and the rules of the HTML document that give
 // those results (heading ids, footnote numbers, caption numbers, cross-references).
 import { describe, expect, it } from 'vitest'
-import { type AstNode } from '../src/ast.ts'
+import { type FootnoteRefNode, type LinkNode, type Node } from '../src/ast.ts'
 import { treesEqual } from '../src/ast-json.ts'
 import { CarveOptionError, readOptions } from '../src/options.ts'
 import { resolve } from '../src/resolve.ts'
 import { slugify } from '../src/slug.ts'
+import { childrenOf, fieldOf, inlinesOf, ofType } from './support/nodes.ts'
 import { at, documentOf, paragraph, resolved, resolvedInlines, text, tree } from './support/tree.ts'
 
 function ids(src: string, mode: Parameters<typeof resolved>[1] = 'keep-case'): (string | undefined)[] {
@@ -15,19 +16,19 @@ function ids(src: string, mode: Parameters<typeof resolved>[1] = 'keep-case'): (
 
 describe('references', () => {
   it('C2-A-103: a reference use and a definition carry key and namespace; a direct link carries neither', () => {
-    expect(resolvedInlines('[a][b] [^n] </#x> [c](d)').filter((node) => node.type !== 'text').map((node) => [node.type, node.namespace])).toEqual([
+    expect(resolvedInlines('[a][b] [^n] </#x> [c](d)').filter((node) => node.type !== 'text').map((node) => [node.type, fieldOf(node, 'namespace')])).toEqual([
       ['link', 'link'], ['footnote_ref', 'footnote'], ['xref', 'heading'], ['link', undefined],
     ])
   })
 
   it('C2-A-104: the key is the folded label, and case is kept', () => {
     expect(resolvedInlines('[x][a  b\n c]\n\n[a b c]: /u')[0]).toEqual({ type: 'link', key: 'a b c', namespace: 'link', form: 'full', href: '/u', children: [text('x')] })
-    expect(resolvedInlines('[x][A]\n\n[a]: /u')[0]!.href).toBeUndefined()
+    expect(ofType(resolvedInlines('[x][A]\n\n[a]: /u')[0], 'link').href).toBeUndefined()
   })
 
   it('C2-A-105: a reference carries its form, exactly when it carries a key', () => {
     expect(resolvedInlines('[a][b] [c][] [d](e)').filter((node) => node.type === 'link').map((node) => node.form)).toEqual(['full', 'collapsed', undefined])
-    expect(resolvedInlines('[c *d*][]')[0]!.key).toBe('c *d*')
+    expect(ofType(resolvedInlines('[c *d*][]')[0], 'link').key).toBe('c *d*')
   })
 
   it('C2-A-106: a resolution result is added beside the authored construct', () => {
@@ -35,9 +36,9 @@ describe('references', () => {
   })
 
   it('C2-A-107: an absent destination means unresolved, and the empty string a destination that is empty', () => {
-    expect(resolvedInlines('[a][nope]')[0]!.href).toBeUndefined()
-    expect(resolvedInlines('[a]()')[0]!.href).toBe('')
-    expect(resolvedInlines('![a][nope] x')[0]!.src).toBeUndefined()
+    expect(ofType(resolvedInlines('[a][nope]')[0], 'link').href).toBeUndefined()
+    expect(ofType(resolvedInlines('[a]()')[0], 'link').href).toBe('')
+    expect(ofType(resolvedInlines('![a][nope] x')[0], 'image').src).toBeUndefined()
   })
 
   it('C2-A-108: an unresolved reference is still a link or an image node with its children, key, form and attrs', () => {
@@ -48,13 +49,13 @@ describe('references', () => {
   })
 
   it('C2-A-109: a link reference is looked up in the definitions first and then in the headings; an image is not', () => {
-    expect(resolvedInlines('# Intro\n\n[Intro][] [x][Intro] ![i][Intro]', 1).map((node) => node.href ?? node.src)).toEqual(['#Intro', undefined, '#Intro', undefined, undefined])
-    expect(resolvedInlines('# Intro\n\n[Intro][]\n\n[Intro]: /u', 1)[0]!.href).toBe('/u')
+    expect(resolvedInlines('# Intro\n\n[Intro][] [x][Intro] ![i][Intro]', 1).map((node) => fieldOf(node, 'href') ?? fieldOf(node, 'src'))).toEqual(['#Intro', undefined, '#Intro', undefined, undefined])
+    expect(ofType(resolvedInlines('# Intro\n\n[Intro][]\n\n[Intro]: /u', 1)[0], 'link').href).toBe('/u')
   })
 
   it('C2-I-084: a heading matches by the folded source of its text or by its plain text; the first one wins', () => {
-    expect(resolvedInlines('# A *b* `c`\n\n[A *b* `c`][] [x][A b c]', 1).map((node) => node.href)).toEqual(['#A-b-c', undefined, '#A-b-c'])
-    expect(resolvedInlines('# T\n\n# T\n\n[T][]', 2)[0]!.href).toBe('#T')
+    expect(resolvedInlines('# A *b* `c`\n\n[A *b* `c`][] [x][A b c]', 1).map((node) => fieldOf(node, 'href'))).toEqual(['#A-b-c', undefined, '#A-b-c'])
+    expect(ofType(resolvedInlines('# T\n\n# T\n\n[T][]', 2)[0], 'link').href).toBe('#T')
     expect(at(resolved('# T\n\n[T][]', 'off').document, 'children.1.children.0.href')).toBeUndefined()
     expect(at(resolved('{#t}\n# T\n\n[T][]', 'off').document, 'children.1.children.0.href')).toBe('#t')
   })
@@ -76,7 +77,7 @@ describe('references', () => {
   })
 
   it('C2-A-100: an inline footnote takes its number in the one sequence', () => {
-    expect(resolvedInlines('a^[x] b[^n]\n\n[^n]: y').filter((node) => node.type !== 'text').map((node) => node.number)).toEqual([1, 2])
+    expect(resolvedInlines('a^[x] b[^n]\n\n[^n]: y').filter((node) => node.type !== 'text').map((node) => fieldOf(node, 'number'))).toEqual([1, 2])
   })
 })
 
@@ -90,14 +91,14 @@ describe('resolution results', () => {
 
   it('C2-A-134: a generated heading id is published in generatedId and never in attrs.id', () => {
     expect(resolved('# One two').document.children![0]).toEqual({ type: 'heading', level: 1, children: [text('One two')], generatedId: 'One-two' })
-    expect(resolved('{#x}\n# T').document.children![0]!.generatedId).toBeUndefined()
-    expect(resolved('# T', 'off').document.children![0]!.generatedId).toBeUndefined()
+    expect(ofType(resolved('{#x}\n# T').document.children[0], 'heading').generatedId).toBeUndefined()
+    expect(ofType(resolved('# T', 'off').document.children[0], 'heading').generatedId).toBeUndefined()
   })
 
   it('C2-A-025: a walker visits the children first and then the secondary slots, and no value, data or payload', () => {
     const { document, resolution } = resolved('| a[^x] |\n^ c[^y] `[^z]`\n\n[^x]: X\n[^y]: Y\n[^z]: Z')
     expect(resolution.notes.map((note) => note.definition!.key)).toEqual(['x', 'y'])
-    const hidden: AstNode = { type: 'footnote_ref', key: 'x', namespace: 'footnote' }
+    const hidden: FootnoteRefNode = { type: 'footnote_ref', key: 'x', namespace: 'footnote' }
     const supplied = documentOf({ ...paragraph(), data: { 'org.example.x': hidden } }, document.children![1]!)
     expect(resolve(supplied, 'keep-case', null).notes).toEqual([])
     expect(hidden.number).toBeUndefined()
@@ -115,10 +116,10 @@ describe('resolution results', () => {
   })
 
   it('C2-A-089, C2-B-213: resolvedAlign is the mark of the last head cell of the column that has one, or else the alignment the column spells', () => {
-    expect(resolved('|={>} a |= b |\n|={~} c |= d |\n| e | f |').document.children![0]!.columns).toEqual([
+    expect(ofType(resolved('|={>} a |= b |\n|={~} c |= d |\n| e | f |').document.children[0], 'table').columns).toEqual([
       { type: 'table_column', resolvedAlign: 'center' }, { type: 'table_column' },
     ])
-    expect(resolved('{aligns="left,center"}\n|={>} a |= b |').document.children![0]!.columns).toEqual([
+    expect(ofType(resolved('{aligns="left,center"}\n|={>} a |= b |').document.children[0], 'table').columns).toEqual([
       { type: 'table_column', align: 'left', authored: true, resolvedAlign: 'right' },
       { type: 'table_column', align: 'center', authored: true, resolvedAlign: 'center' },
     ])
@@ -138,11 +139,11 @@ describe('resolution results', () => {
   })
 
   it('a supplied tree resolves by the plain text of its headings, and keeps a destination an earlier resolution published', () => {
-    const link: AstNode = { type: 'link', key: 'T', namespace: 'link', form: 'collapsed', children: [text('T')] }
+    const link: LinkNode = { type: 'link', key: 'T', namespace: 'link', form: 'collapsed', children: [text('T')] }
     const supplied = documentOf({ type: 'heading', level: 1, children: [text('T')] }, paragraph(link))
     resolve(supplied, 'keep-case', null)
     expect(link.href).toBe('#T')
-    const kept: AstNode = { type: 'link', key: 'gone', namespace: 'link', form: 'full', href: '#x', children: [] }
+    const kept: LinkNode = { type: 'link', key: 'gone', namespace: 'link', form: 'full', href: '#x', children: [] }
     resolve({ ...documentOf(paragraph(kept)), stages: ['referenceResolution'] }, 'keep-case', null)
     expect(kept.href).toBe('#x')
     resolve(documentOf(paragraph(kept)), 'keep-case', null)
@@ -185,14 +186,14 @@ describe('heading ids', () => {
   it('C2-H-025: the headings of a footnote body take their ids after those of the document body, in the order of the numbers', () => {
     const { document } = resolved('a[^b] c[^a]\n\n[^a]: # T\n\n[^b]: # T\n\n[^c]: # T\n\n# T')
     const noteHeading = (index: number): unknown => at(document, `children.${index}.children.0.generatedId`)
-    expect([noteHeading(1), noteHeading(2), noteHeading(3), document.children![4]!.generatedId]).toEqual(['T-3', 'T-2', undefined, 'T'])
+    expect([noteHeading(1), noteHeading(2), noteHeading(3), ofType(document.children[4], 'heading').generatedId]).toEqual(['T-3', 'T-2', undefined, 'T'])
   })
 })
 
 describe('footnotes, captions and cross-references', () => {
   it('C2-H-087: footnotes are numbered in the order of their first reference, and a later reference reuses the number', () => {
     const { document, resolution } = resolved('a[^b] c^[i] d[^a] e[^b]\n\n[^a]: A\n[^b]: B')
-    expect(document.children![0]!.children!.filter((node) => node.number !== undefined).map((node) => node.number)).toEqual([1, 2, 3, 1])
+    expect(inlinesOf(document.children[0]).filter((node) => fieldOf(node, 'number') !== undefined).map((node) => fieldOf(node, 'number'))).toEqual([1, 2, 3, 1])
     expect(resolution.notes.map((note) => note.refIds)).toEqual([['fnref1', 'fnref1-2'], ['fnref2'], ['fnref3']])
   })
 
@@ -206,15 +207,15 @@ describe('footnotes, captions and cross-references', () => {
 
   it('C2-H-066: a caption takes the next number of the sequence its label selects; a panel caption takes none', () => {
     const src = '| a |\n^ Table #: x\n\n![a](b)\n^ Figure #: y\n\n| a |\n^ Table #: z\n\n::: figure\n![a](b)\n^ Figure #: p\n:::\n^ Figure #: g'
-    const numbers = (node: AstNode): unknown => at(node, 'caption.children.0.children.1.n')
+    const numbers = (node: Node | undefined): unknown => at(node, 'caption.children.0.children.1.n')
     const { document } = resolved(src)
     expect(document.children!.map(numbers)).toEqual([1, 1, 2, 2])
-    expect(numbers(document.children![3]!.children![0]!)).toBeUndefined()
+    expect(numbers(childrenOf(document.children[3])[0])).toBeUndefined()
   })
 
   it('C2-H-095, C2-H-096: a cross-reference resolves against the ids of headings and of numbered captions, without case folding', () => {
     const { document, resolution } = resolved('{#t}\n| a |\n^ Table #: x\n\n# Head *ing*\n\n</#t> </#Head-ing> </#head-ing> </#T>')
-    const xrefs = document.children![2]!.children!.filter((node) => node.type === 'xref')
+    const xrefs = inlinesOf(document.children[2]).filter((node) => node.type === 'xref')
     expect(xrefs.map((node) => node.href)).toEqual(['#t', '#Head-ing', undefined, undefined])
     expect(xrefs.map((node) => resolution.xrefText.get(node))).toEqual(['Table 1', 'Head ing', undefined, undefined])
   })

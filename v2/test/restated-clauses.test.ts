@@ -6,11 +6,14 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateRenderTables } from '../scripts/generate-render-tables.ts'
 import {
-  type AstNode, CarveInputError, CarveRenderError, parse, parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics,
+  type CaptionNode, CarveInputError, CarveRenderError, type FigureGroupNode, type FigureNode, type Inline, type MathNode, parse,
+  parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics, type RubyNode, type SpanNode, type TableBodyNode,
+  type TableCellNode, type TableNode,
 } from '../src/index.ts'
 import { type Diagnostic, locateFindings } from '../src/diagnostics.ts'
 import { escapeText } from '../src/html-attributes.ts'
 import { slugify } from '../src/slug.ts'
+import { ofType } from './support/nodes.ts'
 import { block, blocks, documentOf, paragraph, resolved, text } from './support/tree.ts'
 
 const root = join(import.meta.dirname, '..')
@@ -31,10 +34,10 @@ function ids(src: string, options?: RenderOptions): string[] {
   return [...render(src, options).matchAll(/<(?:section|h\d)[^>]* id="([^"]*)"/g)].map((match) => match[1]!)
 }
 
-function headingId(node: AstNode): string | undefined {
+function headingId(node: Inline): string | undefined {
   const document = documentOf({ type: 'heading', level: 1, children: [node] })
   render(document)
-  return document.children![0]!.generatedId
+  return ofType(document.children[0], 'heading').generatedId
 }
 
 it('src/render-tables.ts is what scripts/generate-render-tables.ts writes', () => {
@@ -105,28 +108,28 @@ describe('the include directive', () => {
   })
 
   it('C2-B-202: a bare, a double-quoted and a curly-quoted path, and an empty one makes the line text', () => {
-    expect(block('{{ a/b.crv }}').path).toBe('a/b.crv')
-    expect(block('{{ "a\\.crv" }}').path).toBe('a.crv')
-    expect(block('{{ "notes\\new.crv" }}').path).toBe('notes\\new.crv')
-    expect(block('{{ "a \\" b" }}').path).toBe('a " b')
-    expect(block('{{ “a\\.b c” }}').path).toBe('a\\.b c')
-    expect(block('{{ "a" }}').path).toBe('a')
+    expect(ofType(block('{{ a/b.crv }}'), 'include').path).toBe('a/b.crv')
+    expect(ofType(block('{{ "a\\.crv" }}'), 'include').path).toBe('a.crv')
+    expect(ofType(block('{{ "notes\\new.crv" }}'), 'include').path).toBe('notes\\new.crv')
+    expect(ofType(block('{{ "a \\" b" }}'), 'include').path).toBe('a " b')
+    expect(ofType(block('{{ “a\\.b c” }}'), 'include').path).toBe('a\\.b c')
+    expect(ofType(block('{{ "a" }}'), 'include').path).toBe('a')
     expect(block('{{ a.crv@code }}')).toEqual({ type: 'include', path: 'a.crv', options: [['code', '']] })
     const refused = ['{{ "" }}', '{{ “” }}', '{{ “”x” }}', '{{ a"b }}', '{{ a“b }}', '{{ "a }}', '{{ a}b }}', '{{ #s }}', '{{ @code }}']
     expect(refused.map(kind)).toEqual(Array(9).fill('paragraph'))
   })
 
   it('C2-B-203: a section is `#` and a name, and a directive holds at most one', () => {
-    expect(block('{{ a.crv #_s-1 }}').section).toBe('_s-1')
-    expect(block('{{ a.crv #1a }}').section).toBe('1a')
-    expect(block('{{ a.crv #z9Z0 }}').section).toBe('z9Z0')
+    expect(ofType(block('{{ a.crv #_s-1 }}'), 'include').section).toBe('_s-1')
+    expect(ofType(block('{{ a.crv #1a }}'), 'include').section).toBe('1a')
+    expect(ofType(block('{{ a.crv #z9Z0 }}'), 'include').section).toBe('z9Z0')
     expect(['{{ a.crv #-s }}', '{{ a.crv # }}', '{{ a.crv #s.t }}', '{{ a.crv #s #t }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
   })
 
   it('C2-B-204: an option is an at-sign, a key and an optional value; an unquoted value ends at the next option', () => {
-    expect(block('{{ a.crv @shift:1@lines:1-8 }}').options).toEqual([['lines', '1-8'], ['shift', '1']])
-    expect(block('{{ a.crv @lines:"1-2" @code:\'c\' }}').options).toEqual([['lines', '1-2'], ['code', 'c']])
-    expect(block('{{ a.crv @rows:"a @ b }} c" }}').options).toEqual([['rows', 'a @ b }} c']])
+    expect(ofType(block('{{ a.crv @shift:1@lines:1-8 }}'), 'include').options).toEqual([['lines', '1-8'], ['shift', '1']])
+    expect(ofType(block('{{ a.crv @lines:"1-2" @code:\'c\' }}'), 'include').options).toEqual([['lines', '1-2'], ['code', 'c']])
+    expect(ofType(block('{{ a.crv @rows:"a @ b }} c" }}'), 'include').options).toEqual([['rows', 'a @ b }} c']])
     expect(['{{ a.crv @ }}', '{{ a.crv @1k }}', '{{ a.crv @rows: }}', '{{ a.crv @rows:"x }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
   })
 
@@ -145,17 +148,17 @@ describe('the include directive', () => {
     expect(['{{ a.crv @foo:1 }}', '{{ a.crv @lines }}', '{{ a.crv @region }}', '{{ a.crv @shift }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
     expect(['{{ a.crv @lines:1-2 @lines:3-4 }}', '{{ a.crv @code @code }}', '{{ a.crv @shift:1 @shift:2 }}'].map(kind)).toEqual(Array(3).fill('paragraph'))
     // Outside its shape, `lines`, `rows` and `cols` leave a node that an expansion reports.
-    expect(block('{{ a.crv @lines:5-1 @rows:01-2 @cols:x }}').options).toEqual([['lines', '5-1'], ['rows', '01-2'], ['cols', 'x']])
-    expect(block('{{ a.crv @rows @cols }}').options).toEqual([['rows', ''], ['cols', '']])
+    expect(ofType(block('{{ a.crv @lines:5-1 @rows:01-2 @cols:x }}'), 'include').options).toEqual([['lines', '5-1'], ['rows', '01-2'], ['cols', 'x']])
+    expect(ofType(block('{{ a.crv @rows @cols }}'), 'include').options).toEqual([['rows', ''], ['cols', '']])
   })
 
   it('C2-A-181: the options stand in the fixed order, a repeated `rows` or `cols` keeps the first, and a list of names keeps its quotes', () => {
-    expect(block('{{ a.crv @code @shift:1 @cols:"a,b" @rows:1-2 @region:r @lines:1-2 }}').options).toEqual([
+    expect(ofType(block('{{ a.crv @code @shift:1 @cols:"a,b" @rows:1-2 @region:r @lines:1-2 }}'), 'include').options).toEqual([
       ['lines', '1-2'], ['region', 'r'], ['rows', '1-2'], ['cols', '"a,b"'], ['shift', '1'], ['code', ''],
     ])
-    expect(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}').options).toEqual([['rows', '1-2'], ['cols', '"a\\,b"']])
+    expect(ofType(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}'), 'include').options).toEqual([['rows', '1-2'], ['cols', '"a\\,b"']])
     // A quoted value that is no list of names is a value like any other: its quotes go and its escapes are read.
-    const cols = (written: string): unknown => block(`{{ a.crv @cols:${written} }}`).options
+    const cols = (written: string): unknown => ofType(block(`{{ a.crv @cols:${written} }}`), 'include').options
     expect(cols('"\\,"')).toEqual([['cols', '"\\,"']])
     expect(cols('"a,,b"')).toEqual([['cols', 'a,,b']])
     expect(cols('"a,"')).toEqual([['cols', 'a,']])
@@ -211,15 +214,15 @@ describe('caption numbering', () => {
   it('C2-H-150: the captions of footnote bodies take their numbers after the document body, and an unused definition takes none', () => {
     const src = `a[^n]\n\n${figure('F #: body')}\n[^n]: note\n\n    ![b](b.png)\n    ^ F #: in the note\n\n[^u]: unused\n\n    ![c](c.png)\n    ^ F #: unused\n\n${figure('F #: after')}`
     expect(captions(src)).toEqual(['F 1: body', 'F 2: after', 'F 3: in the note'])
-    const unused = parse(src, { positions: false }).children!.find((node) => node.key === 'u')!
+    const unused = ofType(parse(src, { positions: false }).children.find((node) => node.type === 'footnote' && node.key === 'u'), 'footnote')
     expect(JSON.stringify(unused)).toContain('{"type":"caption_number"}')
   })
 
   it('C2-H-151: in a supplied tree a display equation with a prefix takes the next number of that key, and a figure whose caption has a mark owns it', () => {
-    const math = (extra: Partial<AstNode> = {}): AstNode => ({ type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', ...extra })
-    const caption = (...children: AstNode[]): AstNode => ({ type: 'caption', children: [{ type: 'paragraph', children }] })
-    const numbered: AstNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
-    const plain: AstNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('no mark')) }
+    const math = (extra: Partial<MathNode> = {}): MathNode => ({ type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', ...extra })
+    const caption = (...children: Inline[]): CaptionNode => ({ type: 'caption', children: [{ type: 'paragraph', children }] })
+    const numbered: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
+    const plain: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('no mark')) }
     const document = documentOf(paragraph(math()), numbered, plain, paragraph(math({ display: false })), paragraph(math({ numberPrefix: 'Other' })))
     const html = render(document)
     expect([...html.matchAll(/class="equation-number">([^<]*)</g)].map((match) => match[1])).toEqual(['Eq. 1', 'Eq. 3', 'Other 1'])
@@ -227,9 +230,9 @@ describe('caption numbering', () => {
     expect(html).toContain('<figcaption>Eq. 2</figcaption>')
     expect(render('$$`x`\n^ Equation #')).toContain('<figcaption>Equation 1</figcaption>')
     // A figure group owns the number like a figure, and a table does not.
-    const group: AstNode = { type: 'figure_group', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
-    const cell: AstNode = { type: 'table_cell', header: false, children: [paragraph(math())] }
-    const table: AstNode = {
+    const group: FigureGroupNode = { type: 'figure_group', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
+    const cell: TableCellNode = { type: 'table_cell', header: false, children: [paragraph(math())] }
+    const table: TableNode = {
       type: 'table', columns: [{ type: 'table_column' }], children: [{ type: 'table_body', children: [{ type: 'table_row', children: [cell] }] }],
       caption: caption(text('Eq. '), { type: 'caption_number' }),
     }
@@ -267,24 +270,24 @@ describe('the table attributes', () => {
   })
 
   it('C2-A-088: a body whose partition the source declared carries headRows, and a value that is no count declares none', () => {
-    const body = (attributes: string): AstNode | undefined => block(csv(attributes, 'a', 'b')).children!.find((group) => group.type === 'table_body')
-    expect(body('{table}')!.headRows).toBeUndefined()
-    expect(body('{table header-rows=x}')!.headRows).toBeUndefined()
-    expect(body('{table header-rows=1}')!.headRows).toBe(1)
-    expect(body('{table header-rows=0}')!.headRows).toBe(0)
-    expect(body('{table header-rows=5}')!.headRows).toBe(5)
+    const body = (attributes: string): TableBodyNode => ofType(ofType(block(csv(attributes, 'a', 'b')), 'table').children.find((group) => group.type === 'table_body'), 'table_body')
+    expect(body('{table}').headRows).toBeUndefined()
+    expect(body('{table header-rows=x}').headRows).toBeUndefined()
+    expect(body('{table header-rows=1}').headRows).toBe(1)
+    expect(body('{table header-rows=0}').headRows).toBe(0)
+    expect(body('{table header-rows=5}').headRows).toBe(5)
   })
 
   it('C2-B-211: an entry of `aligns` that is left, right or center sets the column, and any other leaves it unset', () => {
-    expect(block('{aligns=" left ,x,,RIGHT,center,right,left"}\n| a | b | c | d | e | f |').columns).toEqual([
+    expect(ofType(block('{aligns=" left ,x,,RIGHT,center,right,left"}\n| a | b | c | d | e | f |'), 'table').columns).toEqual([
       { type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }, { type: 'table_column' }, { type: 'table_column' },
       { type: 'table_column', align: 'center', authored: true }, { type: 'table_column', align: 'right', authored: true },
     ])
-    expect(block('{aligns="l,r,c"}\n| a | b | c |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }, { type: 'table_column' }])
+    expect(ofType(block('{aligns="l,r,c"}\n| a | b | c |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }, { type: 'table_column' }])
   })
 
   it('C2-B-212: an entry of `widths` above 0 and at most 100 sets the width to a hundredth of it', () => {
-    const widths = (value: string): (number | undefined)[] => block(`{widths="${value}"}\n| a | b | c | d |`).columns!.map((column) => column.width)
+    const widths = (value: string): (number | undefined)[] => ofType(block(`{widths="${value}"}\n| a | b | c | d |`), 'table').columns.map((column) => column.width)
     expect(widths('25, 30.5 ,100,0.5')).toEqual([0.25, 0.305, 1, 0.005])
     expect(widths('0,101,-5,x')).toEqual([undefined, undefined, undefined, undefined])
     expect(widths('.5,5.,1e1,+5')).toEqual([undefined, undefined, undefined, undefined])
@@ -304,8 +307,8 @@ describe('the table attributes', () => {
   })
 
   it('C2-B-213: in a supplied tree the vertical axis resolves on its own, and a row of counts marks the column its cell starts in', () => {
-    const cell = (value: string, extra: Partial<AstNode> = {}): AstNode => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [text(value)] }], ...extra })
-    const table: AstNode = {
+    const cell = (value: string, extra: Partial<TableCellNode> = {}): TableCellNode => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [text(value)] }], ...extra })
+    const table: TableNode = {
       type: 'table', columns: [{ type: 'table_column' }, { type: 'table_column', valign: 'bottom' }, { type: 'table_column' }],
       children: [
         { type: 'table_head', children: [{ type: 'table_row', children: [cell('h', { header: true, colspan: 2, valign: 'top' }), cell('i', { header: true, align: 'right', valign: 'middle' })] }] },
@@ -313,7 +316,7 @@ describe('the table attributes', () => {
       ],
     }
     // A head cell that spans two rows covers its column in the second head row, so the cell of that row starts in the next one.
-    const spanned: AstNode = {
+    const spanned: TableNode = {
       type: 'table', columns: [{ type: 'table_column' }, { type: 'table_column' }],
       children: [{
         type: 'table_head', children: [
@@ -323,7 +326,7 @@ describe('the table attributes', () => {
       }],
     }
     render(documentOf(spanned))
-    expect(spanned.columns!.map((column) => column.resolvedAlign)).toEqual([undefined, 'center'])
+    expect(spanned.columns.map((column) => column.resolvedAlign)).toEqual([undefined, 'center'])
     const html = render(documentOf(table))
     expect(html).toContain('<tr><td style="vertical-align: top;">a</td><td style="vertical-align: bottom;">b</td><td style="text-align: right; vertical-align: baseline;">c</td></tr>')
   })
@@ -337,7 +340,7 @@ describe('the table attributes', () => {
   ])
 
   it('C2-H-152: a supplied width is written with at most ten decimal places', () => {
-    const table: AstNode = { type: 'table', columns: [{ type: 'table_column', width: 0.07 }, { type: 'table_column', width: 1 / 3 }], children: [] }
+    const table: TableNode = { type: 'table', columns: [{ type: 'table_column', width: 0.07 }, { type: 'table_column', width: 1 / 3 }], children: [] }
     expect(render(documentOf(table))).toBe('<table>\n  <colgroup>\n    <col style="width: 7%;">\n    <col style="width: 33.3333333333%;">\n  </colgroup>\n</table>')
     expect(() => render(documentOf({ type: 'table', columns: [{ type: 'table_column', width: 1.5 }], children: [] }))).toThrow('not a fraction')
   })
@@ -593,12 +596,12 @@ describe('comments that tools read', () => {
 
   it('C2-B-217: a marker is a comment node of the block it stands in', () => {
     expect(blocks('%% #region a\n\n- x\n  %% #endregion a').map((node) => node.type)).toEqual(['comment', 'list'])
-    expect(block('%% #region a').value).toBe('#region a')
+    expect(ofType(block('%% #region a'), 'comment').value).toBe('#region a')
   })
 })
 
 describe('the start attribute of an ordered list', () => {
-  const marker = (src: string): unknown => block(src).marker
+  const marker = (src: string): unknown => ofType(block(src), 'list').marker
   const keys = (src: string): unknown => block(src).attrs?.keyValues
 
   it('C2-B-045: the attribute sets the start value and is no key, so it gives the tree of a first marker with that number', () => {
@@ -638,7 +641,7 @@ describe('the byte-order mark', () => {
 
   it('C2-A-141: offsets count the bytes of the mark, and the mark is no content of a node', () => {
     const document = parse('﻿# T\n\nx')
-    const heading = document.children![0]!
+    const heading = ofType(document.children[0], 'heading')
     expect(document.srcByteLength).toBe(9)
     expect([heading.pos!.startOffset, heading.pos!.endOffset, heading.pos!.startLine]).toEqual([3, 6, 1])
     expect(heading.children).toEqual([{ type: 'text', value: 'T', pos: { startLine: 1, endLine: 1, startColumn: 3, endColumn: 4, startOffset: 5, endOffset: 6 } }])
@@ -674,8 +677,8 @@ describe('the position of a diagnostic', () => {
   })
 
   it('C2-A-173: a finding on a supplied tree has the path alone, also where its node is a copy the renderer made', () => {
-    const span: AstNode = { type: 'span', attrs: { keyValues: [['kbd', ''], ['data-carve-ref', 'x']] }, children: [text('k')] }
-    const ruby: AstNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [{ type: 'raw_inline', format: 'tex', value: 'x' }], annotation: [text('a')] }] }
+    const span: SpanNode = { type: 'span', attrs: { keyValues: [['kbd', ''], ['data-carve-ref', 'x']] }, children: [text('k')] }
+    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [{ type: 'raw_inline', format: 'tex', value: 'x' }], annotation: [text('a')] }] }
     const output = renderWithDiagnostics(documentOf(paragraph(span, ruby)), { roundtrip: true })
     expect(output.diagnostics.map((entry) => [entry.code, entry.path, entry.range])).toEqual([
       ['carrier-attribute-dropped', '/children/0/children/0', undefined], ['raw-format-dropped', '/children/0/children/1/pairs/0/base/0', undefined],

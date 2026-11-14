@@ -1,7 +1,7 @@
 // Positions of the public tree (C2-A-140, C2-A-141). Both passes work on string offsets; the tree
 // builder stores those, and this file turns them into lines, columns and UTF-8 byte offsets in
 // one walk over the finished tree.
-import { type AstNode, type Position } from './ast.ts'
+import { captionOf, type Node, type Position, titleOf } from './ast.ts'
 import { BYTE_ORDER_MARK, LF } from './chars.ts'
 
 const ASCII_END = 0x80
@@ -131,17 +131,30 @@ function placeEnd(cursor: Cursor, pos: Position, end: number): void {
 }
 
 /** Places a node, then the slots that hold positioned nodes in source order, then its end. */
-function placeNode(cursor: Cursor, node: AstNode): void {
+function placeNode(cursor: Cursor, node: Node): void {
   const pos = node.pos
   const end = pos === undefined ? 0 : pos.endOffset
   if (pos !== undefined) placeStart(cursor, pos)
-  if (Array.isArray(node.title)) for (const child of node.title) placeNode(cursor, child)
-  if (node.children !== undefined) for (const child of node.children) placeNode(cursor, child)
-  if (node.caption !== undefined) placeNode(cursor, node.caption)
+  // Only a node with children carries a caption, and of those without children only a code block a title.
+  if ('children' in node) placeSlots(cursor, node)
+  else if (node.type === 'code_block' && node.title !== undefined) placeList(cursor, node.title)
   if (pos !== undefined) placeEnd(cursor, pos, end)
 }
 
+function placeList(cursor: Cursor, nodes: readonly Node[]): void {
+  for (const node of nodes) placeNode(cursor, node)
+}
+
+/** The title, the children and the caption of a node with children. */
+function placeSlots(cursor: Cursor, node: Extract<Node, { children: unknown }>): void {
+  const title = titleOf(node)
+  if (title !== undefined) placeList(cursor, title)
+  placeList(cursor, node.children)
+  const caption = captionOf(node)
+  if (caption !== undefined) placeNode(cursor, caption)
+}
+
 /** Replaces the string offsets the tree builder stored in every `pos` by the six integers of C2-A-140. */
-export function finishPositions(root: AstNode, src: string): void {
+export function finishPositions(root: Node, src: string): void {
   placeNode({ src, table: lineTable(src), line: 0, offset: 0, bytes: 0, column: 1 }, root)
 }

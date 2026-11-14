@@ -1,9 +1,12 @@
 // The tables of the public tree (C2-A-086 to C2-A-095): groups, rows, cells and columns, from
 // the rows of the block tree and from the rows of a delimited table.
-import { type AstNode, colspanOf, rowspanOf } from './ast.ts'
+import {
+  type CellParagraphNode, type CommentNode, isFieldValue, type TableBodyNode, type TableCellNode, type TableColumnNode,
+  type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
+} from './ast.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, place, setAttributes, type TreeContext,
+  FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
@@ -12,22 +15,23 @@ import { countValue } from './lines.ts'
 import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
 import { holdsBidiControl } from './unicode.ts'
 
-// C2-B-211: the entries of `aligns` that set an alignment.
-const ALIGN_WORDS = ['left', 'right', 'center']
 const MAX_WIDTH = 100
 
-type CommentBuilder = (ctx: TreeContext, node: BlockNode) => AstNode
+type CommentBuilder = (ctx: TreeContext, node: BlockNode) => CommentNode
+
+/** The rows of a table group and the comments between them. */
+type GroupRows = (TableRowNode | CommentNode)[]
 
 /** The rows of one table as they are sorted into groups. */
 interface Groups {
-  head: AstNode[]
-  body: AstNode[]
-  foot: AstNode[]
+  head: GroupRows
+  body: GroupRows
+  foot: GroupRows
   width: number
   /** The source range of each group, by its row list. A delimited table has none (C2-A-158). */
-  ranges: Map<AstNode[], [number, number]>
+  ranges: Map<GroupRows, [number, number]>
   /** The comments behind the last row, which are children of the table (C2-A-075, C2-A-086). */
-  trailing: AstNode[]
+  trailing: CommentNode[]
 }
 
 function emptyGroups(): Groups {
@@ -35,19 +39,19 @@ function emptyGroups(): Groups {
 }
 
 /** Widens the range of the group `rows` to hold `[start, end)`. */
-function extend(groups: Groups, rows: AstNode[], start: number, end: number): void {
+function extend(groups: Groups, rows: GroupRows, start: number, end: number): void {
   const range = groups.ranges.get(rows)
   if (range === undefined) groups.ranges.set(rows, [start, end])
   else range[1] = end
 }
 
-function alignmentOf(mark: number): string {
+function alignmentOf(mark: number): 'left' | 'right' | 'center' {
   if (mark === LESS) return 'left'
   return mark === GREATER ? 'right' : 'center'
 }
 
 /** C2-A-092: the cell a span mark stood in. It has no content of its own and a covering cell holds the counts. */
-function coveredCell(span: string): AstNode {
+function coveredCell(span: 'rowspan' | 'colspan'): TableCellNode {
   return { type: 'table_cell', header: false, span, children: [] }
 }
 
@@ -60,13 +64,12 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   return attributes
 }
 
-function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
+function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
-  const paragraph: AstNode = { type: 'cell_paragraph' }
-  paragraph.children = leafInlines(ctx, paragraph, node.spans!, flow)
-  const cell: AstNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
+  const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children: leafInlines(ctx, node.spans!, flow) })
+  const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if ((node.facts & FACT_MASK) > 1) cell.colspan = node.facts & FACT_MASK
   if (node.facts >> FACT_SHIFT > 1) cell.rowspan = node.facts >> FACT_SHIFT
   if (node.aux !== 0) cell.align = alignmentOf(node.aux)
@@ -83,8 +86,8 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): AstNode {
  * The cells of one row with the cells of its span marks back at their columns (C2-A-092).
  * `covered` holds, per column, how many further rows a cell above still spans.
  */
-function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): AstNode[] {
-  const cells: AstNode[] = []
+function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): TableCellNode[] {
+  const cells: TableCellNode[] = []
   const takeCovered = (): void => {
     while (cells.length < covered.length && covered[cells.length]! > 0) {
       covered[cells.length]!--
@@ -96,17 +99,17 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
     const cell = cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
-    for (let more = 1; more < (colspanOf(cell)); more++) cells.push(coveredCell('colspan'))
-    covered[column] = (rowspanOf(cell)) - 1
+    for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell('colspan'))
+    covered[column] = (cell.rowspan ?? 1) - 1
   }
   takeCovered()
   return cells
 }
 
-function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): AstNode {
+function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): TableRowNode {
   const firstEnd = rowRangeEnd(ctx.src, row)
   const joined = firstEnd < row.end
-  const out: AstNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1) }
+  const out: TableRowNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1) }
   if (ctx.trace !== null) ctx.trace.blocks.set(out, row)
   if (row.aux !== 0) {
     // C2-B-167: the row attribute stands behind the closing pipe.
@@ -124,7 +127,7 @@ interface RowCursor {
   footStart: number
   /** The row index of the next row that is no comment. */
   index: number
-  group: AstNode[]
+  group: GroupRows
   covered: number[]
   /** The end of the last comment in `groups.trailing`. */
   trailingEnd: number
@@ -151,7 +154,7 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   if (cursor.index < cursor.headRows) cursor.group = groups.head
   else cursor.group = cursor.index < cursor.footStart ? groups.body : groups.foot
   const row = rowNode(ctx, child, cursor.covered)
-  groups.width = Math.max(groups.width, row.children!.length)
+  groups.width = Math.max(groups.width, row.children.length)
   cursor.group.push(row)
   extend(groups, cursor.group, child.start, rowRangeEnd(ctx.src, child))
   cursor.index++
@@ -193,15 +196,16 @@ function columnWidth(entry: string): number | undefined {
 }
 
 /** C2-A-089: one column per position up to the widest row, with what `aligns` and `widths` spell (C2-B-211, C2-B-212). */
-function columnNodes(width: number, aligns: string | null, widths: string | null): AstNode[] {
+function columnNodes(width: number, aligns: string | null, widths: string | null): TableColumnNode[] {
   const alignList = aligns === null ? [] : aligns.split(',')
   const widthList = widths === null ? [] : widths.split(',')
-  const columns: AstNode[] = []
+  const columns: TableColumnNode[] = []
   for (let at = 0; at < width; at++) {
-    const column: AstNode = { type: 'table_column' }
+    const column: TableColumnNode = { type: 'table_column' }
     const align = (alignList[at] ?? '').trim()
     const fraction = columnWidth((widthList[at] ?? '').trim())
-    if (ALIGN_WORDS.includes(align)) column.align = align
+    // C2-B-211: the entries of `aligns` that set an alignment.
+    if (isFieldValue('table_column.align', align)) column.align = align
     if (fraction !== undefined) column.width = fraction
     if (column.align !== undefined || fraction !== undefined) column.authored = true
     columns.push(column)
@@ -209,32 +213,34 @@ function columnNodes(width: number, aligns: string | null, widths: string | null
   return columns
 }
 
-function groupNode(ctx: TreeContext, groups: Groups, type: string, rows: AstNode[]): AstNode {
+function groupNode(
+  ctx: TreeContext, groups: Groups, type: 'table_head' | 'table_body' | 'table_foot', rows: GroupRows,
+): TableHeadNode | TableBodyNode | TableFootNode {
   const range = groups.ranges.get(rows)
-  const group: AstNode = { type, children: rows }
+  const group: TableHeadNode | TableBodyNode | TableFootNode = { type, children: rows }
   return range === undefined ? group : place(ctx, group, range[0], range[1])
 }
 
 /** C2-H-153: `aligns`, `widths`, `header-rows` and `footer-rows` are read here and are no attributes of the table. */
-function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): AstNode {
+function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): TableNode {
   takeKey(attributes, 'footer-rows')
   takeKey(attributes, 'header-rows')
   const columns = columnNodes(groups.width, takeKey(attributes, 'aligns'), takeKey(attributes, 'widths'))
-  const table: AstNode = { type: 'table', columns, children: [] }
-  if (groups.head.length > 0) table.children!.push(groupNode(ctx, groups, 'table_head', groups.head))
-  if (groups.body.length > 0) table.children!.push(groupNode(ctx, groups, 'table_body', groups.body))
-  if (groups.foot.length > 0) table.children!.push(groupNode(ctx, groups, 'table_foot', groups.foot))
-  for (const pending of groups.trailing) table.children!.push(pending)
+  const table: TableNode = { type: 'table', columns, children: [] }
+  if (groups.head.length > 0) table.children.push(groupNode(ctx, groups, 'table_head', groups.head))
+  if (groups.body.length > 0) table.children.push(groupNode(ctx, groups, 'table_body', groups.body))
+  if (groups.foot.length > 0) table.children.push(groupNode(ctx, groups, 'table_foot', groups.foot))
+  for (const pending of groups.trailing) table.children.push(pending)
   setAttributes(table, attributes)
   return table
 }
 
 /** A pipe table. `comment` builds the node of a comment-only line between two rows. */
-export function tableNode(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): AstNode {
+export function tableNode(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): TableNode {
   return tableOf(ctx, sortRows(ctx, node, comment), readAttributeLines(ctx.src, node.attributes))
 }
 
-function delimitedRow(cells: string[], header: boolean): AstNode {
+function delimitedRow(cells: string[], header: boolean): TableRowNode {
   return {
     type: 'table_row',
     children: cells.map((value) => ({
@@ -245,7 +251,7 @@ function delimitedRow(cells: string[], header: boolean): AstNode {
 }
 
 /** C2-B-180: a `csv` or `tsv` fence that the `table` attribute marks. Its cells are plain text with no position (C2-A-158). */
-export function delimitedTableNode(ctx: TreeContext, node: BlockNode): AstNode {
+export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode {
   const source = readDelimitedTable(ctx.src, node)
   const rows = source.rows
   // C2-H-172: the cells are text that the inline scan does not read.
@@ -265,6 +271,6 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): AstNode {
   })
   const table = tableOf(ctx, groups, attributes)
   // C2-A-088: a body whose partition the source declared carries `headRows`.
-  if (source.declared) for (const group of table.children!) if (group.type === 'table_body') group.headRows = source.headRows
+  if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = source.headRows
   return table
 }

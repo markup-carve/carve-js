@@ -1,10 +1,15 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
-import { type AstNode, AST_VERSION, type Marker, valueOf } from './ast.ts'
+import {
+  AST_VERSION, type Block, type CaptionNode, type CodeBlockNode, type CommentNode, type DefinitionListNode, type DocumentNode,
+  type FigureGroupNode, type FigureNode, type FrontmatterNode, type HeadingNode, type Inline, isFieldValue, type LineBlockNode,
+  type LineNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Marker, type Node, type ParagraphNode,
+  type TableNode,
+} from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, place, setAttributes,
-  type TreeContext,
+  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
+  setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
@@ -15,18 +20,23 @@ import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  DOCUMENT, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  DOCUMENT, HEADING, INCLUDE, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { orderedDelimiter, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
-import { definitionLabel, readOpenerInfo } from './opener.ts'
+import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { finishPositions, utf8Length } from './positions.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS, TASK_STATUS } from './tree-tables.ts'
 import { isAsciiNameCharacter } from './unicode.ts'
 
-type BlockBuilder = (ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null) => AstNode
+/** A child of the document or of a block container: a block, or a definition or frontmatter, which the document alone takes. */
+type DocumentChild = DocumentNode['children'][number]
+
+type DescriptionChild = DefinitionListNode['children'][number]
+
+type BlockBuilder<N extends Node> = (ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null) => N
 
 /** True when each line of `spans` starts one character behind the end of the line before it, at a line feed. */
 function isContiguous(src: string, spans: number[]): boolean {
@@ -45,15 +55,15 @@ function bodyValue(src: string, spans: number[]): string {
   return value
 }
 
-/** Gives the text leaf `out` its inline content, with the abbreviations in its text (C2-I-098). */
-function leafChildren(ctx: TreeContext, out: AstNode, node: BlockNode, flow: number): AstNode {
-  out.children = leafInlines(ctx, out, node.spans!, flow)
-  if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
-  return out
+/** The inline content of the text leaf `node`, with the abbreviations in its text (C2-I-098). */
+function leafChildren(ctx: TreeContext, node: BlockNode, flow: number): Inline[] {
+  const children = leafInlines(ctx, node.spans!, flow)
+  if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
+  return children
 }
 
 /** True when `children` holds exactly one node for which `test` holds, and besides it only comments and breaks. */
-function holdsOnly(children: AstNode[], test: (node: AstNode) => boolean): boolean {
+function holdsOnly(children: Inline[], test: (node: Inline) => boolean): boolean {
   let found = 0
   for (const child of children) {
     if (test(child)) found++
@@ -62,23 +72,24 @@ function holdsOnly(children: AstNode[], test: (node: AstNode) => boolean): boole
   return found === 1
 }
 
-function paragraphNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const out = leafChildren(ctx, { type: 'paragraph' }, node, flow)
+function paragraphNode(ctx: TreeContext, node: BlockNode, flow: number): ParagraphNode {
+  const children = leafChildren(ctx, node, flow)
+  const out: ParagraphNode = noteLeaf(ctx, { type: 'paragraph', children })
   // C2-A-136, C2-A-184: the mark needs the shape of the line and the one node the inline pass made of it.
-  if ((node.exitFlags & FLAG_IMAGE) !== 0 && holdsOnly(out.children!, (child) => child.type === 'image')) out.blockImage = true
-  if ((node.exitFlags & FLAG_BLOCK_MATH) !== 0 && holdsOnly(out.children!, (child) => child.type === 'math' && child.display === true)) {
+  if ((node.exitFlags & FLAG_IMAGE) !== 0 && holdsOnly(children, (child) => child.type === 'image')) out.blockImage = true
+  if ((node.exitFlags & FLAG_BLOCK_MATH) !== 0 && holdsOnly(children, (child) => child.type === 'math' && child.display)) {
     out.blockMath = true
   }
   return out
 }
 
-function commentNode(ctx: TreeContext, node: BlockNode): AstNode {
-  const out: AstNode = { type: 'comment', form: 'line', value: commentValue(ctx.src.slice(node.spans![0]! + 2, node.spans![1]), false) }
+function commentNode(ctx: TreeContext, node: BlockNode): CommentNode {
+  const out: CommentNode = { type: 'comment', form: 'line', value: commentValue(ctx.src.slice(node.spans![0]! + 2, node.spans![1]), false) }
   return place(ctx, out, node.start, node.end)
 }
 
 /** C2-A-074: the body of a comment block, its lines joined by line breaks. */
-function commentBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
+function commentBlockNode(ctx: TreeContext, node: BlockNode): CommentNode {
   const lines: string[] = []
   const spans = node.spans!
   for (let at = 0; at < spans.length; at += 2) lines.push(ctx.src.slice(spans[at], spans[at + 1]))
@@ -86,7 +97,7 @@ function commentBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
 }
 
 /** C2-A-049: the format is the word on the opener, or `yaml`. */
-function frontmatterNode(ctx: TreeContext, node: BlockNode): AstNode {
+function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
   const src = ctx.src
   // C2-B-164: the name is glued or stands after one space, and ends at the next space, tab or line end.
   const word = src.charCodeAt(node.start + 3) === SPACE ? node.start + 4 : node.start + 3
@@ -96,7 +107,7 @@ function frontmatterNode(ctx: TreeContext, node: BlockNode): AstNode {
   return { type: 'frontmatter', format, value: bodyValue(src, node.spans!) }
 }
 
-function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
+function codeNode(ctx: TreeContext, node: BlockNode): Block {
   const src = ctx.src
   if ((node.flags & FLAG_DELIMITED) !== 0) return delimitedTableNode(ctx, node)
   const info = readOpenerInfo(src, node.start + node.aux)
@@ -104,7 +115,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
   const value = bodyValue(src, node.spans!)
   // C2-B-116: `=` and a format name make a raw block, which takes no title and no label (C2-B-122).
   if ((node.flags & FLAG_RAW) !== 0) return { type: 'raw_block', format: word.slice(1), value }
-  const out: AstNode = { type: 'code_block', value }
+  const out: CodeBlockNode = { type: 'code_block', value }
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) out.title = [{ type: 'text', value: openerTitle(src, info.titleStart, info.titleEnd) }]
   if (info.labelStart >= 0) out.groupLabel = src.slice(info.labelStart, info.labelEnd)
@@ -112,19 +123,19 @@ function codeNode(ctx: TreeContext, node: BlockNode): AstNode {
 }
 
 /** C2-A-069: one `line` per line of the body; an empty line ends a stanza. */
-function lineBlockNode(ctx: TreeContext, node: BlockNode): AstNode {
+function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
   const spans = node.spans!
-  const lines: AstNode[] = []
+  const lines: LineNode[] = []
   for (let at = 0; at < spans.length; at += 2) {
-    const out: AstNode = { type: 'line' }
-    out.children = lineInlines(ctx, out, spans, at)
-    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, out.children)
-    lines.push(place(ctx, out, spans[at]!, spans[at + 1]!))
+    const children = lineInlines(ctx, spans, at)
+    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
+    const line: LineNode = noteLeaf(ctx, { type: 'line', children })
+    lines.push(place(ctx, line, spans[at]!, spans[at + 1]!))
   }
   return { type: 'line_block', children: lines }
 }
 
-function abbreviationNode(ctx: TreeContext, node: BlockNode): AstNode {
+function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
   const [key, expansion] = abbreviationParts(ctx.src, node)
   return { type: 'abbreviation_def', expansion, key, namespace: 'abbr' }
 }
@@ -135,11 +146,9 @@ function abbreviationParts(src: string, node: BlockNode): [string, string] {
   return [src.slice(start, end), src.slice(end + 2, node.spans![1]).trim()]
 }
 
-function linkDefinitionNode(ctx: TreeContext, node: BlockNode): AstNode {
+function linkDefinitionNode(ctx: TreeContext, node: BlockNode): LinkReferenceDefinitionNode {
   const [start, end] = definitionLabel(ctx.src, node.start)
-  const out: AstNode = { type: 'link_reference_definition', key: foldLabel(ctx.src.slice(start, end)), namespace: 'link' }
-  linkDefinitionFields(ctx.src, end + 2, node.spans![1]!, out)
-  return out
+  return linkDefinitionFields(ctx.src, end + 2, node.spans![1]!, foldLabel(ctx.src.slice(start, end)))
 }
 
 const MAX_START_DIGITS = 9
@@ -173,11 +182,11 @@ function orderedMarker(node: BlockNode, attributes: Attributes | null): Marker {
   return marker
 }
 
-function listNode(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null): AstNode {
+function listNode(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null): ListNode {
   const bullet: Marker = { kind: 'bullet', char: (node.flags & FLAG_STAR) !== 0 ? '*' : '-' }
   return {
     type: 'list', marker: node.kind === BULLET_LIST ? bullet : orderedMarker(node, attributes),
-    spacing: (node.exitFlags & FLAG_TIGHT) !== 0 ? 'tight' : 'loose', children: blockChildren(ctx, node.children!, flow),
+    spacing: (node.exitFlags & FLAG_TIGHT) !== 0 ? 'tight' : 'loose', children: itemChildren(ctx, node.children!, flow),
   }
 }
 
@@ -193,8 +202,8 @@ function markerAttributes(ctx: TreeContext, node: BlockNode): Attributes | null 
   return attributes
 }
 
-function itemNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const out: AstNode = { type: 'list_item', children: blockChildren(ctx, node.children!, flow) }
+function itemNode(ctx: TreeContext, node: BlockNode, flow: number): ListItemNode {
+  const out: ListItemNode = { type: 'list_item', children: blockChildren(ctx, node.children!, flow) }
   if (node.aux !== 0) {
     const mark = String.fromCharCode(node.aux)
     out.task = { mark, status: TASK_STATUS.get(mark)! }
@@ -203,80 +212,101 @@ function itemNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
   return out
 }
 
-function footnoteNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
+function footnoteNode(ctx: TreeContext, node: BlockNode, flow: number): DocumentChild {
   const [start, end] = definitionLabel(ctx.src, node.start)
   const key = foldLabel(ctx.src.slice(start, end))
   return { type: 'footnote', key, namespace: 'footnote', children: blockChildren(ctx, node.children!, flow) }
 }
 
-/** C2-A-066: the node a div opener gives, before its children. */
-function divShell(ctx: TreeContext, node: BlockNode, attributes: Attributes): AstNode {
+/** The title and the group label of a div opener (C2-B-120, C2-B-121), each only where it is written. */
+interface DivHead {
+  title?: Inline[]
+  groupLabel?: string
+}
+
+function divHead(ctx: TreeContext, info: OpenerInfo): DivHead {
+  const head: DivHead = {}
+  if (info.titleStart >= 0) head.title = captionChildren(ctx, info.titleStart, info.titleEnd)
+  if (info.labelStart >= 0) head.groupLabel = ctx.src.slice(info.labelStart, info.labelEnd)
+  return head
+}
+
+/** C2-A-066: the node of a named div: an admonition, a directive, or a plain div whose name is its first class. */
+function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes): Block {
   const src = ctx.src
-  if ((node.flags & FLAG_QUOTE_FENCE) !== 0) return { type: 'block_quote' }
-  if ((node.flags & FLAG_FIGURE) !== 0) return { type: 'figure_group' }
-  if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
-    // C2-A-068: the opener form adds the class after the classes the author wrote.
-    attributes.classes.push(HARD_BREAKS_CLASS)
-    return { type: 'div' }
-  }
   const info = readOpenerInfo(src, node.start + node.aux)
   const name = info.wordStart < 0 ? '' : src.slice(info.wordStart, info.wordEnd)
   const kind = name === 'figure' ? undefined : DIV_KINDS.get(name)
-  const out: AstNode = kind === undefined ? { type: 'div' } : { type: kind, kind: name }
   // C2-B-128: the name of a plain div is its first class.
   if (kind === undefined && name !== '') attributes.classes.unshift(name)
-  if (info.titleStart >= 0) out.title = captionChildren(ctx, info.titleStart, info.titleEnd)
-  if (info.labelStart >= 0) out.groupLabel = src.slice(info.labelStart, info.labelEnd)
-  return out
+  const head = divHead(ctx, info)
+  if (kind === 'admonition' && isFieldValue('admonition.kind', name)) {
+    return { type: 'admonition', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
+  }
+  if (kind === 'directive' && isFieldValue('directive.kind', name)) {
+    return { type: 'directive', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
+  }
+  // C2-A-068: in a hard-break block, written with the opener or with the class, every line end is a hard break.
+  const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
+  return { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
 }
 
-function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attributes | null): AstNode {
+/** C2-A-066: the node a div opener gives. */
+function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attributes | null): Block {
   const attributes = taken ?? emptyAttributes()
-  const out = divShell(ctx, node, attributes)
-  // C2-A-068: in a hard-break block, written with the opener or with the class, every line end is a hard break.
-  const inner = out.type === 'div' && attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
-  out.children = blockChildren(ctx, node.children!, inner)
+  let out: Block
+  if ((node.flags & FLAG_QUOTE_FENCE) !== 0) {
+    out = { type: 'block_quote', children: blockChildren(ctx, node.children!, flow) }
+  } else if ((node.flags & FLAG_FIGURE) !== 0) {
+    out = { type: 'figure_group', children: blockChildren(ctx, node.children!, flow) }
+  } else if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
+    // C2-A-068: the opener form adds the class after the classes the author wrote.
+    attributes.classes.push(HARD_BREAKS_CLASS)
+    out = { type: 'div', children: blockChildren(ctx, node.children!, FLOW_HARD_BREAKS) }
+  } else {
+    out = namedDiv(ctx, node, flow, attributes)
+  }
   setAttributes(out, attributes)
   return out
 }
 
-function headingNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
-  const out = leafChildren(ctx, { type: 'heading', level: node.aux }, node, flow)
+function headingNode(ctx: TreeContext, node: BlockNode, flow: number): HeadingNode {
+  const out: HeadingNode = noteLeaf(ctx, { type: 'heading', level: node.aux, children: leafChildren(ctx, node, flow) })
   // C2-I-084: a reference finds a heading by the folded source of its text, which is read when one looks.
   ctx.headingSpans.set(out, node.spans!)
   return out
 }
 
-function container(type: string): BlockBuilder {
-  return (ctx, node, flow) => ({ type, children: blockChildren(ctx, node.children!, flow) })
-}
-
-function textLeaf(type: string): BlockBuilder {
-  return (ctx, node, flow) => leafChildren(ctx, { type }, node, flow)
-}
-
-const BUILDERS = new Map<number, BlockBuilder>([
-  [QUOTE, container('block_quote')],
+const BUILDERS = new Map<number, BlockBuilder<Block>>([
+  [QUOTE, (ctx, node, flow) => ({ type: 'block_quote', children: blockChildren(ctx, node.children!, flow) })],
   [BULLET_LIST, listNode],
   [ORDERED_LIST, listNode],
-  [ITEM, itemNode],
-  [DESCRIPTION_LIST, container('definition_list')],
-  [DESCRIPTION, container('definition_description')],
-  [FOOTNOTE, footnoteNode],
+  [DESCRIPTION_LIST, (ctx, node, flow) => ({ type: 'definition_list', children: descriptionChildren(ctx, node.children!, flow) })],
   [DIV, divNode],
   [TABLE, (ctx, node) => tableNode(ctx, node, commentNode)],
   [PARAGRAPH, paragraphNode],
-  [TERM, textLeaf('definition_term')],
   [CODE, codeNode],
   [COMMENT_BLOCK, commentBlockNode],
   [LINE_BLOCK, lineBlockNode],
-  [FRONTMATTER, frontmatterNode],
   [HEADING, headingNode],
   [THEMATIC_BREAK, () => ({ type: 'thematic_break' })],
   [COMMENT, commentNode],
   [INCLUDE, (ctx, node) => includeNode(ctx.src, node.spans![0]!, node.spans![1]!)],
+])
+
+// C2-A-052: the block pass opens definitions and the frontmatter at the top level only (C2-B-086, C2-B-164).
+const DOCUMENT_BUILDERS = new Map<number, BlockBuilder<DocumentChild>>([
+  ...BUILDERS,
+  [FOOTNOTE, footnoteNode],
+  [FRONTMATTER, frontmatterNode],
   [LINK_DEFINITION, linkDefinitionNode],
   [ABBREVIATION, abbreviationNode],
+])
+
+const DESCRIPTION_BUILDERS = new Map<number, BlockBuilder<DescriptionChild>>([
+  [TERM, (ctx, node, flow) => noteLeaf(ctx, { type: 'definition_term', children: leafChildren(ctx, node, flow) })],
+  [DESCRIPTION, (ctx, node, flow) => ({ type: 'definition_description', children: blockChildren(ctx, node.children!, flow) })],
+  [COMMENT, commentNode],
 ])
 
 /** The kinds that read their attribute lines themselves, because some of the keys are not attributes of the node. */
@@ -284,17 +314,19 @@ function readsOwnAttributes(node: BlockNode): boolean {
   return node.kind === TABLE || node.kind === DIV || (node.kind === CODE && (node.flags & FLAG_DELIMITED) !== 0)
 }
 
-/** Builds the node of `node` with its builder. C2-I-118: the depth of a content counts the containers around it. */
-function buildBlock(ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null): AstNode {
+/** Builds the node of `node` with `build`. C2-I-118: the depth of a content counts the containers around it. */
+function buildBlock<N extends Node>(
+  ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null, build: BlockBuilder<N>,
+): N {
   const container = node.kind > DOCUMENT && node.kind <= DIV
   if (container) ctx.depth++
-  const out = BUILDERS.get(node.kind)!(ctx, node, flow, attributes)
+  const out = build(ctx, node, flow, attributes)
   if (container) ctx.depth--
   return out
 }
 
 /** Places the block `out`, built from `node`, unless its builder placed it already. */
-function placeBlock(ctx: TreeContext, out: AstNode, node: BlockNode): AstNode {
+function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): N {
   if (out.pos !== undefined) return out
   // C2-A-182: an include directive ends at its closing braces, before the spaces behind them.
   const end = node.kind === INCLUDE ? trimEnd(ctx.src, node.start, node.end) : node.end
@@ -305,31 +337,32 @@ function placeBlock(ctx: TreeContext, out: AstNode, node: BlockNode): AstNode {
   return place(ctx, out, first, end)
 }
 
-function blockNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
+function blockNode<N extends Node>(ctx: TreeContext, node: BlockNode, flow: number, build: BlockBuilder<N>): N {
   const own = readsOwnAttributes(node)
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
-  const out = buildBlock(ctx, node, flow, attributes)
+  const out = buildBlock(ctx, node, flow, attributes, build)
   if (!own) setAttributes(out, attributes)
   if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
   return placeBlock(ctx, out, node)
 }
 
 /** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-150). */
-function captionNode(ctx: TreeContext, node: BlockNode, flow: number): AstNode {
+function captionNode(ctx: TreeContext, node: BlockNode, flow: number): CaptionNode {
   // The mark is found in the source of the text, so the text is placed also where no position is asked for.
-  const paragraph = leafChildren(ctx.positions ? ctx : { ...ctx, positions: true }, { type: 'paragraph' }, node, flow)
-  markCaptionNumber(ctx, paragraph.children!)
-  if (!ctx.positions) dropPositions(paragraph.children!)
+  const placed = ctx.positions ? ctx : { ...ctx, positions: true }
+  const paragraph: ParagraphNode = noteLeaf(placed, { type: 'paragraph', children: leafChildren(placed, node, flow) })
+  markCaptionNumber(ctx, paragraph.children)
+  if (!ctx.positions) dropPositions(paragraph.children)
   place(ctx, paragraph, node.spans![0]!, node.end)
-  const out: AstNode = { type: 'caption', children: [paragraph] }
+  const out: CaptionNode = { type: 'caption', children: [paragraph] }
   if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
   return place(ctx, out, node.start, node.end)
 }
 
-function dropPositions(nodes: AstNode[]): void {
+function dropPositions(nodes: readonly Node[]): void {
   for (const node of nodes) {
     delete node.pos
-    if (node.children !== undefined) dropPositions(node.children)
+    if ('children' in node) dropPositions(node.children)
   }
 }
 
@@ -348,16 +381,16 @@ function numberMarkIndex(src: string, start: number, value: string): number {
 }
 
 /** Splits the first top-level text node that holds the mark around a `caption_number` node. */
-function markCaptionNumber(ctx: TreeContext, children: AstNode[]): void {
+function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
     if (child.type !== 'text') continue
-    const value = valueOf(child)
+    const value = child.value
     const start = child.pos?.startOffset ?? -1
     // A text node with no position was merged from pieces, and its source is not at hand: it holds no mark.
     const index = start < 0 ? -1 : numberMarkIndex(ctx.src, start, value)
     if (index < 0) continue
-    const parts: AstNode[] = []
+    const parts: Inline[] = []
     if (index > 0) addText(ctx, parts, value.slice(0, index), -1, -1)
     parts.push({ type: 'caption_number' })
     if (index + 1 < value.length) addText(ctx, parts, value.slice(index + 1), -1, -1)
@@ -368,25 +401,33 @@ function markCaptionNumber(ctx: TreeContext, children: AstNode[]): void {
 
 /** C2-A-082, C2-A-183: attaches a caption to the block above it, through the comments between them. */
 /** A table or a figure group takes the caption itself, with the comments before it as its last children. */
-function captionHost(target: AstNode, comments: AstNode[], caption: AstNode): void {
-  for (const comment of comments) target.children!.push(comment)
+function captionHost(target: TableNode | FigureGroupNode, comments: CommentNode[], caption: CaptionNode): void {
+  for (const comment of comments) target.children.push(comment)
   target.caption = caption
   if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
 }
 
-function attachCaption(ctx: TreeContext, list: AstNode[], caption: AstNode): void {
+const DOCUMENT_ONLY = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
+
+function isBlock(node: DocumentChild): node is Block {
+  return !DOCUMENT_ONLY.includes(node.type)
+}
+
+/** `list` holds blocks, and at the top level also definitions, to which no caption attaches (C2-B-147). */
+function attachCaption(ctx: TreeContext, list: DocumentChild[], caption: CaptionNode): void {
   let at = list.length - 1
   while (at >= 0 && list[at]!.type === 'comment') at--
-  if (at < 0) return
-  const target = list[at]!
-  const comments = list.splice(at + 1)
+  const target = list[at]
+  if (target === undefined || !isBlock(target)) return
+  const comments: CommentNode[] = []
+  for (const node of list.splice(at + 1)) if (node.type === 'comment') comments.push(node)
   if (target.type === 'table' || target.type === 'figure_group') return captionHost(target, comments, caption)
   list[at] = figureOf(ctx, target, comments, caption)
 }
 
 /** The figure that holds `target`, the comments behind it and the caption. */
-function figureOf(ctx: TreeContext, target: AstNode, comments: AstNode[], caption: AstNode): AstNode {
-  const figure: AstNode = { type: 'figure', children: [target, ...comments], caption }
+function figureOf(ctx: TreeContext, target: Block, comments: CommentNode[], caption: CaptionNode): FigureNode {
+  const figure: FigureNode = { type: 'figure', children: [target, ...comments], caption }
   // The attribute line above a captioned block applies to the figure.
   if (target.attrs !== undefined) figure.attrs = target.attrs
   if (target.lang !== undefined) figure.lang = target.lang
@@ -400,13 +441,28 @@ function figureOf(ctx: TreeContext, target: AstNode, comments: AstNode[], captio
   return figure
 }
 
-function blockChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): AstNode[] {
-  const list: AstNode[] = []
+/** The nodes of `nodes`, each made by its builder in `builders`, with each caption attached to the block above it. */
+function childNodes<N extends DocumentChild>(
+  ctx: TreeContext, nodes: BlockNode[], flow: number, builders: ReadonlyMap<number, BlockBuilder<N>>,
+): N[] {
+  const list: N[] = []
   for (const node of nodes) {
     if (node.kind === CAPTION) attachCaption(ctx, list, captionNode(ctx, node, flow))
-    else list.push(blockNode(ctx, node, flow))
+    else list.push(blockNode(ctx, node, flow, builders.get(node.kind)!))
   }
   return list
+}
+
+function blockChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): Block[] {
+  return childNodes(ctx, nodes, flow, BUILDERS)
+}
+
+function itemChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): ListItemNode[] {
+  return nodes.map((node) => blockNode(ctx, node, flow, itemNode))
+}
+
+function descriptionChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): DescriptionChild[] {
+  return nodes.map((node) => blockNode(ctx, node, flow, DESCRIPTION_BUILDERS.get(node.kind)!))
 }
 
 /** C2-B-085: the first definition of a term wins. */
@@ -423,16 +479,16 @@ function collectAbbreviations(src: string, root: BlockNode): Map<string, string>
 /** What a parse knows of the tree it built, which resolution reads beside the tree. */
 export interface ParseFacts {
   /** C2-I-084: the folded source of the text of a heading of the tree, or undefined for a node that is none. */
-  headingSource: (heading: AstNode) => string | undefined
+  headingSource: (heading: Node) => string | undefined
   /** The leaves with inline content that holds an id, a reference, a note or a cross-reference. */
-  resolvableLeaves: ReadonlySet<AstNode>
+  resolvableLeaves: ReadonlySet<Node>
   /** C2-H-172: whether the inline content of the source holds a bidirectional control. */
   bidi: boolean
 }
 
 /** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
 export interface ParsedTree {
-  readonly document: AstNode
+  readonly document: DocumentNode
   /** Null for a supplied tree, of which nothing is known. */
   readonly facts: ParseFacts | null
 }
@@ -447,7 +503,8 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
 function buildDocument(ctx: TreeContext, root: BlockNode, source: string): ParsedTree {
   const src = ctx.src
-  const document: AstNode = { type: 'document', astVersion: AST_VERSION, children: blockChildren(ctx, root.children!, FLOW_PLAIN) }
+  const children = childNodes(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
+  const document: DocumentNode = { type: 'document', astVersion: AST_VERSION, children }
   if (ctx.positions) {
     document.srcByteLength = utf8Length(source)
     finishPositions(document, source)

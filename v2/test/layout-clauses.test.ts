@@ -2,13 +2,13 @@
 // a writer: here they are tested from the side of the record, which is that both spellings give
 // one tree and differ in the fact the rule reads. The writer rule itself is tested with the writer.
 import { describe, expect, it } from 'vitest'
-import { type AstNode } from '../src/ast.ts'
 import { treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError, validateTree } from '../src/ast-validate.ts'
 import {
   CarveLayoutError, type NodeLayout, parse, parseWithDiagnostics, parseWithLayout, type SourceLayout, utf8Length, validateLayout,
 } from '../src/index.ts'
 import { EXAMPLES } from './support/conformance.ts'
+import { asNode, childrenOf, isNode, ofType } from './support/nodes.ts'
 
 function layoutOf(src: string): SourceLayout {
   return parseWithLayout(src).layout
@@ -78,7 +78,7 @@ describe('what the sidecar is', () => {
     for (const node of result.layout.nodes) expect(resolvePointer(result.document, node.path)).toHaveProperty('type')
     // After an edit of the tree the path of the quote names another node.
     result.document.children!.shift()
-    expect((resolvePointer(result.document, '/children/1') as AstNode | undefined)).toBeUndefined()
+    expect(resolvePointer(result.document, '/children/1')).toBeUndefined()
   })
 
   it('C2-L-005: a written source is a new input with a record of its own', () => {
@@ -181,7 +181,8 @@ describe('shape', () => {
   it('C2-L-012: a range counts UTF-8 bytes, a byte-order mark and every CR as they stand, and stays inside the source', () => {
     const result = parseWithLayout('﻿é\r\n\r\n- ü\r\n')
     const item = result.layout.nodes.find((node) => node.path === '/children/1/children/0')!
-    const pos = result.document.children![1]!.children![0]!.pos!
+    const { pos } = ofType(childrenOf(result.document.children[1])[0], 'list_item')
+    if (pos === undefined) throw new Error('the item has no position')
     expect([item.startByte, item.endByte]).toEqual([pos.startOffset, pos.endOffset])
     expect([item.startByte, item.endByte]).toEqual([9, 13])
     expect(refusal(recordWith((_record, node) => {
@@ -197,7 +198,7 @@ describe('shape', () => {
 
   it('C2-L-013: a node without pos has the range from its first piece to its last', () => {
     const result = parseWithLayout('| a |\n+ b |\n')
-    const cell = resolvePointer(result.document, CELL) as AstNode
+    const cell = ofType(asNode(resolvePointer(result.document, CELL)), 'table_cell')
     expect(cell.pos).toBeUndefined()
     expect(result.layout.nodes.find((node) => node.path === CELL)).toMatchObject({ startByte: 1, endByte: 10 })
     // A cell that spans rows runs to its fragment in the continuation row of the row below.
@@ -293,7 +294,7 @@ describe('facts moved out of the tree', () => {
   it('C2-L-021: the joining space is the character before the offset, and a cell that starts with a fragment has offset 0', () => {
     const result = parseWithLayout('| ab |\n+ cd |\n')
     const wrap = result.layout.nodes.find((node) => node.path === CELL)!.wraps![0]!
-    const value = (resolvePointer(result.document, wrap.path) as AstNode).value!
+    const value = ofType(asNode(resolvePointer(result.document, wrap.path)), 'text').value
     expect(value).toBe('ab cd')
     expect(value[wrap.offset - 1]).toBe(' ')
     expect(value.slice(wrap.offset)).toBe('cd')
@@ -494,7 +495,7 @@ describe('defaults, from the side of the record', () => {
     expect(treesEqual(parse('. a\n. b\n'), parse('1. a\n2. b\n'))).toBe(true)
     // C2-B-045: the attribute and the first marker give the same start value.
     expect(treesEqual(parse('{start=3}\n. a\n'), parse('3. a\n'))).toBe(true)
-    expect(parse('3. a\n').children![0]!.marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 3 })
+    expect(ofType(parse('3. a\n').children[0], 'list').marker).toEqual({ kind: 'ordered', style: '1', delimiter: '.', start: 3 })
   })
 
   it('C2-L-031: a list with letters or with the paren is recorded as not bare', () => {
@@ -503,7 +504,7 @@ describe('defaults, from the side of the record', () => {
   })
 
   it('C2-L-032: the bullet character is in the tree, and no fact holds it', () => {
-    expect(parse('* a\n').children![0]!.marker).toEqual({ kind: 'bullet', char: '*' })
+    expect(ofType(parse('* a\n').children[0], 'list').marker).toEqual({ kind: 'bullet', char: '*' })
     expect(Object.keys(entry('* a\n', FIRST)!)).toEqual(['path', 'startByte', 'endByte', 'blankLinesBefore', 'blankLinesAfter'])
   })
 
@@ -589,7 +590,7 @@ describe('defaults, from the side of the record', () => {
     const result = parseWithLayout(src)
     const types = new Map<string, Set<string>>()
     for (const node of result.layout.nodes) {
-      const type = (resolvePointer(result.document, node.path) as AstNode).type
+      const type = asNode(resolvePointer(result.document, node.path)).type
       for (const fact of Object.keys(node)) types.set(fact, (types.get(fact) ?? new Set()).add(type))
     }
     expect([...types.get('bare')!]).toEqual(['list'])
@@ -613,7 +614,8 @@ describe('every example of the specification', () => {
       expect(result.layout.source, label).toBe(example.input)
       const length = utf8Length(example.input)
       for (const node of result.layout.nodes) {
-        const target = resolvePointer(result.document, node.path) as AstNode | undefined
+        const value = resolvePointer(result.document, node.path)
+        const target = isNode(value) ? value : undefined
         expect(target, `${label} ${node.path}`).toHaveProperty('type')
         expect(node.endByte, `${label} ${node.path}`).toBeLessThanOrEqual(length)
         if (target?.pos !== undefined) expect([node.startByte, node.endByte], `${label} ${node.path}`).toEqual([target.pos.startOffset, target.pos.endOffset])

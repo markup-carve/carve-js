@@ -1,6 +1,6 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
-import { AST_VERSION, type AstNode, isRecord } from './ast.ts'
+import { AST_VERSION, type DocumentNode, isRecord } from './ast.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
 
@@ -456,7 +456,7 @@ function checkBounds(node: Fields, path: string, budget: Budget, fallbacks: numb
 }
 
 /** Refuses `document` unless it is a tree of contract 2.0. */
-export function validateTree(document: unknown): asserts document is AstNode {
+export function validateTree(document: unknown): asserts document is DocumentNode {
   // C2-A-168.
   if (!isRecord(document)) fail('', 'not a tree')
   if (document['type'] !== 'document') fail('/type', 'the root is not a document')

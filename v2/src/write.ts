@@ -1,7 +1,7 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { type AstNode, childrenOf, keyOf, valueOf } from './ast.ts'
+import { type AstNode, asNode, childrenOf, keyOf, valueOf } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
@@ -247,7 +247,7 @@ function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: Ast
   const without = groupTree(w, group, first, left)
   const escaped = new Map(left)
   escaped.set(node, [...(left.get(node) ?? []), at])
-  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
+  const asked = !treesEqual(asNode(groupTree(w, group, first, escaped)), asNode(without))
   w.escapes = placed
   w.lines = lines
   w.lead = lead

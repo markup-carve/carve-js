@@ -1,6 +1,6 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 // Both are compositions of three stages: parse (source to tree), resolve (tree to resolved tree) and render.
-import { type AstNode } from './ast.ts'
+import { type DocumentNode } from './ast.ts'
 import { buildSource, type ParsedTree } from './ast-blocks.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
@@ -15,7 +15,7 @@ import { type Resolution, resolve } from './resolve.ts'
 export { type ParsedTree } from './ast-blocks.ts'
 
 export interface ParseResult {
-  document: AstNode
+  document: DocumentNode
   /** C2-A-172: the diagnostics record, beside the tree. */
   diagnostics: Diagnostic[]
 }
@@ -27,7 +27,7 @@ export interface LayoutResult extends ParseResult {
 
 /** The output of the resolve stage: the resolved tree and what a render of it needs besides the tree. */
 export interface ResolvedTree {
-  readonly document: AstNode
+  readonly document: DocumentNode
   /** The options of the render the tree was resolved for. */
   readonly settings: Settings
   readonly resolution: Resolution
@@ -76,7 +76,7 @@ function checkLength(src: string, settings: Settings): void {
 }
 
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
-function inputStage(input: string | AstNode, settings: Settings): ParsedTree {
+function inputStage(input: string | DocumentNode, settings: Settings): ParsedTree {
   if (typeof input === 'string') {
     checkLength(input, settings)
     // C2-H-016: only the source lines need positions.
@@ -114,7 +114,7 @@ export function parseTree(src: string, options?: ParseOptions): ParsedTree {
  * The resolve stage: resolves a parsed tree, or a supplied tree after validating it, for a render
  * with `options`. A parsed tree is resolved in place; a supplied tree is copied first where the profile replaces nodes.
  */
-export function resolveTree(input: ParsedTree | AstNode, options?: RenderOptions): ResolvedTree {
+export function resolveTree(input: ParsedTree | DocumentNode, options?: RenderOptions): ResolvedTree {
   const settings = readOptions(options, 'render')
   const parsed = 'type' in input ? inputStage(input, settings) : input
   return resolveStage(parsed, settings)
@@ -138,7 +138,7 @@ export function parseWithDiagnostics(src: string, options?: ParseOptions): Parse
 }
 
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
-export function parse(src: string, options?: ParseOptions): AstNode {
+export function parse(src: string, options?: ParseOptions): DocumentNode {
   const settings = readOptions(options, 'parse')
   return resolveStage(buildSource(src, options?.positions !== false), settings).document
 }
@@ -159,7 +159,7 @@ export function parseWithLayout(src: string, options?: ParseOptions): LayoutResu
  * The HTML of Carve source or of a tree (spec/0.2/html.md), with the diagnostics of the run, each
  * with its position (C2-A-173). Under `strictLosses` a render that lost something returns no output.
  */
-export function renderWithDiagnostics(input: string | AstNode, options?: RenderOptions): RenderOutput {
+export function renderWithDiagnostics(input: string | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
   const resolved = resolveStage(inputStage(input, settings), settings)
   const rendered = renderStage(resolved)
@@ -172,7 +172,7 @@ export function renderWithDiagnostics(input: string | AstNode, options?: RenderO
  * The HTML fragment of Carve source or of a tree: the three stages in a row. Under `strictLosses`
  * a render loss throws. The diagnostics are not asked for, so they are given a position only where a loss is thrown.
  */
-export function render(input: string | AstNode, options?: RenderOptions): string {
+export function render(input: string | DocumentNode, options?: RenderOptions): string {
   const settings = readOptions(options, 'render')
   return renderTree(resolveStage(inputStage(input, settings), settings))
 }

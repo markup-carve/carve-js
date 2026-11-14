@@ -1,10 +1,11 @@
 // Edges of the writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
-import { type AstNode } from '../src/ast.ts'
+import { type DocumentNode, type Inline, type ParagraphNode, type TableCellNode } from '../src/ast.ts'
 import { format, parse, parseWithLayout, write, writeWithDiagnostics } from '../src/index.ts'
+import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 
-function paragraphWith(attrs: AstNode['attrs']): AstNode {
-  const paragraph: AstNode = { type: 'paragraph', children: [{ type: 'text', value: 'a' }] }
+function paragraphWith(attrs: ParagraphNode['attrs']): DocumentNode {
+  const paragraph: ParagraphNode = { type: 'paragraph', children: [{ type: 'text', value: 'a' }] }
   if (attrs !== undefined) paragraph.attrs = attrs
   return { type: 'document', astVersion: '2.0', children: [paragraph] }
 }
@@ -40,9 +41,9 @@ describe('the brace block', () => {
 
 describe('the diagnostics of the writer', () => {
   it('C2-W-011: the message names the node, and the field where a field is lost', () => {
-    const empty: AstNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [] }] }
+    const empty: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [] }] }
     expect(writeWithDiagnostics(empty).diagnostics.map((entry) => entry.message)).toEqual(['a paragraph node has no spelling in Carve source here'])
-    const deep: AstNode = { type: 'document', astVersion: '2.0', children: [{ type: 'heading', level: 7, children: [{ type: 'text', value: 'a' }] }] }
+    const deep: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'heading', level: 7, children: [{ type: 'text', value: 'a' }] }] }
     expect(writeWithDiagnostics(deep).diagnostics.map((entry) => entry.message)).toEqual(['the field level of a heading node has no spelling in Carve source here'])
   })
 })
@@ -55,7 +56,7 @@ describe('lines', () => {
   })
 
   it('C2-W-022: a space of text before a soft break and at the end of a leaf is not written, and one before a hard break is', () => {
-    const tree: AstNode = {
+    const tree: DocumentNode = {
       type: 'document', astVersion: '2.0',
       children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a ' }, { type: 'soft_break' }, { type: 'text', value: 'b \t' }] }],
     }
@@ -64,17 +65,17 @@ describe('lines', () => {
   })
 })
 
-function paragraphOf(...children: AstNode[]): AstNode {
+function paragraphOf(...children: Inline[]): DocumentNode {
   return { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children }] }
 }
 
-function writtenBack(tree: AstNode): AstNode[] {
-  return parse(write(tree), { positions: false }).children![0]!.children!
+function writtenBack(tree: DocumentNode): Inline[] {
+  return inlinesOf(parse(write(tree), { positions: false }).children[0])
 }
 
 describe('verbatim spans and destinations', () => {
   it('C2-W-077: a code span is padded only where a reader would take the padding or the run', () => {
-    const code = (value: string): AstNode => paragraphOf({ type: 'text', value: 'x' }, { type: 'code', value })
+    const code = (value: string): DocumentNode => paragraphOf({ type: 'text', value: 'x' }, { type: 'code', value })
     expect(write(code('a'))).toBe('x`a`\n')
     expect(write(code(' a '))).toBe('x`  a  `\n')
     expect(write(code('  '))).toBe('x`  `\n')
@@ -95,7 +96,7 @@ describe('verbatim spans and destinations', () => {
   })
 
   it('C2-I-013: a destination escapes the parenthesis that has no partner and the backslash that would be read as an escape', () => {
-    const link = (href: string): AstNode => paragraphOf({ type: 'link', href, children: [{ type: 'text', value: 't' }] })
+    const link = (href: string): DocumentNode => paragraphOf({ type: 'link', href, children: [{ type: 'text', value: 't' }] })
     expect(write(link('/a(b)c'))).toBe('[t](/a(b)c)\n')
     expect(write(link('/a)b'))).toBe('[t](/a\\)b)\n')
     expect(write(link('/a(b'))).toBe('[t](/a\\(b)\n')
@@ -126,9 +127,9 @@ describe('tables', () => {
   })
 
   it('C2-L-006: a table is written delimited only where every cell is plain text', () => {
-    const written = (edit: (cell: AstNode) => void): string => {
+    const written = (edit: (cell: TableCellNode) => void): string => {
       const parsed = parseWithLayout('|= a |= b |\n| c | d |')
-      edit(parsed.document.children![0]!.children![1]!.children![0]!.children![0]!)
+      edit(ofType(childrenOf(childrenOf(childrenOf(parsed.document.children[0])[1])[0])[0], 'table_cell'))
       const nodes = parsed.layout.nodes.map((entry) => (entry.path === '/children/0' ? { ...entry, sourceFormat: 'csv' as const } : entry))
       return write(parsed.document, { layout: { nodes } })
     }

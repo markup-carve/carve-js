@@ -2,7 +2,7 @@
 // and compared with the tree they were written from. Where the parse reads a construct that the
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
-import { type AstNode, childrenOf, INLINE_PARENTS, isBreak, isRecord, valueOf } from './ast.ts'
+import { type AstNode, asNode, childrenOf, isBreak, isInlineParent, isRecord, valueOf } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
@@ -597,7 +597,7 @@ function compareBlock(c: Check, e: AstNode, a: AstNode): boolean {
   if (e.type === 'table') c.spanMarks = hasSpanMarks(e) || hasSpanMarks(a)
   if (e.type === 'table_cell') c.flags |= IN_CELL
   compareFields(c, e, a)
-  if (INLINE_PARENTS.includes(e.type)) compareInlines(c, childrenOf(e), childrenOf(a), e)
+  if (isInlineParent(asNode(e))) compareInlines(c, childrenOf(e), childrenOf(a), e)
   else compareBlocks(c, childrenOf(e), childrenOf(a), e)
   compareSlots(c, e, a)
   c.spanMarks = marks
@@ -612,7 +612,7 @@ function readStarts(node: AstNode, offset: number, paragraphs: Set<number>, line
       lines.add(block.pos.startLine - offset)
       if (block.type === 'paragraph') paragraphs.add((block.pos.startLine - offset) * PLACE_COLUMNS + block.pos.startColumn - 1)
     }
-    if (!INLINE_PARENTS.includes(block.type)) readStarts(block, offset, paragraphs, lines)
+    if (!isInlineParent(asNode(block))) readStarts(block, offset, paragraphs, lines)
     if (block.caption !== undefined) readStarts(block.caption, offset, paragraphs, lines)
   }
 }

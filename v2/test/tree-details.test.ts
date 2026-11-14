@@ -1,12 +1,16 @@
 // Edges that the mutation run found untested: the ends of character ranges, the bounds of the
 // reader, the details of equality, of an include directive and of the URL filter.
 import { describe, expect, it } from 'vitest'
-import { type AstNode } from '../src/ast.ts'
+import {
+  type Block, type BlockExtensionNode, type DocumentNode, type ImageNode, type Inline, type InlineExtensionNode, type LinkNode,
+  type TableCellNode,
+} from '../src/ast.ts'
 import { decodeTree, encodeEnvelope, treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError, MAX_TREE_DEPTH, validateTree } from '../src/ast-validate.ts'
 import { parse, render, utf8Length } from '../src/index.ts'
 import { slugify } from '../src/slug.ts'
 import { EXAMPLES } from './support/conformance.ts'
+import { asNode, blocksOf, childrenOf, fieldOf, inlinesOf, ofType } from './support/nodes.ts'
 import { at, block, blocks, documentOf, inlines, paragraph, placedTree, resolved, text, tree } from './support/tree.ts'
 import { checkTree } from './support/tree-checks.ts'
 
@@ -52,7 +56,7 @@ describe('character ranges', () => {
 
   it('a term of the first and last digits and letters is an abbreviation, as a whole word', () => {
     const src = '*[Az09]: x\n*[0]: y\n*[z]: w\n\nAz09 0 z Az09é éAz09 @Az09 [Az09 z'
-    expect(blocks(src)[3]!.children!.filter((node) => node.type === 'abbreviation').map((node) => node.key)).toEqual(['Az09', '0', 'z', 'Az09', 'z'])
+    expect(inlinesOf(blocks(src)[3]).filter((node) => node.type === 'abbreviation').map((node) => node.key)).toEqual(['Az09', '0', 'z', 'Az09', 'z'])
   })
 
   it('an abbreviation sees the character across an element edge, a comment and the end of a note, and an atom is a boundary', () => {
@@ -65,13 +69,13 @@ describe('character ranges', () => {
 
   it('an abbreviation behind an escape has the position of its own characters', () => {
     const src = '*[HT]: x\n\na\\*b HT c\\\\ HT'
-    const terms = placedTree(src).children![1]!.children!.filter((node) => node.type === 'abbreviation')
+    const terms = inlinesOf(placedTree(src).children[1]).filter((node) => node.type === 'abbreviation')
     expect(terms.map((node) => [node.pos!.startOffset, node.pos!.endOffset])).toEqual([[15, 17], [22, 24]])
-    expect(placedTree('*[HT]: x\n\nHT').children![1]!.children![0]!.pos!.startColumn).toBe(1)
+    expect(inlinesOf(placedTree('*[HT]: x\n\nHT').children[1])[0]?.pos?.startColumn).toBe(1)
   })
 
   it('the number mark of a caption is bare before the end, whitespace and punctuation, and not before a name character', () => {
-    const mark = (tail: string): boolean => JSON.stringify(block(`| a |\n^ T #${tail}`).caption).includes('caption_number')
+    const mark = (tail: string): boolean => JSON.stringify(ofType(block(`| a |\n^ T #${tail}`), 'table').caption).includes('caption_number')
     expect(['', ' x', ': x', '. x', '/', '@', '[', '`x`', '{'].map(mark)).toEqual(new Array(9).fill(true))
     expect(['0', '9', 'A', 'Z', 'a', 'z', '_', '-'].map(mark)).toEqual(new Array(8).fill(false))
     expect(at(block('| a |\n^ # x'), 'caption.children.0.children')).toEqual([{ type: 'caption_number' }, text(' x')])
@@ -122,34 +126,34 @@ describe('more edges', () => {
   })
 
   it('text and an abbreviation at the first character of the source have a position', () => {
-    const [term, rest] = placedTree('HT x\n\n*[HT]: y').children![0]!.children!
+    const [term, rest] = inlinesOf(placedTree('HT x\n\n*[HT]: y').children[0])
     expect([term!.type, term!.pos!.startOffset, term!.pos!.endOffset, rest!.pos!.startOffset]).toEqual(['abbreviation', 0, 2, 2])
-    expect(placedTree('xa').children![0]!.children![0]!.pos).toMatchObject({ startOffset: 0, endOffset: 2, startColumn: 1 })
+    expect(inlinesOf(placedTree('xa').children[0])[0]?.pos).toMatchObject({ startOffset: 0, endOffset: 2, startColumn: 1 })
   })
 
   it('text merged from an escape and its neighbors spans all of them, and doubled letters are no escape', () => {
-    expect(placedTree('a\\*b').children![0]!.children![0]!.pos).toMatchObject({ startOffset: 0, endOffset: 4 })
-    const terms = placedTree('*[HT]: x\n\naab HT ccd HT').children![1]!.children!.filter((node) => node.type === 'abbreviation')
+    expect(inlinesOf(placedTree('a\\*b').children[0])[0]?.pos).toMatchObject({ startOffset: 0, endOffset: 4 })
+    const terms = inlinesOf(placedTree('*[HT]: x\n\naab HT ccd HT').children[1]).filter((node) => node.type === 'abbreviation')
     expect(terms.map((node) => node.pos!.startOffset)).toEqual([14, 21])
-    expect(JSON.stringify(block('| a |\n^ aab #: x').caption)).toContain('caption_number')
+    expect(JSON.stringify(ofType(block('| a |\n^ aab #: x'), 'table').caption)).toContain('caption_number')
   })
 
   it('terms that end and start at the last capital and the first small letter are found', () => {
-    expect(blocks('*[Za]: x\n*[aZ]: y\n\nZa aZ')[2]!.children!.map((node) => node.key ?? node.value)).toEqual(['Za', ' ', 'aZ'])
+    expect(inlinesOf(blocks('*[Za]: x\n*[aZ]: y\n\nZa aZ')[2]).map((node) => fieldOf(node, 'key') ?? fieldOf(node, 'value'))).toEqual(['Za', ' ', 'aZ'])
   })
 
   it('a number sign glued behind a letter is text, and no mark before a name character', () => {
     for (const char of ['0', '9', 'A', 'Z', 'a', 'z', '_', '-']) {
-      expect([char, JSON.stringify(block(`| a |\n^ Ta#${char}`).caption).includes('caption_number')]).toEqual([char, false])
+      expect([char, JSON.stringify(ofType(block(`| a |\n^ Ta#${char}`), 'table').caption).includes('caption_number')]).toEqual([char, false])
     }
     expect(at(block('| a |\n^ T #:'), 'caption.children.0.children')).toEqual([text('T '), { type: 'caption_number' }, text(':')])
   })
 
   it('a table of head rows alone has no body, and a row that ends at its line ending has a position', () => {
-    expect(block('|= a |').children!.map((group) => group.type)).toEqual(['table_head'])
-    expect((at(placedTree('| a |\n'), 'children.0.children.0.children.0') as AstNode).pos).toMatchObject({ startOffset: 0, endOffset: 5 })
+    expect(ofType(block('|= a |'), 'table').children.map((group) => group.type)).toEqual(['table_head'])
+    expect(asNode(at(placedTree('| a |\n'), 'children.0.children.0.children.0')).pos).toMatchObject({ startOffset: 0, endOffset: 5 })
     expect(checkTree('| ^ | < |\n+ a |')).toBeNull()
-    expect((at(placedTree('| ^ | < |\n+ a |'), 'children.0.children.0.children.0.children.0') as AstNode).pos).toBeUndefined()
+    expect(asNode(at(placedTree('| ^ | < |\n+ a |'), 'children.0.children.0.children.0.children.0')).pos).toBeUndefined()
   })
 
   it('the source line is written on block elements only', () => {
@@ -159,13 +163,13 @@ describe('more edges', () => {
   it('an object with more fields than another is not equal to it, and an empty quoted option value is empty', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1 } }), documentOf({ ...paragraph(), data: { a: 1, b: 2 } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1 } }))).toBe(false)
-    expect(block('{{ a.crv @rows:"" @region:"x" }}').options).toEqual([['region', 'x'], ['rows', '']])
+    expect(ofType(block('{{ a.crv @rows:"" @region:"x" }}'), 'include').options).toEqual([['region', 'x'], ['rows', '']])
   })
 })
 
 describe('the reader at its bounds', () => {
-  const nest = (levels: number): AstNode => {
-    let node: AstNode = paragraph('a')
+  const nest = (levels: number): DocumentNode => {
+    let node: Block = paragraph('a')
     for (let level = 0; level < levels; level++) node = { type: 'block_quote', children: [node] }
     return documentOf(node)
   }
@@ -177,18 +181,18 @@ describe('the reader at its bounds', () => {
   })
 
   it('accepts metadata of 64 levels, 4096 resource references and 32 nested fallbacks, and refuses one more', () => {
-    const metadata = (levels: number): AstNode => {
+    const metadata = (levels: number): DocumentNode => {
       let value: Record<string, unknown> = { a: 1 }
       for (let level = 1; level < levels; level++) value = { a: value }
       return documentOf({ ...paragraph(), metadata: value })
     }
     expect([refusal(metadata(64)), refusal(metadata(65)) === null]).toEqual([null, false])
-    const references = (count: number): AstNode => documentOf(paragraph(
+    const references = (count: number): DocumentNode => documentOf(paragraph(
       { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') }, { type: 'image', resourceId: 'r' },
     ))
     expect([refusal(references(4096)), refusal(references(4097)) === null]).toEqual([null, false])
-    const fallbacks = (levels: number): AstNode => {
-      let node: AstNode = text('x')
+    const fallbacks = (levels: number): DocumentNode => {
+      let node: Inline = text('x')
       for (let level = 0; level < levels; level++) node = { type: 'inline_extension', name: 'a.b', children: [], fallback: [node] }
       return documentOf(paragraph(node))
     }
@@ -197,67 +201,67 @@ describe('the reader at its bounds', () => {
 
   it('bounds the payload of an extension node by its string values', () => {
     const big = 'x'.repeat(8 * 1024 * 1024)
-    const node = (payload: { format: string, value: string }[]): AstNode => documentOf(paragraph({ type: 'inline_extension', name: 'a.b', children: [], payload }))
+    const node = (payload: { format: string, value: string }[]): DocumentNode => documentOf(paragraph({ type: 'inline_extension', name: 'a.b', children: [], payload }))
     expect(refusal(node([{ format: 'a', value: big }]))).toBeNull()
     expect(refusal(node([{ format: 'a', value: big }, { format: 'b', value: 'y' }]))).toBe('/children/0/children/0/payload: an extension payload above 8 MiB')
   })
 
   it('refuses a count that is negative or no integer, a pair that is no pair, and a ruby pair that is none', () => {
-    const heading = (level: unknown): AstNode => documentOf({ type: 'heading', level, children: [] } as AstNode)
+    const heading = (level: unknown): DocumentNode => documentOf({ type: 'heading', level, children: [] } as unknown as Block)
     expect([refusal(heading(0)), refusal(heading(-1)) === null, refusal(heading(1.5)) === null, refusal(heading('1')) === null]).toEqual([null, false, false, false])
-    const include = (options: unknown): AstNode => documentOf({ type: 'include', path: 'a', options } as AstNode)
+    const include = (options: unknown): DocumentNode => documentOf({ type: 'include', path: 'a', options } as unknown as Block)
     expect(refusal(include([['a', 'b']]))).toBeNull()
     for (const bad of [[['a']], [['a', 1]], [[1, 'b']], ['ab'], [['a', 'b', 'c']]]) expect(refusal(include(bad))).toBe('/children/0/options/0: not a pair of two strings')
-    const ruby = (pair: unknown): AstNode => documentOf(paragraph({ type: 'ruby', pairs: [pair] } as AstNode))
+    const ruby = (pair: unknown): DocumentNode => documentOf(paragraph({ type: 'ruby', pairs: [pair] } as unknown as Inline))
     expect(refusal(ruby({ type: 'rubyPair', base: [text('a')], annotation: [] }))).toBeNull()
     expect(refusal(ruby({ type: 'pair', base: [], annotation: [] }))).toBe('/children/0/children/0/pairs/0: not a rubyPair')
     expect(refusal(ruby('x'))).toBe('/children/0/children/0/pairs/0: not a rubyPair')
   })
 
   it('checks the slots and the fallback of an extension node by its role, and the fields that depend on each other', () => {
-    const inline: AstNode = { type: 'inline_extension', name: 'a.b', children: [], slots: { s: [text('x')] }, fallback: [text('y')] }
+    const inline: InlineExtensionNode = { type: 'inline_extension', name: 'a.b', children: [], slots: { s: [text('x')] }, fallback: [text('y')] }
     expect(refusal(documentOf(paragraph(inline)))).toBeNull()
     expect(refusal(documentOf(paragraph({ ...inline, slots: { s: [paragraph()] } })))).toBe('/children/0/children/0/slots/s/0: paragraph does not stand here')
-    const blockNode: AstNode = { type: 'block_extension', name: 'a.b', children: [], slots: { s: [paragraph()] }, fallback: [] }
+    const blockNode: BlockExtensionNode = { type: 'block_extension', name: 'a.b', children: [], slots: { s: [paragraph()] }, fallback: [] }
     expect(refusal(documentOf(blockNode))).toBeNull()
     expect(refusal(documentOf({ ...blockNode, slots: { s: [text('x')] } }))).toBe('/children/0/slots/s/0: text does not stand here')
-    const link = (fields: Partial<AstNode>): string | null => refusal(documentOf(paragraph({ type: 'link', children: [], ...fields })))
+    const link = (fields: Partial<LinkNode>): string | null => refusal(documentOf(paragraph({ type: 'link', children: [], ...fields })))
     expect([link({}), link({ key: 'a', namespace: 'link', form: 'full' })]).toEqual([null, null])
-    for (const fields of [{ key: 'a' }, { namespace: 'link' }, { form: 'full' }, { key: 'a', form: 'full' }, { namespace: 'link', form: 'full' }]) expect(link(fields)).not.toBeNull()
-    const ordered = (marker: object): string | null => refusal(documentOf({ type: 'list', marker, spacing: 'tight', children: [] } as AstNode))
+    for (const fields of [{ key: 'a' }, { namespace: 'link' }, { form: 'full' }, { key: 'a', form: 'full' }, { namespace: 'link', form: 'full' }] satisfies Partial<LinkNode>[]) expect(link(fields)).not.toBeNull()
+    const ordered = (marker: object): string | null => refusal(documentOf({ type: 'list', marker, spacing: 'tight', children: [] } as unknown as Block))
     expect([ordered({ kind: 'ordered' }), ordered({ kind: 'ordered', style: 'a', delimiter: ')', start: 3 })]).toEqual([null, null])
     expect([ordered({ kind: 'ordered', style: 'x' }), ordered({ kind: 'ordered', delimiter: ':' }), ordered({ kind: 'ordered', start: 1.5 })].every((reason) => reason !== null)).toBe(true)
   })
 })
 
 describe('equality in detail', () => {
-  const link = (fields: Partial<AstNode>): AstNode => documentOf(paragraph({ type: 'link', children: [], ...fields }))
+  const link = (fields: Partial<LinkNode>): DocumentNode => documentOf(paragraph({ type: 'link', children: [], ...fields }))
 
   it('a destination is a resolution result only on a reference use', () => {
-    const reference = { key: 'a', namespace: 'link', form: 'full' }
+    const reference = { key: 'a', namespace: 'link', form: 'full' } satisfies Partial<LinkNode>
     expect(treesEqual(link({ ...reference, href: '/u' }), link(reference))).toBe(true)
     expect(treesEqual(link({ href: '/u' }), link({ href: '/v' }))).toBe(false)
     expect(treesEqual(link({ href: '/u' }), link({}))).toBe(false)
     expect(treesEqual(link({ ...reference, tooltip: 'a' }), link(reference))).toBe(false)
-    const image = (fields: Partial<AstNode>): AstNode => documentOf(paragraph({ type: 'image', ...fields }))
+    const image = (fields: Partial<ImageNode>): DocumentNode => documentOf(paragraph({ type: 'image', ...fields }))
     expect(treesEqual(image({ ...reference, src: '/u' }), image(reference))).toBe(true)
     expect(treesEqual(image({ src: '/u', alt: 'a' }), image({ src: '/v', alt: 'a' }))).toBe(false)
-    const xref = (href?: string): AstNode => documentOf(paragraph({ type: 'xref', key: 'a', namespace: 'heading', ...(href === undefined ? {} : { href }) }))
+    const xref = (href?: string): DocumentNode => documentOf(paragraph({ type: 'xref', key: 'a', namespace: 'heading', ...(href === undefined ? {} : { href }) }))
     expect(treesEqual(xref('#a'), xref())).toBe(true)
   })
 
   it('a number is a resolution result on a footnote, and a field of a display equation', () => {
-    const note = (number?: number): AstNode => documentOf(paragraph({ type: 'inline_footnote', children: [], ...(number === undefined ? {} : { number }) }))
+    const note = (number?: number): DocumentNode => documentOf(paragraph({ type: 'inline_footnote', children: [], ...(number === undefined ? {} : { number }) }))
     expect(treesEqual(note(1), note())).toBe(true)
-    const ref = (number?: number): AstNode => documentOf(paragraph({ type: 'footnote_ref', key: 'n', namespace: 'footnote', ...(number === undefined ? {} : { number }) }))
+    const ref = (number?: number): DocumentNode => documentOf(paragraph({ type: 'footnote_ref', key: 'n', namespace: 'footnote', ...(number === undefined ? {} : { number }) }))
     expect(treesEqual(ref(1), ref(2))).toBe(true)
-    const math = (number: number): AstNode => documentOf(paragraph({ type: 'math', display: true, value: 'x', number }))
+    const math = (number: number): DocumentNode => documentOf(paragraph({ type: 'math', display: true, value: 'x', number }))
     expect(treesEqual(math(1), math(2))).toBe(false)
   })
 
   it('a span count is compared where no span mark is written, and not where one is', () => {
-    const table = (cells: AstNode[]): AstNode => documentOf({ type: 'table', columns: [], children: [{ type: 'table_body', children: [{ type: 'table_row', children: cells }] }] })
-    const cell = (fields: Partial<AstNode> = {}): AstNode => ({ type: 'table_cell', header: false, children: [], ...fields })
+    const table = (cells: TableCellNode[]): DocumentNode => documentOf({ type: 'table', columns: [], children: [{ type: 'table_body', children: [{ type: 'table_row', children: cells }] }] })
+    const cell = (fields: Partial<TableCellNode> = {}): TableCellNode => ({ type: 'table_cell', header: false, children: [], ...fields })
     expect(treesEqual(table([cell({ colspan: 2 })]), table([cell()]))).toBe(false)
     expect(treesEqual(table([cell({ colspan: 2 }), cell({ span: 'colspan' })]), table([cell(), cell({ span: 'colspan' })]))).toBe(true)
     expect(treesEqual(table([cell({ colspan: 2 }), cell({ span: 'colspan' })]), table([cell({ colspan: 2 }), cell()]))).toBe(false)
@@ -275,7 +279,7 @@ describe('equality in detail', () => {
   })
 
   it('an envelope carries the extensions of its document, and a bare tree with a field named document is no envelope', () => {
-    const declared: AstNode = { ...documentOf(), extensions: [{ name: 'a.b', required: false }] }
+    const declared: DocumentNode = { ...documentOf(), extensions: [{ name: 'a.b', required: false }] }
     expect(JSON.parse(encodeEnvelope(declared))).toHaveProperty('extensions', declared.extensions)
     expect(JSON.parse(encodeEnvelope(documentOf()))).not.toHaveProperty('extensions')
     expect(() => decodeTree('{"type":"document","astVersion":"2.0","children":[],"document":{}}')).toThrow('/document: not a field of document')
@@ -285,11 +289,11 @@ describe('equality in detail', () => {
 
 describe('one-line blocks in detail', () => {
   it('an include directive reads quoted values and an at-sign that starts the next option, and a part that is no option makes it text', () => {
-    expect(block('{{ a.crv @cols:"p q" @code:\'r+s\' @shift:1@lines:2-3 }}').options).toEqual([['lines', '2-3'], ['cols', '"p q"'], ['shift', '1'], ['code', 'r+s']])
+    expect(ofType(block('{{ a.crv @cols:"p q" @code:\'r+s\' @shift:1@lines:2-3 }}'), 'include').options).toEqual([['lines', '2-3'], ['cols', '"p q"'], ['shift', '1'], ['code', 'r+s']])
     expect(block('{{ a.crv plain @code }}').type).toBe('paragraph')
     expect(block('{{ a.crv @:v }}').type).toBe('paragraph')
     expect(block('{{ a.crv @rows: }}').type).toBe('paragraph')
-    expect(block('{{ a.crv @rows:"a \\" @b" }}').options).toEqual([['rows', 'a " @b']])
+    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').options).toEqual([['rows', 'a " @b']])
     expect(block('{{ a.crv @rows:"x }}').type).toBe('paragraph')
     expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['code', 'v']] })
     expect(block('{{ "a \\" b.crv" #s }}')).toEqual({ type: 'include', path: 'a " b.crv', section: 's' })
@@ -304,8 +308,8 @@ describe('one-line blocks in detail', () => {
   })
 
   it('a comment drops the spaces and tabs at its end, and the brace block of a cell that holds only its alignment mark is read', () => {
-    expect(block('> %% a \t ').children![0]!.value).toBe('a')
-    expect(block('> %%').children![0]!.value).toBe('')
+    expect(ofType(blocksOf(block('> %% a \t '))[0], 'comment').value).toBe('a')
+    expect(ofType(blocksOf(block('> %%'))[0], 'comment').value).toBe('')
     expect(at(block('|={>} a |{~}{.x} b |'), 'children.0.children.0.children')).toMatchObject([{ align: 'right' }, { align: 'center', attrs: { classes: ['x'] } }])
     expect(at(block('*{.i} a\n\n3){.j} b'), 'children.0.attrs')).toEqual({ classes: ['i'] })
     expect(at(blocks('*{.i} a\n\n3){.j} b')[1], 'children.0.attrs')).toEqual({ classes: ['j'] })
@@ -314,20 +318,20 @@ describe('one-line blocks in detail', () => {
   it('only a plain div with the class is a hard-break block, and a block image or math block holds nothing else', () => {
     expect(at(block('{.hardbreaks}\n::: note\na\nb\n:::'), 'children.0.children.1.type')).toBe('soft_break')
     expect(at(block('::: \\\n> a\n> b\n:::'), 'children.0.children.0.children.1.type')).toBe('hard_break')
-    expect(block('![a](b)\\').blockImage).toBeUndefined()
-    expect(block('$$`x` `y`').blockMath).toBeUndefined()
-    expect(block('$`x`').blockMath).toBeUndefined()
+    expect(ofType(block('![a](b)\\'), 'paragraph').blockImage).toBeUndefined()
+    expect(ofType(block('$$`x` `y`'), 'paragraph').blockMath).toBeUndefined()
+    expect(ofType(block('$`x`'), 'paragraph').blockMath).toBeUndefined()
   })
 
   it('a column is authored when the source spells its alignment or its width', () => {
-    expect(block('{aligns="left"}\n| a | b |').columns).toEqual([{ type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }])
-    expect(block('{widths=",40"}\n| a | b |').columns).toEqual([{ type: 'table_column' }, { type: 'table_column', width: 0.4, authored: true }])
+    expect(ofType(block('{aligns="left"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }])
+    expect(ofType(block('{widths=",40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column', width: 0.4, authored: true }])
   })
 
   it('an inline footnote in a joined cell keeps its content, and text joined from two lines has no position', () => {
-    const cell = at(placedTree('| a^[b *c*] |\n+ d |'), 'children.0.children.0.children.0.children.0') as AstNode
+    const cell = asNode(at(placedTree('| a^[b *c*] |\n+ d |'), 'children.0.children.0.children.0.children.0'))
     expect(JSON.stringify(cell)).not.toContain('"pos"')
-    expect(cell.children![0]!.children!.map((node) => node.type)).toEqual(['text', 'inline_footnote', 'text'])
+    expect(inlinesOf(childrenOf(cell)[0]).map((node) => node.type)).toEqual(['text', 'inline_footnote', 'text'])
     expect(inlines('a {.x}\nb')[0]).toEqual(text('a {.x}'))
   })
 })

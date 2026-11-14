@@ -702,10 +702,40 @@ export interface NodeOfType {
   xref: XrefNode
 }
 
-/** A function per node type, each of which reads a node of its own type. */
-export type NodeHandlers<R> = { [T in keyof NodeOfType]?: (node: NodeOfType[T]) => R }
+/** A function per node type, each of which reads a node of its own type and what the caller passes along. */
+export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeOfType[T], context: C) => R }
 
 /** The result of the handler of the type of `node`, or undefined where `handlers` has none. */
-export function handle<R, T extends keyof NodeOfType>(handlers: NodeHandlers<R>, type: T, node: NodeOfType[T]): R | undefined {
-  return handlers[type]?.(node)
+export function handle<R, T extends keyof NodeOfType, C = void>(
+  handlers: NodeHandlers<R, C>, type: T, node: NodeOfType[T], context: C,
+): R | undefined {
+  return handlers[type]?.(node, context)
+}
+
+/** The values of each field that takes one of a fixed set, by `type.field` (`*` for any type). */
+export const FIELD_VALUES = {
+  "*.dir": ["ltr", "rtl", "auto"],
+  "comment.form": ["block", "line", "braced"],
+  "link.form": ["full", "collapsed"],
+  "image.form": ["full", "collapsed"],
+  "xref.form": ["number", "page", "title", "full"],
+  "list.spacing": ["tight", "loose"],
+  "table_cell.span": ["rowspan", "colspan"],
+  "table_cell.align": ["left", "right", "center"],
+  "table_column.align": ["left", "right", "center"],
+  "table_column.resolvedAlign": ["left", "right", "center"],
+  "link.targetKind": ["url", "wiki", "doc", "xref"],
+  "image.targetKind": ["url", "wiki", "doc", "xref"],
+  "directive.tocTarget": ["headings", "figures", "tables", "listings"],
+  "directive.kind": ["bibliography", "footnotes", "glossary", "index", "references", "toc"],
+  "figure.kind": ["image", "table", "listing", "equation", "other"],
+  "admonition.kind": ["note", "tip", "warning", "danger", "info", "success", "example", "quote"],
+  "*.namespace": ["link", "footnote", "citation", "abbr", "heading"],
+} as const
+
+/** Whether `value` is one of the values of `field`. */
+export function isFieldValue<F extends keyof typeof FIELD_VALUES>(
+  field: F, value: string,
+): value is (typeof FIELD_VALUES)[F][number] {
+  return FIELD_VALUES[field].some((allowed) => allowed === value)
 }

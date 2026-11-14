@@ -1,25 +1,25 @@
 // The checks of the writer (spec/0.2/writer.md): its two gates, with and without the sidecar,
 // that a canonical input stays as it is, and that the escaping test asks for every escape.
 import { format, formatWithDiagnostics, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
-import { type AstNode } from '../../src/ast.ts'
+import { type DocumentNode, type Node } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
 
 const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline']
 
-function nodeAt(tree: AstNode, path: string): AstNode | undefined {
+function nodeAt(tree: DocumentNode, path: string): Node | undefined {
   let at: unknown = tree
   for (const part of path.split('/').slice(1)) at = (at as Record<string, unknown> | undefined)?.[part]
-  return at as AstNode | undefined
+  return at as Node | undefined
 }
 
 /**
  * C2-W-016: whether the writer refused the document for a verbatim span whose later line would
  * open a block. Such a document has no canonical spelling, and the refusal is its result.
  */
-export function isRefusal(tree: AstNode, diagnostics: readonly Diagnostic[]): boolean {
+export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
     const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
-    const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && (node.value ?? '').includes('\n')
+    const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && ('value' in node ? node.value : '').includes('\n')
     return entry.code === 'field-unspellable' && multiline
   })
 }
@@ -54,7 +54,7 @@ export function asksForEscape(written: string, at: number): boolean {
  * (C2-W-090): `x(\/u)(\/u)/` for the text `x(/u)(/u)/`. Such an escape passes when the written form
  * without it parses to another tree; the inputs are logged for the specification.
  */
-export function unaskedEscape(written: string, tree: AstNode): number {
+export function unaskedEscape(written: string, tree: DocumentNode): number {
   for (let at = 0; at + 1 < written.length; at++) {
     if (written[at] !== '\\') continue
     if (isAsciiPunctuation(written.charCodeAt(at + 1)) && !asksForEscape(written, at)
@@ -70,7 +70,7 @@ function show(text: string): string {
 }
 
 /** The gates on one written form: it parses to `tree` (C2-W-002) and holds no escape the test does not ask for (C2-W-088). */
-function checkWritten(tree: AstNode, written: string, losses: readonly Diagnostic[], path: string): string | null {
+function checkWritten(tree: DocumentNode, written: string, losses: readonly Diagnostic[], path: string): string | null {
   if (losses.length > 0) {
     const reported = losses.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
     return `${path}: the writer reports ${reported}, written ${show(written)}`

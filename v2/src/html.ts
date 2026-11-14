@@ -1,6 +1,6 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
 import {
-  type AstNode, childrenOf, colspanOf, columnsOf, DEFINITION_TYPES, keyOf, levelOf, type Marker, rowspanOf, valueOf,
+  type AstNode, asNode, childrenOf, colspanOf, columnsOf, DEFINITION_TYPES, keyOf, levelOf, type Marker, rowspanOf, valueOf,
 } from './ast.ts'
 import { blockText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
@@ -13,6 +13,11 @@ import { includeSource } from './include.ts'
 import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
+
+function tableMarks(node: AstNode): (string | undefined)[] {
+  const table = asNode(node)
+  return table.type === 'table' ? headMarks(table, 'valign') : []
+}
 
 type BlockWriter = (r: Render, node: AstNode, level: number) => void
 
@@ -252,7 +257,7 @@ function capitalized(word: string): string {
 /** C2-H-155: the title names the element, or else the `labels` string of the kind; an authored name stops both. */
 function admonitionName(r: Render, node: AstNode, id: string | null): Pair[] {
   if (id !== null) return [['aria-labelledby', id]]
-  if (hasAuthoredName(node)) return []
+  if (hasAuthoredName(asNode(node))) return []
   const kind = capitalized(node.kind ?? '')
   return [['aria-label', r.settings.labels[`admonition${kind}`] ?? kind]]
 }
@@ -483,7 +488,7 @@ function writeColumnGroup(r: Render, columns: readonly AstNode[], level: number)
 function table(r: Render, node: AstNode, level: number): void {
   line(r, level, `<table${tag(r, node)}>`)
   if (node.caption !== undefined) captionLine(r, node.caption, 'caption', level + 1)
-  const layout: TableLayout = { columns: columnsOf(node), headValign: headMarks(node, 'valign') }
+  const layout: TableLayout = { columns: columnsOf(node), headValign: tableMarks(node) }
   writeColumnGroup(r, layout.columns, level + 1)
   writeGroups(r, layout, childrenOf(node).filter((group) => GROUP_ELEMENTS.has(group.type)), level + 1)
   line(r, level, '</table>')

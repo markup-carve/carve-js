@@ -6,6 +6,7 @@ import {
   acquireInlineState, PARAGRAPH, parse, parseBlockTree, parseWithDiagnostics, releaseInlineState, render, scanInline,
 } from '../src/index.ts'
 import { buildInlineTree, type InlineNode, TEXT } from './support/inline-tree.ts'
+import { inlinesOf, ofType } from './support/nodes.ts'
 import { isPlainText } from '../src/inline-scan.ts'
 
 /** The inline nodes of the one-line content `text`, read by the inline pass with no shortcut. */
@@ -40,7 +41,7 @@ describe('a content of plain text', () => {
       // The shortcut gives one text node of the whole line, and so does the pass.
       const pass = fullPass(text).map((node) => [node.kind, node.value, node.start, node.end])
       expect([text, pass]).toEqual([text, [[TEXT, text, 0, text.length]]])
-      expect([text, parse(text, { positions: false }).children![0]!.children]).toEqual([text, [{ type: 'text', value: text }]])
+      expect([text, inlinesOf(parse(text, { positions: false }).children[0])]).toEqual([text, [{ type: 'text', value: text }]])
     }
     for (const first of PIECES) {
       check(first)
@@ -62,13 +63,13 @@ describe('a body that is one piece of the source', () => {
 
   it('has the value of a body read line by line', () => {
     const body = 'a\n  b\n\nc <d> & e'
-    const direct = parse(`${FENCE}\n${body}\n${FENCE}`, { positions: false }).children![0]!
-    const quoted = parse(`> ${FENCE}\n${body.split('\n').map((line) => `> ${line}`).join('\n')}\n> ${FENCE}`, { positions: false }).children![0]!.children![0]!
-    const returned = parse(`${FENCE}\r\n${body.replaceAll('\n', '\r\n')}\r\n${FENCE}`, { positions: false }).children![0]!
+    const direct = parse(`${FENCE}\n${body}\n${FENCE}`, { positions: false }).children[0]
+    const quoted = ofType(parse(`> ${FENCE}\n${body.split('\n').map((line) => `> ${line}`).join('\n')}\n> ${FENCE}`, { positions: false }).children[0], 'block_quote').children[0]
+    const returned = parse(`${FENCE}\r\n${body.replaceAll('\n', '\r\n')}\r\n${FENCE}`, { positions: false }).children[0]
     expect(direct).toEqual({ type: 'code_block', value: `${body}\n` })
     expect(quoted).toEqual(direct)
     expect(returned).toEqual(direct)
-    expect(parse(`${FENCE}\n${FENCE}`, { positions: false }).children![0]).toEqual({ type: 'code_block', value: '' })
+    expect(parse(`${FENCE}\n${FENCE}`, { positions: false }).children[0]).toEqual({ type: 'code_block', value: '' })
   })
 })
 
@@ -89,7 +90,7 @@ describe('a leaf that resolution does not walk into', () => {
   })
 
   it('a leaf whose only node is an inline note is walked into, so the note is numbered', () => {
-    expect(parse('x^[]', { positions: false }).children![0]!.children![1]).toEqual({ type: 'inline_footnote', children: [], number: 1 })
+    expect(inlinesOf(parse('x^[]', { positions: false }).children[0])[1]).toEqual({ type: 'inline_footnote', children: [], number: 1 })
     expect(render('x^[]')).toContain('<li id="fn1">')
   })
 })

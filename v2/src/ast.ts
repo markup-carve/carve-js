@@ -1,9 +1,9 @@
 // The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
 // node type, told apart by `type`; `AstNode` is the loose view of any node, in which every field is optional.
-import { type Node } from './ast-nodes.ts'
+import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node } from './ast-nodes.ts'
 
 export type * from './ast-nodes.ts'
-export { handle } from './ast-nodes.ts'
+export { FIELD_VALUES, handle, isFieldValue } from './ast-nodes.ts'
 
 export const AST_VERSION = '2.0'
 
@@ -42,8 +42,8 @@ export interface Task {
 
 export interface RubyPair {
   type: 'rubyPair'
-  base: AstNode[]
-  annotation: AstNode[]
+  base: Inline[]
+  annotation: Inline[]
 }
 
 export interface ExtensionDeclaration {
@@ -153,19 +153,34 @@ export interface AstNode {
 /** C2-A-012: the envelope a tree travels in at a storage or process boundary. */
 export interface Envelope {
   astVersion: string
-  document: AstNode
+  document: DocumentNode
   vocabulary?: string
   extensions?: ExtensionDeclaration[]
 }
 
 export const DEFINITION_TYPES: readonly string[] = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition']
 
-/** The node types with inline content in `children`. */
-export const INLINE_PARENTS: readonly string[] = [
+/** A node whose children are inline nodes. */
+export type InlineParent = Extract<Node, { children: Inline[] }>
+
+/** The node types with inline content in `children`: those of `InlineParent`. */
+export const INLINE_PARENTS: readonly InlineParent['type'][] = [
   'paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line', 'citation_definition', 'emphasis', 'strong',
   'underline', 'strike', 'highlight', 'superscript', 'subscript', 'insert', 'delete', 'span', 'link', 'inline_footnote',
   'inline_extension', 'small_caps',
 ]
+
+const INLINE_PARENT_TYPES: ReadonlySet<string> = new Set(INLINE_PARENTS)
+
+/** A node whose children are blocks. */
+export type BlockParent = Extract<Node, { children: Block[] }>
+
+const BLOCK_PARENTS: readonly BlockParent['type'][] = [
+  'admonition', 'block_extension', 'block_quote', 'caption', 'definition_description', 'directive', 'div', 'figure',
+  'figure_group', 'footnote', 'list_item', 'section',
+]
+
+const BLOCK_PARENT_TYPES: ReadonlySet<string> = new Set(BLOCK_PARENTS)
 
 const NONE: readonly never[] = []
 
@@ -230,6 +245,26 @@ export function rowspanOf(cell: AstNode): number {
 /** The level of a heading: 1 unless it says otherwise. */
 export function levelOf(heading: AstNode): number {
   return heading.level ?? 1
+}
+
+/** The inline title of `node`, where it has one (C2-A-024). The title of a link definition is a string and no slot. */
+export function titleOf(node: Node): Inline[] | undefined {
+  return 'title' in node && Array.isArray(node.title) ? node.title : undefined
+}
+
+/** The caption of `node`, where it has one (C2-A-024). */
+export function captionOf(node: Node): CaptionNode | undefined {
+  return 'caption' in node ? node.caption : undefined
+}
+
+/** Whether the children of `node` are inline nodes. */
+export function isInlineParent(node: Node): node is InlineParent {
+  return INLINE_PARENT_TYPES.has(node.type)
+}
+
+/** Whether the children of `node` are blocks. */
+export function isBlockParent(node: Node): node is BlockParent {
+  return BLOCK_PARENT_TYPES.has(node.type)
 }
 
 /** A soft or a hard line break. */

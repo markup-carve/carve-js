@@ -33,7 +33,7 @@ const TEXT_OF: NodeHandlers<string> = {
 
 /** C2-H-143: the text of a node type that gives text of its own, or undefined for one that does not. */
 function ownText(node: Node): string | undefined {
-  return handle(TEXT_OF, node.type, node)
+  return handle(TEXT_OF, node.type, node, undefined)
 }
 
 // C2-H-143: the node types that give nothing, so a comment or a note never moves an id.

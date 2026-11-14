@@ -1,8 +1,10 @@
 // One test per clause of spec/0.2/html.md that states behavior, named with the id of the clause.
 import { describe, expect, it } from 'vitest'
 import {
-  type AstNode, CarveOptionError, CarveRenderError, decodeTree, encodeTree, parse, render, type RenderOptions,
-  renderWithDiagnostics,
+  type Block, type BlockExtensionNode, type CaptionNode, CarveOptionError, CarveRenderError, type CitationDefinitionNode,
+  type CitationGroupNode, type CitationNode, decodeTree, type DocumentNode, encodeTree, type HeadingNode,
+  type InlineExtensionNode, type ListItemNode, type ListNode, parse, render, type RenderOptions, renderWithDiagnostics,
+  type RubyNode, type SectionNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableRowNode,
 } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
@@ -17,7 +19,7 @@ function check(cases: readonly Case[]): void {
   }
 }
 
-function lossCodes(input: string | AstNode, options?: RenderOptions): string[] {
+function lossCodes(input: string | DocumentNode, options?: RenderOptions): string[] {
   return renderWithDiagnostics(input, options).diagnostics.filter((entry) => entry.channel === 'render-loss').map((entry) => entry.code)
 }
 
@@ -66,7 +68,7 @@ describe('paragraphs, headings and sections', () => {
   ])
 
   it('C2-H-021: a level above 6 is a div that keeps the true level, and it nests sections by its level', () => {
-    const heading = (level: number, value: string): AstNode => ({ type: 'heading', level, children: [text(value)] })
+    const heading = (level: number, value: string): HeadingNode => ({ type: 'heading', level, children: [text(value)] })
     expect(render(documentOf(heading(6, 'six'), heading(8, 'eight'), paragraph('x'), heading(7, 'seven')))).toBe(
       '<section id="six">\n  <h6>six</h6>\n  <section id="eight">\n    <div role="heading" aria-level="8">eight</div>\n    <p>x</p>\n  </section>\n'
       + '  <section id="seven">\n    <div role="heading" aria-level="7">seven</div>\n  </section>\n</section>',
@@ -87,8 +89,8 @@ describe('lists', () => {
   ])
 
   it('C2-H-036: the renderer reads list.spacing and derives nothing from the blocks of an item', () => {
-    const item = (...children: AstNode[]): AstNode => ({ type: 'list_item', children })
-    const list = (spacing: string): AstNode => documentOf({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing, children: [item(paragraph('a'), paragraph('b'))] })
+    const item = (...children: Block[]): ListItemNode => ({ type: 'list_item', children })
+    const list = (spacing: ListNode['spacing']): DocumentNode => documentOf({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing, children: [item(paragraph('a'), paragraph('b'))] })
     expect(render(list('tight'))).toBe('<ul>\n  <li>a\n    <p>b</p>\n  </li>\n</ul>')
     expect(render(list('loose'))).toBe('<ul>\n  <li><p>a</p>\n    <p>b</p>\n  </li>\n</ul>')
   })
@@ -147,10 +149,10 @@ describe('tables', () => {
   ])
 
   it('C2-A-093, C2-A-175: a supplied cell with counts and no marks covers the positions its counts give, and blocks in a cell are rendered', () => {
-    const cell = (value: string, extra: Partial<AstNode> = {}): AstNode => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [text(value)] }], ...extra })
-    const row = (...cells: AstNode[]): AstNode => ({ type: 'table_row', children: cells })
-    const columns: AstNode[] = [{ type: 'table_column' }, { type: 'table_column' }, { type: 'table_column', align: 'right' }]
-    const body: AstNode = { type: 'table_body', children: [row(cell('a', { rowspan: 2, colspan: 2 }), cell('b')), row(cell('c')), row({ type: 'table_cell', header: false, children: [paragraph('p')] })] }
+    const cell = (value: string, extra: Partial<TableCellNode> = {}): TableCellNode => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [text(value)] }], ...extra })
+    const row = (...cells: TableCellNode[]): TableRowNode => ({ type: 'table_row', children: cells })
+    const columns: TableColumnNode[] = [{ type: 'table_column' }, { type: 'table_column' }, { type: 'table_column', align: 'right' }]
+    const body: TableBodyNode = { type: 'table_body', children: [row(cell('a', { rowspan: 2, colspan: 2 }), cell('b')), row(cell('c')), row({ type: 'table_cell', header: false, children: [paragraph('p')] })] }
     expect(render(documentOf({ type: 'table', columns, children: [body] }))).toBe(
       '<table>\n  <tbody>\n    <tr><td rowspan="2" colspan="2">a</td><td style="text-align: right;">b</td></tr>\n'
       + '    <tr><td style="text-align: right;">c</td></tr>\n    <tr><td><p>p</p></td></tr>\n  </tbody>\n</table>',
@@ -169,7 +171,7 @@ describe('captions and figures', () => {
   ])
 
   it('C2-H-065, C2-H-068: a supplied caption with several blocks gives every paragraph p, and caption.short is not written', () => {
-    const caption: AstNode = { type: 'caption', children: [paragraph('a'), paragraph('b')], short: [text('s')] }
+    const caption: CaptionNode = { type: 'caption', children: [paragraph('a'), paragraph('b')], short: [text('s')] }
     expect(render(documentOf({ type: 'figure', children: [{ type: 'thematic_break' }], caption }))).toBe(
       '<figure>\n  <hr>\n  <figcaption>\n    <p>a</p>\n    <p>b</p>\n  </figcaption>\n</figure>',
     )
@@ -200,28 +202,28 @@ describe('inline elements', () => {
   ])
 
   it('C2-H-142: small_caps, ruby and section reach the renderer in a supplied tree', () => {
-    const ruby: AstNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [text('漢')], annotation: [text('kan')] }] }
-    const section: AstNode = { type: 'section', children: [paragraph({ type: 'small_caps', children: [text('a')] }, ruby)] }
+    const ruby: RubyNode = { type: 'ruby', pairs: [{ type: 'rubyPair', base: [text('漢')], annotation: [text('kan')] }] }
+    const section: SectionNode = { type: 'section', children: [paragraph({ type: 'small_caps', children: [text('a')] }, ruby)] }
     expect(render(documentOf(section))).toBe(
       '<section>\n  <p><span class="smallcaps">a</span><ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby></p>\n</section>',
     )
   })
 
   it('C2-A-119: with no extension for citations a citation group writes its bracket text and a citation definition writes nothing', () => {
-    const citation: AstNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
-    const group: AstNode = { type: 'citation_group', raw: '[@a, p. 3 & 4]', children: [citation] }
-    const definition: AstNode = { type: 'citation_definition', key: 'a', namespace: 'citation', children: [text('A book')] }
+    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
+    const group: CitationGroupNode = { type: 'citation_group', raw: '[@a, p. 3 & 4]', children: [citation] }
+    const definition: CitationDefinitionNode = { type: 'citation_definition', key: 'a', namespace: 'citation', children: [text('A book')] }
     expect(render(documentOf(paragraph('see ', group), definition))).toBe('<p>see [@a, p. 3 &amp; 4]</p>')
   })
 
   it('C2-A-123: an inline extension with a qualified name is a registered extension and renders through its fallback', () => {
-    const extension: AstNode = { type: 'inline_extension', name: 'org.example.badge', children: [], fallback: [text('new')] }
+    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.badge', children: [], fallback: [text('new')] }
     expect(render(documentOf(paragraph(extension)))).toBe('<p>new</p>')
     expect(lossCodes(documentOf(paragraph(extension)))).toEqual(['extension-fallback-rendered'])
   })
 
   it('C2-H-076, C2-A-127: an unknown optional extension renders through its fallback and is reported', () => {
-    const extension: AstNode = { type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('f')] }
+    const extension: BlockExtensionNode = { type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('f')] }
     expect(render(documentOf(extension))).toBe('<p>f</p>')
     expect(lossCodes(documentOf(extension))).toEqual(['extension-fallback-rendered'])
   })

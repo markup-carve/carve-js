@@ -1,15 +1,15 @@
 // The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161 to C2-A-163).
-import { AST_VERSION, type AstNode, type Envelope } from './ast.ts'
+import { type DocumentNode, type Envelope, type Node } from './ast.ts'
 import { CarveTreeError, validateTree } from './ast-validate.ts'
 
 /** The bare tree as JSON, every field included (C2-A-165). */
-export function encodeTree(document: AstNode): string {
+export function encodeTree(document: Node): string {
   return JSON.stringify(document)
 }
 
 /** C2-A-012, C2-A-013: the tree inside its envelope, for a storage or process boundary. */
-export function encodeEnvelope(document: AstNode): string {
-  const envelope: Envelope = { astVersion: document.astVersion ?? AST_VERSION, document }
+export function encodeEnvelope(document: DocumentNode): string {
+  const envelope: Envelope = { astVersion: document.astVersion, document }
   if (document.extensions !== undefined) envelope.extensions = document.extensions
   return JSON.stringify(envelope)
 }
@@ -23,7 +23,7 @@ function cleanString(_key: string, value: unknown): unknown {
  * Reads a bare tree or an envelope from JSON. C2-A-167, C2-A-170: a text that is no JSON, or no
  * tree of contract 2.0, is refused here with a `CarveTreeError`, not with the error of the JSON library.
  */
-export function decodeTree(json: string): AstNode {
+export function decodeTree(json: string): DocumentNode {
   let value: unknown
   try {
     value = JSON.parse(json, cleanString)
@@ -110,6 +110,6 @@ function equalValues(a: unknown, b: unknown, counts: boolean): boolean {
 }
 
 /** C2-A-161: whether two trees are the same document. */
-export function treesEqual(a: AstNode, b: AstNode): boolean {
+export function treesEqual(a: Node, b: Node): boolean {
   return equalValues(a, b, true)
 }
