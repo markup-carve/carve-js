@@ -834,11 +834,11 @@ function openTextLeaf(state: BlockState, kind: number, contentStart: number, end
   leaf.lines = 1
 }
 
-function openOpaqueLeaf(state: BlockState, kind: number, closerChar: number, length: number): void {
+function openOpaqueLeaf(state: BlockState, kind: number, fenceChar: number, length: number): void {
   const leaf = state.leaf
   const cursor = state.cursor
   leaf.kind = kind
-  leaf.fenceChar = closerChar
+  leaf.fenceChar = fenceChar
   leaf.fenceLength = length
   leaf.fenceColumn = cursor.column - cursor.origin
   state.above.heldBlankLine = NO_LINE
