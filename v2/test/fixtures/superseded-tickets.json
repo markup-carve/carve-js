@@ -1,0 +1,1372 @@
+[
+ {
+  "ticket": "carve#6031",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-016",
+   "C2-B-015",
+   "C2-B-012",
+   "C2-B-085"
+  ],
+  "input": "[^n]: +\nc\n[^n]: +\n  - m\n- g\n",
+  "html": ""
+ },
+ {
+  "ticket": "carve#6030",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-024"
+  ],
+  "input": "- a\n  - b\n  +\n  +\n    >\n",
+  "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n+\n+\n&gt;</li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6029",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-017",
+   "C2-B-148"
+  ],
+  "input": ":: t\n: +\n> q\n  ^ p\n  ^ p\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>+\n&gt; q\n^ p\n^ p</dd>\n</dl>"
+ },
+ {
+  "ticket": "carve#6028",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-087",
+   "C2-B-111"
+  ],
+  "input": "[^a]: +\n- i\n\n  ```\n+\n  p\n]\n",
+  "html": "<p>+\np\n]</p>"
+ },
+ {
+  "ticket": "carve#6027",
+  "verdict": "gone",
+  "clauses": [
+   "C2-I-046",
+   "C2-I-047",
+   "C2-I-048",
+   "C2-I-051",
+   "C2-I-054",
+   "C2-I-036"
+  ],
+  "input": "_`/`*_\n_*`/`*{c_}\n",
+  "html": "<p>_<code>/</code><strong>_\n_</strong><code>/</code>*{c_}</p>"
+ },
+ {
+  "ticket": "carve#6008",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-A-076",
+   "C2-B-138",
+   "C2-A-147"
+  ],
+  "input": "- [^n]: t\n  %%\n  y\n",
+  "html": "<ul>\n  <li>[^n]: t\ny</li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6008",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-A-076",
+   "C2-B-138",
+   "C2-A-147"
+  ],
+  "input": "[^n]: t\n%%\n  y\n\nx[^n]\n",
+  "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>t\ny<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#6007",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-024",
+   "C2-B-012",
+   "C2-B-090",
+   "C2-W-002",
+   "C2-W-004",
+   "C2-H-069"
+  ],
+  "input": "- x\n  - a\n  {#i}\n  {% c %}\n  - q\n",
+  "html": "<ul>\n  <li>x\n    <ul>\n      <li>a\n{#i}\n</li>\n      <li>q</li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6004",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-062",
+   "C2-B-063",
+   "C2-B-064",
+   "C2-B-025"
+  ],
+  "input": "- x0\n  - +\n   text\n\n  - q\n",
+  "html": "<ul>\n  <li>x0\n    <ul>\n      <li><p>+\ntext</p></li>\n      <li><p>q</p></li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6004",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-062",
+   "C2-B-063",
+   "C2-B-064",
+   "C2-B-025"
+  ],
+  "input": "- x0\n  - +\n   text\n\n  > q\n",
+  "html": "<ul>\n  <li>x0\n    <ul>\n      <li>+\ntext</li>\n    </ul>\n    <blockquote><p>q</p></blockquote>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6004",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-062",
+   "C2-B-063",
+   "C2-B-064",
+   "C2-B-025"
+  ],
+  "input": "- x0\n  - +\n\n   text\n\n  - q\n",
+  "html": "<ul>\n  <li>x0\n    <ul>\n      <li><p>+</p>\n        <p>text</p>\n      </li>\n      <li><p>q</p></li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#6001",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. x\n   - +\n   [^m]: n\n   {#i}\n     {#i}\n   q\n\np[^m]\n",
+  "html": "<ol>\n  <li>x\n    <ul>\n      <li>+\n[^m]: n\n{#i}\n{#i}\nq</li>\n    </ul>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#6001",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. x\n   - +\n   {#i}\n     {#i}\n   q\n\np[^m]\n",
+  "html": "<ol>\n  <li>x\n    <ul>\n      <li>+\n{#i}\n{#i}\nq</li>\n    </ul>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#6000",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-004",
+   "C2-B-005"
+  ],
+  "input": "- x\n  - y\n    1. +\n  \t{#i}\n    q\n",
+  "html": "<ul>\n  <li>x\n    <ul>\n      <li>y\n        <ol>\n          <li>+\n{#i}\nq</li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5999",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-142",
+   "C2-B-138",
+   "C2-B-053",
+   "C2-A-145",
+   "C2-A-147"
+  ],
+  "input": "- a\n%%%\nx\n%%%\n%% d\n- b\n",
+  "html": "<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5999",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-142",
+   "C2-B-138",
+   "C2-B-053",
+   "C2-A-145",
+   "C2-A-147"
+  ],
+  "input": "- a\n%%%\nx\n%%%\n- b\n",
+  "html": "<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5994",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-012"
+  ],
+  "input": "- x\n   - y\n     [^h]: +\n     [^m]: n\n       {#i}\n      q\n\np[^m][^h]\n",
+  "html": "<ul>\n  <li>x\n    <ul>\n      <li>y\n[^h]: +\n[^m]: n\n{#i}\nq</li>\n    </ul>\n  </li>\n</ul>\n<p>p[^m][^h]</p>"
+ },
+ {
+  "ticket": "carve#5994",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-012"
+  ],
+  "input": "[^m]: n\n  {#i}\n q\n\np[^m]\n",
+  "html": "<p>p<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>n\n{#i}\nq<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5993",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-015",
+   "C2-B-056",
+   "C2-B-012"
+  ],
+  "input": "1. x\n   1. +\n   [^m]: n\n     - z\n   q\n\np[^m]\n",
+  "html": "<ol>\n  <li>x\n    <ol>\n      <li>+\n[^m]: n\n        <ul>\n          <li>z\nq</li>\n        </ul>\n      </li>\n    </ol>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5993",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-015",
+   "C2-B-056",
+   "C2-B-012"
+  ],
+  "input": "1. x\n   1. +\n   [^m]: n\n   q\n\np[^m]\n",
+  "html": "<ol>\n  <li>x\n    <ol>\n      <li>+\n[^m]: n\nq</li>\n    </ol>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5985",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-I-041",
+   "C2-I-042",
+   "C2-B-098",
+   "C2-B-099"
+  ],
+  "input": "[x](/u){.a CLASS=b .c}\n",
+  "html": "<p><a href=\"/u\" class=\"a b c\">x</a></p>"
+ },
+ {
+  "ticket": "carve#5979",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-016",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-054"
+  ],
+  "input": "- - :: t\n    : d\n    z\n: p\n",
+  "html": "<ul>\n  <li>\n    <ul>\n      <li>\n        <dl>\n          <dt>t</dt>\n          <dd>d\nz\n: p</dd>\n        </dl>\n      </li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5979",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-016",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-054"
+  ],
+  "input": "- :: t\n  : d\n  z\n: p\n",
+  "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>d\nz\n: p</dd>\n    </dl>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5977",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-029",
+   "C2-B-108",
+   "C2-B-027"
+  ],
+  "input": "- a\n  - b\n\n    %%%\n  # h\n    %%%\n    :::\n",
+  "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    <h1 id=\"h\">h</h1>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5973",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-022",
+   "C2-B-023",
+   "C2-B-015",
+   "C2-B-050",
+   "C2-H-040"
+  ],
+  "input": "> :: t\n> : +\n> * b\n> +\n> - c\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>+\n* b\n+\n- c</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve#5973",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-022",
+   "C2-B-023",
+   "C2-B-015",
+   "C2-B-050",
+   "C2-H-040"
+  ],
+  "input": "- o\n  :: t\n  : +\n  1. b\n  +\n  - c\n",
+  "html": "<ul>\n  <li>o\n:: t\n: +\n    <ol>\n      <li>b\n+</li>\n    </ol>\n    <ul>\n      <li>c</li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5973",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-022",
+   "C2-B-023",
+   "C2-B-015",
+   "C2-B-050",
+   "C2-H-040"
+  ],
+  "input": ":: t\n: +\n  - b\n+\n- c\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>+</p>\n    <ul>\n      <li>b\n+\n- c</li>\n    </ul>\n  </dd>\n</dl>"
+ },
+ {
+  "ticket": "carve#5972",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-016",
+   "C2-B-085",
+   "C2-B-012",
+   "C2-B-015"
+  ],
+  "input": "[^a]: +\n[^a]: +\npara\n\nsee[^a]\n",
+  "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5972",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-016",
+   "C2-B-085",
+   "C2-B-012",
+   "C2-B-015"
+  ],
+  "input": "[^a]: +\n[^a]: +\n  more\n- item\n\nsee[^a]\n",
+  "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5970",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "- +\n[^m]: +\n  {y}\nz\n\np[^m]\n",
+  "html": "<ul>\n  <li>+\n[^m]: +\n{y}\nz</li>\n</ul>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5970",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. +\n[^m]: +\n  {y}\nz\n\np[^m]\n",
+  "html": "<ol>\n  <li>+\n[^m]: +\n{y}\nz</li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5970",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "- +\n[^m]: +\nz\n\np[^m]\n",
+  "html": "<ul>\n  <li>+\n[^m]: +\nz</li>\n</ul>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5968",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-091",
+   "C2-B-092",
+   "C2-B-192",
+   "C2-B-063"
+  ],
+  "input": "1. +\n[^m]: n\n\n   {y}\n\np[^m]\n",
+  "html": "<ol>\n  <li>+\n[^m]: n\n    <p>{y}</p>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5968",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-091",
+   "C2-B-092",
+   "C2-B-192",
+   "C2-B-063"
+  ],
+  "input": "1. +\n[^m]: n\n\n   {y}\n  q\n\np[^m]\n",
+  "html": "<ol>\n  <li>+\n[^m]: n\n    <p y=\"\">q</p>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5968",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-091",
+   "C2-B-092",
+   "C2-B-192",
+   "C2-B-063"
+  ],
+  "input": "- +\n[^m]: n\n\n   {y}\n\np[^m]\n",
+  "html": "<ul>\n  <li>+\n[^m]: n\n    <p>{y}</p>\n  </li>\n</ul>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5967",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-012",
+   "C2-I-088"
+  ],
+  "input": "- +\n[^m]: n\nq\n\np[^m]\n",
+  "html": "<ul>\n  <li>+\n[^m]: n\nq</li>\n</ul>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5967",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-012",
+   "C2-I-088"
+  ],
+  "input": "- +\n[^m]: n\n  m\nq\n\np[^m]\n",
+  "html": "<ul>\n  <li>+\n[^m]: n\nm\nq</li>\n</ul>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve#5958",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": "- [^a]: h\n+\n  z\n\nx[^a]\n",
+  "html": "<ul>\n  <li>[^a]: h\n+\nz</li>\n</ul>\n<p>x[^a]</p>"
+ },
+ {
+  "ticket": "carve#5958",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": "- a\n+\n  z\n",
+  "html": "<ul>\n  <li>a\n+\nz</li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5956",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-016",
+   "C2-B-085",
+   "C2-B-015",
+   "C2-B-024"
+  ],
+  "input": "[^a]: +\n[^a]: +\n* i\n- b\n\nsee[^a]\n",
+  "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5955",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-109",
+   "C2-B-111",
+   "C2-B-014",
+   "C2-B-026"
+  ],
+  "input": "- +\n```\na\n\n  ```\n  c\n",
+  "html": "<ul>\n  <li>+</li>\n</ul>\n<pre><code>a\n\n</code></pre>\n<p>c</p>"
+ },
+ {
+  "ticket": "carve#5955",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-109",
+   "C2-B-111",
+   "C2-B-014",
+   "C2-B-026"
+  ],
+  "input": "[^1]: +\n```\na\n\n  ```\n  c\n[^1]\n",
+  "html": "<pre><code>a\n\n</code></pre>\n<p>c\n<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5935",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-025",
+   "C2-B-026",
+   "C2-B-109",
+   "C2-B-114"
+  ],
+  "input": "> - x\n> +\n> ```\n> a\n>\n> b\n> ```\n",
+  "html": "<blockquote>\n  <ul>\n    <li>x\n+</li>\n  </ul>\n  <pre><code>a\n\nb\n</code></pre>\n</blockquote>"
+ },
+ {
+  "ticket": "carve#5919",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012",
+   "C2-B-015"
+  ],
+  "input": "- [^a]: +\n  - li\n  +\n  - x\n\nsee[^a]\n",
+  "html": "<ul>\n  <li>[^a]: +\n    <ul>\n      <li>li\n+</li>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>\n<p>see[^a]</p>"
+ },
+ {
+  "ticket": "carve#5918",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-025",
+   "C2-B-026",
+   "C2-B-111",
+   "C2-B-113"
+  ],
+  "input": "see[^a]\n\n[^a]: p\n+\n```\na\n\n+\n zq\n",
+  "html": "<p>see<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<pre><code>a\n\n+\n zq\n</code></pre>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>p\n+<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5918",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-025",
+   "C2-B-026",
+   "C2-B-111",
+   "C2-B-113"
+  ],
+  "input": ":: t\n: p\n+\n```\na\n\n+\nzq\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>p\n+</dd>\n</dl>\n<pre><code>a\n\n+\nzq\n</code></pre>"
+ },
+ {
+  "ticket": "carve#5917",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-109",
+   "C2-B-029",
+   "C2-B-025"
+  ],
+  "input": "see[^a]\n\n- [^a]: +\n  ```\n  a\n\n   ```\n  zq\n",
+  "html": "<p>see[^a]</p>\n<ul>\n  <li>[^a]: +\n    <pre><code>a\n\n</code></pre>\n    <p>zq</p>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5917",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-109",
+   "C2-B-029",
+   "C2-B-025"
+  ],
+  "input": "see[^a]\n\n- [^a]: +\n  ```\n  a\n\n   ```\n   zq\n",
+  "html": "<p>see[^a]</p>\n<ul>\n  <li>[^a]: +\n    <pre><code>a\n\n</code></pre>\n    <p>zq</p>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5916",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-111",
+   "C2-B-114"
+  ],
+  "input": "see[^a]\n\n- [^a]: +\n  ```\n  a\n\n  +\n  zq\n",
+  "html": "<p>see[^a]</p>\n<ul>\n  <li>[^a]: +\n    <pre><code>a\n\n+\nzq\n</code></pre>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5913",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-015",
+   "C2-B-012"
+  ],
+  "input": ":: t\n: [^a]: +\n  - li\n  +\n    - zq\n\nsee[^a]\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>[^a]: +</p>\n    <ul>\n      <li>li\n+\n        <ul>\n          <li>zq</li>\n        </ul>\n      </li>\n    </ul>\n  </dd>\n</dl>\n<p>see[^a]</p>"
+ },
+ {
+  "ticket": "carve#5912",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-012",
+   "C2-B-020",
+   "C2-B-024",
+   "C2-B-137",
+   "C2-B-139",
+   "C2-H-069"
+  ],
+  "input": "> :: t\n> : b\n- s\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>b\n- s</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve#5912",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-012",
+   "C2-B-020",
+   "C2-B-024",
+   "C2-B-137",
+   "C2-B-139",
+   "C2-H-069"
+  ],
+  "input": "> :: t\n> : b\n> %% c\n- s\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>b\n- s</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve#5903",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-005",
+   "C2-B-004",
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-025"
+  ],
+  "input": "[^m]: [^n]: t\n\t\t> x\n\nx[^m] y[^n]\n",
+  "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> y[^n]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>[^n]: t\n&gt; x<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5903",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-005",
+   "C2-B-004",
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-025"
+  ],
+  "input": "[^m]: [^n]: t\n      > x\n\nx[^m] y[^n]\n",
+  "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> y[^n]</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>[^n]: t\n&gt; x<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
+ },
+ {
+  "ticket": "carve#5903",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-005",
+   "C2-B-004",
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-025"
+  ],
+  "input": "- a\n     - b\n\t\t> x\n",
+  "html": "<ul>\n  <li>a\n    <ul>\n      <li>b\n&gt; x</li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5902",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-024",
+   "C2-B-012",
+   "C2-B-032",
+   "C2-I-015",
+   "C2-I-017"
+  ],
+  "input": "- > `a\n  > {.x\n  >  .y}\ntail\n",
+  "html": "<ul>\n  <li>\n    <blockquote><p><code>a\n{.x\n.y}\ntail</code></p></blockquote>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve#5899",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-005",
+   "C2-B-012",
+   "C2-B-024",
+   "C2-H-032",
+   "C2-H-143"
+  ],
+  "input": "- [ ] [^n]: t\n\t\t> x\n  tail\n\nx[^n]\n",
+  "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\": t &gt; x tail\"> [^n]: t\n&gt; x\ntail</li>\n</ul>\n<p>x[^n]</p>"
+ },
+ {
+  "ticket": "carve#5898",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-005",
+   "C2-B-015",
+   "C2-H-032",
+   "C2-H-143"
+  ],
+  "input": "- [ ] [^n]: t\n\t\t- x\n\nx[^n]\n",
+  "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\": t\"> [^n]: t\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>\n<p>x[^n]</p>"
+ },
+ {
+  "ticket": "carve#5894",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-024",
+   "C2-B-001",
+   "C2-I-010"
+  ],
+  "input": "\\\\[a]{title=\"`\"}\n{k=v}\nb\n",
+  "html": "<p>\\<span title=\"`\">a</span>\n{k=v}\nb</p>"
+ },
+ {
+  "ticket": "carve#5893",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-020",
+   "C2-B-024",
+   "C2-H-069",
+   "C2-I-025"
+  ],
+  "input": "> [^n]: b\n> c\n- s\n\nx[^n]\n",
+  "html": "<blockquote><p>[^n]: b\nc\n- s</p></blockquote>\n<p>x[^n]</p>"
+ },
+ {
+  "ticket": "carve-js#4986",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-W-057",
+   "C2-W-117",
+   "C2-B-145"
+  ],
+  "input": ":: %% c\n: d\n",
+  "html": "<dl>\n  <dt></dt>\n  <dd>d</dd>\n</dl>"
+ },
+ {
+  "ticket": "carve-js#4986",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-W-057",
+   "C2-W-117",
+   "C2-B-145"
+  ],
+  "input": "::\n: d\n",
+  "html": "<p>::\n: d</p>"
+ },
+ {
+  "ticket": "carve-js#4983",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": "   - y\n     [^h]: +\n     [^m]: n\n\np[^m][^h]\n",
+  "html": "<ul>\n  <li>y\n[^h]: +\n[^m]: n</li>\n</ul>\n<p>p[^m][^h]</p>"
+ },
+ {
+  "ticket": "carve-js#4982",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-025",
+   "C2-B-026"
+  ],
+  "input": "- a\n  - +\n  %%%\n  c\n  %%%\n",
+  "html": "<ul>\n  <li>a\n    <ul>\n      <li>+</li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve-js#4982",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-025",
+   "C2-B-026"
+  ],
+  "input": "- +\n%%%\nc\n%%%\n%% d\n\ntext\n",
+  "html": "<ul>\n  <li>+</li>\n</ul>\n<p>text</p>"
+ },
+ {
+  "ticket": "carve-js#4979",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-016",
+   "C2-B-012",
+   "C2-B-024"
+  ],
+  "input": "- :: t\n\n  : a\n : b\n",
+  "html": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>a\n: b</dd>\n    </dl>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve-js#4979",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-016",
+   "C2-B-012",
+   "C2-B-024"
+  ],
+  "input": ">  1. :: t\n>\n>     : a\n>    : b\n",
+  "html": "<blockquote>\n  <ol>\n    <li>\n      <dl>\n        <dt>t</dt>\n        <dd>a\n: b</dd>\n      </dl>\n    </li>\n  </ol>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-js#4971",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": "> :: t\n> : > [^q]: +\nx\n\nr[^q]\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>\n      <blockquote><p>[^q]: +\nx</p></blockquote>\n    </dd>\n  </dl>\n</blockquote>\n<p>r[^q]</p>"
+ },
+ {
+  "ticket": "carve-js#4971",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": ":: t\n: > [^q]: +\n  > z\n\nr[^q]\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <blockquote><p>[^q]: +\nz</p></blockquote>\n  </dd>\n</dl>\n<p>r[^q]</p>"
+ },
+ {
+  "ticket": "carve-js#4968",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-040",
+   "C2-B-081",
+   "C2-B-084"
+  ],
+  "input": "a. *[HTML]: X\nHTML\n",
+  "html": "<ol type=\"a\">\n  <li>*[HTML]: X\nHTML</li>\n</ol>"
+ },
+ {
+  "ticket": "carve-js#4968",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-040",
+   "C2-B-081",
+   "C2-B-084"
+  ],
+  "input": "A. *[HTML]: X\nHTML\n",
+  "html": "<p>A. *[HTML]: X\nHTML</p>"
+ },
+ {
+  "ticket": "carve-js#4961",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-090",
+   "C2-B-062",
+   "C2-B-063"
+  ],
+  "input": "- +\n\n  {.x\n  .y}\n- b\n",
+  "html": "<ul>\n  <li>+\n    <p>{.x\n.y}</p>\n  </li>\n  <li>b</li>\n</ul>"
+ },
+ {
+  "ticket": "carve-js#4960",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-004",
+   "C2-B-111"
+  ],
+  "input": "1. +\n\t{.x}\n```\nx\n\n*b*\n",
+  "html": "<ol>\n  <li>+\n{.x}</li>\n</ol>\n<pre><code>x\n\n*b*\n</code></pre>"
+ },
+ {
+  "ticket": "carve-js#4957",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-020",
+   "C2-B-022",
+   "C2-B-012"
+  ],
+  "input": "> :: t\n> : a\n> z\n> : c\n- b\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>a\nz</dd>\n    <dd>c\n- b</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-js#4957",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-020",
+   "C2-B-022",
+   "C2-B-012"
+  ],
+  "input": "> :: t\n> : a\n> : c\n- b\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>a</dd>\n    <dd>c\n- b</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-js#4944",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-109",
+   "C2-B-014"
+  ],
+  "input": "- p\n+\n```\na\n\n ```\n  zq\n",
+  "html": "<ul>\n  <li>p\n+</li>\n</ul>\n<pre><code>a\n\n</code></pre>\n<p>zq</p>"
+ },
+ {
+  "ticket": "carve-js#4934",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-139",
+   "C2-B-140",
+   "C2-H-019",
+   "C2-H-069"
+  ],
+  "input": "{% c %} %% t\n\nz\n",
+  "html": "<p>z</p>"
+ },
+ {
+  "ticket": "carve-js#4931",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-111",
+   "C2-B-114"
+  ],
+  "input": "- x\n+\n```\na\n\n+\n\nz\n",
+  "html": "<ul>\n  <li>x\n+</li>\n</ul>\n<pre><code>a\n\n+\n\nz\n</code></pre>"
+ },
+ {
+  "ticket": "carve-js#4930",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-078",
+   "C2-B-014"
+  ],
+  "input": ":: t\n:  d\n+\n::: note\nx\n:::\n+\nw\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>d\n+</dd>\n</dl>\n<aside class=\"admonition note\" aria-label=\"Note\">\n  <p>x</p>\n</aside>\n<p>+\nw</p>"
+ },
+ {
+  "ticket": "carve-js#4920",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-090",
+   "C2-B-024",
+   "C2-B-012"
+  ],
+  "input": ":: t\n: p\n  - a\n    {.a\n    # q\nafter\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>p</p>\n    <ul>\n      <li>a\n{.a\n# q\nafter</li>\n    </ul>\n  </dd>\n</dl>"
+ },
+ {
+  "ticket": "carve-js#4917",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-090",
+   "C2-B-020",
+   "C2-B-012"
+  ],
+  "input": "> [^n]: b\n> {.x\n- s\n\nx[^n]\n",
+  "html": "<blockquote><p>[^n]: b\n{.x\n- s</p></blockquote>\n<p>x[^n]</p>"
+ },
+ {
+  "ticket": "carve-js#4917",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-081",
+   "C2-B-090",
+   "C2-B-020",
+   "C2-B-012"
+  ],
+  "input": "> - b\n> {% c\n>   z %}\n- s\n",
+  "html": "<blockquote>\n  <ul>\n    <li>b\n\n- s</li>\n  </ul>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-js#4913",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-012"
+  ],
+  "input": "> :: t\n> : a\n}\n> +\n> z\n",
+  "html": "<blockquote>\n  <dl>\n    <dt>t</dt>\n    <dd>a\n}\n+\nz</dd>\n  </dl>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-php#5191",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-012",
+   "C2-B-024"
+  ],
+  "input": "1. x\n   - y\n     10. +\n    \t[^n]: note\n         q\n",
+  "html": "<ol>\n  <li>x\n    <ul>\n      <li>y\n        <ol start=\"10\">\n          <li>+\n[^n]: note\nq</li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ol>"
+ },
+ {
+  "ticket": "carve-php#5190",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-062",
+   "C2-B-063",
+   "C2-B-140"
+  ],
+  "input": "1. x\n   1. +\n      {% x %}\n\n      q\n",
+  "html": "<ol>\n  <li>x\n    <ol>\n      <li>+\n\n        <p>q</p>\n      </li>\n    </ol>\n  </li>\n</ol>"
+ },
+ {
+  "ticket": "carve-php#5184",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-026"
+  ],
+  "input": "  - +\n  ```\n  c\n  ```\n  more\n",
+  "html": "<ul>\n  <li>+</li>\n</ul>\n<pre><code>c\n</code></pre>\n<p>more</p>"
+ },
+ {
+  "ticket": "carve-php#5184",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-024",
+   "C2-B-025",
+   "C2-B-026"
+  ],
+  "input": "  - +\n  # h\n  more\n",
+  "html": "<ul>\n  <li>+\n# h\nmore</li>\n</ul>"
+ },
+ {
+  "ticket": "carve-php#5181",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. o\n   - x\n     1. +\n     [^m]: n\n       {#i}\n     q\n\n   p[^m]\n",
+  "html": "<ol>\n  <li>o\n    <ul>\n      <li>x\n        <ol>\n          <li>+\n[^m]: n\n{#i}\nq</li>\n        </ol>\n      </li>\n    </ul>\n    <p>p[^m]</p>\n  </li>\n</ol>"
+ },
+ {
+  "ticket": "carve-php#5166",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-100",
+   "C2-B-101",
+   "C2-B-024",
+   "C2-A-148",
+   "C2-A-152"
+  ],
+  "input": "-{.x} {.x\n     .y}\n  # h\n",
+  "html": "<ul>\n  <li class=\"x\">{.x\n.y}\n# h</li>\n</ul>"
+ },
+ {
+  "ticket": "carve-php#5165",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-111",
+   "C2-B-113",
+   "C2-B-114",
+   "C2-A-151",
+   "C2-A-154",
+   "C2-I-085"
+  ],
+  "input": "- item\n  %%%\n  [r]: /url\n\n[use][r]\n",
+  "html": "<ul>\n  <li>item</li>\n</ul>\n<p>[use][r]</p>"
+ },
+ {
+  "ticket": "carve-php#5158",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. x0\n   1. +\n   [^m]: n\n     {#i}\n   q\n   r\n\np[^m]\n",
+  "html": "<ol>\n  <li>x0\n    <ol>\n      <li>+\n[^m]: n\n{#i}\nq\nr</li>\n    </ol>\n  </li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve-php#5158",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-024",
+   "C2-I-088"
+  ],
+  "input": "1. +\n[^m]: n\n  {#i}\n q\n\np[^m]\n",
+  "html": "<ol>\n  <li>+\n[^m]: n\n{#i}\nq</li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve-php#5147",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-012",
+   "C2-B-024",
+   "C2-I-043",
+   "C2-I-119"
+  ],
+  "input": "> {% a\n>  {.x}\ntail\n",
+  "html": "<blockquote><p>{% a\n{.x}\ntail</p></blockquote>"
+ },
+ {
+  "ticket": "carve-php#5146",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-I-035",
+   "C2-I-036",
+   "C2-I-028"
+  ],
+  "input": "*}*_ _*`b`*{c_}\n",
+  "html": "<p><strong>}</strong>_ _<strong c_=\"\"><code>b</code></strong></p>"
+ },
+ {
+  "ticket": "carve-php#5146",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-I-035",
+   "C2-I-036",
+   "C2-I-028"
+  ],
+  "input": "_*`b`*{c_}\n",
+  "html": "<p>_<strong c_=\"\"><code>b</code></strong></p>"
+ },
+ {
+  "ticket": "carve-php#5144",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-015",
+   "C2-B-024",
+   "C2-W-106"
+  ],
+  "input": ":: t\n: +\n1. li\n+\n1. sib\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>+\n1. li\n+\n1. sib</dd>\n</dl>"
+ },
+ {
+  "ticket": "carve-php#5144",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-015",
+   "C2-B-024",
+   "C2-W-106"
+  ],
+  "input": ":: t\n: +\n1. li\n+\n- sib\n",
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>+\n1. li\n+\n- sib</dd>\n</dl>"
+ },
+ {
+  "ticket": "carve-php#5134",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-056",
+   "C2-I-088"
+  ],
+  "input": "- [^a]: +\n  - li\n  - l2\n\nsee[^a]\n",
+  "html": "<ul>\n  <li>[^a]: +\n    <ul>\n      <li>li</li>\n      <li>l2</li>\n    </ul>\n  </li>\n</ul>\n<p>see[^a]</p>"
+ },
+ {
+  "ticket": "carve-rs#4317",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-025",
+   "C2-B-139",
+   "C2-B-012",
+   "C2-B-062",
+   "C2-B-063",
+   "C2-H-069"
+  ],
+  "input": "- - p\n\n    {% a\n     m\n     z %}\nq\n",
+  "html": "<ul>\n  <li>\n    <ul>\n      <li>p\n        <p>\nq</p>\n      </li>\n    </ul>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve-rs#4291",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-A-148",
+   "C2-A-151",
+   "C2-A-154",
+   "C2-B-137",
+   "C2-B-138",
+   "C2-B-025",
+   "C2-H-069"
+  ],
+  "input": "- a\n  - b\n%%\n\n  y\n",
+  "html": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n    <p>y</p>\n  </li>\n</ul>"
+ },
+ {
+  "ticket": "carve-rs#4289",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-W-106",
+   "C2-B-012",
+   "C2-H-069"
+  ],
+  "input": "> - +\n> {% c %}\n",
+  "html": "<blockquote>\n  <ul>\n    <li>+\n</li>\n  </ul>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-rs#4285",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-A-151",
+   "C2-B-142",
+   "C2-B-053",
+   "C2-B-109"
+  ],
+  "input": "- a\n%%%\nc\n%%%\n\n- y\n",
+  "html": "<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>y</li>\n</ul>"
+ },
+ {
+  "ticket": "carve-rs#4282",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-081",
+   "C2-B-031",
+   "C2-B-012",
+   "C2-H-069",
+   "C2-I-088"
+  ],
+  "input": "> [^h]: +\n> %% c\n>more\n\np[^h]\n",
+  "html": "<blockquote><p>[^h]: +\n&gt;more</p></blockquote>\n<p>p[^h]</p>"
+ },
+ {
+  "ticket": "carve-rs#4275",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-014",
+   "C2-B-032",
+   "C2-B-111",
+   "C2-A-151"
+  ],
+  "input": "> p\n+\n```\na\n\n> zq\n",
+  "html": "<blockquote><p>p\n+</p></blockquote>\n<pre><code>a\n\n&gt; zq\n</code></pre>"
+ },
+ {
+  "ticket": "carve-rs#4267",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-B-024",
+   "C2-B-012",
+   "C2-I-088"
+  ],
+  "input": "1. +\n[^m]: n\n  {y}\nq\n\np[^m]\n",
+  "html": "<ol>\n  <li>+\n[^m]: n\n{y}\nq</li>\n</ol>\n<p>p[^m]</p>"
+ },
+ {
+  "ticket": "carve-rs#4261",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-W-106",
+   "C2-B-012",
+   "C2-B-125"
+  ],
+  "input": "::: note\n> q\n+\n+\n:::\n",
+  "html": "<aside class=\"admonition note\" aria-label=\"Note\">\n  <blockquote><p>q\n+\n+</p></blockquote>\n</aside>"
+ },
+ {
+  "ticket": "carve-rs#4261",
+  "verdict": "gone",
+  "clauses": [
+   "C2-B-059",
+   "C2-W-106",
+   "C2-B-012",
+   "C2-B-125"
+  ],
+  "input": "::: d\n- +\n:::\nafter\n",
+  "html": "<div class=\"d\">\n  <ul>\n    <li>+</li>\n  </ul>\n</div>\n<p>after</p>"
+ },
+ {
+  "ticket": "carve-rs#4242",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-139",
+   "C2-B-012",
+   "C2-B-081",
+   "C2-H-069",
+   "C2-I-088"
+  ],
+  "input": "> - > {% a\n>   >  z %}\n> q\n",
+  "html": "<blockquote>\n  <ul>\n    <li>\n      <blockquote><p>\nq</p></blockquote>\n    </li>\n  </ul>\n</blockquote>"
+ },
+ {
+  "ticket": "carve-rs#4242",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-139",
+   "C2-B-012",
+   "C2-B-081",
+   "C2-H-069",
+   "C2-I-088"
+  ],
+  "input": "> [^q]: {% a\n>    z %}\n> q\n\nx[^q]\n",
+  "html": "<blockquote><p>[^q]: \nq</p></blockquote>\n<p>x[^q]</p>"
+ },
+ {
+  "ticket": "carve-rs#4238",
+  "verdict": "fixed",
+  "clauses": [
+   "C2-B-012",
+   "C2-B-024",
+   "C2-B-090"
+  ],
+  "input": "> - b\n>   {.x\n>   .y}\ntail\n",
+  "html": "<blockquote>\n  <ul>\n    <li>b\n{.x\n.y}\ntail</li>\n  </ul>\n</blockquote>"
+ }
+]
