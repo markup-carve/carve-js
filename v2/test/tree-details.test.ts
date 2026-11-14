@@ -187,9 +187,13 @@ describe('the reader at its bounds', () => {
       return documentOf({ ...paragraph(), metadata: value })
     }
     expect([refusal(metadata(64)), refusal(metadata(65)) === null]).toEqual([null, false])
-    const references = (count: number): DocumentNode => documentOf(paragraph(
-      { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') }, { type: 'image', resourceId: 'r' },
-    ))
+    // C2-A-131: every reference names an entry of the manifest.
+    const references = (count: number): DocumentNode => ({
+      ...documentOf(paragraph(
+        { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') }, { type: 'image', resourceId: 'r' },
+      )),
+      resources: [{ id: 'r', mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` }],
+    })
     expect([refusal(references(4096)), refusal(references(4097)) === null]).toEqual([null, false])
     const fallbacks = (levels: number): DocumentNode => {
       let node: Inline = text('x')

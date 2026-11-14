@@ -1,6 +1,6 @@
 // The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161 to C2-A-163).
-import { type DocumentNode, type Envelope, type Node } from './ast.ts'
-import { CarveTreeError, validateTree } from './ast-validate.ts'
+import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
+import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.ts'
 
 /** The bare tree as JSON, every field included (C2-A-165). */
 export function encodeTree(document: Node): string {
@@ -19,6 +19,11 @@ function cleanString(_key: string, value: unknown): unknown {
   return typeof value === 'string' && value.includes('\u0000') ? value.replaceAll('\u0000', '�') : value
 }
 
+/** C2-A-012: `value` as an envelope, which has a document and no type, or null for a bare tree. */
+function envelopeOf(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) && value['type'] === undefined && value['document'] !== undefined ? value : null
+}
+
 /**
  * Reads a bare tree or an envelope from JSON. C2-A-167, C2-A-170: a text that is no JSON, or no
  * tree of contract 2.0, is refused here with a `CarveTreeError`, not with the error of the JSON library.
@@ -30,11 +35,16 @@ export function decodeTree(json: string): DocumentNode {
   } catch {
     throw new CarveTreeError('', 'not JSON')
   }
-  const fields = value as { type?: unknown, document?: unknown } | null
-  const document = fields !== null && typeof fields === 'object' && fields.type === undefined && fields.document !== undefined
-    ? fields.document
-    : value
-  validateTree(document)
+  const envelope = envelopeOf(value)
+  if (envelope !== null) validateEnvelope(envelope)
+  const document = envelope === null ? value : envelope['document']
+  // A path inside the envelope starts at its document.
+  try {
+    validateTree(document)
+  } catch (error) {
+    if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
+    throw error
+  }
   return document
 }
 

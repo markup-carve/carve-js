@@ -1,6 +1,7 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
 import { AST_VERSION, type DocumentNode, isRecord } from './ast.ts'
+import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
 
@@ -267,16 +268,30 @@ function checkScalar(type: string, name: string, value: Value, path: string): bo
   return true
 }
 
-type FieldCheck = (value: Value, path: string, depth: number, node: Fields) => void
-
-function nodeList(content: Content): FieldCheck {
-  return (value, path, depth) => checkList(value, path, content, depth)
+/** What the walk counts over the whole tree for the bounds of C2-A-132 and the manifest of C2-A-131. */
+interface TreeFacts {
+  resourceReferences: number
+  /** Each resource id a node names, and the path of the field that names it. */
+  references: [string, string][]
 }
 
-function checkTitle(value: Value, path: string, depth: number, node: Fields): void {
+/** Where the walk stands: the nesting of nodes, the nesting of extension fallbacks, and the facts of the tree. */
+interface Walk {
+  depth: number
+  fallbacks: number
+  tree: TreeFacts
+}
+
+type FieldCheck = (value: Value, path: string, walk: Walk, node: Fields) => void
+
+function nodeList(content: Content): FieldCheck {
+  return (value, path, walk) => checkList(value, path, content, walk)
+}
+
+function checkTitle(value: Value, path: string, walk: Walk, node: Fields): void {
   // C2-A-077: the title of a link definition is a string; every other title is a list of inlines.
   if (node['type'] === 'link_reference_definition') requireString(value, path)
-  else checkList(value, path, 'inlines', depth)
+  else checkList(value, path, 'inlines', walk)
 }
 
 function checkStages(value: Value, path: string): void {
@@ -285,18 +300,39 @@ function checkStages(value: Value, path: string): void {
   })
 }
 
-function checkPairsOfRuby(value: Value, path: string, depth: number): void {
+const RUBY_PAIR_FIELDS = ['type', 'base', 'annotation']
+
+function checkPairsOfRuby(value: Value, path: string, walk: Walk): void {
   requireArray(value, path).forEach((pair, index) => {
     if (!isRecord(pair) || pair['type'] !== 'rubyPair') fail(`${path}/${index}`, 'not a rubyPair')
-    checkList(pair['base'], `${path}/${index}/base`, 'inlines', depth)
-    checkList(pair['annotation'], `${path}/${index}/annotation`, 'inlines', depth)
+    for (const name of Object.keys(pair)) if (!RUBY_PAIR_FIELDS.includes(name)) fail(`${path}/${index}/${name}`, 'not a field of rubyPair')
+    checkList(pair['base'], `${path}/${index}/base`, 'inlines', walk)
+    checkList(pair['annotation'], `${path}/${index}/annotation`, 'inlines', walk)
   })
 }
 
-function checkSlots(value: Value, path: string, depth: number, node: Fields): void {
+function checkSlots(value: Value, path: string, walk: Walk, node: Fields): void {
   if (!isRecord(value)) fail(path, 'slots is not an object')
   const content = node['type'] === 'block_extension' ? 'blocks' : 'inlines'
-  for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${name}`, content, depth)
+  for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${name}`, content, walk)
+}
+
+/** C2-A-122: a list of alternatives, each with a media type in `format` and the extension's own data in `value`. */
+function checkPayload(value: Value, path: string): void {
+  requireArray(value, path).forEach((entry, index) => {
+    const at = `${path}/${index}`
+    if (!isRecord(entry)) fail(at, 'not a payload alternative')
+    for (const name of Object.keys(entry)) {
+      if (name !== 'format' && name !== 'value') fail(`${at}/${name}`, 'not a field of a payload alternative')
+    }
+    if (requireString(entry['format'], `${at}/format`) === '') fail(`${at}/format`, 'an empty media type')
+    if (entry['value'] === null) fail(`${at}/value`, 'a field without a value')
+  })
+}
+
+/** C2-A-131: a resource id that a node names, checked against the manifest when the walk is done. */
+function addReference(id: Value, path: string, walk: Walk): void {
+  walk.tree.references.push([requireString(id, path), path])
 }
 
 /** C2-A-131: every entry has an id, a media type and a digest, and no id occurs twice. */
@@ -339,16 +375,19 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['task', checkTask],
   ['options', checkPairs],
   ['title', checkTitle],
-  ['caption', (value, path, depth) => checkNode(value, path, ['caption'], depth)],
-  ['fallback', (value, path, depth, node) => checkList(value, path, node['type'] === 'block_extension' ? 'blocks' : 'inlines', depth)],
+  ['caption', (value, path, walk) => checkNode(value, path, ['caption'], walk)],
+  ['fallback', (value, path, walk, node) => {
+    const inner: Walk = { ...walk, fallbacks: walk.fallbacks + 1 }
+    checkList(value, path, node['type'] === 'block_extension' ? 'blocks' : 'inlines', inner)
+  }],
   ['columns', nodeList(['table_column'])],
   ['pairs', checkPairsOfRuby],
   ['slots', checkSlots],
   ['stages', checkStages],
   ['resources', checkResources],
   ['extensions', checkExtensions],
-  ['payload', (value, path) => void requireArray(value, path)],
-  ['resourceIds', (value, path) => requireArray(value, path).forEach((id, index) => requireString(id, `${path}/${index}`))],
+  ['payload', checkPayload],
+  ['resourceIds', (value, path, walk) => requireArray(value, path).forEach((id, index) => addReference(id, `${path}/${index}`, walk))],
 ])
 for (const name of INLINE_SLOTS) FIELD_CHECKS.set(name, nodeList('inlines'))
 
@@ -357,9 +396,10 @@ function allowedTypes(content: Content): readonly string[] {
   return content === 'inlines' ? INLINES : content === 'none' ? [] : content
 }
 
-function checkList(value: Value, path: string, content: Content, depth: number): void {
+function checkList(value: Value, path: string, content: Content, walk: Walk): void {
   const allowed = allowedTypes(content)
-  requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, depth + 1))
+  const inner: Walk = { ...walk, depth: walk.depth + 1 }
+  requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
 }
 
 /** C2-A-105, C2-A-120 and the other rules that tie two fields of one node together. */
@@ -375,25 +415,27 @@ function checkDependencies(node: Fields, type: string, path: string): void {
 }
 
 /** C2-A-028, C2-A-169: nodes are closed. C2-A-139: a field that is absent is left out; it is never null. */
-function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, depth: number): void {
+function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, walk: Walk): void {
   const [, required, optional] = rule
   const value = node[name]
   const at = `${path}/${name}`
   if (!COMMON.includes(name) && !required.includes(name) && !optional.includes(name)) fail(at, `not a field of ${type}`)
   if (value === null || value === undefined) fail(at, 'a field without a value')
-  if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, depth, node)
+  if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, walk, node)
+  // C2-A-131: an image names a resource by its id; the string check above holds for it.
+  if (name === 'resourceId') addReference(value, at, walk)
 }
 
-function checkFields(node: Fields, type: string, rule: Rule, path: string, depth: number): void {
+function checkFields(node: Fields, type: string, rule: Rule, path: string, walk: Walk): void {
   const [content, required] = rule
   for (const name of required) if (node[name] === undefined) fail(`${path}/${name}`, 'a required field is missing')
-  for (const name of Object.keys(node)) if (name !== 'type' && name !== 'children') checkField(node, type, rule, name, path, depth)
-  if (content !== 'none') checkList(node['children'], `${path}/children`, content, depth)
+  for (const name of Object.keys(node)) if (name !== 'type' && name !== 'children') checkField(node, type, rule, name, path, walk)
+  if (content !== 'none') checkList(node['children'], `${path}/children`, content, walk)
   else if (node['children'] !== undefined) fail(`${path}/children`, `${type} holds no children`)
 }
 
-function checkNode(value: Value, path: string, allowed: readonly string[], depth: number): void {
-  if (depth > MAX_TREE_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
+function checkNode(value: Value, path: string, allowed: readonly string[], walk: Walk): void {
+  if (walk.depth > MAX_TREE_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
   if (!isRecord(value)) fail(path, 'not a node')
   const type = value['type']
   if (typeof type !== 'string') fail(path, 'a node without a type')
@@ -402,8 +444,9 @@ function checkNode(value: Value, path: string, allowed: readonly string[], depth
   if (rule === undefined) fail(path, `unknown node type ${type}`)
   // C2-A-051, C2-A-052: a type that exists only in its container is refused anywhere else.
   if (!allowed.includes(type)) fail(path, `${type} does not stand here`)
-  checkFields(value, type, rule, path, depth)
+  checkFields(value, type, rule, path, walk)
   checkDependencies(value, type, path)
+  checkNodeBounds(value, path, walk)
 }
 
 /** C2-A-014: `major.minor` without a leading zero. C2-A-018, C2-A-019: the major is 2; a higher minor is accepted. */
@@ -419,40 +462,51 @@ const MAX_METADATA_DEPTH = 64
 const MAX_RESOURCE_REFERENCES = 4096
 const MAX_FALLBACK_DEPTH = 32
 
-/** What the walk for the bounds has counted so far. */
-interface Budget {
-  resourceReferences: number
-}
-
 function metadataDepth(value: Value, path: string, depth: number): void {
   if (typeof value !== 'object' || value === null) return
   if (depth > MAX_METADATA_DEPTH) fail(path, 'metadata is nested deeper than 64 levels')
   for (const [name, inner] of Object.entries(value)) metadataDepth(inner, `${path}/${name}`, depth + 1)
 }
 
+/** The UTF-8 bytes of a payload that `checkPayload` accepted: a string value as it is, any other value as JSON. */
 function payloadBytes(node: Fields): number {
-  const payload = (node['payload'] ?? []) as { value?: unknown }[]
-  return payload.reduce((bytes, entry) => bytes + (typeof entry.value === 'string' ? entry.value.length : 0), 0)
-}
-
-function checkNodeBounds(node: Fields, path: string, budget: Budget, fallbacks: number): void {
-  if (node['metadata'] !== undefined) metadataDepth(node['metadata'], `${path}/metadata`, 1)
-  if (payloadBytes(node) > MAX_PAYLOAD_BYTES) fail(`${path}/payload`, 'an extension payload above 8 MiB')
-  budget.resourceReferences += (node['resourceId'] === undefined ? 0 : 1) + ((node['resourceIds'] as unknown[] | undefined)?.length ?? 0)
-  if (budget.resourceReferences > MAX_RESOURCE_REFERENCES) fail(path, 'more than 4096 resource references')
-  if (fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 extension nodes')
-}
-
-/** C2-A-132: walks the validated tree once more for the bounds that no single node shows. */
-function checkBounds(node: Fields, path: string, budget: Budget, fallbacks: number): void {
-  checkNodeBounds(node, path, budget, fallbacks)
-  for (const slot of ['children', 'fallback', 'title', 'short']) {
-    const list = node[slot]
-    if (!Array.isArray(list)) continue
-    const inner = slot === 'fallback' ? fallbacks + 1 : fallbacks
-    list.forEach((child, index) => checkBounds(child as Fields, `${path}/${slot}/${index}`, budget, inner))
+  let bytes = 0
+  for (const entry of (node['payload'] ?? []) as { value?: unknown }[]) {
+    const value = entry.value
+    if (value !== undefined) bytes += utf8Length(typeof value === 'string' ? value : JSON.stringify(value))
   }
-  if (isRecord(node['caption'])) checkBounds(node['caption'], `${path}/caption`, budget, fallbacks)
+  return bytes
+}
+
+/** C2-A-132: the bounds that one node shows, and its share of the bounds of the whole tree. */
+function checkNodeBounds(node: Fields, path: string, walk: Walk): void {
+  if (node['metadata'] !== undefined) metadataDepth(node['metadata'], `${path}/metadata`, 1)
+  if (node['payload'] !== undefined && payloadBytes(node) > MAX_PAYLOAD_BYTES) fail(`${path}/payload`, 'an extension payload above 8 MiB')
+  const tree = walk.tree
+  tree.resourceReferences += (node['resourceId'] === undefined ? 0 : 1) + ((node['resourceIds'] as unknown[] | undefined)?.length ?? 0)
+  if (tree.resourceReferences > MAX_RESOURCE_REFERENCES) fail(path, 'more than 4096 resource references')
+  if (walk.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 extension nodes')
+}
+
+/** C2-A-131: every id a node names is that of an entry of the manifest. */
+function checkReferences(document: Fields, tree: TreeFacts): void {
+  if (tree.references.length === 0) return
+  const ids = new Set(((document['resources'] ?? []) as Fields[]).map((entry) => entry['id'] as string))
+  for (const [id, path] of tree.references) if (!ids.has(id)) fail(path, `no resource has the id ${JSON.stringify(id)}`)
+}
+
+const ENVELOPE_FIELDS = ['astVersion', 'document', 'vocabulary', 'extensions']
+
+/**
+ * C2-A-012 to C2-A-019: refuses an envelope whose own fields a reader may not accept: a version it does not
+ * read, an unknown required extension, or a field the envelope does not have. The tree inside is checked apart.
+ */
+export function validateEnvelope(envelope: Readonly<Record<string, unknown>>): void {
+  for (const name of Object.keys(envelope)) if (!ENVELOPE_FIELDS.includes(name)) fail(`/${name}`, 'not a field of the envelope')
+  if (envelope['astVersion'] === undefined) fail('/astVersion', 'a required field is missing')
+  checkVersion(envelope['astVersion'], '/astVersion')
+  if (envelope['vocabulary'] !== undefined) checkObject(envelope['vocabulary'], '/vocabulary')
+  if (envelope['extensions'] !== undefined) checkExtensions(envelope['extensions'], '/extensions')
 }
 
 /** Refuses `document` unless it is a tree of contract 2.0. */
@@ -462,12 +516,14 @@ export function validateTree(document: unknown): asserts document is DocumentNod
   if (document['type'] !== 'document') fail('/type', 'the root is not a document')
   if (document['children'] === undefined) fail('/children', 'the root has no children')
   checkVersion(document['astVersion'], '/astVersion')
-  checkFields(document, 'document', RULES.get('document')!, '', 0)
+  const tree: TreeFacts = { resourceReferences: 0, references: [] }
+  checkFields(document, 'document', RULES.get('document')!, '', { depth: 0, fallbacks: 0, tree })
   // C2-A-052: definitions and frontmatter are children of the document and of nothing else.
   const children = document['children'] as Fields[]
   children.forEach((child, index) => {
     // C2-A-049.
     if (child['type'] === 'frontmatter' && index > 0) fail(`/children/${index}`, 'frontmatter is not the first child')
   })
-  checkBounds(document, '', { resourceReferences: 0 }, 0)
+  checkNodeBounds(document, '', { depth: 0, fallbacks: 0, tree })
+  checkReferences(document, tree)
 }
