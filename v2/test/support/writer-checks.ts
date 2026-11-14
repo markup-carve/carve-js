@@ -102,7 +102,7 @@ function nodeEscapes(
   for (let index = 0; at >= 0 && at < end && index < value.length; index++) {
     const next = written[at + 1]
     if (written[at] === '\\' && at + 1 < end && isAsciiPunctuation(written.charCodeAt(at + 1)) && value[index] === next) {
-      if (next !== '\\' && !(inCell && next === '|')) out.push(at)
+      if (next !== '\\' && !cellEscape(inCell, next, value.length)) out.push(at)
       at += 2
     } else if (written[at] === value[index]) {
       at++
@@ -111,6 +111,10 @@ function nodeEscapes(
       return
     }
   }
+}
+
+function cellEscape(inCell: boolean, next: string | undefined, length: number): boolean {
+  return inCell && (next === '|' || (length === 1 && (next === '^' || next === '<')))
 }
 
 /** The number of entries of the ascending list `sorted` below `offset`. */
@@ -274,18 +278,24 @@ function braceInto(u: Unformed, key: string, start: number, end: number): number
  */
 function closerInside(u: Unformed, type: string, start: number, end: number): number {
   if (!['inline_footnote', 'inline_extension', 'emphasis', 'strong'].includes(type)) return -1
+  const mark = type === 'strong' ? '*' : type === 'emphasis' ? '/' : ''
   for (let at = start + 1; at < end - 1; at++) {
     if (u.added.includes(at)) continue
-    if (u.bare.startsWith('/}', at) || (type === 'inline_footnote' && '[]'.includes(u.bare[at] ?? ''))) return at
+    if (u.bare.startsWith('/}', at) || innerCloser(u.bare, type, mark, start, at)) return at
   }
   return -1
+}
+
+function innerCloser(bare: string, type: string, mark: string, start: number, at: number): boolean {
+  if (mark !== '' && bare[at] === mark && !(bare[start] === '{' && at === start + 1)) return true
+  return (type === 'inline_footnote' || type === 'inline_extension') && '[]'.includes(bare[at] ?? '')
 }
 
 function firstCandidate(current: number, candidate: number): number {
   return candidate < 0 ? current : current < 0 ? candidate : Math.min(current, candidate)
 }
 
-function addedBackslash(u: Unformed, missing: Map<string, number>): number {
+function addedBackslashes(u: Unformed, missing: Map<string, number>): number[] {
   let sigil = -1
   let brace = -1
   let closer = -1
@@ -298,7 +308,7 @@ function addedBackslash(u: Unformed, missing: Map<string, number>): number {
     brace = firstCandidate(brace, braceInto(u, key, start, end))
     closer = firstCandidate(closer, closerInside(u, type, start, end))
   }
-  return brace >= 0 ? brace : sigil >= 0 ? sigil : closer
+  return [brace, sigil, closer].filter((at) => at >= 0)
 }
 
 /** The constructs of `held` that the parse of `text` does not hold. */
@@ -415,6 +425,26 @@ function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly numb
   }
 }
 
+/** C2-W-125: find a punctuation escape that restores a node when its missing construct has no simple boundary. */
+function punctuationRepair(source: BareText, tree: DocumentNode, seeds: readonly number[]): number {
+  let first = -1
+  for (let at = 0; at < source.bare.length; at++) {
+    if (seeds.includes(at) || !isAsciiPunctuation(source.bare.charCodeAt(at))) continue
+    if (!('form' in runProcedure(source, tree, [...seeds, at]))) continue
+    if (source.bare[at] === '{') return at
+    if (first < 0) first = at
+  }
+  return first
+}
+
+function nextRepair(source: BareText, tree: DocumentNode, seeds: readonly number[], missing: Map<string, number>): number {
+  const candidates = [...addedBackslashes({ ...source, added: seeds }, missing), lengthenedEnd(source, seeds)]
+    .filter((at) => at >= 0 && !seeds.includes(at))
+  for (const candidate of candidates) if ('form' in runProcedure(source, tree, [...seeds, candidate])) return candidate
+  const repair = punctuationRepair(source, tree, seeds)
+  return repair >= 0 ? repair : candidates[0] ?? -1
+}
+
 /**
  * C2-W-088, C2-W-091, C2-W-125: the escapes of the procedure, as a slow reference. The text of `written` is
  * taken bare of the escapes of its text nodes and parsed; while the parse holds a construct that
@@ -430,8 +460,7 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     if ('form' in result) return result
     const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
     const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
-    let extra = addedBackslash({ ...source, added: seeds }, missing)
-    if (extra < 0) extra = lengthenedEnd(source, seeds)
+    const extra = nextRepair(source, tree, seeds, missing)
     if (extra < 0) {
       const best = result.best
       const what = best === null

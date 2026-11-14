@@ -285,6 +285,15 @@ function escapeInside(c: Check, es: readonly Node[], i: number): boolean {
   return escapeEnd(c, e !== undefined && 'children' in e ? lastText(e) : null, true)
 }
 
+/** C2-W-125, case five: a closer in content precedes a brace that follows the node. */
+function escapeCloserBeforeBrace(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]
+  const next = es[i + 1]
+  if (e === undefined || next?.type !== 'text' || !next.value.startsWith('}')) return false
+  if (lastText(e)?.value.includes('{') !== true) return false
+  return escapeInContent(c, e)
+}
+
 /**
  * The node `es[i]` did not read back. The ways to make it form are tried one per round: an escape
  * before it, an escape at the end of its content, then its other spelling without those escapes,
@@ -321,6 +330,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   (c, es, i) => escapeContentConstruct(c, es[i]!),
   escapeAcrossCloser,
   escapeInside,
+  escapeCloserBeforeBrace,
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
   (c, es, i) => escapeOwnerMark(c, es[i]!),

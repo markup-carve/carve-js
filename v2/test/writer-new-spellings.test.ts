@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { format, parse, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
+import { referenceForm } from './support/writer-checks.ts'
 
 function list(value: string): DocumentNode['children'][number] {
   return { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
@@ -41,5 +42,19 @@ describe('new writer and parser spellings', () => {
     expect(format(String.raw`x/'<\=`)).toBe(String.raw`x/'\<=` + '\n')
     expect(format(String.raw`x/'>\=`)).toBe(String.raw`x/'\>=` + '\n')
     expect(format(String.raw`x'!\=`)).toBe(String.raw`x'\!=` + '\n')
+  })
+
+  it('C2-W-125, case five: the first closer inside emphasis takes the escape', () => {
+    const source = String.raw`x(/u){\//}`
+    const form = String.raw`x(/u){\//}` + '\n'
+    expect(format(source)).toBe(form)
+    expect(referenceForm(form, parse(source))).toEqual({ form })
+  })
+
+  it('C2-W-125: the reference restores obscured constructs and a character behind a mention', () => {
+    for (const source of [String.raw`x[\^](/u)`, String.raw`x^[\[]`, 'x\\`@a\\_']) {
+      const form = format(source)
+      expect(referenceForm(form, parse(source))).toEqual({ form })
+    }
   })
 })
