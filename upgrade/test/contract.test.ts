@@ -22,9 +22,9 @@ const WITH_REPORT = new Set(['U-053#0'])
  * Inputs where the 0.2 engine or the 0.1 engine does not do what the contract states. Each is in
  * _SPEC_GAPS.md under "Contract entries that do not hold"; the test pins what the tool does.
  */
-const DOES_NOT_HOLD: Record<string, { output?: string, entry: string, check: string }> = {
-  // 0.2 reads the marker left of the list's column as a lazy line, so the tool moves it (U-023).
-  'U-029#1': { output: '- a\n- b\n', entry: 'U-023', check: 'pass' },
+const DOES_NOT_HOLD: Record<string, { output?: string, entry?: string, check: string }> = {
+  // Since C2-B-030 and C2-B-054 were ruled, 0.2 reads right-aligned markers as one list, as 0.1 did, so nothing moves (U-119).
+  'U-022#0': { check: 'pass' },
   // 0.1 makes this one-item list loose, which is U-021.
   'U-046#1': { entry: 'U-021', check: 'explained' },
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
@@ -50,7 +50,8 @@ describe('the contract', () => {
           const result = upgrade(input)
           expect(result.output).toBe(known.output ?? input)
           expect(result.check).toBe(known.check)
-          expect(entries(input)).toContain(known.entry)
+          if (known.entry === undefined) expect(entries(input)).toEqual([])
+          else expect(entries(input)).toContain(known.entry)
         })
       } else if (entry.class === 'rewrite' || entry.class === 'escape') {
         it(`${key} gives the output of the contract and keeps the HTML`, () => {
@@ -82,7 +83,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 95 entries', () => {
-    expect(cases.length).toBe(95)
+  it('covers all 98 entries', () => {
+    expect(cases.length).toBe(98)
   })
 })

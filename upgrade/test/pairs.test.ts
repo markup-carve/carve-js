@@ -16,7 +16,7 @@ const BLOCKS: [string, string][] = [
   ['U-017', '- +\n  TEXT\n- two\n'],
   ['U-018', '- TEXT\n\n  second\n- b\n'],
   ['U-020', '{loose}\n- TEXT\n- b\n'],
-  ['U-022', ' 9. TEXT\n10. b\n'],
+  ['U-022', '1. TEXT\n 2. b\n'],
   ['U-023', '- a\n - TEXT\n'],
   ['U-024', 'i) TEXT\nj) two\n'],
   ['U-025', '1234567890. TEXT\n'],

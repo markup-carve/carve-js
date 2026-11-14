@@ -34,7 +34,7 @@ const PAIRS: Pair[] = [
   { entries: 'U-065 U-071', input: 'said \'Bob _and_ left.\n', output: 'said ’Bob {_and_} left.\n' },
   { entries: 'U-001 U-106', input: ':: term\nmore term text\n# Heading\n', output: ':: term\n\nmore term text\n\n# Heading\n' },
   { entries: 'U-063 U-107', input: '| a | b |\n\n^ first\n^ second\n', output: '| a | b |\n^ first\n\n^ second\n' },
-  { entries: 'U-022 U-065', input: ' 9. _a_\n10. b\n', output: '9. {_a_}\n10. b\n' },
+  { entries: 'U-022 U-065', input: '1. _a_\n 2. b\n', output: '1. {_a_}\n2. b\n' },
   { entries: 'U-024 U-065', input: 'i) _one_\nj) two\n', output: '{start=9}\na) {_one_}\nb) two\n' },
   { entries: 'U-026 U-050', input: '- a\n%%%\nx\n%%% y\n- b\n', output: '- a\n  %%%\n  x\n  y\n  %%%\n- b\n' },
   { entries: 'U-057 U-066', input: '| ~a~ | b \\|\n', output: '| {~a~} | b \\| |\n' },

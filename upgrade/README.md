@@ -29,8 +29,9 @@ The tool reads the input with the 0.1 engine of this repository (the build of `s
 `dist/`, so run `npm ci` or `npm run build` at the repository root first), collects edits from
 the 0.1 tree and its positions, and applies them from the end of the text backward. It changes
 only the spans a contract entry names. It then renders the input with the 0.1 engine and the
-output with the 0.2 engine (`v2/`) and compares the HTML after sorting attributes and dropping
-whitespace between tags.
+output with the 0.2 engine (`v2/`) and compares the HTML after sorting attributes, dropping
+whitespace between tags and dropping the class `task` of a list item, which 0.2 writes on every
+boxed item and 0.1 did not.
 
 Each record of the report names a contract entry (`U-001` onward, see `data/entries.json`), its
 class (`rewrite`, `escape`, `report`), the line of the input and the 0.2 lint rule where one

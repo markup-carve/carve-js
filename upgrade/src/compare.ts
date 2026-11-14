@@ -1,6 +1,7 @@
 // The comparison of the contract, section 1: two HTML documents are equal when they are equal
 // after the attributes of each element are sorted and the whitespace between tags is dropped.
-// Text is compared as it is, and so is everything inside `<pre>`.
+// Text is compared as it is, and so is everything inside `<pre>`. The base class `task` of a list
+// item is dropped on both sides: 0.2 writes it on every boxed item (C2-H-032, U-117) and 0.1 did not.
 
 const TEXT = 0
 const OPEN = 1
@@ -70,6 +71,20 @@ function nameEnd(body: string): number {
   return at
 }
 
+const TASK_CLASS = 'task'
+
+/** Drops the class `task` from the class attribute in `parts`, and the attribute when nothing is left. */
+function dropTaskClass(parts: string[]): void {
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]!
+    if (!part.startsWith('class="')) continue
+    const kept = part.slice(7, -1).split(' ').filter((token) => token !== TASK_CLASS && token !== '')
+    if (kept.length === 0) parts.splice(index, 1)
+    else parts[index] = `class="${kept.join(' ')}"`
+    return
+  }
+}
+
 /** Reads the source line off `parts`, removes it, and returns it, or 0. */
 function takeSourceLine(parts: string[]): number {
   for (let index = 0; index < parts.length; index++) {
@@ -91,6 +106,7 @@ function readTag(html: string, start: number, end: number, line: number): Token 
   const name = body.slice(0, split)
   const parts = splitAttributes(body, split)
   const own = takeSourceLine(parts)
+  if (name === 'li') dropTaskClass(parts)
   parts.sort()
   const text = parts.length === 0 ? `<${name}>` : `<${name} ${parts.join(' ')}>`
   return { kind: OPEN, name, text, line: own > 0 ? own : line }

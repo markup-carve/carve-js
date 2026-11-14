@@ -1,4 +1,4 @@
-// Contract 2.2: lists. `+` lines, tightness, marker columns and marker spellings.
+// Contract 2.2: lists. `+` lines, tightness, marker columns, marker spellings and task boundaries.
 import { ancestor, isContainer, isInside, quotesOf } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
@@ -205,20 +205,53 @@ function tightness(ctx: Context, visit: Visit): void {
   }
 }
 
+function isTask(item: Node01): boolean {
+  return item.checked !== undefined || item.taskState !== undefined
+}
+
+const BOUNDARY_BLANKS = 3
+
+/**
+ * U-117: 0.1 never put a boxed and a plain item in one list, 0.2 does (C2-B-049), so two such
+ * lists that 0.1 kept apart get the three blank lines that keep them apart in 0.2 (C2-B-053).
+ */
+function taskBoundary(ctx: Context, visit: Visit): void {
+  const list = visit.node
+  const above = visit.index > 0 ? visit.siblings[visit.index - 1] : undefined
+  if (list.ordered === true || above === undefined || above.type !== 'list' || above.ordered === true || above.pos === undefined) return
+  const last = itemsOf(above).at(-1)
+  const first = itemsOf(list)[0]
+  if (last === undefined || first === undefined || isTask(last) === isTask(first)) return
+  if (ctx.src[markerSpan(ctx, last)[0]] !== ctx.src[markerSpan(ctx, first)[0]]) return
+  let blanks = 0
+  for (let line = above.pos.endLine + 1; line < list.pos!.startLine; line++) {
+    if (!isBlankInQuotes(lineText(ctx.lines, line))) return
+    blanks++
+  }
+  if (blanks >= BOUNDARY_BLANKS) return
+  const blank = quotePrefix(lineText(ctx.lines, list.pos!.startLine), quotesOf(visit).length) + '\n'
+  const at = lineStart(ctx.lines, list.pos!.startLine)
+  change(ctx, 'U-117', at, at, blank.repeat(BOUNDARY_BLANKS - blanks), 'blank lines put between a list of task items and a list of plain items, which 0.2 would join')
+}
+
 function markerColumn(ctx: Context, item: Node01): number {
   return indentOf(lineText(ctx.lines, item.pos!.startLine))
 }
 
-/** The list that ends on the line directly above `visit`, when both stand in the same container. */
-function listAbove(visit: Visit): Node01 | null {
+/** The list that ends above `visit` with only blank lines between, when both stand in the same container. */
+function listAbove(ctx: Context, visit: Visit): Node01 | null {
   const above = visit.index > 0 ? visit.siblings[visit.index - 1] : undefined
   if (above === undefined || above.type !== 'list' || above.pos === undefined) return null
-  return above.pos.endLine === visit.node.pos!.startLine - 1 ? above : null
+  for (let line = above.pos.endLine + 1; line < visit.node.pos!.startLine; line++) {
+    if (!isBlank(lineText(ctx.lines, line))) return null
+  }
+  return above
 }
 
 /**
- * U-022, U-023: a marker right of its list's column and short of the content column above nests
- * in 0.2 (C2-B-056, C2-B-030), so it moves to the column of the list.
+ * U-022, U-023: a marker right of the marker above it and short of that item's content column
+ * nests in 0.2 (C2-B-056), so it moves to the column of the list. A marker at or left of the
+ * marker above continues the list (C2-B-030, C2-B-054) and stays.
  */
 function markerColumns(ctx: Context, visit: Visit): void {
   // Only a list of the document itself: inside a container the columns belong to the container.
@@ -227,12 +260,18 @@ function markerColumns(ctx: Context, visit: Visit): void {
   if (items.length === 0) return
   let base = markerColumn(ctx, items[0]!)
   for (const item of items) base = Math.min(base, markerColumn(ctx, item))
-  const above = listAbove(visit)
+  const above = listAbove(ctx, visit)
   const aboveItems = above === null ? [] : itemsOf(above)
   if (aboveItems.length > 0) base = Math.min(base, markerColumn(ctx, aboveItems[0]!))
+  // The column the marker above stands at once the earlier moves are made.
+  let previous = aboveItems.length > 0 ? markerColumn(ctx, aboveItems[aboveItems.length - 1]!) : Number.MAX_SAFE_INTEGER
   for (const item of items) {
     const column = markerColumn(ctx, item)
-    if (column <= base) continue
+    if (column <= base || column <= previous) {
+      previous = column
+      continue
+    }
+    previous = base
     const id = visit.node.ordered === true && above === null ? 'U-022' : 'U-023'
     dedentLines(ctx, id, item.pos!.startLine, item.pos!.endLine, column - base, 'marker moved to the column of its list')
   }
@@ -298,6 +337,7 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
   if (node.type === 'list') {
     tightness(ctx, visit)
     markerColumns(ctx, visit)
+    taskBoundary(ctx, visit)
     if (node.ordered === true) {
       alphabeticFromRoman(ctx, node)
       longNumber(ctx, node)

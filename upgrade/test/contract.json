@@ -93,5 +93,8 @@
   {"id": "U-113", "title": "Markup inside an unresolved reference", "inputs": ["See [*b* and /i/][nope] and [`c`][].\n", "See [a^[note] b][nope].\n"], "outputs": ["See [\\*b\\* and \\/i\\/][nope] and [\\`c\\`][].\n", "See [a\\^[note] b][nope].\n"], "class": "escape"},
   {"id": "U-114", "title": "New spellings that 0.1 already had", "inputs": [". first\n. second\n", "::: >\nquoted\nsecond\n:::\n", "::: spoiler \"Title\"\nbody\n:::\n", "{start=9}\na) one\nb) two\n", ":::: note\nbody\n:::\nafter\n::::\n"], "outputs": [], "class": "none"},
   {"id": "U-115", "title": "Hyphen run 0.1 kept as typed, and the braced en dash", "inputs": ["a{--}b and --flag\n", "run --verbose (--b) and a-{--}\n"], "outputs": ["a--b and -\\-flag\n", "run -\\-verbose (-\\-b) and a\\---\n"], "class": "escape"},
-  {"id": "U-116", "title": "Tilde fence", "inputs": ["~~~js\nx\n~~~\n", "~~~~ py \"t\"\na ``` b\n~~~~~\n"], "outputs": ["```js\nx\n```\n", "```` py \"t\"\na ``` b\n````\n"], "class": "rewrite"}
+  {"id": "U-116", "title": "Tilde fence", "inputs": ["~~~js\nx\n~~~\n", "~~~~ py \"t\"\na ``` b\n~~~~~\n"], "outputs": ["```js\nx\n```\n", "```` py \"t\"\na ``` b\n````\n"], "class": "rewrite"},
+  {"id": "U-117", "title": "List of task items next to a list of plain items", "inputs": ["- [ ] a\n- b\n", "- a\n\n- [x] b\n", "> - [ ] a\n> - b\n"], "outputs": ["- [ ] a\n\n\n\n- b\n", "- a\n\n\n\n- [x] b\n", "> - [ ] a\n>\n>\n>\n> - b\n"], "class": "rewrite"},
+  {"id": "U-118", "title": "Uppercase marker with a dot and one space", "inputs": ["II. Background\n", "MD. Jones\n", "I.  a\nII. b\n"], "outputs": [], "class": "none"},
+  {"id": "U-119", "title": "List marker left of every open list under item text", "inputs": ["  - a\n- b\n", " 9. a\n10. b\n", "- a\n    - b\n  - c\n"], "outputs": [], "class": "none"}
 ]
