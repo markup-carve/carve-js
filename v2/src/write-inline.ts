@@ -374,12 +374,34 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
       lineStart = true
     }
     const end = partEnd(w, nodes, at)
+    if (node.type === 'text') doubleLastBackslash(w, node, nodes, end, flags)
     const part = writePart(w, nodes, at, end, flags)
     out += part
     if (part !== '') lineStart = part.charCodeAt(part.length - 1) === 10
     at = end
   }
   return out
+}
+
+/**
+ * C2-W-097: a backslash that ends a text is written as two where what follows it is ASCII
+ * punctuation, a space or the end of a line: the end of a list of inlines is the closing mark of
+ * its node or the end of the content. The second backslash is kept as an escape of the text, so
+ * the test of a parse counts it where it counts the others.
+ */
+function doubleLastBackslash(w: Writer, node: TextNode, nodes: readonly Node[], next: number, flags: number): void {
+  const value = node.value
+  const last = value.length - 1
+  if (last < 0 || value.charCodeAt(last) !== BACKSLASH) return
+  const escapes = w.escapes.get(node)
+  if (escapes?.[escapes.length - 1] === last) return
+  const after = nodes[next]
+  if (after !== undefined && after.type !== 'soft_break' && after.type !== 'hard_break') {
+    const spelled = writePart(w, nodes, next, partEnd(w, nodes, next), flags)
+    const code = spelled.charCodeAt(0)
+    if (spelled !== '' && code !== SPACE && !isAsciiPunctuation(code)) return
+  }
+  w.escapes.set(node, [...(escapes ?? []), last])
 }
 
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */

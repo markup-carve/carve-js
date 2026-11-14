@@ -216,6 +216,16 @@ function escapeBefore(c: Check, es: readonly Node[], i: number): boolean {
   return escapeEnd(c, i > 0 ? lastText(es[i - 1]) : null, true)
 }
 
+/**
+ * Asks for the escape of the first character of the text behind `es[i]`, which can read on into its
+ * markup: a name character behind a mention or a tag, a mark behind a closing mark, or the neighbor
+ * that decides a smart punctuation mark (C2-I-104, C2-W-125).
+ */
+function escapeAfter(c: Check, es: readonly Node[], i: number): boolean {
+  const next = textAt(es, i + 1)
+  return next !== null && escapeAt(c, next, 0)
+}
+
 /** Asks for the escape that keeps the end of the content of `es[i]` from reading on into its closing markup. */
 function escapeInside(c: Check, es: readonly Node[], i: number): boolean {
   const e = es[i]
@@ -250,10 +260,13 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
 
 type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) => boolean
 
+// C2-W-088: the leftmost construct takes the backslash first, so a construct inside the content is
+// escaped before the end of the content and the text behind the node.
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
-  escapeInside,
   (c, es, i) => escapeContentConstruct(c, es[i]!),
+  escapeInside,
+  escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
   (c, es, i, attempt) => {
     if (!hasOtherForm(c, es[i]!)) return false
@@ -424,11 +437,19 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
 function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
+  // C2-W-093: the node before took this text into its content, its mark closing the node in place of the node's own.
+  if (at.vi === 0 && at.i > 0 && startsWithCloser(es[at.i - 1]!, es[at.i]) && escapeAt(c, es[at.i] as TextNode, 0)) return false
   // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
   if (at.vi === 0 && at.i > 0 && isBreak(es[at.i - 1])) escapeLineStart(c, es, openerLine(es, at.i), owner)
   else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
   else c.losses.push([owner, null])
   return false
+}
+
+/** Whether `next` is text that starts with the closing mark of `node`. */
+function startsWithCloser(node: Node, next: Node | undefined): boolean {
+  const mark = CLOSING_MARKS.get(node.type)
+  return mark !== undefined && next?.type === 'text' && next.value.startsWith(mark)
 }
 
 /** The text node `es[at.i]` is matched to its end; the parse may hold more text behind it. */
@@ -496,16 +517,19 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   const next = textAt(es, i + 1)
   if (next !== null && !sameValue(e.attrs, a.attrs) && next.value.startsWith('{')) return escapeAt(c, next, 0)
   // C2-I-015: a backtick behind a closing run makes it longer, so the span reads on into the text behind it.
-  if (next !== null && next.value.startsWith('`') && endsInRun(e) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
+  // C2-I-090: a name character behind a mention or a tag makes the name longer.
+  if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
   if (next !== null && escapeAt(c, next, 0)) return true
   const before = textAt(es, i - 1)
   return before !== null && escapeAt(c, before, before.value.length - 1)
 }
 
-/** Whether the spelling of `node` ends in the closing backtick run of a code span. */
-function endsInRun(node: Node): boolean {
-  return (node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && node.attrs === undefined
+/** Whether the text `next` can read on into the end of the spelling of `node`: a closing backtick run, or a name. */
+function readsOn(node: Node, next: TextNode): boolean {
+  if (node.attrs !== undefined) return false
+  if (node.type === 'mention' || node.type === 'tag') return true
+  return (node.type === 'code' || node.type === 'literal_inline' || node.type === 'math') && next.value.startsWith('`')
 }
 
 function textAt(nodes: readonly Node[], at: number): TextNode | null {

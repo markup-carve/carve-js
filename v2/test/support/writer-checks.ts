@@ -467,10 +467,10 @@ export interface GateResult {
 }
 
 /**
- * The gates alone, without the slow reference of C2-W-088: a written form that the writer reports
- * no loss for parses to the tree (C2-W-002), writing its parse again gives the same bytes
- * (C2-W-003), and formatting the formatted source gives the same bytes. A reported loss is no
- * failure of a gate; it is returned apart, since only some trees have no spelling (C2-W-011).
+ * The gates alone, without the slow reference of C2-W-088: the formatted source parses to the tree
+ * of the source (C2-W-002), formatting it again gives the same bytes (C2-W-003), and writing the
+ * parse of the written form again gives the same bytes. C2-W-002 has no exception for a parsed
+ * document, so a loss the writer reports fails it too; the loss is returned apart to name it.
  */
 export function checkGates(src: string): GateResult {
   const tree = parse(src)
@@ -479,11 +479,11 @@ export function checkGates(src: string): GateResult {
   const refused = isRefusal(tree, found)
   const named = found.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
   const losses = found.length === 0 || refused ? null : `the writer reports ${named}`
-  return { failure: refused ? null : gateFailure(tree, formatted.source, found.length > 0), losses, refused }
+  return { failure: refused ? null : gateFailure(tree, formatted.source), losses, refused }
 }
 
-function gateFailure(tree: DocumentNode, source: string, lossy: boolean): string | null {
-  if (!lossy && !treesEqual(tree, parse(source))) return `C2-W-002, ${show(source)} parses to another tree and no loss is reported`
+function gateFailure(tree: DocumentNode, source: string): string | null {
+  if (!treesEqual(tree, parse(source))) return `C2-W-002, ${show(source)} parses to another tree`
   const again = format(source)
   if (again !== source) return `format(format(x)) is ${show(again)}, format(x) is ${show(source)}`
   const plain = write(tree)
@@ -510,31 +510,39 @@ export interface RandomRunResult {
   failureCount: number
   losses: string[]
   lossCount: number
+  /** The failures that come with no reported loss: an output that differs silently (C2-W-011). */
+  silentCount: number
 }
 
 /** Checks `count` sources that `build` makes from the generator, with `checkGates`. */
 export function randomWriter(
   count: number, random: () => number, build: (random: () => number) => string, maxReported = MAX_REPORTED,
 ): RandomRunResult {
-  const result: RandomRunResult = { documents: 0, refused: 0, failures: [], failureCount: 0, losses: [], lossCount: 0 }
+  const result: RandomRunResult = { documents: 0, refused: 0, failures: [], failureCount: 0, losses: [], lossCount: 0, silentCount: 0 }
   for (let at = 0; at < count; at++) {
     const src = build(random)
     result.documents++
-    let gates: GateResult
-    try {
-      gates = checkGates(src)
-    } catch (error) {
-      gates = { failure: `threw ${String(error)}`, losses: null, refused: false }
-    }
-    if (gates.refused) result.refused++
-    if (gates.failure !== null) {
-      result.failureCount++
-      if (result.failures.length < maxReported) result.failures.push(`${show(src)}: ${gates.failure}`)
-    }
-    if (gates.losses !== null) {
-      result.lossCount++
-      if (result.losses.length < maxReported) result.losses.push(`${show(src)}: ${gates.losses}`)
-    }
+    countGates(result, src, guardedGates(src), maxReported)
   }
   return result
+}
+
+function guardedGates(src: string): GateResult {
+  try {
+    return checkGates(src)
+  } catch (error) {
+    return { failure: `threw ${String(error)}`, losses: null, refused: false }
+  }
+}
+
+function countGates(result: RandomRunResult, src: string, gates: GateResult, maxReported: number): void {
+  if (gates.refused) result.refused++
+  if (gates.failure !== null) {
+    result.failureCount++
+    if (gates.losses === null) result.silentCount++
+    if (result.failures.length < maxReported) result.failures.push(`${show(src)}: ${gates.failure}`)
+  }
+  if (gates.losses === null) return
+  result.lossCount++
+  if (result.losses.length < maxReported) result.losses.push(`${show(src)}: ${gates.losses}`)
 }

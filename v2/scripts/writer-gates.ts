@@ -7,7 +7,8 @@
 //   node v2/scripts/writer-gates.ts examples
 //   node v2/scripts/writer-gates.ts lines 3
 //   node v2/scripts/writer-gates.ts tokens 4
-//   node v2/scripts/writer-gates.ts random [contents] [documents] [seed]
+//   node v2/scripts/writer-gates.ts random [contents] [documents] [seed] [--silent]
+// With --silent the random run fails only on an output that reads back differently with no reported loss.
 import { readFileSync } from 'node:fs'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
@@ -78,12 +79,15 @@ function randomDocument(random: () => number): string {
   return lines.join('\n')
 }
 
+const silentOnly = process.argv.includes('--silent')
+
 function report(what: string, result: RandomRunResult, started: number): boolean {
   const counts = `${result.documents} ${what}, ${result.refused} refused (C2-W-016), ${result.failureCount} failures`
-  console.log(`${counts}, ${result.lossCount} with a reported loss (C2-W-011), ${Date.now() - started} ms`)
+  const losses = `${result.lossCount} with a reported loss (C2-W-011), ${result.silentCount} without one`
+  console.log(`${counts}, ${losses}, ${Date.now() - started} ms`)
   for (const failure of result.failures) console.log(`  ${failure}`)
   for (const loss of result.losses) console.log(`  loss: ${loss}`)
-  return result.failureCount === 0
+  return silentOnly ? result.silentCount === 0 : result.failureCount === 0
 }
 
 function runRandom(contents: number, documents: number, seed: number): boolean {
@@ -96,7 +100,8 @@ function runRandom(contents: number, documents: number, seed: number): boolean {
 }
 
 const kind = process.argv[2] ?? 'examples'
-const argument = (at: number, fallback: number): number => Number(process.argv[at] ?? fallback)
+const numbers = process.argv.filter((value) => value !== '--silent')
+const argument = (at: number, fallback: number): number => Number(numbers[at] ?? fallback)
 let passed: boolean
 if (kind === 'examples') passed = runExamples()
 else if (kind === 'random') passed = runRandom(argument(3, 2_000_000), argument(4, 200_000), argument(5, 1))

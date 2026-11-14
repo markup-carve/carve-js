@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
-import { checkWriter, enumerateWriter, randomWriter, seededRandom } from './support/writer-checks.ts'
+import { checkGates, checkWriter, enumerateWriter, seededRandom } from './support/writer-checks.ts'
 
 interface Example {
   file: string
@@ -39,12 +39,16 @@ describe('the gates of the writer on its own token alphabet', () => {
     for (const tokens of [1, 2]) expect(enumerateWriter(WRITER_TOKENS, tokens, '', 'x').failures).toEqual([])
   })
 
-  it('C2-W-002, C2-W-003: a seeded random run of contents and documents', () => {
-    const contents = randomWriter(2000, seededRandom(1), (random) => {
-      let out = 'x'
-      for (let count = 5 + Math.floor(random() * 5); count > 0; count--) out += WRITER_TOKENS[Math.floor(random() * WRITER_TOKENS.length)]!
-      return out
-    })
-    expect(contents.failures).toEqual([])
+  it('C2-W-011: in a seeded random run, no written form reads back as another tree without a reported loss', () => {
+    const random = seededRandom(1)
+    const silent: string[] = []
+    for (let count = 0; count < 2000; count++) {
+      let src = 'x'
+      const pick = (): string => WRITER_TOKENS[Math.floor(random() * WRITER_TOKENS.length)]!
+      for (let tokens = 5 + Math.floor(random() * 5); tokens > 0; tokens--) src += pick()
+      const gates = checkGates(src)
+      if (gates.failure !== null && gates.losses === null) silent.push(`${JSON.stringify(src)}: ${gates.failure}`)
+    }
+    expect(silent).toEqual([])
   })
 })

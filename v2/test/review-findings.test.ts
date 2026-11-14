@@ -419,3 +419,26 @@ describe('fields checked against the node type they stand on', () => {
     expect(refusal(inParagraph({ ...link, namespace: 'link' }))).toBeNull()
   })
 })
+
+describe('what the four-token writer gate found', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-I-090, C2-W-088: a name character behind a mention or a tag is escaped, so the name does not take it', () => {
+    expect(format(`x @a${BACKSLASH}_`)).toBe(`x @a${BACKSLASH}_\n`)
+    expect(format(`x ${BACKSLASH}{#a${BACKSLASH}_`)).toBe(`x ${BACKSLASH}{#a${BACKSLASH}_\n`)
+  })
+
+  it('C2-W-097: a backslash that ends a text is written as two before punctuation, a space or the end of a line', () => {
+    expect(format(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/`)).toBe(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/${BACKTICK}\n`)
+    expect(format(`a${BACKSLASH}${BACKSLASH}`)).toBe(`a${BACKSLASH}${BACKSLASH}\n`)
+  })
+
+  it('C2-W-088, C2-W-093: a closing mark behind the node is escaped, and a brace inside it, so the node closes where it should', () => {
+    expect(format(`x(/u)${BACKSLASH}{/${BACKSLASH}/`)).toBe(`x(/u)${BACKSLASH}{/${BACKSLASH}/\n`)
+    expect(format(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+`)).toBe(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+\n`)
+  })
+
+  it('C2-W-088: a construct inside the content takes its escape before the end of the content', () => {
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}[^/`)).toBe(`x(/u)${BACKSLASH}${BACKTICK}[^/\n`)
+  })
+})
