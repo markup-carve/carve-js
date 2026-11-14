@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, render, type Diagnostic,
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
+import { forEachSlot, type Node } from '../src/ast.ts'
 import { ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
 import { type ParsedArgs } from './flags.ts'
 
@@ -38,12 +39,15 @@ function ast(text: string): DocumentNode {
   catch (error) { throw new CliError('ast-json-invalid', String(error)) }
 }
 
-function hasRawHtml(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false
-  if (Array.isArray(value)) return value.some(hasRawHtml)
-  const record: Record<string, unknown> = Object.fromEntries(Object.entries(value))
-  if ((record['type'] === 'raw_block' || record['type'] === 'raw_inline') && record['format'] === 'html') return true
-  return Object.values(record).some(hasRawHtml)
+function hasRawHtml(document: DocumentNode): boolean {
+  const pending: Node[] = [document]
+  while (pending.length > 0) {
+    const node = pending.pop()
+    if (node === undefined) continue
+    if ((node.type === 'raw_block' || node.type === 'raw_inline') && node.format === 'html') return true
+    forEachSlot(node, (nodes) => { for (const child of nodes) pending.push(child) })
+  }
+  return false
 }
 
 function firstChange(before: string, after: string): { line: number, oldLine: string, newLine: string } {
