@@ -73,6 +73,7 @@ describe('carve2 process', () => {
 
   it('C2-A-012 and C2-W-102: AST JSON round trips through render and fmt', () => {
     const tree = cli(['ast', '--no-positions'], 'text').stdout
+    expect(cli(['ast', '--positions'], 'text').stdout).toContain('"pos"')
     expect(JSON.parse(tree)).toMatchObject({ astVersion: '2.0', type: 'document' })
     expect(tree).not.toContain('"pos"')
     const envelope = cli(['ast', '--envelope'], 'text').stdout
@@ -95,6 +96,8 @@ describe('carve2 process', () => {
     expect(diff.stdout).toContain('@@ -1,1 +1,1 @@')
     expect(cli(['fmt', '-w', path]).status).toBe(0)
     expect(readFileSync(path, 'utf8')).toBe('a\n')
+    expect(cli(['fmt', '--normalize'], '::: >\nquoted\n:::\n').stdout).toBe('> quoted\n')
+    expect(cli(['fmt', '--align-tables'], '| a | long |\n| xx | b |\n').stdout).toBe('| a  | long |\n| xx | b    |\n')
   })
 
   it('C2-A-172: diagnostics emits parse findings as text and JSON', () => {
@@ -114,6 +117,7 @@ describe('carve2 process', () => {
     const report = cli(['upgrade', '--json', path])
     expect(JSON.parse(report.stdout) as unknown).toMatchObject({ engine01: '0.1.17', files: [{ records: [{ entry: 'U-001' }] }] })
     expect(report.stderr).toContain('U-079')
+    expect(cli(['upgrade', '--force'], 'a').status).toBe(0)
     cli(['upgrade', '--write', path])
     expect(readFileSync(path, 'utf8')).toContain('Some text\n\n# Heading')
   })
