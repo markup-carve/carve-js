@@ -169,9 +169,13 @@ function textOrder(nodes: readonly AstNode[], order: Map<AstNode, number>): Map<
 }
 
 /**
- * C2-W-091: the first of `escapes` in written order. A round places that one only, since the
- * escapes behind it were asked for with it not yet in place.
+ * C2-W-091: a round that asks for this many escapes or fewer places the first one only, since the
+ * ones behind it were asked for with it not yet in place. A round that asks for more places them
+ * all, so that the number of rounds stays linear in the size of the group.
  */
+const MAX_ORDERED_ESCAPES = 4
+
+/** C2-W-091: the first of `escapes` in written order. */
 function leftmost(group: readonly AstNode[], escapes: readonly [AstNode, number][]): [AstNode, number] {
   const order = textOrder(group, new Map())
   let best = escapes[0]!
@@ -230,7 +234,9 @@ function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: Ast
 function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
   let dropped = false
-  for (const [node, at] of check.trials) {
+  // Each test writes the group twice; a round with more trials places them all, as it does escapes.
+  const trials = check.trials.length <= MAX_ORDERED_ESCAPES ? check.trials : []
+  for (const [node, at] of trials) {
     if (isAsked(w, group, first, node, at)) continue
     const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
     if (place >= 0) check.escapes.splice(place, 1)
@@ -238,7 +244,7 @@ function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: 
   }
   // The node that asked for a dropped escape takes its next way to form in the next round.
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
-  if (check.escapes.length > 1) check.escapes = [leftmost(group, check.escapes)]
+  if (check.escapes.length > 1 && check.escapes.length <= MAX_ORDERED_ESCAPES) check.escapes = [leftmost(group, check.escapes)]
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line.
