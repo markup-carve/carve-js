@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs'
+import manifest from '../../package.json' with { type: 'json' }
 import { parseArgs, help } from './flags.ts'
 import { CliError, run } from './run.ts'
 
@@ -8,8 +8,7 @@ function main(): number {
     const args = parseArgs(process.argv.slice(2))
     if (args.help) { process.stdout.write(help(args.command)); return 0 }
     if (args.version) {
-      const manifest: unknown = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
-      if (typeof manifest === 'object' && manifest !== null && 'version' in manifest) process.stdout.write(`${manifest.version}\n`)
+      process.stdout.write(`${manifest.version}\n`)
       return 0
     }
     return run(args)
