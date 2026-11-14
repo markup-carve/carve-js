@@ -34,3 +34,33 @@ describe('paragraphs in a description', () => {
     expect(render(':: t\n: d\n\n  e')).toBe('<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>e</p>\n  </dd>\n</dl>')
   })
 })
+
+describe('list markers in prose', () => {
+  it('C2-B-015: a marker that would open a new list interrupts a paragraph only as a bullet or with the value 1', () => {
+    expect(render('- We moved in\n  2024. It was good')).toBe('<ul>\n  <li>We moved in\n2024. It was good</li>\n</ul>')
+    expect(render('- a\n  ii) b')).toBe('<ul>\n  <li>a\nii) b</li>\n</ul>')
+    expect(render('- a\n  b. c')).toBe('<ul>\n  <li>a\nb. c</li>\n</ul>')
+    expect(render('[^n]: a\n  2. b\n\nx[^n]')).toContain('<p>a\n2. b')
+    for (const marker of ['1.', '01.', 'a)', 'A.', 'i.', 'I)', '.', '-', '*']) {
+      const spaces = marker === 'A.' ? '  ' : ' '
+      expect(parse(`- a\n  ${marker}${spaces}b`).children[0]).toMatchObject({ children: [{ children: [{ type: 'paragraph' }, { type: 'list' }] }] })
+    }
+  })
+
+  it('C2-B-015: a sibling marker at an open list\'s column interrupts whatever its number', () => {
+    expect(render('1. a\n3. b')).toBe('<ol>\n  <li>a</li>\n  <li>b</li>\n</ol>')
+    expect(render('- a\n  1. b\n  5. c')).toBe('<ul>\n  <li>a\n    <ol>\n      <li>b</li>\n      <li>c</li>\n    </ol>\n  </li>\n</ul>')
+  })
+
+  it('C2-B-015: after a blank line and on the marker line a nested list starts at any number', () => {
+    expect(render('- a\n\n  2. b')).toContain('<ol start="2">')
+    expect(render('- 3. x')).toContain('<ol start="3">')
+  })
+
+  it('C2-B-043: a bare dot whose content starts with a dot and a space is no marker', () => {
+    expect(render('. . . and then silence')).toBe('<p>. . . and then silence</p>')
+    expect(render('1. a\n. . . b')).toBe('<ol>\n  <li>a\n. . . b</li>\n</ol>')
+    expect(render('. .x')).toBe('<ol>\n  <li>.x</li>\n</ol>')
+    expect(format('. . . and then silence')).toBe('. . . and then silence\n')
+  })
+})

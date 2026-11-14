@@ -1043,7 +1043,7 @@
    "C2-B-024"
   ],
   "input": "1. x\n   - y\n     10. +\n    \t[^n]: note\n         q\n",
-  "html": "<ol>\n  <li>x\n    <ul>\n      <li>y\n        <ol start=\"10\">\n          <li>+\n[^n]: note\nq</li>\n        </ol>\n      </li>\n    </ul>\n  </li>\n</ol>"
+  "html": "<ol>\n  <li>x\n    <ul>\n      <li>y\n10. +\n[^n]: note\nq</li>\n    </ul>\n  </li>\n</ol>"
  },
  {
   "ticket": "carve-php#5190",

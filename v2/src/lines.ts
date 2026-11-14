@@ -3,7 +3,7 @@
 import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
-  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
+  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
@@ -174,7 +174,20 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
   // C2-B-040: one uppercase letter and a dot needs two spaces, so an initial stays text.
   const spaces = src.charCodeAt(delimiter) === DOT && delimiter === pos + 1 && isUpper(src.charCodeAt(pos)) ? 2 : 1
-  return afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
+  const content = afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
+  // C2-B-043: a bare dot before a dot and a space is an ellipsis written with spaces, no marker.
+  if (delimiter === pos && content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE) return -1
+  return content
+}
+
+/** C2-B-015: the list marker at `pos` is a bullet or an ordered marker with the value 1, so it may open a list in a paragraph. */
+export function opensListInParagraph(src: string, pos: number, end: number): boolean {
+  if (bulletMarkerEnd(src, pos, end) >= 0) return true
+  const delimiter = orderedDelimiter(src, pos, end)
+  if (delimiter === pos) return true
+  if (isAsciiDigit(src.charCodeAt(pos))) return decimalValue(src, pos, delimiter) === 1
+  const letter = src.charCodeAt(pos) | CASE_BIT
+  return delimiter === pos + 1 && (letter === LOWER_A || letter === LOWER_I)
 }
 
 /** True when a list marker with content stands at `pos`. */

@@ -26,7 +26,7 @@ import {
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
-  isLinkDefinition, isListMarker, isQuoteMark, isRawInfo, isThematicBreak, isWord, nextPipe, orderedDelimiter,
+  isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isRawInfo, isThematicBreak, isWord, nextPipe, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
@@ -348,7 +348,7 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   if ((shapes & SHAPE_TABLE_ROW) !== 0) return rowClosingPipe(src, pos, end) >= 0
   if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched)
   if ((shapes & DEFINITION_SHAPES) !== 0 && pos === lineStart && isSiblingDefinition(state, matched, end)) return true
-  return (shapes & MARKER_SHAPES) !== 0 && isListMarker(src, pos, end) && markerInterrupts(state, matched)
+  return (shapes & MARKER_SHAPES) !== 0 && isListMarker(src, pos, end) && markerInterrupts(state, matched, end)
 }
 
 /** C2-B-016: a mark at the column of the open description list, below a term or below description text. */
@@ -368,19 +368,21 @@ function isSiblingDefinition(state: BlockState, matched: number, end: number): b
 }
 
 /** Interrupter (b) for a list marker at the cursor, by the first container the line does not carry. */
-function markerInterrupts(state: BlockState, matched: number): boolean {
+function markerInterrupts(state: BlockState, matched: number, end: number): boolean {
   const containers = state.containers
   const cursor = state.cursor
   const depth = containers.depth
+  // C2-B-015: a marker that opens a new list, and continues none, interrupts only as a bullet or with the value 1.
+  const opens = opensListInParagraph(state.src, cursor.pos, end)
   if (matched === depth) {
     // C2-B-015: past the marker of the item the leaf sits in, a nested list opens.
-    return isIndentContainer(containers.kind[depth - 1]!) && depth + 2 <= MAX_DEPTH + 1
+    return opens && isIndentContainer(containers.kind[depth - 1]!) && depth + 2 <= MAX_DEPTH + 1
   }
   const kind = containers.kind[matched]
   const column = cursor.column - cursor.origin
   if (kind === QUOTE) {
     // C2-B-021: without the mark of a quote that sits in an item, the marker closes the quote.
-    return isIndentContainer(containers.kind[matched - 1]!) && matched + 2 <= MAX_DEPTH + 1
+    return opens && isIndentContainer(containers.kind[matched - 1]!) && matched + 2 <= MAX_DEPTH + 1
   }
   if (kind === ITEM) {
     // The line is not indented past this item. C2-B-015: at its column the marker is a sibling.
@@ -388,7 +390,7 @@ function markerInterrupts(state: BlockState, matched: number): boolean {
     return column === containers.column[matched] || isIndentContainer(containers.kind[matched - 2]!)
   }
   // C2-B-022: at the column of a description list a list marker is a lazy line.
-  return kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
+  return opens && kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
 }
 
 /** C2-B-026: closes the containers that do not own the line. */

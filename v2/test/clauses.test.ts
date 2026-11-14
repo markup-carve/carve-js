@@ -251,8 +251,10 @@ describe('lists', () => {
     expect(blocks('- a', '    - b', '  1. c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"]] ol(1.)[li[p"c"]]]]')
   })
 
-  it('C2-B-056, C2-B-060: a marker indented past an item\'s marker opens a nested list, at any number', () => {
-    expect(blocks('- a', '  7. b')).toBe('ul(-)[li[p"a" ol(7.)[li[p"b"]]]]')
+  it('C2-B-056, C2-B-060, C2-B-015: a marker indented past an item\'s marker opens a nested list, at another number than 1 after a blank line', () => {
+    expect(blocks('- a', '  1. b')).toBe('ul(-)[li[p"a" ol(1.)[li[p"b"]]]]')
+    expect(blocks('- a', '  7. b')).toBe('ul(-)[li[p"a|7. b"]]')
+    expect(blocks('- 7. b')).toBe('ul(-)[li[ol(7.)[li[p"b"]]]]')
     expect(blocks('1. a', ' - b')).toBe('ol(1.)[li[p"a" ul(-)[li[p"b"]]]]')
   })
 
