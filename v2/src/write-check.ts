@@ -192,6 +192,13 @@ function lastText(node: Node | undefined): TextNode | null {
 
 const CR = 13
 
+/** Whether `value` holds, from `at` on, spaces or tabs and then a CR. */
+function endsLineWithCr(value: string, at: number): boolean {
+  let k = at
+  while (value[k] === ' ' || value[k] === '\t') k++
+  return value.charCodeAt(k) === CR
+}
+
 /** The characters that read on into markup that stands directly behind them: `\\(`, `![`, `^[`, `$` and a backtick run. */
 const JOINING = '\\!^$`'
 /** The closing mark of each node that has one, for the escape of that mark in its content (C2-W-093). */
@@ -418,13 +425,27 @@ function escapeBrackets(c: Check, node: TextNode, at: number, a: Node): void {
   // The closer stands in this text: one in a later node, such as a code span, can be taken from it by another construct.
   if (!value.includes(']', end)) return
   if (a.type === 'footnote_ref') return escapeLabels(c, node, at, end)
-  for (let k = start; k < at; k++) if (value[k] === '[') escapeAt(c, node, k)
-  // Behind it, a bracket that the content closes, or a `[^`, which opens no bracket pair (C2-I-087), stops the run.
+  // Only a bracket with the sigil of this one opens the same construct, and a bare `[^` opens no bracket pair (C2-I-087).
+  const sigil = sigilOf(value, at)
+  const opens = (k: number): boolean => sigilOf(value, k) === sigil && (sigil === '^' || value[k + 1] !== '^')
+  for (let k = at - 1; k >= start; k--) {
+    if (value[k] !== '[') continue
+    if (!opens(k)) break
+    escapeAt(c, node, k)
+  }
+  // Behind it, a bracket that the content closes stops the run.
   if (holdsCloser(a)) return
   for (let k = at + 1; k < end; k++) {
-    if (value[k] === '[' && value[k + 1] === '^') return
-    if (value[k] === '[') escapeAt(c, node, k)
+    if (value[k] !== '[') continue
+    if (!opens(k)) return
+    escapeAt(c, node, k)
   }
+}
+
+/** The image or footnote sigil glued before the bracket at `at`, or none. */
+function sigilOf(value: string, at: number): string {
+  const before = value[at - 1]
+  return before === '!' || before === '^' ? before : ''
 }
 
 /** The start and the end of the run of brackets around `at`, each with an image or footnote sigil at most. */
@@ -544,6 +565,12 @@ function isBraceLine(node: Node | undefined): boolean {
 
 /** The content of `owner` ended in the parse before the expected node `es[i]`. */
 function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void {
+  // C2-W-016: a line that holds only a CR, and spaces, is a blank line once the line ending takes the CR.
+  const line = isBreak(es[i]) ? es[i + 1] : undefined
+  if (line?.type === 'text' && endsLineWithCr(line.value, 0)) {
+    c.losses.push([line, 'value'])
+    return
+  }
   // C2-W-097: a backslash at the end of the text before took the markup of this node. A line break has no markup to take.
   if (i > 0 && !isBreak(es[i]) && escapeEnd(c, lastText(es[i - 1]), false)) return
   // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
@@ -579,8 +606,9 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
 function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
-  // C2-W-016: a CR that ends a line is read as part of the line ending, and no spelling keeps it.
-  if (es[at.i]?.type === 'text' && (es[at.i] as TextNode).value.charCodeAt(at.vi) === CR) {
+  // C2-W-016: a CR that ends a line is read as part of the line ending, and no spelling keeps it,
+  // nor the spaces before it, which then end the line.
+  if (es[at.i]?.type === 'text' && endsLineWithCr((es[at.i] as TextNode).value, at.vi)) {
     c.losses.push([es[at.i]!, 'value'])
     return false
   }
