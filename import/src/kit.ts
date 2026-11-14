@@ -36,8 +36,8 @@ export function documentOf(context: Context, children: DocumentNode['children'])
   return { type: 'document', astVersion: '2.0', children,
     ...(context.rootLang ? { lang: context.rootLang } : {}),
     ...(context.rootDir ? { dir: context.rootDir } : {}),
-    extensions: [{ name: 'carve.source', version: '1', required: false },
-      { name: 'carve.style', version: '1', required: false }],
+    extensions: [{ name: 'carve.source', version: '1', required: false, slots: [] },
+      { name: 'carve.style', version: '1', required: false, slots: [] }],
     data: { 'carve.source': { format: context.format, locator: { part: 'input' },
       importer: { name: 'carve-import', version: '0.0.0' } } } }
 }
