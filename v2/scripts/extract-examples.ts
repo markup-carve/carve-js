@@ -15,7 +15,7 @@ export interface SpecExample {
 }
 
 const FILES = ['syntax-blocks.md', 'syntax-inline.md', 'html.md', 'ast.md']
-const NEW_DATA = ['ast-results.json', 'ast-schema.json', 'layout-schema.json', 'node-slots.json']
+const NEW_DATA = ['ast-results.json', 'ast-schema.json', 'extensions.json', 'layout-schema.json', 'node-slots.json']
 const HEADER = /^Example (\d+) \((generated|unverified)([^)]*)\)\s*$/
 const FENCE = /^(`{3,})(\w*)\s*$/
 

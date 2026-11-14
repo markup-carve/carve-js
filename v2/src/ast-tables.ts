@@ -201,8 +201,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["block_extension", [
     "children",
-    "fallback",
     "slots.*",
+    "fallback",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",
@@ -334,6 +334,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
     "metadata.subtitle",
     "metadata.bibliography.title",
     "metadata.bibliography.containerTitle",
+    "metadata.headers.*.children",
+    "metadata.footers.*.children",
   ]],
   ["emphasis", [
     "children",
@@ -412,8 +414,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["inline_extension", [
     "children",
-    "fallback",
     "slots.*",
+    "fallback",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",
