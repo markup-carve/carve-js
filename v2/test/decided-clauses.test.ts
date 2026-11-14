@@ -5,6 +5,7 @@ import {
   type AstNode, format, parse, parseWithLayout, render, type RenderOptions, write, writeWithDiagnostics,
 } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
+import { unaskedEscape } from './support/writer-checks.ts'
 
 const FENCE = '```'
 
@@ -144,5 +145,31 @@ describe('tables', () => {
     expect(document.children![0]!.children![0]!.headRows).toBe(5)
     expect(format(src)).toBe(`${src}\n`)
     expect(write(document)).toContain('header-rows=5')
+  })
+})
+
+describe('escapes, from left to right', () => {
+  const written = (value: string): string => write(documentOf(paragraph(text(value))))
+
+  it('C2-W-091: x<a:b>=} as text is written x\<a:b\>=}, and the escape a later one makes needless stays', () => {
+    expect(written('x<a:b>=}')).toBe('x\\<a:b\\>=}\n')
+  })
+
+  it('C2-W-091: an escape that a node which did not form asked for is placed only where the test asks for it', () => {
+    expect(format('x{.c}/}\\{/')).toBe('x{.c}/}\\{/\n')
+  })
+
+  it('C2-W-091: where a node takes its other form, no escape of its first spelling stays', () => {
+    expect(format('x(/u){/ /}')).toBe('x(/u){/ /}\n')
+  })
+
+  it('C2-W-091: a round places the first escape only, so one behind it that it makes needless is not placed', () => {
+    expect(format('x(/u)\\/}/}')).toBe('x({/u)\\/}/}}\n')
+  })
+
+  it('C2-W-088: the gate finds an escape the test does not ask for, also before one it asks for', () => {
+    expect(unaskedEscape('\\.x\n', parse('.x'))).toBe(0)
+    expect(unaskedEscape('\\.x\\<a:b\\>=}\n', parse('.x\\<a:b\\>=}'))).toBe(0)
+    expect(unaskedEscape('x\\<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toBe(-1)
   })
 })

@@ -1,5 +1,5 @@
 // The checks of the writer (spec/0.2/writer.md): its two gates, with and without the sidecar,
-// that a canonical input stays as it is, and that no escape is needless.
+// that a canonical input stays as it is, and that the escaping test asks for every escape.
 import { format, formatWithDiagnostics, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
 import { type AstNode } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
@@ -28,12 +28,37 @@ function isAsciiPunctuation(code: number): boolean {
   return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
 }
 
-/** C2-W-088: the offset of a backslash of `written` without which the parse is the same, or -1. */
-export function needlessEscape(written: string, tree: AstNode): number {
+/** `text` with every backslash before ASCII punctuation taken out: the text bare of escapes. */
+function bare(text: string): string {
+  let out = ''
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === '\\' && at + 1 < text.length && isAsciiPunctuation(text.charCodeAt(at + 1))) at++
+    out += text[at]
+  }
+  return out
+}
+
+/**
+ * C2-W-088, C2-W-091: whether the test asks for the backslash at `at`, tested with the escapes to its
+ * left in place and the text to its right bare: the line parses to a different tree without it.
+ */
+export function asksForEscape(written: string, at: number): boolean {
+  const left = written.slice(0, at)
+  const rest = `${written[at + 1]!}${bare(written.slice(at + 2))}`
+  return !treesEqual(parse(`${left}\\${rest}`), parse(`${left}${rest}`))
+}
+
+/**
+ * C2-W-088: the offset of a backslash of `written` that no test asks for, or -1. Where a construct
+ * would pair differently with the right side bare, `asksForEscape` misses the escape of its opener
+ * (C2-W-090): `x(\/u)(\/u)/` for the text `x(/u)(/u)/`. Such an escape passes when the written form
+ * without it parses to another tree; the inputs are logged for the specification.
+ */
+export function unaskedEscape(written: string, tree: AstNode): number {
   for (let at = 0; at + 1 < written.length; at++) {
     if (written[at] !== '\\') continue
-    const unescaped = written.slice(0, at) + written.slice(at + 1)
-    if (isAsciiPunctuation(written.charCodeAt(at + 1)) && treesEqual(parse(unescaped), tree)) return at
+    if (isAsciiPunctuation(written.charCodeAt(at + 1)) && !asksForEscape(written, at)
+      && treesEqual(parse(written.slice(0, at) + written.slice(at + 1)), tree)) return at
     // The character behind a backslash is not the start of another escape.
     at++
   }
@@ -44,15 +69,15 @@ function show(text: string): string {
   return JSON.stringify(text)
 }
 
-/** The gates on one written form: it parses to `tree` (C2-W-002) and holds no needless escape (C2-W-088). */
+/** The gates on one written form: it parses to `tree` (C2-W-002) and holds no escape the test does not ask for (C2-W-088). */
 function checkWritten(tree: AstNode, written: string, losses: readonly Diagnostic[], path: string): string | null {
   if (losses.length > 0) {
     const reported = losses.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
     return `${path}: the writer reports ${reported}, written ${show(written)}`
   }
   if (!treesEqual(tree, parse(written))) return `${path}: C2-W-002, the written form parses to another tree: ${show(written)}`
-  const needless = needlessEscape(written, tree)
-  if (needless >= 0) return `${path}: C2-W-088, the backslash at ${needless} is not needed: ${show(written)}`
+  const unasked = unaskedEscape(written, tree)
+  if (unasked >= 0) return `${path}: C2-W-088, the test does not ask for the backslash at ${unasked}: ${show(written)}`
   // C2-W-003 on the formatter path, and a canonical input stays as it is.
   const again = format(written)
   return again === written ? null : `${path}: the canonical form ${show(written)} is formatted to ${show(again)}`
@@ -82,7 +107,9 @@ export interface WriterEnumerationResult {
 const MAX_REPORTED = 20
 
 /** Checks every document of exactly `length` parts of `alphabet`, joined by `glue` behind `prefix`. */
-export function enumerateWriter(alphabet: readonly string[], length: number, glue: string, prefix: string): WriterEnumerationResult {
+export function enumerateWriter(
+  alphabet: readonly string[], length: number, glue: string, prefix: string, maxReported = MAX_REPORTED,
+): WriterEnumerationResult {
   const result: WriterEnumerationResult = { documents: 0, refused: 0, failures: [] }
   const choice = new Array<number>(length).fill(0)
   const parts = new Array<string>(length).fill('')
@@ -97,7 +124,7 @@ export function enumerateWriter(alphabet: readonly string[], length: number, glu
       failure = `threw ${String(error)}`
     }
     if (failure === 'refused') result.refused++
-    else if (failure !== null && result.failures.length < MAX_REPORTED) result.failures.push(`${show(src)}: ${failure}`)
+    else if (failure !== null && result.failures.length < maxReported) result.failures.push(`${show(src)}: ${failure}`)
     let at = length - 1
     while (at >= 0 && choice[at] === alphabet.length - 1) choice[at--] = 0
     if (at < 0) return result

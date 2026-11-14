@@ -20,6 +20,8 @@ export interface Check {
   escapes: [AstNode, number][]
   /** Escapes of an earlier round that did not help and are taken back (C2-W-088). */
   retracted: [AstNode, number][]
+  /** The escapes among `escapes` that a node which did not form asked for, which the test of C2-W-088 decides. */
+  trials: [AstNode, number][]
   /** The escapes asked for and the escapes taken back, by text node, for the test whether an offset is escaped. */
   marks: Map<AstNode, Map<number, boolean>>
   forms: AstNode[]
@@ -36,7 +38,7 @@ export interface Check {
 
 export function createCheck(w: Writer): Check {
   return {
-    w, escapes: [], retracted: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
+    w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
     spanMarks: false,
   }
 }
@@ -224,7 +226,10 @@ function respell(c: Check, es: readonly AstNode[], i: number): boolean {
   while (attempt.step < RESPELL_STEPS.length) {
     const step = RESPELL_STEPS[attempt.step++]!
     if (!step(c, es, i, attempt)) continue
-    for (let at = before; at < c.escapes.length; at++) attempt.escapes.push(c.escapes[at]!)
+    for (let at = before; at < c.escapes.length; at++) {
+      attempt.escapes.push(c.escapes[at]!)
+      c.trials.push(c.escapes[at]!)
+    }
     return true
   }
   c.losses.push([e, null])

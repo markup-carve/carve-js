@@ -2,6 +2,7 @@
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import { type AstNode, childrenOf, keyOf, valueOf } from './ast.ts'
+import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
@@ -123,6 +124,14 @@ function removeEscape(w: Writer, node: AstNode, at: number): boolean {
 
 /** Takes over what a comparison asked for. Returns false where it asked for no change. */
 function applyChanges(w: Writer, check: Check): boolean {
+  // C2-W-091: the escapes are placed in the spelling of the nodes. Where a node first takes its other
+  // form, the pass starts again in that spelling, so no escape of the old one stays.
+  if (check.forms.some((node) => !w.forms.has(node))) {
+    w.escapes.clear()
+    w.attempts.clear()
+    for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
+    return true
+  }
   for (const [node, at] of check.retracted) removeEscape(w, node, at)
   for (const [node, at] of check.escapes) addEscape(w, node, at)
   for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
@@ -148,56 +157,95 @@ function groupEnd(w: Writer, nodes: readonly AstNode[], from: number): number {
   return end
 }
 
-/** The rounds of one group, and the escapes they asked for. */
-interface Rounds {
-  round: number
-  escapes: [AstNode, number][]
-  /** The escapes that a later change may have made needless (C2-W-088), and the one on trial. */
-  doubtful: [AstNode, number][] | null
-  trial: [AstNode, number] | null
+/** The text nodes below `nodes` in the order in which they are written. */
+function textOrder(nodes: readonly AstNode[], order: Map<AstNode, number>): Map<AstNode, number> {
+  for (const node of nodes) {
+    if (node.type === 'text') order.set(node, order.size)
+    if (Array.isArray(node.title)) textOrder(node.title, order)
+    if (node.children !== undefined) textOrder(node.children, order)
+    if (node.caption !== undefined) textOrder([node.caption], order)
+  }
+  return order
 }
 
-/** The escapes of a group that are taken out on trial, each for one round. More than these keep linear time over minimality. */
-const MAX_TRIALS = 16
+/**
+ * C2-W-091: the first of `escapes` in written order. A round places that one only, since the
+ * escapes behind it were asked for with it not yet in place.
+ */
+function leftmost(group: readonly AstNode[], escapes: readonly [AstNode, number][]): [AstNode, number] {
+  const order = textOrder(group, new Map())
+  let best = escapes[0]!
+  for (const escape of escapes) {
+    const rank = order.get(escape[0]) ?? -1
+    const bestRank = order.get(best[0]) ?? -1
+    if (rank < bestRank || (rank === bestRank && escape[1] < best[1])) best = escape
+  }
+  return best
+}
+
+/** The tree of the group written with the escapes `escapes`. */
+function groupTree(w: Writer, group: readonly AstNode[], first: boolean, escapes: Map<AstNode, number[]>): AstNode {
+  w.escapes = escapes
+  w.lines = []
+  w.lead = null
+  w.starts.clear()
+  writeBlocks(w, group, '', 0, false)
+  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations)
+}
+
+/**
+ * C2-W-088, C2-W-091: whether the test asks for the escape `at` of `node`: with the escapes to its
+ * left in place and none to its right, the group parses to another tree without it.
+ */
+function isAsked(w: Writer, group: readonly AstNode[], first: boolean, node: AstNode, at: number): boolean {
+  const placed = w.escapes
+  const lines = w.lines
+  const lead = w.lead
+  const starts = new Map(w.starts)
+  const order = textOrder(group, new Map())
+  const rank = order.get(node) ?? -1
+  const left = new Map<AstNode, number[]>()
+  for (const [text, offsets] of placed) {
+    const own = order.get(text) ?? -1
+    if (own < rank) left.set(text, offsets)
+    else if (text === node) left.set(text, offsets.filter((offset) => offset < at))
+  }
+  const without = groupTree(w, group, first, left)
+  const escaped = new Map(left)
+  escaped.set(node, [...(left.get(node) ?? []), at])
+  const asked = !treesEqual(groupTree(w, group, first, escaped), without)
+  w.escapes = placed
+  w.lines = lines
+  w.lead = lead
+  w.starts.clear()
+  for (const [key, value] of starts) w.starts.set(key, value)
+  return asked
+}
 
 /**
  * One round of the test of C2-W-089 on the group `group`, which stands in `w.lines`. Returns
- * false when the group reads back as its blocks and no escape is left to try.
+ * false when the group reads back as its blocks. C2-W-091: an escape stays once placed, and an
+ * escape that a node which did not form asks for is placed only where the test asks for it.
  */
-function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean, rounds: Rounds): boolean {
+function settle(w: Writer, document: AstNode, group: readonly AstNode[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
-  const changes = check.escapes.length + check.forms.length + check.retracted.length
-  if (rounds.trial !== null) {
-    const needed = changes + check.losses.length > 0
-    // The escape that was taken out on trial is needed after all.
-    if (needed) addEscape(w, rounds.trial[0], rounds.trial[1])
-    rounds.trial = null
-    if (needed) return true
+  let dropped = false
+  for (const [node, at] of check.trials) {
+    if (isAsked(w, group, first, node, at)) continue
+    const place = check.escapes.findIndex((escape) => escape[0] === node && escape[1] === at)
+    if (place >= 0) check.escapes.splice(place, 1)
+    dropped = true
   }
+  // The node that asked for a dropped escape takes its next way to form in the next round.
+  if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
+  if (check.escapes.length > 1) check.escapes = [leftmost(group, check.escapes)]
+  const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line.
     w.blankFirst = compareGroup(w, document, group, false).losses.length === 0
     if (w.blankFirst) return false
   }
-  if (rounds.doubtful === null && applyChanges(w, check)) {
-    rounds.round++
-    for (const escape of check.escapes) rounds.escapes.push(escape)
-    return true
-  }
-  return tryWithout(w, rounds)
-}
-
-/** Takes the next escape of an earlier round out for one round that shows whether it is needed (C2-W-088). */
-function tryWithout(w: Writer, rounds: Rounds): boolean {
-  // In a group that one round settled no change came after an escape.
-  rounds.doubtful ??= rounds.round > 1 ? rounds.escapes.slice(-MAX_TRIALS) : []
-  for (;;) {
-    const next = rounds.doubtful.pop()
-    if (next === undefined) return false
-    if (!removeEscape(w, next[0], next[1])) continue
-    rounds.trial = next
-    return true
-  }
+  return applyChanges(w, check)
 }
 
 /**
@@ -207,7 +255,6 @@ function tryWithout(w: Writer, rounds: Rounds): boolean {
  */
 function writeGroup(w: Writer, document: AstNode, from: number, first: boolean): number {
   const nodes = childrenOf(document)
-  const rounds: Rounds = { round: 0, escapes: [], doubtful: null, trial: null }
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
@@ -215,7 +262,7 @@ function writeGroup(w: Writer, document: AstNode, from: number, first: boolean):
     w.lead = null
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
-    if (w.lines.length === 0 || !settle(w, document, group, first, rounds)) return end
+    if (w.lines.length === 0 || !settle(w, document, group, first)) return end
   }
 }
 

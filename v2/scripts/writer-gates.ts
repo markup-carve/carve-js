@@ -1,5 +1,5 @@
 // The two gates of the writer (C2-W-002, C2-W-003) with and without the sidecar, the stability of
-// canonical inputs and the minimality of escapes (C2-W-088), on every example input of the
+// canonical inputs and the escaping test of C2-W-088 on every escape, on every example input of the
 // specification, every document of up to N lines over the alphabet of line shapes and every
 // content of up to M inline tokens (test/support/writer-checks.ts).
 //   node v2/scripts/writer-gates.ts examples
