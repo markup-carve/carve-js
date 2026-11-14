@@ -237,12 +237,13 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean):
   line(r, level, '</li>')
 }
 
-/** C2-H-040: a description with one block writes a paragraph bare. */
+/** C2-H-040: a description with one visible block writes a paragraph bare, unless it carries attributes (C2-H-018). */
 function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
   const blocks = node.children.filter(isVisible)
   const first = blocks[0]
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
-    const text = first === undefined ? '' : inlineHtml(r, first.children)
+    let text = ''
+    if (first !== undefined) text = first.attrs === undefined && first.lang === undefined ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
   }

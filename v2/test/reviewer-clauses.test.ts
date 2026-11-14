@@ -20,3 +20,17 @@ describe('link definitions', () => {
     expect(format('[a]: /u"T"')).toBe('[a]: /u"T"\n')
   })
 })
+
+describe('paragraphs in a description', () => {
+  it('C2-H-018: a paragraph that carries attributes or a lang is never written bare', () => {
+    expect(render(':: t\n: {.x}\n  d')).toBe('<dl>\n  <dt>t</dt>\n  <dd><p class="x">d</p></dd>\n</dl>')
+    expect(render(':: t\n: {lang=de}\n  d')).toBe('<dl>\n  <dt>t</dt>\n  <dd><p lang="de">d</p></dd>\n</dl>')
+    expect(render('- {.x}\n  d')).toBe('<ul>\n  <li><p class="x">d</p></li>\n</ul>')
+  })
+
+  it('C2-H-040, C2-B-073: a description counts its visible blocks, so a comment does not give the paragraph a <p>', () => {
+    expect(render(':: t\n: d\n\n  %%%\n  c\n  %%%')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
+    expect(render(':: t\n: d\n  %% c')).toBe('<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>')
+    expect(render(':: t\n: d\n\n  e')).toBe('<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <p>e</p>\n  </dd>\n</dl>')
+  })
+})
