@@ -1,7 +1,7 @@
 // The comparison of the contract, section 1: two HTML documents are equal when they are equal
 // after the attributes of each element are sorted and the whitespace between tags is dropped.
-// Text is compared as it is, and so is everything inside `<pre>`. The base class `task` of a list
-// item is dropped on both sides: 0.2 writes it on every boxed item (C2-H-032, U-117) and 0.1 did not.
+// Text is compared as it is, and so is everything inside `<pre>`. The task class and generated
+// list style are dropped on both sides: 0.2 writes them on every boxed item (C2-H-032, U-117).
 
 const TEXT = 0
 const OPEN = 1
@@ -73,6 +73,11 @@ function nameEnd(body: string): number {
 
 const TASK_CLASS = 'task'
 
+function isTaskItem(parts: readonly string[]): boolean {
+  const classes = parts.find((part) => part.startsWith('class="'))
+  return classes !== undefined && classes.slice(7, -1).split(' ').includes(TASK_CLASS)
+}
+
 /** Drops the class `task` from the class attribute in `parts`, and the attribute when nothing is left. */
 function dropTaskClass(parts: string[]): void {
   for (let index = 0; index < parts.length; index++) {
@@ -82,6 +87,18 @@ function dropTaskClass(parts: string[]): void {
     if (kept.length === 0) parts.splice(index, 1)
     else parts[index] = `class="${kept.join(' ')}"`
     return
+  }
+}
+
+/** C2-H-032: the generated declaration is presentation, while an authored style still compares. */
+function dropTaskStyle(parts: string[]): void {
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]!
+    if (part === 'style="list-style: none"') { parts.splice(index, 1); return }
+    if (part.startsWith('style="list-style: none; ')) {
+      parts[index] = `style="${part.slice('style="list-style: none; '.length)}`
+      return
+    }
   }
 }
 
@@ -106,7 +123,7 @@ function readTag(html: string, start: number, end: number, line: number): Token 
   const name = body.slice(0, split)
   const parts = splitAttributes(body, split)
   const own = takeSourceLine(parts)
-  if (name === 'li') dropTaskClass(parts)
+  if (name === 'li' && isTaskItem(parts)) { dropTaskClass(parts); dropTaskStyle(parts) }
   parts.sort()
   const text = parts.length === 0 ? `<${name}>` : `<${name} ${parts.join(' ')}>`
   return { kind: OPEN, name, text, line: own > 0 ? own : line }

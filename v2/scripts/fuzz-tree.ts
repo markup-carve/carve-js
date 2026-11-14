@@ -40,26 +40,26 @@ const PARAGRAPH = { type: 'paragraph', children: [TEXT] }
 const SEEDS: Json[] = [
   {
     type: 'document', astVersion: '2.0', resources: [{ id: 'r', mediaType: 'image/png', digest: DIGEST, href: 'a.png', size: 3 }],
-    extensions: [{ name: 'org.example.x', required: false, version: '1' }], metadata: { a: { b: 1 } },
+    extensions: [{ name: 'org.example.x', required: false, version: '1' }], metadata: { title: [TEXT] },
     children: [
       {
         type: 'block_extension', name: 'org.example.x', version: '1', props: { a: 1 }, slots: { s: [PARAGRAPH] },
         fallback: [PARAGRAPH], payload: [{ format: 'text/plain', value: 'p' }], resourceIds: ['r'], children: [PARAGRAPH],
       },
       {
-        type: 'paragraph', data: { 'org.example': 1 }, children: [
+        type: 'paragraph', data: { 'org.example.x': 1 }, children: [
           {
             type: 'inline_extension', name: 'x', payload: [{ format: 'application/json', value: { a: [1] } }], fallback: [TEXT],
             slots: { s: [TEXT] }, resourceIds: ['r'], children: [TEXT],
           },
-          { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [TEXT], annotation: [TEXT] }] },
-          { type: 'image', resourceId: 'r', alt: 'a', tooltip: 't' },
+          { type: 'ruby', pairs: [{ type: 'ruby_pair', attrs: { id: 'pair' }, base: [TEXT], annotation: [TEXT] }] },
+          { type: 'image', resourceId: 'r', alt: 'a', tooltip: 't', longDescription: [PARAGRAPH] },
           { type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', number: 1 },
           {
-            type: 'citation_group', raw: '[@a]', mode: 'parenthetical', children: [
+            type: 'citation_group', raw: '[@a]', children: [
               {
-                type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false, mode: 'parenthetical',
-                prefix: [TEXT], locator: [TEXT], suffix: [TEXT],
+                type: 'citation', key: 'a', namespace: 'citation', mode: 'normal',
+                prefix: [TEXT], locator: { label: 'page', children: [TEXT] }, suffix: [TEXT],
               },
             ],
           },
@@ -70,14 +70,30 @@ const SEEDS: Json[] = [
       { type: 'code_block', value: 'x\n', syntax: 'js', title: [{ type: 'emphasis', children: [TEXT] }], groupLabel: 'g' },
       { type: 'directive', kind: 'toc', tocTarget: 'headings', title: [TEXT], children: [] },
       { type: 'figure', kind: 'image', caption: { type: 'caption', short: [TEXT], children: [PARAGRAPH] }, children: [PARAGRAPH] },
-      { type: 'include', path: "a'b.crv", section: 's', options: [['lines', '1-2'], ['code', '']] },
+      { type: 'include', path: "a'b.crv", section: 's', options: { lines: '1-2', code: true, cols: ['a', 'b'] } },
+      { type: 'link_reference_definition', key: 'k', namespace: 'link', href: '/u', tooltip: 'Title' },
+      { type: 'citation_definition', key: 'a', namespace: 'citation', children: [],
+        metadata: { bibliography: { title: [TEXT], authors: ['A'] } } },
+      { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [
+        { type: 'list_item', task: { mark: 'x' }, children: [PARAGRAPH] }, { type: 'list_item', children: [PARAGRAPH] },
+      ] },
+      { type: 'table', columns: [{ type: 'table_column' }], children: [
+        { type: 'table_head', children: [{ type: 'table_row', children: [
+          { type: 'table_cell', header: true, scope: 'col', attrs: { id: 'head' }, children: [] },
+        ] }] },
+        { type: 'table_body', children: [{ type: 'table_row', children: [
+          { type: 'table_cell', header: false, headerIds: ['head'], children: [] },
+        ] }] },
+      ] },
     ],
   },
   {
     astVersion: '2.1', extensions: [{ name: 'org.example.y', required: false }],
-    document: { type: 'document', astVersion: '2.0', children: [PARAGRAPH] },
+    document: { type: 'document', astVersion: '2.1', children: [PARAGRAPH] },
   },
 ]
+
+for (const seed of SEEDS) decodeTree(JSON.stringify(seed))
 
 /** A generator of 32-bit numbers (mulberry32), so a seed names its mutants. */
 function random(seed: number): () => number {

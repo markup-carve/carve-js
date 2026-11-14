@@ -166,12 +166,34 @@ export type SlotVisitor = (nodes: readonly Node[], step: string, single: boolean
 export const SPEC_ORDER = 0
 export const SOURCE_ORDER = 1
 
+// C2-A-025: metadata slots are the suffix of every generated row; this table is derived from
+// NODE_SLOTS, so a new nonmetadata child slot automatically enters the walk.
+const CORE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map(
+  [...NODE_SLOTS].map(([type, paths]) => [type, paths.filter((path) => !path.startsWith('metadata.'))]),
+)
+
+export const NO_SLOTS = 0
+export const CHILDREN_ONLY = 1
+export const MIXED_SLOTS = 2
+
+/** C2-A-025: the generated row's shape, including metadata slots when metadata is present. */
+export function slotShape(node: Node): 0 | 1 | 2 {
+  const slots = (node.metadata === undefined ? CORE_SLOTS : NODE_SLOTS).get(node.type)
+  if (slots === undefined || slots.length === 0) return NO_SLOTS
+  return slots.length === 1 && slots[0] === 'children' ? CHILDREN_ONLY : MIXED_SLOTS
+}
+
 /**
  * C2-A-024, C2-A-025: visits exactly the slots of the generated node table. In source order a title
  * precedes children. Opaque data and props are not slots.
  */
 export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER): void {
-  const slots = NODE_SLOTS.get(node.type) ?? []
+  const slots = (node.metadata === undefined ? CORE_SLOTS : NODE_SLOTS).get(node.type) ?? []
+  if (slots.length === 0) return
+  if (slots.length === 1 && slots[0] === 'children') {
+    visit(childNodes(node), 'children', false)
+    return
+  }
   if (order === SOURCE_ORDER && slots.includes('title')) visitSlot(node, 'title', visit)
   for (const path of slots) {
     if (order === SOURCE_ORDER && path === 'title') continue

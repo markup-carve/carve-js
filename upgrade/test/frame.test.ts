@@ -64,6 +64,14 @@ describe('the comparison of section 1', () => {
     expect(compareHtml('<p class="a" id="b">x</p>\n<hr>', '<p id="b" class="a">x</p><hr>').equal).toBe(true)
   })
 
+  it('C2-H-032: generated task presentation is ignored but authored style is compared', () => {
+    expect(compareHtml('<li>x</li>', '<li class="task" style="list-style: none">x</li>').equal).toBe(true)
+    expect(compareHtml('<li style="color: red">x</li>',
+      '<li class="task" style="list-style: none; color: red">x</li>').equal).toBe(true)
+    expect(compareHtml('<li style="color: blue">x</li>',
+      '<li class="task" style="list-style: none; color: red">x</li>').equal).toBe(false)
+  })
+
   it('compares text as it is', () => {
     const compared = compareHtml('<p>a  b</p>', '<p>a b</p>')
     expect(compared.equal).toBe(false)

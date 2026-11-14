@@ -7,6 +7,7 @@ import {
   type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
+import { AST_RESULTS } from './ast-tables.ts'
 import { stringOffsetOfByte, utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
@@ -58,9 +59,7 @@ function changes(c: Check): number {
 }
 
 // C2-A-162: positions and the results of resolution are not compared.
-const SKIPPED: readonly string[] = ['pos', 'segments', 'srcByteLength', 'stages', 'generatedId', 'resolvedAlign', 'n']
 const NODE_SLOTS: readonly string[] = ['children', 'caption']
-const NUMBERED: readonly string[] = ['footnote_ref', 'inline_footnote']
 
 type Fields = Record<string, unknown>
 
@@ -69,8 +68,8 @@ function sameList(a: readonly unknown[], b: unknown): boolean {
 }
 
 function sameFields(left: Fields, right: Fields): boolean {
-  for (const name in left) if (!SKIPPED.includes(name) && left[name] !== undefined && !sameValue(left[name], right[name])) return false
-  for (const name in right) if (!SKIPPED.includes(name) && right[name] !== undefined && left[name] === undefined) return false
+  for (const name in left) if (!skipped(left, name, false) && left[name] !== undefined && !sameValue(left[name], right[name])) return false
+  for (const name in right) if (!skipped(right, name, false) && right[name] !== undefined && left[name] === undefined) return false
   return true
 }
 
@@ -79,28 +78,22 @@ function sameValue(a: unknown, b: unknown): boolean {
   return isRecord(a) && isRecord(b) ? sameFields(a, b) : a === b
 }
 
-/** Whether equality compares the field `name` of `node` here, apart from its node slots (C2-A-161, C2-A-162). */
-function isReference(node: Node): boolean {
-  return (node.type === 'link' || node.type === 'image' || node.type === 'xref') && node.key !== undefined
+/** C2-A-162: only typed nodes have geometry and the generated resolution results. */
+function skipped(node: Fields, name: string, spanMarks: boolean): boolean {
+  const type = node['type']
+  if (typeof type !== 'string' || !AST_RESULTS.has(type)) return false
+  if (name === 'pos' || name === 'segments' || name === 'srcByteLength') return true
+  const result = AST_RESULTS.get(type)?.find((entry) => entry.field === name)
+  if (result === undefined) return false
+  if (result.when === 'reference use') return node['key'] !== undefined
+  if (result.when === 'derived from authored span mark') return spanMarks
+  return true
 }
 
 function isCompared(c: Check, node: Node, name: string): boolean {
-  if (SKIPPED.includes(name) || NODE_SLOTS.includes(name)) return false
+  if (NODE_SLOTS.includes(name)) return false
   if (name === 'title') return titleOf(node) === undefined
-  if ((name === 'href' || name === 'src') && isReference(node)) return false
-  if (name === 'number' && NUMBERED.includes(node.type)) return false
-  return !(c.spanMarks && node.type === 'table_cell' && (name === 'colspan' || name === 'rowspan'))
-}
-
-function sameField(name: string, a: unknown, b: unknown): boolean {
-  if (name !== 'marker' || a === undefined || b === undefined) return sameValue(a, b)
-  // C2-A-058: a start of 1 is the same as none.
-  const normal = (marker: unknown): Fields => {
-    const fields: Fields = isRecord(marker) ? { ...marker } : {}
-    if (fields['start'] === 1) delete fields['start']
-    return fields
-  }
-  return sameValue(normal(a), normal(b))
+  return !isRecord(node) || !skipped(node, name, c.spanMarks)
 }
 
 /** The name of the first field in which `e` and `a` differ, or null. */
@@ -108,7 +101,7 @@ function differingField(c: Check, e: Node, a: Node): string | null {
   // Every node is a record; the guard gives the fields of both by name.
   if (!isRecord(e) || !isRecord(a)) return null
   for (const name in e) {
-    if (e[name] !== undefined && isCompared(c, e, name) && !sameField(name, e[name], a[name])) return name
+    if (e[name] !== undefined && isCompared(c, e, name) && !sameValue(e[name], a[name])) return name
   }
   for (const name in a) {
     if (a[name] !== undefined && e[name] === undefined && isCompared(c, a, name)) return name

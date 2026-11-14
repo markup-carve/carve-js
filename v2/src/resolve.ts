@@ -6,7 +6,9 @@ import {
   type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
   type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
-  forEachSlot, SOURCE_ORDER, type MathNode, type Node, isNodeOfType, type NodeOfType, type TableCellNode, type TableNode,
+  CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
+  type NodeOfType,
+  type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
 import { type ParseFacts } from './ast-blocks.ts'
@@ -200,6 +202,12 @@ const STEPS = new Map<string, Step>([
  * skipped here and not in the call: half of the nodes of a document are text.
  */
 function visitChildren(walk: Walk, node: Node): void {
+  const shape = slotShape(node)
+  if (shape === NO_SLOTS) return
+  if (shape === CHILDREN_ONLY) {
+    for (const child of childNodes(node)) if (child.type !== 'text') visit(walk, child, node)
+    return
+  }
   forEachSlot(node, (nodes) => {
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
   }, SOURCE_ORDER)
