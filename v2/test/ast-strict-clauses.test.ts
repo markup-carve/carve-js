@@ -23,16 +23,16 @@ describe('AST 2.0 reader checks', () => {
     expect(refusal(inline('_'))).toBeNull()
     expect(refusal(inline('bad..name'))).toContain('not an extension name')
     expect(refusal(inline('demo.widget', []))).toContain('an undeclared extension name')
-    expect(refusal({ ...inline('demo.widget', []), extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toBeNull()
-    expect(refusal({ ...inline('demo.widget'), extensions: [{ name: 'demo.widget', version: '1', required: false }] }))
+    expect(refusal({ ...inline('demo.widget', []), extensions: [{ name: 'demo.widget', version: '1', required: false, slots: [] }] })).toBeNull()
+    expect(refusal({ ...inline('demo.widget'), extensions: [{ name: 'demo.widget', version: '1', required: false, slots: [] }] }))
       .toContain('a required field is missing')
     expect(refusal(documentOf({ type: 'block_extension', name: 'widget', version: '1', children: [], fallback: [] } as never)))
       .toContain('not an extension name')
     const data = documentOf({ ...paragraph('x'), data: { 'demo.widget': 1 } })
     expect(refusal(data)).toContain('an undeclared data name')
-    expect(refusal({ ...data, extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toBeNull()
+    expect(refusal({ ...data, extensions: [{ name: 'demo.widget', version: '1', required: false, slots: [] }] })).toBeNull()
     expect(refusal({ ...documentOf({ ...paragraph('x'), data: { widget: 1 } }),
-      extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toContain('not a qualified data name')
+      extensions: [{ name: 'demo.widget', version: '1', required: false, slots: [] }] })).toContain('not a qualified data name')
   })
 
   it('C2-A-028, C2-A-122, C2-A-131, C2-A-189: nested objects are closed and opaque objects contain no nodes', () => {

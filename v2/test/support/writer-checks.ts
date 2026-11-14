@@ -224,7 +224,9 @@ function neighborBackslash(type: string, start: number, bare: string, held: Map<
   if (QUOTE_KINDS.includes(kind)) {
     const quote = heldAt(held, 'smart_punctuation:', start)
     const decided = quote !== null && quote[0] !== type && QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))
-    return decided && isAsciiPunctuation(bare.charCodeAt(start + 1)) ? start + 1 : -1
+    if (!decided) return -1
+    if ('!<>'.includes(bare[start + 1] ?? '') && bare[start + 2] === '=') return start + 2
+    return isAsciiPunctuation(bare.charCodeAt(start + 1)) ? start + 1 : -1
   }
   if (DASH_KINDS.includes(kind)) {
     const dash = heldAt(held, 'smart_punctuation:', start)
@@ -270,18 +272,33 @@ function braceInto(u: Unformed, key: string, start: number, end: number): number
  * construct of the tree, the leftmost of each. `missing` holds the constructs of the tree that the text with the
  * backslashes of this clause lacks, as `name@start` with their ends, in bare offsets. Returns -1 where none applies.
  */
+function closerInside(u: Unformed, type: string, start: number, end: number): number {
+  if (!['inline_footnote', 'inline_extension', 'emphasis', 'strong'].includes(type)) return -1
+  for (let at = start + 1; at < end - 1; at++) {
+    if (u.added.includes(at)) continue
+    if (u.bare.startsWith('/}', at) || (type === 'inline_footnote' && '[]'.includes(u.bare[at] ?? ''))) return at
+  }
+  return -1
+}
+
+function firstCandidate(current: number, candidate: number): number {
+  return candidate < 0 ? current : current < 0 ? candidate : Math.min(current, candidate)
+}
+
 function addedBackslash(u: Unformed, missing: Map<string, number>): number {
   let sigil = -1
   let brace = -1
+  let closer = -1
   for (const [key, end] of missing) {
     const at = key.lastIndexOf('@')
     const start = Number(key.slice(at + 1))
-    const isSigil = key.slice(0, at) === 'footnote_ref' && '^!'.includes(u.bare[start - 1] ?? ' ') && !u.added.includes(start - 1)
-    if (isSigil && (sigil < 0 || start - 1 < sigil)) sigil = start - 1
-    const into = braceInto(u, key, start, end)
-    if (into >= 0 && (brace < 0 || into < brace)) brace = into
+    const type = key.slice(0, at)
+    const isSigil = type === 'footnote_ref' && '^!'.includes(u.bare[start - 1] ?? ' ') && !u.added.includes(start - 1)
+    if (isSigil) sigil = firstCandidate(sigil, start - 1)
+    brace = firstCandidate(brace, braceInto(u, key, start, end))
+    closer = firstCandidate(closer, closerInside(u, type, start, end))
   }
-  return sigil >= 0 ? sigil : brace
+  return brace >= 0 ? brace : sigil >= 0 ? sigil : closer
 }
 
 /** The constructs of `held` that the parse of `text` does not hold. */
@@ -346,6 +363,7 @@ function formedConstructs(bare: string, added: readonly number[]): Map<string, n
  */
 function sigilTarget(source: BareText, added: readonly number[], at: number): number {
   const bare = source.bare
+  if (comparisonTarget(source, added, at)) return at + 1
   if (bare[at] !== ':') return at
   const quote = heldAt(source.held, 'smart_punctuation:', at - 1)
   if (quote === null || !QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))) return at
@@ -353,6 +371,14 @@ function sigilTarget(source: BareText, added: readonly number[], at: number): nu
   let bracket = at + 1
   while (bracket < bare.length && (isAsciiAlphanumeric(bare.charCodeAt(bracket)) || '_-'.includes(bare[bracket]!))) bracket++
   return bracket > at + 1 && bare[bracket] === '[' ? bracket : at
+}
+
+function comparisonTarget(source: BareText, added: readonly number[], at: number): boolean {
+  const bare = source.bare
+  if (!'!<>'.includes(bare[at] ?? '') || bare[at + 1] !== '=') return false
+  const quote = heldAt(source.held, 'smart_punctuation:', at - 1)
+  return quote !== null && QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1)) &&
+    !formedConstructs(bare, [...added, at]).has(`${quote[0]}@${at - 1}`)
 }
 
 /**
@@ -404,8 +430,8 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     if ('form' in result) return result
     const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
     const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
-    let extra = lengthenedEnd(source, seeds)
-    if (extra < 0) extra = addedBackslash({ ...source, added: seeds }, missing)
+    let extra = addedBackslash({ ...source, added: seeds }, missing)
+    if (extra < 0) extra = lengthenedEnd(source, seeds)
     if (extra < 0) {
       const best = result.best
       const what = best === null

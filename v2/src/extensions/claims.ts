@@ -117,6 +117,7 @@ export function applyExtensions(parsed: ParsedTree, definitions: readonly Extens
     }
   })
   if (used.size > 0) document.extensions = [...used].sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, version]) => ({ name, version, required: false }))
+    .map(([name, version]) => ({ name, version, required: false,
+      slots: Object.keys(definitions.find((entry) => entry.name === name)?.slots ?? {}) }))
   return parsed
 }

@@ -469,7 +469,7 @@ function authoredIds(document: DocumentNode): Set<string> {
   const visit = (node: Node): void => {
     if (node.attrs?.id !== undefined) ids.add(node.attrs.id)
     if (node.type === 'heading' && node.generatedId !== undefined) ids.add(node.generatedId)
-    forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) })
+    forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) }, undefined, document.extensions)
   }
   visit(document)
   return ids

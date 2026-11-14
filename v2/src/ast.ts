@@ -2,7 +2,7 @@
 // node type, told apart by `type`.
 import { type Block, type BlockExtensionNode, type CaptionNode, type DocumentNode, type Inline, type InlineExtensionNode,
   type Node, type NodeOfType } from './ast-nodes.ts'
-import { EXTENSION_SLOT_ORDER, NODE_SLOTS } from './ast-tables.ts'
+import { NODE_SLOTS } from './ast-tables.ts'
 
 export type * from './ast-nodes.ts'
 export { FIELD_VALUES, isFieldValue } from './ast-nodes.ts'
@@ -60,7 +60,20 @@ export interface Metadata {
   bibliography?: BibliographyMetadata
   headers?: { placement: 'default' | 'first' | 'even', children: Block[] }[]
   footers?: { placement: 'default' | 'first' | 'even', children: Block[] }[]
+  abstract?: Block[]
+  keywords?: string[]
+  fields?: Record<string, MetadataValue>
 }
+
+/** C2-A-212: a closed, recursively typed root metadata value. */
+export type MetadataValue =
+  | { kind: 'string', value: string }
+  | { kind: 'boolean', value: boolean }
+  | { kind: 'number', value: number }
+  | { kind: 'inlines', value: Inline[] }
+  | { kind: 'blocks', value: Block[] }
+  | { kind: 'list', value: MetadataValue[] }
+  | { kind: 'map', value: Record<string, MetadataValue> }
 
 /** C2-A-120: a citation locator and its inline text. */
 export interface CitationLocator {
@@ -82,6 +95,7 @@ export interface ExtensionDeclaration {
   name: string
   required: boolean
   version: string
+  slots: string[]
 }
 
 export interface Resource {
@@ -190,17 +204,18 @@ export function slotShape(node: Node): 0 | 1 | 2 {
  * C2-A-024, C2-A-025: visits exactly the slots of the generated node table. In source order a title
  * precedes children. Opaque data and props are not slots.
  */
-export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER): void {
+export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER,
+  declarations: readonly ExtensionDeclaration[] = []): void {
   const slots = (node.metadata === undefined ? CORE_SLOTS : NODE_SLOTS).get(node.type) ?? []
   if (slots.length === 0) return
   if (slots.length === 1 && slots[0] === 'children') {
     visit(childNodes(node), 'children', false)
     return
   }
-  if (order === SOURCE_ORDER && slots.includes('title')) visitSlot(node, 'title', visit)
+  if (order === SOURCE_ORDER && slots.includes('title')) visitSlot(node, 'title', visit, declarations)
   for (const path of slots) {
     if (order === SOURCE_ORDER && path === 'title') continue
-    visitSlot(node, path, visit)
+    visitSlot(node, path, visit, declarations)
   }
 }
 
@@ -218,9 +233,14 @@ function isNode(value: unknown): value is Node {
   return isRecord(value) && typeof value['type'] === 'string' && NODE_SLOTS.has(value['type'])
 }
 
-function visitSlot(node: Node, path: string, visit: SlotVisitor): void {
+function visitSlot(node: Node, path: string, visit: SlotVisitor,
+  declarations: readonly ExtensionDeclaration[]): void {
   if (path === 'slots.*' && (node.type === 'block_extension' || node.type === 'inline_extension')) {
-    visitExtensionSlots(node, visit)
+    visitExtensionSlots(node, visit, declarations)
+    return
+  }
+  if (path === 'metadata.fields.*') {
+    visitMetadataFields(node.metadata?.fields, visit)
     return
   }
   if (path.includes('.*.')) { visitNestedWildcard(node, path, visit); return }
@@ -229,11 +249,44 @@ function visitSlot(node: Node, path: string, visit: SlotVisitor): void {
 }
 
 function visitExtensionSlots(node: BlockExtensionNode | InlineExtensionNode,
-  visit: SlotVisitor): void {
+  visit: SlotVisitor, declarations: readonly ExtensionDeclaration[]): void {
   const slots = node.slots
   if (slots === undefined) return
-  for (const name of EXTENSION_SLOT_ORDER.get(node.name) ?? Object.keys(slots)) {
+  const declaration = declarations.find((entry) => entry.name === node.name)
+  for (const name of declaration?.slots ?? Object.keys(slots)) {
     visitValue(slots[name], `slots/${pointerKey(name)}`, visit)
+  }
+}
+
+function codePointOrder(a: string, b: string): number {
+  const left = [...a]
+  const right = [...b]
+  for (let at = 0; at < Math.min(left.length, right.length); at++) {
+    const first = left[at]?.codePointAt(0) ?? 0
+    const second = right[at]?.codePointAt(0) ?? 0
+    if (first !== second) return first - second
+  }
+  return left.length - right.length
+}
+
+function visitMetadataFields(fields: Record<string, MetadataValue> | undefined, visit: SlotVisitor): void {
+  if (fields === undefined) return
+  for (const name of Object.keys(fields).sort(codePointOrder)) {
+    const value = fields[name]
+    if (value !== undefined) visitMetadataValue(value, `metadata/fields/${pointerKey(name)}`, visit)
+  }
+}
+
+function visitMetadataValue(value: MetadataValue, path: string, visit: SlotVisitor): void {
+  if (value.kind === 'inlines' || value.kind === 'blocks') visit(value.value, `${path}/value`, false)
+  else if (value.kind === 'list') value.value.forEach((item, index) => visitMetadataValue(item, `${path}/value/${index}`, visit))
+  else if (value.kind === 'map') visitMetadataFieldsAt(value.value, `${path}/value`, visit)
+}
+
+function visitMetadataFieldsAt(fields: Record<string, MetadataValue>, path: string, visit: SlotVisitor): void {
+  for (const name of Object.keys(fields).sort(codePointOrder)) {
+    const value = fields[name]
+    if (value !== undefined) visitMetadataValue(value, `${path}/${pointerKey(name)}`, visit)
   }
 }
 

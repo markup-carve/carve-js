@@ -30,7 +30,7 @@ const DOES_NOT_HOLD: Record<string, { output?: string, entry?: string, check: st
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
-  'U-114#4': { entry: 'upgrade-mismatch', check: 'mismatch' },
+  'U-114#4': { entry: 'U-114', check: 'explained' },
 }
 
 /** U-014 and U-015 write the input of U-018, so a second run reads their output as a loose list. */

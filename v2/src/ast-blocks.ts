@@ -50,11 +50,12 @@ function isContiguous(src: string, spans: number[]): boolean {
 
 /** C2-A-045, C2-A-046: every line of an opaque body with a line break after it. */
 function bodyValue(src: string, spans: number[]): string {
+  if (spans.length === 0) return ''
   // A body at column 0 with bare line feeds is one piece of the source, which is the usual case.
   if (isContiguous(src, spans)) return `${src.slice(spans[0], spans[spans.length - 1])}\n`
-  let value = ''
-  for (let at = 0; at < spans.length; at += 2) value += `${src.slice(spans[at], spans[at + 1])}\n`
-  return value
+  const lines: string[] = []
+  for (let at = 0; at < spans.length; at += 2) lines.push(src.slice(spans[at], spans[at + 1]))
+  return `${lines.join('\n')}\n`
 }
 
 /** The inline content of the text leaf `node`, with the abbreviations in its text (C2-I-098). */

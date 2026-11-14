@@ -72,13 +72,13 @@ describe('root, envelope and versions', () => {
   })
 
   it('C2-A-017: an extension declaration has a name, version and boolean `required`', () => {
-    expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.notes', version: '1', required: false }] })).toBeNull()
+    expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.notes', version: '1', required: false, slots: [] }] })).toBeNull()
     expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.notes', version: '1' }] })).toBe('/extensions/0/required: not a boolean')
   })
 
   it('C2-A-018, C2-A-020: a higher major version, an unknown required extension, an unknown field and an unknown type are refused', () => {
     expect(refusal({ ...documentOf(), astVersion: '3.0' })).toBe('/astVersion: major version 3 is not read by this engine')
-    expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.x', version: '1', required: true }] })).toBe('/extensions/0: an unknown required extension')
+    expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.x', version: '1', required: true, slots: [] }] })).toBe('/extensions/0: an unknown required extension')
     expect(refusal(documentOf({ type: 'paragraph', children: [], extra: 1 } as unknown as Block))).toBe('/children/0/extra: not a field of paragraph')
     expect(refusal(documentOf({ type: 'marquee', children: [] } as unknown as Block))).toBe('/children/0: unknown node type marquee')
   })
@@ -116,7 +116,7 @@ describe('node grammar', () => {
 
   it('C2-A-029, C2-A-030: data and typed metadata are kept', () => {
     const node: ParagraphNode = { type: 'paragraph', children: [], data: { 'org.example.x': { value: 1 } }, metadata: { authors: ['b'] } }
-    const document = { ...documentOf(node), extensions: [{ name: 'org.example.x', version: '1', required: false }] }
+    const document = { ...documentOf(node), extensions: [{ name: 'org.example.x', version: '1', required: false, slots: [] }] }
     expect(decodeTree(encodeTree(document)).children[0]).toEqual(node)
   })
 })
@@ -556,7 +556,7 @@ describe('citations, extension nodes and resources', () => {
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [] } as unknown as Block))).toBe('/children/0/fallback: a required field is missing')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [text('x')] } as unknown as Block))).toBe('/children/0/fallback/0: text does not stand here')
     const declared = { ...documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [paragraph('x')] }),
-      extensions: [{ name: 'org.example.d', version: '1', required: false }] }
+      extensions: [{ name: 'org.example.d', version: '1', required: false, slots: [] }] }
     expect(refusal(declared)).toBeNull()
   })
 
@@ -565,7 +565,7 @@ describe('citations, extension nodes and resources', () => {
       type: 'inline_extension', name: 'org.example.x', version: '1', children: [], fallback: [text('f')],
       props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { kind: 'link' } },
     }
-    const document = { ...documentOf(paragraph(node)), extensions: [{ name: 'org.example.x', version: '1', required: false }] }
+    const document = { ...documentOf(paragraph(node)), extensions: [{ name: 'org.example.x', version: '1', required: false, slots: [] }] }
     expect(inlinesOf(decodeTree(encodeTree(document)).children[0])[0]).toEqual(node)
   })
 
@@ -578,7 +578,7 @@ describe('citations, extension nodes and resources', () => {
     expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
     let nested: Inline = text('x')
     for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'x', children: [], fallback: [nested] }
-    expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 extension nodes$/)
+    expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 unqualified inline extension nodes$/)
   })
 
   it('C2-A-131: a resource has an id, a media type and a digest, and no id occurs twice', () => {

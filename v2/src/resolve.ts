@@ -4,7 +4,7 @@
 // besides them is returned.
 import {
   type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
-  type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
+  type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
   CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
   type NodeOfType,
@@ -52,6 +52,7 @@ type CaptionUse =
 type Reference = LinkNode | ImageNode
 
 interface Walk {
+  declarations: readonly ExtensionDeclaration[]
   resolution: Resolution
   footnotes: Map<string, FootnoteNode>
   headings: HeadingNode[]
@@ -210,7 +211,7 @@ function visitChildren(walk: Walk, node: Node): void {
   }
   forEachSlot(node, (nodes) => {
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
-  }, SOURCE_ORDER)
+  }, SOURCE_ORDER, walk.declarations)
 }
 
 /** The slots of a node that may carry a title or a caption (C2-A-025); a caption that owns a number counts the figures below it. */
@@ -221,7 +222,7 @@ function visitSlots(walk: Walk, node: FigureNode | FigureGroupNode | TableNode |
     if (owns && step === 'children') walk.numberedFigures++
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
     if (owns && step === 'children') walk.numberedFigures--
-  }, SOURCE_ORDER)
+  }, SOURCE_ORDER, walk.declarations)
 }
 
 /** Whether the leaf `node` may hold a node that resolution reads: any leaf of a supplied tree, and the noted leaves of a parse. */
@@ -527,6 +528,7 @@ export function resolve(
     findings, diagnostics: findings.entries,
   }
   const walk: Walk = {
+    declarations: document.extensions ?? [],
     resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
   }

@@ -72,7 +72,7 @@ function decimalMarkers(w: Writer, node: ListNode, delimiter: string, authored: 
   // list is written from 1 and the readback reports the field.
   const start = authored > MAX_DECIMAL ? 1 : authored
   // C2-L-031: a bare `)` is no marker. C2-L-030: with no fact a list with the period takes the bare dot.
-  const bare = delimiter === '.' && (w.facts?.get(node)?.bare ?? true)
+  const bare = delimiter === '.' && !w.bareDotLead && (w.facts?.get(node)?.bare ?? true)
   if (!bare) return numberedMarkers(delimiter, start, count)
   return { markers: new Array<string>(count).fill('.'), start: start === 1 ? null : String(start) }
 }

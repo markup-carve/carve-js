@@ -336,6 +336,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
     "metadata.bibliography.containerTitle",
     "metadata.headers.*.children",
     "metadata.footers.*.children",
+    "metadata.abstract",
+    "metadata.fields.*",
   ]],
   ["emphasis", [
     "children",

@@ -128,12 +128,10 @@ describe('variants of the contract inputs', () => {
     expect(result.records.map((record) => record.entry)).toEqual(['U-116', 'upgrade-mismatch'])
   })
 
-  it('takes a bidirectional control out of text and code, as 0.1 did in its output (X-001)', () => {
-    const result = upgrade('a\u202eb `c\u2066d`\n')
-    expect([result.output, result.check]).toEqual(['ab `cd`\n', 'pass'])
-    expect(result.records.map((record) => [record.entry, record.class, record.lint])).toEqual([
-      ['X-001', 'rewrite', 'bidi-control-in-source'], ['X-001', 'rewrite', 'bidi-control-in-source'],
-    ])
+  it('C2-H-172, X-001: keeps bidirectional controls because both engines render them alike', () => {
+    const input = 'a\u202eb `c\u2066d`\n'
+    const result = upgrade(input)
+    expect([result.output, result.check, result.records]).toEqual([input, 'pass', []])
   })
 
   it('leaves a bidirectional control in a destination, where it changes what the value tests as', () => {
@@ -141,9 +139,10 @@ describe('variants of the contract inputs', () => {
     expect(upgrade(input).output).toBe(input)
   })
 
-  it('writes U+0000 as U+FFFD, as 0.1 rendered it (X-002)', () => {
-    const result = upgrade('a\u0000b\n')
-    expect([result.output, result.check]).toEqual(['a\ufffdb\n', 'pass'])
+  it('C2-B-218, X-002: keeps U+0000 because both engines render it alike', () => {
+    const input = 'a\u0000b\n'
+    const result = upgrade(input)
+    expect([result.output, result.check, result.records]).toEqual([input, 'pass', []])
   })
 
   it('an earlier definition of a key is removed in a quote too (U-040)', () => {

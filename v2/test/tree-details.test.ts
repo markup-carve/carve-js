@@ -229,7 +229,7 @@ describe('the reader at its bounds', () => {
     expect(refusal(documentOf(paragraph(inline)))).toBeNull()
     expect(refusal(documentOf(paragraph({ ...inline, slots: { s: [paragraph()] } })))).toBe('/children/0/children/0/slots/s/0: paragraph does not stand here')
     const blockNode: BlockExtensionNode = { type: 'block_extension', name: 'a.b', version: '1', children: [], slots: { s: [paragraph()] }, fallback: [] }
-    const declared = (node: BlockExtensionNode) => ({ ...documentOf(node), extensions: [{ name: 'a.b', version: '1', required: false }] })
+    const declared = (node: BlockExtensionNode) => ({ ...documentOf(node), extensions: [{ name: 'a.b', version: '1', required: false, slots: ['s'] }] })
     expect(refusal(declared(blockNode))).toBeNull()
     expect(refusal(declared({ ...blockNode, slots: { s: [text('x')] } }))).toBeNull()
     const link = (fields: Partial<LinkNode>): string | null => refusal(documentOf(paragraph({ type: 'link', children: [], ...fields })))
@@ -286,7 +286,7 @@ describe('equality in detail', () => {
   })
 
   it('an envelope carries the extensions of its document, and a bare tree with a field named document is no envelope', () => {
-    const declared: DocumentNode = { ...documentOf(), extensions: [{ name: 'a.b', version: '1', required: false }] }
+    const declared: DocumentNode = { ...documentOf(), extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }] }
     expect(JSON.parse(encodeEnvelope(declared))).toHaveProperty('extensions', declared.extensions)
     expect(JSON.parse(encodeEnvelope(documentOf()))).not.toHaveProperty('extensions')
     expect(() => decodeTree('{"type":"document","astVersion":"2.0","children":[],"document":{}}')).toThrow('/document: not a field of document')

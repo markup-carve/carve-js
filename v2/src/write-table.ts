@@ -7,7 +7,7 @@ import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
 import { emit, lose, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
-import { trimSpaces } from './source.ts'
+import { longestBareRun } from './write-fences.ts'
 import { displayWidth } from './width.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
@@ -293,15 +293,6 @@ function delimitedRow(row: TableRowNode, separator: string): string {
   return row.children.map((cell) => delimitedCell(cell, separator)).join(separator)
 }
 
-function longestBacktickLine(lines: readonly string[]): number {
-  let longest = 0
-  for (const line of lines) {
-    const text = trimSpaces(line)
-    if (text !== '' && text === '`'.repeat(text.length)) longest = Math.max(longest, text.length)
-  }
-  return longest
-}
-
 function delimitedTable(w: Writer, table: TableNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
@@ -314,7 +305,7 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
     for (const row of group.children) body.push(row.type === 'table_row' ? delimitedRow(row, separator) : '')
   }
   const lines = body.join('\n').split('\n')
-  const run = '`'.repeat(Math.max(MIN_RUN, longestBacktickLine(lines) + 1))
+  const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
   emit(w, prefix, run + format)
   if (body.length > 0) for (const line of lines) emit(w, prefix, line)
   emit(w, prefix, run)

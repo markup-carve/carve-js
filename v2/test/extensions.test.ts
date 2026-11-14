@@ -39,18 +39,19 @@ function outer(document: DocumentNode): BlockExtensionNode {
 describe('the extension interface', () => {
   it('C2-X-001, C2-X-002, C2-X-018: a claim declares its qualified name and exact version on the root', () => {
     expect(tabsTree().extensions).toEqual([
-      { name: 'carve.tab', version: '1', required: false }, { name: 'carve.tabs', version: '1', required: false },
+      { name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },
+      { name: 'carve.tabs', version: '1', required: false, slots: ['tabs'] },
     ])
     expect(outer(tabsTree())).toMatchObject({ name: 'carve.tabs', version: '1' })
   })
 
   it('C2-X-003, C2-X-004, C2-X-012: required unknown names fail and optional unknown names use a fallback', () => {
     const unknown: DocumentNode = { type: 'document', astVersion: '2.0',
-      extensions: [{ name: 'test.missing', version: '1', required: false }],
+      extensions: [{ name: 'test.missing', version: '1', required: false, slots: [] }],
       children: [{ type: 'block_extension', name: 'test.missing', version: '1', children: [], fallback: [paragraph('safe')] }] }
     expect(renderWithDiagnostics(unknown)).toMatchObject({ html: '<p>safe</p>',
       diagnostics: [{ code: 'extension-fallback-rendered', path: '/children/0' }] })
-    unknown.extensions = [{ name: 'test.missing', version: '1', required: true }]
+    unknown.extensions = [{ name: 'test.missing', version: '1', required: true, slots: [] }]
     expect(() => render(unknown)).toThrow(CarveTreeError)
     expect(parse('::: tab "Orphan"\nBody\n:::\n', { extensions: tabsExtensions }).children[0]?.type).toBe('div')
   })
@@ -106,6 +107,17 @@ describe('the extension interface', () => {
     const blocked = ':::: tabs\n::: tab "One"\n[x](javascript:alert)\n:::\n::::\n'
     expect(render(blocked, { extensions: tabsExtensions })).toContain('href=""')
     expect(render(blocked, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })).toContain('href=""')
+  })
+
+  it('C2-X-034, C2-H-082: the fallback escapes text and applies the URL policy', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0',
+      extensions: [{ name: 'test.unknown', version: '1', required: false, slots: [] }],
+      children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
+        fallback: [{ type: 'paragraph', children: [
+          { type: 'text', value: '<script>' },
+          { type: 'link', href: 'javascript:alert(1)', children: [{ type: 'text', value: 'click' }] },
+        ] }] }] }
+    expect(render(document)).toBe('<p>&lt;script&gt;<a href="">click</a></p>')
   })
 
   it('C2-X-036: the article profile degrades raw content in slots and fallback', () => {
@@ -175,7 +187,8 @@ describe('the extension interface', () => {
     const install = expectedTab('Install', 'Run setup.')
     const use = expectedTab('Use', 'Open the app.')
     expect(tabsTree()).toEqual({ type: 'document', astVersion: '2.0',
-      extensions: [{ name: 'carve.tab', version: '1', required: false }, { name: 'carve.tabs', version: '1', required: false }],
+      extensions: [{ name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },
+        { name: 'carve.tabs', version: '1', required: false, slots: ['tabs'] }],
       children: [{ type: 'block_extension', name: 'carve.tabs', version: '1', children: [], slots: { tabs: [install, use] },
         fallback: [...install.fallback, ...use.fallback], source: { form: 'div', name: 'tabs',
           body: '::: tab "Install"\nRun setup.\n:::\n\n::: tab "Use"\nOpen the app.\n:::\n' } }] })
@@ -229,7 +242,7 @@ describe('the extension interface', () => {
   it('C2-X-003: decoding checks a required name against the registered exact version', () => {
     const document = tabsTree()
     if (document.extensions === undefined) throw new Error('no declarations')
-    document.extensions[1] = { name: 'carve.tabs', version: '2', required: true }
+    document.extensions[1] = { name: 'carve.tabs', version: '2', required: true, slots: ['tabs'] }
     expect(() => decodeTree(JSON.stringify(document), undefined, tabsExtensions)).toThrow('unknown required extension')
   })
 
@@ -247,7 +260,7 @@ describe('the extension interface', () => {
   it('C2-A-190 to C2-A-209: declared standard data uses its value schema and placement', () => {
     const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [paragraph('Draft')],
       extensions: ['carve.source', 'carve.style', 'carve.annotation']
-        .map((name) => ({ name, version: '1', required: false })),
+        .map((name) => ({ name, version: '1', required: false, slots: [] })),
       data: { 'carve.style': { page: { widthPt: 595, heightPt: 842,
         marginsPt: { top: 72, right: 72, bottom: 72, left: 72 } } } } }
     const child = document.children[0]

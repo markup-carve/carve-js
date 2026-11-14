@@ -63,9 +63,9 @@ describe('reading a supplied tree', () => {
     expect(refusal({ astVersion: '3.0', document })).toBe('/astVersion: major version 3 is not read by this engine')
     expect(refusal({ astVersion: '2.01', document })).toBe('/astVersion: not major.minor')
     expect(refusal({ document })).toBe('/astVersion: a required field is missing')
-    expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: true }], document })).toBe('/extensions/0: an unknown required extension')
+    expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: true, slots: [] }], document })).toBe('/extensions/0: an unknown required extension')
     expect(refusal({ astVersion: '2.0', other: 1, document })).toBe('/other: not a field of the envelope')
-    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', version: '1', required: false }],
+    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }],
       document: { ...document, astVersion: '2.3' } })).toBeNull()
     expect(refusal({ astVersion: '2.0', document: { ...document, astVersion: '3.0' } }))
       .toBe('/document/astVersion: the document and envelope versions differ')
@@ -415,7 +415,7 @@ describe('one walker over every slot that holds nodes', () => {
   const reference = { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
   const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
   const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
-    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: false }],
+    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }],
     children: [{ type: 'paragraph', children: [inline] }, ...more],
   }))
 
@@ -442,7 +442,7 @@ describe('one walker over every slot that holds nodes', () => {
     expect(pointerToken('~01')).toBe('~1')
     const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a.b', version: '1', children: [],
       fallback: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
-    expect(refusal({ ...inParagraph(slot('a/b')), extensions: [{ name: 'a.b', version: '1', required: false }] }))
+    expect(refusal({ ...inParagraph(slot('a/b')), extensions: [{ name: 'a.b', version: '1', required: false, slots: [] }] }))
       .toBe('/children/0/children/0/slots/a~1b: not a lowercase slot name')
   })
 })
@@ -483,7 +483,7 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-093: a closing mark at the end of the content, glued to the closer, takes the backslash', () => {
-    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe(`x(/u)${BACKSLASH}//${BACKSLASH}{/\n`)
+    expect(format(`x(/u)${BACKSLASH}//{/`)).toBe(`x(/u)${BACKSLASH}//{/\n`)
     expect(format(`x(/u)${BACKSLASH}//}/`)).toBe(`x(/u)${BACKSLASH}//}/\n`)
   })
 

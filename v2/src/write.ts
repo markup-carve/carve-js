@@ -5,7 +5,7 @@ import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointe
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
-import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
+import { blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
@@ -240,7 +240,19 @@ function joinsGroup(w: Writer, before: Node, node: Node): boolean {
  */
 function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
-  while (end < nodes.length && joinsGroup(w, nodes[end - 1]!, nodes[end]!)) end++
+  while (end < nodes.length) {
+    const before = nodes[end - 1]!
+    const node = nodes[end]!
+    const following = nodes[end + 1]
+    const hoisted = node.type === 'comment' && (before.type === 'list' || before.type === 'definition_list' ||
+      before.type === 'footnote') && followingAttributes(w, following) !== ''
+    const prior = nodes[end - 2]
+    const belongs = before.type === 'comment' && prior !== undefined &&
+      (prior.type === 'list' || prior.type === 'definition_list' || prior.type === 'footnote') &&
+      followingAttributes(w, node) !== ''
+    if (!hoisted && !belongs && !joinsGroup(w, before, node)) break
+    end++
+  }
   return end
 }
 
@@ -374,6 +386,8 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     const group = nodes.slice(from, end)
     w.lines = []
     w.lead = null
+    w.bareDotLead = false
+    w.prewrittenAttributes = null
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0) return end
@@ -462,6 +476,36 @@ function writeDocument(w: Writer, document: DocumentNode): string {
   return out.length === 0 ? '' : `${out.join('\n')}\n`
 }
 
+function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): void {
+  for (const name of ['headers', 'footers'] as const) {
+    document.metadata?.[name]?.forEach((_entry, index) => diagnostics.push({
+      code: 'structure-unspellable', severity: 'warning', channel: 'render-loss',
+      message: `a root ${name.slice(0, -1)} has no spelling in Carve source`, path: `/metadata/${name}/${index}`,
+    }))
+  }
+  for (const name of ['abstract', 'keywords'] as const) if (document.metadata?.[name] !== undefined) diagnostics.push({
+    code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+    message: `root metadata.${name} has no spelling in Carve source`, path: `/metadata/${name}`,
+  })
+  if (document.metadata?.fields !== undefined && !document.children.some((node) => node.type === 'frontmatter')) {
+    diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+      message: 'root metadata.fields has no spelling in Carve source', path: '/metadata/fields' })
+  }
+}
+
+/** C2-W-088: an escape before a brace is kept only when removing it changes the tree. */
+function necessaryBraceEscapes(source: string, document: DocumentNode, w: Writer): string {
+  let at = source.indexOf('\\{')
+  while (at >= 0) {
+    if (source[at + 2] === '/') {
+      const candidate = source.slice(0, at) + source.slice(at + 1)
+      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions), document)) source = candidate
+    }
+    at = source.indexOf('\\{', at + 1)
+  }
+  return source
+}
+
 /** Writes a tree that is known to be valid. */
 export function writeTree(document: DocumentNode, options: WriteOptions | undefined): WriteOutput {
   const layout = options?.layout
@@ -469,15 +513,11 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
-  const source = writeDocument(w, document)
+  const written = writeDocument(w, document)
+  const source = written.includes('\\{') ? necessaryBraceEscapes(written, document, w) : written
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
-  for (const name of ['headers', 'footers'] as const) {
-    document.metadata?.[name]?.forEach((_entry, index) => diagnostics.push({
-      code: 'structure-unspellable', severity: 'warning', channel: 'render-loss',
-      message: `a root ${name.slice(0, -1)} has no spelling in Carve source`, path: `/metadata/${name}/${index}`,
-    }))
-  }
+  rootMetadataLosses(document, diagnostics)
   return { source, diagnostics }
 }
 

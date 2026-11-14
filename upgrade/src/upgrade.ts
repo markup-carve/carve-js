@@ -2,9 +2,9 @@ import { compareHtml } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
-import { needsPerson, type ReportRecord } from './report.ts'
+import { needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { RULES } from './rules/index.ts'
-import { lineOf, readLines } from './source.ts'
+import { lineOf, lineText, readLines } from './source.ts'
 
 /** Report entries after which the HTML of 0.2 differs from the HTML of 0.1 by the contract. */
 const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077'])
@@ -73,6 +73,23 @@ function hasEntry(records: ReportRecord[], entry: string): boolean {
   return records.some((record) => record.entry === entry)
 }
 
+/** U-114: a shorter bare colon run closes an inner div before the outer div's own closer. */
+function innerColonClose(input: string): number {
+  const lines = readLines(input)
+  let outer = 0
+  for (let line = 1; line <= lines.count; line++) {
+    const value = lineText(lines, line).trim()
+    let run = 0
+    while (value.charCodeAt(run) === 0x3a) run++
+    if (run >= 4 && value.length > run && outer === 0) outer = run
+    else if (outer > run && run >= 3 && value.length === run && line < lines.count) {
+      const next = lineText(lines, line + 1).trim()
+      if (next !== '' && !next.startsWith(':')) return line
+    }
+  }
+  return 0
+}
+
 /** Renders both sides and adds what the comparison found to `records`. */
 function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
   const { output, records } = done
@@ -101,6 +118,14 @@ function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
     const line = compared.difference === null ? strict.difference.line : compared.difference.line
     const message = `the HTML differs, as the entries ${[...new Set(explained)].join(', ')} say`
     records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, line), message })
+    return 'explained'
+  }
+  const colonLine = innerColonClose(input)
+  if (colonLine > 0) {
+    records.push(recordOf('U-114', colonLine,
+      'after the shorter inner div closer, 0.1 opens another anonymous div and 0.2 closes the outer div'))
+    records.push({ entry: 'upgrade-difference', class: 'summary', line: colonLine,
+      message: 'the HTML differs, as U-114 says' })
     return 'explained'
   }
   const { line, expected, actual } = compared.difference

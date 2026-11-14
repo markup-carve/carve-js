@@ -39,11 +39,11 @@ export {
 } from './api.ts'
 export {
   AST_VERSION, type Attrs, type BibliographyMetadata, type CitationLocator, type Envelope, type ExtensionDeclaration,
-  type IncludeOptions, type Marker, type Metadata, type Position, type Resource, type Task,
+  type IncludeOptions, type Marker, type Metadata, type MetadataValue, type Position, type Resource, type Task,
 } from './ast.ts'
 export type * from './ast-nodes.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'
-export { CarveTreeError, MAX_TREE_DEPTH, validateTree } from './ast-validate.ts'
+export { type AnnotationRangeSidecar, CarveTreeError, MAX_TREE_DEPTH, validateTree, validateTreeWithAnnotations } from './ast-validate.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from './layout.ts'
 export { CarveLayoutError, validateLayout } from './layout-validate.ts'
 export {

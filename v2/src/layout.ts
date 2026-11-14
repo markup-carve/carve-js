@@ -1,6 +1,7 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
 // second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
-import { captionOf, type DocumentNode, type FigureNode, forEachSlot, type Node, SOURCE_ORDER, type TableCellNode } from './ast.ts'
+import { captionOf, type DocumentNode, type ExtensionDeclaration, type FigureNode, forEachSlot, type Node, SOURCE_ORDER,
+  type TableCellNode } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
 import { type Facts, measureBlock } from './layout-facts.ts'
@@ -76,6 +77,7 @@ interface Walk {
   trace: LayoutTrace
   bytes: (offset: number) => number
   nodes: NodeLayout[]
+  declarations: readonly ExtensionDeclaration[]
 }
 
 function lineEndings(src: string): SourceLayout['lineEndings'] {
@@ -205,7 +207,7 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   forEachSlot(node, (nodes, step, single) => {
     if (single) visit(walk, nodes[0]!, `${path}/${step}`, inner)
     else visitList(walk, nodes, `${path}/${step}`, inner)
-  }, SOURCE_ORDER)
+  }, SOURCE_ORDER, walk.declarations)
 }
 
 function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Frame): void {
@@ -214,7 +216,7 @@ function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Fram
 
 /** The record of `src` for `document`, the tree that was built with `trace`. */
 export function buildLayout(src: string, document: DocumentNode, trace: LayoutTrace): SourceLayout {
-  const walk: Walk = { src, trace, bytes: byteOffsets(src), nodes: [] }
+  const walk: Walk = { src, trace, bytes: byteOffsets(src), nodes: [], declarations: document.extensions ?? [] }
   visit(walk, document, '', { start: 0, end: src.length, quotes: 0, open: false, spans: null, table: null, row: -1 })
   return {
     version: LAYOUT_VERSION, encoding: 'utf-8', source: src, lineEndings: lineEndings(src), bom: src.charCodeAt(0) === BYTE_ORDER_MARK,

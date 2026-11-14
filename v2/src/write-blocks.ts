@@ -16,6 +16,7 @@ import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { parseChunk } from './write-check.ts'
+import { longestBareRun } from './write-fences.ts'
 import { writeTable } from './write-table.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
@@ -25,12 +26,11 @@ const MIN_RUN = 3
 const MAX_HEADING_LEVEL = 6
 /** C2-W-028: the blank lines that keep two lists of one kind apart. */
 const LIST_BOUNDARY_BLANKS = 3
-const SPACE = 32
-const TAB = 9
 const NONE: readonly never[] = []
 
 /** C2-W-047: the attributes of a block, as one brace block on the line above it. */
 export function attributeLine(w: Writer, node: Node, prefix: string, extra?: BlockParts): void {
+  if (w.prewrittenAttributes === node) { w.prewrittenAttributes = null; return }
   const block = braceBlock(node, extra)
   if (block !== '') emit(w, prefix, block)
 }
@@ -63,21 +63,6 @@ function runsBelow(w: Writer, node: Node): number {
 /** C2-W-039: the shortest colon run of at least three that is longer than the run of every div inside. */
 function colonRun(w: Writer, node: Node): string {
   return ':'.repeat(Math.max(MIN_RUN, runsBelow(w, node) + 1))
-}
-
-/** The longest run of `char` that stands alone on a line of `lines`, at any indent (C2-W-038). */
-function longestBareRun(lines: readonly string[], char: number): number {
-  let longest = 0
-  for (const line of lines) {
-    let start = 0
-    while (start < line.length && (line.charCodeAt(start) === SPACE || line.charCodeAt(start) === TAB)) start++
-    let end = start
-    while (end < line.length && line.charCodeAt(end) === char) end++
-    let rest = end
-    while (rest < line.length && (line.charCodeAt(rest) === SPACE || line.charCodeAt(rest) === TAB)) rest++
-    if (rest === line.length) longest = Math.max(longest, end - start)
-  }
-  return longest
 }
 
 /**
@@ -243,6 +228,7 @@ function listItem(w: Writer, node: ListItemNode, prefix: string, flags: number, 
   // C2-W-046: the task box holds the character of `task.mark`.
   const task = node.task
   const box = task === undefined ? '' : `[${task.mark}] `
+  w.bareDotLead = marker === '.'
   body(w, node, prefix, flags, head + gap + box, marker.length + gap.length, tight)
 }
 
@@ -256,7 +242,8 @@ function list(w: Writer, node: ListNode, prefix: string, flags: number): void {
   if (items.length === 0) return lose(w, node, null)
   const numbering = listMarkers(w, node)
   const block = listAttributes(node, numbering.start)
-  if (block !== '') emit(w, prefix, block)
+  if (w.prewrittenAttributes === node) w.prewrittenAttributes = null
+  else if (block !== '') emit(w, prefix, block)
   const tight = node.spacing !== 'loose'
   for (let at = 0; at < items.length; at++) {
     // C2-W-030: a loose list has one blank line between all of its items.
@@ -537,6 +524,12 @@ function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
   return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
 }
 
+export function followingAttributes(w: Writer, node: Node | undefined): string {
+  if (node?.type === 'list') return listAttributes(node, listMarkers(w, node).start)
+  if (node?.type === 'definition_list' || node?.type === 'footnote') return braceBlock(node)
+  return ''
+}
+
 /** The layout of a list of siblings: the blocks of a container, of a tight item, or the entries of a description list. */
 const BLOCKS = 0
 const TIGHT_ITEM = 1
@@ -565,6 +558,23 @@ function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): 
   if (fence !== null) w.forms.set(fence, 1)
 }
 
+function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: Node | null,
+  list: Node | null, prefix: string, layout: number): void {
+  const node = nodes[at]!
+  const next = nodes[at + 1]
+  const attributes = isCommentLine(node) && before !== null && isOpenContainer(w, before)
+    ? followingAttributes(w, next) : ''
+  if (before !== null) {
+    const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
+    const blanks = attributes !== '' || w.prewrittenAttributes === node ? 0 : blankLinesBetween(w, before, list, node, nested)
+    for (let blank = blanks; blank > 0; blank--) emit(w, prefix, '')
+  }
+  if (attributes !== '' && next !== undefined) {
+    emit(w, prefix, attributes)
+    w.prewrittenAttributes = next
+  }
+}
+
 function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags: number, layout: number): void {
   let before: Node | null = null
   // The last block that is no comment: comments do not keep two lists apart (C2-B-053).
@@ -572,12 +582,9 @@ function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags:
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     const start = w.lines.length
-    if (before !== null) {
-      // C2-W-114: no blank line stands between the entries of a description list.
-      const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
-      for (let blank = blankLinesBetween(w, before, list, node, nested); blank > 0; blank--) emit(w, prefix, '')
-    }
-    markFenceBeforeComment(w, node, nodes[at + 1])
+    const next = nodes[at + 1]
+    beforeSibling(w, nodes, at, before, list, prefix, layout)
+    markFenceBeforeComment(w, node, next)
     const written = w.lines.length
     writeBlock(w, node, prefix, flags)
     if (w.lines.length === written) {

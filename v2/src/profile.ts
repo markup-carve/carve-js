@@ -1,7 +1,8 @@
 // The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
 // form (C2-H-165) before the tree is resolved, so that a reference or a caption that is gone takes no number.
 import {
-  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, forEachSlot, type HeadingNode, type Inline,
+  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, type ExtensionDeclaration,
+  forEachSlot, type HeadingNode, type Inline,
   isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
   type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
@@ -12,6 +13,7 @@ import { includeSource } from './include.ts'
 import { type ProfileRule } from './render-tables.ts'
 
 interface Filter {
+  declarations: readonly ExtensionDeclaration[]
   name: string
   rule: ProfileRule
   findings: Findings
@@ -214,6 +216,13 @@ function filterChildren(filter: Filter, node: Node, depth: number): void {
  * Filters the lists of `node`, whose nodes stand at `depth`: every slot that holds nodes (C2-A-024),
  * the fallback and the named slots of an extension included, which the renderer writes too.
  */
+function isBlockSlot(node: Node, step: string, nodes: readonly Node[]): boolean {
+  if (step === 'longDescription' || step === 'metadata/abstract' || step.startsWith('metadata/headers/') ||
+    step.startsWith('metadata/footers/') || (node.type === 'block_extension' && step === 'fallback')) return true
+  return (step.startsWith('metadata/fields/') || step.startsWith('slots/')) && nodes[0] !== undefined &&
+    NODE_TABLE.BLOCKS.includes(nodes[0].type)
+}
+
 function filterNode(filter: Filter, node: Node, depth: number): void {
   forEachSlot(node, (nodes, step, single) => {
     // The slots are the node's own lists; the walk hands them on read-only, and the filter edits them in place.
@@ -221,13 +230,11 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
     if (step === 'children') filterChildren(filter, node, depth)
     else if (single) filterNode(filter, list[0]!, depth + 1)
     else if (step === 'pairs' || step === 'columns') for (const child of list) filterNode(filter, child, depth + 1)
-    else if (step === 'longDescription' || step.startsWith('metadata/headers/') || step.startsWith('metadata/footers/') ||
-      (node.type === 'block_extension' && step === 'fallback') ||
-      (step.startsWith('slots/') && nodes[0] !== undefined && NODE_TABLE.BLOCKS.includes(nodes[0].type))) {
+    else if (isBlockSlot(node, step, nodes)) {
       filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
     }
     else filterList<Inline>(filter, list as Inline[], false, depth, degradedInline)
-  })
+  }, undefined, filter.declarations)
 }
 
 /**
@@ -235,5 +242,5 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
  * in place, and reports each one. The children of the document stand at depth 0, as in 0.1.
  */
 export function applyProfile(document: DocumentNode, name: string, rule: ProfileRule, findings: Findings): void {
-  filterNode({ name, rule, findings }, document, 0)
+  filterNode({ name, rule, findings, declarations: document.extensions ?? [] }, document, 0)
 }

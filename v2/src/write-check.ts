@@ -844,9 +844,20 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  if (next !== null && (moveSigilEscape(c, next) || escapeAt(c, next, 0))) return true
+  if (next !== null && escapeSmartNeighbor(c, next)) return true
   const before = textAt(es, i - 1)
   return before !== null && escapeAt(c, before, before.value.length - 1)
+}
+
+function escapeSmartNeighbor(c: Check, next: TextNode): boolean {
+  return moveSigilEscape(c, next) || escapeComparison(c, next) || escapeAt(c, next, 0)
+}
+
+/** C2-W-125, case seven: the second character of a comparison sign can take the escape without flipping a quote. */
+function escapeComparison(c: Check, next: TextNode): boolean {
+  const value = next.value
+  if (value.length < 2 || !'!<>'.includes(value[0]!) || value[1] !== '=') return false
+  return escapeAt(c, next, 1)
 }
 
 /**

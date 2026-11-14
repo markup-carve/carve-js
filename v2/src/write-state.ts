@@ -28,6 +28,8 @@ export interface Writer {
   lines: string[]
   /** What the next line starts with instead of its prefix: the markers of the items it opens (C2-W-027). */
   lead: string | null
+  /** C2-W-044: a bare-dot item marker is waiting on this line. */
+  bareDotLead: boolean
   /** C2-W-088: the offsets in the value of a text node that take a backslash, in ascending order. */
   escapes: Map<TextNode, number[]>
   /** The spelling of a node that has more than one: 0 is the first choice of its clause. */
@@ -55,15 +57,17 @@ export interface Writer {
   abbreviations: Map<string, string>
   /** The parse of the group of blocks as it was last written (C2-W-089). */
   parsed: DocumentNode | null
+  prewrittenAttributes: Node | null
 }
 
 export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean,
   extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
     extensions,
-    lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
+    lines: [], lead: null, bareDotLead: false, escapes: new Map(), forms: new Map(), starts: new Map(),
+    attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
-    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), parsed: null,
+    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), parsed: null, prewrittenAttributes: null,
   }
 }
 
@@ -97,6 +101,7 @@ export function trimEnd(text: string): string {
 export function emit(w: Writer, prefix: string, text: string): void {
   const head = w.lead ?? prefix
   w.lead = null
+  w.bareDotLead = false
   w.lines.push(text === '' ? trimEnd(head) : head + text)
 }
 

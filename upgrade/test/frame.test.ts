@@ -119,7 +119,7 @@ describe('the report', () => {
   it('holds the 98 entries of the contract with their classes', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
     // U-048 is `none` by the ruling of 2026-11-13, so one rewrite less and one none more than the summary table.
-    expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([98, 51, 14, 12, 21])
+    expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([98, 51, 14, 13, 20])
     // The tool's own entries, for cases the specification does not decide, stand apart.
     expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002'])
   })
@@ -136,13 +136,13 @@ describe('the report', () => {
     expect([result.output, result.check, result.changed]).toEqual(['one\n\ntwo {_u_} and {~s~}\n\nSome text\n\n# Heading\n', 'pass', true])
   })
 
-  it('reports a difference no entry explains with the line of the input', () => {
+  it('U-114: reports the div difference with the line of the shorter closer', () => {
     // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
     const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
-    expect(result.check).toBe('mismatch')
-    const record = result.records.find((entry) => entry.entry === 'upgrade-mismatch')
-    expect([record?.class, record?.line]).toEqual(['mismatch', 6])
-    expect(record?.message).toBe('the HTML differs: 0.1 gives "</p><div></div></div>", 0.2 gives "</p></div></aside>"')
+    expect(result.check).toBe('explained')
+    const record = result.records.find((entry) => entry.entry === 'U-114')
+    expect([record?.class, record?.line]).toEqual(['report', 5])
+    expect(record?.message).toContain('0.1 opens another anonymous div')
   })
 
   it('does not let U-021 explain a difference outside the paragraph elements of the one item', () => {
@@ -150,7 +150,7 @@ describe('the report', () => {
     expect([explained.check, explained.records.map((record) => record.entry)]).toEqual(['explained', ['U-021', 'upgrade-difference']])
     // The same list, and after it the block of U-114 that 0.1 and 0.2 read differently.
     const other = upgrade('- item\n\n  ***\n\n:::: note\nbody\n:::\nafter\n::::\n')
-    expect([other.check, other.records.map((record) => record.entry)]).toEqual(['mismatch', ['U-021', 'upgrade-mismatch']])
+    expect([other.check, other.records.map((record) => record.entry)]).toEqual(['explained', ['U-021', 'U-114', 'upgrade-difference']])
   })
 
   it('prints one summary line for the later paragraphs of tight items', () => {

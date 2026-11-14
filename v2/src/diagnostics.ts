@@ -1,5 +1,5 @@
 // The diagnostics record (C2-A-172, C2-A-173): its entries, and the position each one takes from the node it is about.
-import { type DocumentNode, forEachSlot, type Node } from './ast.ts'
+import { type DocumentNode, type ExtensionDeclaration, forEachSlot, type Node } from './ast.ts'
 
 /** C2-A-173: one entry of the diagnostics record. */
 export interface Diagnostic {
@@ -37,12 +37,12 @@ function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Fram
 }
 
 /** The fields that hold nodes (C2-A-024), and the columns of a table, which are nodes too. */
-function pushSlots(stack: Frame[], frame: Frame): void {
+function pushSlots(stack: Frame[], frame: Frame, declarations: readonly ExtensionDeclaration[]): void {
   const node = frame.node
   forEachSlot(node, (nodes, step, single) => {
     if (single) stack.push({ node: nodes[0]!, above: frame, step })
     else pushList(stack, nodes, frame, step)
-  })
+  }, undefined, declarations)
 }
 
 /** The pointer of the node of `frame`: the steps from the document down to it. */
@@ -59,7 +59,7 @@ function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, string> 
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
     if (wanted.has(frame.node)) found.set(frame.node, pointerOf(frame))
-    pushSlots(stack, frame)
+    pushSlots(stack, frame, document.extensions ?? [])
   }
   return found
 }

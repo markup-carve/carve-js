@@ -318,6 +318,58 @@ function checkBibliography(value: Value, path: string, walk: Walk): void {
   }
 }
 
+function checkMetadataFields(value: Value, path: string, walk: Walk, depth: number): void {
+  if (!isRecord(value)) fail(path, 'metadata fields is not a map')
+  for (const [name, item] of Object.entries(value)) {
+    const at = `${path}/${pointerKey(name)}`
+    if (name === '') fail(at, 'empty metadata field name')
+    if (++walk.tree.metadataFields > 256) fail(at, 'more than 256 named metadata fields')
+    checkMetadataValue(item, at, walk, depth)
+  }
+}
+
+function checkMetadataValue(value: Value, path: string, walk: Walk, depth: number): void {
+  if (depth > 64) fail(path, 'metadata values are nested deeper than 64 levels')
+  if (!isRecord(value)) fail(path, 'not a metadata value')
+  for (const name of Object.keys(value)) if (name !== 'kind' && name !== 'value') fail(`${path}/${name}`, 'unknown metadata value field')
+  if (value['kind'] === undefined || value['value'] === undefined) fail(path, 'metadata value needs kind and value')
+  checkMetadataPayload(value['kind'], value['value'], path, walk, depth)
+}
+
+function checkMetadataPayload(kind: Value, item: Value, path: string, walk: Walk, depth: number): void {
+  const at = `${path}/value`
+  if (typeof kind !== 'string') fail(`${path}/kind`, 'unknown metadata value kind')
+  switch (kind) {
+    case 'string': requireString(item, at); break
+    case 'boolean': if (typeof item !== 'boolean') fail(at, 'not a boolean'); break
+    case 'number': if (typeof item !== 'number' || !Number.isFinite(item)) fail(at, 'not a finite number'); break
+    case 'inlines': checkList(item, at, 'inlines', walk); break
+    case 'blocks': checkList(item, at, 'blocks', walk); break
+    case 'list': requireArray(item, at).forEach((entry, index) => checkMetadataValue(entry, `${at}/${index}`, walk, depth + 1)); break
+    case 'map': checkMetadataFields(item, at, walk, depth + 1); break
+    default: fail(`${path}/kind`, 'unknown metadata value kind')
+  }
+}
+
+function checkHeaderFooter(value: Value, path: string, walk: Walk): void {
+  requireArray(value, path).forEach((entry, index) => {
+    const place = `${path}/${index}`
+    if (!isRecord(entry)) fail(place, 'not a header or footer')
+    for (const key of Object.keys(entry)) if (key !== 'placement' && key !== 'children') fail(`${place}/${key}`, 'unknown field')
+    const placement = entry['placement']
+    if (placement !== 'default' && placement !== 'first' && placement !== 'even') fail(`${place}/placement`, 'invalid placement')
+    checkList(entry['children'], `${place}/children`, 'blocks', walk)
+  })
+}
+
+function checkRootMetadataField(name: string, item: Value, path: string, walk: Walk): void {
+  if (name === 'abstract') checkList(item, path, 'blocks', walk)
+  else if (name === 'keywords') checkStrings(item, path)
+  else if (name === 'fields') checkMetadataFields(item, path, walk, 1)
+  else if (name === 'headers' || name === 'footers') checkHeaderFooter(item, path, walk)
+  else fail(path, 'not a field of metadata')
+}
+
 /** C2-A-030, C2-A-121: metadata has only its typed fields and node-bearing slots. */
 function checkMetadata(value: Value, path: string, walk: Walk): void {
   if (!isRecord(value)) fail(path, 'metadata is not an object')
@@ -327,15 +379,7 @@ function checkMetadata(value: Value, path: string, walk: Walk): void {
     else if (name === 'authors') checkStrings(item, at)
     else if (name === 'date') requireString(item, at)
     else if (name === 'bibliography') checkBibliography(item, at, walk)
-    else if ((name === 'headers' || name === 'footers') && path === '/metadata') {
-      requireArray(item, at).forEach((entry, index) => {
-        const place = `${at}/${index}`
-        if (!isRecord(entry)) fail(place, 'not a header or footer')
-        for (const key of Object.keys(entry)) if (key !== 'placement' && key !== 'children') fail(`${place}/${key}`, 'unknown field')
-        if (!['default', 'first', 'even'].includes(entry['placement'] as string)) fail(`${place}/placement`, 'invalid placement')
-        checkList(entry['children'], `${place}/children`, 'blocks', walk)
-      })
-    }
+    else if (path === '/metadata') checkRootMetadataField(name, item, at, walk)
     else fail(at, 'not a field of metadata')
   }
 }
@@ -385,7 +429,9 @@ function checkCount(name: string, value: Value, path: string): boolean {
 /** What the walk counts over the whole tree for the bounds of C2-A-132 and the manifest of C2-A-131. */
 interface TreeFacts {
   resourceReferences: number
-  declarations: ReadonlyMap<string, string>
+  metadataFields: number
+  annotationIds: Map<string, string>
+  declarations: ReadonlyMap<string, { version: string, required: boolean, slots: readonly string[] }>
   registry: ReadonlyMap<string, ExtensionDefinition>
   headerIds: Set<string>
   headerReferences: [string, string][]
@@ -412,17 +458,18 @@ function validName(value: string, qualified: boolean): boolean {
   return (!qualified || parts.length >= 2) && parts.every(validSegment)
 }
 
-function declaredNames(value: unknown): [string, string][] {
+function declaredNames(value: unknown): [string, { version: string, required: boolean, slots: readonly string[] }][] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => isRecord(entry) && typeof entry['name'] === 'string' &&
-    typeof entry['version'] === 'string' ? [[entry['name'], entry['version']]] : [])
+    typeof entry['version'] === 'string' && typeof entry['required'] === 'boolean' && Array.isArray(entry['slots'])
+    ? [[entry['name'], { version: entry['version'], required: entry['required'], slots: entry['slots'] }]] : [])
 }
 
 /** Where the walk stands: the nesting of nodes, the nesting of extension fallbacks, and the facts of the tree. */
 interface Walk {
   depth: number
   fallbacks: number
-  extensions?: number
+  coreFallback?: boolean
   tree: TreeFacts
   parent?: { name: string, slot: string }
 }
@@ -447,6 +494,11 @@ function checkSlots(value: Value, path: string, walk: Walk, node: Fields): void 
   if (!isRecord(value)) fail(path, 'slots is not an object')
   const name = String(node['name'])
   const definition = walk.tree.registry.get(name)
+  const declaration = walk.tree.declarations.get(name)
+  for (const slotName of Object.keys(value)) if (validSlotName(slotName) && declaration !== undefined &&
+    !declaration.slots.includes(slotName)) {
+    fail(`${path}/${pointerKey(slotName)}`, 'slot absent from extension declaration')
+  }
   for (const [slotName, slot] of Object.entries(value)) checkSlot(slotName, slot, path, walk, node, definition)
   if (definition !== undefined) checkRequiredSlots(value, path, definition)
 }
@@ -538,13 +590,20 @@ function checkExtensions(value: Value, path: string, walk: Walk): void {
   requireArray(value, path).forEach((entry, index) => {
     if (!isRecord(entry)) fail(`${path}/${index}`, 'not an extension declaration')
     for (const name of Object.keys(entry)) {
-      if (!['name', 'required', 'version'].includes(name)) fail(`${path}/${index}/${name}`, 'not a field of extension declaration')
+      if (!['name', 'required', 'version', 'slots'].includes(name)) fail(`${path}/${index}/${name}`, 'not a field of extension declaration')
     }
     const name = requireString(entry['name'], `${path}/${index}/name`)
     if (!validName(name, true)) fail(`${path}/${index}/name`, 'not a qualified name')
     if (typeof entry['required'] !== 'boolean') fail(`${path}/${index}/required`, 'not a boolean')
     const version = requireString(entry['version'], `${path}/${index}/version`)
     if (version === '') fail(`${path}/${index}/version`, 'an empty version')
+    const slots = requireArray(entry['slots'], `${path}/${index}/slots`)
+    const seenSlots = new Set<string>()
+    slots.forEach((slot, at) => {
+      if (typeof slot !== 'string' || !validSlotName(slot)) fail(`${path}/${index}/slots/${at}`, 'not a slot name')
+      if (seenSlots.has(slot)) fail(`${path}/${index}/slots/${at}`, 'duplicate slot name')
+      seenSlots.add(slot)
+    })
     if (seen.has(name)) fail(`${path}/${index}/name`, 'a duplicate extension declaration')
     seen.add(name)
     if (entry['required'] === true && walk.tree.registry.get(name)?.version !== version) {
@@ -559,7 +618,7 @@ function checkData(value: Value, path: string, walk: Walk, node: Fields): void {
   for (const name of Object.keys(value)) {
     if (!validName(name, true)) fail(`${path}/${pointerKey(name)}`, 'not a qualified data name')
     if (!walk.tree.declarations.has(name)) fail(`${path}/${pointerKey(name)}`, 'an undeclared data name')
-    checkStandardData(name, value[name], `${path}/${pointerKey(name)}`, node)
+    checkStandardData(name, value[name], `${path}/${pointerKey(name)}`, node, walk)
   }
 }
 
@@ -570,8 +629,9 @@ function closedObject(value: Value, path: string, allowed: readonly string[], re
   return value
 }
 
-function nonempty(value: Value, path: string): void {
+function nonempty(value: Value, path: string): string {
   if (typeof value !== 'string' || value.length === 0) fail(path, 'not a nonempty string')
+  return value
 }
 
 function positiveNumber(value: Value, path: string, zero: boolean): void {
@@ -623,27 +683,33 @@ function checkStyle(value: Value, path: string, node: Fields): void {
   if (style['page'] !== undefined) checkStylePage(style['page'], `${path}/page`)
 }
 
-function checkStandardData(name: string, value: Value, path: string, node: Fields): void {
-  if (name === 'carve.style') { checkStyle(value, path, node); return }
-  if (name === 'carve.source') {
-    const source = closedObject(value, path, ['format', 'locator', 'importer'], ['format', 'locator', 'importer'])
-    nonempty(source['format'], `${path}/format`)
-    const locator = closedObject(source['locator'], `${path}/locator`, ['part', 'path', 'id'])
-    if (Object.keys(locator).length === 0) fail(`${path}/locator`, 'empty locator')
-    for (const [key, item] of Object.entries(locator)) nonempty(item, `${path}/locator/${key}`)
-    const importer = closedObject(source['importer'], `${path}/importer`, ['name', 'version'], ['name', 'version'])
-    for (const [key, item] of Object.entries(importer)) nonempty(item, `${path}/importer/${key}`)
-  }
-  if (name === 'carve.annotation') {
+function checkAnnotationData(value: Value, path: string, walk: Walk): void {
     const annotation = closedObject(value, path, ['ids'], ['ids'])
     const ids = requireArray(annotation['ids'], `${path}/ids`)
     const seen = new Set<string>()
     for (const [at, id] of ids.entries()) {
-      nonempty(id, `${path}/ids/${at}`)
-      if (seen.has(id as string)) fail(`${path}/ids/${at}`, 'duplicate annotation id')
-      seen.add(id as string)
+      const name = nonempty(id, `${path}/ids/${at}`)
+      if (seen.has(name)) fail(`${path}/ids/${at}`, 'duplicate annotation id')
+      if (walk.tree.annotationIds.has(name)) fail(`${path}/ids/${at}`, 'duplicate annotation id across tree')
+      seen.add(name)
+      walk.tree.annotationIds.set(name, path.slice(0, -'/data/carve.annotation'.length))
     }
-  }
+}
+
+function checkSourceData(value: Value, path: string): void {
+  const source = closedObject(value, path, ['format', 'locator', 'importer'], ['format', 'locator', 'importer'])
+  nonempty(source['format'], `${path}/format`)
+  const locator = closedObject(source['locator'], `${path}/locator`, ['part', 'path', 'id'])
+  if (Object.keys(locator).length === 0) fail(`${path}/locator`, 'empty locator')
+  for (const [key, item] of Object.entries(locator)) nonempty(item, `${path}/locator/${key}`)
+  const importer = closedObject(source['importer'], `${path}/importer`, ['name', 'version'], ['name', 'version'])
+  for (const [key, item] of Object.entries(importer)) nonempty(item, `${path}/importer/${key}`)
+}
+
+function checkStandardData(name: string, value: Value, path: string, node: Fields, walk: Walk): void {
+  if (name === 'carve.style') checkStyle(value, path, node)
+  else if (name === 'carve.source') checkSourceData(value, path)
+  else if (name === 'carve.annotation') checkAnnotationData(value, path, walk)
 }
 
 function checkObject(value: Value, path: string): void {
@@ -704,9 +770,11 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['title', checkTitle],
   ['caption', (value, path, walk) => checkNode(value, path, ['caption'], walk)],
   ['fallback', (value, path, walk, node) => {
-    const inner: Walk = { ...walk, fallbacks: walk.fallbacks + 1 }
+    const qualified = typeof node['name'] === 'string' && node['name'].includes('.')
+    const inner: Walk = { ...walk, coreFallback: walk.coreFallback || qualified,
+      fallbacks: walk.fallbacks + (node['type'] === 'inline_extension' && !qualified ? 1 : 0) }
     const role = node['type'] === 'block_extension' ? BLOCKS : INLINES
-    const allowed = typeof node['name'] === 'string' && node['name'].includes('.')
+    const allowed = qualified
       ? role.filter((type) => type !== 'block_extension' && type !== 'inline_extension') : role
     checkList(value, path, allowed, inner)
   }],
@@ -729,7 +797,7 @@ function allowedTypes(content: Content): readonly string[] {
 function checkList(value: Value, path: string, content: Content, walk: Walk, parent?: Walk['parent']): void {
   const allowed = allowedTypes(content)
   const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, tree: walk.tree,
-    ...(walk.extensions === undefined ? {} : { extensions: walk.extensions }),
+    ...(walk.coreFallback === undefined ? {} : { coreFallback: walk.coreFallback }),
     ...(parent === undefined ? {} : { parent }) }
   requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
 }
@@ -765,7 +833,9 @@ function checkExtensionIdentity(node: Fields, type: string, path: string, walk: 
   if (!validName(name, type === 'block_extension') && !unqualifiedSource) fail(`${path}/name`, 'not an extension name')
   if (qualified && !walk.tree.declarations.has(name)) fail(`${path}/name`, 'an undeclared extension name')
   if (qualified && node['fallback'] === undefined) fail(`${path}/fallback`, 'a required field is missing')
-  if (qualified && node['version'] !== walk.tree.declarations.get(name)) fail(`${path}/version`, 'version differs from declaration')
+  if (qualified && node['version'] !== walk.tree.declarations.get(name)?.version) {
+    fail(`${path}/version`, 'version differs from declaration')
+  }
   if (!qualified && node['version'] !== undefined) fail(`${path}/version`, 'an unqualified extension has no version')
 }
 
@@ -875,11 +945,10 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   if (rule === undefined) fail(path, `unknown node type ${type}`)
   // C2-A-051, C2-A-052: a type that exists only in its container is refused anywhere else.
   if (!allowed.includes(type)) fail(path, `${type} does not stand here`)
-  const extension = type === 'block_extension' || type === 'inline_extension'
-  const depth = (walk.extensions ?? 0) + (extension ? 1 : 0)
-  if (depth > 32) fail(path, walk.fallbacks >= 32
-    ? 'fallbacks are nested deeper than 32 extension nodes' : 'extension nesting exceeds 32')
-  const current: Walk = { ...walk, extensions: depth }
+  if (walk.coreFallback && (type === 'inline_extension' || type === 'block_extension')) {
+    fail(path, 'qualified fallback contains an extension node')
+  }
+  const current: Walk = walk
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
   if (type === 'table') checkSpanCounts(value, path)
@@ -904,15 +973,8 @@ function checkVersion(value: Value, path: string): void {
 
 // C2-A-132: the bounds on what a tree may carry besides its nodes.
 const MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
-const MAX_METADATA_DEPTH = 64
 const MAX_RESOURCE_REFERENCES = 4096
 const MAX_FALLBACK_DEPTH = 32
-
-function metadataDepth(value: Value, path: string, depth: number): void {
-  if (typeof value !== 'object' || value === null) return
-  if (depth > MAX_METADATA_DEPTH) fail(path, 'metadata is nested deeper than 64 levels')
-  for (const [name, inner] of Object.entries(value)) metadataDepth(inner, `${path}/${name}`, depth + 1)
-}
 
 /** The UTF-8 bytes of a payload that `checkPayload` accepted: a string value as it is, any other value as JSON. */
 function payloadBytes(node: Fields): number {
@@ -926,12 +988,11 @@ function payloadBytes(node: Fields): number {
 
 /** C2-A-132: the bounds that one node shows, and its share of the bounds of the whole tree. */
 function checkNodeBounds(node: Fields, path: string, walk: Walk): void {
-  if (node['metadata'] !== undefined) metadataDepth(node['metadata'], `${path}/metadata`, 1)
   if (node['payload'] !== undefined && payloadBytes(node) > MAX_PAYLOAD_BYTES) fail(`${path}/payload`, 'an extension payload above 8 MiB')
   const tree = walk.tree
   tree.resourceReferences += (node['resourceId'] === undefined ? 0 : 1) + ((node['resourceIds'] as unknown[] | undefined)?.length ?? 0)
   if (tree.resourceReferences > MAX_RESOURCE_REFERENCES) fail(path, 'more than 4096 resource references')
-  if (walk.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 extension nodes')
+  if (walk.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 unqualified inline extension nodes')
 }
 
 /** C2-A-131: every id a node names is that of an entry of the manifest. */
@@ -940,6 +1001,25 @@ function checkReferences(document: Fields, tree: TreeFacts): void {
   for (const [id, path] of tree.references) if (!ids.has(id)) fail(path, `no resource has the id ${JSON.stringify(id)}`)
   for (const [id, path] of tree.headerReferences) {
     if (!tree.headerIds.has(id)) fail(path, `no header cell has the id ${JSON.stringify(id)}`)
+  }
+}
+
+/** C2-A-203: ranges for an unchanged tree, addressed by node pointer and code point offset. */
+export interface AnnotationRangeSidecar {
+  ranges: { id: string, start: { path: string, offset: number }, end: { path: string, offset: number } }[]
+}
+
+function checkAnnotations(sidecar: AnnotationRangeSidecar, tree: TreeFacts): void {
+  const ranges = new Map<string, AnnotationRangeSidecar['ranges'][number]>()
+  sidecar.ranges.forEach((range, index) => {
+    if (ranges.has(range.id)) fail(`/ranges/${index}/id`, 'duplicate annotation range id')
+    ranges.set(range.id, range)
+  })
+  for (const [id, path] of tree.annotationIds) {
+    const range = ranges.get(id)
+    if (range === undefined) fail(path, `annotation ${JSON.stringify(id)} has no range`)
+    const attached = [range.start.path, range.end.path].some((endpoint) => endpoint === path || endpoint.startsWith(`${path}/`))
+    if (!attached) fail(path, `annotation ${JSON.stringify(id)} has no endpoint on this node or its descendants`)
   }
 }
 
@@ -959,7 +1039,7 @@ export function validateEnvelope(envelope: Readonly<Record<string, unknown>>, ex
   }
   if (envelope['vocabulary'] !== undefined) checkObject(envelope['vocabulary'], '/vocabulary')
   if (envelope['extensions'] !== undefined) {
-    const tree: TreeFacts = { resourceReferences: 0, references: [], declarations: new Map(),
+    const tree: TreeFacts = { resourceReferences: 0, metadataFields: 0, annotationIds: new Map(), references: [], declarations: new Map(),
       registry: new Map(extensions.map((entry) => [entry.name, entry])), headerIds: new Set(),
       headerReferences: [], sourcePositions: undefined }
     checkExtensions(envelope['extensions'], '/extensions', { depth: 0, fallbacks: 0, tree })
@@ -979,18 +1059,34 @@ function sourcePositions(source: string): ReadonlyMap<number, readonly [number, 
   return positions
 }
 
+function combinedDeclarations(document: Fields, envelope?: Readonly<Record<string, unknown>>):
+  [string, { version: string, required: boolean, slots: readonly string[] }][] {
+  const root = declaredNames(document['extensions'])
+  const outside = declaredNames(envelope?.['extensions'])
+  for (const [name, outer] of outside) {
+    const inner = root.find(([candidate]) => candidate === name)?.[1]
+    if (inner !== undefined && (inner.version !== outer.version || inner.required !== outer.required ||
+      inner.slots.length !== outer.slots.length || inner.slots.some((slot, index) => slot !== outer.slots[index]))) {
+      fail('/extensions', `the root and envelope declarations of ${name} differ`)
+    }
+  }
+  return [...root, ...outside]
+}
+
 /** Refuses `document` unless it is a tree of contract 2.0. */
 export function validateTree(
   document: unknown, envelope?: Readonly<Record<string, unknown>>, source?: string,
   extensions: readonly ExtensionDefinition[] = [],
+  annotations?: AnnotationRangeSidecar,
 ): asserts document is DocumentNode {
   // C2-A-168.
   if (!isRecord(document)) fail('', 'not a tree')
   if (document['type'] !== 'document') fail('/type', 'the root is not a document')
   if (document['children'] === undefined) fail('/children', 'the root has no children')
   checkVersion(document['astVersion'], '/astVersion')
-  const declarations = [...declaredNames(document['extensions']), ...declaredNames(envelope?.['extensions'])]
-  const tree: TreeFacts = { resourceReferences: 0, references: [], declarations: new Map(declarations),
+  const declarations = combinedDeclarations(document, envelope)
+  const tree: TreeFacts = { resourceReferences: 0, metadataFields: 0, annotationIds: new Map(), references: [],
+    declarations: new Map(declarations),
     registry: new Map(extensions.map((entry) => [entry.name, entry])),
     headerIds: new Set(), headerReferences: [], sourcePositions: source === undefined ? undefined : sourcePositions(source) }
   if (source !== undefined && document['srcByteLength'] !== undefined && document['srcByteLength'] !== utf8Length(source)) {
@@ -1005,4 +1101,12 @@ export function validateTree(
   })
   checkNodeBounds(document, '', { depth: 0, fallbacks: 0, tree })
   checkReferences(document, tree)
+  if (annotations !== undefined) checkAnnotations(annotations, tree)
+}
+
+/** C2-A-203: validates a tree together with its annotation-range sidecar. */
+export function validateTreeWithAnnotations(document: unknown, annotations: AnnotationRangeSidecar,
+  envelope?: Readonly<Record<string, unknown>>, source?: string,
+  extensions: readonly ExtensionDefinition[] = []): asserts document is DocumentNode {
+  validateTree(document, envelope, source, extensions, annotations)
 }

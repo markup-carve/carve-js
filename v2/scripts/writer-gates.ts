@@ -80,7 +80,7 @@ function runExtensionExamples(): boolean {
       || !treesEqual(parse(once, parseOptions), parse(input, parseOptions))) failures++
   }
   const unknown: DocumentNode = { type: 'document', astVersion: '2.0',
-    extensions: [{ name: 'test.unknown', version: '1', required: false }],
+    extensions: [{ name: 'test.unknown', version: '1', required: false, slots: [] }],
     children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
       fallback: [{ type: 'paragraph', children: [{ type: 'text', value: 'Safe' }] }] }] }
   const written = writeWithDiagnostics(unknown)

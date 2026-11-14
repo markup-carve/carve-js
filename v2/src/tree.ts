@@ -1,6 +1,7 @@
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
-  ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP, isLeaf, PARAGRAPH, ROW,
+  ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_HEADER, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
+  isLeaf, PARAGRAPH, ROW,
   TABLE,
 } from './kinds.ts'
 
@@ -166,6 +167,7 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
 function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | null)[] {
   const owners: (BlockNode | null)[] = []
   const kept: BlockNode[] = []
+  const failed: BlockNode[] = []
   let left: BlockNode | null = null
   for (const cell of row.children!) {
     const column = owners.length
@@ -179,11 +181,16 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
       owners.push(up)
       left = null
     } else {
-      if ((cell.flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) !== 0) cell.spans = []
+      if ((cell.flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) !== 0) { cell.spans = []; failed.push(cell) }
       kept.push(cell)
       owners.push(cell)
       left = cell
     }
+  }
+  // C2-B-173: a failed mark in an otherwise all-header row remains a header cell.
+  if (kept.some((cell) => (cell.flags & FLAG_HEADER) !== 0) &&
+    kept.every((cell) => (cell.flags & FLAG_HEADER) !== 0 || failed.includes(cell))) {
+    for (const cell of failed) cell.flags |= FLAG_HEADER
   }
   row.children = kept
   return owners

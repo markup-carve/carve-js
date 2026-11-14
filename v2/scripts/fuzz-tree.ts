@@ -40,7 +40,7 @@ const PARAGRAPH = { type: 'paragraph', children: [TEXT] }
 const SEEDS: Json[] = [
   {
     type: 'document', astVersion: '2.0', resources: [{ id: 'r', mediaType: 'image/png', digest: DIGEST, href: 'a.png', size: 3 }],
-    extensions: [{ name: 'org.example.x', required: false, version: '1' }], metadata: { title: [TEXT] },
+    extensions: [{ name: 'org.example.x', required: false, version: '1', slots: ['s'] }], metadata: { title: [TEXT] },
     children: [
       {
         type: 'block_extension', name: 'org.example.x', version: '1', props: { a: 1 }, slots: { s: [PARAGRAPH] },
@@ -88,13 +88,13 @@ const SEEDS: Json[] = [
     ],
   },
   {
-    astVersion: '2.1', extensions: [{ name: 'org.example.y', version: '1', required: false }],
+    astVersion: '2.1', extensions: [{ name: 'org.example.y', version: '1', required: false, slots: [] }],
     document: { type: 'document', astVersion: '2.1', children: [PARAGRAPH] },
   },
-  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.unknown', version: '1', required: false }],
+  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.unknown', version: '1', required: false, slots: [] }],
     children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
       fallback: [PARAGRAPH], props: { title: 'unknown' } }] },
-  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.nested', version: '1', required: false }],
+  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.nested', version: '1', required: false, slots: [] }],
     children: [{ type: 'block_extension', name: 'test.nested', version: '1', fallback: [],
       children: [{ type: 'block_extension', name: 'test.nested', version: '1', children: [], fallback: [PARAGRAPH] }] }] },
 ]

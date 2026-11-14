@@ -340,6 +340,8 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   const src = state.src
   const pos = state.cursor.pos
   const shapes = shapesAt(state)
+  // C2-W-122: attribute lines for a following comment close the preceding list.
+  if (attributeInterrupts(state, matched, end)) return true
   // C2-B-014.
   if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return true
   // C2-B-200.
@@ -349,6 +351,26 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched, end)
   if ((shapes & DEFINITION_SHAPES) !== 0 && pos === lineStart && isSiblingDefinition(state, matched, end)) return true
   return (shapes & MARKER_SHAPES) !== 0 && isListMarker(src, pos, end) && markerInterrupts(state, matched, end)
+}
+
+function attributeInterrupts(state: BlockState, matched: number, end: number): boolean {
+  return matched < state.containers.depth && isAttributeLine(state.src, state.cursor.pos, end) &&
+    attributesBeforeComment(state.src, end)
+}
+
+function attributesBeforeComment(src: string, end: number): boolean {
+  let at = src.indexOf('\n', end) + 1
+  if (at === 0) return false
+  while (at < src.length) {
+    const next = src.indexOf('\n', at)
+    const lineEnd = next < 0 ? src.length : next > at && src.charCodeAt(next - 1) === CR ? next - 1 : next
+    const start = skipSpaces(src, at, lineEnd)
+    if (isLineComment(src, start, lineEnd)) return true
+    if (!isAttributeLine(src, start, lineEnd)) return false
+    at = next + 1
+    if (next < 0) return false
+  }
+  return false
 }
 
 /** C2-B-016: a mark at the column of the open description list, below a term or below description text. */

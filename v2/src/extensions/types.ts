@@ -49,5 +49,6 @@ export interface ExtensionRenderHost {
 
 export interface ExtensionRenderer {
   version: string
+  /** C2-X-034: trusted host code; returned HTML is inserted unchanged. Hosts register trusted renderers for untrusted input. */
   render: (node: BlockExtensionNode | InlineExtensionNode, host: ExtensionRenderHost) => string
 }
