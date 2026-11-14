@@ -6,7 +6,7 @@ import { type Diagnostic } from './diagnostics.ts'
 import { writeTree } from './write.ts'
 
 /** The options of the formatter (C2-H-137): `alignTables` (C2-W-068) and `normalize` (C2-W-127). */
-export type FormatOptions = Pick<Options, 'alignTables' | 'normalize'>
+export type FormatOptions = Pick<Options, 'alignTables' | 'normalize' | 'extensions'>
 
 export interface FormatOutput {
   source: string
@@ -15,24 +15,26 @@ export interface FormatOutput {
 }
 
 /** C2-H-137: refuses a name that is no option, an option of another stage and a value of the wrong type. */
-function readFormatOptions(options: object | undefined): { alignTables: boolean, normalize: boolean } {
+function readFormatOptions(options: FormatOptions | undefined): { alignTables: boolean, normalize: boolean,
+  extensions: NonNullable<Options['extensions']> } {
   const given = (options ?? {}) as Readonly<Record<string, unknown>>
   for (const name of Object.keys(given)) {
     if (!OPTION_KINDS.has(name)) throw new CarveOptionError(name, 'unknown option')
     checkType(name, given[name])
   }
   for (const name of Object.keys(given)) {
-    if (OPTION_KINDS.get(name) !== 'format') throw new CarveOptionError(name, 'not an option of format')
+    if (OPTION_KINDS.get(name) !== 'format' && name !== 'extensions') throw new CarveOptionError(name, 'not an option of format')
   }
-  return { alignTables: given['alignTables'] === true, normalize: given['normalize'] === true }
+  return { alignTables: given['alignTables'] === true, normalize: given['normalize'] === true,
+    extensions: options?.extensions ?? [] }
 }
 
 /** The canonical form of `source`, with the diagnostics of the parse and of the writer. */
 export function formatWithDiagnostics(source: string, options?: FormatOptions): FormatOutput {
-  const { alignTables, normalize } = readFormatOptions(options)
-  const parsed = parseWithLayout(source)
+  const { alignTables, normalize, extensions } = readFormatOptions(options)
+  const parsed = parseWithLayout(source, { extensions })
   // C2-W-127: with `normalize` the writer gets no sidecar, so every spelling takes its default form.
-  const written = writeTree(parsed.document, normalize ? { alignTables } : { layout: parsed.layout, alignTables })
+  const written = writeTree(parsed.document, normalize ? { alignTables, extensions } : { layout: parsed.layout, alignTables, extensions })
   return { source: written.source, diagnostics: [...parsed.diagnostics, ...written.diagnostics] }
 }
 

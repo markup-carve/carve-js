@@ -5,6 +5,7 @@ import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
 import { SMART_KIND_NAMES } from './inline-tables.ts'
+import { type ExtensionDefinition, type ExtensionSlot } from './extensions/types.ts'
 
 /** A tree that a reader refuses. `path` is an RFC 6901 pointer to the node or the field. */
 export class CarveTreeError extends Error {
@@ -43,14 +44,14 @@ export type Content = 'blocks' | 'inlines' | 'none' | readonly string[]
 export type Rule = readonly [Content, readonly string[], readonly string[]]
 
 const REFERENCE = ['key', 'namespace']
-const EXTENSION = ['version', 'props', 'slots', 'payload', 'resourceIds']
+const EXTENSION = ['props', 'slots', 'payload', 'resourceIds', 'source']
 
 const RULES = new Map<string, Rule>([
   ['abbreviation', ['none', REFERENCE, ['expansion']]],
   ['abbreviation_def', ['none', ['expansion', ...REFERENCE], []]],
   ['admonition', ['blocks', ['kind'], ['title', 'groupLabel']]],
   ['autolink', ['none', ['href'], ['text']]],
-  ['block_extension', ['blocks', ['name', 'fallback'], EXTENSION]],
+  ['block_extension', ['blocks', ['name', 'version', 'fallback'], EXTENSION]],
   ['block_quote', ['blocks', [], []]],
   ['caption', ['blocks', [], ['short']]],
   ['caption_number', ['none', [], ['n']]],
@@ -87,7 +88,7 @@ const RULES = new Map<string, Rule>([
     'src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm', 'longDescription',
   ]]],
   ['include', ['none', ['path'], ['section', 'options']]],
-  ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'fallback']]],
+  ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'version', 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
   ['line', ['inlines', [], []]],
@@ -326,6 +327,15 @@ function checkMetadata(value: Value, path: string, walk: Walk): void {
     else if (name === 'authors') checkStrings(item, at)
     else if (name === 'date') requireString(item, at)
     else if (name === 'bibliography') checkBibliography(item, at, walk)
+    else if ((name === 'headers' || name === 'footers') && path === '/metadata') {
+      requireArray(item, at).forEach((entry, index) => {
+        const place = `${at}/${index}`
+        if (!isRecord(entry)) fail(place, 'not a header or footer')
+        for (const key of Object.keys(entry)) if (key !== 'placement' && key !== 'children') fail(`${place}/${key}`, 'unknown field')
+        if (!['default', 'first', 'even'].includes(entry['placement'] as string)) fail(`${place}/placement`, 'invalid placement')
+        checkList(entry['children'], `${place}/children`, 'blocks', walk)
+      })
+    }
     else fail(at, 'not a field of metadata')
   }
 }
@@ -361,7 +371,7 @@ function checkScalar(type: string, name: string, value: Value, path: string): bo
   if (TRUE_ONLY.includes(name)) return value === true || fail(path, 'not true')
   if (BOOLEANS.includes(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
   if (INTEGERS.includes(name)) return checkCount(name, value, path)
-  if (!STRINGS.includes(name) && name !== 'dir') return false
+  if ((name === 'source' && type !== 'smart_punctuation') || (!STRINGS.includes(name) && name !== 'dir')) return false
   requireString(value, path)
   checkEnum(type, name, value, path)
   return true
@@ -375,7 +385,8 @@ function checkCount(name: string, value: Value, path: string): boolean {
 /** What the walk counts over the whole tree for the bounds of C2-A-132 and the manifest of C2-A-131. */
 interface TreeFacts {
   resourceReferences: number
-  declarations: ReadonlySet<string>
+  declarations: ReadonlyMap<string, string>
+  registry: ReadonlyMap<string, ExtensionDefinition>
   headerIds: Set<string>
   headerReferences: [string, string][]
   sourcePositions: ReadonlyMap<number, readonly [number, number]> | undefined
@@ -401,16 +412,19 @@ function validName(value: string, qualified: boolean): boolean {
   return (!qualified || parts.length >= 2) && parts.every(validSegment)
 }
 
-function declaredNames(value: unknown): string[] {
+function declaredNames(value: unknown): [string, string][] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((entry) => isRecord(entry) && typeof entry['name'] === 'string' ? [entry['name']] : [])
+  return value.flatMap((entry) => isRecord(entry) && typeof entry['name'] === 'string' &&
+    typeof entry['version'] === 'string' ? [[entry['name'], entry['version']]] : [])
 }
 
 /** Where the walk stands: the nesting of nodes, the nesting of extension fallbacks, and the facts of the tree. */
 interface Walk {
   depth: number
   fallbacks: number
+  extensions?: number
   tree: TreeFacts
+  parent?: { name: string, slot: string }
 }
 
 type FieldCheck = (value: Value, path: string, walk: Walk, node: Fields) => void
@@ -431,8 +445,51 @@ function checkStages(value: Value, path: string): void {
 
 function checkSlots(value: Value, path: string, walk: Walk, node: Fields): void {
   if (!isRecord(value)) fail(path, 'slots is not an object')
-  const content = node['type'] === 'block_extension' ? 'blocks' : 'inlines'
-  for (const [name, slot] of Object.entries(value)) checkList(slot, `${path}/${pointerKey(name)}`, content, walk)
+  const name = String(node['name'])
+  const definition = walk.tree.registry.get(name)
+  for (const [slotName, slot] of Object.entries(value)) checkSlot(slotName, slot, path, walk, node, definition)
+  if (definition !== undefined) checkRequiredSlots(value, path, definition)
+}
+
+function checkSlot(name: string, slot: Value, path: string, walk: Walk, node: Fields,
+  definition: ExtensionDefinition | undefined): void {
+  const at = `${path}/${pointerKey(name)}`
+  if (!validSlotName(name)) fail(at, 'not a lowercase slot name')
+  const rule = definition?.slots[name]
+  if (definition !== undefined && rule === undefined) fail(at, 'unknown extension slot')
+  const content = rule === undefined ? unknownSlotContent(node) : slotContent(rule)
+  checkList(slot, at, content, walk, { name: String(node['name']), slot: name })
+  if (rule?.minItems !== undefined && Array.isArray(slot) && slot.length < rule.minItems) fail(at, 'too few slot items')
+  if (rule?.name !== undefined && Array.isArray(slot) && slot.some((item) => !isRecord(item) || item['name'] !== rule.name)) {
+    fail(at, 'wrong extension in slot')
+  }
+}
+
+function unknownSlotContent(node: Fields): Content {
+  if (String(node['name']).includes('.')) return [...BLOCKS, ...INLINES]
+  return node['type'] === 'block_extension' ? 'blocks' : 'inlines'
+}
+
+function checkRequiredSlots(value: Fields, path: string, definition: ExtensionDefinition): void {
+  for (const [name, rule] of Object.entries(definition.slots)) {
+    if (!rule.optional && value[name] === undefined) fail(`${path}/${name}`, 'a required slot is missing')
+  }
+}
+
+function validSlotName(value: string): boolean {
+  const first = value.charCodeAt(0)
+  if (first < 97 || first > 122) return false
+  for (let at = 1; at < value.length; at++) {
+    const code = value.charCodeAt(at)
+    if ((code < 97 || code > 122) && (code < 48 || code > 57) && code !== 95) return false
+  }
+  return true
+}
+
+function slotContent(rule: ExtensionSlot): Content {
+  if (rule.kind === 'block') return 'blocks'
+  if (rule.kind === 'inline') return 'inlines'
+  return [rule.kind]
 }
 
 /** C2-A-122: a list of alternatives, each with a media type in `format` and the extension's own data in `value`. */
@@ -444,7 +501,8 @@ function checkPayload(value: Value, path: string): void {
       if (name !== 'format' && name !== 'value') fail(`${at}/${name}`, 'not a field of a payload alternative')
     }
     if (requireString(entry['format'], `${at}/format`) === '') fail(`${at}/format`, 'an empty media type')
-    if (entry['value'] === null) fail(`${at}/value`, 'a field without a value')
+    if (entry['value'] === null || entry['value'] === undefined) fail(`${at}/value`, 'a field without a value')
+    checkJson(entry['value'], `${at}/value`)
   })
 }
 
@@ -475,7 +533,8 @@ function checkResources(value: Value, path: string): void {
 }
 
 /** C2-A-017: a qualified name, a boolean `required` and an optional version. */
-function checkExtensions(value: Value, path: string): void {
+function checkExtensions(value: Value, path: string, walk: Walk): void {
+  const seen = new Set<string>()
   requireArray(value, path).forEach((entry, index) => {
     if (!isRecord(entry)) fail(`${path}/${index}`, 'not an extension declaration')
     for (const name of Object.keys(entry)) {
@@ -484,23 +543,112 @@ function checkExtensions(value: Value, path: string): void {
     const name = requireString(entry['name'], `${path}/${index}/name`)
     if (!validName(name, true)) fail(`${path}/${index}/name`, 'not a qualified name')
     if (typeof entry['required'] !== 'boolean') fail(`${path}/${index}/required`, 'not a boolean')
-    if (entry['version'] !== undefined) requireString(entry['version'], `${path}/${index}/version`)
-    // C2-A-018: this reader knows no extension, so a required one is unknown.
-    if (entry['required'] === true) fail(`${path}/${index}`, 'an unknown required extension')
+    const version = requireString(entry['version'], `${path}/${index}/version`)
+    if (version === '') fail(`${path}/${index}/version`, 'an empty version')
+    if (seen.has(name)) fail(`${path}/${index}/name`, 'a duplicate extension declaration')
+    seen.add(name)
+    if (entry['required'] === true && walk.tree.registry.get(name)?.version !== version) {
+      fail(`${path}/${index}`, 'an unknown required extension')
+    }
   })
 }
 
-function checkData(value: Value, path: string, walk: Walk): void {
+function checkData(value: Value, path: string, walk: Walk, node: Fields): void {
   checkObject(value, path)
   if (!isRecord(value)) return
   for (const name of Object.keys(value)) {
     if (!validName(name, true)) fail(`${path}/${pointerKey(name)}`, 'not a qualified data name')
     if (!walk.tree.declarations.has(name)) fail(`${path}/${pointerKey(name)}`, 'an undeclared data name')
+    checkStandardData(name, value[name], `${path}/${pointerKey(name)}`, node)
+  }
+}
+
+function closedObject(value: Value, path: string, allowed: readonly string[], required: readonly string[] = []): Fields {
+  if (!isRecord(value)) fail(path, 'not an object')
+  for (const name of Object.keys(value)) if (!allowed.includes(name)) fail(`${path}/${pointerKey(name)}`, 'unknown field')
+  for (const name of required) if (value[name] === undefined) fail(`${path}/${name}`, 'required field absent')
+  return value
+}
+
+function nonempty(value: Value, path: string): void {
+  if (typeof value !== 'string' || value.length === 0) fail(path, 'not a nonempty string')
+}
+
+function positiveNumber(value: Value, path: string, zero: boolean): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (!zero && value === 0)) {
+    fail(path, zero ? 'not a nonnegative number' : 'not a positive number')
+  }
+}
+
+const STYLE_DIRECT = ['namedStyle', 'alignment', 'indentPt', 'spacingBeforePt', 'spacingAfterPt',
+  'pageBreakBefore', 'keepWithNext', 'language', 'direction']
+
+function checkStyleDirect(value: Value, path: string, node: Fields): void {
+  const fields = closedObject(value, path, STYLE_DIRECT)
+  for (const [name, item] of Object.entries(fields)) {
+    const at = `${path}/${name}`
+    if (['namedStyle', 'language'].includes(name)) nonempty(item, at)
+    else if (name === 'alignment' && !['start', 'center', 'end', 'justify'].includes(item as string)) fail(at, 'invalid alignment')
+    else if (name === 'direction' && !['ltr', 'rtl'].includes(item as string)) fail(at, 'invalid direction')
+    else if (name.endsWith('Pt')) positiveNumber(item, at, true)
+    else if (['pageBreakBefore', 'keepWithNext'].includes(name) && typeof item !== 'boolean') fail(at, 'not a boolean')
+    if ((name === 'language' && node['lang'] !== undefined) || (name === 'direction' && node['dir'] !== undefined)) {
+      fail(at, 'the common field already holds this value')
+    }
+  }
+}
+
+function checkStylePage(value: Value, path: string): void {
+  const page = closedObject(value, path, ['widthPt', 'heightPt', 'marginsPt'], ['widthPt', 'heightPt', 'marginsPt'])
+  positiveNumber(page['widthPt'], `${path}/widthPt`, false)
+  positiveNumber(page['heightPt'], `${path}/heightPt`, false)
+  const margins = closedObject(page['marginsPt'], `${path}/marginsPt`, ['top', 'right', 'bottom', 'left'],
+    ['top', 'right', 'bottom', 'left'])
+  for (const [name, amount] of Object.entries(margins)) positiveNumber(amount, `${path}/marginsPt/${name}`, true)
+}
+
+function checkStyle(value: Value, path: string, node: Fields): void {
+  const style = closedObject(value, path, [...STYLE_DIRECT, 'namedStyles', 'page'])
+  checkStyleDirect(Object.fromEntries(Object.entries(style).filter(([name]) => STYLE_DIRECT.includes(name))), path, node)
+  if (node['type'] !== 'document' && (style['namedStyles'] !== undefined || style['page'] !== undefined)) {
+    fail(path, 'named styles and page stand only on the root')
+  }
+  if (style['namedStyles'] !== undefined) {
+    if (!isRecord(style['namedStyles'])) fail(`${path}/namedStyles`, 'not an object')
+    for (const [name, item] of Object.entries(style['namedStyles'])) {
+      nonempty(name, `${path}/namedStyles`)
+      checkStyleDirect(item, `${path}/namedStyles/${pointerKey(name)}`, {})
+    }
+  }
+  if (style['page'] !== undefined) checkStylePage(style['page'], `${path}/page`)
+}
+
+function checkStandardData(name: string, value: Value, path: string, node: Fields): void {
+  if (name === 'carve.style') { checkStyle(value, path, node); return }
+  if (name === 'carve.source') {
+    const source = closedObject(value, path, ['format', 'locator', 'importer'], ['format', 'locator', 'importer'])
+    nonempty(source['format'], `${path}/format`)
+    const locator = closedObject(source['locator'], `${path}/locator`, ['part', 'path', 'id'])
+    if (Object.keys(locator).length === 0) fail(`${path}/locator`, 'empty locator')
+    for (const [key, item] of Object.entries(locator)) nonempty(item, `${path}/locator/${key}`)
+    const importer = closedObject(source['importer'], `${path}/importer`, ['name', 'version'], ['name', 'version'])
+    for (const [key, item] of Object.entries(importer)) nonempty(item, `${path}/importer/${key}`)
+  }
+  if (name === 'carve.annotation') {
+    const annotation = closedObject(value, path, ['ids'], ['ids'])
+    const ids = requireArray(annotation['ids'], `${path}/ids`)
+    const seen = new Set<string>()
+    for (const [at, id] of ids.entries()) {
+      nonempty(id, `${path}/ids/${at}`)
+      if (seen.has(id as string)) fail(`${path}/ids/${at}`, 'duplicate annotation id')
+      seen.add(id as string)
+    }
   }
 }
 
 function checkObject(value: Value, path: string): void {
   if (!isRecord(value)) fail(path, 'not an object')
+  checkJson(value, path)
   const pending: [unknown, string][] = [[value, path]]
   const seen = new WeakSet<object>()
   while (pending.length > 0) {
@@ -512,6 +660,33 @@ function checkObject(value: Value, path: string): void {
   }
 }
 
+function checkJson(value: Value, path: string): void {
+  const active = new Set<object>()
+  const visit = (item: Value, at: string): void => {
+    if (item === null || typeof item === 'string' || typeof item === 'boolean') return
+    if (typeof item === 'number' && Number.isFinite(item)) return
+    if (typeof item !== 'object') fail(at, 'not JSON')
+    if (active.has(item)) fail(at, 'a cycle is not JSON')
+    active.add(item)
+    if (Array.isArray(item)) item.forEach((entry, index) => visit(entry, `${at}/${index}`))
+    else for (const [name, entry] of Object.entries(item)) visit(entry, `${at}/${pointerKey(name)}`)
+    active.delete(item)
+  }
+  visit(value, path)
+}
+
+function checkSource(value: Value, path: string): void {
+  if (!isRecord(value)) fail(path, 'source is not an object')
+  for (const name of Object.keys(value)) {
+    if (!['form', 'name', 'body', 'title', 'groupLabel'].includes(name)) fail(`${path}/${name}`, 'unknown source field')
+    requireString(value[name], `${path}/${name}`)
+  }
+  if (!['inline', 'div', 'fence'].includes(value['form'] as string)) fail(`${path}/form`, 'unknown source form')
+  requireString(value['name'], `${path}/name`)
+  const body = requireString(value['body'], `${path}/body`)
+  if (utf8Length(body) > MAX_PAYLOAD_BYTES) fail(`${path}/body`, 'source body above 8 MiB')
+}
+
 const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['attrs', checkAttrs],
   ['pos', checkPosition],
@@ -519,6 +694,7 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['data', checkData],
   ['metadata', checkMetadata],
   ['props', checkObject],
+  ['source', checkSource],
   ['marker', checkMarker],
   ['task', checkTask],
   ['options', checkOptions],
@@ -547,9 +723,11 @@ function allowedTypes(content: Content): readonly string[] {
   return content === 'inlines' ? INLINES : content === 'none' ? [] : content
 }
 
-function checkList(value: Value, path: string, content: Content, walk: Walk): void {
+function checkList(value: Value, path: string, content: Content, walk: Walk, parent?: Walk['parent']): void {
   const allowed = allowedTypes(content)
-  const inner: Walk = { ...walk, depth: walk.depth + 1 }
+  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, tree: walk.tree,
+    ...(walk.extensions === undefined ? {} : { extensions: walk.extensions }),
+    ...(parent === undefined ? {} : { parent }) }
   requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
 }
 
@@ -573,11 +751,47 @@ function checkLinkFields(node: Fields, type: string, path: string): void {
 function checkExtensionName(node: Fields, type: string, path: string, walk: Walk): void {
   const name = node['name']
   if (typeof name !== 'string') fail(`${path}/name`, 'not an extension name')
+  checkExtensionIdentity(node, type, path, walk, name)
+  checkExtensionSource(node, type, path)
+  checkExtensionDefinition(node, path, walk, name)
+}
+
+function checkExtensionIdentity(node: Fields, type: string, path: string, walk: Walk, name: string): void {
   const qualified = name.includes('.')
   const unqualifiedSource = type === 'inline_extension' && name.startsWith('_') && validSegment(`a${name.slice(1)}`)
   if (!validName(name, type === 'block_extension') && !unqualifiedSource) fail(`${path}/name`, 'not an extension name')
   if (qualified && !walk.tree.declarations.has(name)) fail(`${path}/name`, 'an undeclared extension name')
   if (qualified && node['fallback'] === undefined) fail(`${path}/fallback`, 'a required field is missing')
+  if (qualified && node['version'] !== walk.tree.declarations.get(name)) fail(`${path}/version`, 'version differs from declaration')
+  if (!qualified && node['version'] !== undefined) fail(`${path}/version`, 'an unqualified extension has no version')
+}
+
+function checkExtensionSource(node: Fields, type: string, path: string): void {
+  if (node['source'] !== undefined && isRecord(node['source'])) {
+    const form = node['source']['form']
+    if (form === 'inline' && type !== 'inline_extension') fail(`${path}/source/form`, 'inline source on a block extension')
+    if (form !== 'inline' && type !== 'block_extension') fail(`${path}/source/form`, 'block source on an inline extension')
+  }
+}
+
+function checkExtensionDefinition(node: Fields, path: string, walk: Walk, name: string): void {
+  const definition = walk.tree.registry.get(name)
+  if (definition?.children === 'none' && Array.isArray(node['children']) && node['children'].length > 0) {
+    fail(`${path}/children`, 'extension children must be empty')
+  }
+  const parent = definition?.parent
+  if (parent !== undefined && (parent.name !== walk.parent?.name || parent.slot !== walk.parent.slot)) {
+    fail(path, 'extension stands outside its parent slot')
+  }
+  if (definition !== undefined && node['props'] !== undefined && isRecord(node['props'])) checkProps(node['props'], path, definition)
+}
+
+function checkProps(props: Fields, path: string, definition: ExtensionDefinition): void {
+  for (const [key, value] of Object.entries(props)) {
+    const kind = definition.props[key]
+    const valid = kind === 'array' ? Array.isArray(value) : kind === 'object' ? isRecord(value) : typeof value === kind
+    if (kind === undefined || !valid) fail(`${path}/props/${pointerKey(key)}`, 'invalid extension prop')
+  }
 }
 
 function members(node: unknown, field: string): unknown[] {
@@ -658,17 +872,24 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   if (rule === undefined) fail(path, `unknown node type ${type}`)
   // C2-A-051, C2-A-052: a type that exists only in its container is refused anywhere else.
   if (!allowed.includes(type)) fail(path, `${type} does not stand here`)
-  checkFields(value, type, rule, path, walk)
-  checkDependencies(value, type, path, walk)
+  const extension = type === 'block_extension' || type === 'inline_extension'
+  const depth = (walk.extensions ?? 0) + (extension ? 1 : 0)
+  if (depth > 32) fail(path, walk.fallbacks >= 32
+    ? 'fallbacks are nested deeper than 32 extension nodes' : 'extension nesting exceeds 32')
+  const current: Walk = { ...walk, extensions: depth }
+  checkFields(value, type, rule, path, current)
+  checkDependencies(value, type, path, current)
   if (type === 'table') checkSpanCounts(value, path)
-  if (type === 'table_cell') {
-    const attrs = value['attrs']
-    if (value['header'] === true && isRecord(attrs) && typeof attrs['id'] === 'string') walk.tree.headerIds.add(attrs['id'])
-    if (Array.isArray(value['headerIds'])) {
-      value['headerIds'].forEach((id, index) => walk.tree.headerReferences.push([id as string, `${path}/headerIds/${index}`]))
-    }
-  }
+  if (type === 'table_cell') checkCellReferences(value, path, walk)
   checkNodeBounds(value, path, walk)
+}
+
+function checkCellReferences(value: Fields, path: string, walk: Walk): void {
+  const attrs = value['attrs']
+  if (value['header'] === true && isRecord(attrs) && typeof attrs['id'] === 'string') walk.tree.headerIds.add(attrs['id'])
+  if (Array.isArray(value['headerIds'])) {
+    value['headerIds'].forEach((id, index) => walk.tree.headerReferences.push([id as string, `${path}/headerIds/${index}`]))
+  }
 }
 
 /** C2-A-014: `major.minor` without a leading zero. C2-A-018, C2-A-019: the major is 2; a higher minor is accepted. */
@@ -725,7 +946,7 @@ const ENVELOPE_FIELDS = ['astVersion', 'document', 'vocabulary', 'extensions']
  * C2-A-012 to C2-A-019: refuses an envelope whose own fields a reader may not accept: a version it does not
  * read, an unknown required extension, or a field the envelope does not have. The tree inside is checked apart.
  */
-export function validateEnvelope(envelope: Readonly<Record<string, unknown>>): void {
+export function validateEnvelope(envelope: Readonly<Record<string, unknown>>, extensions: readonly ExtensionDefinition[] = []): void {
   for (const name of Object.keys(envelope)) if (!ENVELOPE_FIELDS.includes(name)) fail(`/${name}`, 'not a field of the envelope')
   if (envelope['astVersion'] === undefined) fail('/astVersion', 'a required field is missing')
   checkVersion(envelope['astVersion'], '/astVersion')
@@ -734,7 +955,12 @@ export function validateEnvelope(envelope: Readonly<Record<string, unknown>>): v
     fail('/document/astVersion', 'the document and envelope versions differ')
   }
   if (envelope['vocabulary'] !== undefined) checkObject(envelope['vocabulary'], '/vocabulary')
-  if (envelope['extensions'] !== undefined) checkExtensions(envelope['extensions'], '/extensions')
+  if (envelope['extensions'] !== undefined) {
+    const tree: TreeFacts = { resourceReferences: 0, references: [], declarations: new Map(),
+      registry: new Map(extensions.map((entry) => [entry.name, entry])), headerIds: new Set(),
+      headerReferences: [], sourcePositions: undefined }
+    checkExtensions(envelope['extensions'], '/extensions', { depth: 0, fallbacks: 0, tree })
+  }
 }
 
 function sourcePositions(source: string): ReadonlyMap<number, readonly [number, number]> {
@@ -753,6 +979,7 @@ function sourcePositions(source: string): ReadonlyMap<number, readonly [number, 
 /** Refuses `document` unless it is a tree of contract 2.0. */
 export function validateTree(
   document: unknown, envelope?: Readonly<Record<string, unknown>>, source?: string,
+  extensions: readonly ExtensionDefinition[] = [],
 ): asserts document is DocumentNode {
   // C2-A-168.
   if (!isRecord(document)) fail('', 'not a tree')
@@ -760,7 +987,8 @@ export function validateTree(
   if (document['children'] === undefined) fail('/children', 'the root has no children')
   checkVersion(document['astVersion'], '/astVersion')
   const declarations = [...declaredNames(document['extensions']), ...declaredNames(envelope?.['extensions'])]
-  const tree: TreeFacts = { resourceReferences: 0, references: [], declarations: new Set(declarations),
+  const tree: TreeFacts = { resourceReferences: 0, references: [], declarations: new Map(declarations),
+    registry: new Map(extensions.map((entry) => [entry.name, entry])),
     headerIds: new Set(), headerReferences: [], sourcePositions: source === undefined ? undefined : sourcePositions(source) }
   if (source !== undefined && document['srcByteLength'] !== undefined && document['srcByteLength'] !== utf8Length(source)) {
     fail('/srcByteLength', 'the byte count disagrees with the source')

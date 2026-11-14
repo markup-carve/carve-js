@@ -316,6 +316,8 @@ function ruby(node: RubyNode, r: Render): string {
 function inlineExtension(node: InlineExtensionNode, r: Render): string {
   const name = node.name
   if (!name.includes('.')) return `<span${attributes(r, node, { base: [`ext-${name}`] })}>${children(r, node)}</span>`
+  const rendered = r.renderExtension(node)
+  if (rendered !== null) return rendered
   loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
   return inlineHtml(r, node.fallback ?? node.children)
 }

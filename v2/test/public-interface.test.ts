@@ -1,7 +1,7 @@
 // The public interface of the 0.2 engine: `parse`, `render` and the option types come from
 // src/index.ts, and nothing in src/ reaches outside v2/, where the 0.1 engine lives.
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import * as engine from '../src/index.ts'
 import {
@@ -52,9 +52,15 @@ describe('the public interface', () => {
   })
 
   it('no file of src/ imports from outside v2/src', () => {
-    for (const file of readdirSync(src)) {
-      const text = readFileSync(join(src, file), 'utf8')
-      for (const match of text.matchAll(/from '([^']+)'/g)) expect(match[1]).toMatch(/^\.\/[a-z-]+\.ts$/)
+    const pending = [src]
+    for (let directory = pending.pop(); directory !== undefined; directory = pending.pop()) {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) { pending.push(join(directory, entry.name)); continue }
+        const text = readFileSync(join(directory, entry.name), 'utf8')
+        for (const match of text.matchAll(/from '([^']+)'/g)) {
+          expect(resolve(directory, match[1]!).startsWith(`${src}/`)).toBe(true)
+        }
+      }
     }
   })
 })

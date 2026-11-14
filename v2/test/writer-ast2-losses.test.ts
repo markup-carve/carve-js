@@ -41,7 +41,7 @@ describe('writer losses for AST 2.0 fields', () => {
   it('C2-W-011: a tree deeper than source nesting reports its loss without retrying the parse', () => {
     let child: Inline = { type: 'text', value: 'a' }
     for (let depth = 0; depth < 250; depth++) child = { type: 'inline_extension', name: 'x', children: [child] }
-    expect(losses(documentOf(paragraph(child))).some((entry) => entry.includes('structure-unspellable'))).toBe(true)
+    expect(() => losses(documentOf(paragraph(child)))).toThrow('extension nesting exceeds 32')
     expect(losses(parse(`${'{^'.repeat(200)}a${'^}'.repeat(200)}\n`))).toEqual([])
   })
 })

@@ -21,7 +21,7 @@ describe('generated AST tables', () => {
   it('C2-A-189: a node-shaped value inside opaque data or props is refused at its path', () => {
     const data = documentOf({ ...paragraph('x'), data: { 'demo.value': [{ nested: { type: 'text', value: 'x' } }] } })
     expect(() => validateTree(data)).toThrow('/children/0/data/demo.value/0/nested: a node in an opaque object')
-    const extension = documentOf({ type: 'block_extension', name: 'demo.widget', fallback: [], children: [],
+    const extension = documentOf({ type: 'block_extension', name: 'demo.widget', version: '1', fallback: [], children: [],
       props: { one: [{ type: 'text', value: 'x' }] } })
     expect(() => validateTree(extension)).toThrow('/children/0/props/one/0: a node in an opaque object')
   })

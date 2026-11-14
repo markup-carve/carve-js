@@ -218,15 +218,15 @@ describe('inline elements', () => {
   })
 
   it('C2-A-123: an inline extension with a qualified name is a registered extension and renders through its fallback', () => {
-    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.badge', children: [], fallback: [text('new')] }
-    const document = { ...documentOf(paragraph(extension)), extensions: [{ name: 'org.example.badge', required: false }] }
+    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.badge', version: '1', children: [], fallback: [text('new')] }
+    const document = { ...documentOf(paragraph(extension)), extensions: [{ name: 'org.example.badge', version: '1', required: false }] }
     expect(render(document)).toBe('<p>new</p>')
     expect(lossCodes(document)).toEqual(['extension-fallback-rendered'])
   })
 
   it('C2-H-076, C2-A-127: an unknown optional extension renders through its fallback and is reported', () => {
-    const extension: BlockExtensionNode = { type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('f')] }
-    const document = { ...documentOf(extension), extensions: [{ name: 'org.example.d', required: false }] }
+    const extension: BlockExtensionNode = { type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [paragraph('f')] }
+    const document = { ...documentOf(extension), extensions: [{ name: 'org.example.d', version: '1', required: false }] }
     expect(render(document)).toBe('<p>f</p>')
     expect(lossCodes(document)).toEqual(['extension-fallback-rendered'])
   })
@@ -350,8 +350,8 @@ describe('options', () => {
   })
 
   it('C2-H-123, C2-H-137: renderers, extensions and includes are refused while the engine offers none', () => {
-    expect(() => render('a', { renderers: { x: 1 } })).toThrow('option renderers: not offered by this engine')
-    expect(() => render('a', { extensions: [{}] })).toThrow(CarveOptionError)
+    expect(() => render('a', { renderers: { x: 1 } } as never)).toThrow('option renderers: invalid renderer x')
+    expect(() => render('a', { extensions: [{}] } as never)).toThrow(CarveOptionError)
     expect(render('a', { renderers: {}, extensions: [] })).toBe('<p>a</p>')
   })
 

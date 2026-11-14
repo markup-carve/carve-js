@@ -2,6 +2,7 @@
 import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
 import { AST_RESULTS, type ResultField } from './ast-tables.ts'
 import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.ts'
+import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** The bare tree as JSON, every field included (C2-A-165). */
 export function encodeTree(document: Node): string {
@@ -29,7 +30,7 @@ function envelopeOf(value: unknown): Record<string, unknown> | null {
  * Reads a bare tree or an envelope from JSON. C2-A-167, C2-A-170: a text that is no JSON, or no
  * tree of contract 2.0, is refused here with a `CarveTreeError`, not with the error of the JSON library.
  */
-export function decodeTree(json: string, source?: string): DocumentNode {
+export function decodeTree(json: string, source?: string, extensions: readonly ExtensionDefinition[] = []): DocumentNode {
   let value: unknown
   try {
     value = JSON.parse(json, cleanString)
@@ -37,11 +38,11 @@ export function decodeTree(json: string, source?: string): DocumentNode {
     throw new CarveTreeError('', 'not JSON')
   }
   const envelope = envelopeOf(value)
-  if (envelope !== null) validateEnvelope(envelope)
+  if (envelope !== null) validateEnvelope(envelope, extensions)
   const document = envelope === null ? value : envelope['document']
   // A path inside the envelope starts at its document.
   try {
-    validateTree(document, envelope ?? undefined, source)
+    validateTree(document, envelope ?? undefined, source, extensions)
   } catch (error) {
     if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
     throw error

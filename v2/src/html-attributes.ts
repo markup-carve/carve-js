@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type Block, type Node, type ParagraphNode } from './ast.ts'
+import { type Block, type BlockExtensionNode, type InlineExtensionNode, type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings, type UrlPolicy } from './options.ts'
@@ -9,6 +9,9 @@ import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
 
 /** The state of one render. */
 export interface Render {
+  extensionIds: number
+  usedIds: Set<string>
+  renderExtension: (node: BlockExtensionNode | InlineExtensionNode) => string | null
   settings: Settings
   resolution: Resolution
   /** The output: every line with a line break before it, so the first character is cut off at the end. */

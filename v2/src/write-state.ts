@@ -2,6 +2,7 @@
 // and spellings the reparse asked for (C2-W-089), the facts of the sidecar and the losses.
 import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
+import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
 export interface WriterFacts {
@@ -22,6 +23,7 @@ export interface Attempt {
 }
 
 export interface Writer {
+  extensions: readonly ExtensionDefinition[]
   /** The lines of the blocks being written, without their line endings. */
   lines: string[]
   /** What the next line starts with instead of its prefix: the markers of the items it opens (C2-W-027). */
@@ -55,8 +57,10 @@ export interface Writer {
   parsed: DocumentNode | null
 }
 
-export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean): Writer {
+export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean,
+  extensions: readonly ExtensionDefinition[] = []): Writer {
   return {
+    extensions,
     lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), parsed: null,

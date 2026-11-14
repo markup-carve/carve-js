@@ -7,6 +7,8 @@ import {
   type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
+import { applyExtensions } from './extensions/claims.ts'
+import { type ExtensionDefinition } from './extensions/types.ts'
 import { AST_RESULTS } from './ast-tables.ts'
 import { stringOffsetOfByte, utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
@@ -14,8 +16,8 @@ import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */
-export function parseChunk(src: string, abbreviations: Map<string, string>): DocumentNode {
-  return buildSource(src, true, abbreviations).document
+export function parseChunk(src: string, abbreviations: Map<string, string>, extensions: readonly ExtensionDefinition[] = []): DocumentNode {
+  return applyExtensions(buildSource(src, true, abbreviations, null, extensions.length > 0), extensions).document
 }
 
 /** One comparison of written blocks with their parse: what it asks the next write to change. */
@@ -396,7 +398,7 @@ function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: numbe
   let found = false
   for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
     const source = `${writeInlines(w, expected, flags)}\n`
-    const parsed = parseChunk(source, c.w.abbreviations).children
+    const parsed = parseChunk(source, c.w.abbreviations, c.w.extensions).children
     const block = parsed[0]
     if (parsed.length !== 1 || block?.type !== 'paragraph') return round === 0 ? null : found
     const probe = createCheck(w)
@@ -505,7 +507,7 @@ function escapeContentLine(c: Check, e: Node): boolean {
 function opensBlockAlone(c: Check, nodes: readonly Node[], from: number): boolean {
   let end = from
   while (end < nodes.length && !isBreak(nodes[end])) end++
-  const blocks = parseChunk(writeInlines(c.w, nodes.slice(from, end), c.flags), c.w.abbreviations).children
+  const blocks = parseChunk(writeInlines(c.w, nodes.slice(from, end), c.flags), c.w.abbreviations, c.w.extensions).children
   return blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
 }
 

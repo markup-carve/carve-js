@@ -2,8 +2,10 @@
 // content is a line feed in the string; the block that holds the content places the lines.
 import {
   type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
-  type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode,
+  type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode, type InlineExtensionNode,
 } from './ast.ts'
+import { treesEqual } from './ast-json.ts'
+import { parseChunk } from './write-check.ts'
 import { unitBytes } from './positions.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
@@ -293,6 +295,24 @@ function citationGroup(w: Writer, node: CitationGroupNode): string {
   return node.raw
 }
 
+function inlineExtension(w: Writer, node: InlineExtensionNode, flags: number): string {
+  if (!node.name.includes('.')) return `:${node.name}[${writeInlines(w, node.children, flags)}]`
+  const source = node.source
+  if (source?.form === 'inline') {
+    const form = `:${source.name}[${source.body}]`
+    let same = w.extensions.length === 0
+    if (!same) {
+      try {
+        const parsed = parseChunk(`${form}${braceBlock(node)}\n`, w.abbreviations, w.extensions).children[0]
+        same = parsed?.type === 'paragraph' && parsed.children.length === 1 && treesEqual(node, parsed.children[0]!)
+      } catch { same = false }
+    }
+    if (same) return form
+  }
+  lose(w, node, null)
+  return writeInlines(w, node.fallback ?? node.children, flags)
+}
+
 const WRITERS: InlineWriters = {
   text: textNode,
   soft_break: () => '\n',
@@ -311,7 +331,7 @@ const WRITERS: InlineWriters = {
   link: linkNode,
   image: imageNode,
   inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
-  inline_extension: (w, node, flags) => `:${node.name}[${writeInlines(w, node.children, flags)}]`,
+  inline_extension: inlineExtension,
   footnote_ref: (_w, node) => `[^${labelText(node.key)}]`,
   code: (_w, node) => codeSpan(node.value),
   literal_inline: (_w, node) => `!${codeSpan(node.value)}`,

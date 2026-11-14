@@ -5,8 +5,9 @@ import {
   type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
   type FigureGroupNode, type FigureNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
-  type ParagraphNode, type RawBlockNode, type TableNode,
+  type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
 } from './ast.ts'
+import { treesEqual } from './ast-json.ts'
 import { plainText } from './ast-text.ts'
 import { includeSource } from './include.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
@@ -14,6 +15,7 @@ import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
+import { parseChunk } from './write-check.ts'
 import { writeTable } from './write-table.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
@@ -393,6 +395,45 @@ function childrenOnly(w: Writer, node: Node, prefix: string, flags: number): voi
   writeBlocks(w, fallback ?? childNodes(node), prefix, flags, false)
 }
 
+function sourceLines(body: string): string[] {
+  const lines = body.split('\n')
+  if (lines.at(-1) === '') lines.pop()
+  return lines
+}
+
+function extensionSpelling(node: BlockExtensionNode): string | null {
+  const source = node.source
+  if (source === undefined || source.form === 'inline') return null
+  const lines = sourceLines(source.body)
+  const mark = source.form === 'div' ? ':' : '`'
+  const run = mark.repeat(Math.max(MIN_RUN, longestBareRun(lines, mark.charCodeAt(0)) + 1))
+  const title = source.title === undefined ? '' : ` ${quoted(source.title)}`
+  const label = source.groupLabel === undefined ? '' : ` [${source.groupLabel}]`
+  const opener = source.form === 'div' ? `${run} ${source.name}${title}${label}` : `${run}${source.name}${title}${label}`
+  return [opener, ...lines, run].join('\n') + '\n'
+}
+
+function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, flags: number): void {
+  const spelling = extensionSpelling(node)
+  if (spelling !== null) {
+    let same = w.extensions.length === 0
+    if (!same) {
+      try {
+        const parsed = parseChunk(spelling, w.abbreviations, w.extensions).children[0]
+        same = parsed !== undefined && treesEqual(node, parsed)
+      }
+      catch { same = false }
+    }
+    if (same) {
+      attributeLine(w, node, prefix)
+      for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
+      return
+    }
+  }
+  lose(w, node, null)
+  writeBlocks(w, node.fallback, prefix, flags, false)
+}
+
 function table(w: Writer, node: TableNode, prefix: string, flags: number): void {
   writeTable(w, node, prefix, flags)
   caption(w, node.caption, prefix, flags)
@@ -428,6 +469,7 @@ const WRITERS: BlockWriters = {
   figure,
   line_block: lineBlock,
   table,
+  block_extension: blockExtension,
 }
 
 /** Writes `node` by the writer of its type. False where its type has none. */

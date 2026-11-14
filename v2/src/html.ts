@@ -2,7 +2,9 @@
 import {
   type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
-  type FigureGroupNode, type FigureNode, type HeadingNode, type IncludeNode, type LineBlockNode, type LineNode, type ListItemNode,
+  forEachSlot,
+  type FigureGroupNode, type FigureNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
+  type ListItemNode,
   type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
   type TableCellNode, type TableColumnNode, type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
 } from './ast.ts'
@@ -17,6 +19,8 @@ import { includeSource } from './include.ts'
 import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
+import { NODE_TABLE } from './ast-validate.ts'
+import { type ExtensionRenderHost } from './extensions/types.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
 type BlockWriters = { [T in keyof NodeOfType]?: (r: Render, node: NodeOfType[T], level: number) => void }
@@ -406,8 +410,69 @@ function include(r: Render, node: IncludeNode, level: number): void {
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
+  const rendered = r.renderExtension(node)
+  if (rendered !== null) { line(r, level, rendered); return }
   loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
-  writeBlocks(r, node.fallback, level)
+  line(r, level, rendererHost(r).blocks(node.fallback))
+}
+
+function isBlockNode(node: Node): node is Block {
+  return NODE_TABLE.BLOCKS.includes(node.type)
+}
+
+function isInlineNode(node: Node): node is Inline {
+  return NODE_TABLE.INLINES.includes(node.type)
+}
+
+function rendererHost(r: Render): ExtensionRenderHost {
+  return {
+    blocks: (nodes) => {
+      const previous = r.out
+      const bidi = r.bidi
+      r.bidi = true
+      let html = ''
+      for (const node of nodes.filter(isBlockNode)) {
+        r.out = ''
+        writeBlocks(r, [node], 0)
+        html += r.out.slice(1)
+      }
+      r.out = previous
+      r.bidi = bidi
+      return html
+    },
+    inlines: (nodes) => {
+      const bidi = r.bidi
+      r.bidi = true
+      const html = inlineHtml(r, nodes.filter(isInlineNode))
+      r.bidi = bidi
+      return html
+    },
+    plainText: (nodes) => plainText(nodes.filter(isInlineNode)),
+    escapeText,
+    escapeAttribute,
+    nextId: (prefix) => nextExtensionId(r, prefix),
+    profile: r.settings.profile,
+    urlPolicy: r.settings.urlPolicy,
+  }
+}
+
+function nextExtensionId(r: Render, prefix: string): string {
+  let candidate = ''
+  do { candidate = `${prefix}-${++r.extensionIds}` }
+  while ([...r.usedIds].some((id) => id === candidate || id.startsWith(`${candidate}-`)))
+  r.usedIds.add(candidate)
+  return candidate
+}
+
+function authoredIds(document: DocumentNode): Set<string> {
+  const ids = new Set<string>()
+  const visit = (node: Node): void => {
+    if (node.attrs?.id !== undefined) ids.add(node.attrs.id)
+    if (node.type === 'heading' && node.generatedId !== undefined) ids.add(node.generatedId)
+    forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) })
+  }
+  visit(document)
+  return ids
 }
 
 // ---- tables ----
@@ -713,7 +778,13 @@ export function renderDocument(
 ): RenderResult {
   const r: Render = {
     settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
-    backlinkHost: null, backlinks: '', bidi, longDescriptions: [],
+    backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
+    usedIds: Object.keys(settings.renderers).length === 0 ? new Set() : authoredIds(document),
+    renderExtension: () => null,
+  }
+  r.renderExtension = (node) => {
+    const renderer = settings.renderers[node.name]
+    return renderer !== undefined && renderer.version === node.version ? renderer.render(node, rendererHost(r)) : null
   }
   writeDocument(r, document)
   return { html: r.out.slice(1), losses: r.losses }

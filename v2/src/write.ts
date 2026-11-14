@@ -11,6 +11,7 @@ import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
+import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {
@@ -18,6 +19,7 @@ export interface LayoutEntry extends WriterFacts {
 }
 
 export interface WriteOptions {
+  extensions?: readonly ExtensionDefinition[]
   /** The sidecar of the tree (C2-L-004). Only its node entries are read. */
   layout?: { nodes: readonly LayoutEntry[] }
   /** C2-W-068: pads the cells of each column of a pipe table to one display width. */
@@ -292,7 +294,7 @@ function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: M
   w.lead = null
   w.starts.clear()
   writeBlocks(w, group, '', 0, false)
-  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations)
+  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations, w.extensions)
 }
 
 /**
@@ -423,7 +425,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   check.source = source
-  const parsed = parseChunk(source, w.abbreviations)
+  const parsed = parseChunk(source, w.abbreviations, w.extensions)
   w.parsed = parsed
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
@@ -464,17 +466,24 @@ function writeDocument(w: Writer, document: DocumentNode): string {
 export function writeTree(document: DocumentNode, options: WriteOptions | undefined): WriteOutput {
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
-  const w = createWriter(facts, options?.alignTables === true)
+  const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   const source = writeDocument(w, document)
   // C2-W-103: a finding of the writer has the path of its node.
-  return { source, diagnostics: locateFindings(document, w.losses) }
+  const diagnostics = locateFindings(document, w.losses)
+  for (const name of ['headers', 'footers'] as const) {
+    document.metadata?.[name]?.forEach((_entry, index) => diagnostics.push({
+      code: 'structure-unspellable', severity: 'warning', channel: 'render-loss',
+      message: `a root ${name.slice(0, -1)} has no spelling in Carve source`, path: `/metadata/${name}/${index}`,
+    }))
+  }
+  return { source, diagnostics }
 }
 
 /** The canonical Carve source of a tree, with what could not be written (C2-W-011). The tree is validated first. */
 export function writeWithDiagnostics(document: DocumentNode, options?: WriteOptions): WriteOutput {
-  validateTree(document)
+  validateTree(document, undefined, undefined, options?.extensions)
   return writeTree(document, options)
 }
 

@@ -6,6 +6,7 @@ import {
   type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { plainText } from './ast-text.ts'
+import { NODE_TABLE } from './ast-validate.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { includeSource } from './include.ts'
 import { type ProfileRule } from './render-tables.ts'
@@ -214,14 +215,15 @@ function filterChildren(filter: Filter, node: Node, depth: number): void {
  * the fallback and the named slots of an extension included, which the renderer writes too.
  */
 function filterNode(filter: Filter, node: Node, depth: number): void {
-  const blocks = node.type === 'block_extension'
   forEachSlot(node, (nodes, step, single) => {
     // The slots are the node's own lists; the walk hands them on read-only, and the filter edits them in place.
     const list = nodes as Node[]
     if (step === 'children') filterChildren(filter, node, depth)
     else if (single) filterNode(filter, list[0]!, depth + 1)
     else if (step === 'pairs' || step === 'columns') for (const child of list) filterNode(filter, child, depth + 1)
-    else if (step === 'longDescription' || (blocks && (step === 'fallback' || step.startsWith('slots/')))) {
+    else if (step === 'longDescription' || step.startsWith('metadata/headers/') || step.startsWith('metadata/footers/') ||
+      (node.type === 'block_extension' && step === 'fallback') ||
+      (step.startsWith('slots/') && nodes[0] !== undefined && NODE_TABLE.BLOCKS.includes(nodes[0].type))) {
       filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
     }
     else filterList<Inline>(filter, list as Inline[], false, depth, degradedInline)

@@ -63,9 +63,9 @@ describe('reading a supplied tree', () => {
     expect(refusal({ astVersion: '3.0', document })).toBe('/astVersion: major version 3 is not read by this engine')
     expect(refusal({ astVersion: '2.01', document })).toBe('/astVersion: not major.minor')
     expect(refusal({ document })).toBe('/astVersion: a required field is missing')
-    expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', required: true }], document })).toBe('/extensions/0: an unknown required extension')
+    expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: true }], document })).toBe('/extensions/0: an unknown required extension')
     expect(refusal({ astVersion: '2.0', other: 1, document })).toBe('/other: not a field of the envelope')
-    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', required: false }],
+    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', version: '1', required: false }],
       document: { ...document, astVersion: '2.3' } })).toBeNull()
     expect(refusal({ astVersion: '2.0', document: { ...document, astVersion: '3.0' } }))
       .toBe('/document/astVersion: the document and envelope versions differ')
@@ -415,19 +415,19 @@ describe('one walker over every slot that holds nodes', () => {
   const reference = { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
   const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
   const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
-    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', required: false }],
+    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', version: '1', required: false }],
     children: [{ type: 'paragraph', children: [inline] }, ...more],
   }))
 
   it('C2-A-024, C2-A-025: resolution reads a reference in a ruby base and in an extension fallback', () => {
     const ruby = { type: 'ruby', pairs: [{ type: 'ruby_pair', base: [reference], annotation: [{ type: 'text', value: 'a' }] }] }
     expect(render(supplied(ruby, definition))).toBe('<p><ruby><a href="/u">x</a><rp>(</rp><rt>a</rt><rp>)</rp></ruby></p>')
-    expect(render(supplied({ type: 'inline_extension', name: 'a.b', children: [], fallback: [reference] }, definition))).toBe('<p><a href="/u">x</a></p>')
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', version: '1', children: [], fallback: [reference] }, definition))).toBe('<p><a href="/u">x</a></p>')
   })
 
   it('C2-H-129: a profile filters the fallback of an extension, which the renderer writes', () => {
     const link = { type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }
-    expect(render(supplied({ type: 'inline_extension', name: 'a.b', children: [], fallback: [link] }), { profile: 'minimal' })).toBe('<p>x</p>')
+    expect(render(supplied({ type: 'inline_extension', name: 'a.b', version: '1', children: [], fallback: [link] }), { profile: 'minimal' })).toBe('<p>x</p>')
   })
 
   it('C2-H-024, C2-L-011: numbers count in document order, so a footnote in a title comes before one in the body', () => {
@@ -440,8 +440,10 @@ describe('one walker over every slot that holds nodes', () => {
     expect(pointerKey('a/b~c')).toBe('a~1b~0c')
     expect(pointerToken('a~1b~0c')).toBe('a/b~c')
     expect(pointerToken('~01')).toBe('~1')
-    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a', children: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
-    expect(refusal(inParagraph(slot('a/b')))).toBe('/children/0/children/0/slots/a~1b/0: paragraph does not stand here')
+    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a.b', version: '1', children: [],
+      fallback: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
+    expect(refusal({ ...inParagraph(slot('a/b')), extensions: [{ name: 'a.b', version: '1', required: false }] }))
+      .toBe('/children/0/children/0/slots/a~1b: not a lowercase slot name')
   })
 })
 
@@ -579,7 +581,7 @@ describe('every option is checked against its declared type first', () => {
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
   }
   // Values of the right type that this engine does not offer, or that no stage of it reads.
-  const UNOFFERED: Readonly<Record<string, unknown>> = { extensions: [{ name: 'a.b' }], includes: { root: '.' }, renderers: { a: () => '' } }
+  const UNOFFERED: Readonly<Record<string, unknown>> = { includes: { root: '.' } }
   const SAMPLES: readonly [string, unknown][] = [
     ['a string', 'x'], ['a number', 1], ['a boolean', true], ['a list', ['x']], ['a map', { x: 'y' }], ['a function', () => null],
     ['a Map', new Map([['a', 'b']])],
@@ -639,7 +641,7 @@ describe('every option is checked against its declared type first', () => {
   it('C2-H-137: extensions must be a list, and an object or a Map is refused', () => {
     expect(() => parse('x', { extensions: {} } as never)).toThrow('option extensions: not a list')
     expect(() => parse('x', { extensions: new Map([['a', 'b']]) } as never)).toThrow('option extensions: not a list')
-    expect(() => parse('x', { extensions: [{ name: 'a.b' }] })).toThrow('option extensions: not offered by this engine')
+    expect(() => parse('x', { extensions: [{ name: 'a.b' }] } as never)).toThrow('option extensions: an invalid extension registration')
   })
 })
 

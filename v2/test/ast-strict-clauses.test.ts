@@ -18,21 +18,21 @@ describe('AST 2.0 reader checks', () => {
 
   it('C2-A-029, C2-A-123, C2-A-124, C2-A-125, C2-A-126: names, declarations and fallback are checked', () => {
     const inline = (name: string, fallback?: unknown[]) => documentOf(paragraph({ type: 'inline_extension', name,
-      children: [], ...(fallback === undefined ? {} : { fallback }) } as never))
+      children: [], ...(name.includes('.') ? { version: '1' } : {}), ...(fallback === undefined ? {} : { fallback }) } as never))
     expect(refusal(inline('kbd'))).toBeNull()
     expect(refusal(inline('_'))).toBeNull()
     expect(refusal(inline('bad..name'))).toContain('not an extension name')
     expect(refusal(inline('demo.widget', []))).toContain('an undeclared extension name')
-    expect(refusal({ ...inline('demo.widget', []), extensions: [{ name: 'demo.widget', required: false }] })).toBeNull()
-    expect(refusal({ ...inline('demo.widget'), extensions: [{ name: 'demo.widget', required: false }] }))
+    expect(refusal({ ...inline('demo.widget', []), extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toBeNull()
+    expect(refusal({ ...inline('demo.widget'), extensions: [{ name: 'demo.widget', version: '1', required: false }] }))
       .toContain('a required field is missing')
-    expect(refusal(documentOf({ type: 'block_extension', name: 'widget', children: [], fallback: [] } as never)))
+    expect(refusal(documentOf({ type: 'block_extension', name: 'widget', version: '1', children: [], fallback: [] } as never)))
       .toContain('not an extension name')
     const data = documentOf({ ...paragraph('x'), data: { 'demo.widget': 1 } })
     expect(refusal(data)).toContain('an undeclared data name')
-    expect(refusal({ ...data, extensions: [{ name: 'demo.widget', required: false }] })).toBeNull()
+    expect(refusal({ ...data, extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toBeNull()
     expect(refusal({ ...documentOf({ ...paragraph('x'), data: { widget: 1 } }),
-      extensions: [{ name: 'demo.widget', required: false }] })).toContain('not a qualified data name')
+      extensions: [{ name: 'demo.widget', version: '1', required: false }] })).toContain('not a qualified data name')
   })
 
   it('C2-A-028, C2-A-122, C2-A-131, C2-A-189: nested objects are closed and opaque objects contain no nodes', () => {

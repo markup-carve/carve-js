@@ -8,6 +8,7 @@ import { blankLinesAfter, blankLinesBefore, byteOffsets, markedBlankEnd } from '
 import { cellRange, cellWraps, continuationRows, type TableRows, tableRows } from './layout-table.ts'
 import { contentSource, type LayoutTrace } from './ast-inline.ts'
 import { type BlockNode } from './tree.ts'
+import { stringOffsetOfByte } from './positions.ts'
 
 export const LAYOUT_VERSION = 2
 
@@ -180,11 +181,23 @@ function visitInline(walk: Walk, node: Node, path: string, frame: Frame): void {
   addEntry(walk, node, path, origin.start, origin.end, { rawRef })
 }
 
+function visitExtension(walk: Walk, node: Node, path: string, frame: Frame): Frame {
+  const pos = node.pos
+  if (pos === undefined) return frame
+  const start = stringOffsetOfByte(walk.src, pos.startOffset)
+  const end = stringOffsetOfByte(walk.src, pos.endOffset)
+  const facts: Facts = {}
+  setBlankLines(walk, start, end, frame, facts)
+  addEntry(walk, node, path, start, end, facts)
+  return { ...frame, start, end, open: false }
+}
+
 function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   const origin = walk.trace.blocks.get(node)
   let inner = frame
   if (origin !== undefined) inner = visitBlock(walk, node, path, origin, frame)
   else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
+  else if (node.type === 'block_extension' || node.type === 'inline_extension') inner = visitExtension(walk, node, path, frame)
   else visitInline(walk, node, path, frame)
   // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
   forEachSlot(node, (nodes, step, single) => {
