@@ -374,26 +374,6 @@ function lengthenedEnd(source: BareText, seeds: readonly number[]): number {
   return best
 }
 
-/**
- * C2-W-125, case five: a closing mark inside a construct of the tree that ends it early, as the `*` inside a
- * strong `*`. Its first character takes the backslash. Returns the bare offset of the leftmost one, or -1.
- */
-function closerInside(source: BareText, missing: Map<string, number>, seeds: readonly number[]): number {
-  const bare = source.bare
-  let best = -1
-  for (const [key, end] of missing) {
-    const start = Number(key.slice(key.lastIndexOf('@') + 1))
-    const mark = bare[end - 1]
-    if (mark === undefined || !isAsciiPunctuation(bare.charCodeAt(end - 1)) || bare[start] !== mark) continue
-    for (let at = start + 1; at < end - 1; at++) {
-      if (bare[at] !== mark || bare[at - 1] === '\\' || seeds.includes(at)) continue
-      if (best < 0 || at < best) best = at
-      break
-    }
-  }
-  return best
-}
-
 function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly number[]): ProcedureEnd {
   const added = [...seeds].sort((x, y) => x - y)
   for (;;) {
@@ -425,7 +405,6 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
     const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
     let extra = lengthenedEnd(source, seeds)
-    if (extra < 0) extra = closerInside(source, missing, seeds)
     if (extra < 0) extra = addedBackslash({ ...source, added: seeds }, missing)
     if (extra < 0) {
       const best = result.best
