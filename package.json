@@ -71,6 +71,7 @@
     "enumerate-inline:v2": "node v2/scripts/enumerate-inline.ts",
     "stress-inline:v2": "node v2/scripts/stress-inline.ts",
     "stress-tree:v2": "node v2/scripts/stress-tree.ts",
+    "fuzz-tree:v2": "node v2/scripts/fuzz-tree.ts",
     "enumerate-tree:v2": "node v2/scripts/enumerate-tree.ts",
     "conformance:v2": "node v2/scripts/conformance.ts",
     "bench:v2": "node v2/scripts/bench.ts",

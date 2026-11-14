@@ -129,6 +129,27 @@ jobs:
       - name: Contents of up to four tokens
         run: npm run enumerate-tree:v2 -- tokens 4
 
+  fuzz-tree:
+    name: tree reader fuzz, 20,000 mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Random single mutations of the trees of the examples through decodeTree: each is refused with a
+      # path into the mutant (C2-A-167) or accepted and then rendered and written without throwing.
+      - name: Fuzz
+        run: npm run fuzz-tree:v2 -- --count 20000
+
   writer-gates:
     name: writer gates, examples, three lines and four tokens
     runs-on: ubuntu-latest
