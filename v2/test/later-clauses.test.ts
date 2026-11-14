@@ -255,6 +255,25 @@ describe('the escapes of a text as one procedure', () => {
     expect(referenceForm(form, parse(form))).toEqual({ form })
   })
 
+  it('C2-W-125, case seven: where the escape of a sigil would turn the quote before it, the bracket takes the backslash', () => {
+    const form = format("-':n[\\]")
+    expect(form).toBe("-':n\\[]\n")
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+    expect(format("x':n[\\]")).toBe("x'\\:n[]\n")
+  })
+
+  it('C2-W-125, case six: a character behind a node that would lengthen it takes the backslash in the reference too', () => {
+    for (const form of [`x${TICK}a${TICK}\\${TICK}\n`, 'x @a\\_\n', 'x(/u)/\\/\n']) {
+      expect(referenceForm(form, parse(form))).toEqual({ form })
+    }
+  })
+
+  it('C2-W-088: a footnote label that runs on over a line break past an emphasis is escaped at its bracket', () => {
+    const form = format('/[^a/\n\\]')
+    expect(form).toBe('/\\[^a/\n]\n')
+    expect(referenceForm(form, parse(form))).toEqual({ form })
+  })
+
   it('C2-W-088: a backslash the procedure does not place is a defect, and so is a missing one', () => {
     expect(referenceForm('\\.x\n', parse('.x'))).toEqual({ form: '.x\n' })
     expect(referenceForm('x<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toEqual({ form: 'x\\<a:b\\>=}\n' })

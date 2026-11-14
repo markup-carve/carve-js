@@ -438,7 +438,8 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const closer: Node = { type: 'text', value: spelled.slice(spelled.length - (spelled.length - content.length) / 2) }
   const word: Node = { type: 'text', value: 'x' }
   let end = i + 1
-  while (end < es.length && end - i <= MAX_ACROSS && !isBreak(es[end])) end++
+  // A label or a bracket pair can run on over a line break (C2-I-076).
+  while (end < es.length && end - i <= MAX_ACROSS) end++
   const inlines = [...e.children, closer, ...es.slice(i + 1, end)]
   // The stand-ins for markup take no escape, and neither does a mark of the node in its content,
   // which asks for the braced form instead (C2-W-069).
@@ -823,9 +824,24 @@ function readsNeighbor(c: Check, e: Node, es: readonly Node[], i: number, a: Nod
   // C2-I-090: a name character behind a mention or a tag makes the name longer.
   if (next !== null && readsOn(e, next) && differingField(c, e, a) !== null) return escapeAt(c, next, 0)
   if (e.type !== 'smart_punctuation' || a.type !== 'smart_punctuation' || (e.kind === a.kind && e.source === a.source)) return false
-  if (next !== null && escapeAt(c, next, 0)) return true
+  if (next !== null && (moveSigilEscape(c, next) || escapeAt(c, next, 0))) return true
   const before = textAt(es, i - 1)
   return before !== null && escapeAt(c, before, before.value.length - 1)
+}
+
+/**
+ * C2-W-125, case seven: the escape of the sigil opener `:name[` at the start of `next` changed the
+ * direction of the quote before it, so the backslash goes before the bracket of that opener.
+ */
+function moveSigilEscape(c: Check, next: TextNode): boolean {
+  const value = next.value
+  if (value[0] !== ':' || !isEscaped(c, next, 0)) return false
+  let bracket = 1
+  while (bracket < value.length && isAsciiAlphanumeric(value.charCodeAt(bracket))) bracket++
+  if (bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket)) return false
+  c.retracted.push([next, 0])
+  mark(c, next, 0, false)
+  return escapeAt(c, next, bracket)
 }
 
 /** Whether the text `next` can read on into the end of the spelling of `node`: a closing backtick run, or a name. */
