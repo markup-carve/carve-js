@@ -2,7 +2,7 @@
 import { type AstNode, type Attrs, valueOf } from './ast.ts'
 import { type Attributes, attributeSink, foldLabel, NO_MEMO } from './ast-attributes.ts'
 import { readAttributeBlock, unescape } from './attributes.ts'
-import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
+import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, DESTINATION, EDITORIAL, ESCAPE, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED,
   FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION,
@@ -306,17 +306,16 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): AstNo
   const root: AstNode[] = []
   const open: InlineFrame[] = []
   let top: InlineFrame | null = null
-  for (let at = 0; at < eventLength; at += EVENT_WIDTH) {
-    const tag = events[at]!
-    const type = eventType(tag)
+  for (const event = new EventCursor(events, eventLength); event.more(); event.next()) {
+    const type = event.type()
     if (type === ENTER) {
-      top = openFrame(eventKind(tag), events[at + 1]!, eventFlags(tag), events[at + 2]!)
+      top = openFrame(event.kind(), event.start(), event.flags(), event.aux())
       open.push(top)
     } else if (type === SPAN) {
-      addSpan(ctx, root, top, events[at + 1]!, events[at + 2]!, flow)
+      addSpan(ctx, root, top, event.start(), event.end(), flow)
     } else {
       const node = open.pop()!
-      node.end = events[at + 1]!
+      node.end = event.end()
       top = open.length > 0 ? open[open.length - 1]! : null
       closeFrame(ctx, spans, node, top, top === null ? root : top.children!, flow)
     }

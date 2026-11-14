@@ -27,3 +27,56 @@ export function eventKind(tag: number): number {
 export function eventFlags(tag: number): number {
   return tag >> (TYPE_BITS + KIND_BITS)
 }
+
+/**
+ * A reader of the first `length` ints of an event array, one event at a time. Readers outside this
+ * module go through it and never index the array themselves.
+ */
+export class EventCursor {
+  private readonly events: Int32Array
+  private readonly length: number
+  private at = 0
+
+  constructor(events: Int32Array, length: number) {
+    this.events = events
+    this.length = length
+  }
+
+  /** Whether the cursor stands on an event. */
+  more(): boolean {
+    return this.at < this.length
+  }
+
+  /** Moves to the next event. */
+  next(): void {
+    this.at += EVENT_WIDTH
+  }
+
+  type(): number {
+    return eventType(this.events[this.at]!)
+  }
+
+  kind(): number {
+    return eventKind(this.events[this.at]!)
+  }
+
+  flags(): number {
+    return eventFlags(this.events[this.at]!)
+  }
+
+  /** The offset of an enter event, or the start of a span. */
+  start(): number {
+    return this.events[this.at + 1]!
+  }
+
+  /** The end of a span, or the end offset of an exit event. */
+  end(): number {
+    const at = this.at
+    return this.events[at + (eventType(this.events[at]!) === SPAN ? 2 : 1)]!
+  }
+
+  /** The aux of an enter event, or the facts of an exit event. */
+  aux(): number {
+    return this.events[this.at + 2]!
+  }
+}

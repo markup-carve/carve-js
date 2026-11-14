@@ -1,4 +1,4 @@
-import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from './events.ts'
+import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP, isLeaf, PARAGRAPH, ROW,
   TABLE,
@@ -32,25 +32,22 @@ export function buildTree(events: Int32Array, length: number): BlockNode {
   const open: BlockNode[] = []
   let root: BlockNode | null = null
   let top: BlockNode | null = null
-  for (let at = 0; at < length; at += EVENT_WIDTH) {
-    const tag = events[at]!
-    const a = events[at + 1]!
-    const b = events[at + 2]!
-    const type = eventType(tag)
+  for (const event = new EventCursor(events, length); event.more(); event.next()) {
+    const type = event.type()
     if (type === SPAN) {
-      top!.spans!.push(a, b)
+      top!.spans!.push(event.start(), event.end())
     } else if (type === ENTER) {
-      const node = enterNode(eventKind(tag), eventFlags(tag), a, b, top)
+      const node = enterNode(event.kind(), event.flags(), event.start(), event.aux(), top)
       if (top === null) root = node
       else top.children!.push(node)
       open.push(node)
       top = node
     } else {
       const node = open.pop()!
-      node.end = a
-      node.exitFlags = eventFlags(tag)
+      node.end = event.end()
+      node.exitFlags = event.flags()
       top = open.length > 0 ? open[open.length - 1]! : null
-      exitNode(node, b)
+      exitNode(node, event.aux())
     }
   }
   return root!
