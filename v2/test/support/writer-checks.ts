@@ -351,7 +351,7 @@ function sigilTarget(source: BareText, added: readonly number[], at: number): nu
   if (quote === null || !QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))) return at
   if (formedConstructs(bare, [...added, at]).has(`${quote[0]}@${at - 1}`)) return at
   let bracket = at + 1
-  while (bracket < bare.length && isAsciiAlphanumeric(bare.charCodeAt(bracket))) bracket++
+  while (bracket < bare.length && (isAsciiAlphanumeric(bare.charCodeAt(bracket)) || '_-'.includes(bare[bracket]!))) bracket++
   return bracket > at + 1 && bare[bracket] === '[' ? bracket : at
 }
 

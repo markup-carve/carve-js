@@ -244,7 +244,24 @@ function escapeOwnerMark(c: Check, e: Node): boolean {
 
 /** Asks for the escape that keeps the text before `es[i]` from reading on into its opening markup. */
 function escapeBefore(c: Check, es: readonly Node[], i: number): boolean {
-  return escapeEnd(c, i > 0 ? lastText(es[i - 1]) : null, true)
+  const before = i > 0 ? lastText(es[i - 1]) : null
+  return escapeEnd(c, before, true) || escapeNameSigil(c, before, es[i]!)
+}
+
+/** C2-W-125, case three: the sigil `:name` glued before the bracket of `e` reads it as an extension, so its colon takes the backslash. */
+function escapeNameSigil(c: Check, text: TextNode | null, e: Node): boolean {
+  if (text === null || !writeInlines(c.w, [e], c.flags).startsWith('[')) return false
+  const value = text.value
+  let start = value.length
+  while (start > 0 && isExtensionNameChar(value.charCodeAt(start - 1))) start--
+  // C2-I-094: the name starts with a letter or `_`.
+  while (start < value.length && (value[start] === '-' || (value.charCodeAt(start) >= 48 && value.charCodeAt(start) <= 57))) start++
+  return start < value.length && value[start - 1] === ':' && escapeAt(c, text, start - 1)
+}
+
+/** C2-I-094: a character of the name of an inline extension after its first. */
+function isExtensionNameChar(code: number): boolean {
+  return isAsciiAlphanumeric(code) || code === 95 || code === 45
 }
 
 /**
@@ -845,7 +862,7 @@ function moveSigilEscape(c: Check, next: TextNode): boolean {
   const value = next.value
   if (value[0] !== ':' || !isEscaped(c, next, 0)) return false
   let bracket = 1
-  while (bracket < value.length && isAsciiAlphanumeric(value.charCodeAt(bracket))) bracket++
+  while (bracket < value.length && isExtensionNameChar(value.charCodeAt(bracket))) bracket++
   if (bracket === 1 || value[bracket] !== '[' || isEscaped(c, next, bracket)) return false
   c.retracted.push([next, 0])
   mark(c, next, 0, false)
