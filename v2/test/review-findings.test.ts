@@ -456,3 +456,13 @@ describe('what the four-token writer gate found', () => {
     expect(format(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}`)).toBe(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}${BACKTICK}\n`)
   })
 })
+
+describe('what the random document gate found', () => {
+  it('C2-W-003, C2-L-021: a fragment that starts an empty cell is joined without a space, so formatting is stable', () => {
+    for (const source of ['||<|\n+a|[|', '||<|\n+a|<|']) {
+      const once = format(source)
+      expect(once).toBe(source.endsWith('[|') ? '| a [ | < |\n+ | |\n' : '| a < | < |\n+ | |\n')
+      expect(format(once)).toBe(once)
+    }
+  })
+})
