@@ -1,6 +1,7 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
 import { CarveTreeError, decodeTree, parse, render, stringOffsetOfByte, utf8Length, writeWithDiagnostics } from '../src/index.ts'
+import { CarveOptionError } from '../src/options.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -127,5 +128,33 @@ describe('byte offsets', () => {
     for (const text of ['\ud800x\n', 'a\udc00', '\udc00\ud800', '😀\ud800', 'é😀']) expect(utf8Length(text)).toBe(Buffer.byteLength(text))
     expect(parse('\ud800x\n').srcByteLength).toBe(5)
     expect(stringOffsetOfByte('\ud800x', 3)).toBe(1)
+  })
+})
+
+describe('option values', () => {
+  it('C2-H-137, C2-H-128: a urlPolicy that is not a deny list or an allow list of strings is refused', () => {
+    const refused = (urlPolicy: unknown): string => {
+      try {
+        render('[x](javascript:y)', { urlPolicy } as never)
+        return 'accepted'
+      } catch (error) {
+        return error instanceof CarveOptionError ? error.message : `other: ${String(error)}`
+      }
+    }
+    expect(refused({ allow: 'https' })).toBe('option urlPolicy: allow is not a list of strings')
+    expect(refused({ deny: [1] })).toBe('option urlPolicy: deny is not a list of strings')
+    expect(refused({ allow: ['https'], deny: ['ftp'] })).toBe('option urlPolicy: both a deny list and an allow list')
+    expect(refused({ other: [] })).toBe('option urlPolicy: unknown field other')
+    expect(refused(null)).toBe('option urlPolicy: not an object with a deny list or an allow list')
+    expect(refused(['ftp'])).toBe('option urlPolicy: not an object with a deny list or an allow list')
+    expect(refused({ allow: ['https'] })).toBe('accepted')
+  })
+
+  it('C2-H-137: symbols, labels and social of the wrong shape are refused too', () => {
+    expect(() => render('x', { symbols: { a: 1 } } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { labels: 'x' } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { social: { mentionUrl: 1 } } as never)).toThrow(CarveOptionError)
+    expect(() => render('x', { social: { other: '' } } as never)).toThrow(CarveOptionError)
+    expect(render('x', { symbols: {}, labels: {}, social: null })).toBe('<p>x</p>')
   })
 })

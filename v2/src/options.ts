@@ -108,6 +108,53 @@ function schemeSet(policy: UrlPolicy, field: 'deny' | 'allow'): ReadonlySet<stri
   return list === undefined ? null : new Set(list.map((scheme) => scheme.toLowerCase()))
 }
 
+function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** C2-H-128: a deny list or an allow list of schemes, each a list of strings. An absent policy is the default deny list. */
+function urlPolicyValue(options: OptionMap): UrlPolicy {
+  const value = options['urlPolicy']
+  if (value === undefined) return {}
+  if (!isPlainObject(value)) throw new CarveOptionError('urlPolicy', 'not an object with a deny list or an allow list')
+  for (const name of Object.keys(value)) {
+    if (name !== 'deny' && name !== 'allow') throw new CarveOptionError('urlPolicy', `unknown field ${name}`)
+    const list = value[name]
+    if (!Array.isArray(list) || !list.every((scheme) => typeof scheme === 'string')) {
+      throw new CarveOptionError('urlPolicy', `${name} is not a list of strings`)
+    }
+  }
+  if (value['deny'] !== undefined && value['allow'] !== undefined) {
+    throw new CarveOptionError('urlPolicy', 'both a deny list and an allow list')
+  }
+  return value as UrlPolicy
+}
+
+/** A map whose values are strings (C2-H-124, C2-H-125). An absent map, or null, is the default. */
+function stringMap(options: OptionMap, name: string): Readonly<Record<string, string>> | undefined {
+  const value = options[name]
+  if (value === undefined || value === null) return undefined
+  if (!isPlainObject(value) || !Object.values(value).every((text) => typeof text === 'string')) {
+    throw new CarveOptionError(name, 'not a map of strings')
+  }
+  return value as Readonly<Record<string, string>>
+}
+
+const SOCIAL_FIELDS = new Map([['mentionUrl', 'string'], ['tagUrl', 'string'], ['resolveMention', 'function'], ['resolveTag', 'function']])
+
+/** C2-H-126: URL templates and resolvers, or null for none. */
+function socialValue(options: OptionMap): Social | null {
+  const value = options['social']
+  if (value === undefined || value === null) return null
+  if (!isPlainObject(value)) throw new CarveOptionError('social', 'not an object')
+  for (const [name, field] of Object.entries(value)) {
+    const kind = SOCIAL_FIELDS.get(name)
+    if (kind === undefined) throw new CarveOptionError('social', `unknown field ${name}`)
+    if (field !== undefined && typeof field !== kind) throw new CarveOptionError('social', `${name} is not a ${kind}`)
+  }
+  return value as Social
+}
+
 /** C2-H-137: refuses a name that is no option, an option of another stage, and one this engine does not offer. */
 function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
   for (const name of Object.keys(given)) {
@@ -131,14 +178,14 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
 export function readOptions(options: object | undefined, stage: 'parse' | 'render'): Settings {
   const given: OptionMap = (options ?? {}) as OptionMap
   checkNames(given, stage)
-  const policy = (given['urlPolicy'] ?? {}) as UrlPolicy
+  const policy = urlPolicyValue(given)
   const allowed = schemeSet(policy, 'allow')
   return {
     headingIds: enumValue(given, 'headingIds') as HeadingIds,
     mode: enumValue(given, 'mode') as Mode,
-    symbols: (given['symbols'] ?? {}) as Readonly<Record<string, string>>,
-    labels: { ...DEFAULT_LABELS, ...(given['labels'] as Readonly<Record<string, string>> | undefined) },
-    social: (given['social'] ?? null) as Social | null,
+    symbols: stringMap(given, 'symbols') ?? {},
+    labels: { ...DEFAULT_LABELS, ...stringMap(given, 'labels') },
+    social: socialValue(given),
     sourceLines: booleanValue(given, 'sourceLines'),
     sections: booleanValue(given, 'sections'),
     smartTypography: booleanValue(given, 'smartTypography'),
