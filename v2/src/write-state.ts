@@ -11,6 +11,7 @@ export interface WriterFacts {
   continuationLines?: number
   wraps?: readonly { line: number, path: string, offset: number, row?: number }[]
   rawRef?: string
+  optionSpelling?: Record<string, string>
   sourceFormat?: string
 }
 

@@ -2,7 +2,7 @@
 // JSON form and of a reader. The clauses on resolution are in resolve-clauses.test.ts, those on
 // positions in positions.test.ts.
 import { describe, expect, it } from 'vitest'
-import { type Block, type CaptionNode, type CitationNode, type CodeBlockNode, type DivNode, type DocumentNode, type FootnoteNode, type Inline, type InlineExtensionNode, type ListItemNode, type ListNode, type Node, type ParagraphNode, type TableCellNode, type TableRowNode } from '../src/ast.ts'
+import { type Block, type CaptionNode, type CitationNode, type CodeBlockNode, type DivNode, type DocumentNode, type FootnoteNode, type Inline, type InlineExtensionNode, type ListItemNode, type ListNode, type Node, type ParagraphNode, type TableCellNode, type TableRowNode, type Task } from '../src/ast.ts'
 import { decodeTree, encodeEnvelope, encodeTree, treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError, MAX_TREE_DEPTH, validateTree } from '../src/ast-validate.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
@@ -114,8 +114,8 @@ describe('node grammar', () => {
     expect(refusal(documentOf({ type: 'heading', level: 1, children: [], marker: { kind: 'bullet', char: '-' } } as unknown as Block))).toBe('/children/0/marker: not a field of heading')
   })
 
-  it('C2-A-029, C2-A-030: data and metadata are kept without being read', () => {
-    const node: ParagraphNode = { type: 'paragraph', children: [], data: { 'org.example.x': { type: 'nonsense' } }, metadata: { a: [1, 'b'] } }
+  it('C2-A-029, C2-A-030: data and typed metadata are kept', () => {
+    const node: ParagraphNode = { type: 'paragraph', children: [], data: { 'org.example.x': { value: 1 } }, metadata: { authors: ['b'] } }
     expect(decodeTree(encodeTree(documentOf(node))).children[0]).toEqual(node)
   })
 })
@@ -256,16 +256,17 @@ describe('lists and tasks', () => {
     expect(ofType(block('- a\n\n  b'), 'list').spacing).toBe('tight')
   })
 
-  it('C2-A-060, C2-A-061: a task item carries its mark and the status that follows from it', () => {
+  it('C2-A-060, C2-A-061: a task item carries only its mark', () => {
     const marks = ofType(blocks('- [ ] a\n- [x] a\n- [X] a\n- [_] a\n- [-] a\n- [/] a\n- [!] a\n- [>] a\n- [?] a')[0], 'list').children.map((item) => item.task)
     expect(marks).toEqual([
-      { mark: ' ', status: 'todo' }, { mark: 'x', status: 'done' }, { mark: 'x', status: 'done' }, { mark: '_', status: 'todo' },
-      { mark: '-', status: 'canceled' }, { mark: '/', status: 'in-progress' }, { mark: '!', status: 'blocked' },
-      { mark: '>', status: 'partial' }, { mark: '?', status: 'other' },
+      { mark: ' ' }, { mark: 'x' }, { mark: 'x' }, { mark: '_' }, { mark: '-' }, { mark: '/' }, { mark: '!' },
+      { mark: '>' }, { mark: '?' },
     ])
-    const item: ListItemNode = { type: 'list_item', children: [], task: { mark: 'x', status: 'todo' } }
+    const item: ListItemNode = { type: 'list_item', children: [], task: { mark: 'x' } }
     const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item] }
-    expect(refusal(documentOf(list))).toBe('/children/0/children/0/task/status: the status does not follow from the mark')
+    expect(refusal(documentOf(list))).toBeNull()
+    expect(refusal(documentOf({ ...list, children: [{ ...item, task: { mark: 'x', status: 'todo' } as unknown as Task }] })))
+      .toBe('/children/0/children/0/task/status: not a field of task')
   })
 })
 
@@ -538,11 +539,12 @@ describe('inline nodes', () => {
 })
 
 describe('citations, extension nodes and resources', () => {
-  it('C2-A-118, C2-A-120: a citation stands only in a group, and a group mode needs a mode on every item', () => {
-    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
+  it('C2-A-118, C2-A-120: a citation stands only in a group, and mode belongs to the item', () => {
+    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', mode: 'normal' }
     expect(refusal(documentOf(paragraph(citation as unknown as Inline)))).toBe('/children/0/children/0: citation does not stand here')
     expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', children: [citation] })))).toBeNull()
-    expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', mode: 'paren', children: [citation] })))).toBe('/children/0/children/0: a group mode needs a mode on every citation')
+    const group = { type: 'citation_group', raw: '[@a]', mode: 'paren', children: [citation] } as unknown as Inline
+    expect(refusal(documentOf(paragraph(group)))).toBe('/children/0/children/0/mode: not a field of citation_group')
   })
 
   it('C2-A-121: a citation definition carries its key and inline children', () => {
@@ -563,10 +565,10 @@ describe('citations, extension nodes and resources', () => {
     expect(inlinesOf(decodeTree(encodeTree(documentOf(paragraph(node)))).children[0])[0]).toEqual(node)
   })
 
-  it('C2-A-132: a reader bounds metadata nesting, resource references and fallback nesting', () => {
+  it('C2-A-030, C2-A-132: a reader closes metadata and bounds resource references and fallback nesting', () => {
     let metadata: Record<string, unknown> = {}
     for (let level = 0; level < 70; level++) metadata = { a: metadata }
-    expect(refusal(documentOf({ ...paragraph(), metadata }))).toMatch(/metadata is nested deeper than 64 levels$/)
+    expect(refusal(documentOf({ ...paragraph(), metadata }))).toBe('/children/0/metadata/a: not a field of metadata')
     const references = Array.from({ length: 5000 }, (_unused, index) => `r${index}`)
     const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.x', children: [], resourceIds: references }
     expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
@@ -620,7 +622,7 @@ describe('facts set at close', () => {
 
   it('C2-A-181: an include directive is an include node with its path, its section and its options in the fixed order', () => {
     expect(block('{{ parts/intro.crv #setup @code:js @lines:1-5 }}')).toEqual({
-      type: 'include', path: 'parts/intro.crv', section: 'setup', options: [['lines', '1-5'], ['code', 'js']],
+      type: 'include', path: 'parts/intro.crv', section: 'setup', options: { lines: '1-5', code: 'js' },
     })
     expect(block('{{ "a b.crv" }}')).toEqual({ type: 'include', path: 'a b.crv' })
   })

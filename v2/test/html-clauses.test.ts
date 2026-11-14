@@ -41,7 +41,7 @@ describe('attributes', () => {
     ['C2-H-009: structural attributes, then id, class, language and the keys as written', '{k=v :en .c #i}\n2) a', '<ol start="2" data-delim=")" id="i" class="c" lang="en" k="v">\n  <li>a</li>\n</ol>'],
     ['C2-H-010: the structural attributes of a link and of an image stand in their fixed order', '[a](b "T"){#i} ![c](d "U"){.x}', '<p><a href="b" title="T" id="i">a</a> <img src="d" alt="c" title="U" class="x"></p>'],
     ['C2-H-011: on a footnote reference the id stands before href; on a mention the class stands first', 'a[^n]{.c} @ann\n\n[^n]: x', '<p>a<a id="fnref1" href="#fn1" role="doc-noteref" class="c"><sup>1</sup></a> <span class="mention"><strong>@ann</strong></span></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>x<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
-    ['C2-H-012: a base class stands first, the authored classes follow, and a class the marker generates stands last', '{.a}\n::: |\nx\n:::\n\n{.b}\n-{.e} [ ] t\n\n{.c}\n::: tip\n:::\n\n$`m`{.d}', '<div class="a line-block">\n  <p>x</p>\n</div>\n<ul class="task-list b">\n  <li class="task e"><input type="checkbox" disabled aria-label="t"> t</li>\n</ul>\n<aside class="admonition tip c" aria-label="Tip">\n\n</aside>\n<p><span class="math inline d" role="math">\\(m\\)</span></p>'],
+    ['C2-H-012: a base class stands first, the authored classes follow, and a class the marker generates stands last', '{.a}\n::: |\nx\n:::\n\n{.b}\n-{.e} [ ] t\n\n{.c}\n::: tip\n:::\n\n$`m`{.d}', '<div class="a line-block">\n  <p>x</p>\n</div>\n<ul class="task-list b">\n  <li class="task e" style="list-style: none"><input type="checkbox" disabled aria-label="t"> t</li>\n</ul>\n<aside class="admonition tip c" aria-label="Tip">\n\n</aside>\n<p><span class="math inline d" role="math">\\(m\\)</span></p>'],
     ['C2-H-012: a class that occurs twice is written once', '{.hardbreaks .a .a}\n::: \\\n:::', '<div class="hardbreaks a">\n\n</div>'],
     ['C2-H-013: a structural attribute replaces an authored key of the same name, and an authored key every other generated one', '[a](b){HREF=x k=1} $`m`{role=img}', '<p><a href="b" k="1">a</a> <span class="math inline" role="img">\\(m\\)</span></p>'],
     ['C2-H-014: an attribute with the empty value is written as name=""', '[t]{hidden k=""}', '<p><span hidden="" k="">t</span></p>'],
@@ -81,8 +81,8 @@ describe('lists', () => {
     ['C2-H-029: a bullet list is ul, an ordered list is ol, an item is li', '- a\n\n1. b', '<ul>\n  <li>a</li>\n</ul>\n<ol>\n  <li>b</li>\n</ol>'],
     ['C2-H-030: an ordered list carries type when its style is not decimal and start when it does not start at 1', 'c.  x\n\niv)  y\n\nI.  z\n\n3. w', '<ol type="a" start="3">\n  <li>x</li>\n</ol>\n<ol type="i" start="4" data-delim=")">\n  <li>y</li>\n</ol>\n<ol type="I">\n  <li>z</li>\n</ol>\n<ol start="3">\n  <li>w</li>\n</ol>'],
     ['C2-H-031: the delimiter ) gives data-delim on every render', '1) a', '<ol data-delim=")">\n  <li>a</li>\n</ol>'],
-    ['C2-H-032, C2-H-033: a task item starts with its box, carries its state and the class task; the list carries task-list', '- [ ] a *b*\n- [x] c\n- [/] d', '<ul class="task-list">\n  <li class="task"><input type="checkbox" disabled aria-label="a b"> a <strong>b</strong></li>\n  <li data-task-state="x" class="task"><input type="checkbox" checked disabled aria-label="c"> c</li>\n  <li data-task-state="/" class="task"><input type="checkbox" disabled aria-label="d"> d</li>\n</ul>'],
-    ['C2-H-032: in a list with at least one task item the other items are plain', '- [ ] a\n- b\n- [x] c', '<ul class="task-list">\n  <li class="task"><input type="checkbox" disabled aria-label="a"> a</li>\n  <li>b</li>\n  <li data-task-state="x" class="task"><input type="checkbox" checked disabled aria-label="c"> c</li>\n</ul>'],
+    ['C2-H-032, C2-H-033: a task item starts with its box, carries its state and the class task; the list carries task-list', '- [ ] a *b*\n- [x] c\n- [/] d', '<ul class="task-list">\n  <li class="task" style="list-style: none"><input type="checkbox" disabled aria-label="a b"> a <strong>b</strong></li>\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="c"> c</li>\n  <li data-task-state="/" class="task" style="list-style: none"><input type="checkbox" disabled aria-label="d"> d</li>\n</ul>'],
+    ['C2-H-032: in a list with at least one task item the other items are plain', '- [ ] a\n- b\n- [x] c', '<ul class="task-list">\n  <li class="task" style="list-style: none"><input type="checkbox" disabled aria-label="a"> a</li>\n  <li>b</li>\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="c"> c</li>\n</ul>'],
     ['C2-H-034: in a tight list only the first paragraph of an item is bare', '- a\n\n  b\n- > q\n\n  c', '<ul>\n  <li>a\n    <p>b</p>\n  </li>\n  <li>\n    <blockquote><p>q</p></blockquote>\n    <p>c</p>\n  </li>\n</ul>'],
     ['C2-H-035: in a loose list every paragraph gets p', '- a\n\n- b', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p></li>\n</ul>'],
     ['C2-H-037: the bullet character adds nothing by default and is carried by data-marker under roundtrip', '* a', '<ul>\n  <li>a</li>\n</ul>'],
@@ -211,7 +211,7 @@ describe('inline elements', () => {
   })
 
   it('C2-A-119: with no extension for citations a citation group writes its bracket text and a citation definition writes nothing', () => {
-    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', suppressAuthor: false }
+    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation' }
     const group: CitationGroupNode = { type: 'citation_group', raw: '[@a, p. 3 & 4]', children: [citation] }
     const definition: CitationDefinitionNode = { type: 'citation_definition', key: 'a', namespace: 'citation', children: [text('A book')] }
     expect(render(documentOf(paragraph('see ', group), definition))).toBe('<p>see [@a, p. 3 &amp; 4]</p>')
@@ -245,8 +245,8 @@ describe('links, images and references', () => {
     ['C2-H-140: under roundtrip a collapsed reference carries data-carve-ref-collapsed beside data-carve-ref', '[r][] [x][r] ![r][]\n\n[r]: /u', '<p><a href="/u" data-carve-ref="r" data-carve-ref-collapsed>r</a> <a href="/u" data-carve-ref="r">x</a> <img src="/u" alt="r" data-carve-ref="r" data-carve-ref-collapsed></p>', { roundtrip: true }],
   ])
 
-  it('C2-H-080: a supplied image with no src and no alt writes both as empty', () => {
-    expect(render(documentOf(paragraph({ type: 'image' }, 'x')))).toBe('<p><img src="" alt="">x</p>')
+  it('C2-H-080: a decorative image with no src writes src and alt as empty', () => {
+    expect(render(documentOf(paragraph({ type: 'image', decorative: true }, 'x')))).toBe('<p><img src="" alt="">x</p>')
   })
 
   it('C2-H-082, C2-H-132: the denial is reported with the severity error', () => {
@@ -306,7 +306,7 @@ describe('state beyond the current block', () => {
     ['C2-H-107: a caption line below decides whether a figure wraps the block', '```\nx\n```\n^ c', '<figure>\n  <pre><code>x\n</code></pre>\n  <figcaption>c</figcaption>\n</figure>'],
     ['C2-H-108: a section closes at the next heading of the same or a lower level number, or at the end', '## A\n\n# B', '<section id="A">\n  <h2>A</h2>\n</section>\n<section id="B">\n  <h1>B</h1>\n</section>'],
     ['C2-H-109: whether the first paragraph of a description is bare is known when the description closes', ':: t\n: a\n\n  b', '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>a</p>\n    <p>b</p>\n  </dd>\n</dl>'],
-    ['C2-H-110: the task-list class is known when the list closes', '- a\n- [x] b', '<ul class="task-list">\n  <li>a</li>\n  <li data-task-state="x" class="task"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
+    ['C2-H-110: the task-list class is known when the list closes', '- a\n- [x] b', '<ul class="task-list">\n  <li>a</li>\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
   ])
 
   it('C2-H-111: the tree of a source, also after a JSON round trip, renders as the source does', () => {
@@ -324,7 +324,7 @@ describe('roundtrip carriers', () => {
     ['C2-H-115, C2-H-116, C2-H-120: with roundtrip on an authored attribute with a reserved name is dropped; another data-carve- name is ordinary', '[t]{data-carve-ref=x data-carve-other=y data-marker=z}', '<p><span data-carve-other="y">t</span></p>', { roundtrip: true }],
     ['C2-H-116: with roundtrip off the attribute passes through', '[t]{data-carve-ref=x}', '<p><span data-carve-ref="x">t</span></p>'],
     ['C2-H-117: a presence carrier is the bare attribute name', '<https://x.y>', '<p><a href="https://x.y" data-carve-autolink>https://x.y</a></p>', { roundtrip: true }],
-    ['C2-H-118: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x" class="task"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
+    ['C2-H-118: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
   ])
 
   it('C2-H-116: the dropped attribute is reported as a render loss', () => {

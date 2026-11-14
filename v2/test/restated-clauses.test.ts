@@ -99,12 +99,12 @@ describe('the include directive', () => {
   const kind = (src: string): string => block(src).type
 
   it('C2-B-201: braces, spaces, a path, a section, options, spaces and braces; a tab is no such space', () => {
-    expect(block('{{ a.crv#s@shift:1 }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['shift', '1']] })
+    expect(block('{{ a.crv#s@shift:1 }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: { shift: 1 } })
     expect(block('{{   a.crv   }} \t')).toEqual({ type: 'include', path: 'a.crv' })
     const refused = ['{{\ta.crv }}', '{{a.crv }}', '{{ a.crv}}', '{{ a.crv\t}}', '{{ a.crv }} x', '{{ }}', '{{}}', '{{ a.crv x}', '{  a.crv }}', '{{ a.crv }']
     expect(refused.map(kind)).toEqual(Array(10).fill('paragraph'))
     // The closing braces are the first ones outside a quoted run.
-    expect(block('{{ "a }} b" @rows:"1 }} 2" }}')).toEqual({ type: 'include', path: 'a }} b', options: [['rows', '1 }} 2']] })
+    expect(block('{{ "a }} b" @rows:"1 }} 2" }}')).toEqual({ type: 'include', path: 'a }} b', options: { rows: '1 }} 2' } })
   })
 
   it('C2-B-202: a bare, a double-quoted and a curly-quoted path, and an empty one makes the line text', () => {
@@ -114,7 +114,7 @@ describe('the include directive', () => {
     expect(ofType(block('{{ "a \\" b" }}'), 'include').path).toBe('a " b')
     expect(ofType(block('{{ “a\\.b c” }}'), 'include').path).toBe('a\\.b c')
     expect(ofType(block('{{ "a" }}'), 'include').path).toBe('a')
-    expect(block('{{ a.crv@code }}')).toEqual({ type: 'include', path: 'a.crv', options: [['code', '']] })
+    expect(block('{{ a.crv@code }}')).toEqual({ type: 'include', path: 'a.crv', options: { code: true } })
     const refused = ['{{ "" }}', '{{ “” }}', '{{ “”x” }}', '{{ a"b }}', '{{ a“b }}', '{{ "a }}', '{{ a}b }}', '{{ #s }}', '{{ @code }}']
     expect(refused.map(kind)).toEqual(Array(9).fill('paragraph'))
   })
@@ -127,9 +127,9 @@ describe('the include directive', () => {
   })
 
   it('C2-B-204: an option is an at-sign, a key and an optional value; an unquoted value ends at the next option', () => {
-    expect(ofType(block('{{ a.crv @shift:1@lines:1-8 }}'), 'include').options).toEqual([['lines', '1-8'], ['shift', '1']])
-    expect(ofType(block('{{ a.crv @lines:"1-2" @code:\'c\' }}'), 'include').options).toEqual([['lines', '1-2'], ['code', 'c']])
-    expect(ofType(block('{{ a.crv @rows:"a @ b }} c" }}'), 'include').options).toEqual([['rows', 'a @ b }} c']])
+    expect(ofType(block('{{ a.crv @shift:1@lines:1-8 }}'), 'include').options).toEqual({ lines: '1-8', shift: 1 })
+    expect(ofType(block('{{ a.crv @lines:"1-2" @code:\'c\' }}'), 'include').options).toEqual({ lines: '1-2', code: 'c' })
+    expect(ofType(block('{{ a.crv @rows:"a @ b }} c" }}'), 'include').options).toEqual({ rows: 'a @ b }} c' })
     expect(['{{ a.crv @ }}', '{{ a.crv @1k }}', '{{ a.crv @rows: }}', '{{ a.crv @rows:"x }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
   })
 
@@ -148,23 +148,23 @@ describe('the include directive', () => {
     expect(['{{ a.crv @foo:1 }}', '{{ a.crv @lines }}', '{{ a.crv @region }}', '{{ a.crv @shift }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
     expect(['{{ a.crv @lines:1-2 @lines:3-4 }}', '{{ a.crv @code @code }}', '{{ a.crv @shift:1 @shift:2 }}'].map(kind)).toEqual(Array(3).fill('paragraph'))
     // Outside its shape, `lines`, `rows` and `cols` leave a node that an expansion reports.
-    expect(ofType(block('{{ a.crv @lines:5-1 @rows:01-2 @cols:x }}'), 'include').options).toEqual([['lines', '5-1'], ['rows', '01-2'], ['cols', 'x']])
-    expect(ofType(block('{{ a.crv @rows @cols }}'), 'include').options).toEqual([['rows', ''], ['cols', '']])
+    expect(ofType(block('{{ a.crv @lines:5-1 @rows:01-2 @cols:x }}'), 'include').options).toEqual({ lines: '5-1', rows: '01-2', cols: 'x' })
+    expect(ofType(block('{{ a.crv @rows @cols }}'), 'include').options).toEqual({ rows: '', cols: '' })
   })
 
-  it('C2-A-181: the options stand in the fixed order, a repeated `rows` or `cols` keeps the first, and a list of names keeps its quotes', () => {
-    expect(ofType(block('{{ a.crv @code @shift:1 @cols:"a,b" @rows:1-2 @region:r @lines:1-2 }}'), 'include').options).toEqual([
-      ['lines', '1-2'], ['region', 'r'], ['rows', '1-2'], ['cols', '"a,b"'], ['shift', '1'], ['code', ''],
-    ])
-    expect(ofType(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}'), 'include').options).toEqual([['rows', '1-2'], ['cols', '"a\\,b"']])
+  it('C2-A-181: the options are decoded, and repeated rows or cols keeps the first', () => {
+    expect(ofType(block('{{ a.crv @code @shift:1 @cols:"a,b" @rows:1-2 @region:r @lines:1-2 }}'), 'include').options)
+      .toEqual({ lines: '1-2', region: 'r', rows: '1-2', cols: ['a', 'b'], shift: 1, code: true })
+    expect(ofType(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}'), 'include').options)
+      .toEqual({ rows: '1-2', cols: ['a,b'] })
     // A quoted value that is no list of names is a value like any other: its quotes go and its escapes are read.
     const cols = (written: string): unknown => ofType(block(`{{ a.crv @cols:${written} }}`), 'include').options
-    expect(cols('"\\,"')).toEqual([['cols', '"\\,"']])
-    expect(cols('"a,,b"')).toEqual([['cols', 'a,,b']])
-    expect(cols('"a,"')).toEqual([['cols', 'a,']])
-    expect(cols('",a"')).toEqual([['cols', ',a']])
-    expect(cols('""')).toEqual([['cols', '']])
-    expect(cols("'a,b'")).toEqual([['cols', 'a,b']])
+    expect(cols('"\\,"')).toEqual({ cols: [','] })
+    expect(cols('"a,,b"')).toEqual({ cols: 'a,,b' })
+    expect(cols('"a,"')).toEqual({ cols: 'a,' })
+    expect(cols('",a"')).toEqual({ cols: ',a' })
+    expect(cols('""')).toEqual({ cols: '' })
+    expect(cols("'a,b'")).toEqual({ cols: 'a,b' })
   })
 
   it('C2-A-182: an include node spans the directive from its opening braces to its closing braces', () => {

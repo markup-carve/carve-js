@@ -30,7 +30,7 @@ import { finishPositions, utf8Length } from './positions.ts'
 import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
-import { DIV_KINDS, HARD_BREAKS_CLASS, TASK_STATUS } from './tree-tables.ts'
+import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { isAsciiNameCharacter } from './unicode.ts'
 
 /** A child of the document or of a block container: a block, or a definition or frontmatter, which the document alone takes. */
@@ -213,7 +213,7 @@ function itemNode(ctx: TreeContext, node: BlockNode, flow: number): ListItemNode
   const out: ListItemNode = { type: 'list_item', children: blockChildren(ctx, node.children!, flow) }
   if (node.aux !== 0) {
     const mark = String.fromCharCode(node.aux)
-    out.task = { mark, status: TASK_STATUS.get(mark)! }
+    out.task = { mark }
   }
   setAttributes(out, markerAttributes(ctx, node))
   return out

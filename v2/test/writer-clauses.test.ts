@@ -3,7 +3,8 @@
 // writer-layout.test.ts, the gates on the enumerations in writer-gates.test.ts.
 import { describe, expect, it } from 'vitest'
 import {
-  type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type Inline, type LinkNode, parse,
+  type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type IncludeOptions,
+  type Inline, type LinkNode, parse,
   parseWithLayout, render, treesEqual, write, writeWithDiagnostics,
 } from '../src/index.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
@@ -144,7 +145,7 @@ describe('what the writer cannot spell', () => {
     expect(write(team)).toBe('@user\n')
     expect(losses(team)).toEqual(['field-unspellable /children/0/children/0'])
 
-    const metadata = edited('para', (blocks) => { blocks[0]!.metadata = { a: 1 } })
+    const metadata = edited('para', (blocks) => { blocks[0]!.metadata = { authors: ['A'] } })
     expect(write(metadata)).toBe('para\n')
     expect(losses(metadata)).toEqual(['field-unspellable /children/0'])
   })
@@ -622,13 +623,15 @@ describe('canonical forms: blocks', () => {
   })
 
   it('C2-W-058: the options of a supplied tree are written in the order of the directive grammar', () => {
-    const tree = edited('{{ a.crv @shift:1 }}', (blocks) => { ofType(blocks[0], 'include').options = [['shift', '1'], ['lines', '1-2']] })
+    const tree = edited('{{ a.crv @shift:1 }}', (blocks) => { ofType(blocks[0], 'include').options = { shift: 1, lines: '1-2' } })
     expect(write(tree)).toBe('{{ a.crv @lines:1-2 @shift:1 }}\n')
   })
 
-  it('C2-W-058: an option with another key follows the six, in the order of the node', () => {
-    const tree = edited('{{ a.crv @shift:1 }}', (blocks) => { ofType(blocks[0], 'include').options = [['zeta', '1'], ['shift', '1']] })
-    expect(write(tree)).toBe('{{ a.crv @shift:1 @zeta:1 }}\n')
+  it('C2-A-181: an unknown option is refused by the tree reader', () => {
+    const tree = edited('{{ a.crv @shift:1 }}', (blocks) => {
+      ofType(blocks[0], 'include').options = { zeta: '1', shift: 1 } as unknown as IncludeOptions
+    })
+    expect(() => render(tree)).toThrow('not an include option')
   })
 
   it('C2-W-059: a comment is written in its form', () => {

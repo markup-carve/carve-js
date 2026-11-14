@@ -38,8 +38,8 @@ export {
   parseWithLayout, render, type RenderOutput, renderTree, renderWithDiagnostics, type ResolvedTree, resolveTree,
 } from './api.ts'
 export {
-  AST_VERSION, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
-  type Resource, type Task,
+  AST_VERSION, type Attrs, type BibliographyMetadata, type CitationLocator, type Envelope, type ExtensionDeclaration,
+  type IncludeOptions, type Marker, type Metadata, type Position, type Resource, type Task,
 } from './ast.ts'
 export type * from './ast-nodes.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'

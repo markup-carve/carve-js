@@ -1,11 +1,12 @@
 // The facts of the source-layout record that one block states about itself (C2-L-016 to C2-L-018,
 // C2-L-023 to C2-L-028, C2-L-045), read from the block tree and the source.
 import { type Node } from './ast.ts'
+import { readInclude } from './include.ts'
 import { COLON, GREATER, HYPHEN, STAR } from './chars.ts'
 import {
   ABBREVIATION, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DIV, FLAG_AUTO, FLAG_HARD_BREAKS, FLAG_UNCLOSED,
   FOOTNOTE, FRONTMATTER, HEADING, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM,
-  THEMATIC_BREAK,
+  THEMATIC_BREAK, INCLUDE,
 } from './kinds.ts'
 import type { NodeLayout } from './layout.ts'
 import { columnOf, lineEndOf, lineStartOf, readPrefix } from './layout-lines.ts'
@@ -223,6 +224,10 @@ const MEASURES = new Map<number, Measure>([
   [COMMENT, commentFacts],
   [LINK_DEFINITION, definitionFacts],
   [ABBREVIATION, definitionFacts],
+  [INCLUDE, (src, _node, origin, _quotes, facts) => {
+    const parts = readInclude(src, origin.start, origin.end)
+    if (parts !== null && Object.keys(parts.optionSpelling).length > 0) facts.optionSpelling = parts.optionSpelling
+  }],
 ])
 
 /** Adds to `facts` what the block `origin` of the node `node` states about its own spelling. */

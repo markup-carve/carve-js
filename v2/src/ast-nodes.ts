@@ -1,5 +1,8 @@
 // Generated from the node table of src/ast-validate.ts by scripts/generate-ast-nodes.ts. Do not edit.
-import { type Attrs, type ExtensionDeclaration, type Marker, type Position, type Resource, type Task } from './ast.ts'
+import {
+  type Attrs, type CitationLocator, type ExtensionDeclaration, type IncludeOptions, type Marker, type Metadata,
+  type Position, type Resource, type Task,
+} from './ast.ts'
 
 /** C2-A-027: the fields every node may carry. */
 export interface NodeBase {
@@ -7,7 +10,7 @@ export interface NodeBase {
   data?: Record<string, unknown>
   pos?: Position
   segments?: Position[]
-  metadata?: Record<string, unknown>
+  metadata?: Metadata
   dir?: "ltr" | "rtl" | "auto"
   lang?: string
 }
@@ -76,14 +79,11 @@ export interface CellParagraphNode extends NodeBase {
 export interface CitationNode extends NodeBase {
   type: "citation"
   key: string
-  suppressAuthor: boolean
   namespace: "citation"
   prefix?: Inline[]
-  locator?: Inline[]
-  locatorLabel?: string
-  locatorValue?: string
+  locator?: CitationLocator
   suffix?: Inline[]
-  mode?: string
+  mode?: "normal" | "author-in-text" | "suppress-author"
   number?: number
   useIndex?: boolean
 }
@@ -99,7 +99,6 @@ export interface CitationGroupNode extends NodeBase {
   type: "citation_group"
   children: CitationNode[]
   raw: string
-  mode?: string
 }
 
 export interface CodeNode extends NodeBase {
@@ -237,13 +236,14 @@ export interface ImageNode extends NodeBase {
   namespace?: "link"
   resourceId?: string
   refForm?: "full" | "collapsed"
+  longDescription?: Block[]
 }
 
 export interface IncludeNode extends NodeBase {
   type: "include"
   path: string
   section?: string
-  options?: [string, string][]
+  options?: IncludeOptions
 }
 
 export interface InlineExtensionNode extends NodeBase {
@@ -439,6 +439,8 @@ export interface TableCellNode extends NodeBase {
   rowspan?: number
   align?: "left" | "right" | "center"
   valign?: string
+  scope?: "row" | "col" | "rowgroup" | "colgroup"
+  headerIds?: string[]
 }
 
 export interface TableColumnNode extends NodeBase {
@@ -723,6 +725,8 @@ export const FIELD_VALUES = {
   "image.refForm": ["full", "collapsed"],
   "xref.display": ["number", "page", "title", "full"],
   "paragraph.role": ["image", "math"],
+  "citation.mode": ["normal", "author-in-text", "suppress-author"],
+  "table_cell.scope": ["row", "col", "rowgroup", "colgroup"],
   "list.spacing": ["tight", "loose"],
   "table_cell.span": ["rowspan", "colspan"],
   "table_cell.align": ["left", "right", "center"],

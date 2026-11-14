@@ -196,7 +196,7 @@ function include(w: Writer, node: IncludeNode, prefix: string): void {
   attributeLine(w, node, prefix)
   // C2-B-202, C2-W-117: an empty path and a path with a line break have no spelling.
   if (node.path === '' || node.path.includes('\n')) lose(w, node, 'path')
-  emit(w, prefix, includeSource(node))
+  emit(w, prefix, includeSource(node, w.facts?.get(node)?.optionSpelling))
 }
 
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */

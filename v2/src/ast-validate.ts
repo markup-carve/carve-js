@@ -55,11 +55,10 @@ const RULES = new Map<string, Rule>([
   ['caption_number', ['none', [], ['n']]],
   ['cell_paragraph', ['inlines', [], []]],
   ['citation', [
-    'none', ['key', 'suppressAuthor', 'namespace'],
-    ['prefix', 'locator', 'locatorLabel', 'locatorValue', 'suffix', 'mode', 'number', 'useIndex'],
+    'none', ['key', 'namespace'], ['prefix', 'locator', 'suffix', 'mode', 'number', 'useIndex'],
   ]],
   ['citation_definition', ['inlines', REFERENCE, []]],
-  ['citation_group', [['citation'], ['raw'], ['mode']]],
+  ['citation_group', [['citation'], ['raw'], []]],
   ['code', ['none', ['value'], []]],
   ['code_block', ['none', ['value'], ['syntax', 'title', 'groupLabel']]],
   ['comment', ['none', ['form', 'value'], []]],
@@ -83,7 +82,9 @@ const RULES = new Map<string, Rule>([
   ['hard_break', ['none', [], []]],
   ['heading', ['inlines', ['level'], ['generatedId']]],
   ['highlight', ['inlines', [], []]],
-  ['image', ['none', [], ['src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm']]],
+  ['image', ['none', [], [
+    'src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm', 'longDescription',
+  ]]],
   ['include', ['none', ['path'], ['section', 'options']]],
   ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
@@ -115,7 +116,7 @@ const RULES = new Map<string, Rule>([
   ['symbol', ['none', ['name'], []]],
   ['table', [[...TABLE_GROUPS, 'comment'], ['columns'], ['caption']]],
   ['table_body', [['table_row', 'comment'], [], ['headRows', 'rowHeadColumns']]],
-  ['table_cell', [[...BLOCKS, 'cell_paragraph'], ['header'], ['span', 'colspan', 'rowspan', 'align', 'valign']]],
+  ['table_cell', [[...BLOCKS, 'cell_paragraph'], ['header'], ['span', 'colspan', 'rowspan', 'align', 'valign', 'scope', 'headerIds']]],
   ['table_column', ['none', [], ['align', 'valign', 'width', 'resolvedAlign', 'authored']]],
   ['table_foot', [['table_row', 'comment'], [], []]],
   ['table_head', [['table_row', 'comment'], [], []]],
@@ -131,12 +132,12 @@ const STRINGS = [
   'key', 'namespace', 'expansion', 'kind', 'groupLabel', 'href', 'text', 'name', 'version', 'raw', 'syntax', 'form',
   'tocTarget', 'generatedId', 'src', 'alt', 'tooltip', 'targetKind', 'resourceId', 'path', 'section', 'spacing',
   'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
-  'mode', 'locatorLabel', 'locatorValue', 'value', 'astVersion', 'lang', 'refForm', 'role',
+  'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope',
 ]
 const INTEGERS = ['n', 'number', 'level', 'headRows', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
-const BOOLEANS = ['display', 'header', 'decorative', 'suppressAuthor', 'useIndex']
+const BOOLEANS = ['display', 'header', 'decorative', 'useIndex']
 const TRUE_ONLY = ['authored']
-const INLINE_SLOTS = ['short', 'prefix', 'locator', 'suffix', 'base', 'annotation']
+const INLINE_SLOTS = ['short', 'prefix', 'suffix', 'base', 'annotation']
 const POSITION_FIELDS = ['startLine', 'endLine', 'startColumn', 'endColumn', 'startOffset', 'endOffset']
 
 // The values of the fields that take one of a fixed set, by node type and field; `*` is every type.
@@ -147,6 +148,8 @@ const ENUMS = new Map<string, readonly string[]>([
   ['image.refForm', ['full', 'collapsed']],
   ['xref.display', ['number', 'page', 'title', 'full']],
   ['paragraph.role', ['image', 'math']],
+  ['citation.mode', ['normal', 'author-in-text', 'suppress-author']],
+  ['table_cell.scope', ['row', 'col', 'rowgroup', 'colgroup']],
   ['list.spacing', ['tight', 'loose']],
   ['table_cell.span', ['rowspan', 'colspan']],
   ['table_cell.align', ['left', 'right', 'center']],
@@ -199,6 +202,23 @@ function checkPairs(value: Value, path: string): void {
   requireArray(value, path).forEach((pair, index) => {
     if (!isPair(pair)) fail(`${path}/${index}`, 'not a pair of two strings')
   })
+}
+
+/** C2-A-181: decoded values under the six include option names. */
+function checkOption(name: string, item: Value, path: string): void {
+  if (name === 'lines' || name === 'region' || name === 'rows') requireString(item, path)
+  else if (name === 'cols') {
+    if (typeof item !== 'string') checkStrings(item, path)
+  } else if (name === 'shift') {
+    if (item !== 'auto' && !Number.isInteger(item)) fail(path, 'not an integer or auto')
+  } else if (name === 'code') {
+    if (item !== true) requireString(item, path)
+  } else fail(path, 'not an include option')
+}
+
+function checkOptions(value: Value, path: string): void {
+  if (!isRecord(value)) fail(path, 'options is not an object')
+  for (const [name, item] of Object.entries(value)) checkOption(name, item, `${path}/${name}`)
 }
 
 /** C2-A-032, C2-A-034: an optional id, a list of classes and a list of pairs; `id` and `class` are no keys. */
@@ -254,9 +274,47 @@ function checkOrderedMarker(value: Fields, path: string): void {
 /** C2-A-060, C2-A-061: the status follows from the mark. */
 function checkTask(value: Value, path: string): void {
   if (!isRecord(value)) fail(path, 'task is not an object')
-  const status = TASK_STATUS.get(value['mark'] as string)
-  if (status === undefined) fail(`${path}/mark`, 'unknown task mark')
-  if (value['status'] !== status) fail(`${path}/status`, 'the status does not follow from the mark')
+  for (const name of Object.keys(value)) if (name !== 'mark') fail(`${path}/${name}`, 'not a field of task')
+  if (typeof value['mark'] !== 'string' || !TASK_STATUS.has(value['mark'])) fail(`${path}/mark`, 'unknown task mark')
+}
+
+function checkStrings(value: Value, path: string): void {
+  requireArray(value, path).forEach((item, index) => requireString(item, `${path}/${index}`))
+}
+
+function checkBibliography(value: Value, path: string, walk: Walk): void {
+  if (!isRecord(value)) fail(path, 'bibliography is not an object')
+  for (const [name, item] of Object.entries(value)) {
+    const at = `${path}/${name}`
+    if (name === 'title' || name === 'containerTitle') checkList(item, at, 'inlines', walk)
+    else if (name === 'authors') checkStrings(item, at)
+    else if (name === 'issued' || name === 'doi' || name === 'url') requireString(item, at)
+    else fail(at, 'not a field of bibliography')
+  }
+}
+
+/** C2-A-030, C2-A-121: metadata has only its typed fields and node-bearing slots. */
+function checkMetadata(value: Value, path: string, walk: Walk): void {
+  if (!isRecord(value)) fail(path, 'metadata is not an object')
+  for (const [name, item] of Object.entries(value)) {
+    const at = `${path}/${name}`
+    if (name === 'title' || name === 'subtitle') checkList(item, at, 'inlines', walk)
+    else if (name === 'authors') checkStrings(item, at)
+    else if (name === 'date') requireString(item, at)
+    else if (name === 'bibliography') checkBibliography(item, at, walk)
+    else fail(at, 'not a field of metadata')
+  }
+}
+
+function checkLocator(value: Value, path: string, walk: Walk): void {
+  if (!isRecord(value)) fail(path, 'locator is not an object')
+  for (const name of Object.keys(value)) if (name !== 'label' && name !== 'children') fail(`${path}/${name}`, 'not a field of locator')
+  if (value['label'] !== undefined) requireString(value['label'], `${path}/label`)
+  checkList(value['children'], `${path}/children`, 'inlines', walk)
+}
+
+function checkHeaderIds(value: Value, path: string): void {
+  checkStrings(value, path)
 }
 
 function checkEnum(type: string, name: string, value: Value, path: string): void {
@@ -373,11 +431,14 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['pos', checkPosition],
   ['segments', (value, path) => requireArray(value, path).forEach((range, index) => checkPosition(range, `${path}/${index}`))],
   ['data', checkObject],
-  ['metadata', checkObject],
+  ['metadata', checkMetadata],
   ['props', checkObject],
   ['marker', checkMarker],
   ['task', checkTask],
-  ['options', checkPairs],
+  ['options', checkOptions],
+  ['locator', checkLocator],
+  ['longDescription', nodeList('blocks')],
+  ['headerIds', checkHeaderIds],
   ['title', checkTitle],
   ['caption', (value, path, walk) => checkNode(value, path, ['caption'], walk)],
   ['fallback', (value, path, walk, node) => {
@@ -412,9 +473,10 @@ function checkDependencies(node: Fields, type: string, path: string): void {
     const present = ['key', 'namespace', 'refForm'].filter((name) => node[name] !== undefined).length
     if (present !== 0 && present !== 3) fail(path, 'key, namespace and refForm stand together or not at all')
   }
-  if (type === 'citation_group' && node['mode'] !== undefined) {
-    const items = node['children'] as Fields[]
-    if (items.some((item) => item['mode'] === undefined)) fail(path, 'a group mode needs a mode on every citation')
+  if (type === 'image') {
+    const alt = node['alt'] !== undefined
+    const decorative = node['decorative'] === true
+    if (alt === decorative) fail(path, 'decorative is true exactly when alt is absent')
   }
 }
 

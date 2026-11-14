@@ -747,7 +747,7 @@
    "C2-H-143"
   ],
   "input": "- [ ] [^n]: t\n\t\t> x\n  tail\n\nx[^n]\n",
-  "html": "<ul class=\"task-list\">\n  <li class=\"task\"><input type=\"checkbox\" disabled aria-label=\": t &gt; x tail\"> [^n]: t\n&gt; x\ntail</li>\n</ul>\n<p>x[^n]</p>"
+  "html": "<ul class=\"task-list\">\n  <li class=\"task\" style=\"list-style: none\"><input type=\"checkbox\" disabled aria-label=\": t &gt; x tail\"> [^n]: t\n&gt; x\ntail</li>\n</ul>\n<p>x[^n]</p>"
  },
  {
   "ticket": "carve#5898",
@@ -760,7 +760,7 @@
    "C2-H-143"
   ],
   "input": "- [ ] [^n]: t\n\t\t- x\n\nx[^n]\n",
-  "html": "<ul class=\"task-list\">\n  <li class=\"task\"><input type=\"checkbox\" disabled aria-label=\": t\"> [^n]: t\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>\n<p>x[^n]</p>"
+  "html": "<ul class=\"task-list\">\n  <li class=\"task\" style=\"list-style: none\"><input type=\"checkbox\" disabled aria-label=\": t\"> [^n]: t\n    <ul>\n      <li>x</li>\n    </ul>\n  </li>\n</ul>\n<p>x[^n]</p>"
  },
  {
   "ticket": "carve#5894",

@@ -94,7 +94,10 @@ function isTextParagraph(node: Node | undefined): node is ParagraphNode {
 
 /** Writes `node` through the writer of its type, where it has one. */
 function writeBlock<T extends keyof NodeOfType>(r: Render, type: T, node: NodeOfType[T], level: number): void {
+  const start = r.longDescriptions.length
   BLOCKS[type]?.(r, node, level)
+  const descriptions = r.longDescriptions.splice(start)
+  for (const blocks of descriptions) writeBlocks(r, blocks, level)
 }
 
 function writeBlocks(r: Render, nodes: readonly Node[], level: number): void {
@@ -213,7 +216,8 @@ function itemOpen(r: Render, node: ListItemNode): string {
   const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
   const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
   const label = escapeAttribute(blockText(node.children))
-  return `<li${tag(r, node, { structural: state, base: ['task'] })}><input type="checkbox"${checked} disabled aria-label="${label}"> `
+  const open = `<li${tag(r, node, { structural: state, base: ['task'], style: 'list-style: none', styleFirst: true })}>`
+  return `${open}<input type="checkbox"${checked} disabled aria-label="${label}"> `
 }
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
@@ -450,7 +454,9 @@ function cellHtml(
   if (rowspan !== undefined && rowspan > 1) structural.push(['rowspan', String(rowspan)])
   const colspan = cell.colspan
   if (colspan !== undefined && colspan > 1) structural.push(['colspan', String(colspan)])
-  if (cell.header) structural.push(['scope', inHead ? 'col' : 'row'])
+  if (cell.header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
+  else if (cell.scope !== undefined) structural.push(['scope', cell.scope])
+  if (cell.headerIds !== undefined) structural.push(['headers', cell.headerIds.join(' ')])
   return `<${name}${attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })}>${cellContent(r, cell)}</${name}>`
 }
 
@@ -707,7 +713,7 @@ export function renderDocument(
 ): RenderResult {
   const r: Render = {
     settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
-    backlinkHost: null, backlinks: '', bidi,
+    backlinkHost: null, backlinks: '', bidi, longDescriptions: [],
   }
   writeDocument(r, document)
   return { html: r.out.slice(1), losses: r.losses }

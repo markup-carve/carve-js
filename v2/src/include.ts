@@ -1,5 +1,5 @@
 // The include directive (C2-B-201 to C2-B-206): its shape on one line, and what its options make of the line.
-import { type IncludeNode } from './ast.ts'
+import { type IncludeNode, type IncludeOptions } from './ast.ts'
 import { unescape } from './attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
@@ -34,7 +34,8 @@ interface Shape {
 interface IncludeParts {
   path: string
   section: string | null
-  options: [string, string][]
+  options: IncludeOptions
+  optionSpelling: Record<string, string>
   /** The offset behind the closing braces, where the node ends (C2-A-182). */
   end: number
 }
@@ -187,21 +188,26 @@ function isLanguage(value: string): boolean {
   return value !== ''
 }
 
-/** A double-quoted list of names separated by commas: no name is empty, and a backslash takes the next character. */
-function isNameList(written: string): boolean {
-  if (written.length < 2 || written.charCodeAt(0) !== QUOTE_MARK) return false
-  let length = 0
+/** C2-A-181: a double-quoted column name list, with backslash escapes removed. */
+function nameList(written: string): string[] | null {
+  if (written.length < 2 || written.charCodeAt(0) !== QUOTE_MARK) return null
+  const names: string[] = []
+  let name = ''
   for (let p = 1; p < written.length - 1; p++) {
     const code = written.charCodeAt(p)
     if (code === COMMA) {
-      if (length === 0) return false
-      length = 0
-      continue
+      if (name === '') return null
+      names.push(name)
+      name = ''
+    } else if (code === BACKSLASH && p + 1 < written.length - 1) {
+      name += written[++p]
+    } else {
+      name += written[p]
     }
-    if (code === BACKSLASH) p++
-    length++
   }
-  return length > 0
+  if (name === '') return null
+  names.push(name)
+  return names
 }
 
 // The shapes a parse tells apart. A range is not among them: outside its shape, an option that takes
@@ -229,31 +235,48 @@ function optionVerdict(key: string, written: string | null): string {
   return shape === undefined || shape(valueText(written)) ? 'valid' : rule.outsideShape
 }
 
-/** The options of `shape` as pairs in the order of C2-A-181, or null when one of them makes the line a paragraph (C2-B-206). */
-/** C2-A-181: the value an option keeps. A list of column names keeps its quotes. */
-function keptValue(key: string, written: string | null): string {
-  if (written === null) return ''
-  return key === 'cols' && isNameList(written) ? written : valueText(written)
+/** C2-A-181: one decoded option value. */
+export function decodedOption(key: string, written: string | null): string | string[] | number | true {
+  if (written === null) return key === 'code' ? true : ''
+  if (key === 'cols') return nameList(written) ?? valueText(written)
+  const text = valueText(written)
+  return key === 'shift' && text !== 'auto' ? Number(text) : text
 }
 
-function optionPairs(src: string, shape: Shape): [string, string][] | null {
-  const values = new Map<string, string>()
+function optionValue(options: IncludeOptions | undefined, key: string): string | string[] | number | true | undefined {
+  if (options === undefined) return undefined
+  switch (key) {
+    case 'lines': return options.lines
+    case 'region': return options.region
+    case 'rows': return options.rows
+    case 'cols': return options.cols
+    case 'shift': return options.shift
+    case 'code': return options.code
+    default: return undefined
+  }
+}
+
+function optionValues(src: string, shape: Shape): { options: IncludeOptions, spelling: Record<string, string> } | null {
+  const first = new Map<string, string | null>()
   const options = shape.options
   for (let at = 0; at < options.length; at += 4) {
     const key = src.slice(options[at], options[at + 1])
     const written = options[at + 2] === NONE ? null : src.slice(options[at + 2], options[at + 3])
-    const repeated = values.has(key)
+    const repeated = first.has(key)
     const verdict = repeated ? INCLUDE_OPTIONS.get(key)?.repeated : optionVerdict(key, written)
     if (verdict === 'paragraph' || verdict === undefined) return null
     // C2-A-181: a repeated option keeps the first one.
-    if (!repeated) values.set(key, keptValue(key, written))
+    if (!repeated) first.set(key, written)
   }
-  const pairs: [string, string][] = []
+  const values: IncludeOptions = {}
+  const spelling: Record<string, string> = {}
   for (const key of INCLUDE_OPTIONS.keys()) {
-    const value = values.get(key)
-    if (value !== undefined) pairs.push([key, value])
+    if (!first.has(key)) continue
+    const written = first.get(key) ?? null
+    Object.assign(values, { [key]: decodedOption(key, written) })
+    if (written !== null) spelling[key] = written
   }
-  return pairs
+  return { options: values, spelling }
 }
 
 /**
@@ -263,12 +286,12 @@ function optionPairs(src: string, shape: Shape): [string, string][] | null {
 export function readInclude(src: string, pos: number, end: number): IncludeParts | null {
   const shape = readShape(src, pos, end)
   if (shape === null || shape.twoSections) return null
-  const options = optionPairs(src, shape)
-  if (options === null) return null
+  const values = optionValues(src, shape)
+  if (values === null) return null
   // C2-B-202: a double-quoted path has its escapes read, and a path in curly quotes is read as written.
   const path = shape.pathQuote === QUOTE_MARK ? unescape(src, shape.pathStart, shape.pathEnd) : src.slice(shape.pathStart, shape.pathEnd)
   const section = shape.sectionStart === NONE ? null : src.slice(shape.sectionStart, shape.sectionEnd)
-  return { path, section, options, end: shape.end }
+  return { path, section, options: values.options, optionSpelling: values.spelling, end: shape.end }
 }
 
 /** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */
@@ -294,29 +317,30 @@ function isBareValue(value: string): boolean {
 }
 
 /** One option of a directive: the key alone for no value, and a value quoted where the bare form does not hold it. */
-function includeOption(name: string, value: string): string {
-  // C2-A-181: a part of a supplied tree that is no option is kept as its text.
-  if (name === '') return value
-  if (value === '') return `@${name}`
-  // C2-A-181: a list of column names keeps the quotes it was written in.
-  const bare = (name === 'cols' && value.startsWith('"')) || isBareValue(value)
-  return `@${name}:${bare ? value : quoted(value)}`
+function includeOption(name: string, value: string | string[] | number | true, spelling?: string): string {
+  if (value === true) return `@${name}`
+  if (spelling !== undefined && JSON.stringify(decodedOption(name, spelling)) === JSON.stringify(value)) {
+    return `@${name}:${spelling}`
+  }
+  if (Array.isArray(value)) {
+    const names = value.map((part) => part.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll(',', '\\,'))
+    return `@${name}:"${names.join(',')}"`
+  }
+  const text = String(value)
+  if (text === '') return `@${name}`
+  return `@${name}:${isBareValue(text) ? text : quoted(text)}`
 }
 
 const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
 
-function optionRank(name: string): number {
-  const rank = OPTION_ORDER.indexOf(name)
-  return rank < 0 ? OPTION_ORDER.length : rank
-}
-
 /** C2-W-058, C2-H-133, C2-H-171: the one spelling of an include directive, which the writer writes and the renderer shows. */
-export function includeSource(node: IncludeNode): string {
+export function includeSource(node: IncludeNode, spelling?: Record<string, string>): string {
   const path = node.path
   const parts = [isBarePath(path) ? path : quoted(path)]
   if (node.section !== undefined) parts.push(`#${node.section}`)
-  // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.
-  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
-  for (const [name, value] of options) parts.push(includeOption(name, value))
+  for (const name of OPTION_ORDER) {
+    const value = optionValue(node.options, name)
+    if (value !== undefined) parts.push(includeOption(name, value, spelling?.[name]))
+  }
   return `{{ ${parts.join(' ')} }}`
 }

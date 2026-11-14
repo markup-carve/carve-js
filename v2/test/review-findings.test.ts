@@ -71,15 +71,15 @@ describe('reading a supplied tree', () => {
 
   it('C2-A-131: an image and an extension name resources of the manifest', () => {
     const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
-    expect(refusal(inParagraph({ type: 'image', resourceId: 'missing' }))).toBe('/children/0/children/0/resourceId: no resource has the id "missing"')
-    expect(refusal({ ...inParagraph({ type: 'image', resourceId: 'r' }), resources })).toBeNull()
+    expect(refusal(inParagraph({ type: 'image', resourceId: 'missing', decorative: true }))).toBe('/children/0/children/0/resourceId: no resource has the id "missing"')
+    expect(refusal({ ...inParagraph({ type: 'image', resourceId: 'r', decorative: true }), resources })).toBeNull()
     const extension = { type: 'inline_extension', name: 'a.b', children: [], resourceIds: ['r', 'q'] }
     expect(refusal({ ...inParagraph(extension), resources })).toBe('/children/0/children/0/resourceIds/1: no resource has the id "q"')
   })
 
   it('C2-A-132: references are counted in every slot that holds nodes, ruby pairs and extension slots included', () => {
     const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
-    const images = (count: number): unknown[] => Array.from({ length: count }, () => ({ type: 'image', resourceId: 'r' }))
+    const images = (count: number): unknown[] => Array.from({ length: count }, () => ({ type: 'image', resourceId: 'r', decorative: true }))
     const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: images(count), annotation: [] }] }), resources })
     expect(refusal(ruby(4096))).toBeNull()
     expect(refusal(ruby(4097))).toBe('/children/0/children/0/pairs/0/base/4096: more than 4096 resource references')
@@ -193,9 +193,9 @@ describe('the spelling of an include directive', () => {
   })
 
   it('C2-B-204: a value that starts with a quote is written in quotes, so it reads back as the same value', () => {
-    const tree = JSON.stringify({ type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', options: [['lines', "'1"]] }] })
+    const tree = JSON.stringify({ type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', options: { lines: "'1" } }] })
     expect(write(decodeTree(tree))).toBe('{{ a.crv @lines:"\'1" }}\n')
-    expect(parse(write(decodeTree(tree))).children[0]).toMatchObject({ options: [['lines', "'1"]] })
+    expect(parse(write(decodeTree(tree))).children[0]).toMatchObject({ options: { lines: "'1" } })
   })
 })
 

@@ -37,7 +37,41 @@ export interface Marker {
 /** C2-A-060, C2-A-061. */
 export interface Task {
   mark: string
-  status: string
+}
+
+/** C2-A-121: the structured fields of a bibliography entry. */
+export interface BibliographyMetadata {
+  title?: Inline[]
+  containerTitle?: Inline[]
+  authors?: string[]
+  issued?: string
+  doi?: string
+  url?: string
+}
+
+/** C2-A-030: the typed metadata of a node. */
+export interface Metadata {
+  title?: Inline[]
+  subtitle?: Inline[]
+  authors?: string[]
+  date?: string
+  bibliography?: BibliographyMetadata
+}
+
+/** C2-A-120: a citation locator and its inline text. */
+export interface CitationLocator {
+  label?: string
+  children: Inline[]
+}
+
+/** C2-A-181: decoded include options. */
+export interface IncludeOptions {
+  lines?: string
+  region?: string
+  rows?: string
+  cols?: string | string[]
+  shift?: number | 'auto'
+  code?: string | true
 }
 
 export interface ExtensionDeclaration {
@@ -157,10 +191,11 @@ export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER):
 function visitInlineSlots(node: Node, visit: SlotVisitor): void {
   if (node.type === 'caption' && node.short !== undefined) visit(node.short, 'short', false)
   if (node.type === 'citation') {
-    for (const name of ['prefix', 'locator', 'suffix'] as const) {
+    for (const name of ['prefix', 'suffix'] as const) {
       const list = node[name]
       if (list !== undefined) visit(list, name, false)
     }
+    if (node.locator !== undefined) visit(node.locator.children, 'locator/children', false)
   }
   if (node.type === 'ruby') {
     node.pairs.forEach((pair, at) => {

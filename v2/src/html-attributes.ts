@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type Node, type ParagraphNode } from './ast.ts'
+import { type Block, type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings } from './options.ts'
@@ -26,6 +26,8 @@ export interface Render {
   backlinks: string
   /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
   bidi: boolean
+  /** C2-H-080: descriptions awaiting the end of the containing block. */
+  longDescriptions: Block[][]
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */
@@ -48,6 +50,8 @@ export interface TagParts {
   alignStyle?: boolean
   /** Declarations that follow the authored `style` (C2-H-057). */
   style?: string
+  /** C2-H-032: the item declaration precedes an authored style. */
+  styleFirst?: boolean
   /** C2-H-011: the id stands before the structural attributes, or the class does. */
   idFirst?: boolean
   classFirst?: boolean
@@ -362,8 +366,9 @@ interface StyleFacts {
 }
 
 /** The value of the `style` key: the declarations of the other keys follow what the author wrote. */
-function styleValue(value: string, declarations: string): string {
+function styleValue(value: string, declarations: string, first: boolean): string {
   const written = keyValue('style', value)
+  if (first && declarations !== '') return written === '' ? declarations : `${declarations}; ${written}`
   return declarations === '' ? written : withDeclaration(written, declarations)
 }
 
@@ -375,7 +380,7 @@ function addKeyValue(
   if (r.settings.roundtrip && CARRIERS.has(name)) {
     return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
   }
-  if (name === 'style') return list.add(key, styleValue(value, style.declarations))
+  if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
   if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) return list.add(key, keyValue(name, value))
   if (!style.hasStyle) list.add('style', style.declarations)
 }

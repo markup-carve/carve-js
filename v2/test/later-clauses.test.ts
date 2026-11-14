@@ -112,7 +112,7 @@ describe('the cols value of an include', () => {
   })
 
   it('C2-W-058: the writer writes a stored cols value with no second pair', () => {
-    expect(write(documentOf({ type: 'include', path: 'a.crv', options: [['cols', '"a b"']] }))).toBe('{{ a.crv @cols:"a b" }}\n')
+    expect(write(documentOf({ type: 'include', path: 'a.crv', options: { cols: ['a b'] } }))).toBe('{{ a.crv @cols:"a b" }}\n')
   })
 
   it('C2-H-171: the renderer writes a cols value that kept its quotes as stored', () => {

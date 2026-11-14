@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   type Block, type BlockExtensionNode, type DocumentNode, type ImageNode, type Inline, type InlineExtensionNode, type LinkNode,
+  type Metadata,
   type TableCellNode,
 } from '../src/ast.ts'
 import { decodeTree, encodeEnvelope, treesEqual } from '../src/ast-json.ts'
@@ -163,7 +164,7 @@ describe('more edges', () => {
   it('an object with more fields than another is not equal to it, and an empty quoted option value is empty', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1 } }), documentOf({ ...paragraph(), data: { a: 1, b: 2 } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1 } }))).toBe(false)
-    expect(ofType(block('{{ a.crv @rows:"" @region:"x" }}'), 'include').options).toEqual([['region', 'x'], ['rows', '']])
+    expect(ofType(block('{{ a.crv @rows:"" @region:"x" }}'), 'include').options).toEqual({ region: 'x', rows: '' })
   })
 })
 
@@ -180,17 +181,15 @@ describe('the reader at its bounds', () => {
     expect(MAX_TREE_DEPTH).toBe(416)
   })
 
-  it('accepts metadata of 64 levels, 4096 resource references and 32 nested fallbacks, and refuses one more', () => {
-    const metadata = (levels: number): DocumentNode => {
-      let value: Record<string, unknown> = { a: 1 }
-      for (let level = 1; level < levels; level++) value = { a: value }
-      return documentOf({ ...paragraph(), metadata: value })
-    }
-    expect([refusal(metadata(64)), refusal(metadata(65)) === null]).toEqual([null, false])
+  it('accepts typed metadata, 4096 resource references and 32 nested fallbacks, and refuses one more', () => {
+    expect(refusal(documentOf({ ...paragraph(), metadata: { authors: ['A'] } }))).toBeNull()
+    expect(refusal(documentOf({ ...paragraph(), metadata: { a: 1 } as unknown as Metadata })))
+      .toBe('/children/0/metadata/a: not a field of metadata')
     // C2-A-131: every reference names an entry of the manifest.
     const references = (count: number): DocumentNode => ({
       ...documentOf(paragraph(
-        { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') }, { type: 'image', resourceId: 'r' },
+        { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') },
+        { type: 'image', resourceId: 'r', decorative: true },
       )),
       resources: [{ id: 'r', mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` }],
     })
@@ -214,8 +213,10 @@ describe('the reader at its bounds', () => {
     const heading = (level: unknown): DocumentNode => documentOf({ type: 'heading', level, children: [] } as unknown as Block)
     expect([refusal(heading(0)), refusal(heading(-1)) === null, refusal(heading(1.5)) === null, refusal(heading('1')) === null]).toEqual([null, false, false, false])
     const include = (options: unknown): DocumentNode => documentOf({ type: 'include', path: 'a', options } as unknown as Block)
-    expect(refusal(include([['a', 'b']]))).toBeNull()
-    for (const bad of [[['a']], [['a', 1]], [[1, 'b']], ['ab'], [['a', 'b', 'c']]]) expect(refusal(include(bad))).toBe('/children/0/options/0: not a pair of two strings')
+    expect(refusal(include({ lines: '1-2', code: true }))).toBeNull()
+    expect(refusal(include([['a', 'b']]))).toBe('/children/0/options: options is not an object')
+    expect(refusal(include({ shift: 'x' }))).toBe('/children/0/options/shift: not an integer or auto')
+    expect(refusal(include({ cols: [1] }))).toBe('/children/0/options/cols/0: not a string')
     const ruby = (pair: unknown): DocumentNode => documentOf(paragraph({ type: 'ruby', pairs: [pair] } as unknown as Inline))
     expect(refusal(ruby({ type: 'ruby_pair', base: [text('a')], annotation: [] }))).toBeNull()
     expect(refusal(ruby({ type: 'pair', base: [], annotation: [] }))).toBe('/children/0/children/0/pairs/0: unknown node type pair')
@@ -293,13 +294,14 @@ describe('equality in detail', () => {
 
 describe('one-line blocks in detail', () => {
   it('an include directive reads quoted values and an at-sign that starts the next option, and a part that is no option makes it text', () => {
-    expect(ofType(block('{{ a.crv @cols:"p q" @code:\'r+s\' @shift:1@lines:2-3 }}'), 'include').options).toEqual([['lines', '2-3'], ['cols', '"p q"'], ['shift', '1'], ['code', 'r+s']])
+    expect(ofType(block('{{ a.crv @cols:"p q" @code:\'r+s\' @shift:1@lines:2-3 }}'), 'include').options)
+      .toEqual({ lines: '2-3', cols: ['p q'], shift: 1, code: 'r+s' })
     expect(block('{{ a.crv plain @code }}').type).toBe('paragraph')
     expect(block('{{ a.crv @:v }}').type).toBe('paragraph')
     expect(block('{{ a.crv @rows: }}').type).toBe('paragraph')
-    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').options).toEqual([['rows', 'a " @b']])
+    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').options).toEqual({ rows: 'a " @b' })
     expect(block('{{ a.crv @rows:"x }}').type).toBe('paragraph')
-    expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: [['code', 'v']] })
+    expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: { code: 'v' } })
     expect(block('{{ "a \\" b.crv" #s }}')).toEqual({ type: 'include', path: 'a " b.crv', section: 's' })
     expect(block('{{ a.crv }}  ')).toEqual({ type: 'include', path: 'a.crv' })
     expect(render('{{ a.crv   @code:v }}')).toBe('<p>{{ a.crv @code:v }}</p>')

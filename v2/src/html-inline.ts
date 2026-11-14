@@ -170,6 +170,7 @@ function link(node: LinkNode, r: Render): string {
 }
 
 function image(node: ImageNode, r: Render): string {
+  if (node.longDescription !== undefined) r.longDescriptions.push(node.longDescription)
   const key = node.key
   const src = node.src
   const alt = node.alt ?? ''

@@ -3,6 +3,7 @@
 import { isRecord } from './ast.ts'
 import { LAYOUT_VERSION, type SourceLayout } from './layout.ts'
 import { utf8Length } from './positions.ts'
+import { INCLUDE_OPTIONS } from './render-tables.ts'
 
 /** A record that a reader refuses. `path` is an RFC 6901 pointer to the field inside the record. */
 export class CarveLayoutError extends Error {
@@ -73,6 +74,14 @@ const checkWraps: Check = (value, path) => {
   })
 }
 
+const checkOptionSpelling: Check = (value, path) => {
+  if (!isRecord(value)) fail(path, 'is not an object')
+  for (const [name, written] of Object.entries(value)) {
+    if (!INCLUDE_OPTIONS.has(name)) fail(`${path}/${name}`, 'is not an include option')
+    checkString(written, `${path}/${name}`)
+  }
+}
+
 /** C2-L-009: the facts an entry may have, each with the check of its value. */
 const FACTS = new Map<string, Check>([
   ['bare', checkBoolean],
@@ -81,6 +90,7 @@ const FACTS = new Map<string, Check>([
   ['wraps', checkWraps],
   ['continuationLines', (value, path) => void checkCount(value, path)],
   ['rawRef', checkString],
+  ['optionSpelling', checkOptionSpelling],
   ['sourceFormat', oneOf(['pipe', 'csv', 'tsv'])],
   ['markerRaw', checkString],
   ['markerColumn', (value, path) => void checkCount(value, path)],
