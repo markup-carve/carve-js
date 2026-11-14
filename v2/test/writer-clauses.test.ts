@@ -307,6 +307,9 @@ describe('layout', () => {
     expect(format('| a |\n^ c\n      d')).toBe('| a |\n^ c\n  d\n')
     expect(format(':: term\n      more\n: d')).toBe(':: term\n   more\n: d\n')
     expect(format('  - a\n  - b')).toBe('- a\n- b\n')
+    // C2-B-030, C2-B-054: markers left of the list above are siblings, written at the list's column.
+    expect(format('  - a\n- b\n  c')).toBe('- a\n- b\n  c\n')
+    expect(format(' 9. a\n10. b')).toBe('9. a\n10. b\n')
   })
 
   it('C2-W-025: one space follows a marker, two an uppercase marker with a dot, and the content column moves with it', () => {
@@ -328,6 +331,7 @@ describe('layout', () => {
   it('C2-W-026: a continuation line that would read as a list marker is kept text by an escape', () => {
     expect(format('- a\n  \\- b')).toBe('- a\n  \\- b\n')
     expect(format('- a\n  1\\. b')).toBe('- a\n  1\\. b\n')
+    expect(format('- a\n  - x\n    \\- y')).toBe('- a\n  - x\n    \\- y\n')
   })
 
   it('C2-W-027: a first block that is not a paragraph has its opener on the marker line', () => {
