@@ -1,7 +1,7 @@
 // The clauses that the specification commits after "fix what the review of today's clauses found"
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, formatWithDiagnostics, render, renderWithDiagnostics, write } from '../src/index.ts'
+import { type AstNode, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, write } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const CONTROLS = '‪‮⁦⁩'
@@ -116,5 +116,30 @@ describe('the cols value of an include', () => {
 
   it('C2-H-171: the renderer writes a cols value that kept its quotes as stored', () => {
     expect(render('{{ a.crv @cols:"a b" }}')).toBe('<p>{{ a.crv @cols:"a b" }}</p>')
+  })
+})
+
+describe('the bracket label', () => {
+  const fence = TICK.repeat(3)
+
+  it('C2-A-187: the bracket label of a code block is the string groupLabel, with no inline parsing', () => {
+    expect(parse(`${fence}js [Tab *x*]\nx\n${fence}`, { positions: false }).children?.[0]).toEqual(
+      { type: 'code_block', value: 'x\n', syntax: 'js', groupLabel: 'Tab *x*' })
+  })
+
+  it('C2-B-121: the label renders nothing on a code fence', () => {
+    expect(render(`${fence}js [Tab]\nx\n${fence}`)).toBe('<pre><code class="language-js">x\n</code></pre>')
+  })
+
+  it('C2-B-121: the label is the label paragraph on a div, an admonition and a directive', () => {
+    expect(render('::: [Tab *x*]\nx\n:::')).toBe('<div>\n  <p class="div-label">Tab *x*</p>\n  <p>x</p>\n</div>')
+    expect(render('::: tip [L]\nx\n:::')).toContain('<p class="div-label">L</p>')
+    expect(render('::: toc [L]\n:::')).toBe('<div class="toc">\n  <p class="div-label">L</p>\n</div>')
+  })
+
+  it('C2-B-119: a label may stand with no name or language before it', () => {
+    expect(parse('::: [L]\nx\n:::', { positions: false }).children?.[0]).toMatchObject({ type: 'div', groupLabel: 'L' })
+    expect(parse(`${fence} [L]\nx\n${fence}`, { positions: false }).children?.[0]).toEqual({ type: 'code_block', value: 'x\n', groupLabel: 'L' })
+    expect(format('::: [L]\nx\n:::')).toBe('::: [L]\nx\n:::\n')
   })
 })

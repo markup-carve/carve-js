@@ -18,10 +18,20 @@ export interface OpenerInfo {
   extra: boolean
 }
 
-/** Reads the opener line from `pos`, the offset behind the run. */
+/** The offset of the first closing bracket after `p` on the line, or -1. A search to `end` keeps it linear. */
+function labelClose(src: string, p: number, end: number): number {
+  for (let at = p + 1; at < end; at++) if (src.charCodeAt(at) === BRACKET_CLOSE) return at
+  return -1
+}
+
+/** C2-B-119: a title or a label may stand with no word before it. */
+function startsLabel(src: string, p: number, end: number): boolean {
+  return src.charCodeAt(p) === BRACKET_OPEN && labelClose(src, p, end) >= 0
+}
+
 /** Reads the word at `p` into `info` and returns the offset behind it and the spaces after it. */
 function readWord(src: string, p: number, end: number, info: OpenerInfo): number {
-  if (p >= end || src.charCodeAt(p) === QUOTE_MARK) return p
+  if (p >= end || src.charCodeAt(p) === QUOTE_MARK || startsLabel(src, p, end)) return p
   info.wordStart = p
   while (p < end && !isSpaceOrTab(src.charCodeAt(p))) p++
   info.wordEnd = p
@@ -41,13 +51,14 @@ function readTitle(src: string, p: number, end: number, info: OpenerInfo): numbe
 /** Reads the bracketed label at `p` into `info` and returns the offset behind it and the spaces after it. */
 function readLabel(src: string, p: number, end: number, info: OpenerInfo): number {
   if (p >= end || src.charCodeAt(p) !== BRACKET_OPEN) return p
-  const close = src.indexOf(']', p)
-  if (close < 0 || close >= end) return p
+  const close = labelClose(src, p, end)
+  if (close < 0) return p
   info.labelStart = p + 1
   info.labelEnd = close
   return skipSpaces(src, close + 1, end)
 }
 
+/** Reads the opener line from `pos`, the offset behind the run. */
 export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   let end = pos
   while (end < src.length && src.charCodeAt(end) !== LF && src.charCodeAt(end) !== CR) end++
