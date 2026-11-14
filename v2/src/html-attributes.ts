@@ -2,7 +2,7 @@
 import { type Block, type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
-import { type Settings } from './options.ts'
+import { type Settings, type UrlPolicy } from './options.ts'
 import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
 import { type Resolution } from './resolve.ts'
 import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
@@ -188,7 +188,7 @@ function isProbeRemoved(code: number): boolean {
 }
 
 /** C2-H-159: the scheme of `url` in lower case, or the empty string when it has none. */
-function schemeOf(url: string): string {
+export function urlScheme(url: string): string {
   let removed = false
   for (let at = 0, length = 0; at < url.length; at++) {
     const code = url.charCodeAt(at)
@@ -197,6 +197,15 @@ function schemeOf(url: string): string {
     else if (length++ === 0 ? !isAsciiLetter(code) : !isSchemeCharacter(code)) return ''
   }
   return ''
+}
+
+/** C2-H-159, C2-H-173: whether a URL sink passes the same scheme test as the HTML renderer. */
+export function isUrlAllowed(url: string, policy: UrlPolicy = {}): boolean {
+  const scheme = urlScheme(url)
+  if (scheme === '') return true
+  if (policy.allow !== undefined) return policy.allow.some((allowed) => allowed.toLowerCase() === scheme)
+  const denied = policy.deny ?? DEFAULT_DENIED_SCHEMES
+  return !denied.some((item) => item.toLowerCase() === scheme)
 }
 
 /** The scheme that ends before `colon`, in lower case and without the characters that C2-H-159 removes. */
@@ -209,7 +218,7 @@ function schemeText(url: string, colon: number, removed: boolean): string {
 
 /** C2-H-160: whether the scheme of `url` passes the URL policy. A URL with no scheme passes. */
 function schemePasses(r: Render, url: string): boolean {
-  const scheme = schemeOf(url)
+  const scheme = urlScheme(url)
   if (scheme === '') return true
   const settings = r.settings
   return settings.allowed !== null ? settings.allowed.has(scheme) : !settings.denied!.has(scheme)

@@ -55,6 +55,9 @@ export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } 
 export { type LayoutEntry, write, type WriteOptions, type WriteOutput, writeWithDiagnostics } from './write.ts'
 export { displayWidth } from './width.ts'
 export { type Diagnostic } from './diagnostics.ts'
+/** C2-H-173: shared scheme test and default policy data for consumers of URL sinks. */
+export { isUrlAllowed, urlScheme } from './html-attributes.ts'
+export { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */
 export function parseBlockTree(src: string): BlockNode {
