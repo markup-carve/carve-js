@@ -106,13 +106,6 @@ export function emitLines(w: Writer, prefix: string, indent: string, text: strin
   }
 }
 
-const NONE: readonly never[] = []
-
-/** The children of `node`, or none: for a node of a type the reader has not narrowed. */
-export function childNodes(node: Node): readonly Node[] {
-  return 'children' in node ? node.children : NONE
-}
-
 /** C2-W-011, C2-W-117: records that `node`, or its field `field`, could not be written. One entry per node. */
 export function lose(w: Writer, node: Node, field: string | null): void {
   if (w.lost.has(node)) return

@@ -442,7 +442,7 @@ function figureOf(ctx: TreeContext, target: Block, comments: CommentNode[], capt
 }
 
 /** The nodes of `nodes`, each made by its builder in `builders`, with each caption attached to the block above it. */
-function childNodes<N extends DocumentChild>(
+function buildChildren<N extends DocumentChild>(
   ctx: TreeContext, nodes: BlockNode[], flow: number, builders: ReadonlyMap<number, BlockBuilder<N>>,
 ): N[] {
   const list: N[] = []
@@ -454,7 +454,7 @@ function childNodes<N extends DocumentChild>(
 }
 
 function blockChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): Block[] {
-  return childNodes(ctx, nodes, flow, BUILDERS)
+  return buildChildren(ctx, nodes, flow, BUILDERS)
 }
 
 function itemChildren(ctx: TreeContext, nodes: BlockNode[], flow: number): ListItemNode[] {
@@ -503,7 +503,7 @@ function headingSource(src: string, spans: number[] | undefined): string | undef
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
 function buildDocument(ctx: TreeContext, root: BlockNode, source: string): ParsedTree {
   const src = ctx.src
-  const children = childNodes(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
+  const children = buildChildren(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
   const document: DocumentNode = { type: 'document', astVersion: AST_VERSION, children }
   if (ctx.positions) {
     document.srcByteLength = utf8Length(source)

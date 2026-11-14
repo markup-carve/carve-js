@@ -3,13 +3,13 @@
 // tree does not hold, the opener of that construct takes a backslash; where a construct of the
 // tree did not form, it takes its other spelling (C2-W-005). What neither repairs is a loss.
 import {
-  captionOf, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node, type ParagraphNode,
-  type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
+  captionOf, childNodes, type CommentNode, type DocumentNode, type EmphasisNode, isBreak, isInlineParent, isRecord, type Node,
+  type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
 import { utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
-import { type Attempt, childNodes, PLACE_COLUMNS, type Writer } from './write-state.ts'
+import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */

@@ -1,14 +1,14 @@
 // The canonical writer (spec/0.2/writer.md): a tree, and optionally the sidecar that was returned
 // with it, as Carve source (C2-W-001). Blocks that a blank line separates are written and tested
 // on their own (C2-W-089), so one block is written again only for its own escapes.
-import { captionOf, type DocumentNode, isRecord, type Node, type TextNode, titleOf } from './ast.ts'
+import { captionOf, childNodes, type DocumentNode, isRecord, type Node, type TextNode, titleOf } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
-import { childNodes, createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
+import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
 export interface LayoutEntry extends WriterFacts {

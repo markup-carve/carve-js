@@ -1,7 +1,7 @@
 // The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
 // C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
 import {
-  type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, type CodeBlockNode, type CommentNode,
+  type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode, type CommentNode,
   type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
   type FigureGroupNode, type FigureNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
@@ -11,7 +11,7 @@ import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
-import { childNodes, emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
+import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { writeTable } from './write-table.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */

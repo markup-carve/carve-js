@@ -1,12 +1,12 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
 import {
-  type AutolinkNode, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
+  type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
   type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode,
 } from './ast.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
-import { childNodes, lose, trimEnd, type Writer } from './write-state.ts'
+import { lose, trimEnd, type Writer } from './write-state.ts'
 
 /** The content stands in a table cell: a pipe in text takes a backslash (C2-W-098). */
 export const IN_CELL = 1

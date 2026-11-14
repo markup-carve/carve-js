@@ -1,11 +1,11 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
 import {
-  type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
+  childNodes, type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
-import { childNodes, emit, lose, type Writer } from './write-state.ts'
+import { emit, lose, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
 import { displayWidth } from './width.ts'
 

@@ -92,6 +92,13 @@ const BLOCK_PARENTS: readonly BlockParent['type'][] = [
 
 const BLOCK_PARENT_TYPES: ReadonlySet<string> = new Set(BLOCK_PARENTS)
 
+const NO_NODES: readonly Node[] = []
+
+/** The children of `node`, or none: for a node of a type the reader has not narrowed. */
+export function childNodes(node: Node): readonly Node[] {
+  return 'children' in node ? node.children : NO_NODES
+}
+
 /** The inline title of `node`, where it has one (C2-A-024). The title of a link definition is a string and no slot. */
 export function titleOf(node: Node): Inline[] | undefined {
   return 'title' in node && Array.isArray(node.title) ? node.title : undefined
