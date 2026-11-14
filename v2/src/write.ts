@@ -9,6 +9,7 @@ import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
+import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -374,10 +375,32 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0) return end
+    if (beyondSourceDepth(group)) {
+      const host = group[0]
+      if (host !== undefined) lose(w, host, null)
+      return end
+    }
     if (!settle(w, document, group, first && !w.blankFirst)) {
       if (w.losses.entries.length === reported) reportUnread(w, group)
       return end
     }
+  }
+}
+
+/** C2-W-011: a tree beyond the parser's nesting limit has no source that reads back as that tree. */
+function beyondSourceDepth(group: readonly Node[]): boolean {
+  const pending = group.map((node) => ({ node, depth: 0 }))
+  for (;;) {
+    const item = pending.pop()
+    if (item === undefined) return false
+    let hasChild = false
+    forEachSlot(item.node, (children) => {
+      for (const node of children) {
+        hasChild = true
+        pending.push({ node, depth: item.depth + 1 })
+      }
+    })
+    if (hasChild && item.depth > MAX_DEPTH) return true
   }
 }
 
