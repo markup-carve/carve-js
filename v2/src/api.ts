@@ -130,11 +130,24 @@ export function renderTree(resolved: ResolvedTree): string {
   throw new CarveRenderError(locateFindings(resolved.document, rendered.losses))
 }
 
+/**
+ * C2-A-172: the findings of the parse channel, each with its position: those the tree builder noted, in document
+ * order, then those of resolution. The notes get their messages here, so a parse that asks for none writes none.
+ */
+function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnostic[] {
+  const found = resolved.resolution.findings
+  const noted: Findings = { entries: [], nodes: [] }
+  parsed.facts?.addFindings(noted)
+  if (noted.entries.length === 0) return locateFindings(resolved.document, found)
+  return locateFindings(resolved.document, { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] })
+}
+
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
-  const resolved = resolveStage(buildSource(src, options?.positions !== false), settings)
-  return { document: resolved.document, diagnostics: locateFindings(resolved.document, resolved.resolution.findings) }
+  const parsed = buildSource(src, options?.positions !== false)
+  const resolved = resolveStage(parsed, settings)
+  return { document: resolved.document, diagnostics: parseDiagnostics(resolved, parsed) }
 }
 
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
@@ -150,8 +163,9 @@ export function parse(src: string, options?: ParseOptions): DocumentNode {
 export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
-  const resolved = resolveStage(buildSource(src, true, null, trace), settings)
-  const diagnostics = locateFindings(resolved.document, resolved.resolution.findings)
+  const parsed = buildSource(src, true, null, trace)
+  const resolved = resolveStage(parsed, settings)
+  const diagnostics = parseDiagnostics(resolved, parsed)
   return { document: resolved.document, diagnostics, layout: buildLayout(src, resolved.document, trace) }
 }
 
@@ -161,10 +175,10 @@ export function parseWithLayout(src: string, options?: ParseOptions): LayoutResu
  */
 export function renderWithDiagnostics(input: string | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
-  const resolved = resolveStage(inputStage(input, settings), settings)
+  const parsed = inputStage(input, settings)
+  const resolved = resolveStage(parsed, settings)
   const rendered = renderStage(resolved)
-  const found = locateFindings(resolved.document, resolved.resolution.findings)
-  const diagnostics = [...found, ...locateFindings(resolved.document, rendered.losses)]
+  const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
   return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html, diagnostics }
 }
 

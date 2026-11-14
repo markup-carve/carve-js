@@ -2,7 +2,7 @@
 // reviewer reading as an implementer and as an author" and "the escapes the procedure cannot reach, and the title of
 // a degraded admonition" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { format, parse, render } from '../src/index.ts'
+import { format, parse, parseWithDiagnostics, render, renderWithDiagnostics } from '../src/index.ts'
 
 describe('link definitions', () => {
   it('C2-B-083: the tail is that of an inline link, with a destination of at least one character', () => {
@@ -95,5 +95,75 @@ describe('comment-only lines', () => {
   it('C2-H-069: a line that holds text beside a comment keeps both breaks', () => {
     expect(render('a {% c %}\nb')).toBe('<p>a \nb</p>')
     expect(render('a\n{% c %} x\nb')).toBe('<p>a\n x\nb</p>')
+  })
+})
+
+function reports(src: string): string[] {
+  return parseWithDiagnostics(src).diagnostics.map((entry) => `${entry.code} ${entry.path} ${entry.range?.startOffset}-${entry.range?.endOffset}`)
+}
+
+function messages(src: string): string[] {
+  return parseWithDiagnostics(src).diagnostics.map((entry) => entry.message)
+}
+
+describe('the parse channel', () => {
+  it('C2-B-111: a comment block that ends with its container and one that runs to the end are two reports, and both say what they hide', () => {
+    expect(reports('> %%%\n> a\n%%%\nb')).toEqual(['unclosed-comment-fence /children/0/children/0 2-9', 'unclosed-comment-fence /children/1 10-15'])
+    expect(messages('> %%%\n> a\n%%%\nb')).toEqual([
+      'The %%% comment fence opened here has no closing fence and hides everything to the end of its container. Add a closing %%% where the comment should stop.',
+      'The %%% comment fence opened here has no closing fence and hides everything to the end of the document. Add a closing %%% where the comment should stop.',
+    ])
+  })
+
+  it('C2-B-163: frontmatter with no closer is reported, and the message says the whole document is hidden in it', () => {
+    expect(reports('---\ntitle: x\n')).toEqual(['unclosed-frontmatter /children/0 0-12'])
+    expect(messages('---\ntitle: x\n')).toEqual(['The frontmatter opened on line 1 has no closing line, so the whole document is frontmatter.'])
+  })
+
+  it('C2-B-111: a code fence and a raw block that end without their closer', () => {
+    expect(messages('```js\ncode')).toEqual([
+      'The ``` fence opened here has no closing fence; it runs to the end of the document. Add a closing ``` where the code should stop.',
+    ])
+    expect(messages('- ~~~~\n  x\ny')).toEqual([
+      'The ~~~~ fence opened here has no closing fence; it ends at the end of its container on line 2. Add a closing ~~~~ where the code should stop.',
+    ])
+    expect(reports('```=html\n<b>')).toEqual(['unclosed-code-fence /children/0 0-12'])
+  })
+
+  it('C2-B-111, C2-B-125: a div, an admonition and a line block that end without their closer', () => {
+    expect(messages(':::\nx')).toEqual(['This 3-colon container has no closer; add a bare fence of 3 colons to close it.'])
+    expect(messages('::: note\n:::: warning\nx\n:::')).toEqual([
+      'This 4-colon admonition has no closer; it runs to the end of its container. Add a bare fence of 4 colons to close it.',
+    ])
+    expect(reports('::: |\nline')).toEqual(['unclosed-container-fence /children/0 0-10'])
+    expect(reports('::: note\nx\n:::\n\n```\ny\n```')).toEqual([])
+  })
+
+  it('C2-B-085: a losing footnote definition says how many lines of content are lost with it', () => {
+    expect(messages('[^a]: x\n\n[^a]: one\n  two\n  three\n\n[^a]: y')).toEqual([
+      'Duplicate footnote definition [^a] is ignored; the first definition for a label wins. Its 3 lines of content are lost with it.',
+      'Duplicate footnote definition [^a] is ignored; the first definition for a label wins.',
+    ])
+    expect(parseWithDiagnostics('[^a]: x\n\n[^a]: one\n  two', { positions: false }).diagnostics[0]!.message).toContain('Its 2 lines')
+  })
+
+  it('C2-B-122: further words on an opener are reported, and typographic quotes are named', () => {
+    expect(messages('```js “T”\nx\n```')[0]).toBe(
+      'The title after "js" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before Carve parsed it. '
+      + 'A fence title needs straight double quotes: ``` js "T".')
+    expect(messages('```js T [L]\nx\n```')[0]).toBe(
+      'Text after the "js" fence type must be a quoted "title" or a [label]; unquoted it is not read as a title, and the block opens. '
+      + 'Did you mean ``` js "T" [L]?')
+    expect(reports('```=html x\n<b>\n```')).toEqual(['fence-title-syntax /children/0 0-18'])
+    expect(reports('```js "T" [L]\nx\n```')).toEqual([])
+  })
+
+  it('C2-B-181: a delimited table with an unclosed quote is reported and stays a table', () => {
+    expect(reports('{table=""}\n```csv\na,"b\n```')).toEqual(['delimited-table-malformed /children/0 0-26'])
+  })
+
+  it('C2-A-172: the parse findings come beside the HTML too, and a parse that asks for none carries none', () => {
+    expect(renderWithDiagnostics('```\nx').diagnostics.map((entry) => entry.code)).toEqual(['unclosed-code-fence'])
+    expect(parse('```\nx').children[0]!.type).toBe('code_block')
   })
 })

@@ -276,21 +276,36 @@ function alignColumns(table: TableNode): void {
 }
 
 
-/** Enters `node` under its key in `table`, unless an earlier definition holds the key, which is reported. */
+/** Enters `node` under its key in `table`, unless an earlier definition holds the key, which is reported with `message`. */
 function define<N extends FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode>(
-  walk: Walk, table: Map<string, N>, node: N, code: string,
+  walk: Walk, table: Map<string, N>, node: N, code: string, message: (node: N) => string,
 ): void {
-  if (table.has(node.key)) report(walk.resolution, node, code, `${node.key} is defined more than once`)
+  if (table.has(node.key)) report(walk.resolution, node, code, message(node))
   else table.set(node.key, node)
 }
 
+const LINK_DUPLICATE = (): string => 'Duplicate link definition (label) is ignored; the first definition for a label wins.'
+const ABBREVIATION_DUPLICATE = (): string => 'Duplicate abbreviation definition (label) is ignored; the first definition for a label wins.'
+
+/** C2-B-085: a losing footnote definition takes its content with it, which the message counts past the first line. */
+function footnoteDuplicate(facts: ParseFacts | null): (node: FootnoteNode) => string {
+  return (node) => {
+    const lines = facts?.footnoteLines(node) ?? 0
+    const lost = lines > 1 ? ` Its ${lines} lines of content are lost with it.` : ''
+    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.${lost}`
+  }
+}
+
 /** C2-B-085: the first definition of a key wins, and each later one is reported. */
-function collectDefinitions(document: DocumentNode, walk: Walk): void {
+function collectDefinitions(document: DocumentNode, walk: Walk, facts: ParseFacts | null): void {
   const abbreviations = new Map<string, AbbreviationDefNode>()
+  const definitions = walk.resolution.definitions
   for (const child of document.children) {
-    if (child.type === 'link_reference_definition') define(walk, walk.resolution.definitions, child, 'duplicate-link-reference-definition')
-    else if (child.type === 'footnote') define(walk, walk.footnotes, child, 'duplicate-footnote-definition')
-    else if (child.type === 'abbreviation_def') define(walk, abbreviations, child, 'duplicate-abbreviation-definition')
+    if (child.type === 'link_reference_definition') define(walk, definitions, child, 'duplicate-link-reference-definition', LINK_DUPLICATE)
+    else if (child.type === 'footnote') define(walk, walk.footnotes, child, 'duplicate-footnote-definition', footnoteDuplicate(facts))
+    else if (child.type === 'abbreviation_def') {
+      define(walk, abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
+    }
   }
 }
 
@@ -337,13 +352,17 @@ function isUnresolvedReference(node: Node, targets: Map<Reference, Target>, kept
   return (node.type === 'link' || node.type === 'image') && node.key !== undefined && !targets.has(node) && !kept.has(node)
 }
 
+function duplicateIdMessage(id: string): string {
+  return `Duplicate id "${id}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`
+}
+
 /** C2-H-024: authored ids are reserved first, in document order. C2-A-039: the first node of an id wins. */
 function reserveIds(walk: Walk, targets: Map<Reference, Target>, kept: Set<Reference>): Set<string> {
   const taken = new Set<string>()
   for (const node of walk.identified) {
     const id = node.attrs?.id
     if (id === undefined || isUnresolvedReference(node, targets, kept)) continue
-    if (taken.has(id)) report(walk.resolution, node, 'duplicate-id', `the id ${id} is used more than once`)
+    if (taken.has(id)) report(walk.resolution, node, 'duplicate-id', duplicateIdMessage(id))
     else taken.add(id)
   }
   return taken
@@ -497,7 +516,7 @@ export function resolve(
     resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
   }
-  collectDefinitions(document, walk)
+  collectDefinitions(document, walk, facts)
   visit(walk, document, null)
   // C2-H-025: the content of the notes follows the document body, in the order of the footnote numbers.
   for (let at = 0; at < resolution.notes.length; at++) {

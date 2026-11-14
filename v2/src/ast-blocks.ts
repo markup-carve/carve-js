@@ -19,13 +19,15 @@ import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
-  FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  DOCUMENT, HEADING, INCLUDE, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
+  DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { orderedDelimiter, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
+import { addParseFindings, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
+import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS, TASK_STATUS } from './tree-tables.ts'
@@ -114,8 +116,13 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
   const word = info.wordStart < 0 ? '' : src.slice(info.wordStart, info.wordEnd)
   const value = bodyValue(src, node.spans!)
   // C2-B-116: `=` and a format name make a raw block, which takes no title and no label (C2-B-122).
-  if ((node.flags & FLAG_RAW) !== 0) return { type: 'raw_block', format: word.slice(1), value }
+  if ((node.flags & FLAG_RAW) !== 0) {
+    const raw: Block = { type: 'raw_block', format: word.slice(1), value }
+    if (info.extra || info.titleStart >= 0 || info.labelStart >= 0) ctx.notes.push({ what: TITLE_SYNTAX, node: raw, block: node, from: -1 })
+    return raw
+  }
   const out: CodeBlockNode = { type: 'code_block', value }
+  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) out.title = [{ type: 'text', value: openerTitle(src, info.titleStart, info.titleEnd) }]
   if (info.labelStart >= 0) out.groupLabel = src.slice(info.labelStart, info.labelEnd)
@@ -215,7 +222,9 @@ function itemNode(ctx: TreeContext, node: BlockNode, flow: number): ListItemNode
 function footnoteNode(ctx: TreeContext, node: BlockNode, flow: number): DocumentChild {
   const [start, end] = definitionLabel(ctx.src, node.start)
   const key = foldLabel(ctx.src.slice(start, end))
-  return { type: 'footnote', key, namespace: 'footnote', children: blockChildren(ctx, node.children!, flow) }
+  const out: DocumentChild = { type: 'footnote', key, namespace: 'footnote', children: blockChildren(ctx, node.children!, flow) }
+  ctx.footnoteBlocks.set(out, node)
+  return out
 }
 
 /** The title and the group label of a div opener (C2-B-120, C2-B-121), each only where it is written. */
@@ -240,15 +249,19 @@ function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
   // C2-B-128: the name of a plain div is its first class.
   if (kind === undefined && name !== '') attributes.classes.unshift(name)
   const head = divHead(ctx, info)
+  let out: Block
   if (kind === 'admonition' && isFieldValue('admonition.kind', name)) {
-    return { type: 'admonition', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
+    out = { type: 'admonition', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
+  } else if (kind === 'directive' && isFieldValue('directive.kind', name)) {
+    out = { type: 'directive', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
+  } else {
+    // C2-A-068: in a hard-break block, written with the opener or with the class, every line end is a hard break.
+    const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
+    out = { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
   }
-  if (kind === 'directive' && isFieldValue('directive.kind', name)) {
-    return { type: 'directive', kind: name, ...head, children: blockChildren(ctx, node.children!, flow) }
-  }
-  // C2-A-068: in a hard-break block, written with the opener or with the class, every line end is a hard break.
-  const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
-  return { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
+  // C2-B-122: further words on the opener do not stop the div from opening.
+  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  return out
 }
 
 /** C2-A-066: the node a div opener gives. */
@@ -342,6 +355,10 @@ function blockNode<N extends Node>(ctx: TreeContext, node: BlockNode, flow: numb
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
   const out = buildBlock(ctx, node, flow, attributes, build)
   if (!own) setAttributes(out, attributes)
+  // C2-B-111, C2-B-163: a fence, a comment block, a div, a line block or frontmatter that ends without its closer.
+  if ((node.exitFlags & FLAG_UNCLOSED) !== 0 && (node.kind === DIV || isOpaqueLeaf(node.kind))) {
+    ctx.notes.push({ what: UNCLOSED, node: out, block: node, from: 0 })
+  }
   if (ctx.trace !== null) ctx.trace.blocks.set(out, node)
   return placeBlock(ctx, out, node)
 }
@@ -484,6 +501,10 @@ export interface ParseFacts {
   resolvableLeaves: ReadonlySet<Node>
   /** C2-H-172: whether the inline content of the source holds a bidirectional control. */
   bidi: boolean
+  /** The findings of the parse channel that the tree builder noted, added to `findings` with their messages. */
+  addFindings: (findings: Findings) => void
+  /** C2-B-085: the number of source lines of a footnote definition of the tree, or 0 for a node that is none. */
+  footnoteLines: (node: Node) => number
 }
 
 /** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
@@ -491,6 +512,13 @@ export interface ParsedTree {
   readonly document: DocumentNode
   /** Null for a supplied tree, of which nothing is known. */
   readonly facts: ParseFacts | null
+}
+
+/** The number of lines from `start` to `end`. */
+function lineCount(src: string, start: number, end: number): number {
+  let count = 1
+  for (let p = src.indexOf('\n', start); p >= 0 && p < end; p = src.indexOf('\n', p + 1)) count++
+  return count
 }
 
 function headingSource(src: string, spans: number[] | undefined): string | undefined {
@@ -512,6 +540,11 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
   const facts: ParseFacts = {
     headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
     bidi: ctx.inline.bidi,
+    addFindings: (findings) => addParseFindings(src, ctx.notes, findings),
+    footnoteLines: (node) => {
+      const block = ctx.footnoteBlocks.get(node)
+      return block === undefined ? 0 : lineCount(src, block.start, block.end)
+    },
   }
   return { document, facts }
 }
@@ -534,7 +567,7 @@ export function buildSource(
     const root = buildTree(blocks.events, blocks.eventLength)
     const ctx: TreeContext = {
       src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
-      headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace,
+      headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
     }
     return buildDocument(ctx, root, src)
   } finally {

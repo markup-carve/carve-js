@@ -654,11 +654,11 @@ describe('the position of a diagnostic', () => {
     const { diagnostics } = parseWithDiagnostics('{#a}\né\n\n> {#a}\n> y\n\n[l]: /a\n[l]: /b')
     expect(diagnostics).toEqual([
       {
-        code: 'duplicate-link-reference-definition', severity: 'warning', channel: 'parse', message: 'l is defined more than once',
+        code: 'duplicate-link-reference-definition', severity: 'warning', channel: 'parse', message: 'Duplicate link definition (label) is ignored; the first definition for a label wins.',
         path: '/children/3', range: { startOffset: 29, endOffset: 36 },
       },
       {
-        code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'the id a is used more than once',
+        code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'Duplicate id "a": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.',
         path: '/children/1/children/0', range: { startOffset: 11, endOffset: 19 },
       },
     ])

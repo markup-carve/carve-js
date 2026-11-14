@@ -16,6 +16,7 @@ import {
 import { isPlainText, scanInline } from './inline-scan.ts'
 import { type InlineState } from './inline-state.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
+import { type ParseNote } from './parse-findings.ts'
 import type { BlockNode } from './tree.ts'
 
 /**
@@ -69,6 +70,10 @@ export interface TreeContext {
   /** The leaves whose inline content holds such a node. Resolution walks into no other leaf. */
   resolvableLeaves: Set<Node>
   trace: LayoutTrace | null
+  /** The findings of the parse channel, noted with their nodes while the tree is built (parse-findings.ts). */
+  notes: ParseNote[]
+  /** The source range of each footnote definition, which a duplicate reports the lines of (C2-B-085). */
+  footnoteBlocks: Map<Node, BlockNode>
 }
 
 // How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard

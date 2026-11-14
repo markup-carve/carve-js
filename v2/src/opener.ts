@@ -14,8 +14,9 @@ export interface OpenerInfo {
   // The label in brackets, without the brackets (C2-B-121). Both are -1 when there is none.
   labelStart: number
   labelEnd: number
-  // Anything else on the line, which is a diagnostic; the block still opens (C2-B-122).
+  // Anything else on the line, which is a diagnostic; the block still opens (C2-B-122). -1 where there is none.
   extra: boolean
+  extraStart: number
 }
 
 /** The offset of the first closing bracket after `p` on the line, or -1. A search to `end` keeps it linear. */
@@ -62,9 +63,12 @@ function readLabel(src: string, p: number, end: number, info: OpenerInfo): numbe
 export function readOpenerInfo(src: string, pos: number): OpenerInfo {
   let end = pos
   while (end < src.length && src.charCodeAt(end) !== LF && src.charCodeAt(end) !== CR) end++
-  const info: OpenerInfo = { wordStart: -1, wordEnd: -1, titleStart: -1, titleEnd: -1, labelStart: -1, labelEnd: -1, extra: false }
+  const info: OpenerInfo = {
+    wordStart: -1, wordEnd: -1, titleStart: -1, titleEnd: -1, labelStart: -1, labelEnd: -1, extra: false, extraStart: -1,
+  }
   const p = readLabel(src, readTitle(src, readWord(src, skipSpaces(src, pos, end), end, info), end, info), end, info)
   info.extra = p < end
+  if (info.extra) info.extraStart = p
   return info
 }
 

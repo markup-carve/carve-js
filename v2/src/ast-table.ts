@@ -10,6 +10,7 @@ import {
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
+import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { countValue } from './lines.ts'
 import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
@@ -272,5 +273,7 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
   const table = tableOf(ctx, groups, attributes)
   // C2-A-088: a body whose partition the source declared carries `headRows`.
   if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = source.headRows
+  // C2-B-181: a quote that never closes is reported, and the block stays a table.
+  if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node, from: 0 })
   return table
 }

@@ -127,7 +127,7 @@ describe('resolution results', () => {
 
   it('C2-A-005, C2-A-039, C2-A-172, C2-A-173: a duplicate id is reported in the diagnostics record with a code, a severity, a message and a channel, and nothing in the tree marks it', () => {
     const { document, resolution } = resolved('{#a}\nx\n\n{#a}\ny')
-    expect(resolution.diagnostics).toEqual([{ code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'the id a is used more than once' }])
+    expect(resolution.diagnostics).toEqual([{ code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'Duplicate id "a": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.' }])
     expect(document.children!.map((node) => node.attrs)).toEqual([{ id: 'a' }, { id: 'a' }])
   })
 

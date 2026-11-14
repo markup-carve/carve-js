@@ -872,7 +872,7 @@ function openBareRun(state: BlockState, end: number): boolean {
     if (containers.column[index]! > length) continue
     const captioned = (containers.style[index]! & (FLAG_QUOTE_FENCE | FLAG_FIGURE)) !== 0
     state.contentEnd = end
-    closeTo(state, index)
+    closeTo(state, index, index)
     // C2-B-147: a quote fence and a figure group take a caption.
     if (captioned) state.above.captionDepth = containers.depth
     return true
@@ -965,14 +965,18 @@ function leafFacts(state: BlockState, kind: number): number {
   return isDisplayMathOnly(state.src, leaf.start, leaf.end) ? FLAG_BLOCK_MATH : 0
 }
 
-/** Closes the open leaf and the containers above stack index `depth`. Tightness is set here (C2-B-191). */
-function closeTo(state: BlockState, depth: number): void {
+/**
+ * Closes the open leaf and the containers above stack index `depth`. Tightness is set here (C2-B-191), and a div
+ * other than `closed`, the one its closer ends, is marked as ending without one (C2-B-111).
+ */
+function closeTo(state: BlockState, depth: number, closed = -1): void {
   closeLeaf(state)
   const containers = state.containers
   while (containers.depth > depth) {
     const index = --containers.depth
     const kind = containers.kind[index]!
-    const flags = isList(kind) && containers.loose[index] === 0 ? FLAG_TIGHT : 0
+    let flags = isList(kind) && containers.loose[index] === 0 ? FLAG_TIGHT : 0
+    if (kind === DIV && index !== closed) flags = FLAG_UNCLOSED
     writeEvent(state, eventTag(EXIT, kind, flags), state.contentEnd, 0)
   }
 }
