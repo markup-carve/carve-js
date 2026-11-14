@@ -8,6 +8,7 @@ import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
+import { isSecondHalf, unitBytes } from './positions.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -53,11 +54,8 @@ interface WrapCursor {
 /** Moves `cursor` to the byte `offset` of `value`. False where no character starts there, or the offset lies behind. */
 function seek(cursor: WrapCursor, value: string, offset: number): boolean {
   if (offset < cursor.bytes) return false
-  while (cursor.bytes < offset && cursor.at < value.length) {
-    const code = value.charCodeAt(cursor.at++)
-    cursor.bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code >= 0xd800 && code <= 0xdfff ? 2 : 3
-  }
-  return cursor.bytes === offset
+  while (cursor.bytes < offset && cursor.at < value.length) cursor.bytes += unitBytes(value, cursor.at++)
+  return cursor.bytes === offset && !isSecondHalf(value, cursor.at)
 }
 
 /**

@@ -20,6 +20,12 @@ function isPairAt(text: string, at: number): boolean {
   return next >= LOW_SURROGATE && next <= LOW_SURROGATE_END
 }
 
+/** Whether the code unit at `at` of `text` is the second half of a surrogate pair, so no character starts there. */
+export function isSecondHalf(text: string, at: number): boolean {
+  const code = text.charCodeAt(at)
+  return code >= LOW_SURROGATE && code <= LOW_SURROGATE_END && isPairAt(text, at - 1)
+}
+
 /**
  * Bytes in UTF-8 of the code unit at `at` of `text`. A surrogate pair is four bytes, counted as two per half;
  * an unpaired surrogate is encoded as U+FFFD, three bytes, as UTF-8 encoders do.
@@ -29,7 +35,7 @@ export function unitBytes(text: string, at: number): number {
   if (code < ASCII_END) return 1
   if (code < TWO_BYTES_END) return 2
   if (code < HIGH_SURROGATE || code > LOW_SURROGATE_END) return 3
-  return isPairAt(text, at) || (code >= LOW_SURROGATE && isPairAt(text, at - 1)) ? 2 : 3
+  return isPairAt(text, at) || isSecondHalf(text, at) ? 2 : 3
 }
 
 /** The number of UTF-8 bytes of `src` (C2-A-010). */
@@ -125,10 +131,9 @@ function seek(cursor: Cursor, target: number): void {
     cursor.offset = 1
   }
   while (cursor.offset < target) {
-    const code = src.charCodeAt(cursor.offset)
     cursor.bytes += unitBytes(src, cursor.offset)
-    // C2-A-141: columns count code points, so the second half of a pair adds none.
-    if (code < HIGH_SURROGATE || code > HIGH_SURROGATE_END) cursor.column++
+    // C2-A-141: columns count code points, so the first half of a pair adds none; an unpaired half is one.
+    if (!isPairAt(src, cursor.offset)) cursor.column++
     cursor.offset++
   }
 }

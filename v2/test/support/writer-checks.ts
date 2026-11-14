@@ -3,6 +3,7 @@
 import { format, formatWithDiagnostics, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
 import { type DocumentNode, type Node, type Position, type TextNode } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
+import { unitBytes } from '../../src/positions.ts'
 import { isNode } from './nodes.ts'
 
 const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline']
@@ -29,18 +30,13 @@ function isAsciiPunctuation(code: number): boolean {
   return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
 }
 
-function unitBytes(code: number): number {
-  if (code < 0x80) return 1
-  return code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 2 : 3
-}
-
 /** The string offset of each UTF-8 byte offset of `src` at which a character starts, and of its end. */
 function stringOffsets(src: string): Map<number, number> {
   const offsets = new Map<number, number>()
   let bytes = 0
   for (let at = 0; at <= src.length; at++) {
     offsets.set(bytes, at)
-    if (at < src.length) bytes += unitBytes(src.charCodeAt(at))
+    if (at < src.length) bytes += unitBytes(src, at)
   }
   return offsets
 }

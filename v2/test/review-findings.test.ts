@@ -344,3 +344,17 @@ describe('what the random writer gates found', () => {
     expect(format(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*`)).toBe(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*\n`)
   })
 })
+
+describe('one UTF-8 width for positions, the layout record and the writer', () => {
+  it('C2-W-067, C2-A-010: a continuation row behind an unpaired surrogate stays where the record puts it', () => {
+    expect(format('| \ud800 |\n+ more |')).toBe('| \ud800 |\n+ more |\n')
+    expect(format('| \ud800 a |\n+ more |')).toBe('| \ud800 a |\n+ more |\n')
+    expect(format('| 😀 a |\n+ more |')).toBe('| 😀 a |\n+ more |\n')
+  })
+
+  it('C2-A-141: an unpaired surrogate is one column, as every code point is', () => {
+    const second = (source: string): unknown => (parse(source).children[0] as unknown as Nested).children[1]!['pos']
+    expect(second('\ud800a *b*')).toMatchObject({ startColumn: 4, startOffset: 5 })
+    expect(second('😀a *b*')).toMatchObject({ startColumn: 4, startOffset: 6 })
+  })
+})

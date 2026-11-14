@@ -2,11 +2,8 @@
 // of the block chapter, blank-line counts and UTF-8 byte offsets.
 import { BYTE_ORDER_MARK, CR, GREATER, SPACE } from './chars.ts'
 import { skipSpaces } from './lines.ts'
-import { unitBytes } from './positions.ts'
+import { isSecondHalf, unitBytes } from './positions.ts'
 import { advanceColumn, isSpaceOrTab } from './source.ts'
-
-const LOW_SURROGATE = 0xdc00
-const LOW_SURROGATE_END = 0xdfff
 
 /** The offset of the first character of the line that holds `pos`. */
 export function lineStartOf(src: string, pos: number): number {
@@ -59,8 +56,8 @@ export function columnOf(src: string, offset: number, quotes: number): number {
   let column = prefix.column
   for (let pos = prefix.pos; pos < offset; pos++) {
     const code = src.charCodeAt(pos)
-    // Columns count code points, so the second half of a pair adds none.
-    if (code < LOW_SURROGATE || code > LOW_SURROGATE_END) column = advanceColumn(column, code)
+    // Columns count code points, so the second half of a pair adds none; an unpaired half is one.
+    if (!isSecondHalf(src, pos)) column = advanceColumn(column, code)
   }
   return column - prefix.origin
 }
