@@ -167,3 +167,31 @@ describe('the parse channel', () => {
     expect(parse('```\nx').children[0]!.type).toBe('code_block')
   })
 })
+
+describe('the other changed clauses', () => {
+  it('C2-H-165: a degraded admonition or directive keeps its title, as a div does', () => {
+    expect(render('::: note "Title"\nbody\n:::', { profile: 'minimal' })).toBe('<p>Title body</p>')
+    expect(render('::: warning "T"\na\n\nb\n:::', { profile: 'comment' })).toBe('<p>T a b</p>')
+    expect(render('::: x "T"\nbody\n:::', { profile: 'minimal' })).toBe('<p>T body</p>')
+  })
+
+  it('C2-A-115: tooltip is the title of the link tail, and a resolved reference keeps none of its own', () => {
+    const link = (src: string): unknown => (parse(src, { positions: false }).children[0] as { children: unknown[] }).children[0]
+    expect(link('[x](/u "T")')).toMatchObject({ type: 'link', tooltip: 'T' })
+    expect(link('[x][a]\n\n[a]: /u "T"')).not.toHaveProperty('tooltip')
+    expect(render('[x][a]\n\n[a]: /u "T"')).toBe('<p><a href="/u" title="T">x</a></p>')
+  })
+
+  it('C2-B-166: the separator row of a Markdown table is an ordinary body row', () => {
+    expect(render('|= a |\n|:--|\n| b |')).toBe(
+      '<table>\n  <thead>\n    <tr><th scope="col">a</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>:–</td></tr>\n    <tr><td>b</td></tr>\n'
+      + '  </tbody>\n</table>')
+  })
+
+  it('C2-A-148: leading indent is outside the span of a container as of a leaf', () => {
+    const quote = parse(' > a').children[0]!
+    expect(quote.pos).toMatchObject({ startOffset: 1 })
+    expect(parse('  - a').children[0]!.pos).toMatchObject({ startOffset: 2 })
+    expect(parse('  a').children[0]!.pos).toMatchObject({ startOffset: 2 })
+  })
+})

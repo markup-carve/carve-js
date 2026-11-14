@@ -88,7 +88,10 @@ const MARKED_TEXT: NodeHandlers<string> = {
   raw_block: (node) => withoutLineEnd(node.value),
   table_row: rowText,
   include: includeSource,
+  // A degraded admonition or directive keeps its title, as a div does.
   div: containerText,
+  admonition: containerText,
+  directive: containerText,
 }
 
 /** The text a degraded block leaves. */
