@@ -153,6 +153,26 @@ describe('C2-W-106 catalog rules', () => {
   }
 })
 
+describe('C2-W-109 lint options and ordering', () => {
+  it('applies default, explicit, and platform rule states', () => {
+    expect(lint('_x_').some((entry) => entry.code === 'deprecated-bare-underline')).toBe(true)
+    expect(lint('_x_', { rules: { 'deprecated-bare-underline': 'off' } })
+      .some((entry) => entry.code === 'deprecated-bare-underline')).toBe(false)
+    expect(lint('See @bob.').some((entry) => entry.code === 'platform-mention-token')).toBe(false)
+    expect(lint('See @bob.', { platforms: ['github'] })
+      .some((entry) => entry.code === 'platform-mention-token')).toBe(true)
+    expect(lint('See @bob.', { platforms: ['github'], rules: { 'platform-mention-token': 'off' } })
+      .some((entry) => entry.code === 'platform-mention-token')).toBe(false)
+  })
+
+  it('sorts mixed spelling and tree findings by UTF-8 byte position', () => {
+    const findings = lint('😀 **bold**\n\n# H\n\n_x_')
+    const positions = findings.map((entry) => entry.range.startOffset)
+    expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(findings.every((entry) => entry.channel === 'lint')).toBe(true)
+  })
+})
+
 describe('C2-B-215 to C2-B-216 controls', () => {
   it('handles line, next line, document, and re-enable scopes', () => {
     expect(lint('_x_ %% carve-lint-disable-line deprecated-bare-underline')).toEqual([])
