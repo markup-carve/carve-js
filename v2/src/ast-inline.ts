@@ -70,6 +70,7 @@ export interface TreeContext {
   /** The leaves whose inline content holds such a node. Resolution walks into no other leaf. */
   resolvableLeaves: Set<Node>
   trace: LayoutTrace | null
+  sourceNames: Map<Node, string> | null
   /** The findings of the parse channel, noted with their nodes while the tree is built (parse-findings.ts). */
   notes: ParseNote[]
   /** The source range of each footnote definition, which a duplicate reports the lines of (C2-B-085). */

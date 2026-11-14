@@ -126,6 +126,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) out.title = [{ type: 'text', value: openerTitle(src, info.titleStart, info.titleEnd) }]
   if (info.labelStart >= 0) out.groupLabel = src.slice(info.labelStart, info.labelEnd)
+  if (word !== '') ctx.sourceNames?.set(out, word)
   return out
 }
 
@@ -261,6 +262,7 @@ function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
   }
   // C2-B-122: further words on the opener do not stop the div from opening.
   if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  if (name !== '') ctx.sourceNames?.set(out, name)
   return out
 }
 
@@ -495,6 +497,7 @@ function collectAbbreviations(src: string, root: BlockNode): Map<string, string>
 
 /** What a parse knows of the tree it built, which resolution reads beside the tree. */
 export interface ParseFacts {
+  sourceNames: ReadonlyMap<Node, string> | null
   /** C2-I-084: the folded source of the text of a heading of the tree, or undefined for a node that is none. */
   headingSource: (heading: Node) => string | undefined
   /** The leaves with inline content that holds an id, a reference, a note or a cross-reference. */
@@ -538,6 +541,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
     finishPositions(document, source)
   }
   const facts: ParseFacts = {
+    sourceNames: ctx.sourceNames,
     headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
     bidi: ctx.inline.bidi,
     addFindings: (findings) => addParseFindings(src, ctx.notes, findings),
@@ -556,6 +560,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
+  collectSourceNames = false,
 ): ParsedTree {
   // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
   const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
@@ -568,6 +573,7 @@ export function buildSource(
     const ctx: TreeContext = {
       src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
       headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
+      sourceNames: collectSourceNames ? new Map() : null,
     }
     return buildDocument(ctx, root, src)
   } finally {

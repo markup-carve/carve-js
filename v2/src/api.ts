@@ -11,6 +11,7 @@ import { utf8Length } from './positions.ts'
 import { applyProfile } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
+import { applyExtensions } from './extensions/claims.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -80,9 +81,9 @@ function inputStage(input: string | DocumentNode, settings: Settings): ParsedTre
   if (typeof input === 'string') {
     checkLength(input, settings)
     // C2-H-016: only the source lines need positions.
-    return buildSource(input, settings.sourceLines)
+    return applyExtensions(buildSource(input, settings.sourceLines, null, null, settings.extensions.length > 0), settings.extensions)
   }
-  validateTree(input)
+  validateTree(input, undefined, undefined, settings.extensions)
   // A profile replaces nodes, and the tree of the caller keeps its own.
   return { document: profileRule(settings) === NO_PROFILE ? input : structuredClone(input), facts: null }
 }
@@ -106,8 +107,8 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
 
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */
 export function parseTree(src: string, options?: ParseOptions): ParsedTree {
-  readOptions(options, 'parse')
-  return buildSource(src, options?.positions !== false)
+  const settings = readOptions(options, 'parse')
+  return applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0), settings.extensions)
 }
 
 /**
@@ -145,7 +146,8 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
-  const parsed = buildSource(src, options?.positions !== false)
+  const parsed = applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0),
+    settings.extensions)
   const resolved = resolveStage(parsed, settings)
   return { document: resolved.document, diagnostics: parseDiagnostics(resolved, parsed) }
 }
@@ -153,7 +155,8 @@ export function parseWithDiagnostics(src: string, options?: ParseOptions): Parse
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
 export function parse(src: string, options?: ParseOptions): DocumentNode {
   const settings = readOptions(options, 'parse')
-  return resolveStage(buildSource(src, options?.positions !== false), settings).document
+  return resolveStage(applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0),
+    settings.extensions), settings).document
 }
 
 /**
@@ -163,7 +166,7 @@ export function parse(src: string, options?: ParseOptions): DocumentNode {
 export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
-  const parsed = buildSource(src, true, null, trace)
+  const parsed = applyExtensions(buildSource(src, true, null, trace, settings.extensions.length > 0), settings.extensions)
   const resolved = resolveStage(parsed, settings)
   const diagnostics = parseDiagnostics(resolved, parsed)
   return { document: resolved.document, diagnostics, layout: buildLayout(src, resolved.document, trace) }
