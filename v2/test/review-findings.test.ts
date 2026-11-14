@@ -1,6 +1,6 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, format, parse, render, stringOffsetOfByte, utf8Length, write, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, foldLabel, format, parse, render, stringOffsetOfByte, utf8Length, write, writeWithDiagnostics } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
@@ -356,5 +356,20 @@ describe('one UTF-8 width for positions, the layout record and the writer', () =
     const second = (source: string): unknown => (parse(source).children[0] as unknown as Nested).children[1]!['pos']
     expect(second('\ud800a *b*')).toMatchObject({ startColumn: 4, startOffset: 5 })
     expect(second('😀a *b*')).toMatchObject({ startColumn: 4, startOffset: 6 })
+  })
+})
+
+describe('folding and trimming keep the characters the specification keeps', () => {
+  it('C2-I-079: a label folds and trims spaces, tabs and line breaks, and keeps a no-break space', () => {
+    expect(render('[x][ r ]\n\n[r]: /u')).not.toContain('href')
+    expect(render('[x][ r ]\n\n[ r ]: /u')).toBe('<p><a href="/u">x</a></p>')
+    expect(render('[x][ r\n s ]\n\n[r s]: /u')).toBe('<p><a href="/u">x</a></p>')
+    expect(foldLabel(' a \t\n b  ')).toBe('a b')
+    expect(foldLabel(' a ')).toBe(' a ')
+  })
+
+  it('C2-B-084: the expansion of an abbreviation keeps a no-break space at its ends', () => {
+    expect(parse('*[A]:  x ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: ' x ' })
+    expect(parse('*[A]: x  ').children[0]).toMatchObject({ type: 'abbreviation_def', expansion: 'x' })
   })
 })

@@ -14,6 +14,7 @@ import { captionLabelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
 import { slugify } from './slug.ts'
+import { trimEndWhitespace } from './source.ts'
 
 export { type Diagnostic } from './diagnostics.ts'
 
@@ -433,7 +434,7 @@ function setDestinations(walk: Walk, targets: Map<Reference, Target>, kept: Set<
  * the mark, without trailing whitespace.
  */
 function captionKey(walk: Walk, children: Inline[], mark: number): string {
-  return captionLabelText(children.slice(0, mark), walk.symbols).trimEnd()
+  return trimEndWhitespace(captionLabelText(children.slice(0, mark), walk.symbols))
 }
 
 /** C2-H-149: the next number of the sequence of `key`. */

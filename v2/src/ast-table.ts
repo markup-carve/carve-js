@@ -13,6 +13,7 @@ import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { countValue } from './lines.ts'
+import { trimSpaces } from './source.ts'
 import type { BlockNode } from './tree.ts'
 import { holdsBidiControl } from './unicode.ts'
 
@@ -203,8 +204,8 @@ function columnNodes(width: number, aligns: string | null, widths: string | null
   const columns: TableColumnNode[] = []
   for (let at = 0; at < width; at++) {
     const column: TableColumnNode = { type: 'table_column' }
-    const align = (alignList[at] ?? '').trim()
-    const fraction = columnWidth((widthList[at] ?? '').trim())
+    const align = trimSpaces(alignList[at] ?? '')
+    const fraction = columnWidth(trimSpaces(widthList[at] ?? ''))
     // C2-B-211: the entries of `aligns` that set an alignment.
     if (isFieldValue('table_column.align', align)) column.align = align
     if (fraction !== undefined) column.width = fraction

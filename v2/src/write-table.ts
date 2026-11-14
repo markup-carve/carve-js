@@ -7,6 +7,7 @@ import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
 import { emit, lose, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
+import { trimSpaces } from './source.ts'
 import { displayWidth } from './width.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
@@ -291,7 +292,7 @@ function delimitedRow(row: TableRowNode, separator: string): string {
 function longestBacktickLine(lines: readonly string[]): number {
   let longest = 0
   for (const line of lines) {
-    const text = line.trim()
+    const text = trimSpaces(line)
     if (text !== '' && text === '`'.repeat(text.length)) longest = Math.max(longest, text.length)
   }
   return longest

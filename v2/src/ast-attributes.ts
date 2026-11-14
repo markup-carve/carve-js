@@ -1,6 +1,6 @@
 // The attribute blocks a block took, read from their source spans into the fields of C2-A-032.
 import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
-import { BRACE_OPEN, GREATER, LESS, TILDE } from './chars.ts'
+import { BRACE_OPEN, GREATER, LESS, LF, SPACE, TAB, TILDE } from './chars.ts'
 
 /** The merged attribute blocks of a host, in the fixed order of C2-I-041. */
 export interface Attributes {
@@ -12,9 +12,23 @@ export interface Attributes {
   keyIndex?: Map<string, number>
 }
 
-/** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
+/**
+ * C2-I-079: every run of spaces, tabs and line breaks is one space, and the ends are trimmed of
+ * those. A no-break space and every other character are kept as they stand.
+ */
 export function foldLabel(source: string): string {
-  return source.replaceAll(/[ \t\n]+/g, ' ').trim()
+  let out = ''
+  let gap = false
+  let start = 0
+  for (let at = 0; at < source.length; at++) {
+    const code = source.charCodeAt(at)
+    if (code !== SPACE && code !== TAB && code !== LF) continue
+    if (at > start) out += (gap && out !== '' ? ' ' : '') + source.slice(start, at)
+    gap = true
+    start = at + 1
+  }
+  if (start < source.length) out += (gap && out !== '' ? ' ' : '') + source.slice(start)
+  return out
 }
 
 function sameName(a: string, b: string): boolean {

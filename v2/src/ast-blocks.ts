@@ -23,7 +23,7 @@ import {
   DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { orderedDelimiter, trimEnd } from './lines.ts'
-import { lineFeedAt } from './source.ts'
+import { lineFeedAt, trimSpaces } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
@@ -150,7 +150,7 @@ function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
 /** C2-B-084: the label and the expansion of an abbreviation definition. */
 function abbreviationParts(src: string, node: BlockNode): [string, string] {
   const [start, end] = definitionLabel(src, node.start)
-  return [src.slice(start, end), src.slice(end + 2, node.spans![1]).trim()]
+  return [src.slice(start, end), trimSpaces(src.slice(end + 2, node.spans![1]))]
 }
 
 function linkDefinitionNode(ctx: TreeContext, node: BlockNode): LinkReferenceDefinitionNode {

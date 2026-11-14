@@ -50,3 +50,19 @@ export function columnAt(src: string, lineStarts: Int32Array, lineCount: number,
 export function isSpaceOrTab(code: number): boolean {
   return code === SPACE || code === TAB
 }
+
+/** `text` without the whitespace at its end: spaces, tabs and line feeds, and no other Unicode space. */
+export function trimEndWhitespace(text: string): string {
+  let end = text.length
+  while (end > 0 && (isSpaceOrTab(text.charCodeAt(end - 1)) || text.charCodeAt(end - 1) === LF)) end--
+  return end === text.length ? text : text.slice(0, end)
+}
+
+/** `text` without the spaces and tabs at its ends. Unlike `String.prototype.trim` it keeps a no-break space and other Unicode spaces. */
+export function trimSpaces(text: string): string {
+  let start = 0
+  let end = text.length
+  while (start < end && isSpaceOrTab(text.charCodeAt(start))) start++
+  while (end > start && isSpaceOrTab(text.charCodeAt(end - 1))) end--
+  return start === 0 && end === text.length ? text : text.slice(start, end)
+}
