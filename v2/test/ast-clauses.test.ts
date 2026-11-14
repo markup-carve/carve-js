@@ -116,7 +116,8 @@ describe('node grammar', () => {
 
   it('C2-A-029, C2-A-030: data and typed metadata are kept', () => {
     const node: ParagraphNode = { type: 'paragraph', children: [], data: { 'org.example.x': { value: 1 } }, metadata: { authors: ['b'] } }
-    expect(decodeTree(encodeTree(documentOf(node))).children[0]).toEqual(node)
+    const document = { ...documentOf(node), extensions: [{ name: 'org.example.x', required: false }] }
+    expect(decodeTree(encodeTree(document)).children[0]).toEqual(node)
   })
 })
 
@@ -554,7 +555,9 @@ describe('citations, extension nodes and resources', () => {
   it('C2-A-122, C2-A-125, C2-A-126: a block extension carries a fallback of block content', () => {
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [] } as unknown as Block))).toBe('/children/0/fallback: a required field is missing')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [text('x')] } as unknown as Block))).toBe('/children/0/fallback/0: text does not stand here')
-    expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('x')] }))).toBeNull()
+    const declared = { ...documentOf({ type: 'block_extension', name: 'org.example.d', children: [], fallback: [paragraph('x')] }),
+      extensions: [{ name: 'org.example.d', required: false }] }
+    expect(refusal(declared)).toBeNull()
   })
 
   it('C2-A-128: reading a tree keeps payload, props and data as they are and runs nothing in them', () => {
@@ -562,7 +565,8 @@ describe('citations, extension nodes and resources', () => {
       type: 'inline_extension', name: 'org.example.x', children: [], fallback: [text('f')],
       props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { kind: 'link' } },
     }
-    expect(inlinesOf(decodeTree(encodeTree(documentOf(paragraph(node)))).children[0])[0]).toEqual(node)
+    const document = { ...documentOf(paragraph(node)), extensions: [{ name: 'org.example.x', required: false }] }
+    expect(inlinesOf(decodeTree(encodeTree(document)).children[0])[0]).toEqual(node)
   })
 
   it('C2-A-030, C2-A-132: a reader closes metadata and bounds resource references and fallback nesting', () => {
@@ -570,10 +574,10 @@ describe('citations, extension nodes and resources', () => {
     for (let level = 0; level < 70; level++) metadata = { a: metadata }
     expect(refusal(documentOf({ ...paragraph(), metadata }))).toBe('/children/0/metadata/a: not a field of metadata')
     const references = Array.from({ length: 5000 }, (_unused, index) => `r${index}`)
-    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.x', children: [], resourceIds: references }
+    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'x', children: [], resourceIds: references }
     expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
     let nested: Inline = text('x')
-    for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'org.example.x', children: [], fallback: [nested] }
+    for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'x', children: [], fallback: [nested] }
     expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 extension nodes$/)
   })
 

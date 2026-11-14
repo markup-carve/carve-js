@@ -188,7 +188,7 @@ describe('the reader at its bounds', () => {
     // C2-A-131: every reference names an entry of the manifest.
     const references = (count: number): DocumentNode => ({
       ...documentOf(paragraph(
-        { type: 'inline_extension', name: 'a.b', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') },
+        { type: 'inline_extension', name: 'a', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') },
         { type: 'image', resourceId: 'r', decorative: true },
       )),
       resources: [{ id: 'r', mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` }],
@@ -196,7 +196,7 @@ describe('the reader at its bounds', () => {
     expect([refusal(references(4096)), refusal(references(4097)) === null]).toEqual([null, false])
     const fallbacks = (levels: number): DocumentNode => {
       let node: Inline = text('x')
-      for (let level = 0; level < levels; level++) node = { type: 'inline_extension', name: 'a.b', children: [], fallback: [node] }
+      for (let level = 0; level < levels; level++) node = { type: 'inline_extension', name: 'a', children: [], fallback: [node] }
       return documentOf(paragraph(node))
     }
     expect([refusal(fallbacks(32)), refusal(fallbacks(33)) === null]).toEqual([null, false])
@@ -204,14 +204,15 @@ describe('the reader at its bounds', () => {
 
   it('bounds the payload of an extension node by its string values', () => {
     const big = 'x'.repeat(8 * 1024 * 1024)
-    const node = (payload: { format: string, value: string }[]): DocumentNode => documentOf(paragraph({ type: 'inline_extension', name: 'a.b', children: [], payload }))
+    const node = (payload: { format: string, value: string }[]): DocumentNode => documentOf(paragraph({ type: 'inline_extension', name: 'a', children: [], payload }))
     expect(refusal(node([{ format: 'a', value: big }]))).toBeNull()
     expect(refusal(node([{ format: 'a', value: big }, { format: 'b', value: 'y' }]))).toBe('/children/0/children/0/payload: an extension payload above 8 MiB')
   })
 
   it('refuses a count that is negative or no integer, a pair that is no pair, and a ruby pair that is none', () => {
     const heading = (level: unknown): DocumentNode => documentOf({ type: 'heading', level, children: [] } as unknown as Block)
-    expect([refusal(heading(0)), refusal(heading(-1)) === null, refusal(heading(1.5)) === null, refusal(heading('1')) === null]).toEqual([null, false, false, false])
+    expect([refusal(heading(0)) === null, refusal(heading(-1)) === null, refusal(heading(1.5)) === null,
+      refusal(heading('1')) === null]).toEqual([false, false, false, false])
     const include = (options: unknown): DocumentNode => documentOf({ type: 'include', path: 'a', options } as unknown as Block)
     expect(refusal(include({ lines: '1-2', code: true }))).toBeNull()
     expect(refusal(include([['a', 'b']]))).toBe('/children/0/options: options is not an object')
@@ -224,12 +225,13 @@ describe('the reader at its bounds', () => {
   })
 
   it('checks the slots and the fallback of an extension node by its role, and the fields that depend on each other', () => {
-    const inline: InlineExtensionNode = { type: 'inline_extension', name: 'a.b', children: [], slots: { s: [text('x')] }, fallback: [text('y')] }
+    const inline: InlineExtensionNode = { type: 'inline_extension', name: 'a', children: [], slots: { s: [text('x')] }, fallback: [text('y')] }
     expect(refusal(documentOf(paragraph(inline)))).toBeNull()
     expect(refusal(documentOf(paragraph({ ...inline, slots: { s: [paragraph()] } })))).toBe('/children/0/children/0/slots/s/0: paragraph does not stand here')
     const blockNode: BlockExtensionNode = { type: 'block_extension', name: 'a.b', children: [], slots: { s: [paragraph()] }, fallback: [] }
-    expect(refusal(documentOf(blockNode))).toBeNull()
-    expect(refusal(documentOf({ ...blockNode, slots: { s: [text('x')] } }))).toBe('/children/0/slots/s/0: text does not stand here')
+    const declared = (node: BlockExtensionNode) => ({ ...documentOf(node), extensions: [{ name: 'a.b', required: false }] })
+    expect(refusal(declared(blockNode))).toBeNull()
+    expect(refusal(declared({ ...blockNode, slots: { s: [text('x')] } }))).toBe('/children/0/slots/s/0: text does not stand here')
     const link = (fields: Partial<LinkNode>): string | null => refusal(documentOf(paragraph({ type: 'link', children: [], ...fields })))
     expect([link({}), link({ key: 'a', namespace: 'link', refForm: 'full' })]).toEqual([null, null])
     for (const fields of [{ key: 'a' }, { namespace: 'link' }, { refForm: 'full' }, { key: 'a', refForm: 'full' }, { namespace: 'link', refForm: 'full' }] satisfies Partial<LinkNode>[]) expect(link(fields)).not.toBeNull()

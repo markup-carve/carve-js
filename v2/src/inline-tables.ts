@@ -55,11 +55,11 @@ export const SMART_RIGHTWARDS_ARROW = 15
 export const SMART_RIGHTWARDS_DOUBLE_ARROW = 16
 export const SMART_TRADEMARK = 17
 
-export const SMART_KIND_NAMES: readonly string[] = [
+export const SMART_KIND_NAMES = [
   "ellipsis", "em_dash", "en_dash", "greater_than_or_equal", "left_double_quote", "left_right_arrow", "left_right_double_arrow",
   "left_single_quote", "leftwards_arrow", "leftwards_double_arrow", "less_than_or_equal", "not_equal", "plus_minus", "right_double_quote",
   "right_single_quote", "rightwards_arrow", "rightwards_double_arrow", "trademark",
-]
+] as const
 export const SMART_GLYPHS: readonly string[] = ["…","—","–","≥","“","↔","⇔","‘","←","⇐","≤","≠","±","”","’","→","⇒","™"]
 
 /** The replaced runs, the longest first, as [source, kind]. */

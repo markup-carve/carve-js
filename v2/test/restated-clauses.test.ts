@@ -219,7 +219,7 @@ describe('caption numbering', () => {
   })
 
   it('C2-H-151: in a supplied tree a display equation with a prefix takes the next number of that key, and a figure whose caption has a mark owns it', () => {
-    const math = (extra: Partial<MathNode> = {}): MathNode => ({ type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', ...extra })
+    const math = (extra: Partial<MathNode> = {}): MathNode => ({ type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', number: 0, ...extra })
     const caption = (...children: Inline[]): CaptionNode => ({ type: 'caption', children: [{ type: 'paragraph', children }] })
     const numbered: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
     const plain: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('no mark')) }

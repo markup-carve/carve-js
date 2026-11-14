@@ -124,7 +124,7 @@ function smartLines(read: DataReader): { lines: string[], triggers: number[] } {
   for (const row of [...replaced, ...smart.quotes, ...smart.dashes]) kinds.set(row.kind!, row.glyph!)
   const names = [...kinds.keys()].sort()
   const lines = names.map((name, index) => `export const SMART_${name.toUpperCase()} = ${index}`)
-  lines.push('', ...wrapJson('export const SMART_KIND_NAMES: readonly string[] = ', names))
+  lines.push('', ...wrapJson('export const SMART_KIND_NAMES = ', names, ' as const'))
   lines.push(...wrapJson('export const SMART_GLYPHS: readonly string[] = ', names.map((name) => kinds.get(name))))
   // The runs matched in text, the longest first (C2-I-115). The braced en dash is an atom of the scan.
   const runs = replaced

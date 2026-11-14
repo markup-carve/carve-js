@@ -50,7 +50,7 @@ describe('linear passes', () => {
 
 describe('reading a supplied tree', () => {
   it('C2-A-167, C2-A-170: a payload alternative that is no object with a media type is refused with its path', () => {
-    const extension = (payload: unknown): unknown => inParagraph({ type: 'inline_extension', name: 'a.b', children: [], payload })
+    const extension = (payload: unknown): unknown => inParagraph({ type: 'inline_extension', name: 'a', children: [], payload })
     expect(refusal(extension([null]))).toBe('/children/0/children/0/payload/0: not a payload alternative')
     expect(refusal(extension([{ value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: not a string')
     expect(refusal(extension([{ format: '', value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: an empty media type')
@@ -65,15 +65,17 @@ describe('reading a supplied tree', () => {
     expect(refusal({ document })).toBe('/astVersion: a required field is missing')
     expect(refusal({ astVersion: '2.0', extensions: [{ name: 'a.b', required: true }], document })).toBe('/extensions/0: an unknown required extension')
     expect(refusal({ astVersion: '2.0', other: 1, document })).toBe('/other: not a field of the envelope')
-    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', required: false }], document })).toBeNull()
-    expect(refusal({ astVersion: '2.0', document: { ...document, astVersion: '3.0' } })).toBe('/document/astVersion: major version 3 is not read by this engine')
+    expect(refusal({ astVersion: '2.3', extensions: [{ name: 'a.b', required: false }],
+      document: { ...document, astVersion: '2.3' } })).toBeNull()
+    expect(refusal({ astVersion: '2.0', document: { ...document, astVersion: '3.0' } }))
+      .toBe('/document/astVersion: the document and envelope versions differ')
   })
 
   it('C2-A-131: an image and an extension name resources of the manifest', () => {
     const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
     expect(refusal(inParagraph({ type: 'image', resourceId: 'missing', decorative: true }))).toBe('/children/0/children/0/resourceId: no resource has the id "missing"')
     expect(refusal({ ...inParagraph({ type: 'image', resourceId: 'r', decorative: true }), resources })).toBeNull()
-    const extension = { type: 'inline_extension', name: 'a.b', children: [], resourceIds: ['r', 'q'] }
+    const extension = { type: 'inline_extension', name: 'a', children: [], resourceIds: ['r', 'q'] }
     expect(refusal({ ...inParagraph(extension), resources })).toBe('/children/0/children/0/resourceIds/1: no resource has the id "q"')
   })
 
@@ -83,7 +85,7 @@ describe('reading a supplied tree', () => {
     const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: images(count), annotation: [] }] }), resources })
     expect(refusal(ruby(4096))).toBeNull()
     expect(refusal(ruby(4097))).toBe('/children/0/children/0/pairs/0/base/4096: more than 4096 resource references')
-    const slots = (count: number): unknown => ({ ...inParagraph({ type: 'inline_extension', name: 'a.b', children: [], slots: { s: images(count) } }), resources })
+    const slots = (count: number): unknown => ({ ...inParagraph({ type: 'inline_extension', name: 'a', children: [], slots: { s: images(count) } }), resources })
     expect(refusal(slots(4096))).toBeNull()
     expect(refusal(slots(4097))).toBe('/children/0/children/0/slots/s/4096: more than 4096 resource references')
   })
@@ -115,7 +117,7 @@ describe('the attribute filter', () => {
       }],
     })))
     expect(table('baseline')).toContain('<td style="vertical-align: baseline;"></td>')
-    expect(table('top; background-image: url(javascript:alert(1))')).toContain('<td></td>')
+    expect(() => table('top; background-image: url(javascript:alert(1))')).toThrow('unknown value')
   })
 })
 
@@ -413,7 +415,8 @@ describe('one walker over every slot that holds nodes', () => {
   const reference = { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] }
   const definition = { type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }
   const supplied = (inline: unknown, ...more: unknown[]): DocumentNode => decodeTree(JSON.stringify({
-    type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [inline] }, ...more],
+    type: 'document', astVersion: '2.0', extensions: [{ name: 'a.b', required: false }],
+    children: [{ type: 'paragraph', children: [inline] }, ...more],
   }))
 
   it('C2-A-024, C2-A-025: resolution reads a reference in a ruby base and in an extension fallback', () => {
@@ -437,7 +440,7 @@ describe('one walker over every slot that holds nodes', () => {
     expect(pointerKey('a/b~c')).toBe('a~1b~0c')
     expect(pointerToken('a~1b~0c')).toBe('a/b~c')
     expect(pointerToken('~01')).toBe('~1')
-    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a.b', children: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
+    const slot = (name: string): unknown => ({ type: 'inline_extension', name: 'a', children: [], slots: { [name]: [{ type: 'paragraph', children: [] }] } })
     expect(refusal(inParagraph(slot('a/b')))).toBe('/children/0/children/0/slots/a~1b/0: paragraph does not stand here')
   })
 })

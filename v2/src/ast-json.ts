@@ -29,7 +29,7 @@ function envelopeOf(value: unknown): Record<string, unknown> | null {
  * Reads a bare tree or an envelope from JSON. C2-A-167, C2-A-170: a text that is no JSON, or no
  * tree of contract 2.0, is refused here with a `CarveTreeError`, not with the error of the JSON library.
  */
-export function decodeTree(json: string): DocumentNode {
+export function decodeTree(json: string, source?: string): DocumentNode {
   let value: unknown
   try {
     value = JSON.parse(json, cleanString)
@@ -41,7 +41,7 @@ export function decodeTree(json: string): DocumentNode {
   const document = envelope === null ? value : envelope['document']
   // A path inside the envelope starts at its document.
   try {
-    validateTree(document)
+    validateTree(document, envelope ?? undefined, source)
   } catch (error) {
     if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
     throw error

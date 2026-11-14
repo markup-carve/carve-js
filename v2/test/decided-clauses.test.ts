@@ -236,7 +236,7 @@ describe('the other clauses of the two commits', () => {
   it('C2-H-170: the caption of a table takes its number before an equation in a cell of that table', () => {
     const document = parse('| a | x |\n^ Table # cap', { positions: false })
     const cell = childrenOf(childrenOf(childrenOf(document.children[0])[0])[0])[1]
-    ofType(childrenOf(cell)[0], 'cell_paragraph').children = [{ type: 'math', display: true, value: 'e', numberPrefix: 'Table' }]
+    ofType(childrenOf(cell)[0], 'cell_paragraph').children = [{ type: 'math', display: true, value: 'e', numberPrefix: 'Table', number: 0 }]
     const html = render(document)
     expect(html).toContain('<caption>Table 1 cap</caption>')
     expect(html).toContain('<span class="equation-number">Table 2</span>')

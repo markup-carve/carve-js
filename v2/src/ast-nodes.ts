@@ -377,7 +377,25 @@ export interface SmallCapsNode extends NodeBase {
 
 export interface SmartPunctuationNode extends NodeBase {
   type: "smart_punctuation"
-  kind: string
+  kind:
+    | "ellipsis"
+    | "em_dash"
+    | "en_dash"
+    | "greater_than_or_equal"
+    | "left_double_quote"
+    | "left_right_arrow"
+    | "left_right_double_arrow"
+    | "left_single_quote"
+    | "leftwards_arrow"
+    | "leftwards_double_arrow"
+    | "less_than_or_equal"
+    | "not_equal"
+    | "plus_minus"
+    | "right_double_quote"
+    | "right_single_quote"
+    | "rightwards_arrow"
+    | "rightwards_double_arrow"
+    | "trademark"
   source: string
   glyph?: string
 }
@@ -438,7 +456,7 @@ export interface TableCellNode extends NodeBase {
   colspan?: number
   rowspan?: number
   align?: "left" | "right" | "center"
-  valign?: string
+  valign?: "top" | "middle" | "bottom" | "baseline"
   scope?: "row" | "col" | "rowgroup" | "colgroup"
   headerIds?: string[]
 }
@@ -446,7 +464,7 @@ export interface TableCellNode extends NodeBase {
 export interface TableColumnNode extends NodeBase {
   type: "table_column"
   align?: "left" | "right" | "center"
-  valign?: string
+  valign?: "top" | "middle" | "bottom" | "baseline"
   width?: number
   resolvedAlign?: "left" | "right" | "center"
   authored?: true
@@ -719,26 +737,33 @@ export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeO
 
 /** The values of each field that takes one of a fixed set, by `type.field` (`*` for any type). */
 export const FIELD_VALUES = {
-  "*.dir": ["ltr", "rtl", "auto"],
-  "comment.form": ["block", "line", "braced"],
-  "link.refForm": ["full", "collapsed"],
-  "image.refForm": ["full", "collapsed"],
-  "xref.display": ["number", "page", "title", "full"],
-  "paragraph.role": ["image", "math"],
-  "citation.mode": ["normal", "author-in-text", "suppress-author"],
-  "table_cell.scope": ["row", "col", "rowgroup", "colgroup"],
-  "list.spacing": ["tight", "loose"],
-  "table_cell.span": ["rowspan", "colspan"],
-  "table_cell.align": ["left", "right", "center"],
-  "table_column.align": ["left", "right", "center"],
-  "table_column.resolvedAlign": ["left", "right", "center"],
-  "link.targetKind": ["url", "wiki", "doc", "xref"],
-  "image.targetKind": ["url", "wiki", "doc", "xref"],
-  "directive.tocTarget": ["headings", "figures", "tables", "listings"],
-  "directive.kind": ["bibliography", "footnotes", "glossary", "index", "references", "toc"],
-  "figure.kind": ["image", "table", "listing", "equation", "other"],
-  "admonition.kind": ["note", "tip", "warning", "danger", "info", "success", "example", "quote"],
-  "*.namespace": ["link", "footnote", "citation", "abbr", "heading"],
+  "*.dir": ["ltr","rtl","auto"],
+  "comment.form": ["block","line","braced"],
+  "link.refForm": ["full","collapsed"],
+  "image.refForm": ["full","collapsed"],
+  "xref.display": ["number","page","title","full"],
+  "paragraph.role": ["image","math"],
+  "citation.mode": ["normal","author-in-text","suppress-author"],
+  "table_cell.scope": ["row","col","rowgroup","colgroup"],
+  "list.spacing": ["tight","loose"],
+  "table_cell.span": ["rowspan","colspan"],
+  "table_cell.align": ["left","right","center"],
+  "table_column.align": ["left","right","center"],
+  "table_column.resolvedAlign": ["left","right","center"],
+  "table_cell.valign": ["top","middle","bottom","baseline"],
+  "table_column.valign": ["top","middle","bottom","baseline"],
+  "smart_punctuation.kind": [
+  "ellipsis", "em_dash", "en_dash", "greater_than_or_equal", "left_double_quote", "left_right_arrow", "left_right_double_arrow",
+  "left_single_quote", "leftwards_arrow", "leftwards_double_arrow", "less_than_or_equal", "not_equal", "plus_minus", "right_double_quote",
+  "right_single_quote", "rightwards_arrow", "rightwards_double_arrow", "trademark",
+],
+  "link.targetKind": ["url","wiki","doc","xref"],
+  "image.targetKind": ["url","wiki","doc","xref"],
+  "directive.tocTarget": ["headings","figures","tables","listings"],
+  "directive.kind": ["bibliography","footnotes","glossary","index","references","toc"],
+  "figure.kind": ["image","table","listing","equation","other"],
+  "admonition.kind": ["note","tip","warning","danger","info","success","example","quote"],
+  "*.namespace": ["link","footnote","citation","abbr","heading"],
   "link.namespace": ["link"],
   "image.namespace": ["link"],
   "link_reference_definition.namespace": ["link"],

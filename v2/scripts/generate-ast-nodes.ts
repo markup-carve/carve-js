@@ -4,6 +4,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Content, NODE_TABLE } from '../src/ast-validate.ts'
+import { MAX_COLUMNS, wrapJson } from './wrap-literal.ts'
 
 const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES } = NODE_TABLE
 
@@ -67,6 +68,12 @@ function fieldType(type: string, name: string): string {
   throw new Error(`no type for ${type}.${name}`)
 }
 
+function fieldLines(name: string, type: string, optional = false): string[] {
+  const prefix = `  ${name}${optional ? '?' : ''}:`
+  if (`${prefix} ${type}`.length <= MAX_COLUMNS) return [`${prefix} ${type}`]
+  return [prefix, ...type.split(' | ').map((part) => `    | ${part}`)]
+}
+
 /** The text of src/ast-nodes.ts. */
 export function generateAstNodes(): string {
   const types = [...RULES.keys()]
@@ -92,8 +99,8 @@ export function generateAstNodes(): string {
     const [content, required, optional] = RULES.get(type)!
     lines.push('', `export interface ${interfaceName(type)} extends NodeBase {`, `  type: ${JSON.stringify(type)}`)
     if (content !== 'none') lines.push(`  children: ${childrenType(content)}`)
-    for (const name of required) lines.push(`  ${name}: ${fieldType(type, name)}`)
-    for (const name of optional) lines.push(`  ${name}?: ${fieldType(type, name)}`)
+    for (const name of required) lines.push(...fieldLines(name, fieldType(type, name)))
+    for (const name of optional) lines.push(...fieldLines(name, fieldType(type, name), true))
     lines.push('}')
   }
   lines.push(
@@ -110,7 +117,7 @@ export function generateAstNodes(): string {
     'export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeOfType[T], context: C) => R }',
     '', '/** The values of each field that takes one of a fixed set, by `type.field` (`*` for any type). */',
     'export const FIELD_VALUES = {',
-    ...[...ENUMS].map(([field, values]) => `  ${JSON.stringify(field)}: [${values.map((value) => JSON.stringify(value)).join(', ')}],`),
+    ...[...ENUMS].flatMap(([field, values]) => wrapJson(`  ${JSON.stringify(field)}: `, values, ',')),
     '} as const',
     '', '/** Whether `value` is one of the values of `field`. */',
     'export function isFieldValue<F extends keyof typeof FIELD_VALUES>(',
