@@ -63,6 +63,7 @@ export const FLAG_BRACED = 1
 // A link or an image written as a reference (C2-I-072), and its collapsed form.
 export const FLAG_REFERENCE = 1
 export const FLAG_COLLAPSED = 2
+export const FLAG_SHORTCUT = 4
 export const FLAG_DISPLAY = 1
 export const FLAG_EMAIL = 1
 // A code, literal-text or math span with no closing run (C2-I-017).

@@ -199,6 +199,7 @@ function destination(value: string): string {
 /** C2-W-075: the label of a reference, from the tree. */
 function referenceLabel(node: LinkNode | ImageNode, key: string): string {
   if (node.refForm === 'collapsed') return '[]'
+  if (node.refForm === 'shortcut') return ''
   // C2-I-078: a label that starts with a caret or an at-sign is no reference label; the space folds away.
   return key.startsWith('^') || key.startsWith('@') ? `[ ${labelText(key)}]` : `[${labelText(key)}]`
 }
@@ -303,7 +304,7 @@ function inlineExtension(w: Writer, node: InlineExtensionNode, flags: number): s
     let same = w.extensions.length === 0
     if (!same) {
       try {
-        const parsed = parseChunk(`${form}${braceBlock(node)}\n`, w.abbreviations, w.extensions).children[0]
+        const parsed = parseChunk(`${form}${braceBlock(node)}\n`, w.abbreviations, w.extensions, w.linkKeys).children[0]
         same = parsed?.type === 'paragraph' && parsed.children.length === 1 && treesEqual(node, parsed.children[0]!)
       } catch { same = false }
     }

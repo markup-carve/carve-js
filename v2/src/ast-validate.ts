@@ -146,8 +146,8 @@ const POSITION_FIELDS = ['startLine', 'endLine', 'startColumn', 'endColumn', 'st
 const ENUMS = new Map<string, readonly string[]>([
   ['*.dir', ['ltr', 'rtl', 'auto']],
   ['comment.form', ['block', 'line', 'braced']],
-  ['link.refForm', ['full', 'collapsed']],
-  ['image.refForm', ['full', 'collapsed']],
+  ['link.refForm', ['full', 'collapsed', 'shortcut']],
+  ['image.refForm', ['full', 'collapsed', 'shortcut']],
   ['xref.display', ['number', 'page', 'title', 'full']],
   ['paragraph.role', ['image', 'math']],
   ['citation.mode', ['normal', 'author-in-text', 'suppress-author']],

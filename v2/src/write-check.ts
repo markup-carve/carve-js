@@ -16,8 +16,11 @@ import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
 /** The tree of `src`, one block of a larger document whose abbreviations are `abbreviations`. */
-export function parseChunk(src: string, abbreviations: Map<string, string>, extensions: readonly ExtensionDefinition[] = []): DocumentNode {
-  return applyExtensions(buildSource(src, true, abbreviations, null, extensions.length > 0), extensions).document
+export function parseChunk(
+  src: string, abbreviations: Map<string, string>, extensions: readonly ExtensionDefinition[] = [],
+  linkKeys: ReadonlySet<string> | null = null,
+): DocumentNode {
+  return applyExtensions(buildSource(src, true, abbreviations, null, extensions.length > 0, linkKeys), extensions).document
 }
 
 /** One comparison of written blocks with their parse: what it asks the next write to change. */
@@ -408,7 +411,7 @@ function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: numbe
   let found = false
   for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
     const source = `${writeInlines(w, expected, flags)}\n`
-    const parsed = parseChunk(source, c.w.abbreviations, c.w.extensions).children
+    const parsed = parseChunk(source, c.w.abbreviations, c.w.extensions, c.w.linkKeys).children
     const block = parsed[0]
     if (parsed.length !== 1 || block?.type !== 'paragraph') return round === 0 ? null : found
     const probe = createCheck(w)
@@ -517,7 +520,7 @@ function escapeContentLine(c: Check, e: Node): boolean {
 function opensBlockAlone(c: Check, nodes: readonly Node[], from: number): boolean {
   let end = from
   while (end < nodes.length && !isBreak(nodes[end])) end++
-  const blocks = parseChunk(writeInlines(c.w, nodes.slice(from, end), c.flags), c.w.abbreviations, c.w.extensions).children
+  const blocks = parseChunk(writeInlines(c.w, nodes.slice(from, end), c.flags), c.w.abbreviations, c.w.extensions, c.w.linkKeys).children
   return blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
 }
 
@@ -553,7 +556,8 @@ function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
 function isChainOpener(a: Node): boolean {
   if (a.type === 'footnote_ref') return true
   if (a.type !== 'link' && a.type !== 'image' && a.type !== 'span' && a.type !== 'inline_footnote') return false
-  return !('key' in a && a.key !== undefined) || ('refForm' in a && (a.refForm === 'full' || a.refForm === 'collapsed'))
+  return !('key' in a && a.key !== undefined) ||
+    ('refForm' in a && (a.refForm === 'full' || a.refForm === 'collapsed' || a.refForm === 'shortcut'))
 }
 
 /** Whether the content of `node`, its text or the alternative text of an image, holds `]`, which may close a bracket of it. */

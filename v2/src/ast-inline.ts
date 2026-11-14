@@ -9,7 +9,7 @@ import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, BRACKET_SPAN, CODE_SPAN, DELETE, DESTINATION, EDITORIAL, EMPHASIS, ESCAPE, FLAG_BRACED,
-  FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, HARD_BREAK, HIGHLIGHT, IMAGE, INLINE_COMMENT,
+  FLAG_COLLAPSED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_REFERENCE, FLAG_SHORTCUT, FOOTNOTE_REF, HARD_BREAK, HIGHLIGHT, IMAGE, INLINE_COMMENT,
   INLINE_EXTENSION, INLINE_FOOTNOTE, INSERT, isInlineContainer, LABEL, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE,
   SMART, SOFT_BREAK, STRIKE, STRONG, SUBSCRIPT, SUPERSCRIPT, SYMBOL, TAG, TITLE, UNDERLINE, XREF,
 } from './inline-kinds.ts'
@@ -119,7 +119,8 @@ export function commentValue(text: string, braced: boolean): string {
   return value
 }
 
-function referenceForm(node: InlineFrame): 'collapsed' | 'full' {
+function referenceForm(node: InlineFrame): 'collapsed' | 'full' | 'shortcut' {
+  if ((node.flags & FLAG_SHORTCUT) !== 0) return 'shortcut'
   return (node.flags & FLAG_COLLAPSED) !== 0 ? 'collapsed' : 'full'
 }
 
@@ -282,7 +283,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
     host.destination = destinationValue(value)
   } else if (node.kind === TITLE) {
     host.title = unescape(value, 0, value.length)
-  } else if ((host.flags & FLAG_COLLAPSED) !== 0) {
+  } else if ((host.flags & (FLAG_COLLAPSED | FLAG_SHORTCUT)) !== 0) {
     // C2-I-072: the label of a collapsed reference is the source of its own text.
     host.key = foldLabel(contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))
   } else {

@@ -1,5 +1,6 @@
 // Contract 3: text that 0.1 left text and 0.2 reads as a construct.
 import { ancestor } from '../blocks.ts'
+import { foldLabel } from '../../../v2/src/ast-attributes.ts'
 import { change, type Context, type Visit } from '../context.ts'
 import { type Node01, probe02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
@@ -138,6 +139,10 @@ function reference(ctx: Context, index: number, headings: Set<string>): void {
   } else if (ref.includes('\n')) {
     // C2-I-080: a label may wrap in 0.2.
     change(ctx, 'U-111', start, start, '\\', 'reference with a wrapped label escaped, the label folds and may resolve in 0.2')
+    if (ctx.doc.children?.some((node) => node.type === 'link_reference_definition' && node.label === foldLabel(ref))) {
+      change(ctx, 'U-111', end - ref.length - 2, end - ref.length - 2, '\\',
+        'the wrapped label escaped because it would become a shortcut after the first escape')
+    }
     markupInside(ctx, link)
   } else if (headings.has(collapsed ? plainText(ctx.visits, index) : ref)) {
     // C2-I-081: the heading lookup applies to the full form too.

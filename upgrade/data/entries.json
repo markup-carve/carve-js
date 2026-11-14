@@ -98,7 +98,9 @@
     {"id": "U-116", "name": "tilde fence", "class": "rewrite", "lint": []},
     {"id": "U-117", "name": "list of task items next to a list of plain items", "class": "rewrite", "lint": []},
     {"id": "U-118", "name": "uppercase marker with a dot and one space", "class": "none", "lint": []},
-    {"id": "U-119", "name": "list marker left of every open list under item text", "class": "none", "lint": ["uneven-list-indent"]}
+    {"id": "U-119", "name": "list marker left of every open list under item text", "class": "none", "lint": ["uneven-list-indent"]},
+    {"id": "U-120", "name": "ordered task box that 0.1 kept as text", "class": "escape", "lint": []},
+    {"id": "U-121", "name": "defined shortcut that 0.1 kept as text", "class": "escape", "lint": []}
   ],
   "extensions": [
     {"id": "X-001", "name": "bidirectional control in the source", "class": "none", "lint": []},

@@ -219,7 +219,7 @@ describe('lists', () => {
     expect(blocks('- [x]a')).toBe('ul(-)[li[p"[x]a"]]')
     expect(blocks('- [y] a')).toBe('ul(-)[li[p"[y] a"]]')
     expect(blocks('-  [x] a')).toBe('ul(-)[li[p"[x] a"]]')
-    expect(blocks('1. [x] a')).toBe('ol(1.)[li[p"[x] a"]]')
+    expect(blocks('1. [x]')).toBe('ol(1.)[li[p"[x]"]]')
   })
 
   it('C2-B-049: a matching marker at the list\'s column is a sibling, with or without a task box', () => {

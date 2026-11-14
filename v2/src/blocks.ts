@@ -541,6 +541,8 @@ function openOrderedItem(state: BlockState, end: number): boolean {
   if (delimiter < 0) return false
   const markerEnd = orderedMarkerEnd(src, pos, delimiter, end)
   if (markerEnd < 0) return false
+  const boxEnd = taskBoxEnd(src, markerEnd, end)
+  const box = boxEnd < 0 ? 0 : src.charCodeAt(markerEnd + 1) === UPPER_X ? LOWER_X : src.charCodeAt(markerEnd + 1)
   let style = src.charCodeAt(delimiter) === PAREN_CLOSE ? FLAG_PAREN : 0
   const first = src.charCodeAt(pos)
   // C2-B-042, C2-B-043: the bare dot numbers automatically and is of the decimal style.
@@ -552,8 +554,8 @@ function openOrderedItem(state: BlockState, end: number): boolean {
     start = letterStart(src, pos, delimiter, style)
   }
   const auto = start < 0
-  if (!openItem(state, ORDERED_LIST, style, auto ? FLAG_AUTO : 0, auto ? 0 : start, 0, delimiter + 1)) return false
-  moveTo(state, markerEnd, end)
+  if (!openItem(state, ORDERED_LIST, style, auto ? FLAG_AUTO : 0, auto ? 0 : start, box, delimiter + 1)) return false
+  moveTo(state, boxEnd >= 0 ? boxEnd : markerEnd, end)
   return true
 }
 

@@ -209,26 +209,27 @@ function listParts(r: Render, node: ListNode): TagParts {
 function list(r: Render, node: ListNode, level: number): void {
   const name = node.marker.kind === 'ordered' ? 'ol' : 'ul'
   line(r, level, `<${name}${tag(r, node, listParts(r, node))}>`)
-  for (const item of node.children) listItem(r, item, level + 1, node.spacing === 'tight')
+  for (const item of node.children) listItem(r, item, level + 1, node.spacing === 'tight', node.marker.kind === 'bullet')
   line(r, level, `</${name}>`)
 }
 
 /** C2-H-032, C2-H-033: the opening tag of an item, with the box of a task item. */
-function itemOpen(r: Render, node: ListItemNode): string {
+function itemOpen(r: Render, node: ListItemNode, bullet: boolean): string {
   const task = node.task
   if (task === undefined) return `<li${tag(r, node)}>`
   const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
   const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
   const label = escapeAttribute(blockText(node.children))
-  const open = `<li${tag(r, node, { structural: state, base: ['task'], style: 'list-style: none', styleFirst: true })}>`
+  const open = `<li${tag(r, node, { structural: state, base: ['task'],
+    ...(bullet ? { style: 'list-style: none', styleFirst: true } : {}) })}>`
   return `${open}<input type="checkbox"${checked} disabled aria-label="${label}"> `
 }
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */
-function listItem(r: Render, node: ListItemNode, level: number, tight: boolean): void {
+function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, bullet: boolean): void {
   const blocks = visibleBlocks(node.children)
   const first = blocks[0]
-  let open = itemOpen(r, node)
+  let open = itemOpen(r, node, bullet)
   let rest = blocks
   if (isTextParagraph(first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.

@@ -346,10 +346,18 @@
  {
   "file": "syntax-blocks.md",
   "number": 44,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "1. [x] a",
-  "html": "<ol>\n  <li>[x] a</li>\n</ol>"
+  "html": "<ol class=\"task-list\">\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"a\"> a</li>\n</ol>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 232,
+  "label": "unverified",
+  "flags": [],
+  "input": "II) [x] a\nIII) b",
+  "html": "<ol type=\"I\" start=\"2\" data-delim=\")\" class=\"task-list\">\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"a\"> a</li>\n  <li>b</li>\n</ol>"
  },
  {
   "file": "syntax-blocks.md",
@@ -2385,11 +2393,19 @@
  },
  {
   "file": "syntax-inline.md",
+  "number": 109,
+  "label": "unverified",
+  "flags": [],
+  "input": "[later] and ![later] and [missing]\n\n[later]: /u",
+  "html": "<p><a href=\"/u\">later</a> and <img src=\"/u\" alt=\"later\"> and [missing]</p>"
+ },
+ {
+  "file": "syntax-inline.md",
   "number": 67,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "[text][ref] and [ref][] and [ref] and ![img][ref]\n\n[ref]: /u \"T\"",
-  "html": "<p><a href=\"/u\" title=\"T\">text</a> and <a href=\"/u\" title=\"T\">ref</a> and [ref] and <img src=\"/u\" alt=\"img\" title=\"T\"></p>"
+  "html": "<p><a href=\"/u\" title=\"T\">text</a> and <a href=\"/u\" title=\"T\">ref</a> and <a href=\"/u\" title=\"T\">ref</a> and <img src=\"/u\" alt=\"img\" title=\"T\"></p>"
  },
  {
   "file": "syntax-inline.md",
@@ -2570,9 +2586,9 @@
  {
   "file": "syntax-inline.md",
   "number": 90,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
-  "input": "See [@doe2020] and [see @doe2020, p. 3; @roe].",
+  "input": "See [@doe2020] and [see @doe2020, p. 3; @roe].\n\n[@doe2020]: /u",
   "html": "<p>See [<span class=\"mention\"><strong>@doe2020</strong></span>] and [see <span class=\"mention\"><strong>@doe2020</strong></span>, p. 3; <span class=\"mention\"><strong>@roe</strong></span>].</p>"
  },
  {

@@ -55,6 +55,8 @@ export interface Writer {
   kindsBelow: Map<Node, number>
   /** C2-I-098: the expansion of each term the document defines. */
   abbreviations: Map<string, string>
+  /** Definition keys of the whole document, used while reparsing one written block. */
+  linkKeys: ReadonlySet<string>
   /** The parse of the group of blocks as it was last written (C2-W-089). */
   parsed: DocumentNode | null
   prewrittenAttributes: Node | null
@@ -67,7 +69,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lines: [], lead: null, bareDotLead: false, escapes: new Map(), forms: new Map(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
-    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), parsed: null, prewrittenAttributes: null,
+    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null, prewrittenAttributes: null,
   }
 }
 

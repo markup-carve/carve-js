@@ -66,6 +66,8 @@ export interface InlineState {
   bidi: boolean
   /** Open containers of the block pass around this content (C2-I-118). */
   baseDepth: number
+  /** Definition keys from the completed block pass, including definitions after this content. */
+  definitions: ReadonlySet<string> | null
 
   tokens: Int32Array
   tokenLength: number
@@ -138,6 +140,7 @@ function createState(): InlineState {
     lineComments: true,
     bidi: false,
     baseDepth: 0,
+    definitions: null,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,
     tokenEnd: 0,
@@ -192,6 +195,7 @@ export function acquireInlineState(): InlineState {
 export function releaseInlineState(state: InlineState): void {
   state.src = ''
   state.text = ''
+  state.definitions = null
   if (pool.length < POOL_SIZE) pool.push(state)
 }
 

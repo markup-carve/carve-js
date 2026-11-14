@@ -73,7 +73,7 @@
   {"id": "U-072", "title": "Editorial comment that starts like an id", "inputs": ["a*{#b} c #}\n"], "outputs": [], "class": "report"},
   {"id": "U-073", "title": "Sigil after a letter or number", "inputs": ["see config:items[0] and :smile: and x:smile:\n", "color #fff and a#tag and é#tag and #tag\n", "mail a@user and é@user and @user and (@user)\n"], "outputs": [], "class": "report"},
   {"id": "U-074", "title": "Inline spellings that read the same", "inputs": ["***bold italic*** here\n", "**bold** and //it//\n", "[a]{} and [b]{.c}\n", "!`x` and !`y`{.c}\n", "x{^2^} H{,2,}O ^bare^ ,bare,\n", "{+add+} {-del-} {_u_} {~s~} {=h=}\n"], "outputs": [], "class": "none"},
-  {"id": "U-075", "title": "References that read the same", "inputs": ["See [^n](/u).\n\n[^n]: Note.\n", "See [x][ ] here.\n", "[label]: /u\n\nSee [label].\n", "[Ref]: /u\n\n[x][ref]\n", "# Pic\n\n![Pic][]\n", "# My Heading\n\nSee [My Heading][].\n"], "outputs": [], "class": "none"},
+  {"id": "U-075", "title": "References that read the same", "inputs": ["See [^n](/u).\n\n[^n]: Note.\n", "See [x][ ] here.\n", "[Ref]: /u\n\n[x][ref]\n", "# Pic\n\n![Pic][]\n", "# My Heading\n\nSee [My Heading][].\n"], "outputs": [], "class": "none"},
   {"id": "U-076", "title": "Raw HTML block", "inputs": ["```=html\n<b>x</b>\n```\n"], "outputs": [], "class": "report"},
   {"id": "U-077", "title": "Raw HTML span", "inputs": ["a `<b>x</b>`{=html} b\n"], "outputs": [], "class": "report"},
   {"id": "U-078", "title": "Bare HTML tag", "inputs": ["a <b>bold</b> tag\n"], "outputs": [], "class": "none"},
@@ -88,7 +88,7 @@
   {"id": "U-108", "title": "Row attribute one space after the closing pipe", "inputs": ["| a | b | {.r}\n"], "outputs": ["| a | b | \\{.r}\n"], "class": "escape"},
   {"id": "U-109", "title": "Line indented short of the content column after a blank line", "inputs": ["- item\n\n second paragraph\n", "Text[^a].\n\n[^a]: first\n\n second para one space\n"], "outputs": ["- item\n\nsecond paragraph\n", "Text[^a].\n\n[^a]: first\n\nsecond para one space\n"], "class": "escape"},
   {"id": "U-110", "title": "Full reference whose label is a heading", "inputs": ["# My Heading\n\nSee [My Heading][] and [the text][My Heading].\n"], "outputs": ["# My Heading\n\nSee [My Heading][] and \\[the text][My Heading].\n"], "class": "escape"},
-  {"id": "U-111", "title": "Reference label that wraps", "inputs": ["See [the text][a long\nlabel] here.\n\n[a long label]: /u\n"], "outputs": ["See \\[the text][a long\nlabel] here.\n\n[a long label]: /u\n"], "class": "escape"},
+  {"id": "U-111", "title": "Reference label that wraps", "inputs": ["See [the text][a long\nlabel] here.\n\n[a long label]: /u\n"], "outputs": ["See \\[the text]\\[a long\nlabel] here.\n\n[a long label]: /u\n"], "class": "escape"},
   {"id": "U-112", "title": "Reference label that starts with a caret", "inputs": ["See [x][^n].\n\n[^n]: Note.\n"], "outputs": ["See [x]\\[^n].\n\n[^n]: Note.\n"], "class": "escape"},
   {"id": "U-113", "title": "Markup inside an unresolved reference", "inputs": ["See [*b* and /i/][nope] and [`c`][].\n", "See [a^[note] b][nope].\n"], "outputs": ["See [\\*b\\* and \\/i\\/][nope] and [\\`c\\`][].\n", "See [a\\^[note] b][nope].\n"], "class": "escape"},
   {"id": "U-114", "title": "New spellings that 0.1 already had", "inputs": [". first\n. second\n", "::: >\nquoted\nsecond\n:::\n", "::: spoiler \"Title\"\nbody\n:::\n", "{start=9}\na) one\nb) two\n", ":::: note\nbody\n:::\nafter\n::::\n"], "outputs": [], "class": "none"},
@@ -96,5 +96,7 @@
   {"id": "U-116", "title": "Tilde fence", "inputs": ["~~~js\nx\n~~~\n", "~~~~ py \"t\"\na ``` b\n~~~~~\n"], "outputs": ["```js\nx\n```\n", "```` py \"t\"\na ``` b\n````\n"], "class": "rewrite"},
   {"id": "U-117", "title": "List of task items next to a list of plain items", "inputs": ["- [ ] a\n- b\n", "- a\n\n- [x] b\n", "> - [ ] a\n> - b\n"], "outputs": ["- [ ] a\n\n\n\n- b\n", "- a\n\n\n\n- [x] b\n", "> - [ ] a\n>\n>\n>\n> - b\n"], "class": "rewrite"},
   {"id": "U-118", "title": "Uppercase marker with a dot and one space", "inputs": ["II. Background\n", "MD. Jones\n", "I.  a\nII. b\n"], "outputs": [], "class": "none"},
-  {"id": "U-119", "title": "List marker left of every open list under item text", "inputs": ["  - a\n- b\n", " 9. a\n10. b\n", "- a\n    - b\n  - c\n"], "outputs": [], "class": "none"}
+  {"id": "U-119", "title": "List marker left of every open list under item text", "inputs": ["  - a\n- b\n", " 9. a\n10. b\n", "- a\n    - b\n  - c\n"], "outputs": [], "class": "none"},
+  {"id": "U-120", "title": "Ordered task box kept as text", "inputs": ["1. [ ] x\n", "II) [x] y\n"], "outputs": ["1. \\[ ] x\n", "II) \\[x] y\n"], "class": "escape"},
+  {"id": "U-121", "title": "Defined shortcut kept as text", "inputs": ["[text]\n\n[text]: /u\n", "![text]\n\n[text]: /u\n"], "outputs": ["\\[text]\n\n[text]: /u\n", "!\\[text]\n\n[text]: /u\n"], "class": "escape"}
 ]

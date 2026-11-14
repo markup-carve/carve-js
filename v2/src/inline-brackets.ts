@@ -1,12 +1,13 @@
 // The bracket stack of the inline scan (C2-I-006): openers, the closing bracket and what is
 // glued to it, the link tail, reference labels and footnote references.
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
+import { foldLabel } from './ast-attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT,
   QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
-  ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
+  ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
 } from './inline-kinds.ts'
 import {
   type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_CLOSE,
@@ -233,6 +234,25 @@ function closeConstruct(state: InlineState, open: number, pos: number): number {
   return next === BRACE_OPEN ? closeSpan(state, open, pos, image) : NONE
 }
 
+/** C2-I-072: only a defined key turns an otherwise plain pair into a shortcut reference. */
+function closeShortcut(state: InlineState, open: number, pos: number): number {
+  const definitions = state.definitions
+  if (definitions === null) return NONE
+  const next = state.text.charCodeAt(pos + 1)
+  // C2-I-069, C2-I-078: these failed tails have a specified text reading.
+  if (next === PAREN_OPEN || (next === BRACKET_OPEN &&
+    (state.text.charCodeAt(pos + 2) === CARET || state.text.charCodeAt(pos + 2) === AT_SIGN))) return NONE
+  const start = state.tokens[open + TOKEN_END]!
+  const image = state.tokens[open + TOKEN_A] === OPEN_IMAGE
+  // C2-I-101: a citation-shaped pair keeps its core reading as text and a mention.
+  if (!image && state.text.charCodeAt(start) === AT_SIGN) return NONE
+  const key = foldLabel(state.text.slice(start, pos))
+  if (key === '' || !definitions.has(key)) return NONE
+  closePair(state, open, pos, image ? IMAGE : LINK)
+  pushToken(state, LABEL, pos + 1, pos + 1, start, pos, FLAG_SHORTCUT, NONE)
+  return pos + 1
+}
+
 /** C2-I-006: a closing bracket pairs with the nearest open one. With none it is text. */
 export function scanBracketClose(state: InlineState, pos: number): number {
   if (state.bracketDepth === 0) return pos + 1
@@ -244,6 +264,7 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   }
   const end = closeConstruct(state, open, pos)
   if (end !== NONE) return end
+  if (state.definitions !== null && closeShortcut(state, open, pos) !== NONE) return pos + 1
   // C2-I-065: the pair forms no construct. It is text and bounds nothing.
   state.tokens[open] = TOKEN_TEXT
   return pos + 1

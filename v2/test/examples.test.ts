@@ -1,4 +1,4 @@
-// All 226 examples of the block chapter (spec/0.2/syntax-blocks.md on next2 of the spec repository), checked at the
+// All 232 examples of the block chapter (spec/0.2/syntax-blocks.md on next2 of the spec repository), checked at the
 // block level. The chapter gives the expected HTML; the shapes below were checked against that
 // HTML by hand. The HTML itself is compared once the renderer exists. Notation: support/shape.ts.
 import { describe, expect, it } from 'vitest'
@@ -50,7 +50,8 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [41, ['mmmmmmmmmm) a'], 'p"mmmmmmmmmm) a"'],
   [42, ['- [ ] a', '- [x] b', '- [X] c', '- [_] d'], 'ul(-)[li( )[p"a"] li(x)[p"b"] li(x)[p"c"] li(_)[p"d"]]'],
   [43, ['- [ ]'], 'ul(-)[li[p"[ ]"]]'],
-  [44, ['1. [x] a'], 'ol(1.)[li[p"[x] a"]]'],
+  [44, ['1. [x] a'], 'ol(1.)[li(x)[p"a"]]'],
+  [232, ['II) [x] a', 'III) b'], 'ol(I2))[li(x)[p"a"] li[p"b"]]'],
   [45, ['- [ ] a', '- b'], 'ul(-)[li( )[p"a"] li[p"b"]]'],
   [46, ['- a', '', '', '- b'], 'ul(-,loose)[li[p"a"] li[p"b"]]'],
   [47, ['- a', '', '', '', '- b'], 'ul(-)[li[p"a"]] ul(-)[li[p"b"]]'],

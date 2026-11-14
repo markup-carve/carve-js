@@ -4,7 +4,7 @@ import { BRACE_CLOSE, LF, LOWER_A, SPACE } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
   ATTRIBUTE_BLOCK, BRACED_KINDS, BRACKET_SPAN, DESTINATION, EMPHASIS, ESCAPE, FLAG_BRACED, FLAG_COLLAPSED,
-  FLAG_REFERENCE, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE, isHost, LABEL, NBSP,
+  FLAG_REFERENCE, FLAG_SHORTCUT, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE, isHost, LABEL, NBSP,
   RAW_INLINE, SMART, SOFT_BREAK, STRONG, TITLE,
 } from './inline-kinds.ts'
 import {
@@ -118,7 +118,7 @@ function referenceFlags(state: InlineState, close: number): number {
   const tokens = state.tokens
   const part = close + TOKEN_WIDTH
   if (part >= state.tokenLength || tokens[part] !== LABEL) return 0
-  return FLAG_REFERENCE | (tokens[part + TOKEN_C]! & FLAG_COLLAPSED)
+  return FLAG_REFERENCE | (tokens[part + TOKEN_C]! & (FLAG_COLLAPSED | FLAG_SHORTCUT))
 }
 
 function writeOpen(state: InlineState, at: number): number {

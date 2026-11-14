@@ -237,7 +237,7 @@ export interface ImageNode extends NodeBase {
   key?: string
   namespace?: "link"
   resourceId?: string
-  refForm?: "full" | "collapsed"
+  refForm?: "full" | "collapsed" | "shortcut"
   longDescription?: Block[]
 }
 
@@ -290,7 +290,7 @@ export interface LinkNode extends NodeBase {
   targetKind?: "url" | "wiki" | "doc" | "xref"
   key?: string
   namespace?: "link"
-  refForm?: "full" | "collapsed"
+  refForm?: "full" | "collapsed" | "shortcut"
 }
 
 export interface LinkReferenceDefinitionNode extends NodeBase {
@@ -742,8 +742,8 @@ export type NodeHandlers<R, C = void> = { [T in keyof NodeOfType]?: (node: NodeO
 export const FIELD_VALUES = {
   "*.dir": ["ltr","rtl","auto"],
   "comment.form": ["block","line","braced"],
-  "link.refForm": ["full","collapsed"],
-  "image.refForm": ["full","collapsed"],
+  "link.refForm": ["full","collapsed","shortcut"],
+  "image.refForm": ["full","collapsed","shortcut"],
   "xref.display": ["number","page","title","full"],
   "paragraph.role": ["image","math"],
   "citation.mode": ["normal","author-in-text","suppress-author"],

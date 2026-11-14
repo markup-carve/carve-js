@@ -306,7 +306,7 @@ function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: M
   w.lead = null
   w.starts.clear()
   writeBlocks(w, group, '', 0, false)
-  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations, w.extensions)
+  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations, w.extensions, w.linkKeys)
 }
 
 /**
@@ -439,7 +439,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   check.source = source
-  const parsed = parseChunk(source, w.abbreviations, w.extensions)
+  const parsed = parseChunk(source, w.abbreviations, w.extensions, w.linkKeys)
   w.parsed = parsed
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
@@ -499,7 +499,7 @@ function necessaryBraceEscapes(source: string, document: DocumentNode, w: Writer
   while (at >= 0) {
     if (source[at + 2] === '/') {
       const candidate = source.slice(0, at) + source.slice(at + 1)
-      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions), document)) source = candidate
+      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys), document)) source = candidate
     }
     at = source.indexOf('\\{', at + 1)
   }
@@ -511,6 +511,7 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
+  w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   const written = writeDocument(w, document)

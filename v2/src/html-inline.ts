@@ -128,13 +128,15 @@ function withDefinition<N extends LinkNode | ImageNode>(node: N, definition: Lin
 
 /** C2-H-085: the label part of an unresolved reference, written from its key. */
 function unresolvedLabel(node: LinkNode | ImageNode, key: string): string {
-  return escapeText(`${node.refForm === 'collapsed' ? '[]' : `[${key}]`}${attributeBlockText(node)}`)
+  const label = node.refForm === 'shortcut' ? '' : node.refForm === 'collapsed' ? '[]' : `[${key}]`
+  return escapeText(`${label}${attributeBlockText(node)}`)
 }
 
 function referenceCarriers(r: Render, node: LinkNode | ImageNode, key: string | undefined): Pair[] {
   if (!r.settings.roundtrip || key === undefined) return []
   const carriers: Pair[] = [['data-carve-ref', key]]
   if (node.refForm === 'collapsed') carriers.push(['data-carve-ref-collapsed', null])
+  if (node.refForm === 'shortcut') carriers.push(['data-carve-ref-shortcut', null])
   return carriers
 }
 

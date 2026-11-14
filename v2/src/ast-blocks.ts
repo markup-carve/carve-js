@@ -496,6 +496,18 @@ function collectAbbreviations(src: string, root: BlockNode): Map<string, string>
   return terms
 }
 
+/** C2-I-125: definition keys are block facts available to the inline pass, even when defined later. */
+function collectLinkKeys(src: string, root: BlockNode): Set<string> | null {
+  let keys: Set<string> | null = null
+  for (const child of root.children!) {
+    if (child.kind !== LINK_DEFINITION) continue
+    const [start, end] = definitionLabel(src, child.start)
+    keys ??= new Set()
+    keys.add(foldLabel(src.slice(start, end)))
+  }
+  return keys
+}
+
 /** What a parse knows of the tree it built, which resolution reads beside the tree. */
 export interface ParseFacts {
   sourceNames: ReadonlyMap<Node, string> | null
@@ -561,7 +573,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
-  collectSourceNames = false,
+  collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null,
 ): ParsedTree {
   // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
   const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
@@ -571,6 +583,7 @@ export function buildSource(
   try {
     scanBlocks(blocks, text)
     const root = buildTree(blocks.events, blocks.eventLength)
+    inline.definitions = linkKeys ?? collectLinkKeys(text, root)
     const ctx: TreeContext = {
       src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
       headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
