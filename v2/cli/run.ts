@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, render, type Diagnostic,
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
-import { formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
+import { ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
 import { type ParsedArgs } from './flags.ts'
 
 export class CliError extends Error {
@@ -157,6 +157,13 @@ export function run(args: ParsedArgs): number {
     if (result.record !== undefined) records.push(result.record)
   }
   if (escapedRawHtml) process.stderr.write('carve2: raw HTML escaped; pass --raw-html to allow it\n')
-  if (args.values['json'] === true) process.stdout.write(`${JSON.stringify({ files: records }, null, 2)}\n`)
+  if (args.command === 'upgrade') {
+    process.stderr.write('U-079 report: review host render options; rawHtml is off by default (pass --raw-html to keep raw HTML).\n')
+    process.stderr.write(`read with the 0.1 engine ${ENGINE_01_VERSION}\n`)
+  }
+  if (args.values['json'] === true) {
+    const result = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: records } : { files: records }
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
+  }
   return status
 }
