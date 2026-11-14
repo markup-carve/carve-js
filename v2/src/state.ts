@@ -13,7 +13,7 @@ const INITIAL_EVENTS = 1024 * EVENT_WIDTH
 const INITIAL_LINES = 256
 const POOL_SIZE = 4
 
-/** C2-B-001: the container stack, outermost first, with the document at index 0. */
+/** C2-B-001: the open containers of the stack of open blocks, outermost first, with the document at index 0. */
 export interface Containers {
   // `column` is the marker column of an item, a description or a footnote body, the column of a
   // description list and the run length of a div. `style` holds the enter flags that are the kind of a list or of a div.
@@ -24,7 +24,10 @@ export interface Containers {
   depth: number
 }
 
-/** The open leaf: NO_LEAF, a text leaf, an opaque leaf or TABLE, whose rows are read like a leaf's lines. */
+/**
+ * C2-B-001: the innermost entry of the stack of open blocks, the open leaf with what its opener set:
+ * NO_LEAF, a text leaf, an opaque leaf or TABLE, whose rows are read like a leaf's lines.
+ */
 export interface OpenLeaf {
   kind: number
   // The first line of the open text leaf and the number of its lines (C2-B-017, C2-B-157).
@@ -45,8 +48,8 @@ export interface OpenLeaf {
 }
 
 /**
- * C2-B-001: the facts kept about the lines directly above. Whether the line is line 1 of the
- * document (C2-B-161) is not kept: the loop of the pass knows it.
+ * C2-B-001: the five facts kept about the lines directly above, beside the stack of open blocks.
+ * Whether the line is line 1 of the document (C2-B-161) is not kept: the loop of the pass knows it.
  */
 export interface LinesAbove {
   /** C2-B-052, C2-B-062: blank lines since the last line that was not blank. */
