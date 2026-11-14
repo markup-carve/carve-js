@@ -8,6 +8,7 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["includes", "parse"],
   ["labels", "render"],
   ["mode", "render"],
+  ["normalize", "format"],
   ["platforms", "lint"],
   ["profile", "render"],
   ["rawHtml", "render"],
@@ -31,6 +32,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
   ["includes", "structure"],
   ["labels", "map"],
   ["mode", "enum"],
+  ["normalize", "boolean"],
   ["platforms", "list"],
   ["profile", "enum"],
   ["rawHtml", "boolean"],
@@ -63,6 +65,7 @@ export const ENUM_DEFAULTS: ReadonlyMap<string, string> = new Map([
 
 export const BOOLEAN_DEFAULTS: ReadonlyMap<string, boolean> = new Map([
   ["alignTables", false],
+  ["normalize", false],
   ["rawHtml", false],
   ["roundtrip", false],
   ["sections", true],

@@ -39,6 +39,8 @@ export interface Options {
   profile?: Profile
   strictLosses?: boolean
   alignTables?: boolean
+  /** C2-W-127: `format` writes as if the parse had no sidecar. */
+  normalize?: boolean
   rules?: Readonly<Record<string, boolean>>
   platforms?: readonly string[]
 }
@@ -48,7 +50,7 @@ export interface ParseOptions extends Pick<Options, 'extensions' | 'includes' | 
   positions?: boolean
 }
 
-export type RenderOptions = Omit<Options, 'alignTables' | 'rules' | 'platforms'>
+export type RenderOptions = Omit<Options, 'alignTables' | 'normalize' | 'rules' | 'platforms'>
 
 /** The options with every default filled in. */
 export interface Settings {

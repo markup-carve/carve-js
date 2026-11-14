@@ -571,7 +571,7 @@ describe('every option is checked against its declared type first', () => {
   const rows = (JSON.parse(readFileSync(new URL('../data/options.json', import.meta.url), 'utf8')) as { options: OptionRow[] }).options
 
   const VALID: Readonly<Record<string, unknown>> = {
-    alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', platforms: ['github'],
+    alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
     profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: true }, sections: false, smartTypography: false,
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
   }
@@ -605,8 +605,8 @@ describe('every option is checked against its declared type first', () => {
   const typeRefusal = (message: string): boolean =>
     message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
 
-  it('C2-H-137: the option list is the 19 of the data file', () => {
-    expect(rows).toHaveLength(19)
+  it('C2-H-137: the option list is the 20 of the data file', () => {
+    expect(rows).toHaveLength(20)
     expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
   })
 
