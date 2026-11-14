@@ -1,7 +1,7 @@
 // Writes data/examples.json from the `compare` containers of the four documents of the 0.2
 // specification that hold examples, and copies every data file this engine keeps a copy of.
 //   node v2/scripts/extract-examples.ts <path to spec/0.2>
-import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export interface SpecExample {
@@ -64,5 +64,8 @@ if (process.argv[1] === import.meta.filename) {
   const copies = [...new Set([...readdirSync(data), ...NEW_DATA])]
     .filter((name) => name.endsWith('.json') && existsSync(join(spec, 'data', name)))
   for (const name of copies) copyFileSync(join(spec, 'data', name), join(data, name))
-  console.log(`${examples.length} examples, ${copies.length} data files`)
+  const schemas = ['carve-source.schema.json', 'carve-style.schema.json', 'carve-annotation.schema.json']
+  mkdirSync(join(data, 'schemas'), { recursive: true })
+  for (const name of schemas) copyFileSync(join(spec, 'data/schemas', name), join(data, 'schemas', name))
+  console.log(`${examples.length} examples, ${copies.length + schemas.length} data files`)
 }

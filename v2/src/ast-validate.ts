@@ -705,7 +705,10 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['caption', (value, path, walk) => checkNode(value, path, ['caption'], walk)],
   ['fallback', (value, path, walk, node) => {
     const inner: Walk = { ...walk, fallbacks: walk.fallbacks + 1 }
-    checkList(value, path, node['type'] === 'block_extension' ? 'blocks' : 'inlines', inner)
+    const role = node['type'] === 'block_extension' ? BLOCKS : INLINES
+    const allowed = typeof node['name'] === 'string' && node['name'].includes('.')
+      ? role.filter((type) => type !== 'block_extension' && type !== 'inline_extension') : role
+    checkList(value, path, allowed, inner)
   }],
   ['columns', nodeList(['table_column'])],
   ['pairs', nodeList(['ruby_pair'])],

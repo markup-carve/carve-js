@@ -51,8 +51,10 @@ function fenceClaim(node: CodeBlockNode, name: string): ExtensionClaim {
 }
 
 function inlineClaim(node: InlineExtensionNode, name: string): ExtensionClaim {
-  const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: node.children }] }
-  const source: ExtensionSource = { form: 'inline', name, body: write(document).trimEnd() }
+  const core: InlineExtensionNode = { type: 'inline_extension', name, children: node.children }
+  const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [core] }] }
+  const written = write(document)
+  const source: ExtensionSource = { form: 'inline', name, body: written.slice(name.length + 2, -2) }
   return { form: 'inline', name, node, children: node.children,
     ...(node.attrs === undefined ? {} : { attrs: node.attrs }), source }
 }

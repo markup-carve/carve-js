@@ -58,6 +58,7 @@ const BEYOND_SCHEMA = [
   'an undeclared extension name', 'an undeclared data name', 'no resource has the id', 'no header cell has the id',
   'the document and envelope versions differ', 'fallbacks are nested deeper', 'the tree is nested deeper',
   'the start lies behind the end', 'coordinates disagree with the source', 'a node in an opaque object',
+  'extension nesting exceeds 32',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {

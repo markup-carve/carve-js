@@ -197,7 +197,9 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   let inner = frame
   if (origin !== undefined) inner = visitBlock(walk, node, path, origin, frame)
   else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
-  else if (node.type === 'block_extension' || node.type === 'inline_extension') inner = visitExtension(walk, node, path, frame)
+  else if ((node.type === 'block_extension' || node.type === 'inline_extension') && node.source !== undefined) {
+    inner = visitExtension(walk, node, path, frame)
+  }
   else visitInline(walk, node, path, frame)
   // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
   forEachSlot(node, (nodes, step, single) => {

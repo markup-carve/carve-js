@@ -83,12 +83,21 @@ describe('the extension interface', () => {
       .toEqual(parse(':callout[Hi]\n', { extensions: [calloutExtension], positions: false }))
   })
 
+  it('C2-X-017: a transform result depends only on its claimed subtree', () => {
+    const first = parse('Before\n\n:callout[Hi]\n', { extensions: [calloutExtension], positions: false })
+    const second = parse('Different context\n\n:callout[Hi]\n', { extensions: [calloutExtension], positions: false })
+    expect(first.children[1]).toEqual(second.children[1])
+  })
+
   it('C2-X-019, C2-X-020, C2-X-021, C2-X-022: props, ordered slots, payload and fallback validate', () => {
     const tree = parseTree('```diagram\na -> b\n```\n', { extensions: [diagramExtension], positions: false }).document
     expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).not.toThrow()
     const node = outer(tree)
     node.payload = [{ format: 'text/plain', value: null }]
     expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).toThrow('/children/0/payload/0/value')
+    delete node.payload
+    node.fallback = [{ type: 'block_extension', name: 'test.diagram', version: '1', children: [], fallback: [] }]
+    expect(() => validateTree(tree, undefined, undefined, [diagramExtension])).toThrow('does not stand here')
   })
 
   it('C2-X-023, C2-X-032, C2-X-035, C2-X-036: no renderer resolves and renders the fallback', () => {
@@ -97,6 +106,13 @@ describe('the extension interface', () => {
     const blocked = ':::: tabs\n::: tab "One"\n[x](javascript:alert)\n:::\n::::\n'
     expect(render(blocked, { extensions: tabsExtensions })).toContain('href=""')
     expect(render(blocked, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })).toContain('href=""')
+  })
+
+  it('C2-X-036: the article profile degrades raw content in slots and fallback', () => {
+    const input = ':::: tabs\n::: tab "One"\n`<i>`{=html}\n:::\n::::\n'
+    const options = { extensions: tabsExtensions, profile: 'article' as const, rawHtml: true }
+    expect(render(input, options)).toContain('&lt;i&gt;')
+    expect(render(input, { ...options, renderers: { 'carve.tabs': tabsRenderer } })).toContain('&lt;i&gt;')
   })
 
   it('C2-X-024, C2-X-025, C2-X-026, C2-X-027: source records and the writer carry the nested canonical divs', () => {
@@ -202,7 +218,7 @@ describe('the extension interface', () => {
     const renderers = { 'test.callout': calloutRenderer, 'test.diagram': diagramRenderer }
     expect(render(':callout[<em>]\n', { extensions, renderers })).toBe('<p><span class="callout">&lt;em&gt;</span></p>')
     expect(render('```diagram\na < b\n```\n', { extensions, renderers })).toContain('a &lt; b')
-    for (const text of [':callout[Hi]\n', '```diagram\na -> b\n```\n']) {
+    for (const text of [':callout[Hi]\n', ':callout[Hi ]\n', '```diagram\na -> b\n```\n']) {
       const document = parse(text, { extensions, positions: false })
       const written = writeWithDiagnostics(document, { extensions })
       expect(written.diagnostics).toEqual([])
@@ -244,5 +260,14 @@ describe('the extension interface', () => {
     delete document.data
     child.data = { 'carve.style': { namedStyles: {} } }
     expect(() => validateTree(document)).toThrow('only on the root')
+  })
+
+  it('C2-A-192 and C2-A-193: page furniture is silent in HTML and a reported writer loss', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [],
+      metadata: { headers: [{ placement: 'default', children: [paragraph('Report')] }], footers: [] } }
+    expect(renderWithDiagnostics(document)).toEqual({ html: '', diagnostics: [] })
+    expect(writeWithDiagnostics(document).diagnostics).toMatchObject([
+      { code: 'structure-unspellable', path: '/metadata/headers/0' },
+    ])
   })
 })
