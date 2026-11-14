@@ -58,6 +58,13 @@ describe('list markers in prose', () => {
     expect(render('- 3. x')).toContain('<ol start="3">')
   })
 
+  it('C2-B-015, C2-W-018: the writer keeps the blank line before a nested list that starts at another number than 1', () => {
+    expect(format('- a\n\n  2. a')).toBe('- a\n\n  2. a\n')
+    expect(format('i) x\n\n   ii) a')).toBe('i) x\n\n   ii) a\n')
+    expect(format('- a\n  1. b')).toBe('- a\n  1. b\n')
+    expect(format('- a\n  - b')).toBe('- a\n  - b\n')
+  })
+
   it('C2-B-043: a bare dot whose content starts with a dot and a space is no marker', () => {
     expect(render('. . . and then silence')).toBe('<p>. . . and then silence</p>')
     expect(render('1. a\n. . . b')).toBe('<ol>\n  <li>a\n. . . b</li>\n</ol>')

@@ -521,6 +521,8 @@ export function blankLinesBetween(w: Writer, before: Node, list: Node | null, no
 /** C2-W-018: whether `node`, the second block of a tight item, is a nested list directly below the first paragraph. */
 function isNestedList(w: Writer, before: Node, node: Node, at: number): boolean {
   if (at !== 1 || node.type !== 'list' || before.type !== 'paragraph') return false
+  // C2-B-015: only a bullet or a first marker with the value 1 opens a list below a paragraph.
+  if (node.marker.kind === 'ordered' && (node.marker.start ?? 1) !== 1) return false
   // An attribute line directly below the paragraph would be a lazy line of it (C2-B-024).
   return listAttributes(node, listMarkers(w, node).start) === ''
 }
