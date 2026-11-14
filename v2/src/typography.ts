@@ -83,8 +83,10 @@ function singleQuote(state: InlineState, pos: number, previous: number, next: nu
   const word = apostropheWord(text, pos + 1, state.end)
   if (word > 0) {
     // C2-I-108: the word is quoted when a single quote and then no letter and no number follow it. `n` never is.
+    // The word list holds one word of one letter, `n`.
     const closer = pos + 1 + word
-    if (word === 1 || text.charCodeAt(closer) !== APOSTROPHE || isWordCharacter(codePointAt(text, closer + 1, state.end))) return SMART_RIGHT_SINGLE_QUOTE
+    const quoted = word > 1 && text.charCodeAt(closer) === APOSTROPHE && !isWordCharacter(codePointAt(text, closer + 1, state.end))
+    if (!quoted) return SMART_RIGHT_SINGLE_QUOTE
   } else if (state.singleQuoteOpen && isWordCharacter(next)) {
     return SMART_RIGHT_SINGLE_QUOTE
   }
@@ -173,7 +175,9 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
   if (run === NO_MATCH) return pos
   const [source, kind] = SMART_RUNS[run]!
   // C2-I-117: the plus-minus sign needs its exact run.
-  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(after(state, pos + 2, to)))) return pos
+  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(after(state, pos + 2, to)))) {
+    return pos
+  }
   flushSpan(state, pos)
   writeSmart(state, pos, pos + source.length, kind)
   state.smartKind = kind

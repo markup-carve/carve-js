@@ -243,7 +243,8 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
   const first = blocks[0]
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
-    if (first !== undefined) text = first.attrs === undefined && first.lang === undefined ? inlineHtml(r, first.children) : paragraphHtml(r, first)
+    const bare = first !== undefined && first.attrs === undefined && first.lang === undefined
+    if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
   }

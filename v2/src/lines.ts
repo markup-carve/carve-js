@@ -176,7 +176,8 @@ export function orderedMarkerEnd(src: string, pos: number, delimiter: number, en
   const spaces = src.charCodeAt(delimiter) === DOT && delimiter === pos + 1 && isUpper(src.charCodeAt(pos)) ? 2 : 1
   const content = afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
   // C2-B-043: a bare dot before a dot and a space is an ellipsis written with spaces, no marker.
-  if (delimiter === pos && content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE) return -1
+  const ellipsis = content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE
+  if (delimiter === pos && ellipsis) return -1
   return content
 }
 
