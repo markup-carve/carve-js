@@ -1,7 +1,7 @@
 // The clauses that the specification commits after "fix what the review of today's clauses found"
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, write } from '../src/index.ts'
+import { type AstNode, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const CONTROLS = '‪‮⁦⁩'
@@ -141,5 +141,63 @@ describe('the bracket label', () => {
     expect(parse('::: [L]\nx\n:::', { positions: false }).children?.[0]).toMatchObject({ type: 'div', groupLabel: 'L' })
     expect(parse(`${fence} [L]\nx\n${fence}`, { positions: false }).children?.[0]).toEqual({ type: 'code_block', value: 'x\n', groupLabel: 'L' })
     expect(format('::: [L]\nx\n:::')).toBe('::: [L]\nx\n:::\n')
+  })
+})
+
+describe('a line comment behind a list', () => {
+  const fence = TICK.repeat(3)
+
+  function withComment(src: string): ReturnType<typeof writeWithDiagnostics> {
+    const document = parse(src, { positions: false })
+    document.children!.push({ type: 'comment', form: 'line', value: 'c' })
+    return writeWithDiagnostics(document)
+  }
+
+  for (const src of ['- a', ':: t\n: d', '[^n]: d']) {
+    it(`C2-W-122: a supplied tree with a line comment as the sibling of ${JSON.stringify(src)} is reported`, () => {
+      expect(withComment(src).diagnostics.map((entry) => `${entry.code} ${entry.path ?? ''}`)).toEqual(['structure-unspellable /children/1'])
+    })
+  }
+
+  it('C2-W-122, C2-W-123: behind an open fence the comment is a sibling and nothing is reported', () => {
+    const out = withComment(`- a\n\n  ${fence}\n  x\n  ${fence}`)
+    expect(out.source).toBe(`- a\n\n  ${fence}\n  x\n%% c\n`)
+    expect(out.diagnostics).toEqual([])
+  })
+})
+
+describe('continuation rows with no layout record', () => {
+  const fence = TICK.repeat(3)
+
+  it('C2-W-067: a pipe-table cell whose code span holds a line feed is written with a continuation row there', () => {
+    const document = parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false })
+    const out = writeWithDiagnostics(document)
+    expect(out.source).toBe(`| ${TICK}a | b c |\n+ b${TICK} | |\n`)
+    expect(out.diagnostics).toEqual([])
+  })
+
+  it('C2-W-067: a braced comment that holds a line feed is broken the same way', () => {
+    expect(write(parse('| {%a | b |\n+ x%} | c |', { positions: false }))).toBe('| {% a | b c |\n+ x %} | |\n')
+  })
+
+  it('C2-W-067: a delimited table writes a cell that holds a line feed in double quotes', () => {
+    const document = parse(`{table}\n${fence}csv\n"a\nb",c\n${fence}`, { positions: false })
+    expect(write(document)).toBe(`{table}\n${fence}csv\n"a\nb",c\n${fence}\n`)
+  })
+
+  it('C2-W-067: a rawRef that holds a line feed is written in its cell with one space in its place', () => {
+    expect(format('| [x][a | b |\n+ b] | c |\n\n[a b]: /u')).toBe('| [x][a b] | b |\n+ | c |\n\n[a b]: /u\n')
+  })
+})
+
+describe('the scheme test', () => {
+  it('C2-H-159: U+0000 of the source is read as U+FFFD, which the scheme test removes', () => {
+    expect(render('[x](java\u0000script:alert(1))')).toBe('<p><a href="">x</a></p>')
+    expect(render('[x](java\ufffdscript:alert(1))')).toBe('<p><a href="">x</a></p>')
+  })
+
+  it('C2-H-159: the two ranges of bidirectional controls are removed before the test', () => {
+    expect(render('[x](java\u202ascript:alert(1))')).toBe('<p><a href="">x</a></p>')
+    expect(render('[x](java\u2069script:alert(1))')).toBe('<p><a href="">x</a></p>')
   })
 })
