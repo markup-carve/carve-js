@@ -26,8 +26,8 @@ import {
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
-  isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isRawInfo, isThematicBreak, isWord, nextPipe, orderedDelimiter,
-  orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, skipSpaces, taskBoxEnd,
+  isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isRawInfo, isThematicBreak, isWord, orderedDelimiter,
+  orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
@@ -715,8 +715,8 @@ function tableLine(state: BlockState, end: number): boolean {
   if (last < 0) return false
   // C2-B-184, C2-B-185: a fragment is plain text for the cell of its column in the row above.
   writeEvent(state, eventTag(ENTER, ROW, FLAG_CONTINUATION), cursor.pos, 0)
-  for (let start = cursor.pos + 1; start <= last;) {
-    const stop = nextPipe(src, start, last + 1)
+  let start = cursor.pos + 1
+  for (const stop of separatorPipes(src, start, last + 1)) {
     const content = skipSpaces(src, start, stop)
     writeEvent(state, eventTag(ENTER, CELL, 0), start, 0)
     writeEvent(state, SPAN_TAG, content, trimEnd(src, content, stop))
@@ -737,8 +737,8 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   writeEvent(state, eventTag(ENTER, ROW, 0), cursor.pos, attribute < 0 ? 0 : attribute)
   let headers = 0
   let others = 0
-  for (let pipe = cursor.pos; pipe < closing;) {
-    const next = nextPipe(src, pipe + 1, closing + 1)
+  let pipe = cursor.pos
+  for (const next of separatorPipes(src, pipe + 1, closing + 1)) {
     const flags = writeCell(state, pipe, next)
     if ((flags & FLAG_HEADER) !== 0) headers++
     else if ((flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) === 0) others++

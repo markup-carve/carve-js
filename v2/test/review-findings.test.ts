@@ -192,3 +192,29 @@ describe('the spelling of an include directive', () => {
     expect(parse(write(decodeTree(tree))).children[0]).toMatchObject({ options: [['lines', "'1"]] })
   })
 })
+
+// The findings of the second code review.
+const BACKTICK = '`'
+const ESCAPED_RUN = `\\${BACKTICK}${BACKTICK}`
+// A quadratic pass over the inputs below takes a minute; a linear one a few dozen milliseconds.
+const LINEAR_BUDGET_MS = 3000
+
+type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
+
+/** The texts of the cells of the first row of the table that `source` opens. */
+function cellTexts(source: string): string[] {
+  const table = parse(source).children[0] as unknown as Nested
+  return table.children[0]!.children[0]!.children.map((cell) => cell.children.flatMap((block) => block.children.map((node) => node.value ?? '')).join(''))
+}
+
+describe('table rows in linear time', () => {
+  it('C2-B-169: a backtick run behind an escaped backtick protects no pipe without a closer of its length', () => {
+    expect(cellTexts(`| ${ESCAPED_RUN}x | y |`)).toEqual([`${BACKTICK}x`, 'y'])
+    expect(cellTexts(`| ${BACKTICK}a | b${BACKTICK} |`)).toHaveLength(1)
+    // A test that runs past its timeout still passes when it never yields, so the time is checked here.
+    const started = performance.now()
+    expect(cellTexts(`|${` ${ESCAPED_RUN}x |`.repeat(20000)}`)).toHaveLength(20000)
+    expect(parse(`| a |\n+${` ${ESCAPED_RUN}x |`.repeat(20000)}`).children).toHaveLength(1)
+    expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS)
+  })
+})

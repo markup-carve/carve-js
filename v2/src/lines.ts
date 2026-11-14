@@ -520,47 +520,83 @@ export function countValue(value: string | null): number {
 }
 
 /**
- * Offset of the next pipe that separates cells between `pos` and `end`, or -1 (C2-B-169). A pipe
- * is no separator when it is escaped or stands between a backtick run and its matching closing run.
+ * The backtick runs of one line, grouped by length, for code-span-aware scans that move forward.
+ * Built at the first backtick, so a line without one costs nothing; each length keeps a cursor, so
+ * finding every closing run of a forward scan is linear in the line (C2-B-169).
  */
-export function nextPipe(src: string, pos: number, end: number): number {
+class BacktickRuns {
+  private readonly starts = new Map<number, number[]>()
+  private readonly cursors = new Map<number, number>()
+
+  constructor(src: string, pos: number, end: number) {
+    let p = pos
+    while (p < end) {
+      if (src.charCodeAt(p) !== BACKTICK) {
+        p++
+        continue
+      }
+      const run = runLength(src, p, end, BACKTICK)
+      const list = this.starts.get(run)
+      if (list === undefined) this.starts.set(run, [p])
+      else list.push(p)
+      p += run
+    }
+  }
+
+  /** Start of the first run of exactly `length` at or after `pos`, or -1. Calls for one length move forward. */
+  closer(pos: number, length: number): number {
+    const list = this.starts.get(length)
+    if (list === undefined) return -1
+    let index = this.cursors.get(length) ?? 0
+    while (index < list.length && list[index]! < pos) index++
+    this.cursors.set(length, index)
+    return index < list.length ? list[index]! : -1
+  }
+}
+
+/**
+ * Offset of the first `target` character between `pos` and `end` that is neither escaped nor
+ * between a backtick run and its matching closing run, or -1. With `first` false the scan goes on
+ * to the last such offset, and `out` collects every one of them.
+ */
+function scanOutsideCode(src: string, pos: number, end: number, target: number, first: boolean, out: number[] | null): number {
+  let runs: BacktickRuns | null = null
+  let last = -1
   let p = pos
   while (p < end) {
     const code = src.charCodeAt(p)
-    if (code === PIPE) return p
-    if (code === BACKSLASH) {
+    if (code === target) {
+      if (first) return p
+      out?.push(p)
+      last = p
+      p++
+    } else if (code === BACKSLASH) {
       p += 2
     } else if (code === BACKTICK) {
       const run = runLength(src, p, end, BACKTICK)
-      const close = closingRun(src, p + run, end, run)
+      runs ??= new BacktickRuns(src, p + run, end)
+      const close = runs.closer(p + run, run)
       p = close < 0 ? p + run : close + run
     } else {
       p++
     }
   }
-  return -1
+  return last
 }
 
-/** Offset of the next backtick run of exactly `length` at or after `pos`, or -1. */
-function closingRun(src: string, pos: number, end: number, length: number): number {
-  let p = pos
-  while (p < end) {
-    if (src.charCodeAt(p) !== BACKTICK) {
-      p++
-      continue
-    }
-    const run = runLength(src, p, end, BACKTICK)
-    if (run === length) return p
-    p += run
-  }
-  return -1
+/**
+ * The pipes that separate cells between `pos` and `end`, in order (C2-B-169). A pipe is no
+ * separator when it is escaped or stands between a backtick run and its matching closing run.
+ */
+export function separatorPipes(src: string, pos: number, end: number): number[] {
+  const pipes: number[] = []
+  scanOutsideCode(src, pos, end, PIPE, false, pipes)
+  return pipes
 }
 
 /** Offset of the last separating pipe between `pos` and `end`, or -1. */
 function lastPipe(src: string, pos: number, end: number): number {
-  let last = -1
-  for (let p = nextPipe(src, pos, end); p >= 0; p = nextPipe(src, p + 1, end)) last = p
-  return last
+  return scanOutsideCode(src, pos, end, PIPE, false, null)
 }
 
 /** Offset of the brace block of the row attribute behind the closing pipe at `pipe`, or -1 (C2-B-167). */
@@ -592,21 +628,7 @@ export function continuationClosingPipe(src: string, pos: number, end: number): 
 
 /** Offset of the first bare `#` of a caption's text, the caption number mark, or -1 (C2-B-150). */
 export function captionNumberMark(src: string, pos: number, end: number): number {
-  let p = pos
-  while (p < end) {
-    const code = src.charCodeAt(p)
-    if (code === HASH) return p
-    if (code === BACKSLASH) {
-      p += 2
-    } else if (code === BACKTICK) {
-      const run = runLength(src, p, end, BACKTICK)
-      const close = closingRun(src, p + run, end, run)
-      p = close < 0 ? p + run : close + run
-    } else {
-      p++
-    }
-  }
-  return -1
+  return scanOutsideCode(src, pos, end, HASH, true, null)
 }
 
 /** Offset after the last character between `pos` and `end` that is not a space or a tab. */

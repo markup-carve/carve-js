@@ -20,7 +20,10 @@ function option(name: string, fallback: string): string {
 const sizes = option('sizes', '1000,10000,100000').split(',').map(Number)
 const limit = Number(option('limit', '60'))
 const only = option('only', '')
-const FENCE = '`'.repeat(3)
+const BACKTICK = '`'
+const FENCE = BACKTICK.repeat(3)
+// An escaped backtick and a run of one: the run has no closer among runs of two.
+const ESCAPED_RUN = `\\${BACKTICK}${BACKTICK}`
 // A stack of containers is capped at 200 (C2-B-190), so a nesting shape repeats a stack of this depth.
 const STACK = 190
 
@@ -78,6 +81,16 @@ export const BLOCK_SHAPES: readonly Shape[] = [
   ['continuation rows', (size) => `| a | b |\n${'+ c | d |\n'.repeat(size)}`],
   ['head rows with alignment marks', (size) => '|={>} a |={~} b |\n'.repeat(size)],
   ['tables with a caption', (size) => '| a |\n^ Table #: x\n\n'.repeat(size)],
+  // A backtick run behind an escaped backtick closes only on a run of its own length (C2-B-169),
+  // so a scan for its closer from every opener reads the rest of the line each time.
+  ['backtick runs without a closer in one row', (size) => `|${` ${ESCAPED_RUN}x`.repeat(size)} |`],
+  ['backtick runs of rising length in one row', (size) =>
+    `|${each(Math.ceil(Math.sqrt(2 * size)), (index) => ` ${BACKTICK.repeat(index + 1)}x`)} |`],
+  ['backtick runs without a closer in one continuation row', (size) => `| a |\n+${` ${ESCAPED_RUN}x`.repeat(size)} |`],
+  ['backtick runs without a closer in a caption', (size) => `| a |\n^ ${`${ESCAPED_RUN}x `.repeat(size)}#`],
+  ['unclosed brace blocks in the cells of one row', (size) => `|${'{.a x |'.repeat(size)}`],
+  ['cells that end in a brace block', (size) => `|${' a{.b} |'.repeat(size)}{.r}`],
+  ['backtick runs without a closer in a heading', (size) => `# ${`${ESCAPED_RUN}x `.repeat(size)}`],
   ['captioned images and cross-references', (size) => each(size, (index) => `{#f${index}}\n![a](b)\n^ Figure #: x\n\n</#f${index}>\n\n`)],
   ['rows of a delimited table', (size) => `{table}\n${FENCE}csv\n${'a,"b,c",d\n'.repeat(size)}${FENCE}`],
   ['terms and descriptions', (size) => ':: t\n: d\n'.repeat(size)],
