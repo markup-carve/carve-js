@@ -2,7 +2,7 @@
 // "fix what the review of today's clauses found" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
 import {
-  type AstNode, format, parse, parseWithLayout, render, type RenderOptions, write, writeWithDiagnostics,
+  type AstNode, format, parse, parseWithLayout, render, type RenderOptions, treesEqual, write, writeWithDiagnostics,
 } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 import { unaskedEscape } from './support/writer-checks.ts'
@@ -171,5 +171,176 @@ describe('escapes, from left to right', () => {
     expect(unaskedEscape('\\.x\n', parse('.x'))).toBe(0)
     expect(unaskedEscape('\\.x\\<a:b\\>=}\n', parse('.x\\<a:b\\>=}'))).toBe(0)
     expect(unaskedEscape('x\\<a:b\\>=}\n', parse('x\\<a:b\\>=}'))).toBe(-1)
+  })
+})
+
+describe('the other clauses of the two commits', () => {
+  const layoutOf = (src: string): readonly object[] => parseWithLayout(src).layout.nodes
+  const entry = (src: string, path: string): Record<string, unknown> | undefined =>
+    parseWithLayout(src).layout.nodes.find((node) => node.path === path) as Record<string, unknown> | undefined
+
+  it('C2-B-220: a widths entry is digits with an optional dot and digits; .5, 5., 1e1 and +5 set no width', () => {
+    const table = parse(`{table widths="30.5,5,.5,5.,1e1,+5"}\n${FENCE}csv\na,b,c,d,e,f\n${FENCE}`, { positions: false }).children![0]!
+    expect(table.columns!.map((column) => column.width)).toEqual([0.305, 0.05, undefined, undefined, undefined, undefined])
+  })
+
+  it('C2-A-089: resolvedAlign is the mark of the last head cell before the aligns entry', () => {
+    const table = parse('{aligns="right"}\n|={<} a |\n| b |', { positions: false }).children![0]!
+    expect(table.columns).toEqual([{ type: 'table_column', align: 'right', authored: true, resolvedAlign: 'left' }])
+  })
+
+  it('C2-A-187: the bracket label of a div is the string groupLabel, not parsed', () => {
+    expect(parse('::: tip [Tab *x*]\nbody\n:::', { positions: false }).children![0]).toMatchObject({ type: 'admonition', groupLabel: 'Tab *x*' })
+  })
+
+  it('C2-H-147: with ascii the result is lowered as with lower', () => {
+    expect(render('# AB', { headingIds: 'ascii' })).toBe('<section id="ab">\n  <h1>AB</h1>\n</section>')
+  })
+
+  it('C2-H-165: a degraded block is one paragraph of its plain text behind the mark of its kind', () => {
+    expect(render(`# h *x*\n\n> q\n\n***\n\n| a | b |\n| c | d |\n\n${FENCE}\ncode\n${FENCE}\n\n::: d "T"\nx\n:::`, { profile: 'minimal' }))
+      .toBe('<p># h x</p>\n<p>&gt; q</p>\n<p>---</p>\n<p>a | b<br>\nc | d</p>\n<p>code</p>\n<p>T x</p>')
+  })
+
+  it('C2-H-165: a degraded block image is the text [img: ALT] in its paragraph', () => {
+    expect(render('![alt](i.png)', { profile: 'minimal' })).toBe('<p>[img: alt]</p>')
+  })
+
+  it('C2-H-166: a node at the bound of max_nesting stays and its children are degraded', () => {
+    expect(render('- a\n  - b\n    - c\n      - d\n        - e', { profile: 'comment' }))
+      .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c - d - e</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
+  })
+
+  it('C2-H-168: static math with no renderer is code with the class language-math', () => {
+    expect(render('$`x`\n\n$$`y`', { mode: 'static' })).toBe('<p><code class="language-math">x</code></p>\n<pre><code class="language-math">y\n</code></pre>')
+  })
+
+  it('C2-H-169: the blocks of the footnotes directive come before the section, its attributes are not written, and a title names it', () => {
+    expect(render('a[^n]\n\n[^n]: note\n\n{aria-label="L" .c}\n::: footnotes "Notes"\nbefore\n:::')).toBe(
+      '<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<p>before</p>\n'
+      + '<section role="doc-endnotes" aria-labelledby="adm-1">\n  <p class="admonition-title" id="adm-1">Notes</p>\n  <hr>\n  <ol>\n'
+      + '    <li id="fn1">\n      <p>note<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>',
+    )
+  })
+
+  it('C2-H-170: the caption of a table takes its number before an equation in a cell of that table', () => {
+    const document = parse('| a | x |\n^ Table # cap', { positions: false })
+    document.children![0]!.children![0]!.children![0]!.children![1]!.children![0]!.children = [{ type: 'math', display: true, value: 'e', numberPrefix: 'Table' }]
+    const html = render(document)
+    expect(html).toContain('<caption>Table 1 cap</caption>')
+    expect(html).toContain('<span class="equation-number">Table 2</span>')
+  })
+
+  it('C2-H-171: an option value with a space, a tab, @ or } stands in quotes, and the options stand in the order of C2-W-058', () => {
+    expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:a,,b }}</p>')
+    const document: AstNode = {
+      type: 'document', astVersion: '2.0',
+      children: [{ type: 'include', path: 'a.crv', options: [['region', 'x y'], ['shift', 'a@b'], ['code', 'c}d'], ['lines', '1-2']] }],
+    }
+    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:"x y" @shift:"a@b" @code:"c}d" }}</p>')
+  })
+
+  it('C2-W-002: the gate holds for a document the writer does not refuse', () => {
+    const src = 'a *b* `c`\n\n- d'
+    expect(treesEqual(parse(format(src)), parse(src))).toBe(true)
+  })
+
+  it('C2-W-099: a first block that reads as another tree on line 1 is written below one blank line', () => {
+    const document = documentOf(paragraph({ type: 'smart_punctuation', kind: 'em_dash', glyph: '—', source: '---' }))
+    const output = writeWithDiagnostics(document)
+    expect(output.source).toBe('\n---\n')
+    expect(output.diagnostics).toEqual([])
+    expect(format(output.source)).toBe(output.source)
+  })
+
+  it('C2-W-116: a caption_number is written as #', () => {
+    expect(format('| a |\n^ Table # cap')).toBe('| a |\n^ Table # cap\n')
+  })
+
+  it('C2-W-120: a first class of the shape of a div name names the div, any other stands on the attribute line', () => {
+    const div = (name: string): AstNode => ({ type: 'document', astVersion: '2.0', children: [{ type: 'div', attrs: { classes: [name] }, children: [paragraph(text('x'))] }] })
+    expect(write(div('my-box'))).toBe('::: my-box\nx\n:::\n')
+    expect(write(div('note'))).toBe('{.note}\n:::\nx\n:::\n')
+    expect(write(div('a.b'))).toBe('{class="a.b"}\n:::\nx\n:::\n')
+  })
+
+  it('C2-W-121: a paragraph that starts with a description mark after a description list keeps its backslash', () => {
+    expect(format(':: t\n: d\n\n\n\n\\: x')).toBe(':: t\n: d\n\n\\: x\n')
+  })
+
+  it('C2-W-122, C2-W-123: a comment between two lists, behind the open fence of the first, then three blank lines', () => {
+    const item = (blocks: AstNode[]): AstNode => ({ type: 'list_item', children: blocks })
+    const list = (blocks: AstNode[]): AstNode => ({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item(blocks)] })
+    const document: AstNode = {
+      type: 'document', astVersion: '2.0',
+      children: [list([paragraph(text('a')), { type: 'code_block', value: 'x\n' }]), { type: 'comment', form: 'line', value: 'c' }, list([paragraph(text('b'))])],
+    }
+    const output = writeWithDiagnostics(document)
+    expect(output.source).toBe(`- a\n\n  ${FENCE}\n  x\n%% c\n\n\n\n- b\n`)
+    expect(output.diagnostics).toEqual([])
+  })
+
+  it('C2-W-124: a frontmatter format that is no format name is reported at the frontmatter as structure-unspellable', () => {
+    const document: AstNode = {
+      type: 'document', astVersion: '2.0', children: [{ type: 'frontmatter', format: 'Not A Name', value: 'k: v\n' }, paragraph(text('x'))],
+    }
+    expect(writeWithDiagnostics(document).diagnostics.map((item) => [item.code, item.path])).toEqual([['structure-unspellable', '/children/0']])
+  })
+
+  it('C2-L-047: every block has blankLinesBefore and blankLinesAfter, 0 included; an inline node only with a fact', () => {
+    expect(layoutOf('a *b*\n\nc')).toEqual([
+      { path: '/children/0', startByte: 0, endByte: 5, blankLinesBefore: 0, blankLinesAfter: 1 },
+      { path: '/children/1', startByte: 7, endByte: 8, blankLinesBefore: 1, blankLinesAfter: 0 },
+    ])
+  })
+
+  it('C2-L-048: a wrap behind a hard break names the node behind it, and content that starts in a continuation row has offset 0', () => {
+    expect(entry('| a\\ | x |\n+ b | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
+      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/2', offset: 0 }])
+    expect(entry('| | x |\n+ b | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
+      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 0 }])
+    expect(entry('| `a | x |\n+ b` | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
+      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 2 }])
+  })
+
+  it('C2-L-049: rawRef runs from the bracket, without the image mark and the attribute block, read without prefixes', () => {
+    expect(entry('> [a\n> b][r]{.c}\n\n[a b]: /u', '/children/0/children/0/children/0')!['rawRef']).toBe('[a\nb][r]')
+    expect(entry('![x][r]\n\n[r]: /u', '/children/0/children/0')!['rawRef']).toBe('[x][r]')
+  })
+
+  it('C2-L-050: markerRaw of a definition holds its colon, and so does metadataSeparatorRaw', () => {
+    const src = '[^n]: note\n\n[r]:  /u\n\n*[A]: Abbr\n\n:: term\n: d'
+    expect(entry(src, '/children/0')).toMatchObject({ markerRaw: '[^n]:', metadataSeparatorRaw: ': ' })
+    expect(entry(src, '/children/1')).toMatchObject({ markerRaw: '[r]:', metadataSeparatorRaw: ':  ' })
+    expect(entry(src, '/children/2')).toMatchObject({ markerRaw: '*[A]:', metadataSeparatorRaw: ': ' })
+    expect(entry(src, '/children/3/children/0')).toMatchObject({ markerRaw: '::', metadataSeparatorRaw: ' ' })
+  })
+
+  it('C2-L-051: a task box is not content of the item', () => {
+    expect(entry('- [x] a', '/children/0/children/0')).toMatchObject({ contentColumn: 6 })
+  })
+
+  it('C2-L-052: continuationStyle on every item, description and footnote', () => {
+    const src = '- a\n  b\n- c\nlazy\n\n:: t\n: d\n\n[^n]: x'
+    expect(entry(src, '/children/0/children/0')!['continuationStyle']).toBe('indent')
+    expect(entry(src, '/children/0/children/1')!['continuationStyle']).toBe('lazy')
+    expect(entry(src, '/children/1/children/1')!['continuationStyle']).toBe('marker_line')
+    expect(entry(src, '/children/2')!['continuationStyle']).toBe('marker_line')
+  })
+
+  it('C2-L-053: blank lines with the mark of a quote count inside it, a blank line without the mark after it', () => {
+    const src = '> a\n>\n>\n\nb'
+    expect(entry(src, '/children/0/children/0')!['blankLinesAfter']).toBe(2)
+    expect(entry(src, '/children/0')!['blankLinesAfter']).toBe(1)
+    expect(entry(src, '/children/1')!['blankLinesBefore']).toBe(1)
+    expect(entry('> a\n>\n>\nb', '/children/0')!['blankLinesAfter']).toBe(0)
+  })
+
+  it('C2-L-054: a delimited table has no openerRaw, a caption is preceding, and lineEndings reports a lone CR', () => {
+    const src = `{table}\n${FENCE}csv\na\n${FENCE}\n\n| a |\n^ cap`
+    expect(entry(src, '/children/0')).not.toHaveProperty('openerRaw')
+    expect(entry(src, '/children/0')).not.toHaveProperty('closerRaw')
+    expect(entry(src, '/children/1/caption')).toMatchObject({ attachment: 'preceding' })
+    expect(parseWithLayout('x\ry').layout.lineEndings).toBe('cr')
   })
 })

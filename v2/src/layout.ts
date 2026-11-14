@@ -4,7 +4,7 @@ import { type AstNode } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
 import { type Facts, measureBlock } from './layout-facts.ts'
-import { blankLinesAfter, blankLinesBefore, byteOffsets } from './layout-lines.ts'
+import { blankLinesAfter, blankLinesBefore, byteOffsets, markedBlankEnd } from './layout-lines.ts'
 import { cellRange, cellWraps, continuationRows, type TableRows, tableRows } from './layout-table.ts'
 import { contentSource, type LayoutTrace } from './ast-inline.ts'
 import { type BlockNode } from './tree.ts'
@@ -104,9 +104,9 @@ function addEntry(walk: Walk, node: AstNode, path: string, start: number, end: n
   })
 }
 
-function setBlankLines(walk: Walk, start: number, end: number, frame: Frame, facts: Facts): void {
+function setBlankLines(walk: Walk, start: number, end: number, frame: Frame, facts: Facts, after = end): void {
   facts.blankLinesBefore = blankLinesBefore(walk.src, start, frame.start, frame.quotes)
-  facts.blankLinesAfter = blankLinesAfter(walk.src, end, frame.end, frame.quotes, frame.open)
+  facts.blankLinesAfter = blankLinesAfter(walk.src, after, frame.end, frame.quotes, frame.open)
 }
 
 /** The offset of the first line of a block: its first attribute line, or its own markup. */
@@ -143,9 +143,11 @@ function visitBlock(walk: Walk, node: AstNode, path: string, origin: BlockNode, 
   const end = caption === undefined ? origin.end : Math.max(origin.end, caption.end)
   const facts: Facts = {}
   measureBlock(walk.src, node, origin, frame.quotes, facts)
-  setBlankLines(walk, start, end, frame, facts)
-  addEntry(walk, node, path, start, end, facts)
   const quote = origin.kind === QUOTE
+  // C2-L-053: the blank lines that still carry the mark of a bare quote stand inside it.
+  const after = quote && facts.fenced !== true ? markedBlankEnd(walk.src, end, frame.quotes + 1) : end
+  setBlankLines(walk, start, end, frame, facts, after)
+  addEntry(walk, node, path, start, end, facts)
   return {
     start, end, quotes: frame.quotes + (quote ? 1 : 0), open: quote, spans: origin.spans,
     table: origin.kind === TABLE ? tableRows(origin) : null, row: -1,

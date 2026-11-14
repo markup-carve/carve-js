@@ -102,6 +102,23 @@ export function blankLinesAfter(src: string, end: number, limit: number, quotes:
   return count
 }
 
+/**
+ * C2-L-053: the end of the last line behind `end` that carries exactly `quotes` quote marks and
+ * nothing else, or `end`. Such lines belong inside the quote and do not count after it.
+ */
+export function markedBlankEnd(src: string, end: number, quotes: number): number {
+  let last = end
+  let feed = src.indexOf('\n', end)
+  while (feed >= 0 && feed + 1 < src.length) {
+    const start = feed + 1
+    const lineEnd = lineEndOf(src, start)
+    if (!isBlankInside(src, start, lineEnd, quotes)) break
+    last = lineEnd
+    feed = src.indexOf('\n', start)
+  }
+  return last
+}
+
 /** C2-L-012: the UTF-8 byte offset of every string offset of `src`. */
 export function byteOffsets(src: string): (offset: number) => number {
   let ascii = true

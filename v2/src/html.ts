@@ -9,7 +9,7 @@ import {
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
-import { PROFILES } from './render-tables.ts'
+import { INCLUDE_OPTIONS, PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
 
@@ -68,8 +68,9 @@ function isVisible(node: AstNode): boolean {
 /** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
 function isBareImage(node: AstNode): boolean {
   if (node.blockImage !== true) return false
+  // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
   const image = childrenOf(node).find((child) => child.type === 'image')
-  return image === undefined || image.key === undefined || image.src !== undefined
+  return image !== undefined && (image.key === undefined || image.src !== undefined)
 }
 
 /** A paragraph that is written as `<p>`. */
@@ -374,12 +375,21 @@ function includeOption(name: string, value: string): string {
   return `@${name}:${bare ? value : quoted(value)}`
 }
 
+const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
+
+function optionRank(name: string): number {
+  const rank = OPTION_ORDER.indexOf(name)
+  return rank < 0 ? OPTION_ORDER.length : rank
+}
+
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: AstNode, level: number): void {
   const path = node.path ?? ''
   const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
   if (node.section !== undefined) parts.push(`#${node.section}`)
-  for (const [name, value] of node.options ?? []) parts.push(includeOption(name, value))
+  // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.
+  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
+  for (const [name, value] of options) parts.push(includeOption(name, value))
   loss(r, node, 'include-unresolved', `the include of ${path} was not expanded`)
   line(r, level, `<p>${escapeText(`{{ ${parts.join(' ')} }}`)}</p>`)
 }
