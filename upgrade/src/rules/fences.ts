@@ -1,11 +1,13 @@
 // Contract 2.8: fences and comment blocks.
-import { change, type Context, type Visit } from '../context.ts'
+import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, lineEnd, lineStart, lineText } from '../source.ts'
 import { insideQuotes } from './lines.ts'
 import { commentShift } from './lists.ts'
 
 const PERCENT = 0x25
+const BACKTICK = 0x60
+const TILDE = 0x7e
 
 /** U-050: the closer of a comment block is a bare run in 0.2 (C2-B-110). */
 function commentCloser(ctx: Context, visit: Visit): void {
@@ -71,7 +73,7 @@ function indentedCloser(ctx: Context, node: Node01): void {
   const { startLine, endLine, startOffset: start } = node.pos!
   const code = ctx.src.charCodeAt(start)
   const length = runLength(ctx.src, start, code)
-  if (length < 3 || typeof node.content !== 'string' || (code !== 0x60 && code !== 0x7e)) return
+  if (length < 3 || typeof node.content !== 'string' || code !== BACKTICK) return
   const last = insideQuotes(lineText(ctx.lines, endLine)).trim()
   const closed = endLine > startLine && runLength(last, 0, code) === last.length && last.length >= length
   const longest = longestBareRun(node.content, code)
@@ -81,6 +83,44 @@ function indentedCloser(ctx: Context, node: Node01): void {
   change(ctx, 'U-049', start, start + length, run, message)
   const end = lineEnd(ctx.lines, endLine)
   change(ctx, 'U-049', end, end, '\n' + closerPrefix(ctx, start, startLine) + run, message)
+}
+
+/** Length of the longest run of `code` anywhere in `text`. */
+function longestRun(text: string, code: number): number {
+  let longest = 0
+  let run = 0
+  for (let at = 0; at < text.length; at++) {
+    run = text.charCodeAt(at) === code ? run + 1 : 0
+    if (run > longest) longest = run
+  }
+  return longest
+}
+
+/**
+ * U-116: 0.2 has no tilde fence (C2-B-108). The opener and the closer become a backtick run longer
+ * than every backtick run in the body; an info string with a backtick has no backtick fence (C2-B-118).
+ */
+function tildeFence(ctx: Context, node: Node01): void {
+  const { startLine, endLine, startOffset: start, endOffset: end } = node.pos!
+  const length = runLength(ctx.src, start, TILDE)
+  if (length < 3) return
+  const openerEnd = lineEnd(ctx.lines, startLine)
+  const info = ctx.src.slice(start + length, openerEnd)
+  if (info.includes('`')) {
+    note(ctx, 'U-116', startLine, 'tilde fence left as it is: no backtick fence carries an info string with a backtick')
+    return
+  }
+  const run = '`'.repeat(Math.max(3, longestRun(ctx.src.slice(openerEnd, end), BACKTICK) + 1))
+  const message = 'tilde fence written as a backtick fence'
+  change(ctx, 'U-116', start, start + length, run, message)
+  if (endLine === startLine) return
+  const text = lineText(ctx.lines, endLine)
+  const inner = insideQuotes(text)
+  const closer = text.length - inner.length + indentOf(inner)
+  const close = runLength(text, closer, TILDE)
+  if (close < length || text.slice(closer + close).trim() !== '') return
+  const at = lineStart(ctx.lines, endLine) + closer
+  change(ctx, 'U-116', at, at + close, run, message)
 }
 
 /**
@@ -115,6 +155,9 @@ export function fences(ctx: Context): void {
     } else if (node.type === 'code_block') {
       indentedCloser(ctx, node)
       tabsInCode(ctx, node)
+      tildeFence(ctx, node)
+    } else if (node.type === 'raw_block' || (node.type === 'table' && node.sourceFormat !== undefined)) {
+      tildeFence(ctx, node)
     }
   }
 }

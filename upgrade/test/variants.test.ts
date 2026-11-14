@@ -54,7 +54,13 @@ const VARIANTS: Variant[] = [
   { entries: 'U-021 U-038', input: '- a\n\n  [r]: /u\n\n  tail [x][r]\n', output: '- a\n\n\n  tail [x][r]\n\n[r]: /u\n', check: 'explained', stable: true },
   { entries: 'U-041', input: '*[A]: one\n*[B]: x\n*[A]: two\n\nA B\n', output: '*[B]: x\n*[A]: two\n\nA B\n', check: 'pass', stable: true },
   { entries: 'U-040', input: '[a]: /one\n\ntext\n\n[a]: /two\n\n[x][a]\n', output: '\ntext\n\n[a]: /two\n\n[x][a]\n', check: 'pass', stable: true },
-  { entries: 'U-049', input: '~~~\ncode\n  ~~~\nafter\n', output: '~~~~\ncode\n  ~~~\nafter\n~~~~\n', check: 'pass', stable: true },
+  // A tilde line is text in 0.2, so a backtick fence runs on past the closer 0.1 refused, as 0.1 did.
+  { entries: 'U-116', input: '~~~\ncode\n  ~~~\nafter\n', output: '```\ncode\n  ~~~\nafter\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '> ~~~\n> x\n> ~~~~\n', output: '> ```\n> x\n> ```\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '- ~~~\n  x\n  ~~~\n- b\n', output: '- ```\n  x\n  ```\n- b\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '~~~\n```\n``` a\n~~~\n', output: '````\n```\n``` a\n````\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '- ~~~\n  x\ny\n', output: '- ```\n  x\ny\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '{table}\n~~~csv\na,b\n1,2\n~~~\n', output: '{table}\n```csv\na,b\n1,2\n```\n', check: 'pass', stable: true },
   { entries: 'U-049', input: '- ```\n  code\n    ```\n  after\n- b\n', output: '- ````\n  code\n    ```\n  after\n  ````\n- b\n', check: 'pass', stable: true },
   { entries: 'U-050', input: '> %%%\n> hidden\n> %%% visible\n> after\n', output: '> %%%\n> hidden\n> visible\n> %%%\n> after\n', check: 'pass', stable: true },
   { entries: 'U-051', input: '```js title\ncode\n```\n', output: '```js\ncode\n```\n', check: 'pass', stable: true },
@@ -109,6 +115,13 @@ describe('variants of the contract inputs', () => {
       expect(upgrade(result.output).output === result.output).toBe(variant.stable)
     })
   }
+
+  it('leaves a tilde fence whose info string holds a backtick, and names it (U-116)', () => {
+    const input = '~~~ js "a`b"\nx\n~~~\n'
+    const result = upgrade(input)
+    expect([result.output, result.check]).toEqual([input, 'mismatch'])
+    expect(result.records.map((record) => record.entry)).toEqual(['U-116', 'upgrade-mismatch'])
+  })
 
   it('takes a bidirectional control out of text and code, as 0.1 did in its output (X-001)', () => {
     const result = upgrade('a\u202eb `c\u2066d`\n')

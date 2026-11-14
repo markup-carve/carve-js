@@ -52,7 +52,7 @@
   {"id": "U-051", "title": "Unquoted words after a fence language or a div name", "inputs": ["```js My Title\ncode\n```\n\n::: note My Title\nbody\n:::\n"], "outputs": ["```js\ncode\n```\n\n::: note\nbody\n:::\n"], "class": "rewrite"},
   {"id": "U-052", "title": "`%%` line inside a line block", "inputs": ["::: |\none\n%% hidden\ntwo\n:::\n"], "outputs": ["::: |\none\n{% hidden %}\ntwo\n:::\n"], "class": "rewrite"},
   {"id": "U-053", "title": "Tab in code under a container", "inputs": ["- item\n\n\t```\n\tx\n\t\ty\n\t```\n"], "outputs": ["- item\n\n\t```\n\tx\n\t    y\n\t```\n"], "class": "rewrite"},
-  {"id": "U-054", "title": "Fence and div spellings that read the same", "inputs": ["~~~\ncode\n~~~\n", "{title=\"T\"}\n```js\ncode\n```\n", "```js \"T\"\ncode\n```\n", "```\ncode\n``` not a closer\nmore\n```\n", ":::note\nbody\n:::\n", "::: figure \"T\"\n![a](i.png)\n:::\n", "- %%%\n  hidden\n  %%%\n- b\n"], "outputs": [], "class": "none"},
+  {"id": "U-054", "title": "Fence and div spellings that read the same", "inputs": ["{title=\"T\"}\n```js\ncode\n```\n", "```js \"T\"\ncode\n```\n", "```\ncode\n``` not a closer\nmore\n```\n", ":::note\nbody\n:::\n", "::: figure \"T\"\n![a](i.png)\n:::\n", "- %%%\n  hidden\n  %%%\n- b\n"], "outputs": [], "class": "none"},
   {"id": "U-055", "title": "GFM separator row", "inputs": ["| a | b |\n|---|--:|\n| 1 | 2 |\n"], "outputs": ["|= a |={>} b |\n| 1 | 2 |\n"], "class": "rewrite"},
   {"id": "U-056", "title": "Glued alignment marks", "inputs": ["|=< a |=> b |=~ c |\n| 1 | 2 | 3 |\n"], "outputs": ["|={<} a |={>} b |={~} c |\n| 1 | 2 | 3 |\n"], "class": "rewrite"},
   {"id": "U-057", "title": "Escaped last pipe", "inputs": ["| a | b \\|\n"], "outputs": ["| a | b \\| |\n"], "class": "rewrite"},
@@ -92,5 +92,6 @@
   {"id": "U-112", "title": "Reference label that starts with a caret", "inputs": ["See [x][^n].\n\n[^n]: Note.\n"], "outputs": ["See [x]\\[^n].\n\n[^n]: Note.\n"], "class": "escape"},
   {"id": "U-113", "title": "Markup inside an unresolved reference", "inputs": ["See [*b* and /i/][nope] and [`c`][].\n", "See [a^[note] b][nope].\n"], "outputs": ["See [\\*b\\* and \\/i\\/][nope] and [\\`c\\`][].\n", "See [a\\^[note] b][nope].\n"], "class": "escape"},
   {"id": "U-114", "title": "New spellings that 0.1 already had", "inputs": [". first\n. second\n", "::: >\nquoted\nsecond\n:::\n", "::: spoiler \"Title\"\nbody\n:::\n", "{start=9}\na) one\nb) two\n", ":::: note\nbody\n:::\nafter\n::::\n"], "outputs": [], "class": "none"},
-  {"id": "U-115", "title": "Hyphen run 0.1 kept as typed, and the braced en dash", "inputs": ["a{--}b and --flag\n", "run --verbose (--b) and a-{--}\n"], "outputs": ["a--b and -\\-flag\n", "run -\\-verbose (-\\-b) and a\\---\n"], "class": "escape"}
+  {"id": "U-115", "title": "Hyphen run 0.1 kept as typed, and the braced en dash", "inputs": ["a{--}b and --flag\n", "run --verbose (--b) and a-{--}\n"], "outputs": ["a--b and -\\-flag\n", "run -\\-verbose (-\\-b) and a\\---\n"], "class": "escape"},
+  {"id": "U-116", "title": "Tilde fence", "inputs": ["~~~js\nx\n~~~\n", "~~~~ py \"t\"\na ``` b\n~~~~~\n"], "outputs": ["```js\nx\n```\n", "```` py \"t\"\na ``` b\n````\n"], "class": "rewrite"}
 ]
