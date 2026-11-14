@@ -37,12 +37,14 @@ export interface Check {
   flags: number
   /** C2-A-093: the counts of a cell are a resolution result in a table that has span marks. */
   spanMarks: boolean
+  /** The node whose inline content is under comparison. */
+  owner: Node | null
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
-    spanMarks: false,
+    spanMarks: false, owner: null,
   }
 }
 
@@ -184,6 +186,8 @@ function lastText(node: Node | undefined): TextNode | null {
   }
 }
 
+const CR = 13
+
 /** The characters that read on into markup that stands directly behind them: `\\(`, `![`, `^[`, `$` and a backtick run. */
 const JOINING = '\\!^$`'
 /** The closing mark of each node that has one, for the escape of that mark in its content (C2-W-093). */
@@ -207,6 +211,22 @@ function escapeEnd(c: Check, text: TextNode | null, braces: boolean): boolean {
 /** Asks for a backslash before the first bare closing mark of `e` in its content, or before the first bracket in it. */
 function escapeInContent(c: Check, e: Node): boolean {
   const mark = CLOSING_MARKS.get(e.type)
+  if (mark === undefined || !('children' in e)) return false
+  return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
+}
+
+/** Whether the text before `es[i]` ends in a character that reads on into the markup of `es[i]` (C2-W-125). */
+function joinsNext(es: readonly Node[], i: number): boolean {
+  const value = i > 0 ? lastText(es[i - 1])?.value ?? '' : ''
+  return value !== '' && JOINING.includes(value[value.length - 1]!)
+}
+
+/**
+ * C2-W-125: a closer, or a lone bracket, of the node around `e` stands in the content of `e` and ended
+ * that node early, as a `]` inside emphasis inside an inline footnote. Its first one takes the backslash.
+ */
+function escapeOwnerMark(c: Check, e: Node): boolean {
+  const mark = c.owner === null ? undefined : CLOSING_MARKS.get(c.owner.type)
   if (mark === undefined || !('children' in e)) return false
   return escapeMark(c, e.children, 0, 0, mark) || (mark === ']' && escapeMark(c, e.children, 0, 0, '['))
 }
@@ -279,6 +299,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeInside,
   escapeAfter,
   (c, es, i) => escapeContentLine(c, es[i]!),
+  (c, es, i) => escapeOwnerMark(c, es[i]!),
   (c, es, i, attempt) => {
     if (!hasOtherForm(c, es[i]!)) return false
     for (const escape of attempt.escapes) {
@@ -448,6 +469,11 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
 function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
+  // C2-W-016: a CR that ends a line is read as part of the line ending, and no spelling keeps it.
+  if (es[at.i]?.type === 'text' && (es[at.i] as TextNode).value.charCodeAt(at.vi) === CR) {
+    c.losses.push([es[at.i]!, 'value'])
+    return false
+  }
   // C2-W-093: the node before took this text into its content, its mark closing the node in place of the node's own.
   if (at.vi === 0 && at.i > 0 && startsWithCloser(es[at.i - 1]!, es[at.i]) && escapeAt(c, es[at.i] as TextNode, 0)) return false
   // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
@@ -473,7 +499,7 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   if (es[at.i] === undefined) {
     if (!escapeInContent(c, owner)) c.losses.push([owner, null])
   }
-  else if (at.j + 1 >= as.length && isPaired(owner)) closedEarly(c, es, at.i, 0, owner)
+  else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i)) closedEarly(c, es, at.i, 0, owner)
   else return respell(c, es, at.i) && stepOver(c, es, as, at)
   return false
 }
@@ -622,6 +648,13 @@ function resync(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor):
 }
 
 function compareInlines(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
+  const outer = c.owner
+  c.owner = owner
+  compareList(c, es, as, owner)
+  c.owner = outer
+}
+
+function compareList(c: Check, es: readonly Node[], as: readonly Node[], owner: Node): void {
   const at: Cursor = { i: 0, vi: 0, j: 0, aj: 0, anchor: -1, anchorByte: 0 }
   while (at.i < es.length) {
     setAnchor(es, as, at)

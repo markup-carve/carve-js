@@ -14,15 +14,25 @@ function nodeAt(tree: DocumentNode, path: string): Node | undefined {
   return at as Node | undefined
 }
 
+/** C2-W-016: whether `value` holds a CR at the end of a line, which the line ending takes. */
+function endsLineWithCr(value: string): boolean {
+  for (let at = value.indexOf('\r'); at >= 0; at = value.indexOf('\r', at + 1)) {
+    if (at + 1 === value.length || value[at + 1] === '\n') return true
+  }
+  return false
+}
+
 /**
  * C2-W-016: whether the writer refused the document for a verbatim span whose later line would
- * open a block. Such a document has no canonical spelling, and the refusal is its result.
+ * open a block, or for a lone CR at the end of a line. Such a document has no canonical spelling,
+ * and the refusal is its result.
  */
 export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
     const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
-    const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && ('value' in node ? node.value : '').includes('\n')
-    return entry.code === 'field-unspellable' && multiline
+    const value = node !== undefined && 'value' in node && typeof node.value === 'string' ? node.value : ''
+    const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && value.includes('\n')
+    return entry.code === 'field-unspellable' && (multiline || endsLineWithCr(value))
   })
 }
 

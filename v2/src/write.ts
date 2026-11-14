@@ -297,9 +297,10 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   }
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
-    // C2-W-005: what only line 1 reads differently is written below one blank line.
+    // C2-W-005: what only line 1 reads differently is written below one blank line, and the
+    // rounds go on there, since that line can still ask for escapes.
     w.blankFirst = compareGroup(w, document, group, false).losses.length === 0
-    if (w.blankFirst) return false
+    if (w.blankFirst) return true
   }
   return applyChanges(w, check)
 }
@@ -320,7 +321,7 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0) return end
-    if (!settle(w, document, group, first)) {
+    if (!settle(w, document, group, first && !w.blankFirst)) {
       if (w.losses.entries.length === reported) reportUnread(w, group)
       return end
     }

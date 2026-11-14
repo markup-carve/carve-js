@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  CarveTreeError, decodeTree, foldLabel, format, parse, render, stringOffsetOfByte, treesEqual, utf8Length, write,
+  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length, write,
   writeWithDiagnostics,
 } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
@@ -472,6 +472,44 @@ describe('what the random document gate found', () => {
 })
 
 describe('what the third code review found', () => {
+  const BACKSLASH = '\\'
+  const BOM = '﻿'
+
+  /** The render-loss diagnostics of formatting `source`, as `code path`. */
+  function writerLosses(source: string): string[] {
+    const found = formatWithDiagnostics(source).diagnostics.filter((entry) => entry.channel === 'render-loss')
+    return found.map((entry) => `${entry.code} ${entry.path ?? ''}`)
+  }
+
+  /** Formats `source`, checks C2-W-002 and C2-W-003 with no reported loss, and returns the form. */
+  function faithful(source: string): string {
+    expect(writerLosses(source)).toEqual([])
+    const once = format(source)
+    expect(treesEqual(parse(once), parse(source))).toBe(true)
+    expect(format(once)).toBe(once)
+    return once
+  }
+
+  it('C2-W-125: a lone bracket inside an inline footnote takes the backslash, also inside emphasis', () => {
+    expect(faithful(`^[/[${BACKSLASH}]]/]`)).toBe(`^[/[${BACKSLASH}]]/]\n`)
+    faithful(`^[{/[]${BACKSLASH}]/}]`)
+  })
+
+  it('C2-W-125: a sigil before a footnote reference inside emphasis keeps its backslash', () => {
+    expect(faithful(`/${BACKSLASH}![^^]/`)).toBe(`/${BACKSLASH}![^^]/\n`)
+  })
+
+  it('C2-W-088: escapes are found again in the final spelling, before a code span opener and behind byte-order marks', () => {
+    faithful(`/*{${BACKSLASH}${BACKTICK}(*/${BACKSLASH}${BACKTICK}`)
+    expect(faithful(`${BOM}${BOM}${BACKSLASH}${BACKTICK}`)).toBe(`\n${BOM}${BACKSLASH}${BACKTICK}\n`)
+  })
+
+  it('C2-W-016: a lone CR at the end of a line is refused with field-unspellable; inside a line it is text', () => {
+    expect(writerLosses('a\r')).toEqual(['field-unspellable /children/0/children/0'])
+    expect(writerLosses('a\r\r\nb')).toEqual(['field-unspellable /children/0/children/0'])
+    expect(faithful('a\rb')).toBe('a\rb\n')
+  })
+
   it('C2-A-093, C2-A-161: a metadata field named span is no span mark, so the counts of the cells are compared', () => {
     const table = (colspan: number): DocumentNode => {
       const tree = parse('| a | b |')
