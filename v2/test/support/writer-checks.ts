@@ -38,6 +38,10 @@ export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]
   })
 }
 
+function isAsciiAlphanumeric(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
 function isAsciiPunctuation(code: number): boolean {
   return (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96) || (code >= 123 && code <= 126)
 }
@@ -330,13 +334,75 @@ function nextEscape(text: string, toBare: readonly number[], parsed: Node, sourc
  */
 type ProcedureEnd = { form: string } | { text: string, best: Construct | null }
 
+/** The constructs of the parse of `bare` with the backslashes `added`, as `name@start` with their ends, in bare offsets. */
+function formedConstructs(bare: string, added: readonly number[]): Map<string, number> {
+  const { text, toBare } = withEscapes(bare, [...added].sort((x, y) => x - y))
+  return constructEnds(placedNodes(parse(text)), stringOffsets(text), (at) => toBare[at] ?? -1)
+}
+
+/**
+ * C2-W-125, case seven: where the backslash before the sigil `:` at `at` changes the direction of the smart
+ * quote of the tree before it, the bracket of that opener takes the backslash. Returns `at` otherwise.
+ */
+function sigilTarget(source: BareText, added: readonly number[], at: number): number {
+  const bare = source.bare
+  if (bare[at] !== ':') return at
+  const quote = heldAt(source.held, 'smart_punctuation:', at - 1)
+  if (quote === null || !QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))) return at
+  if (formedConstructs(bare, [...added, at]).has(`${quote[0]}@${at - 1}`)) return at
+  let bracket = at + 1
+  while (bracket < bare.length && isAsciiAlphanumeric(bare.charCodeAt(bracket))) bracket++
+  return bracket > at + 1 && bare[bracket] === '[' ? bracket : at
+}
+
+/**
+ * C2-W-125, case six: a construct of the tree that the character behind it lengthens or keeps from forming,
+ * as a backtick behind a code span or a name character behind a mention. Returns the bare offset of the
+ * leftmost such character, or -1.
+ */
+function lengthenedEnd(source: BareText, seeds: readonly number[]): number {
+  const formed = formedConstructs(source.bare, seeds)
+  let best = -1
+  for (const [key, end] of source.held) {
+    const now = formed.get(key)
+    const bare = source.bare
+    if (seeds.includes(end) || !isAsciiPunctuation(bare.charCodeAt(end))) continue
+    // Formed longer, or kept from forming by a closing run that the character makes longer.
+    if (now === undefined ? bare[end] !== bare[end - 1] : now <= end) continue
+    if (best < 0 || end < best) best = end
+  }
+  return best
+}
+
+/**
+ * C2-W-125, case five: a closing mark inside a construct of the tree that ends it early, as the `*` inside a
+ * strong `*`. Its first character takes the backslash. Returns the bare offset of the leftmost one, or -1.
+ */
+function closerInside(source: BareText, missing: Map<string, number>, seeds: readonly number[]): number {
+  const bare = source.bare
+  let best = -1
+  for (const [key, end] of missing) {
+    const start = Number(key.slice(key.lastIndexOf('@') + 1))
+    const mark = bare[end - 1]
+    if (mark === undefined || !isAsciiPunctuation(bare.charCodeAt(end - 1)) || bare[start] !== mark) continue
+    for (let at = start + 1; at < end - 1; at++) {
+      if (bare[at] !== mark || bare[at - 1] === '\\' || seeds.includes(at)) continue
+      if (best < 0 || at < best) best = at
+      break
+    }
+  }
+  return best
+}
+
 function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly number[]): ProcedureEnd {
   const added = [...seeds].sort((x, y) => x - y)
   for (;;) {
     const { text, toBare } = withEscapes(source.bare, added)
     const parsed = parse(text)
     if (treesEqual(parsed, tree)) return { form: text }
-    const { target, best } = nextEscape(text, toBare, parsed, source)
+    const next = nextEscape(text, toBare, parsed, source)
+    const best = next.best
+    const target = next.target < 0 ? -1 : sigilTarget(source, added, next.target)
     if (target < 0 || added.includes(target)) return { text, best }
     added.push(target)
     added.sort((x, y) => x - y)
@@ -358,7 +424,9 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     if ('form' in result) return result
     const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
     const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
-    const extra = addedBackslash({ ...source, added: seeds }, missing)
+    let extra = lengthenedEnd(source, seeds)
+    if (extra < 0) extra = closerInside(source, missing, seeds)
+    if (extra < 0) extra = addedBackslash({ ...source, added: seeds }, missing)
     if (extra < 0) {
       const best = result.best
       const what = best === null
