@@ -36,6 +36,8 @@ export interface Writer {
   facts: Map<AstNode, WriterFacts> | null
   /** C2-L-020: the offsets in the value of a text node at which the fragment of a continuation row starts. */
   wrapPoints: Map<AstNode, number[]> | null
+  /** C2-L-021: the nodes of a cell whose start is the start of the fragment of a continuation row. */
+  wrapStarts: Set<AstNode> | null
   alignTables: boolean
   /** C2-W-005: the output starts with one blank line, because its first block reads differently on line 1 (C2-B-161). */
   blankFirst: boolean
@@ -53,7 +55,7 @@ export interface Writer {
 export function createWriter(facts: Map<AstNode, WriterFacts> | null, alignTables: boolean): Writer {
   return {
     lines: [], lead: null, escapes: new Map(), forms: new Map(), starts: new Map(), attempts: new Map(), facts, wrapPoints: null,
-    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
+    wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(),
   }
 }

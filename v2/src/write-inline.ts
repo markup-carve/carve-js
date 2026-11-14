@@ -352,6 +352,11 @@ export function writeInlines(w: Writer, nodes: readonly AstNode[], flags: number
     const node = nodes[at]!
     // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
     if (node.type === 'comment' && node.form !== 'braced' && !lineStart) out += ' '
+    // C2-L-021: a fragment of a continuation row starts at this node; the joining space is the line break.
+    if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) {
+      out = `${out.endsWith(' ') ? out.slice(0, -1) : out}\n`
+      lineStart = true
+    }
     const end = partEnd(w, nodes, at)
     const part = writePart(w, nodes, at, end, flags)
     out += part

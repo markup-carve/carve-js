@@ -7,6 +7,7 @@ import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
+import { type Wrap } from './layout.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -68,27 +69,56 @@ function addWrap(cursor: WrapCursor, node: AstNode, offset: number): boolean {
 }
 
 /**
+ * C2-L-021: whether the wrap at offset 0 of the node at `path`, which is not text, can mark its start: it stands in the
+ * content of `cell`, first or behind text that ends in the joining space.
+ */
+function startsFragment(document: AstNode, cell: AstNode, path: string): boolean {
+  const cut = path.lastIndexOf('/children/')
+  const parent = cut < 0 ? null : nodeAt(document, path.slice(0, cut))
+  if (parent === null || parent !== cell.children?.[0]) return false
+  const at = Number(path.slice(cut + '/children/'.length))
+  if (at === 0) return true
+  const before = childrenOf(parent)[at - 1]!
+  return before.type === 'text' && valueOf(before).endsWith(' ')
+}
+
+/**
  * C2-L-020, C2-L-021: the places in the text nodes of a cell at which its continuation rows
- * start. C2-L-006: a wrap that names no text node, or a place with no joining space before it,
- * contradicts the tree, and then the cell keeps no wrap.
+ * start, and the nodes whose start is such a place. C2-L-006: a wrap that names no node of the
+ * cell, or a place with no joining space before it, contradicts the tree, and then the cell keeps no wrap.
  */
 function readWraps(w: Writer, document: AstNode, cell: AstNode, entry: LayoutEntry): void {
   const cursors = new Map<AstNode, WrapCursor>()
+  const starts: AstNode[] = []
   let path = ''
   let node: AstNode | null = null
   for (const wrap of entry.wraps ?? []) {
     // The wraps of one cell mostly name one text node, so its pointer is resolved once.
     if (wrap.path !== path || node === null) node = nodeAt(document, wrap.path)
     path = wrap.path
-    const cursor = node === null ? undefined : cursors.get(node) ?? { bytes: 0, at: 0, points: [] }
-    if (node === null || cursor === undefined || !addWrap(cursor, node, wrap.offset)) {
+    if (node === null || !placeWrap(document, cell, node, wrap, cursors, starts)) {
       w.facts!.set(cell, { ...entry, wraps: [] })
       return
     }
-    cursors.set(node, cursor)
   }
   w.wrapPoints ??= new Map()
   for (const [text, cursor] of cursors) w.wrapPoints.set(text, cursor.points)
+  w.wrapStarts ??= new Set()
+  for (const start of starts) w.wrapStarts.add(start)
+}
+
+/** Records one wrap of a cell: a place in a text node, or the start of another node. False where it contradicts the tree. */
+function placeWrap(
+  document: AstNode, cell: AstNode, node: AstNode, wrap: Wrap, cursors: Map<AstNode, WrapCursor>, starts: AstNode[],
+): boolean {
+  if (node.type !== 'text' && wrap.offset === 0 && !starts.includes(node) && startsFragment(document, cell, wrap.path)) {
+    starts.push(node)
+    return true
+  }
+  const cursor = cursors.get(node) ?? { bytes: 0, at: 0, points: [] }
+  if (!addWrap(cursor, node, wrap.offset)) return false
+  cursors.set(node, cursor)
+  return true
 }
 
 function readLayout(w: Writer, document: AstNode, entries: readonly LayoutEntry[]): void {

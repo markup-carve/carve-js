@@ -1,7 +1,7 @@
 // The clauses that the specification commits after "fix what the review of today's clauses found"
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
+import { type AstNode, format, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const CONTROLS = '‪‮⁦⁩'
@@ -199,5 +199,40 @@ describe('the scheme test', () => {
   it('C2-H-159: the two ranges of bidirectional controls are removed before the test', () => {
     expect(render('[x](java\u202ascript:alert(1))')).toBe('<p><a href="">x</a></p>')
     expect(render('[x](java\u2069script:alert(1))')).toBe('<p><a href="">x</a></p>')
+  })
+})
+
+describe('the layout record', () => {
+  function entries(src: string): NodeLayout[] {
+    return parseWithLayout(src).layout.nodes
+  }
+
+  function entry(src: string, path: string): NodeLayout | undefined {
+    return entries(src).find((node) => node.path === path)
+  }
+
+  it('C2-L-011: the slots of a node are visited in the order title, children, caption', () => {
+    expect(entries('::: note "see [x][r]"\n[y][r]\n:::\n\n[r]: /u').map((node) => node.path))
+      .toEqual(['/children/0', '/children/0/title/1', '/children/0/children/0', '/children/0/children/0/children/0', '/children/1'])
+    const figure = entries('![a][r]\n^ see [c][r]\n\n[r]: /u').map((node) => node.path)
+    expect(figure.indexOf('/children/0/children/0')).toBeLessThan(figure.indexOf('/children/0/caption'))
+  })
+
+  it('C2-L-020, C2-L-021: an offset of 0 marks the start of a node that need not have a value', () => {
+    const cell = '/children/0/children/0/children/0/children/0'
+    expect(entry('| |\n+ *b* |', cell)?.wraps).toEqual([{ line: 1, path: `${cell}/children/0/children/0`, offset: 0 }])
+    expect(format('| |\n+ *b* |')).toBe('| |\n+ *b* |\n')
+    expect(format('| a | x |\n+ *b* | /y/ |')).toBe('| a | x |\n+ *b* | /y/ |\n')
+  })
+
+  it('C2-L-048: a cell that spans rows has row on its wraps, the number of rows below its own', () => {
+    const wraps = entry('| a | b |\n|^ | c |\n+ x | d |', '/children/0/children/0/children/0/children/0')?.wraps
+    expect(wraps).toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 2, row: 1 }])
+  })
+
+  it('C2-L-045, C2-L-054: a comment inside a quote has the column of the quote mark, and none when its line lacks the mark', () => {
+    expect(entry('> a\n>\n> %% c', '/children/0/children/1')?.markerColumn).toBe(0)
+    expect(entry('  > a\n  >\n  > %% c', '/children/0/children/1')?.markerColumn).toBe(2)
+    expect(entry('> a\n>\n%% c', '/children/0/children/1')).not.toHaveProperty('markerColumn')
   })
 })
