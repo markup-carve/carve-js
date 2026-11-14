@@ -40,11 +40,9 @@ export interface OpenLeaf {
   fenceChar: number
   fenceLength: number
   fenceColumn: number
-  // The open table: its rows so far, its head rows, whether the head is still open, and `footer-rows`.
-  tableRows: number
+  // The open table: its head rows and whether the head is still open.
   tableHeadRows: number
   tableHeadOpen: boolean
-  tableFooterRows: number
 }
 
 /**
@@ -111,8 +109,8 @@ function createState(): BlockState {
       depth: 0,
     },
     leaf: {
-      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0, tableRows: 0,
-      tableHeadRows: 0, tableHeadOpen: false, tableFooterRows: 0,
+      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0,
+      tableHeadRows: 0, tableHeadOpen: false,
     },
     above: {
       blankCount: 0, captionDepth: NO_DEPTH, attributesDepth: NO_DEPTH, attributesStart: 0, attributesEnd: 0, takeAttributes: false,

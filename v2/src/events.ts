@@ -1,7 +1,8 @@
 // An event is three ints: [tag, a, b]. The tag holds the type in two bits, the kind in six and the flags above them.
-//   ENTER: a = offset of the block, b = aux    SPAN: a = start, b = end    EXIT: a = end offset, b = 0
+//   ENTER: a = offset of the block, b = aux    SPAN: a = start, b = end    EXIT: a = end offset, b = facts
 // The aux of an enter event is the heading level, the first number of an ordered list,
-// the task state of an item (a character code, 0 for a plain item) or the run length of a fence.
+// the task state of an item (a character code, 0 for a plain item), the run length of a fence
+// or the footer rows a table asks for. The facts of a table's exit event are its head rows.
 export const ENTER = 0
 export const SPAN = 1
 export const EXIT = 2

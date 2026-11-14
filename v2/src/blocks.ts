@@ -32,7 +32,6 @@ import {
 } from './lines.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'
-import { FACT_SHIFT } from './tree.ts'
 
 const LIST_BOUNDARY_BLANKS = 3
 const SPAN_TAG = eventTag(SPAN, 0, 0)
@@ -687,15 +686,14 @@ function openTable(state: BlockState, end: number): boolean {
   const src = state.src
   const closing = rowClosingPipe(src, cursor.pos, end)
   if (closing < 0) return false
-  leaf.tableFooterRows = 0
+  let footerRows = 0
   if (above.takeAttributes) {
     // C2-B-210: a value that is no count has no effect.
     const value = attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'footer-rows')
-    leaf.tableFooterRows = Math.max(0, countValue(value))
+    footerRows = Math.max(0, countValue(value))
   }
-  writeEvent(state, enterTag(state, TABLE, 0), cursor.pos, 0)
+  writeEvent(state, enterTag(state, TABLE, 0), cursor.pos, footerRows)
   leaf.kind = TABLE
-  leaf.tableRows = 0
   leaf.tableHeadRows = 0
   leaf.tableHeadOpen = true
   writeRow(state, closing, end)
@@ -746,7 +744,6 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
-  leaf.tableRows++
   // C2-B-178: the head is the leading rows made only of header cells. A span mark joins another cell and is none itself.
   leaf.tableHeadOpen = leaf.tableHeadOpen && headers > 0 && others === 0
   if (leaf.tableHeadOpen) leaf.tableHeadRows++
@@ -938,9 +935,8 @@ function closeLeaf(state: BlockState): void {
   if (kind === NO_LEAF) return
   leaf.kind = NO_LEAF
   if (kind === TABLE) {
-    // C2-B-187: the footer rows are the last rows of the body. C2-B-147: a table takes a caption.
-    const footer = Math.min(leaf.tableFooterRows, leaf.tableRows - leaf.tableHeadRows)
-    writeEvent(state, eventTag(EXIT, TABLE, 0), state.contentEnd, leaf.tableHeadRows | (footer << FACT_SHIFT))
+    // C2-B-147: a table takes a caption.
+    writeEvent(state, eventTag(EXIT, TABLE, 0), state.contentEnd, leaf.tableHeadRows)
     state.above.captionDepth = state.containers.depth
     return
   }

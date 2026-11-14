@@ -4,11 +4,6 @@ import {
   TABLE,
 } from './kinds.ts'
 
-// The facts of a table are its head rows and, above FACT_SHIFT, its footer rows.
-// The facts of a cell are the columns and, above FACT_SHIFT, the rows it spans.
-export const FACT_SHIFT = 16
-export const FACT_MASK = (1 << FACT_SHIFT) - 1
-const ONE_BY_ONE = 1 | (1 << FACT_SHIFT)
 
 /**
  * One field layout for every block. A container has `children`, a leaf has `spans` (start, end pairs).
@@ -21,7 +16,10 @@ export interface BlockNode {
   aux: number
   flags: number
   exitFlags: number
+  /** The head rows of a table, the columns a cell spans. */
   facts: number
+  /** The footer rows of a table, the rows a cell spans. */
+  rowFacts: number
   children: BlockNode[] | null
   spans: number[] | null
   attributes: number[] | null
@@ -57,16 +55,19 @@ function enterNode(kind: number, flags: number, start: number, aux: number, pare
   const leaf = isLeaf(kind)
   const takes = (flags & FLAG_ATTRIBUTES) !== 0 && kind !== ATTRIBUTES
   return {
-    kind, start, end: start, aux, flags, exitFlags: 0, facts: kind === CELL ? ONE_BY_ONE : 0,
+    kind, start, end: start, aux, flags, exitFlags: 0, facts: kind === CELL ? 1 : 0, rowFacts: kind === CELL ? 1 : 0,
     children: leaf ? null : [], spans: leaf ? [] : null,
     attributes: takes ? takeAttributes(parent!.children!) : null,
   }
 }
 
-function exitNode(node: BlockNode, facts: number): void {
+/** The aux of a table's exit event is its head rows; the aux of its enter event the footer rows it asks for (C2-B-187). */
+function exitNode(node: BlockNode, headRows: number): void {
   if (node.kind === TABLE) {
-    node.facts = facts
-    resolveTable(node)
+    node.facts = headRows
+    const rows = resolveTable(node)
+    // C2-B-187: the footer rows are the last rows of the body.
+    node.rowFacts = Math.min(node.aux, rows - headRows)
   }
   if (node.children !== null) orphanAttributes(node.children)
 }
@@ -117,8 +118,8 @@ function orphanAttributes(children: BlockNode[]): void {
  * Resolves the span marks of a closed table (C2-B-172, C2-B-183) and joins its continuation rows.
  * A cell that joins another is removed from its row; a mark that fails is an empty cell (C2-B-173).
  */
-function resolveTable(table: BlockNode): void {
-  const headRows = table.facts & FACT_MASK
+function resolveTable(table: BlockNode): number {
+  const headRows = table.facts
   const kept: BlockNode[] = []
   let owners: (BlockNode | null)[] = []
   let last: BlockNode | null = null
@@ -136,6 +137,7 @@ function resolveTable(table: BlockNode): void {
     rowIndex++
   }
   table.children = kept
+  return rowIndex
 }
 
 /**
@@ -171,8 +173,8 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
     if ((cell.flags & FLAG_SPAN_LEFT) !== 0 && left !== null) {
       left.facts++
       owners.push(left)
-    } else if ((cell.flags & FLAG_SPAN_UP) !== 0 && up !== null && (up.facts & FACT_MASK) === 1) {
-      up.facts += 1 << FACT_SHIFT
+    } else if ((cell.flags & FLAG_SPAN_UP) !== 0 && up !== null && up.facts === 1) {
+      up.rowFacts++
       // A cell joined upward has no cell of this row to its left to extend.
       owners.push(up)
       left = null

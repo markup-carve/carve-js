@@ -13,7 +13,7 @@ import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { countValue } from './lines.ts'
-import { type BlockNode, FACT_MASK, FACT_SHIFT } from './tree.ts'
+import type { BlockNode } from './tree.ts'
 import { holdsBidiControl } from './unicode.ts'
 
 const MAX_WIDTH = 100
@@ -71,8 +71,8 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
   const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children: leafInlines(ctx, node.spans!, flow) })
   const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
-  if ((node.facts & FACT_MASK) > 1) cell.colspan = node.facts & FACT_MASK
-  if (node.facts >> FACT_SHIFT > 1) cell.rowspan = node.facts >> FACT_SHIFT
+  if (node.facts > 1) cell.colspan = node.facts
+  if (node.rowFacts > 1) cell.rowspan = node.rowFacts
   if (node.aux !== 0) cell.align = alignmentOf(node.aux)
   setAttributes(cell, cellAttributes(ctx, node))
   if (ctx.trace !== null) ctx.trace.blocks.set(cell, node)
@@ -162,11 +162,11 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
 }
 
 function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): Groups {
-  const headRows = node.facts & FACT_MASK
+  const headRows = node.facts
   const rowCount = node.children!.reduce((count, child) => count + (child.kind === COMMENT ? 0 : 1), 0)
   const groups = emptyGroups()
   const cursor: RowCursor = {
-    headRows, footStart: rowCount - (node.facts >> FACT_SHIFT), index: 0, group: headRows > 0 ? groups.head : groups.body,
+    headRows, footStart: rowCount - node.rowFacts, index: 0, group: headRows > 0 ? groups.head : groups.body,
     covered: [], trailingEnd: 0,
   }
   for (const child of node.children!) {

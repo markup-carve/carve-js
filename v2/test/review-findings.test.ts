@@ -218,3 +218,26 @@ describe('table rows in linear time', () => {
     expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS)
   })
 })
+
+describe('counts that once shared an integer', () => {
+  const firstCell = (source: string): Record<string, unknown> => {
+    const table = parse(source).children[0] as unknown as Nested
+    return table.children[0]!.children[0]!.children[0]! as unknown as Record<string, unknown>
+  }
+
+  it('C2-B-172, C2-A-092: a column span past 65,535 columns keeps its width and spans one row', () => {
+    const cell = firstCell(`|a${'|<'.repeat(65536)}|`)
+    expect(cell.colspan).toBe(65537)
+    expect(cell.rowspan).toBeUndefined()
+  })
+
+  it('C2-B-172: a row span past 65,535 rows keeps its height', () => {
+    expect(firstCell(`| a |\n${'| ^ |\n'.repeat(65536)}`).rowspan).toBe(65537)
+  })
+
+  it('C2-B-178, C2-B-187: head rows and footer rows past 65,535 are counted in full', () => {
+    const groups = (source: string): string[] => (parse(source).children[0] as unknown as Nested).children.map((group) => `${group.type} ${group.children.length}`)
+    expect(groups(`${'|= a |\n'.repeat(65537)}| b |\n`)).toEqual(['table_head 65537', 'table_body 1'])
+    expect(groups(`{footer-rows=65537}\n${'| a |\n'.repeat(65540)}`)).toEqual(['table_body 3', 'table_foot 65537'])
+  })
+})

@@ -10,7 +10,7 @@
 // p["a " strong["b"]], in the notation of support/inline-shape.ts.
 import {
   ABBREVIATION, type BlockNode, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION,
-  DESCRIPTION_LIST, DIV, DOCUMENT, FACT_MASK, FACT_SHIFT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_DELIMITED,
+  DESCRIPTION_LIST, DIV, DOCUMENT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_DELIMITED,
   FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
   FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE,
   FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, parseBlockTree, QUOTE,
@@ -87,16 +87,16 @@ function divSigil(flags: number): string {
 
 function tableFacts(node: BlockNode): string {
   const parts: string[] = []
-  if ((node.facts & FACT_MASK) > 0) parts.push(`h${node.facts & FACT_MASK}`)
-  if (node.facts >> FACT_SHIFT > 0) parts.push(`f${node.facts >> FACT_SHIFT}`)
+  if (node.facts > 0) parts.push(`h${node.facts}`)
+  if (node.rowFacts > 0) parts.push(`f${node.rowFacts}`)
   return parts.length === 0 ? '' : `(${parts.join(',')})`
 }
 
 /** th or td, then (c2,r2,<) for spans and alignment, then {} for a brace block in the prefix. */
 function cellName(node: BlockNode): string {
   const parts: string[] = []
-  if ((node.facts & FACT_MASK) > 1) parts.push(`c${node.facts & FACT_MASK}`)
-  if (node.facts >> FACT_SHIFT > 1) parts.push(`r${node.facts >> FACT_SHIFT}`)
+  if (node.facts > 1) parts.push(`c${node.facts}`)
+  if (node.rowFacts > 1) parts.push(`r${node.rowFacts}`)
   if (node.aux !== 0) parts.push(String.fromCharCode(node.aux))
   const name = (node.flags & FLAG_HEADER) !== 0 ? 'th' : 'td'
   return `${name}${parts.length === 0 ? '' : `(${parts.join(',')})`}${(node.flags & FLAG_CELL_ATTRIBUTES) !== 0 ? '{}' : ''}`
