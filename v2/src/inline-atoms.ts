@@ -5,7 +5,7 @@
 import { classRunEnd, readAttributeBlock } from './attributes.ts'
 import {
   AT_SIGN, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_OPEN, COLON, DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LF,
-  PERCENT, SLASH, SPACE,
+  BACKSLASH, PERCENT, SLASH, SPACE,
 } from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END,
@@ -21,7 +21,7 @@ import {
 } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
-  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace,
+  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace, NO_BREAK_SPACE,
   isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
@@ -56,6 +56,8 @@ export function characterAfter(state: InlineState, pos: number): number {
     if (close < 0 || close + 2 > state.end) state.commentCloserMissing = true
     else pos = close + 2
   }
+  // C2-I-011: an escaped no-break space is whitespace for the test, like U+00A0 itself.
+  if (text.charCodeAt(pos) === BACKSLASH && pos + 1 < state.end && text.charCodeAt(pos + 1) === SPACE) return NO_BREAK_SPACE
   return codePointAt(text, pos, state.end)
 }
 

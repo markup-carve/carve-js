@@ -758,6 +758,9 @@ describe('smart typography', () => {
     expect(inline('run\\ --verbose')).toBe('"run" nbsp "--verbose"')
     expect(inline('run\u00a0--verbose')).toBe('"run --verbose"')
     expect(inline('a\\ (--b)')).toBe('"a" nbsp "(--b)"')
+    // The test of the character after the run sees an escaped no-break space as whitespace too.
+    expect(inline('a --\\ x')).toBe('"a " ‹–› nbsp "x"')
+    expect(inline('*\\ a*')).toBe('"*" nbsp "a*"')
     expect(inline('x\u00a0%% c')).toBe('"x " %%" c"')
     expect(inline('*\u00a0a*')).toBe('"* a*"')
     expect(inline('a\u00a0"b"')).toBe('"a " ‹“› "b" ‹”›')

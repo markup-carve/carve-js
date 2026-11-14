@@ -50,7 +50,7 @@ export function isWhitespace(code: number): boolean {
   return code === SPACE || code === TAB || code === LF || code === NO_CHARACTER
 }
 
-const NO_BREAK_SPACE = 0xa0
+export const NO_BREAK_SPACE = 0xa0
 
 /** Whitespace for a test of the character before or after a position: a no-break space counts too. */
 export function isBoundarySpace(code: number): boolean {
