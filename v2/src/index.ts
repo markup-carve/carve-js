@@ -44,6 +44,7 @@ export {
 export type * from './ast-nodes.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'
 export { type AnnotationRangeSidecar, CarveTreeError, MAX_TREE_DEPTH, validateTree, validateTreeWithAnnotations } from './ast-validate.ts'
+export { migrateTree } from "../migrate/index.ts"
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from './layout.ts'
 export { CarveLayoutError, validateLayout } from './layout-validate.ts'
 export {

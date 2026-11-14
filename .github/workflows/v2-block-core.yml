@@ -138,6 +138,8 @@ jobs:
       # example fails without a written verdict.
       - name: Conformance
         run: npm run conformance:v2
+      - run: npm run differential-migrate:v2
+      - run: npm run test:migrate:v2
 
   enumerate-tree:
     name: tree and HTML properties, three lines and four tokens

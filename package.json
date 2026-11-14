@@ -82,6 +82,8 @@
     "stress-format:v2": "node v2/scripts/stress-format.ts",
     "mutate:v2": "node v2/scripts/mutate.ts",
     "differential:v2": "node v2/scripts/differential.ts",
+    "differential-migrate:v2": "node v2/scripts/differential-migrate.ts",
+    "test:migrate:v2": "node --test v2/migrate/*.test.mts && tsc -p v2/migrate/tsconfig.json",
     "test:includes": "vitest run test/include-conformance.test.ts",
     "ledger:render": "UPDATE_RENDER_LEDGER=1 vitest run test/corpus-render-ledger.test.ts",
     "drift:prune": "PRUNE_PACK_DRIFT=1 vitest run test/conformance-pack.test.ts",
