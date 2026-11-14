@@ -1,6 +1,6 @@
 // Line-shape tests. Each reads character codes of the source between `pos` and `end`
 // (the end of the line) and copies nothing.
-import { type AttributeSink, readAttributeBlock } from './attributes.ts'
+import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
   BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
@@ -73,7 +73,7 @@ export function braceBlocksEnd(src: string, pos: number, end: number): number {
 export function isAttributeLine(src: string, pos: number, end: number): boolean {
   const blocksEnd = braceBlocksEnd(src, pos, end)
   if (blocksEnd === pos || skipSpaces(src, blocksEnd, end) !== end) return false
-  const memo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+  const memo = emptyMemo()
   let p = pos
   while (p >= 0 && p < blocksEnd) p = readAttributeBlock(src, p, blocksEnd, memo, null)
   return p === blocksEnd
@@ -479,7 +479,7 @@ export function attributeKeyValue(src: string, pos: number, end: number, key: st
       if (name === key) found.value = value
     },
   }
-  const memo = { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+  const memo = emptyMemo()
   let p = pos
   while (p < end) {
     const after = src.charCodeAt(p) === BRACE_OPEN ? readAttributeBlock(src, p, end, memo, sink) : -1

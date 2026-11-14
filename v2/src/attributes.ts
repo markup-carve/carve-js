@@ -16,6 +16,11 @@ export interface AttributeMemo {
   valueFailEnd: number
 }
 
+/** A memo with no failed read yet. Its offsets belong to one source, so a memo is never shared between sources. */
+export function emptyMemo(): AttributeMemo {
+  return { doubleQuoteFailEnd: -1, singleQuoteFailEnd: -1, valueFailEnd: -1 }
+}
+
 export interface AttributeSink {
   id(name: string): void
   className(name: string): void

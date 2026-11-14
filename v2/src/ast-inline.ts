@@ -4,8 +4,8 @@ import {
   type InsertNode, type LinkNode, type Node, type SpanNode, type StrikeNode, type StrongNode, type SubscriptNode,
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
-import { type Attributes, attributeSink, foldLabel, NO_MEMO } from './ast-attributes.ts'
-import { readAttributeBlock, unescape } from './attributes.ts'
+import { type Attributes, attributeSink, foldLabel } from './ast-attributes.ts'
+import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, BRACKET_SPAN, CODE_SPAN, DELETE, DESTINATION, EDITORIAL, EMPHASIS, ESCAPE, FLAG_BRACED,
@@ -271,7 +271,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
   if (node.kind === LABEL) host.aux = node.end
   if (node.kind === ATTRIBUTE_BLOCK) {
     host.attributes ??= { id: null, classes: [], language: null, keys: [] }
-    readAttributeBlock(ctx.src, node.start, node.end, NO_MEMO, attributeSink(host.attributes))
+    readAttributeBlock(ctx.src, node.start, node.end, emptyMemo(), attributeSink(host.attributes))
   } else if (node.kind === DESTINATION) {
     host.destination = destinationValue(value)
   } else if (node.kind === TITLE) {

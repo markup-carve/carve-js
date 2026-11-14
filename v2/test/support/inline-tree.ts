@@ -1,8 +1,8 @@
 // The block tree with an inline tree per content, for tests in shape notation. The engine builds
 // the public tree straight from the events; this reads the same events into nodes that keep every flag.
-import { type Attributes, attributeSink, foldLabel, NO_MEMO } from '../../src/ast-attributes.ts'
+import { type Attributes, attributeSink, foldLabel } from '../../src/ast-attributes.ts'
 import { contentSource } from '../../src/ast-inline.ts'
-import { readAttributeBlock, unescape } from '../../src/attributes.ts'
+import { emptyMemo, readAttributeBlock, unescape } from '../../src/attributes.ts'
 import { ENTER, EVENT_WIDTH, eventFlags, eventKind, eventType, SPAN } from '../../src/events.ts'
 import {
   ATTRIBUTE_BLOCK, DESTINATION, ESCAPE, FLAG_COLLAPSED, IMAGE, isInlineContainer, LABEL, TITLE,
@@ -48,7 +48,7 @@ function textNode(value: string, start: number, end: number): InlineNode {
 
 function addAttributes(src: string, host: InlineNode, start: number, end: number): void {
   host.attributes ??= { id: null, classes: [], language: null, keys: [] }
-  readAttributeBlock(src, start, end, NO_MEMO, attributeSink(host.attributes))
+  readAttributeBlock(src, start, end, emptyMemo(), attributeSink(host.attributes))
 }
 
 /** Adds text to the node list: adjacent runs are one text node (C2-A-040). */
