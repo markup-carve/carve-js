@@ -213,7 +213,7 @@ function itemOpen(r: Render, node: ListItemNode): string {
   const state: Pair[] = TASK_NO_STATE.includes(task.mark) ? [] : [['data-task-state', task.mark]]
   const checked = TASK_CHECKED.includes(task.mark) ? ' checked' : ''
   const label = escapeAttribute(blockText(node.children))
-  return `<li${tag(r, node, { structural: state })}><input type="checkbox"${checked} disabled aria-label="${label}"> `
+  return `<li${tag(r, node, { structural: state, base: ['task'] })}><input type="checkbox"${checked} disabled aria-label="${label}"> `
 }
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */

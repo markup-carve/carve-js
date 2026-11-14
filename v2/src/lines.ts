@@ -172,8 +172,8 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 
 /** Offset after the spaces of the ordered marker whose delimiter is at `delimiter`, or -1. */
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
-  // C2-B-040: one uppercase letter and a dot needs two spaces, so an initial stays text.
-  const spaces = src.charCodeAt(delimiter) === DOT && delimiter === pos + 1 && isUpper(src.charCodeAt(pos)) ? 2 : 1
+  // C2-B-040: an uppercase marker and a dot needs two spaces, so an initial or an abbreviation stays text.
+  const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && isUpper(src.charCodeAt(pos)) ? 2 : 1
   const content = afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
   // C2-B-043: a bare dot before a dot and a space is an ellipsis written with spaces, no marker.
   const ellipsis = content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE

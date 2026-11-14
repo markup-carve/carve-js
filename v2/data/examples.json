@@ -149,7 +149,7 @@
   "label": "unverified",
   "flags": [],
   "input": " 9. a\n10. b",
-  "html": "<ol start=\"9\">\n  <li>a\n10. b</li>\n</ol>"
+  "html": "<ol start=\"9\">\n  <li>a</li>\n  <li>b</li>\n</ol>"
  },
  {
   "file": "syntax-blocks.md",
@@ -330,10 +330,10 @@
  {
   "file": "syntax-blocks.md",
   "number": 42,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "- [ ] a\n- [x] b\n- [X] c\n- [_] d",
-  "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"b\"> b</li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"c\"> c</li>\n  <li data-task-state=\"_\"><input type=\"checkbox\" disabled aria-label=\"d\"> d</li>\n</ul>"
+  "html": "<ul class=\"task-list\">\n  <li class=\"task\"><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"b\"> b</li>\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"c\"> c</li>\n  <li data-task-state=\"_\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"d\"> d</li>\n</ul>"
  },
  {
   "file": "syntax-blocks.md",
@@ -354,10 +354,10 @@
  {
   "file": "syntax-blocks.md",
   "number": 45,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "- [ ] a\n- b",
-  "html": "<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>"
+  "html": "<ul class=\"task-list\">\n  <li class=\"task\"><input type=\"checkbox\" disabled aria-label=\"a\"> a</li>\n  <li>b</li>\n</ul>"
  },
  {
   "file": "syntax-blocks.md",
@@ -2765,10 +2765,10 @@
  {
   "file": "html.md",
   "number": 5,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "1) a\n2) b\n\n- [ ] open\n- [x] done\n- [-] dropped\n- [_] kept\n- [/] half\n- [!] urgent\n- [>] moved\n- [?] unsure\n- [X] Done",
-  "html": "<ol data-delim=\")\">\n  <li>a</li>\n  <li>b</li>\n</ol>\n<ul class=\"task-list\">\n  <li><input type=\"checkbox\" disabled aria-label=\"open\"> open</li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"done\"> done</li>\n  <li data-task-state=\"-\"><input type=\"checkbox\" disabled aria-label=\"dropped\"> dropped</li>\n  <li data-task-state=\"_\"><input type=\"checkbox\" disabled aria-label=\"kept\"> kept</li>\n  <li data-task-state=\"/\"><input type=\"checkbox\" disabled aria-label=\"half\"> half</li>\n  <li data-task-state=\"!\"><input type=\"checkbox\" disabled aria-label=\"urgent\"> urgent</li>\n  <li data-task-state=\"&gt;\"><input type=\"checkbox\" disabled aria-label=\"moved\"> moved</li>\n  <li data-task-state=\"?\"><input type=\"checkbox\" disabled aria-label=\"unsure\"> unsure</li>\n  <li data-task-state=\"x\"><input type=\"checkbox\" checked disabled aria-label=\"Done\"> Done</li>\n</ul>"
+  "html": "<ol data-delim=\")\">\n  <li>a</li>\n  <li>b</li>\n</ol>\n<ul class=\"task-list\">\n  <li class=\"task\"><input type=\"checkbox\" disabled aria-label=\"open\"> open</li>\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"done\"> done</li>\n  <li data-task-state=\"-\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"dropped\"> dropped</li>\n  <li data-task-state=\"_\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"kept\"> kept</li>\n  <li data-task-state=\"/\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"half\"> half</li>\n  <li data-task-state=\"!\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"urgent\"> urgent</li>\n  <li data-task-state=\"&gt;\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"moved\"> moved</li>\n  <li data-task-state=\"?\" class=\"task\"><input type=\"checkbox\" disabled aria-label=\"unsure\"> unsure</li>\n  <li data-task-state=\"x\" class=\"task\"><input type=\"checkbox\" checked disabled aria-label=\"Done\"> Done</li>\n</ul>"
  },
  {
   "file": "html.md",

@@ -17,7 +17,7 @@ import {
   ABBREVIATION, ATTRIBUTES, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST,
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
   FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
-  FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_SPAN_LEFT, FLAG_SPAN_UP, FLAG_STAR, FLAG_TASK, FLAG_TIGHT,
+  FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_SPAN_LEFT, FLAG_SPAN_UP, FLAG_STAR, FLAG_TIGHT,
   FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER, HEADING, INCLUDE, isIndentContainer, isList, isOpaqueLeaf,
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
@@ -396,8 +396,8 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
   }
   if (kind === ITEM) {
     // The line is not indented past this item. C2-B-015: at its column the marker is a sibling.
-    // C2-B-055: between two open lists it joins the deeper one. Left of every open list it is a lazy line.
-    return column === containers.column[matched] || isIndentContainer(containers.kind[matched - 2]!)
+    // C2-B-055: between two open lists it joins the deeper one. C2-B-054: left of every open list it continues the outermost.
+    return column <= containers.column[matched]! || isIndentContainer(containers.kind[matched - 2]!)
   }
   // C2-B-022: at the column of a description list a list marker is a lazy line.
   return opens && kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
@@ -490,8 +490,8 @@ function openBulletItem(state: BlockState, end: number): boolean {
   const markerEnd = bulletMarkerEnd(src, pos, end)
   if (markerEnd < 0) return false
   const boxEnd = taskBoxEnd(src, markerEnd, end)
-  let style = src.charCodeAt(pos) === STAR ? FLAG_STAR : 0
-  if (boxEnd >= 0) style |= FLAG_TASK
+  // C2-B-049: a task box is a fact of the item, not of the list, so boxed and plain items are siblings.
+  const style = src.charCodeAt(pos) === STAR ? FLAG_STAR : 0
   // C2-B-046: `X` is read as `x`.
   const box = boxEnd < 0 ? 0 : src.charCodeAt(markerEnd + 1) === UPPER_X ? LOWER_X : src.charCodeAt(markerEnd + 1)
   if (!openItem(state, BULLET_LIST, style, 0, 0, box, pos + 1)) return false
