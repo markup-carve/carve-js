@@ -7,7 +7,7 @@ import {
   type ParagraphNode, type StrongNode, type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { buildSource } from './ast-blocks.ts'
-import { utf8Length } from './positions.ts'
+import { stringOffsetOfByte, utf8Length } from './positions.ts'
 import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -39,12 +39,16 @@ export interface Check {
   spanMarks: boolean
   /** The node whose inline content is under comparison. */
   owner: Node | null
+  /** The escapes among `escapes` that open a run of escapes in one round (`extendChains`), with the construct each one stops. */
+  chains: [TextNode, number, Node][]
+  /** The written group the parse under comparison was made of, or null in a probe of part of it. */
+  source: string | null
 }
 
 export function createCheck(w: Writer): Check {
   return {
     w, escapes: [], retracted: [], trials: [], marks: new Map(), forms: [], respelled: new Set(), misaligned: false, losses: [], flags: 0,
-    spanMarks: false, owner: null,
+    spanMarks: false, owner: null, chains: [], source: null,
   }
 }
 
@@ -374,7 +378,113 @@ function escapeOpener(c: Check, e: TextNode, at: number, a: Node): void {
   let start = at
   // C2-I-023: a line comment takes the spaces before it.
   while (start < value.length && (value[start] === ' ' || value[start] === '\t')) start++
-  if (!escapeAt(c, e, start + openerShift(a)) && !escapeAt(c, e, start)) c.losses.push([e, 'value'])
+  const shifted = start + openerShift(a)
+  if (escapeAt(c, e, shifted)) {
+    const opener = value[shifted]
+    if ((opener === '[' && isChainOpener(a)) || (opener === '`' && SPAN_TYPES.includes(a.type))) c.chains.push([e, shifted, a])
+  } else if (!escapeAt(c, e, start)) c.losses.push([e, 'value'])
+}
+
+/**
+ * Whether the construct `a` forms from a bracket whatever lies between it and its closer: an inline
+ * link, image, span or inline footnote, and a full or collapsed reference, all of which a closer
+ * takes from the nearest bare bracket before it, and a footnote reference, whose label any later
+ * `[^` before the closer also gives (C2-I-076, C2-I-087).
+ */
+function isChainOpener(a: Node): boolean {
+  if (a.type === 'footnote_ref') return true
+  if (a.type !== 'link' && a.type !== 'image' && a.type !== 'span' && a.type !== 'inline_footnote') return false
+  return !('key' in a && a.key !== undefined) || ('form' in a && (a.form === 'full' || a.form === 'collapsed'))
+}
+
+/** Whether the content of `node`, its text or the alternative text of an image, holds `]`, which may close a bracket of it. */
+function holdsCloser(node: Node): boolean {
+  if (node.type === 'image' && node.alt?.includes(']') === true) return true
+  return childNodes(node).some((child) => (child.type === 'text' ? child.value.includes(']') : holdsCloser(child)))
+}
+
+/**
+ * The bracket at `at` of the text `node` opened the construct `a`, which `isChainOpener` names.
+ * Once it is escaped, another bare bracket of the same run forms the same construct with the same
+ * closer, so the procedure of C2-W-088 escapes the brackets of the run one per parse, and they are
+ * placed in one round. A closer takes the nearest open bracket before it, so the brackets of the
+ * run before it form in turn. The brackets behind it were open but past the depth limit of 200
+ * where no `]` of the content closes them (C2-I-118), and they form in turn too. The label of a
+ * footnote reference holds every later `[^` of the run, and it forms only from those.
+ */
+function escapeBrackets(c: Check, node: TextNode, at: number, a: Node): void {
+  const value = node.value
+  const [start, end] = bracketRun(value, at)
+  // The closer stands in this text: one in a later node, such as a code span, can be taken from it by another construct.
+  if (!value.includes(']', end)) return
+  if (a.type === 'footnote_ref') return escapeLabels(c, node, at, end)
+  for (let k = start; k < at; k++) if (value[k] === '[') escapeAt(c, node, k)
+  // Behind it, a bracket that the content closes, or a `[^`, which opens no bracket pair (C2-I-087), stops the run.
+  if (holdsCloser(a)) return
+  for (let k = at + 1; k < end; k++) {
+    if (value[k] === '[' && value[k + 1] === '^') return
+    if (value[k] === '[') escapeAt(c, node, k)
+  }
+}
+
+/** The start and the end of the run of brackets around `at`, each with an image or footnote sigil at most. */
+function bracketRun(value: string, at: number): [number, number] {
+  const inRun = (k: number): boolean => value[k] === '[' || ((value[k] === '!' || value[k] === '^') && value[k + 1] === '[')
+  let start = at
+  while (start > 0 && inRun(start - 1)) start--
+  let end = at + 1
+  while (end < value.length && inRun(end)) end++
+  return [start, end]
+}
+
+/** The `[^` behind the footnote reference at `at`, up to the run end `end`, each with more of the run behind it for a label (C2-I-079). */
+function escapeLabels(c: Check, node: TextNode, at: number, end: number): void {
+  const value = node.value
+  for (let k = at + 1; k < end; k++) {
+    if (value[k] !== '[') continue
+    if (value[k + 1] !== '^' || k + 2 >= end) return
+    escapeAt(c, node, k)
+  }
+}
+
+// The constructs a backtick run opens, alone or behind `!` or `$` (C2-I-014, C2-I-018).
+const SPAN_TYPES: readonly string[] = ['code', 'literal_inline', 'math']
+
+/** Whether the backtick at `at` of `source` is escaped: an odd number of backslashes stands before it. */
+function isEscapedBacktick(source: string, at: number): boolean {
+  let before = at
+  while (before > 0 && source[before - 1] === '\\') before--
+  return (at - before) % 2 === 1
+}
+
+/**
+ * The backtick at `at` of the text `node` opened the code span `a`, which has no closing run: no
+ * bare backtick stands behind its run in the written group. Escaped, the shorter run behind it
+ * opens a span to the same end, which changes nothing before it, so the procedure of C2-W-088
+ * escapes each backtick of the run in turn (C2-I-017). They are placed in one round.
+ */
+function escapeBackticks(c: Check, node: TextNode, at: number, a: Node): void {
+  const source = c.source
+  const value = node.value
+  if (source === null || a.pos === undefined) return
+  let run = at
+  while (value[run] === '`') run++
+  let start = source.indexOf('`', stringOffsetOfByte(source, a.pos.startOffset))
+  if (start < 0) return
+  const end = start + run - at
+  while (start < end && source[start] === '`') start++
+  if (start !== end || source[end] === '`') return
+  for (let k = source.indexOf('`', end); k >= 0; k = source.indexOf('`', k + 1)) if (!isEscapedBacktick(source, k)) return
+  for (let k = at + 1; k < run; k++) escapeAt(c, node, k)
+}
+
+/** Extends the escapes of `chains` that this round places by the escapes the procedure would place behind each, one per parse. */
+export function extendChains(c: Check): void {
+  for (const [node, at, a] of c.chains) {
+    if (!c.escapes.some((escape) => escape[0] === node && escape[1] === at)) continue
+    if (node.value[at] === '`') escapeBackticks(c, node, at, a)
+    else escapeBrackets(c, node, at, a)
+  }
 }
 
 /** The cursor of a comparison of two inline lists: the next node of each, and the offset in a text of each. */

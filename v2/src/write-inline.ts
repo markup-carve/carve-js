@@ -33,6 +33,12 @@ function doubles(value: string, at: number): boolean {
   return next === SPACE || isAsciiPunctuation(next)
 }
 
+/** Whether the character `at` of a text takes a backslash whatever the reparse finds: C2-W-097, C2-W-098. */
+function alwaysEscaped(value: string, at: number, cell: boolean): boolean {
+  const code = value.charCodeAt(at)
+  return (code === BACKSLASH && doubles(value, at)) || (cell && code === PIPE)
+}
+
 /** The text `value[from, to)` with the backslashes it needs. */
 function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, cell: boolean): string {
   const escapes = w.escapes.get(node) ?? []
@@ -40,10 +46,9 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
   let next = firstFrom(escapes, from)
   let start = from
   for (let at = from; at < to; at++) {
-    const code = value.charCodeAt(at)
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    if (!asked && !(code === BACKSLASH && doubles(value, at)) && !(cell && code === PIPE)) continue
+    if (!asked && !alwaysEscaped(value, at, cell)) continue
     out += `${value.slice(start, at)}\\`
     start = at
   }
@@ -73,10 +78,9 @@ export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: numbe
   let rest = bytes
   let at = from
   for (; rest > 0 && at < value.length; at++) {
-    const code = value.charCodeAt(at)
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    rest -= unitBytes(value, at) + (asked || (code === BACKSLASH && doubles(value, at)) || (cell && code === PIPE) ? 1 : 0)
+    rest -= unitBytes(value, at) + (asked || alwaysEscaped(value, at, cell) ? 1 : 0)
   }
   return rest === 0 ? at : -1
 }

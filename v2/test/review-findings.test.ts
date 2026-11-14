@@ -510,6 +510,13 @@ describe('what the third code review found', () => {
     expect(faithful('a\rb')).toBe('a\rb\n')
   })
 
+  it('C2-W-088: many escaped backticks take linear time', () => {
+    const source = `x${`${BACKSLASH}${BACKTICK}`.repeat(20000)}z`
+    const started = performance.now()
+    expect(format(source)).toBe(`${source}\n`)
+    expect(performance.now() - started).toBeLessThan(3000)
+  })
+
   it('C2-A-093, C2-A-161: a metadata field named span is no span mark, so the counts of the cells are compared', () => {
     const table = (colspan: number): DocumentNode => {
       const tree = parse('| a | b |')

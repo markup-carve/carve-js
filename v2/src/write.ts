@@ -6,7 +6,7 @@ import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
 import { blankLinesBetween, writeBlocks } from './write-blocks.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, parseChunk } from './write-check.ts'
+import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
@@ -141,12 +141,26 @@ function readAbbreviations(w: Writer, document: DocumentNode): void {
   }
 }
 
-function addEscape(w: Writer, node: TextNode, at: number): void {
-  const list = w.escapes.get(node) ?? []
-  let place = list.length
-  while (place > 0 && list[place - 1]! > at) place--
-  list.splice(place, 0, at)
-  w.escapes.set(node, list)
+/** Adds the escapes `added` to the ascending lists of their text nodes, one merge per node. */
+function addEscapes(w: Writer, added: readonly [TextNode, number][]): void {
+  const byNode = new Map<TextNode, number[]>()
+  for (const [node, at] of added) {
+    const list = byNode.get(node)
+    if (list === undefined) byNode.set(node, [at])
+    else list.push(at)
+  }
+  for (const [node, offsets] of byNode) {
+    offsets.sort((a, b) => a - b)
+    const list = w.escapes.get(node) ?? []
+    const merged: number[] = []
+    let i = 0
+    for (const at of offsets) {
+      while (i < list.length && list[i]! < at) merged.push(list[i++]!)
+      merged.push(at)
+    }
+    while (i < list.length) merged.push(list[i++]!)
+    w.escapes.set(node, merged)
+  }
 }
 
 function removeEscape(w: Writer, node: TextNode, at: number): boolean {
@@ -167,7 +181,7 @@ function applyChanges(w: Writer, check: Check): boolean {
     return true
   }
   for (const [node, at] of check.retracted) removeEscape(w, node, at)
-  for (const [node, at] of check.escapes) addEscape(w, node, at)
+  addEscapes(w, check.escapes)
   for (const node of check.forms) w.forms.set(node, (w.forms.get(node) ?? 0) + 1)
   if (check.escapes.length + check.forms.length + check.retracted.length > 0) return true
   for (const [node, field] of check.losses) lose(w, node, field)
@@ -295,6 +309,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
     deferEscapes(w, check.escapes.filter((escape) => escape !== first))
     check.escapes = [first]
   }
+  extendChains(check)
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line, and the
@@ -346,6 +361,7 @@ function reportUnread(w: Writer, group: readonly Node[]): void {
 function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): Check {
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
+  check.source = source
   const parsed = parseChunk(source, w.abbreviations)
   w.parsed = parsed
   compareBlocks(check, group, parsed.children, document)

@@ -30,6 +30,12 @@ const WRITER_SHAPES: readonly Shape[] = [
   ['numbered items', (size) => { let out = ''; for (let at = 1; at <= size; at++) out += `${at}. a\n`; return out }],
   ['quote fences', (size) => '::: >\na\n:::\n\n'.repeat(size)],
   ['tilde fences', (size) => '~~~\nx\n~~~\n\n'.repeat(size)],
+  // Each backtick opens a code span, and each bracket takes the closer once the one beside it is
+  // escaped, so these escapes reveal each other one at a time; the writer places them in one round.
+  ['escaped backticks in one text', (size) => `x${'\\`'.repeat(size)}z`],
+  ['escaped brackets before one link tail', (size) => `x${'\\['.repeat(size)}a](u)`],
+  ['escaped brackets before one reference', (size) => `x${'\\['.repeat(size)}a][]`],
+  ['escaped footnote openers before one closer', (size) => `x${'^\\['.repeat(size)}]`],
 ]
 
 const INLINE_SHAPES: readonly Shape[] = SHAPES.map(([name, build]): Shape => [`inline: ${name}`, (size) => `x ${build(size)}`])
