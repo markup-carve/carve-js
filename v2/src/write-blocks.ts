@@ -122,28 +122,36 @@ function codeTitle(w: Writer, node: CodeBlockNode): string | null {
   return plainText(title)
 }
 
-/**
- * C2-B-118: a backtick run whose info string holds a backtick opens no fence, and the writer writes
- * a backtick fence (C2-W-037). Such a field has no spelling: it is left out and reported, as C2-W-040 does.
- */
-function spellableInfo(w: Writer, node: CodeBlockNode, field: string, value: string | null): string | null {
-  if (value === null || !value.includes('`')) return value
-  lose(w, node, field)
-  return null
+/** The longest run of `char` anywhere on a line of `lines`. */
+function longestRun(lines: readonly string[], char: number): number {
+  let longest = 0
+  for (const line of lines) {
+    let run = 0
+    for (let at = 0; at < line.length; at++) {
+      run = line.charCodeAt(at) === char ? run + 1 : 0
+      if (run > longest) longest = run
+    }
+  }
+  return longest
 }
 
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
   const lines = valueLines(w, node)
-  const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
-  let info = node.type === 'raw_block' ? `=${node.format}` : spellableInfo(w, node, 'syntax', node.syntax ?? '') ?? ''
+  const title = node.type === 'code_block' ? codeTitle(w, node) : null
+  // C2-B-118: only a tilde fence carries an info string with a backtick.
+  const tilde = node.type === 'code_block' && ((node.syntax ?? '').includes('`') || (title ?? '').includes('`'))
+  const run = tilde
+    ? '~'.repeat(Math.max(MIN_RUN, longestRun(lines, 126) + 1))
+    : '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
+  let info = node.type === 'raw_block' ? `=${node.format}` : node.syntax ?? ''
   if (node.type === 'code_block') {
-    const title = spellableInfo(w, node, 'title', codeTitle(w, node))
     // C2-B-120: the title reads escapes, as a quoted attribute value does.
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
-  emit(w, prefix, run + info)
+  // Glued, an info string that starts with a tilde would lengthen the tilde run.
+  emit(w, prefix, run + (tilde && info.startsWith('~') ? ' ' : '') + info)
   for (const line of lines) emit(w, prefix, line)
   if (!isLeftOpen(w, node)) emit(w, prefix, run)
 }

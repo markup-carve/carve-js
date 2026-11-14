@@ -325,11 +325,21 @@ describe('writer output that read back as another tree', () => {
 describe('what the random writer gates found', () => {
   const BACKSLASH = '\\'
 
-  it('C2-B-118, C2-W-037: an info string with a backtick has no spelling on a backtick fence, and the writer leaves it out', () => {
+  it('C2-B-118, C2-W-037: an info string with a backtick keeps a tilde fence, the shortest run longer than every tilde run in the body', () => {
     const output = writeWithDiagnostics(parse(`~~~${BACKTICK}\nx\n~~~`))
-    expect(output.source).toBe('```\nx\n```\n')
-    expect(output.diagnostics.map((finding) => finding.code)).toEqual(['field-unspellable'])
-    expect(format(output.source)).toBe(output.source)
+    expect(output.source).toBe(`~~~${BACKTICK}\nx\n~~~\n`)
+    expect(output.diagnostics).toEqual([])
+    expect(format(`~~~ js "t${BACKTICK}"\na~~~~b\n~~~`)).toBe(`~~~~~js "t${BACKTICK}"\na~~~~b\n~~~~~\n`)
+    expect(format(`~~~ ~a${BACKTICK}\nx\n~~~`)).toBe(`~~~ ~a${BACKTICK}\nx\n~~~\n`)
+    expect(format('~~~a\nx\n~~~')).toBe('```a\nx\n```\n')
+  })
+
+  it('C2-W-016: a braced or editorial comment whose later line would open a block is refused', () => {
+    for (const source of [' - {%\n- [%}', ' - {#\n- #}', '[^a]: {%\n- a%}', ' - *`\n- `*']) {
+      const output = writeWithDiagnostics(parse(source))
+      expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
+    }
+    expect(writeWithDiagnostics(parse('a {% b\n c %}')).diagnostics).toEqual([])
   })
 
   it('C2-W-026: a line behind a hard break that would read as a list marker is kept text by an escape', () => {
