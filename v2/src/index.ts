@@ -58,6 +58,9 @@ export { type Diagnostic } from './diagnostics.ts'
 /** C2-H-173: shared scheme test and default policy data for consumers of URL sinks. */
 export { isUrlAllowed, urlScheme } from './html-attributes.ts'
 export { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
+export { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer, type ExtensionRenderHost,
+  type ExtensionSlot, type ExtensionSource } from './extensions/types.ts'
+export { tabExtension, tabsExtension, tabsExtensions, tabsRenderer } from './extensions/tabs.ts'
 
 /** Block tree of `src`. Leaves keep their source spans; inline content is not parsed. */
 export function parseBlockTree(src: string): BlockNode {
