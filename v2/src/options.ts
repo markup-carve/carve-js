@@ -1,6 +1,6 @@
 // The 19 options of C2-H-137. An option this engine does not offer is refused, not ignored.
 import {
-  BOOLEAN_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, OPTION_KINDS,
+  BOOLEAN_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
 } from './option-tables.ts'
 
 export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii'
@@ -81,10 +81,11 @@ export class CarveOptionError extends Error {
 
 type OptionMap = Readonly<Record<string, unknown>>
 
+/** Whether a value of the declared type of its option asks for nothing: an empty list or map, or no value. */
 function isEmpty(value: unknown): boolean {
   if (value === undefined || value === null) return true
   if (Array.isArray(value)) return value.length === 0
-  return typeof value === 'object' && Object.keys(value).length === 0
+  return isPlainObject(value) && Object.keys(value).length === 0
 }
 
 function enumValue(options: OptionMap, name: string): string {
@@ -108,8 +109,55 @@ function schemeSet(policy: UrlPolicy, field: 'deny' | 'allow'): ReadonlySet<stri
   return list === undefined ? null : new Set(list.map((scheme) => scheme.toLowerCase()))
 }
 
+/** A record such as an object literal or JSON gives: not an array, a Map or an instance of another class. */
 function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  if (typeof value !== 'object' || value === null) return false
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+// The type of the items of each list and map option (spec/0.2/data/options.json).
+const ITEM_TYPES = new Map([['labels', 'string'], ['symbols', 'string'], ['rules', 'boolean'], ['platforms', 'string']])
+const STRUCTURE_NAMES = new Map([
+  ['includes', 'an include root or resolver'], ['social', 'an object'], ['urlPolicy', 'an object with a deny list or an allow list'],
+])
+
+function checkItems(name: string, items: readonly unknown[], what: string): void {
+  const type = ITEM_TYPES.get(name)
+  if (type !== undefined && !items.every((item) => typeof item === type)) throw new CarveOptionError(name, `not ${what} of ${type}s`)
+}
+
+/** The test of each declared type: the reason a value of the option `name` is refused, or null. */
+const TYPE_CHECKS = new Map<string, (name: string, value: unknown) => string | null>([
+  ['boolean', (_name, value) => (typeof value === 'boolean' ? null : 'not a boolean')],
+  ['enum', (name, value) => {
+    if (typeof value === 'string' && ENUM_VALUES.get(name)!.includes(value)) return null
+    return `unknown value ${JSON.stringify(value) ?? typeof value}`
+  }],
+  ['list', (name, value) => {
+    if (!Array.isArray(value)) return 'not a list'
+    checkItems(name, value, 'a list')
+    return null
+  }],
+  ['map', (name, value) => {
+    if (!isPlainObject(value)) return 'not a map'
+    checkItems(name, Object.values(value), 'a map')
+    return null
+  }],
+  ['structure', (name, value) => {
+    const resolver = name === 'includes' && (typeof value === 'string' || typeof value === 'function')
+    return isPlainObject(value) || resolver ? null : `not ${STRUCTURE_NAMES.get(name)!}`
+  }],
+])
+
+/**
+ * C2-H-137: refuses a value that is not of the declared type of the option `name`, before anything
+ * else is read of it. Null is a value only of an option whose default is null.
+ */
+export function checkType(name: string, value: unknown): void {
+  if (value === undefined || (value === null && NULL_DEFAULTS.includes(name))) return
+  const reason = TYPE_CHECKS.get(OPTION_TYPES.get(name)!)!(name, value)
+  if (reason !== null) throw new CarveOptionError(name, reason)
 }
 
 /** C2-H-128: a deny list or an allow list of schemes, each a list of strings. An absent policy is the default deny list. */
@@ -155,12 +203,22 @@ function socialValue(options: OptionMap): Social | null {
   return value as Social
 }
 
-/** C2-H-137: refuses a name that is no option, an option of another stage, and one this engine does not offer. */
+/** C2-H-137: refuses a name that is no option and a value of the wrong type. `positions` is a boolean the parse reads. */
+function checkValues(given: OptionMap, names: readonly string[], stage: 'parse' | 'render'): void {
+  for (const name of names) {
+    if (name === 'positions' && stage === 'parse') {
+      if (given[name] !== undefined && typeof given[name] !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
+    } else if (OPTION_KINDS.has(name)) checkType(name, given[name])
+    else throw new CarveOptionError(name, 'unknown option')
+  }
+}
+
+/** C2-H-137: then refuses an option of another stage, and one this engine does not offer. */
 function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
-  for (const name of Object.keys(given)) {
-    if (name === 'positions' && stage === 'parse') continue
+  const names = Object.keys(given)
+  checkValues(given, names, stage)
+  for (const name of names) {
     const kind = OPTION_KINDS.get(name)
-    if (kind === undefined) throw new CarveOptionError(name, 'unknown option')
     if (kind === 'format' || kind === 'lint' || (stage === 'parse' && kind === 'render')) {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }

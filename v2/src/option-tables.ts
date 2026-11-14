@@ -23,6 +23,32 @@ export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([
   ["urlPolicy", "render"],
 ])
 
+/** C2-H-137: the declared type of each option, checked before anything else is read of it. */
+export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
+  ["alignTables", "boolean"],
+  ["extensions", "list"],
+  ["headingIds", "enum"],
+  ["includes", "structure"],
+  ["labels", "map"],
+  ["mode", "enum"],
+  ["platforms", "list"],
+  ["profile", "enum"],
+  ["rawHtml", "boolean"],
+  ["renderers", "map"],
+  ["roundtrip", "boolean"],
+  ["rules", "map"],
+  ["sections", "boolean"],
+  ["smartTypography", "boolean"],
+  ["social", "structure"],
+  ["sourceLines", "boolean"],
+  ["strictLosses", "boolean"],
+  ["symbols", "map"],
+  ["urlPolicy", "structure"],
+])
+
+/** The options whose default is null, which take null as that default. */
+export const NULL_DEFAULTS: readonly string[] = ["includes","social"]
+
 export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([
   ["headingIds", ["off","keep-case","lower","ascii"]],
   ["mode", ["interactive","static"]],

@@ -1,6 +1,6 @@
 // The formatter (C2-W-001, C2-W-100): the source is parsed with its sidecar and written again.
 import { parseWithLayout } from './api.ts'
-import { CarveOptionError, type Options } from './options.ts'
+import { CarveOptionError, checkType, type Options } from './options.ts'
 import { OPTION_KINDS } from './option-tables.ts'
 import { type Diagnostic } from './diagnostics.ts'
 import { writeTree } from './write.ts'
@@ -18,13 +18,13 @@ export interface FormatOutput {
 function readFormatOptions(options: object | undefined): boolean {
   const given = (options ?? {}) as Readonly<Record<string, unknown>>
   for (const name of Object.keys(given)) {
-    const kind = OPTION_KINDS.get(name)
-    if (kind === undefined) throw new CarveOptionError(name, 'unknown option')
-    if (kind !== 'format') throw new CarveOptionError(name, 'not an option of format')
+    if (!OPTION_KINDS.has(name)) throw new CarveOptionError(name, 'unknown option')
+    checkType(name, given[name])
   }
-  const align = given['alignTables']
-  if (align !== undefined && typeof align !== 'boolean') throw new CarveOptionError('alignTables', 'not a boolean')
-  return align === true
+  for (const name of Object.keys(given)) {
+    if (OPTION_KINDS.get(name) !== 'format') throw new CarveOptionError(name, 'not an option of format')
+  }
+  return given['alignTables'] === true
 }
 
 /** The canonical form of `source`, with the diagnostics of the parse and of the writer. */

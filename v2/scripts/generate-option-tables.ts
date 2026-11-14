@@ -18,6 +18,7 @@ export function generateOptionTables(json: string): string {
   const row = (name: string): OptionRow => rows.find((option) => option.name === name)!
   const enums = rows.filter((option) => option.type === 'enum')
   const booleans = rows.filter((option) => option.type === 'boolean')
+  const nullable = rows.filter((option) => option.default === null).map((option) => option.name)
   const lines = [
     '// Generated from data/options.json by scripts/generate-option-tables.ts. Do not edit.',
     '',
@@ -25,6 +26,14 @@ export function generateOptionTables(json: string): string {
     'export const OPTION_KINDS: ReadonlyMap<string, string> = new Map([',
     ...rows.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.kind)}],`),
     '])',
+    '',
+    '/** C2-H-137: the declared type of each option, checked before anything else is read of it. */',
+    'export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([',
+    ...rows.map((option) => `  [${JSON.stringify(option.name)}, ${JSON.stringify(option.type)}],`),
+    '])',
+    '',
+    '/** The options whose default is null, which take null as that default. */',
+    ...wrapJson('export const NULL_DEFAULTS: readonly string[] = ', nullable),
     '',
     'export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([',
     ...enums.flatMap((option) => wrapJson(`[${JSON.stringify(option.name)}, `, option.values!, '],', '  ')),

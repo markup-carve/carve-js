@@ -83,7 +83,7 @@ function isCompared(c: Check, node: Node, name: string): boolean {
   if (name === 'title') return titleOf(node) === undefined
   if ((name === 'href' || name === 'src') && isReference(node)) return false
   if (name === 'number' && NUMBERED.includes(node.type)) return false
-  return !(c.spanMarks && (name === 'colspan' || name === 'rowspan'))
+  return !(c.spanMarks && node.type === 'table_cell' && (name === 'colspan' || name === 'rowspan'))
 }
 
 function sameField(name: string, a: unknown, b: unknown): boolean {

@@ -1,6 +1,10 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, foldLabel, format, parse, render, stringOffsetOfByte, utf8Length, write, writeWithDiagnostics } from '../src/index.ts'
+import { readFileSync } from 'node:fs'
+import {
+  CarveTreeError, decodeTree, foldLabel, format, parse, render, stringOffsetOfByte, treesEqual, utf8Length, write,
+  writeWithDiagnostics,
+} from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 
@@ -464,5 +468,99 @@ describe('what the random document gate found', () => {
       expect(once).toBe(source.endsWith('[|') ? '| a [ | < |\n+ | |\n' : '| a < | < |\n+ | |\n')
       expect(format(once)).toBe(once)
     }
+  })
+})
+
+describe('what the third code review found', () => {
+  it('C2-A-093, C2-A-161: a metadata field named span is no span mark, so the counts of the cells are compared', () => {
+    const table = (colspan: number): DocumentNode => {
+      const tree = parse('| a | b |')
+      type Level = { children: Level[] } & Record<string, unknown>
+      const cell = (tree.children[0] as unknown as Level).children[0]!.children[0]!.children[0]!
+      cell['colspan'] = colspan
+      cell['metadata'] = { span: 123 }
+      return tree
+    }
+    expect(treesEqual(table(1), table(2))).toBe(false)
+    expect(treesEqual(table(2), table(2))).toBe(true)
+  })
+})
+
+describe('every option is checked against its declared type first', () => {
+  interface OptionRow {
+    name: string
+    kind: string
+    type: string
+    values?: string[]
+  }
+  const rows = (JSON.parse(readFileSync(new URL('../data/options.json', import.meta.url), 'utf8')) as { options: OptionRow[] }).options
+
+  const VALID: Readonly<Record<string, unknown>> = {
+    alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', platforms: ['github'],
+    profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: true }, sections: false, smartTypography: false,
+    social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
+  }
+  // Values of the right type that this engine does not offer, or that no stage of it reads.
+  const UNOFFERED: Readonly<Record<string, unknown>> = { extensions: [{ name: 'a.b' }], includes: { root: '.' }, renderers: { a: () => '' } }
+  const SAMPLES: readonly [string, unknown][] = [
+    ['a string', 'x'], ['a number', 1], ['a boolean', true], ['a list', ['x']], ['a map', { x: 'y' }], ['a function', () => null],
+    ['a Map', new Map([['a', 'b']])],
+  ]
+  /** Which samples are of the declared type of an option. */
+  function ofType(row: OptionRow, sample: string): boolean {
+    if (row.type === 'boolean') return sample === 'a boolean'
+    if (row.type === 'list') return sample === 'a list'
+    if (row.type === 'map') return sample === 'a map'
+    if (row.type === 'structure') return sample === 'a map' || (row.name === 'includes' && (sample === 'a string' || sample === 'a function'))
+    return false
+  }
+
+  function outcome(row: OptionRow, value: unknown): string {
+    const options = { [row.name]: value } as never
+    try {
+      if (row.kind === 'format') format('x', options)
+      else if (row.kind === 'parse') parse('x', options)
+      else render('x', options)
+      return 'accepted'
+    } catch (error) {
+      return error instanceof CarveOptionError ? error.message : `other: ${String(error)}`
+    }
+  }
+
+  const typeRefusal = (message: string): boolean =>
+    message.startsWith('option ') && !/unknown option|not an option of|not offered/.test(message) && message !== 'accepted'
+
+  it('C2-H-137: the option list is the 19 of the data file', () => {
+    expect(rows).toHaveLength(19)
+    expect(Object.keys(VALID).sort()).toEqual(rows.map((row) => row.name).sort())
+  })
+
+  for (const row of rows) {
+    it(`C2-H-137: ${row.name} (${row.type}) takes a valid value, refuses each wrong type, and reads null as its spec says`, () => {
+      const lint = row.kind === 'lint'
+      expect(outcome(row, VALID[row.name])).toBe(lint ? `option ${row.name}: not an option of render` : 'accepted')
+      if (UNOFFERED[row.name] !== undefined) expect(outcome(row, UNOFFERED[row.name])).toBe(`option ${row.name}: not offered by this engine`)
+      for (const [sample, value] of SAMPLES) {
+        if (ofType(row, sample)) continue
+        const message = outcome(row, value)
+        expect(typeRefusal(message), `${row.name} given ${sample}: ${message}`).toBe(true)
+      }
+      const nullable = row.name === 'includes' || row.name === 'social'
+      const atNull = outcome(row, null)
+      if (nullable) expect(atNull).toBe('accepted')
+      else expect(typeRefusal(atNull), `${row.name} given null: ${atNull}`).toBe(true)
+    })
+  }
+
+  it('C2-H-137: an unknown option name is refused at every stage', () => {
+    expect(() => parse('x', { colour: true } as never)).toThrow('option colour: unknown option')
+    expect(() => render('x', { colour: true } as never)).toThrow('option colour: unknown option')
+    expect(() => format('x', { colour: true } as never)).toThrow('option colour: unknown option')
+  })
+
+  it('C2-H-137: extensions must be a list, and an object or a Map is refused', () => {
+    expect(() => parse('x', { extensions: {} } as never)).toThrow('option extensions: not a list')
+    expect(() => parse('x', { extensions: new Map([['a', 'b']]) } as never)).toThrow('option extensions: not a list')
+    expect(() => parse('x', { extensions: [{ name: 'a.b' }] })).toThrow('option extensions: not offered by this engine')
   })
 })

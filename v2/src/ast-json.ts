@@ -61,9 +61,10 @@ function isNumbered(node: Record<string, unknown>): boolean {
   return node['type'] === 'footnote_ref' || node['type'] === 'inline_footnote'
 }
 
-/** The fields of `node` that equality compares, sorted by name. */
-function comparedFields(node: Record<string, unknown>, counts: boolean): string[] {
+/** The fields of `node` that equality compares, sorted by name. `spanMarks`: the node stands in a table with span marks. */
+function comparedFields(node: Record<string, unknown>, spanMarks: boolean): string[] {
   const reference = isReferenceUse(node)
+  const counts = !spanMarks || node['type'] !== 'table_cell'
   return Object.keys(node).filter((name) => {
     if (SKIPPED.includes(name) || node[name] === undefined) return false
     if (reference && (name === 'href' || name === 'src')) return false
@@ -84,42 +85,51 @@ function coalesced(list: unknown[]): unknown[] {
   return out
 }
 
-function hasSpanMarks(table: Record<string, unknown>): boolean {
-  return JSON.stringify(table['children']).includes('"span":')
+/** The node list of `node` in its slot `name`, or none. */
+function listOf(node: unknown, name: string): unknown[] {
+  const list = isRecord(node) ? node[name] : undefined
+  return Array.isArray(list) ? list : []
 }
 
-function equalLists(a: unknown[], b: unknown[], counts: boolean): boolean {
+/** C2-A-093: whether a cell of the rows of `table` carries span marks, read from the `span` field of each cell. */
+function hasSpanMarks(table: Record<string, unknown>): boolean {
+  return listOf(table, 'children').some((group) => listOf(group, 'children').some((row) => listOf(row, 'children').some(
+    (cell) => isRecord(cell) && cell['type'] === 'table_cell' && cell['span'] !== undefined,
+  )))
+}
+
+function equalLists(a: unknown[], b: unknown[], spanMarks: boolean): boolean {
   const left = coalesced(a)
   const right = coalesced(b)
-  return left.length === right.length && left.every((item, index) => equalValues(item, right[index], counts))
+  return left.length === right.length && left.every((item, index) => equalValues(item, right[index], spanMarks))
 }
 
-function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, counts: boolean): boolean {
-  const inner = a['type'] === 'table' ? !(hasSpanMarks(a) || hasSpanMarks(b)) : counts
+function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, spanMarks: boolean): boolean {
+  const inner = a['type'] === 'table' ? hasSpanMarks(a) || hasSpanMarks(b) : spanMarks
   const names = comparedFields(a, inner)
   const others = comparedFields(b, inner)
   if (names.length !== others.length || names.some((name, index) => name !== others[index])) return false
   return names.every((name) => equalField(name, a[name], b[name], inner))
 }
 
-function equalField(name: string, a: unknown, b: unknown, counts: boolean): boolean {
-  if (name !== 'marker') return equalValues(a, b, counts)
+function equalField(name: string, a: unknown, b: unknown, spanMarks: boolean): boolean {
+  if (name !== 'marker') return equalValues(a, b, spanMarks)
   // C2-A-058: a start of 1 is the same as none.
   const normal = (marker: unknown): unknown => {
     const fields = { ...(marker as Record<string, unknown>) }
     if (fields['start'] === 1) delete fields['start']
     return fields
   }
-  return equalValues(normal(a), normal(b), counts)
+  return equalValues(normal(a), normal(b), spanMarks)
 }
 
-function equalValues(a: unknown, b: unknown, counts: boolean): boolean {
-  if (Array.isArray(a)) return Array.isArray(b) && equalLists(a, b, counts)
+function equalValues(a: unknown, b: unknown, spanMarks: boolean): boolean {
+  if (Array.isArray(a)) return Array.isArray(b) && equalLists(a, b, spanMarks)
   if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null || Array.isArray(b)) return a === b
-  return equalObjects(a as Record<string, unknown>, b as Record<string, unknown>, counts)
+  return equalObjects(a as Record<string, unknown>, b as Record<string, unknown>, spanMarks)
 }
 
 /** C2-A-161: whether two trees are the same document. */
 export function treesEqual(a: Node, b: Node): boolean {
-  return equalValues(a, b, true)
+  return equalValues(a, b, false)
 }
