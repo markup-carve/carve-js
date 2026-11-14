@@ -68,6 +68,7 @@
     "test:watch": "vitest",
     "test:v2": "vitest run v2/test",
     "test:cli:v2": "vitest run --config v2/cli/vitest.config.ts",
+    "test:lint:v2": "vitest run --config v2/lint/vitest.config.mjs",
     "typecheck:v2": "tsc -p v2/tsconfig.json",
     "check-public-types:v2": "node v2/scripts/check-public-types.ts",
     "enumerate:v2": "node v2/scripts/enumerate.ts",
