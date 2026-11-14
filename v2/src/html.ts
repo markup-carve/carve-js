@@ -9,7 +9,8 @@ import {
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
-import { INCLUDE_OPTIONS, PROFILES } from './render-tables.ts'
+import { includeSource } from './include.ts'
+import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
 
@@ -355,43 +356,10 @@ function lineBlock(r: Render, node: AstNode, level: number): void {
   line(r, level, '</div>')
 }
 
-/** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */
-function quoted(value: string): string {
-  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
-}
-
-const BARE_PATH_ENDS = [' ', '#', '@', '}', '"', '“']
-const BARE_VALUE_ENDS = [' ', '\t', '@', '}']
-
-function holdsAny(value: string, characters: readonly string[]): boolean {
-  return characters.some((character) => value.includes(character))
-}
-
-/** One option of a directive: the key alone for no value, and a value quoted where the bare form does not hold it. */
-function includeOption(name: string, value: string): string {
-  if (value === '') return `@${name}`
-  // C2-A-181: a list of column names keeps the quotes it was written in.
-  const bare = !holdsAny(value, BARE_VALUE_ENDS) || (name === 'cols' && value.startsWith('"'))
-  return `@${name}:${bare ? value : quoted(value)}`
-}
-
-const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
-
-function optionRank(name: string): number {
-  const rank = OPTION_ORDER.indexOf(name)
-  return rank < 0 ? OPTION_ORDER.length : rank
-}
-
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: AstNode, level: number): void {
-  const path = node.path ?? ''
-  const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
-  if (node.section !== undefined) parts.push(`#${node.section}`)
-  // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.
-  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
-  for (const [name, value] of options) parts.push(includeOption(name, value))
-  loss(r, node, 'include-unresolved', `the include of ${path} was not expanded`)
-  line(r, level, `<p>${escapeText(`{{ ${parts.join(' ')} }}`)}</p>`)
+  loss(r, node, 'include-unresolved', `the include of ${node.path ?? ''} was not expanded`)
+  line(r, level, `<p>${escapeText(includeSource(node))}</p>`)
 }
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */

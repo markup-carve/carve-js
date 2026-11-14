@@ -214,7 +214,7 @@ describe('the other clauses of the two commits', () => {
 
   it('C2-H-166: a node at the bound of max_nesting stays and its children are degraded', () => {
     expect(render('- a\n  - b\n    - c\n      - d\n        - e', { profile: 'comment' }))
-      .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c - d - e</li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
+      .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <p>- d - e</p>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
   })
 
   it('C2-H-168: static math with no renderer is code with the class language-math', () => {

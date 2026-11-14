@@ -184,7 +184,9 @@ function includeOption(pair: readonly [string, string]): string {
   // C2-A-181: a part that is no option is kept as its text.
   if (key === '') return value
   if (value === '') return `@${key}`
-  return `@${key}:${value.includes(' ') || value.includes('"') ? quoted(value) : value}`
+  // C2-W-058: a list of column names kept its quotes and gets no second pair.
+  const stored = key === 'cols' && value.startsWith('"')
+  return `@${key}:${!stored && (value.includes(' ') || value.includes('"')) ? quoted(value) : value}`
 }
 
 /** C2-W-058: one space inside each brace pair and between the parts: the path, the section, the options. */

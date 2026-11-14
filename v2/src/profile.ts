@@ -1,9 +1,9 @@
 // The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
-// form before the tree is resolved, so that a reference or a caption that is gone takes no number.
-// The specification does not state the degraded forms; they follow the 0.1 engine.
+// form (C2-H-165) before the tree is resolved, so that a reference or a caption that is gone takes no number.
 import { type AstNode, childrenOf, DEFINITION_TYPES, INLINE_PARENTS, keyOf, levelOf, pairsOf, valueOf } from './ast.ts'
 import { plainText } from './ast-text.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
+import { includeSource } from './include.ts'
 import { type ProfileRule } from './render-tables.ts'
 
 interface Filter {
@@ -15,13 +15,13 @@ interface Filter {
 // A node of these types renders nothing, so it has no degraded form and stays as it is.
 const UNWRITTEN = ['comment', 'frontmatter', ...DEFINITION_TYPES]
 const INLINE_SLOTS = ['title', 'short', 'prefix', 'locator', 'suffix'] as const
-const MAX_HEADING_MARKS = 6
 
 /** The text a degraded inline node leaves: its plain text, or the spelling of a node that has none. */
 function inlineText(node: AstNode): string {
   switch (node.type) {
     case 'image': return `[img: ${node.alt ?? ''}]`
     case 'footnote_ref': return `[^${keyOf(node)}]`
+    case 'comment': return ''
     case 'symbol': return `:${node.name ?? ''}:`
     case 'xref': return `</#${keyOf(node)}>`
     case 'raw_inline': return valueOf(node)
@@ -56,24 +56,31 @@ function containerText(node: AstNode): string {
   return [title, ...rest].filter((part) => part !== '').join(' ')
 }
 
+/** A quote whose blocks leave no text leaves none either. */
+function quoteText(node: AstNode): string {
+  const text = joined(childrenOf(node), '')
+  return text === '' ? '' : `> ${text}`
+}
+
 function headingText(node: AstNode): string {
-  return `${'#'.repeat(Math.min(levelOf(node), MAX_HEADING_MARKS))} ${inlinesText(childrenOf(node))}`
+  return `${'#'.repeat(levelOf(node))} ${inlinesText(childrenOf(node))}`
 }
 
 function rowText(node: AstNode): string {
   return childrenOf(node).filter((cell) => cell.span === undefined).map(blockText).join(' | ')
 }
 
-// The blocks whose degraded text is not that of their content alone: the mark of the kind stands in it, as 0.1 wrote it.
+// C2-H-165: the blocks whose degraded text is not that of their content alone: the mark of the kind stands in it.
 const MARKED_TEXT = new Map<string, (node: AstNode) => string>([
   ['heading', headingText],
-  ['block_quote', (node) => `> ${joined(childrenOf(node), '')}`],
+  ['block_quote', quoteText],
   ['list', (node) => joined(childrenOf(node), '- ')],
   ['thematic_break', () => '---'],
   ['code_block', (node) => withoutLineEnd(valueOf(node))],
   ['raw_block', (node) => withoutLineEnd(valueOf(node))],
   ['table_row', rowText],
-  ['include', (node) => `{{ ${node.path ?? ''} }}`],
+  ['include', includeSource],
+  ['div', containerText],
 ])
 
 /** The text a degraded block leaves. */
@@ -83,12 +90,12 @@ function blockText(node: AstNode): string {
   return INLINE_PARENTS.includes(node.type) ? inlinesText(childrenOf(node)) : containerText(node)
 }
 
-/** The inline content of the paragraph a degraded block becomes: a table keeps one line per row. */
-function degradedInlines(node: AstNode): AstNode[] {
-  if (node.type !== 'table') {
-    const text = blockText(node)
-    return text === '' ? [] : [{ type: 'text', value: text }]
-  }
+function textParagraph(text: string): AstNode[] {
+  return text === '' ? [] : [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
+}
+
+/** A table keeps one line per row, with a hard break between the rows. */
+function tableParagraph(node: AstNode): AstNode[] {
   const out: AstNode[] = []
   for (const group of childrenOf(node)) {
     for (const row of childrenOf(group)) {
@@ -97,16 +104,34 @@ function degradedInlines(node: AstNode): AstNode[] {
       out.push({ type: 'text', value: blockText(row) })
     }
   }
+  return out.length === 0 ? [] : [{ type: 'paragraph', children: out }]
+}
+
+/**
+ * C2-H-165: the blocks a degraded block becomes. A block with a mark of its kind and a leaf block give one
+ * paragraph of their text; any other block that holds blocks gives those blocks in their degraded forms, in order.
+ */
+function degradedBlocks(node: AstNode): AstNode[] {
+  if (node.type === 'table') return tableParagraph(node)
+  if (MARKED_TEXT.has(node.type) || INLINE_PARENTS.includes(node.type) || node.children === undefined) {
+    return textParagraph(blockText(node))
+  }
+  const out: AstNode[] = []
+  for (const child of childrenOf(node)) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))
+  if (node.caption !== undefined) out.push(...degradedBlocks(node.caption))
   return out
 }
 
-/** The node that stands in place of `node`, or null when nothing is left of it. An item stays an item, as its list expects. */
-function degraded(node: AstNode, block: boolean): AstNode | null {
-  if (!block) return { type: 'text', value: inlineText(node) }
-  const children = degradedInlines(node)
-  if (children.length === 0) return null
-  const paragraph: AstNode = { type: 'paragraph', children }
-  return node.type === 'list_item' ? { type: 'list_item', children: [paragraph] } : paragraph
+/** The nodes that stand in place of `node`, none when nothing is left of it. An item stays an item, as its list expects. */
+function degraded(node: AstNode, block: boolean): AstNode[] {
+  if (!block) {
+    const text = inlineText(node)
+    return text === '' ? [] : [{ type: 'text', value: text }]
+  }
+  if (node.type !== 'list_item') return degradedBlocks(node)
+  const children: AstNode[] = []
+  for (const child of childrenOf(node)) if (!UNWRITTEN.includes(child.type)) children.push(...degradedBlocks(child))
+  return children.length === 0 ? [] : [{ type: 'list_item', children }]
 }
 
 /** C2-H-163: the deny list of the axis, then its allow list, then the nesting bound. */
@@ -121,23 +146,30 @@ function isOutside(filter: Filter, node: AstNode, block: boolean, depth: number)
 
 /** Filters one list in place. Its nodes stand `depth` levels below the children of the document. */
 function filterList(filter: Filter, list: AstNode[], block: boolean, depth: number): void {
-  let kept = 0
+  const kept: AstNode[] = []
+  let changed = false
   for (const node of list) {
-    let out: AstNode | null = node
     if (UNWRITTEN.includes(node.type)) {
       // Kept as it is: a definition still resolves the references to it. The body of a note is
       // filtered where the profile has notes; elsewhere no reference is left to write it.
       if (node.type === 'footnote' && !isOutside(filter, node, block, depth)) filterNode(filter, node, depth + 1)
     } else if (isOutside(filter, node, block, depth)) {
-      out = degraded(node, block)
+      // C2-H-165: one report for the degraded node; the nodes inside it are not reported again.
+      const out = degraded(node, block)
       const message = `Degraded a construct the profile "${filter.name}" does not allow: ${node.type}`
-      addFinding(filter.findings, out, { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message })
+      const entry = { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message } as const
+      addFinding(filter.findings, out[0] ?? null, entry)
+      for (const part of out) kept.push(part)
+      changed = true
+      continue
     } else {
       filterNode(filter, node, depth + 1)
     }
-    if (out !== null) list[kept++] = out
+    kept.push(node)
   }
-  list.length = kept
+  if (!changed) return
+  list.length = 0
+  for (const node of kept) list.push(node)
 }
 
 /** Filters the lists of `node`, whose nodes stand at `depth`. */

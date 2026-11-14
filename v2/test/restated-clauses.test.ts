@@ -506,7 +506,7 @@ describe('the profiles', () => {
       '<p><a href="/u" rel="nofollow ugc">a</a></p>', { profile: 'comment' }],
     ['C2-H-164: a literal-text span stands where code stands', '!`a` `b`', '<p>a <code>b</code></p>', { profile: 'minimal' }],
     ['C2-H-163: a node deeper than max_nesting is outside the profile, and an item stays an item', '- a\n  - b `c`\n    - d',
-      '<ul>\n  <li>a\n    <ul>\n      <li>b c - d</li>\n    </ul>\n  </li>\n</ul>', { profile: 'minimal' }],
+      '<ul>\n  <li>a\n    <ul>\n      <li>b c\n        <p>- d</p>\n      </li>\n    </ul>\n  </li>\n</ul>', { profile: 'minimal' }],
     ['C2-H-163: the full profile accepts every type', '`<b>`{=html}', '<p><b></p>', { profile: 'full', rawHtml: true }],
   ])
 

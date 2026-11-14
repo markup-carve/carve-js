@@ -1,7 +1,7 @@
 // The clauses that the specification commits after "fix what the review of today's clauses found"
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
-import { type AstNode, render } from '../src/index.ts'
+import { type AstNode, formatWithDiagnostics, render, renderWithDiagnostics, write } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
 const CONTROLS = '‪‮⁦⁩'
@@ -64,5 +64,57 @@ describe('the bidirectional controls', () => {
 
   it('C2-H-172: raw content passed through unescaped keeps them', () => {
     expect(render(`a ${TICK}x${CONTROLS}${TICK}{=html} b`, { rawHtml: true })).toBe(`<p>a x${CONTROLS} b</p>`)
+  })
+})
+
+describe('the degraded forms', () => {
+  const minimal = { profile: 'minimal' } as const
+
+  it('C2-H-165: a description list gives one paragraph for each term and the degraded blocks of each description', () => {
+    expect(render(':: term one\n: desc *a*\n\n  desc b\n:: term two\n: desc c', minimal))
+      .toBe('<p>term one</p>\n<p>desc a</p>\n<p>desc b</p>\n<p>term two</p>\n<p>desc c</p>')
+  })
+
+  it('C2-H-165: the nodes inside a degraded node are not reported again', () => {
+    const out = renderWithDiagnostics(':: term one\n: desc *a* [x](/u)\n', minimal)
+    expect(out.diagnostics.filter((entry) => entry.code === 'profile-construct-degraded')).toHaveLength(1)
+  })
+
+  it('C2-H-165: an include is written as the source text of its directive, options included', () => {
+    expect(render('{{ a.crv #s @lines:1-2 @cols:"a,b" }}', minimal)).toBe('<p>{{ a.crv #s @lines:1-2 @cols:"a,b" }}</p>')
+  })
+
+  it('C2-H-165: a heading is one # for each level and a space, whatever marker the source used', () => {
+    expect(render('=== Deep', minimal)).toBe('<p>### Deep</p>')
+  })
+
+  it('C2-H-165: a no-break space, a break and a smart punctuation node give U+00A0, one space and the glyph', () => {
+    expect(render('[a\\ b "q" x -- y\\\nz]{.c}', minimal)).toBe('<p>a&nbsp;b “q” x – y z</p>')
+  })
+
+  it('C2-H-165: a footnote reference is written as [^key]', () => {
+    expect(render('a[^n]\n\n[^n]: note', minimal)).toBe('<p>a[^n]</p>')
+  })
+
+  it('C2-H-165: a comment gives no text, and a paragraph that holds only comments writes nothing', () => {
+    expect(render('a {% c %} b', minimal)).toBe('<p>a  b</p>')
+    expect(render('{% only %}', minimal)).toBe('')
+    expect(render('> {% only %}', minimal)).toBe('')
+  })
+})
+
+describe('the cols value of an include', () => {
+  it('C2-A-181, C2-W-058: a cols value that kept its quotes formats to itself with no diagnostic', () => {
+    const out = formatWithDiagnostics('{{ a.crv @cols:"a,b" }}')
+    expect(out.source).toBe('{{ a.crv @cols:"a,b" }}\n')
+    expect(out.diagnostics).toEqual([])
+  })
+
+  it('C2-W-058: the writer writes a stored cols value with no second pair', () => {
+    expect(write(documentOf({ type: 'include', path: 'a.crv', options: [['cols', '"a b"']] }))).toBe('{{ a.crv @cols:"a b" }}\n')
+  })
+
+  it('C2-H-171: the renderer writes a cols value that kept its quotes as stored', () => {
+    expect(render('{{ a.crv @cols:"a b" }}')).toBe('<p>{{ a.crv @cols:"a b" }}</p>')
   })
 })

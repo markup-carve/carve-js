@@ -269,3 +269,41 @@ export function readInclude(src: string, pos: number, end: number): IncludeParts
   const section = shape.sectionStart === NONE ? null : src.slice(shape.sectionStart, shape.sectionEnd)
   return { path, section, options, end: shape.end }
 }
+
+/** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */
+function quoted(value: string): string {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+const BARE_PATH_ENDS = [' ', '#', '@', '}', '"', '“']
+const BARE_VALUE_ENDS = [' ', '\t', '@', '}']
+
+function holdsAny(value: string, characters: readonly string[]): boolean {
+  return characters.some((character) => value.includes(character))
+}
+
+/** One option of a directive: the key alone for no value, and a value quoted where the bare form does not hold it. */
+function includeOption(name: string, value: string): string {
+  if (value === '') return `@${name}`
+  // C2-A-181: a list of column names keeps the quotes it was written in.
+  const bare = !holdsAny(value, BARE_VALUE_ENDS) || (name === 'cols' && value.startsWith('"'))
+  return `@${name}:${bare ? value : quoted(value)}`
+}
+
+const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
+
+function optionRank(name: string): number {
+  const rank = OPTION_ORDER.indexOf(name)
+  return rank < 0 ? OPTION_ORDER.length : rank
+}
+
+/** C2-H-133, C2-H-171: the source text of an include directive, as the renderer writes it, written as in C2-W-058. */
+export function includeSource(node: { path?: string, section?: string, options?: readonly (readonly [string, string])[] }): string {
+  const path = node.path ?? ''
+  const parts = [holdsAny(path, BARE_PATH_ENDS) ? quoted(path) : path]
+  if (node.section !== undefined) parts.push(`#${node.section}`)
+  // C2-W-058: the six options in the order of the directive grammar, then the others in the order of the node.
+  const options = [...(node.options ?? [])].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
+  for (const [name, value] of options) parts.push(includeOption(name, value))
+  return `{{ ${parts.join(' ')} }}`
+}
