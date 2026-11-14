@@ -313,7 +313,7 @@ describe('the opening brace', () => {
     expect(inline('[s]{#id}')).toBe('span["s"]{#id}')
     expect(inline('a{%b%}c')).toBe('"a" {%}"b" "c"')
     expect(inline('a{#b#}c {##} {#}')).toBe('"a" {#}"b" "c {##} {#}"')
-    expect(inline('a{--}b')).toBe('"a" ‹–› "b"')
+    expect(inline('a{--}b')).toBe('"a{" ‹–› "}b"')
     expect(inline('{*a*}{/b/}{_c_}{~d~}{=e=}{+f+}{-g-}{^h^}{,i,}')).toBe('strong["a"] em["b"] u["c"] s["d"] mark["e"] ins["f"] del["g"] sup["h"] sub["i"]')
     expect(inline('{% a {# b #} %}')).toBe('{%}" a {# b #} "')
     expect(inline('{# a {% b %} #}')).toBe('{#}" a {% b %} "')
@@ -749,25 +749,25 @@ describe('smart typography', () => {
     expect(inline('a -- b --')).toBe('"a " ‹–› " b " ‹–›')
   })
 
-  it('C2-I-112: a hyphen run that is a command-line flag stays as typed', () => {
-    expect(inline('git --all (--x) "--y" \'--z\' a(--b) --')).toBe('"git --all (--x) " ‹“› "--y" ‹”› " " ‹‘› "--z" ‹’› " a(" ‹–› "b) " ‹–›')
-    expect(inline('--a', '--b')).toBe('"--a" sb "--b"')
-    expect(inline('*--a*')).toBe('strong["--a"]')
-    expect(inline('a ---b')).toBe('"a ---b"')
+  it('C2-I-111: a hyphen run is dashes wherever it stands, in the place of a command-line flag too', () => {
+    expect(inline('git --all (--x) "--y" a(--b) --')).toBe('"git " ‹–› "all (" ‹–› "x) " ‹“› ‹–› "y" ‹”› " a(" ‹–› "b) " ‹–›')
+    expect(inline('--a', '--b')).toBe('‹–› "a" sb ‹–› "b"')
+    expect(inline('*--a*')).toBe('strong[‹–› "a"]')
+    expect(inline('a ---b')).toBe('"a " ‹—› "b"')
+    expect(inline('x {--}y')).toBe('"x {" ‹–› "}y"')
+  })
+
+  it('C2-I-011: a no-break space, escaped or as U+00A0, is whitespace for every boundary test', () => {
+    expect(inline('"a-"\\ b')).toBe('‹“› "a-" ‹”› nbsp "b"')
     // A no-break space, escaped or as U+00A0, is whitespace for every boundary test.
-    expect(inline('run\\ --verbose')).toBe('"run" nbsp "--verbose"')
-    expect(inline('run\u00a0--verbose')).toBe('"run --verbose"')
-    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(--b)"')
+    expect(inline('run\\ --verbose')).toBe('"run" nbsp ‹–› "verbose"')
+    expect(inline('run\u00a0--verbose')).toBe('"run " ‹–› "verbose"')
     // The test of the character after the run sees an escaped no-break space as whitespace too.
     expect(inline('a --\\ x')).toBe('"a " ‹–› nbsp "x"')
     expect(inline('*\\ a*')).toBe('"*" nbsp "a*"')
     expect(inline('x\u00a0%% c')).toBe('"x " %%" c"')
     expect(inline('*\u00a0a*')).toBe('"* a*"')
     expect(inline('a\u00a0"b"')).toBe('"a " ‹“› "b" ‹”›')
-  })
-
-  it('C2-I-113: `{--}` is an en dash', () => {
-    expect(inline('x {--}y {--}{.c} *{--}*')).toBe('"x " ‹–› "y " ‹–› "{.c} " strong[‹–›]')
   })
 
   it('C2-I-114: three dots become an ellipsis', () => {
@@ -782,7 +782,7 @@ describe('smart typography', () => {
   })
 
   it('C2-I-116: an arrow needs its exact hyphen run', () => {
-    expect(inline('a--->b a<---b a<---->b a ---> b')).toBe('"a" ‹—› ">b a<" ‹—› "b a<" ‹–› ‹–› ">b a ---> b"')
+    expect(inline('a--->b a<---b a<---->b a ---> b')).toBe('"a" ‹—› ">b a<" ‹—› "b a<" ‹–› ‹–› ">b a " ‹—› "> b"')
   })
 
   it('C2-I-117: the comparison signs, plus-minus and the trademark sign', () => {
@@ -860,7 +860,7 @@ describe('more cases per clause', () => {
   })
 
   it('C2-I-021: the format name and a later node keep their source offsets in a container', () => {
-    expect(tree('> a `x`{=html} {--}')).toBe('quote[p["a " raw(html)"x" " " ‹–›]]')
+    expect(tree('> a `x`{=html} --')).toBe('quote[p["a " raw(html)"x" " " ‹–›]]')
   })
 
   it('C2-I-023: a line comment behind a no-break space, and a percent sign before other forms', () => {
@@ -973,13 +973,6 @@ describe('more cases per clause', () => {
   it('C2-I-109: a link keeps the run of single quotes, and a footnote gives it back', () => {
     expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›')
     expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›]')
-  })
-
-  it('C2-I-112: what stands before the character before a hyphen run', () => {
-    expect(inline('a\\ (--b)')).toBe('"a" nbsp "(--b)"')
-    expect(inline('*a* (--b)')).toBe('strong["a"] " (--b)"')
-    expect(inline('a', '(--b)')).toBe('"a" sb "(--b)"')
-    expect(inline('a \\"--b a \\(--b')).toBe('"a "" ‹–› "b a (" ‹–› "b"')
   })
 
   it('C2-I-116: a hyphen that belongs to a braced closer is no part of the run', () => {

@@ -72,7 +72,7 @@
   {"id": "U-071", "title": "Single opening quote with no closer", "inputs": ["said 'Bob and left.\n"], "outputs": ["said ’Bob and left.\n"], "class": "rewrite"},
   {"id": "U-072", "title": "Editorial comment that starts like an id", "inputs": ["a*{#b} c #}\n"], "outputs": [], "class": "report"},
   {"id": "U-073", "title": "Sigil after a letter or number", "inputs": ["see config:items[0] and :smile: and x:smile:\n", "color #fff and a#tag and é#tag and #tag\n", "mail a@user and é@user and @user and (@user)\n"], "outputs": [], "class": "report"},
-  {"id": "U-074", "title": "Inline spellings that read the same", "inputs": ["***bold italic*** here\n", "**bold** and //it//\n", "a{--}b and --flag\n", "[a]{} and [b]{.c}\n", "!`x` and !`y`{.c}\n", "x{^2^} H{,2,}O ^bare^ ,bare,\n", "{+add+} {-del-} {_u_} {~s~} {=h=}\n"], "outputs": [], "class": "none"},
+  {"id": "U-074", "title": "Inline spellings that read the same", "inputs": ["***bold italic*** here\n", "**bold** and //it//\n", "[a]{} and [b]{.c}\n", "!`x` and !`y`{.c}\n", "x{^2^} H{,2,}O ^bare^ ,bare,\n", "{+add+} {-del-} {_u_} {~s~} {=h=}\n"], "outputs": [], "class": "none"},
   {"id": "U-075", "title": "References that read the same", "inputs": ["See [^n](/u).\n\n[^n]: Note.\n", "See [x][ ] here.\n", "[label]: /u\n\nSee [label].\n", "[Ref]: /u\n\n[x][ref]\n", "# Pic\n\n![Pic][]\n", "# My Heading\n\nSee [My Heading][].\n"], "outputs": [], "class": "none"},
   {"id": "U-076", "title": "Raw HTML block", "inputs": ["```=html\n<b>x</b>\n```\n"], "outputs": [], "class": "report"},
   {"id": "U-077", "title": "Raw HTML span", "inputs": ["a `<b>x</b>`{=html} b\n"], "outputs": [], "class": "report"},

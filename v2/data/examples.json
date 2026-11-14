@@ -2108,8 +2108,8 @@
   "number": 33,
   "label": "generated",
   "flags": [],
-  "input": "a {=a}b=} c and {--} and {---} and [s]{=x=}",
-  "html": "<p>a <mark>a}b</mark> c and – and <del>-</del> and [s]<mark>x</mark></p>"
+  "input": "a {=a}b=} c and {---} and [s]{=x=}",
+  "html": "<p>a <mark>a}b</mark> c and <del>-</del> and [s]<mark>x</mark></p>"
  },
  {
   "file": "syntax-inline.md",
@@ -2180,8 +2180,8 @@
   "number": 42,
   "label": "generated",
   "flags": [],
-  "input": "a/b testing, 2 * 3 * 4, a*b*c, x^2, $5, --flag, 50%, a = b = c",
-  "html": "<p>a/b testing, 2 * 3 * 4, a*b*c, x^2, $5, --flag, 50%, a = b = c</p>"
+  "input": "a/b testing, 2 * 3 * 4, a*b*c, x^2, $5, 50%, a = b = c",
+  "html": "<p>a/b testing, 2 * 3 * 4, a*b*c, x^2, $5, 50%, a = b = c</p>"
  },
  {
   "file": "syntax-inline.md",
@@ -2644,8 +2644,8 @@
   "number": 99,
   "label": "generated",
   "flags": [],
-  "input": "pages 1--10 and a---b and a----b and git log --oneline and x --- y",
-  "html": "<p>pages 1–10 and a—b and a––b and git log --oneline and x — y</p>"
+  "input": "pages 1--10 and a---b and a----b and `git log --oneline` and x --- y",
+  "html": "<p>pages 1–10 and a—b and a––b and <code>git log --oneline</code> and x — y</p>"
  },
  {
   "file": "syntax-inline.md",
@@ -2660,8 +2660,8 @@
   "number": 101,
   "label": "generated",
   "flags": [],
-  "input": "x {--}y and wait... really and a --> b <-- c <--> d ==> e <== f <=> g",
-  "html": "<p>x –y and wait… really and a → b ← c ↔ d ⇒ e ⇐ f ⇔ g</p>"
+  "input": "x -- y and wait... really and a --> b <-- c <--> d ==> e <== f <=> g",
+  "html": "<p>x – y and wait… really and a → b ← c ↔ d ⇒ e ⇐ f ⇔ g</p>"
  },
  {
   "file": "syntax-inline.md",

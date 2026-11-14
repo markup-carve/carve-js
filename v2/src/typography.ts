@@ -1,6 +1,6 @@
 // Smart typography (C2-I-104 to C2-I-117). It reads the text that the scan left as text and
 // writes a text span for each plain stretch and a SMART node for each match.
-import { APOSTROPHE, GREATER, HYPHEN, PAREN_OPEN, QUOTE_MARK, SLASH } from './chars.ts'
+import { APOSTROPHE, GREATER, HYPHEN, QUOTE_MARK, SLASH } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import { characterAfter } from './inline-atoms.ts'
 import { SMART } from './inline-kinds.ts'
@@ -44,11 +44,6 @@ function isDash(code: number): boolean {
 /** The character before `pos` in the text stretch that starts at `from`; before `from` it is the state's. */
 function before(state: InlineState, pos: number, from: number): number {
   return pos > from ? codePointBefore(state.text, pos) : state.previous
-}
-
-function beforeFollowsSpace(state: InlineState, pos: number, from: number): boolean {
-  if (pos > from + 1) return isBoundarySpace(state.text.charCodeAt(pos - 2))
-  return pos === from + 1 ? isBoundarySpace(state.previous) : state.previousAfterSpace
 }
 
 /** The character at `pos`, or behind the text stretch when it ends at `to`. */
@@ -110,22 +105,11 @@ function writeDashes(state: InlineState, pos: number, length: number): void {
   }
 }
 
-/** The characters before a flag that open a phrase. */
-const OPENING_CHARACTERS: readonly number[] = [PAREN_OPEN, QUOTE_MARK, APOSTROPHE, LEFT_SINGLE, LEFT_DOUBLE]
-
-/** C2-I-112: a hyphen run after whitespace, or after `(` or a quote that follows whitespace, and before no whitespace. */
-function isFlag(state: InlineState, pos: number, from: number, next: number): boolean {
-  if (isBoundarySpace(next)) return false
-  const previous = before(state, pos, from)
-  if (isBoundarySpace(previous)) return true
-  return OPENING_CHARACTERS.includes(previous) && beforeFollowsSpace(state, pos, from)
-}
-
 /**
- * The hyphen run at `pos`. Returns the offset behind what was written, `pos` when the run stays
- * as typed, and sets `state.textRun` behind a flag so that its hyphens are not read again.
+ * C2-I-111: the hyphen run at `pos`. Returns the offset behind what was written, or the negated end of a
+ * single hyphen, which stays as typed.
  */
-function hyphens(state: InlineState, pos: number, from: number, to: number): number {
+function hyphens(state: InlineState, pos: number, to: number): number {
   const text = state.text
   let end = pos
   while (end < to && text.charCodeAt(end) === HYPHEN) end++
@@ -137,7 +121,7 @@ function hyphens(state: InlineState, pos: number, from: number, to: number): num
     state.smartKind = SMART_RIGHTWARDS_ARROW
     return end + 1
   }
-  if (length < 2 || isFlag(state, pos, from, after(state, end, to))) return -end
+  if (length < 2) return -end
   flushSpan(state, pos)
   writeDashes(state, pos, length)
   return end
@@ -180,7 +164,7 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
   const text = state.text
   const code = text.charCodeAt(pos)
   if (code === QUOTE_MARK || code === APOSTROPHE) return quote(state, pos, from, to, code)
-  if (code === HYPHEN) return hyphens(state, pos, from, to)
+  if (code === HYPHEN) return hyphens(state, pos, to)
   const run = runAt(text, pos, to)
   if (run === NO_MATCH) return pos
   const [source, kind] = SMART_RUNS[run]!
@@ -191,8 +175,7 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
 }
 
 /** Sets what the next quote or hyphen run sees before it, after a node was written up to `pos`. */
-function afterSmart(state: InlineState, pos: number, from: number, start: number): void {
-  state.previousAfterSpace = isBoundarySpace(before(state, start, from))
+function afterSmart(state: InlineState, pos: number): void {
   state.previous = SMART_GLYPHS[state.smartKind]!.codePointAt(0)!
   state.textRun = pos
 }
@@ -211,13 +194,12 @@ export function writeText(state: InlineState, from: number, to: number): void {
     }
     const end = smartAt(state, pos, start, to)
     if (end > pos) {
-      afterSmart(state, end, start, pos)
+      afterSmart(state, end)
       start = end
     }
     pos = end > pos ? end : Math.max(pos + 1, -end)
   }
   if (to > state.textRun) {
-    state.previousAfterSpace = beforeFollowsSpace(state, to, start)
     state.previous = codePointBefore(text, to)
     flushSpan(state, to)
   }
@@ -226,5 +208,4 @@ export function writeText(state: InlineState, from: number, to: number): void {
 /** Sets the typography state as it is at the start of a content, or of the content of a node. */
 export function startOfContent(state: InlineState): void {
   state.previous = NO_CHARACTER
-  state.previousAfterSpace = true
 }

@@ -34,7 +34,7 @@ export const SLUG_REVERSED: ReadonlyMap<string, string> = new Map([
 /** C2-H-159: the ranges of code points that are removed from a destination before its scheme is read. */
 export const PROBE_REMOVED: readonly (readonly [number, number])[] = [
   [0,32], [127,160], [5760,5760], [8192,8202], [8232,8233], [8234,8238], [8239,8239], [8287,8287], [8294,8297], [12288,12288],
-  [65279,65279],
+  [65279,65279], [65533,65533],
 ]
 
 /** C2-H-161: the attribute names that are never written, and the prefixes of such names. */

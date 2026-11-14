@@ -116,7 +116,6 @@ export interface InlineState {
   breakFrom: number
   nextBreak: number
   previous: number
-  previousAfterSpace: boolean
   singleQuoteOpen: boolean
   // The state of single quotes around each open inline footnote (C2-I-109).
   footnoteQuotes: Uint8Array
@@ -172,7 +171,6 @@ function createState(): InlineState {
     breakFrom: 0,
     nextBreak: NONE,
     previous: NO_CHARACTER,
-    previousAfterSpace: true,
     singleQuoteOpen: false,
     footnoteQuotes: new Uint8Array(256),
     footnoteDepth: 0,

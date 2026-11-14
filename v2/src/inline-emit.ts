@@ -59,7 +59,6 @@ function writeLabel(state: InlineState, at: number): void {
 /** What a quote or a hyphen run sees before it, after a closed node (C2-I-104): a word character. */
 function afterNode(state: InlineState): void {
   state.previous = LOWER_A
-  state.previousAfterSpace = false
 }
 
 /**
@@ -177,7 +176,6 @@ function writeAtom(state: InlineState, at: number): number {
     // C2-I-035: a block that attaches to nothing is printed as written.
     writePieces(state, start, end)
     state.previous = BRACE_CLOSE
-    state.previousAfterSpace = false
     state.textRun = end
     return at + TOKEN_WIDTH
   }
@@ -187,12 +185,10 @@ function writeAtom(state: InlineState, at: number): number {
   writeInlineEvent(state, eventTag(ENTER, kind, tokens[at + TOKEN_C]!), toSource(state, start), keepsAux ? aux : 0)
   if (tokens[at + TOKEN_A] !== NONE) writePieces(state, tokens[at + TOKEN_A]!, tokens[at + TOKEN_B]!)
   const previous = state.previous
-  const afterSpace = state.previousAfterSpace
   const next = closeHost(state, at + TOKEN_WIDTH, kind, end)
   if (kind === INLINE_COMMENT) {
     // C2-I-026: a comment counts as nothing for its neighbors.
     state.previous = previous
-    state.previousAfterSpace = afterSpace
   } else {
     afterAtom(state, at, kind)
   }

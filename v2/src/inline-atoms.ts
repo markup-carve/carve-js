@@ -9,7 +9,7 @@ import {
 } from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END,
-  HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SOFT_BREAK, SYMBOL, TAG, XREF,
+  HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
   type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START, TOKEN_WIDTH,
@@ -17,7 +17,7 @@ import {
 import {
   BRACED_MARKS, CHARACTER_CLASSES, CLASS_BRACED_MARK, CLASS_EMAIL_DOMAIN, CLASS_EMAIL_LAST, CLASS_EMAIL_LOCAL,
   CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_RAW_FIRST, CLASS_RAW_REST, CLASS_SCHEME_FIRST,
-  CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY, SMART_EN_DASH,
+  CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY,
 } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
@@ -262,10 +262,6 @@ export function scanBrace(state: InlineState, pos: number): number {
   const next = codeAt(state, pos + 1)
   if (next === PERCENT) return bracedComment(state, pos, INLINE_COMMENT)
   if (next === HASH) return bracedComment(state, pos, EDITORIAL)
-  if (next === HYPHEN && text.startsWith('--}', pos + 1)) {
-    pushToken(state, SMART, pos, pos + 4, NONE, NONE, 0, SMART_EN_DASH)
-    return pos + 4
-  }
   // C2-I-050: a mark before a combining mark is text, and so the brace is (C2-I-044).
   if (!inClass(next, CLASS_BRACED_MARK) || isJoining(codePointAt(text, pos + 2, state.end))) return pos + 1
   pushToken(state, TOKEN_BRACED_OPEN, pos, pos + 2, BRACED_MARKS.indexOf(String.fromCharCode(next)), NONE, 0, NONE)

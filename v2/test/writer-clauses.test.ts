@@ -948,7 +948,9 @@ describe('escaping', () => {
   })
 
   it('C2-W-096: an opening brace that would form is escaped', () => {
-    for (const src of ['a \\{% c %}', 'a \\{#e#}', 'a \\{--}', 'a \\{/b/}']) expect(format(src)).toBe(`${src}\n`)
+    for (const src of ['a \\{% c %}', 'a \\{#e#}', 'a \\{/b/}']) expect(format(src)).toBe(`${src}\n`)
+    // `{--}` is no form of its own any more, so its brace needs no escape.
+    expect(format('a \\{--}')).toBe('a {--}\n')
     expect(format('[x]\\{.a}')).toBe('\\[x]{.a}\n')
     expect(format('a \\{ b')).toBe('a { b\n')
   })
@@ -967,7 +969,7 @@ describe('escaping', () => {
 
   it('C2-W-099: every second hyphen of a text run that would read as dashes is escaped', () => {
     expect(write(documentOf(paragraph('a -- b --- c ---- d')))).toBe('a -\\- b -\\-- c -\\--\\- d\n')
-    expect(write(documentOf(paragraph('--flag and a --flag')))).toBe('--flag and a --flag\n')
+    expect(write(documentOf(paragraph('--flag and a --flag')))).toBe('-\\-flag and a -\\-flag\n')
     expect(write(documentOf(paragraph('---'), paragraph('x')))).toBe('-\\--\n\nx\n')
   })
 
