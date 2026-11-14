@@ -9,16 +9,35 @@ function isFlowParent(node: Inline): node is Inline & InlineParent {
   return isInlineParent(node)
 }
 
-/** The first character of the flow at `nodes[from]`, or `after` when the list ends there. An element edge is no boundary (C2-I-099). */
+// What `leadingCharacter` gives for a node the flow passes through, distinct from every character and from NO_CHARACTER.
+const PASSES_THROUGH = NO_CHARACTER - 1
+
+/** The first character of `node`, or `after` when the flow passes through it. An element edge is no boundary (C2-I-099). */
+function leadingCharacter(node: Inline, after: number): number {
+  if (node.type === 'text') return codePointAt(node.value, 0, node.value.length)
+  if (node.type === 'comment') return after
+  if (!isFlowParent(node) || node.type === 'inline_footnote') return NO_CHARACTER
+  return node.children.length > 0 ? firstCharacter(node.children, 0, NO_CHARACTER) : after
+}
+
+/** The first character of the flow at `nodes[from]`, or `after` when the list ends there. */
 function firstCharacter(nodes: readonly Inline[], from: number, after: number): number {
   for (let at = from; at < nodes.length; at++) {
-    const node = nodes[at]!
-    if (node.type === 'text') return codePointAt(node.value, 0, node.value.length)
-    if (node.type === 'comment') continue
-    if (!isFlowParent(node) || node.type === 'inline_footnote') return NO_CHARACTER
-    if (node.children.length > 0) return firstCharacter(node.children, 0, NO_CHARACTER)
+    const found = leadingCharacter(nodes[at]!, PASSES_THROUGH)
+    if (found !== PASSES_THROUGH) return found
   }
   return after
+}
+
+/** The first character of the flow behind each node, in one pass from the end, so empty nodes are not walked again per node. */
+function followingCharacters(nodes: readonly Inline[], after: number): Int32Array {
+  const following = new Int32Array(nodes.length)
+  let next = after
+  for (let at = nodes.length - 1; at >= 0; at--) {
+    following[at] = next
+    next = leadingCharacter(nodes[at]!, next)
+  }
+  return following
 }
 
 function lastCharacter(nodes: readonly Inline[], before: number): number {
@@ -102,9 +121,10 @@ function splitText(ctx: TreeContext, node: TextNode, before: number, after: numb
 function applyTo(ctx: TreeContext, nodes: Inline[], before: number, after: number): Inline[] {
   let out: Inline[] | null = null
   let previous = before
+  let following: Int32Array | null = null
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
-    const next = (): number => firstCharacter(nodes, at + 1, after)
+    const next = (): number => (following ??= followingCharacters(nodes, after))[at]!
     let parts: Inline[] | null = null
     if (node.type === 'text') {
       parts = splitText(ctx, node, previous, next())

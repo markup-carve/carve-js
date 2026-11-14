@@ -58,6 +58,17 @@ export const BLOCK_SHAPES: readonly Shape[] = [
   ['unused footnote definitions', (size) => each(size, (index) => `[^n${index}]: note\n`)],
   ['occurrences of one abbreviation', (size) => `*[HTML]: x\n\n${'HTML '.repeat(size)}`],
   ['abbreviation definitions', (size) => `${each(size, (index) => `*[A${index}]: x\n`)}\nA1 A2 B`],
+  // Each text node looks past the empty spans behind it for the character that ends its word (C2-I-099).
+  ['empty spans after an abbreviation definition', (size) => `*[A]: B\n\n${'[]{.x}'.repeat(size)}`],
+  ['words between empty spans after an abbreviation definition', (size) => `*[A]: B\n\nA${'[]{.x}A '.repeat(size)}`],
+  // A key looks up the earlier keys of its host (C2-A-035), within one block and over the lines of a host.
+  ['distinct keys of one attribute block', (size) => `{${each(size, (index) => `k${index}=v `)}}\nx`],
+  ['distinct keys of one span', (size) => `[x]{${each(size, (index) => `k${index}=v `)}}`],
+  ['attribute lines with distinct keys above one block', (size) => `${each(size, (index) => `{k${index}=v}\n`)}p`],
+  ['distinct keys of a reference and of its definition', (size) => {
+    const keys = (prefix: string): string => each(size, (index) => `${prefix}${index}=v `)
+    return `[x][r]{${keys('a')}}\n\n{${keys('b')}}\n[r]: /u`
+  }],
   ['attribute lines above one block', (size) => `${'{.a k=v}\n'.repeat(size)}p`],
   ['blocks with an attribute line', (size) => '{#i .c k=v}\np\n\n'.repeat(size)],
   ['table rows', (size) => '| a | b |\n'.repeat(size)],

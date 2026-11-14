@@ -8,6 +8,8 @@ export interface Attributes {
   classes: string[]
   lang: string | null
   keyValues: [string, string][]
+  /** The place of each key in `keyValues` by its lower-case name, built when a key is merged and dropped when one is taken. */
+  keyIndex?: Map<string, number>
 }
 
 /** C2-I-079: every run of spaces, tabs and a line break is one space, and the ends are trimmed. */
@@ -17,6 +19,15 @@ export function foldLabel(source: string): string {
 
 function sameName(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase()
+}
+
+function keyIndexOf(keyValues: readonly [string, string][]): Map<string, number> {
+  const index = new Map<string, number>()
+  keyValues.forEach(([key], at) => {
+    const name = key.toLowerCase()
+    if (!index.has(name)) index.set(name, at)
+  })
+  return index
 }
 
 /** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
@@ -38,9 +49,15 @@ export function attributeSink(attributes: Attributes): AttributeSink {
         return
       }
       // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
-      const earlier = attributes.keyValues.find((pair) => sameName(pair[0], key))
-      if (earlier === undefined) attributes.keyValues.push([key, value])
-      else earlier[1] = value
+      const index = attributes.keyIndex ??= keyIndexOf(attributes.keyValues)
+      const name = key.toLowerCase()
+      const earlier = index.get(name)
+      if (earlier === undefined) {
+        index.set(name, attributes.keyValues.length)
+        attributes.keyValues.push([key, value])
+      } else {
+        attributes.keyValues[earlier]![1] = value
+      }
     },
   }
   return sink
@@ -83,5 +100,6 @@ export function takeKey(attributes: Attributes | null, name: string): string | n
   if (attributes === null) return null
   const at = attributes.keyValues.findIndex((pair) => pair[0] === name)
   if (at < 0) return null
+  delete attributes.keyIndex
   return attributes.keyValues.splice(at, 1)[0]![1]
 }

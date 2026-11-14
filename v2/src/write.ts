@@ -94,7 +94,7 @@ function startsFragment(document: DocumentNode, cell: Node, path: string): boole
  */
 function readWraps(w: Writer, facts: Map<Node, WriterFacts>, document: DocumentNode, cell: Node, entry: LayoutEntry): void {
   const cursors = new Map<TextNode, WrapCursor>()
-  const starts: Node[] = []
+  const starts = new Set<Node>()
   let path = ''
   let node: Node | null = null
   for (const wrap of entry.wraps ?? []) {
@@ -114,11 +114,11 @@ function readWraps(w: Writer, facts: Map<Node, WriterFacts>, document: DocumentN
 
 /** Records one wrap of a cell: a place in a text node, or the start of another node. False where it contradicts the tree. */
 function placeWrap(
-  document: DocumentNode, cell: Node, node: Node, wrap: Wrap, cursors: Map<TextNode, WrapCursor>, starts: Node[],
+  document: DocumentNode, cell: Node, node: Node, wrap: Wrap, cursors: Map<TextNode, WrapCursor>, starts: Set<Node>,
 ): boolean {
   if (node.type !== 'text') {
-    if (wrap.offset !== 0 || starts.includes(node) || !startsFragment(document, cell, wrap.path)) return false
-    starts.push(node)
+    if (wrap.offset !== 0 || starts.has(node) || !startsFragment(document, cell, wrap.path)) return false
+    starts.add(node)
     return true
   }
   const cursor = cursors.get(node) ?? { bytes: 0, at: 0, points: [] }

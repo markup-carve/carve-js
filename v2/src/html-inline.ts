@@ -111,7 +111,8 @@ function span(node: SpanNode, r: Render): string {
 /** The attributes of a reference and of its definition, merged: the reference decides a key, the id and the language both carry. */
 function mergedAttrs(own: Attrs, from: Attrs): Attrs {
   const ownKeyValues = own.keyValues ?? []
-  const keyValues = (from.keyValues ?? []).filter(([key]) => !ownKeyValues.some(([name]) => name.toLowerCase() === key.toLowerCase()))
+  const ownNames = new Set(ownKeyValues.map(([name]) => name.toLowerCase()))
+  const keyValues = (from.keyValues ?? []).filter(([key]) => !ownNames.has(key.toLowerCase()))
   const attrs: Attrs = { classes: [...(from.classes ?? []), ...(own.classes ?? [])], keyValues: [...keyValues, ...ownKeyValues] }
   const id = own.id ?? from.id
   if (id !== undefined) attrs.id = id
