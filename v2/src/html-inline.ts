@@ -1,8 +1,8 @@
 // The inline elements of C2-H-072 to C2-H-101.
 import {
-  type AbbreviationNode, type Attrs, type AutolinkNode, type CaptionNumberNode, type FootnoteRefNode, handle, type ImageNode,
+  type AbbreviationNode, type Attrs, type AutolinkNode, type CaptionNumberNode, type FootnoteRefNode, type ImageNode,
   type Inline, type InlineExtensionNode, type InlineFootnoteNode, type InlineParent, isBreak, type LinkNode,
-  type LinkReferenceDefinitionNode, type LiteralInlineNode, type MathNode, type MentionNode, type Node, type NodeHandlers,
+  type LinkReferenceDefinitionNode, type LiteralInlineNode, type MathNode, type MentionNode, type Node, type NodeHandlers, type NodeOfType,
   type RawInlineNode, type RubyNode, type SpanNode, type SymbolNode, type TagNode, type XrefNode,
 } from './ast.ts'
 import {
@@ -48,13 +48,18 @@ function isSkippedBreak(nodes: readonly Inline[], at: number): boolean {
   return isCommentOnlyLine(nodes, at - 1, -1, false) || isCommentOnlyLine(nodes, at + 1, 1, true)
 }
 
+/** The HTML of `node` from the entry of WRITERS for its type, or undefined where it has none. */
+function writeOwn<T extends keyof NodeOfType>(r: Render, type: T, node: NodeOfType[T]): string | undefined {
+  return WRITERS[type]?.(node, r)
+}
+
 export function inlineHtml(r: Render, nodes: readonly Inline[]): string {
   let out = ''
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
     if (node.type === 'text') out += escapeTextNode(r, node.value)
-    else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += handle(WRITERS, node.type, node, r) ?? ''
+    else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += writeOwn(r, node.type, node) ?? ''
   }
   return out
 }

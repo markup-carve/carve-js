@@ -1,8 +1,8 @@
 // The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
 // form (C2-H-165) before the tree is resolved, so that a reference or a caption that is gone takes no number.
 import {
-  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, handle, type HeadingNode, type Inline,
-  isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type ParagraphNode, type TableCellNode,
+  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, type HeadingNode, type Inline,
+  isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
   type TableNode, type TableRowNode, type TextNode, titleOf,
 } from './ast.ts'
 import { plainText } from './ast-text.ts'
@@ -30,9 +30,13 @@ const SPELLED_TEXT: NodeHandlers<string> = {
   inline_footnote: (node) => inlinesText(node.children),
 }
 
+function spelledText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): string | undefined {
+  return SPELLED_TEXT[type]?.(node, undefined)
+}
+
 /** The text a degraded inline node leaves: its plain text, or the spelling of a node that has none. */
 function inlineText(node: Inline): string {
-  const spelled = handle(SPELLED_TEXT, node.type, node, undefined)
+  const spelled = spelledText(node.type, node)
   if (spelled !== undefined) return spelled
   return isInlineParent(node) ? inlinesText(node.children) : plainText([node])
 }
@@ -94,9 +98,13 @@ const MARKED_TEXT: NodeHandlers<string> = {
   directive: containerText,
 }
 
+function markedText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): string | undefined {
+  return MARKED_TEXT[type]?.(node, undefined)
+}
+
 /** The text a degraded block leaves. */
 function blockText(node: Node): string {
-  const marked = handle(MARKED_TEXT, node.type, node, undefined)
+  const marked = markedText(node.type, node)
   if (marked !== undefined) return marked
   return isInlineParent(node) ? inlinesText(node.children) : containerText(node)
 }

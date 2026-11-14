@@ -1,9 +1,9 @@
 // The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
 // node type, told apart by `type`.
-import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node } from './ast-nodes.ts'
+import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node, type NodeOfType } from './ast-nodes.ts'
 
 export type * from './ast-nodes.ts'
-export { FIELD_VALUES, handle, isFieldValue } from './ast-nodes.ts'
+export { FIELD_VALUES, isFieldValue } from './ast-nodes.ts'
 
 export const AST_VERSION = '2.0'
 
@@ -92,21 +92,38 @@ const BLOCK_PARENTS: readonly BlockParent['type'][] = [
 
 const BLOCK_PARENT_TYPES: ReadonlySet<string> = new Set(BLOCK_PARENTS)
 
+/**
+ * The slots any node may hold, as a walk over every node type reads them (C2-A-024, C2-A-025). Every
+ * node is one, so a walk reads them as plain fields, which costs less than an `in` test per node.
+ */
+export interface NodeSlots {
+  readonly type: string
+  readonly children?: readonly Node[]
+  readonly title?: Inline[] | string
+  readonly caption?: CaptionNode
+}
+
 const NO_NODES: readonly Node[] = []
 
 /** The children of `node`, or none: for a node of a type the reader has not narrowed. */
-export function childNodes(node: Node): readonly Node[] {
-  return 'children' in node ? node.children : NO_NODES
+export function childNodes(node: NodeSlots): readonly Node[] {
+  return node.children ?? NO_NODES
 }
 
 /** The inline title of `node`, where it has one (C2-A-024). The title of a link definition is a string and no slot. */
-export function titleOf(node: Node): Inline[] | undefined {
-  return 'title' in node && Array.isArray(node.title) ? node.title : undefined
+export function titleOf(node: NodeSlots): Inline[] | undefined {
+  const title = node.title
+  return typeof title === 'string' ? undefined : title
 }
 
 /** The caption of `node`, where it has one (C2-A-024). */
-export function captionOf(node: Node): CaptionNode | undefined {
-  return 'caption' in node ? node.caption : undefined
+export function captionOf(node: NodeSlots): CaptionNode | undefined {
+  return node.caption
+}
+
+/** Whether `node` is of type `type`. */
+export function isNodeOfType<T extends keyof NodeOfType>(node: Node, type: T): node is NodeOfType[T] {
+  return node.type === type
 }
 
 /** Whether the children of `node` are inline nodes. */

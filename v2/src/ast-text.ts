@@ -1,6 +1,6 @@
 // The plain text of inline nodes (C2-H-143): what a heading id, a task label, a caption label
 // and the text of a cross-reference are made of. A node gives the literal text it carries or nothing.
-import { type Block, handle, type Inline, isInlineParent, type NodeHandlers, type RubyNode } from './ast.ts'
+import { type Block, type Inline, isInlineParent, type NodeHandlers, type NodeOfType, type RubyNode } from './ast.ts'
 
 const NO_BREAK_SPACE = ' '
 
@@ -33,7 +33,11 @@ const TEXT_OF: NodeHandlers<string> = {
 
 /** C2-H-143: the text of a node type that gives text of its own, or undefined for one that does not. */
 function ownText(node: Inline): string | undefined {
-  return handle(TEXT_OF, node.type, node, undefined)
+  return textOfType(node.type, node)
+}
+
+function textOfType<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): string | undefined {
+  return TEXT_OF[type]?.(node, undefined)
 }
 
 // C2-H-143: the node types that give nothing, so a comment or a note never moves an id.

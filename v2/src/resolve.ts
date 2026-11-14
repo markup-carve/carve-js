@@ -4,9 +4,9 @@
 // besides them is returned.
 import {
   type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
-  type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode, handle,
-  type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode,
-  type LinkReferenceDefinitionNode, type MathNode, type Node, type NodeHandlers, type TableCellNode, type TableNode,
+  type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
+  type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
+  type MathNode, type Node, isNodeOfType, type NodeOfType, type NodeSlots, type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
 import { type ParseFacts } from './ast-blocks.ts'
@@ -91,28 +91,25 @@ function useNote(walk: Walk, node: FootnoteRefNode | InlineFootnoteNode, definit
   node.number = note.number
 }
 
-function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): boolean {
+function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
   const definition = walk.footnotes.get(node.key)
   if (definition === undefined) delete node.number
   else useNote(walk, node, definition)
-  return true
 }
 
-function visitHost(node: FigureNode | FigureGroupNode | TableNode, walk: Walk): boolean {
+function visitHost(node: FigureNode | FigureGroupNode | TableNode, walk: Walk): void {
   const panel = walk.parent?.type === 'figure_group'
   if (node.type === 'table') alignColumns(node)
   if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel })
   visitSlots(walk, node)
-  return true
 }
 
 /** C2-H-151: a display equation with a prefix takes a number, unless the caption of a figure around it owns the number. */
-function visitMath(node: MathNode, walk: Walk): boolean {
+function visitMath(node: MathNode, walk: Walk): void {
   delete node.number
   if (node.display && node.numberPrefix !== undefined && walk.numberedFigures === 0) {
     walk.captions.push({ caption: null, host: node, prefix: node.numberPrefix })
   }
-  return true
 }
 
 /** The inline content of the paragraph of a caption (C2-A-081), or none. */
@@ -134,74 +131,73 @@ export function hasAuthoredName(node: Node): boolean {
   return node.attrs?.keyValues?.some(([key]) => NAMING_KEYS.includes(key.toLowerCase())) === true
 }
 
-function visitAdmonition(node: AdmonitionNode, walk: Walk): boolean {
+function visitAdmonition(node: AdmonitionNode, walk: Walk): void {
   if (node.title !== undefined && !hasAuthoredName(node)) walk.titled.push(node)
   visitSlots(walk, node)
-  return true
 }
 
-function visitDirective(node: DirectiveNode, walk: Walk): boolean {
+function visitDirective(node: DirectiveNode, walk: Walk): void {
   if (node.kind === 'footnotes' && walk.parent?.type === 'document') {
     walk.notesDirective ??= node
     if (node.title !== undefined) walk.titled.push(node)
   }
   visitSlots(walk, node)
-  return true
 }
 
-function visitReference(node: Reference, walk: Walk): boolean {
+function visitReference(node: Reference, walk: Walk): void {
   if (node.key !== undefined) walk.references.push(node)
-  visitChildren(walk, node)
-  return true
 }
 
-/** A leaf with inline content, which a parse may know to hold nothing that resolution reads. */
-function visitLeaf(node: Node, walk: Walk): boolean {
-  if (mayResolve(walk, node)) visitChildren(walk, node)
-  return true
+// What the walk does below a node of a type, besides its visitor. A note is opaque: its content is
+// visited with the notes. A leaf is inline content that a parse may know to hold nothing that
+// resolution reads. A node with a title or a caption visits them in its visitor.
+const NOTHING = 0
+const CHILDREN = 1
+const LEAF = 2
+
+interface Step {
+  visit: ((node: Node, walk: Walk) => void) | null
+  below: number
 }
 
-/**
- * What the walk does at a node of a type. A type with no entry has its children visited. A note
- * is opaque: its content is visited with the notes. A title and a caption are visited with the children.
- */
-const VISITS: NodeHandlers<boolean, Walk> = {
-  footnote_ref: visitFootnoteRef,
-  inline_footnote: (node, walk) => {
-    useNote(walk, node, null)
-    return true
-  },
-  footnote: () => true,
-  heading: (node, walk) => {
-    walk.headings.push(node)
-    return visitLeaf(node, walk)
-  },
-  paragraph: visitLeaf,
-  definition_term: visitLeaf,
-  cell_paragraph: visitLeaf,
-  line: visitLeaf,
-  link: visitReference,
-  image: visitReference,
-  xref: (node, walk) => {
-    walk.xrefs.push(node)
-    return true
-  },
-  figure: visitHost,
-  figure_group: visitHost,
-  table: visitHost,
-  math: visitMath,
-  admonition: visitAdmonition,
-  directive: visitDirective,
-  div: (node, walk) => {
-    visitSlots(walk, node)
-    return true
-  },
+/** The step of `type`: `visit` takes a node of that type. */
+function on<T extends keyof NodeOfType>(type: T, below: number, visit: ((node: NodeOfType[T], walk: Walk) => void) | null): [string, Step] {
+  if (visit === null) return [type, { visit: null, below }]
+  return [type, {
+    visit: (node, walk) => {
+      if (isNodeOfType(node, type)) visit(node, walk)
+    },
+    below,
+  }]
 }
+
+/** The steps of the node types the walk does more at than visit the children. */
+const STEPS = new Map<string, Step>([
+  on('footnote_ref', NOTHING, visitFootnoteRef),
+  on('inline_footnote', NOTHING, (node, walk) => useNote(walk, node, null)),
+  on('footnote', NOTHING, null),
+  on('heading', LEAF, (node, walk) => void walk.headings.push(node)),
+  on('paragraph', LEAF, null),
+  on('definition_term', LEAF, null),
+  on('cell_paragraph', LEAF, null),
+  on('line', LEAF, null),
+  on('link', CHILDREN, visitReference),
+  on('image', NOTHING, visitReference),
+  on('xref', NOTHING, (node, walk) => void walk.xrefs.push(node)),
+  on('figure', NOTHING, visitHost),
+  on('figure_group', NOTHING, visitHost),
+  on('table', NOTHING, visitHost),
+  on('math', NOTHING, visitMath),
+  on('admonition', NOTHING, visitAdmonition),
+  on('directive', NOTHING, visitDirective),
+  on('div', NOTHING, (node, walk) => visitSlots(walk, node)),
+])
 
 /** Visits the children of `node`. Text is skipped here and not in the call: half of the nodes of a document are text. */
 function visitChildren(walk: Walk, node: Node): void {
-  if (!('children' in node)) return
-  for (const child of node.children) if (child.type !== 'text') visit(walk, child, node)
+  const slots: NodeSlots = node
+  if (slots.children === undefined) return
+  for (const child of slots.children) if (child.type !== 'text') visit(walk, child, node)
 }
 
 /** The title, the children and the caption of a node that may carry a title or a caption, in that order (C2-A-025). */
@@ -227,8 +223,13 @@ function mayResolve(walk: Walk, node: Node): boolean {
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
   if (node.attrs?.id !== undefined) walk.identified.push(node)
-  walk.parent = parent
-  if (handle(VISITS, node.type, node, walk) === undefined) visitChildren(walk, node)
+  const step = STEPS.get(node.type)
+  if (step === undefined) return visitChildren(walk, node)
+  if (step.visit !== null) {
+    walk.parent = parent
+    step.visit(node, walk)
+  }
+  if (step.below === CHILDREN || (step.below === LEAF && mayResolve(walk, node))) visitChildren(walk, node)
 }
 
 /**
