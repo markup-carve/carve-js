@@ -27,7 +27,8 @@
   "unpkg": "./dist/carve.iife.min.js",
   "jsdelivr": "./dist/carve.iife.min.js",
   "bin": {
-    "carve": "./dist/cli.js"
+    "carve": "./dist/cli.js",
+    "carve2": "./v2/cli/main.ts"
   },
   "exports": {
     ".": {
@@ -45,7 +46,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
+    "dist", "v2/src", "v2/data", "v2/cli", "upgrade/src", "upgrade/data",
     "README.md",
     "LICENSE",
     "action.yml",
@@ -66,6 +67,7 @@
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
     "test:v2": "vitest run v2/test",
+    "test:cli:v2": "vitest run --config v2/cli/vitest.config.ts",
     "typecheck:v2": "tsc -p v2/tsconfig.json",
     "check-public-types:v2": "node v2/scripts/check-public-types.ts",
     "enumerate:v2": "node v2/scripts/enumerate.ts",
