@@ -792,7 +792,7 @@ function matchText(c: Check, e: TextNode, es: readonly Node[], as: readonly Node
   const value = e.value
   const a = as[at.j]
   if (a === undefined) return parseEndsInText(c, es, at, owner)
-  if (a.type !== 'text') return skipConstruct(c, e, a, at)
+  if (a.type !== 'text') return skipConstruct(c, e, es, a, at)
   if (!matchCharacters(c, e, a, at)) return false
   return at.vi < value.length || afterTextNode(c, es, as, at, owner)
 }
@@ -817,8 +817,9 @@ function stepOver(c: Check, es: readonly Node[], as: readonly Node[], at: Cursor
 }
 
 /** The parse read a construct where the tree has text: escapes its opener and steps over it (C2-W-091). */
-function skipConstruct(c: Check, e: TextNode, a: Node, at: Cursor): boolean {
-  escapeOpener(c, e, at.vi, a)
+function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: Cursor): boolean {
+  if (comparisonBehindQuote(es[at.i - 2], es[at.i - 1], e, at.vi, a)) escapeAt(c, e, at.vi + 1)
+  else escapeOpener(c, e, at.vi, a)
   const pos = a.pos
   if (pos === undefined) return false
   const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, (c.flags & IN_CELL) !== 0)
@@ -830,6 +831,18 @@ function skipConstruct(c: Check, e: TextNode, a: Node, at: Cursor): boolean {
     at.vi = 0
   }
   return true
+}
+
+/** C2-W-125, case seven: escaping a comparison's first character would turn the preceding right quote left. */
+function comparisonBehindQuote(prior: Node | undefined, before: Node | undefined,
+  text: TextNode, at: number, parsed: Node): boolean {
+  const neighbor = prior?.type === 'text' ? prior.value.at(-1) : undefined
+  return before?.type === 'smart_punctuation' &&
+    (before.kind === 'right_single_quote' || before.kind === 'right_double_quote') &&
+    (neighbor === '/' || neighbor === '-') &&
+    parsed.type === 'smart_punctuation' &&
+    (parsed.kind === 'not_equal' || parsed.kind === 'less_than_or_equal' || parsed.kind === 'greater_than_or_equal') &&
+    '!<>'.includes(text.value[at] ?? '') && text.value[at + 1] === '='
 }
 
 /**

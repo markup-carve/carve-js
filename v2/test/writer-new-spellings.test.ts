@@ -35,4 +35,11 @@ describe('new writer and parser spellings', () => {
     const source = String.raw`x(/u)\//\{/` + '\n'
     expect(format(source)).toBe(String.raw`x(/u)\//{/` + '\n')
   })
+
+  it('C2-W-125: a comparison sign takes its escape on equals only where the first sign would flip a quote', () => {
+    expect(format(String.raw`x/'!\=`)).toBe(String.raw`x/'!\=` + '\n')
+    expect(format(String.raw`x/'<\=`)).toBe(String.raw`x/'\<=` + '\n')
+    expect(format(String.raw`x/'>\=`)).toBe(String.raw`x/'\>=` + '\n')
+    expect(format(String.raw`x'!\=`)).toBe(String.raw`x'\!=` + '\n')
+  })
 })
