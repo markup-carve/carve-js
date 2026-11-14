@@ -123,7 +123,8 @@ function quotedValueEnd(text: string, pos: number, end: number, memo: AttributeM
     const code = text.charCodeAt(p)
     if (code === quote) return p
     if (code === LF) break
-    if (code === BACKSLASH) p++
+    // C2-I-028: the block stands on one line, so a backslash does not carry the scan over a line break.
+    if (code === BACKSLASH && text.charCodeAt(p + 1) !== LF) p++
   }
   if (quote === QUOTE_MARK) memo.doubleQuoteFailEnd = p
   else memo.singleQuoteFailEnd = p

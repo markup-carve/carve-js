@@ -117,7 +117,10 @@ function isDestinationEscape(code: number): boolean {
  * backslash escapes the character behind it.
  */
 function closingQuote(text: string, p: number, end: number, quote: number): number {
-  while (p < end && text.charCodeAt(p) !== quote && text.charCodeAt(p) !== LF) p += text.charCodeAt(p) === BACKSLASH ? 2 : 1
+  while (p < end && text.charCodeAt(p) !== quote && text.charCodeAt(p) !== LF) {
+    // C2-I-069: the tail stands on one line, so a backslash does not carry the scan over a line break.
+    p += text.charCodeAt(p) === BACKSLASH && text.charCodeAt(p + 1) !== LF ? 2 : 1
+  }
   return p < end && text.charCodeAt(p) === quote ? p : NONE
 }
 

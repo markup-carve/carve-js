@@ -696,3 +696,17 @@ describe('what the random writer gate found after the third review', () => {
     expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
   })
 })
+
+describe('fourth review: a quoted value stays on its line', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-I-069: a backslash at the end of a line does not carry a link title over the line break', () => {
+    expect(render(`[x](u "a${BACKSLASH}\nb")`)).not.toContain('<a ')
+    expect(render(`[x](u "a${BACKSLASH}"b")`)).toBe('<p><a href="u" title="a&quot;b">x</a></p>')
+  })
+
+  it('C2-I-028: a backslash at the end of a line does not carry a quoted attribute value over the line break', () => {
+    expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}\nb"}`)).not.toContain('<code title')
+    expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}"b"}`)).toBe('<p><code title="a&quot;b">x</code></p>')
+  })
+})
