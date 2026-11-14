@@ -22,7 +22,32 @@ function active(id: RuleId, options: LintOptions): boolean {
 function message(id: RuleId, values: Record<string, string>, index: number): string {
   const templates: readonly string[] = CATALOG[id].messages
   const template = templates[index] ?? templates[0] ?? ''
-  return template.replace(/\$\{([^}]+)\}/g, (match, key: string) => values[key] ?? match)
+  let output = ''
+  let at = 0
+  while (at < template.length) {
+    const open = template.indexOf('${', at)
+    if (open < 0) return output + template.slice(at)
+    const close = template.indexOf('}', open + 2)
+    if (close < 0) return output + template.slice(at)
+    const key = template.slice(open + 2, close)
+    output += template.slice(at, open) + (values[key] ?? template.slice(open, close + 1))
+    at = close + 1
+  }
+  return output
+}
+
+function controlIds(tail: string): string[] {
+  const ids: string[] = []
+  let start = -1
+  for (let at = 0; at <= tail.length; at++) {
+    const separator = at === tail.length || tail[at] === ' ' || tail[at] === ','
+    if (!separator && start < 0) start = at
+    if (separator && start >= 0) {
+      ids.push(tail.slice(start, at))
+      start = -1
+    }
+  }
+  return ids
 }
 
 function controlOf(node: Node, context: LintContext): Control | null {
@@ -39,7 +64,7 @@ function controlOf(node: Node, context: LintContext): Control | null {
     if (!suffix.startsWith(kind)) continue
     const tail = suffix.slice(kind.length)
     if (tail !== '' && tail[0] !== ' ' && tail[0] !== ',') return null
-    return { kind, ids: tail.split(/[ ,]+/).filter(Boolean) }
+    return { kind, ids: controlIds(tail) }
   }
   return null
 }
