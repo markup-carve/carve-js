@@ -325,6 +325,8 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   escapeInside,
   (c, es, i) => escapeInContent(c, es[i]!),
+  // C2-W-125: a lone bracket in the content of a bracket construct, where its closer was not asked for.
+  (c, es, i) => CLOSING_MARKS.get(es[i]!.type) === ']' && 'children' in es[i]! && escapeMark(c, es[i]!.children as Node[], 0, 0, '['),
 ]
 
 /** The flags the content of `e` is written with. */
@@ -716,7 +718,8 @@ function afterTextNode(c: Check, es: readonly Node[], as: readonly Node[], at: C
   // The parse has more text here: the node after the text did not form. At the end of the content
   // the closing mark did not close, as a mark of the content glued to it makes a longer run (C2-W-093).
   if (es[at.i] === undefined) {
-    if (!escapeInContent(c, owner)) c.losses.push([owner, null])
+    // C2-W-125: or a brace before the closing mark reads as a braced opener and takes the mark.
+    if (!escapeInContent(c, owner) && !escapeEnd(c, lastText(owner), true)) c.losses.push([owner, null])
   }
   else if (at.j + 1 >= as.length && isPaired(owner) && !joinsNext(es, at.i)) closedEarly(c, es, at.i, 0, owner)
   else return respell(c, es, at.i) && stepOver(c, es, as, at)

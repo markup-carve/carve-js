@@ -376,8 +376,14 @@ function figure(w: Writer, node: FigureNode, prefix: string, flags: number): voi
 function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   fenced(w, node, prefix, ' |', false, () => {
-    for (const line of node.children) emit(w, prefix, writeContent(w, line.children, flags | BARE_BREAKS))
+    for (const line of node.children) emit(w, prefix, lineContent(w, line.children, flags | BARE_BREAKS))
   })
+}
+
+/** A line of a line block. A hard break at its end is the backslash that ends its source line, behind the text as it is. */
+function lineContent(w: Writer, nodes: readonly Node[], flags: number): string {
+  if (nodes[nodes.length - 1]?.type !== 'hard_break') return writeContent(w, nodes, flags)
+  return `${writeInlines(w, nodes.slice(0, -1), flags)}\\`
 }
 
 /** C2-A-175: a node with no spelling of its own is its children, or its fallback. */

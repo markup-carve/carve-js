@@ -630,6 +630,15 @@ describe('what the random writer gate found after the third review', () => {
     expect(codes('a\n\r')).toEqual(['field-unspellable'])
   })
 
+  it('C2-A-069: a hard break at the end of a line of a line block is written as its backslash', () => {
+    for (const source of [`::: |\n${BACKSLASH}\n:::\n`, `::: |\na ${BACKSLASH}\nb\n:::\n`]) expect(format(source)).toBe(source)
+  })
+
+  it('C2-W-125: a brace before the closing mark takes the backslash, and so does a lone bracket in an inline footnote', () => {
+    expect(format(`/${BACKSLASH}{/[/`)).toBe(`/${BACKSLASH}{/[/\n`)
+    expect(format(`^[${BACKSLASH}[[]]`)).toBe(`^[${BACKSLASH}[[]]\n`)
+  })
+
   it('C2-W-088: a bracket run stops at a bracket of another opener', () => {
     expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
   })

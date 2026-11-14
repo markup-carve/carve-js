@@ -32,7 +32,8 @@ export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]
     const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
     const value = node !== undefined && 'value' in node && typeof node.value === 'string' ? node.value : ''
     const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && value.includes('\n')
-    return entry.code === 'field-unspellable' && (multiline || endsLineWithCr(value))
+    const fields = node === undefined ? [] : Object.values(node).filter((field): field is string => typeof field === 'string')
+    return entry.code === 'field-unspellable' && (multiline || fields.some(endsLineWithCr))
   })
 }
 
