@@ -345,7 +345,7 @@ describe('what the random writer gates found', () => {
   })
 
   it('C2-W-016: a braced or editorial comment whose later line would open a block is refused', () => {
-    for (const source of [' - {%\n- [%}', ' - {#\n- #}', '[^a]: {%\n- a%}', ' - *`\n- `*']) {
+    for (const source of [':: t\n: {%\n- [%}', '[^a]: {#\n- #}', '[^a]: {%\n- a%}', '[^a]: *`\n- `*']) {
       const output = writeWithDiagnostics(parse(source))
       expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
     }
@@ -353,13 +353,13 @@ describe('what the random writer gates found', () => {
   })
 
   it('C2-W-026: a line behind a hard break that would read as a list marker is kept text by an escape', () => {
-    expect(format(` - ${BACKSLASH}\n- a`)).toBe(`- ${BACKSLASH}\n  ${BACKSLASH}- a\n`)
-    expect(format(` - ${BACKSLASH}\n1. a`)).toBe(`- ${BACKSLASH}\n  1${BACKSLASH}. a\n`)
+    expect(format(`:: t\n: ${BACKSLASH}\n- a`)).toBe(`:: t\n: ${BACKSLASH}\n  ${BACKSLASH}- a\n`)
+    expect(format(`[^a]: ${BACKSLASH}\n1. a`)).toBe(`[^a]: ${BACKSLASH}\n  1${BACKSLASH}. a\n`)
   })
 
   it('C2-W-092: of the later lines inside an inline node, the one that opens a block takes the escape', () => {
-    expect(format(' - *a\n{*\n- (*')).toBe(`- *a\n  {*\n  ${BACKSLASH}- (*\n`)
-    expect(format(' - /)\n}\n- \\{/')).toBe(`- {/)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/}\n`)
+    expect(format('[^a]: *a\n{*\n- (*')).toBe(`[^a]: *a\n  {*\n  ${BACKSLASH}- (*\n`)
+    expect(format('[^a]: /)\n}\n- \\{/')).toBe(`[^a]: {/)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/}\n`)
   })
 
   it('C2-W-125, case three: the colon of a name sigil before the bracket of a footnote reference takes the backslash', () => {
@@ -368,8 +368,8 @@ describe('what the random writer gates found', () => {
   })
 
   it('C2-W-026, C2-W-092: a line that starts inside an inline node and would open a block is escaped', () => {
-    expect(format(' - ^[\n- ]')).toBe(`- ^[\n  ${BACKSLASH}- ]\n`)
-    expect(format(' - /:\n1. a/')).toBe(`- /:\n  1${BACKSLASH}. a/\n`)
+    expect(format(':: t\n: ^[\n- ]')).toBe(`:: t\n: ^[\n  ${BACKSLASH}- ]\n`)
+    expect(format('[^a]: /:\n1. a/')).toBe(`[^a]: /:\n  1${BACKSLASH}. a/\n`)
     expect(format('[^a]: /|\n- +/')).toBe(`[^a]: /|\n  ${BACKSLASH}- +/\n`)
   })
 

@@ -1,6 +1,6 @@
 // A one-line picture of a block tree, for tests. Spans of a leaf are joined by `|`.
 //   p"a|b"  img"![a](b)"  h2"T"  code"x"  hr  %"%% c"  quote[...]
-//   ul(-)[li[...]]  ul(*,task,loose)[li(x)[...]]  li{}[...] for an item with attributes on its marker
+//   ul(-)[li[...]]  ul(*,loose)[li(x)[...]]  li{}[...] for an item with attributes on its marker
 //   ol(3.)[...]  ol(.)[...] for a bare first marker, ol(2))[...], ol(a8.)  ol(I4))  for letters and roman
 //   dl[dt"t" dd[...]]  fn[...]  def"[a]: /u"  abbr"*[a]: b"  inc"{{ x }}"  cap"c"
 //   div[...]  div(\)[...]  div(>)[...]  div(figure)[...]  lines"a|b"  %%%"x"  fm"a: b"
@@ -12,7 +12,7 @@ import {
   ABBREVIATION, type BlockNode, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION,
   DESCRIPTION_LIST, DIV, DOCUMENT, FLAG_ALPHA, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_DELIMITED,
   FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_HEADER, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES, FLAG_BLOCK_MATH, FLAG_PAREN,
-  FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TASK, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE,
+  FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE,
   FRONTMATTER, HEADING, INCLUDE, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, parseBlockTree, QUOTE,
   readDelimitedTable, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from '../../src/index.ts'
@@ -63,7 +63,6 @@ function containerShape(node: BlockNode, children: string): string {
 
 function bulletStyle(node: BlockNode): string {
   const parts = [(node.flags & FLAG_STAR) !== 0 ? '*' : '-']
-  if ((node.flags & FLAG_TASK) !== 0) parts.push('task')
   if ((node.exitFlags & FLAG_TIGHT) === 0) parts.push('loose')
   return parts.join(',')
 }

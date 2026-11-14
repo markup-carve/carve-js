@@ -95,10 +95,21 @@ describe('paragraphs and interrupters', () => {
     expect(blocks('- a', '  - b', '- c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"]]] li[p"c"]]')
   })
 
-  it('C2-B-015, C2-B-030: a list marker where no list is open, or left of the list, is a lazy line', () => {
+  it('C2-B-015, C2-B-024: a list marker where no list is open is a lazy line', () => {
     expect(blocks('a', '- b')).toBe('p"a|- b"')
     expect(blocks('> a', '> - b')).toBe('quote[p"a|- b"]')
-    expect(blocks('  - a', '- b')).toBe('ul(-)[li[p"a|- b"]]')
+  })
+
+  it('C2-B-015, C2-B-030, C2-B-054: a list marker left of every open list interrupts and continues the outermost list', () => {
+    expect(blocks('  - a', '- b')).toBe('ul(-)[li[p"a"] li[p"b"]]')
+    expect(blocks(' 9. a', '10. b')).toBe('ol(9.)[li[p"a"] li[p"b"]]')
+    expect(blocks('- a', '    - b', '  - c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"] li[p"c"]]]]')
+    expect(blocks('  - a', '- b', '  c')).toBe('ul(-)[li[p"a"] li[p"b|c"]]')
+    // C2-B-050: as at the list's column, a marker that does not match closes the list and opens a new one.
+    expect(blocks('  - a', '* b')).toBe('ul(-)[li[p"a"]] ul(*)[li[p"b"]]')
+    expect(blocks('  - a', '2. b')).toBe('ul(-)[li[p"a"]] ol(2.)[li[p"b"]]')
+    // C2-B-020: without the mark of the quote the list sits in, the marker is still a lazy line.
+    expect(blocks('> - a', '- b')).toBe('quote[ul(-)[li[p"a|- b"]]]')
   })
 
   it('C2-B-020: a marker without the mark of the quote its list sits in is a lazy line', () => {
@@ -196,10 +207,10 @@ describe('lists', () => {
   })
 
   it('C2-B-046, C2-B-048: a task box stands directly after a bullet\'s space, and `X` is read as `x`', () => {
-    expect(blocks('- [ ] a')).toBe('ul(-,task)[li( )[p"a"]]')
-    expect(blocks('* [X] a')).toBe('ul(*,task)[li(x)[p"a"]]')
+    expect(blocks('- [ ] a')).toBe('ul(-)[li( )[p"a"]]')
+    expect(blocks('* [X] a')).toBe('ul(*)[li(x)[p"a"]]')
     for (const state of ['x', '_', '/', '!', '-', '>', '?']) {
-      expect(blocks(`- [${state}] a`)).toBe(`ul(-,task)[li(${state})[p"a"]]`)
+      expect(blocks(`- [${state}] a`)).toBe(`ul(-)[li(${state})[p"a"]]`)
     }
   })
 
@@ -211,14 +222,16 @@ describe('lists', () => {
     expect(blocks('1. [x] a')).toBe('ol(1.)[li[p"[x] a"]]')
   })
 
-  it('C2-B-049: a matching marker at the list\'s column is a sibling', () => {
-    expect(blocks('- [ ] a', '- [x] b')).toBe('ul(-,task)[li( )[p"a"] li(x)[p"b"]]')
+  it('C2-B-049: a matching marker at the list\'s column is a sibling, with or without a task box', () => {
+    expect(blocks('- [ ] a', '- [x] b')).toBe('ul(-)[li( )[p"a"] li(x)[p"b"]]')
+    expect(blocks('- [ ] a', '- b')).toBe('ul(-)[li( )[p"a"] li[p"b"]]')
+    expect(blocks('* a', '* [x] b', '* c')).toBe('ul(*)[li[p"a"] li(x)[p"b"] li[p"c"]]')
     expect(blocks('2) a', '5) b')).toBe('ol(2))[li[p"a"] li[p"b"]]')
   })
 
   it('C2-B-050: a marker that does not match closes the list and opens a new one', () => {
     expect(blocks('- a', '1. b')).toBe('ul(-)[li[p"a"]] ol(1.)[li[p"b"]]')
-    expect(blocks('- [ ] a', '- b')).toBe('ul(-,task)[li( )[p"a"]] ul(-)[li[p"b"]]')
+    expect(blocks('- [ ] a', '* [ ] b')).toBe('ul(-)[li( )[p"a"]] ul(*)[li( )[p"b"]]')
     expect(blocks('- a', '  - b', '  * c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"]] ul(*)[li[p"c"]]]]')
   })
 
@@ -270,7 +283,7 @@ describe('lists', () => {
     expect(blocks('- 1. a')).toBe('ul(-)[li[ol(1.)[li[p"a"]]]]')
     expect(blocks('- -')).toBe('ul(-)[li[p"-"]]')
     expect(blocks('- - a', '  - b', '- c')).toBe('ul(-)[li[ul(-)[li[p"a"] li[p"b"]]] li[p"c"]]')
-    expect(blocks('- [ ] - a')).toBe('ul(-,task)[li( )[ul(-)[li[p"a"]]]]')
+    expect(blocks('- [ ] - a')).toBe('ul(-)[li( )[ul(-)[li[p"a"]]]]')
   })
 
   it('C2-B-059: a line that starts with `+` is text', () => {
@@ -491,13 +504,20 @@ describe('ordered lists with letters and roman numerals', () => {
     expect(blocks('h) x', 'ii) y')).toBe('ol(a8))[li[p"x"]] ol(i2))[li[p"y"]]')
   })
 
-  it('C2-B-040: a letter or roman marker with a dot needs two spaces', () => {
+  it('C2-B-040: an uppercase letter or roman marker with a dot needs two spaces', () => {
     expect(blocks('a.  x')).toBe('ol(a1.)[li[p"x"]]')
     expect(blocks('a. x')).toBe('ol(a1.)[li[p"x"]]')
     expect(blocks('A. Smith')).toBe('p"A. Smith"')
     expect(blocks('I. Claudius')).toBe('p"I. Claudius"')
     expect(blocks('A.  x')).toBe('ol(A1.)[li[p"x"]]')
-    expect(blocks('IV. x')).toBe('ol(I4.)[li[p"x"]]')
+    expect(blocks('IV. x')).toBe('p"IV. x"')
+    expect(blocks('IV.  x')).toBe('ol(I4.)[li[p"x"]]')
+    expect(blocks('II. Background')).toBe('p"II. Background"')
+    expect(blocks('II.  Background')).toBe('ol(I2.)[li[p"Background"]]')
+    expect(blocks('MD. Jones')).toBe('p"MD. Jones"')
+    expect(blocks('A) x')).toBe('ol(A1))[li[p"x"]]')
+    expect(blocks('IV) x')).toBe('ol(I4))[li[p"x"]]')
+    expect(blocks('. x')).toBe('ol(.)[li[p"x"]]')
     expect(blocks('iv.  x')).toBe('ol(i4.)[li[p"x"]]')
     expect(blocks('iv. x')).toBe('ol(i4.)[li[p"x"]]')
     expect(blocks('a) x')).toBe('ol(a1))[li[p"x"]]')
@@ -1000,7 +1020,8 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('civil. war')).toBe('p"civil. war"')
     expect(blocks('iiii. a')).toBe('p"iiii. a"')
     expect(blocks('xiv. a')).toBe('ol(i14.)[li[p"a"]]')
-    expect(blocks('MCMXC. a')).toBe('ol(I1990.)[li[p"a"]]')
+    expect(blocks('MCMXC.  a')).toBe('ol(I1990.)[li[p"a"]]')
+    expect(blocks('MCMXC. a')).toBe('p"MCMXC. a"')
     expect(blocks('---\t', 'a: 1', '---')).toBe('fm"a: 1"')
     expect(blocks('ai) x')).toBe('p"ai) x"')
     expect(blocks('ia) x')).toBe('p"ia) x"')

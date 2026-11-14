@@ -30,7 +30,7 @@ describe('the gates of the writer', () => {
   })
 
   it('C2-W-016: a code span whose later line would open a block is refused, not written wrong', () => {
-    expect(checkWriter('  - a\n- ```\n- a')).toBe('refused')
+    expect(checkWriter(':: t\n: a\n- ```\n- a')).toBe('refused')
   })
 })
 

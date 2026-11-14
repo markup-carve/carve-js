@@ -57,7 +57,6 @@ export function isOpaqueLeaf(kind: number): boolean {
 
 // Flags of the enter event of a list. Together with the kind they are the kind of the list (C2-B-049).
 export const FLAG_STAR = 1
-export const FLAG_TASK = 2
 export const FLAG_PAREN = 4
 export const FLAG_ALPHA = 8
 export const FLAG_ROMAN = 16
