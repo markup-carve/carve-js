@@ -1,5 +1,6 @@
 // The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161 to C2-A-163).
 import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
+import { AST_RESULTS, type ResultField } from './ast-tables.ts'
 import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.ts'
 
 /** The bare tree as JSON, every field included (C2-A-165). */
@@ -48,28 +49,23 @@ export function decodeTree(json: string): DocumentNode {
   return document
 }
 
-// C2-A-162: positions and the results of resolution are not compared.
-const SKIPPED = ['pos', 'segments', 'srcByteLength', 'stages', 'generatedId', 'resolvedAlign', 'n']
-// A count on a cell is a resolution result where span marks are written, and an authored fact where they are not (C2-A-093).
-const SPAN_COUNTS = ['colspan', 'rowspan']
-
-function isReferenceUse(node: Record<string, unknown>): boolean {
-  return node['key'] !== undefined && (node['type'] === 'link' || node['type'] === 'image' || node['type'] === 'xref')
-}
-
-function isNumbered(node: Record<string, unknown>): boolean {
-  return node['type'] === 'footnote_ref' || node['type'] === 'inline_footnote'
+function skippedResult(node: Record<string, unknown>, name: string, spanMarks: boolean): boolean {
+  const type = node['type']
+  if (typeof type !== 'string') return false
+  const result = AST_RESULTS.get(type)?.find((entry: ResultField) => entry.field === name)
+  if (result === undefined) return false
+  if (result.when === 'reference use') return node['key'] !== undefined
+  if (result.when === 'derived from authored span mark') return spanMarks
+  return true
 }
 
 /** The fields of `node` that equality compares, sorted by name. `spanMarks`: the node stands in a table with span marks. */
 function comparedFields(node: Record<string, unknown>, spanMarks: boolean): string[] {
-  const reference = isReferenceUse(node)
-  const counts = !spanMarks || node['type'] !== 'table_cell'
+  const typed = typeof node['type'] === 'string' && AST_RESULTS.has(node['type'])
   return Object.keys(node).filter((name) => {
-    if (SKIPPED.includes(name) || node[name] === undefined) return false
-    if (reference && (name === 'href' || name === 'src')) return false
-    if (name === 'number' && isNumbered(node)) return false
-    return counts || !SPAN_COUNTS.includes(name)
+    if (node[name] === undefined) return false
+    if (typed && (name === 'pos' || name === 'segments' || name === 'srcByteLength')) return false
+    return !skippedResult(node, name, spanMarks)
   }).sort()
 }
 
@@ -109,24 +105,13 @@ function equalObjects(a: Record<string, unknown>, b: Record<string, unknown>, sp
   const names = comparedFields(a, inner)
   const others = comparedFields(b, inner)
   if (names.length !== others.length || names.some((name, index) => name !== others[index])) return false
-  return names.every((name) => equalField(name, a[name], b[name], inner))
-}
-
-function equalField(name: string, a: unknown, b: unknown, spanMarks: boolean): boolean {
-  if (name !== 'marker') return equalValues(a, b, spanMarks)
-  // C2-A-058: a start of 1 is the same as none.
-  const normal = (marker: unknown): unknown => {
-    const fields = { ...(marker as Record<string, unknown>) }
-    if (fields['start'] === 1) delete fields['start']
-    return fields
-  }
-  return equalValues(normal(a), normal(b), spanMarks)
+  return names.every((name) => equalValues(a[name], b[name], inner))
 }
 
 function equalValues(a: unknown, b: unknown, spanMarks: boolean): boolean {
   if (Array.isArray(a)) return Array.isArray(b) && equalLists(a, b, spanMarks)
-  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null || Array.isArray(b)) return a === b
-  return equalObjects(a as Record<string, unknown>, b as Record<string, unknown>, spanMarks)
+  if (!isRecord(a) || !isRecord(b)) return a === b
+  return equalObjects(a, b, spanMarks)
 }
 
 /** C2-A-161: whether two trees are the same document. */

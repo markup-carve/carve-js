@@ -255,13 +255,13 @@ describe('equality in detail', () => {
     expect(treesEqual(xref('#a'), xref())).toBe(true)
   })
 
-  it('a number is a resolution result on a footnote, and a field of a display equation', () => {
+  it('a number is a resolution result on a footnote and a display equation', () => {
     const note = (number?: number): DocumentNode => documentOf(paragraph({ type: 'inline_footnote', children: [], ...(number === undefined ? {} : { number }) }))
     expect(treesEqual(note(1), note())).toBe(true)
     const ref = (number?: number): DocumentNode => documentOf(paragraph({ type: 'footnote_ref', key: 'n', namespace: 'footnote', ...(number === undefined ? {} : { number }) }))
     expect(treesEqual(ref(1), ref(2))).toBe(true)
     const math = (number: number): DocumentNode => documentOf(paragraph({ type: 'math', display: true, value: 'x', number }))
-    expect(treesEqual(math(1), math(2))).toBe(false)
+    expect(treesEqual(math(1), math(2))).toBe(true)
   })
 
   it('a span count is compared where no span mark is written, and not where one is', () => {

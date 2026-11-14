@@ -43,7 +43,6 @@ function pushSlots(stack: Frame[], frame: Frame): void {
     if (single) stack.push({ node: nodes[0]!, above: frame, step })
     else pushList(stack, nodes, frame, step)
   })
-  if (node.type === 'table') pushList(stack, node.columns, frame, 'columns')
 }
 
 /** The pointer of the node of `frame`: the steps from the document down to it. */

@@ -424,6 +424,15 @@ function checkExtensions(value: Value, path: string): void {
 
 function checkObject(value: Value, path: string): void {
   if (!isRecord(value)) fail(path, 'not an object')
+  const pending: [unknown, string][] = [[value, path]]
+  const seen = new WeakSet<object>()
+  while (pending.length > 0) {
+    const [item, at] = pending.pop()!
+    if (typeof item !== 'object' || item === null || seen.has(item)) continue
+    seen.add(item)
+    if (isRecord(item) && typeof item['type'] === 'string' && RULES.has(item['type'])) fail(at, 'a node in an opaque object')
+    for (const [name, child] of Object.entries(item)) pending.push([child, `${at}/${pointerKey(name)}`])
+  }
 }
 
 const FIELD_CHECKS = new Map<string, FieldCheck>([

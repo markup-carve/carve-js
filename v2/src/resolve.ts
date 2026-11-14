@@ -6,7 +6,7 @@ import {
   type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
   type DocumentNode, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
-  forEachSlot, SOURCE_ORDER, type MathNode, type Node, isNodeOfType, type NodeOfType, type NodeSlots, type TableCellNode, type TableNode,
+  forEachSlot, SOURCE_ORDER, type MathNode, type Node, isNodeOfType, type NodeOfType, type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
 import { type ParseFacts } from './ast-blocks.ts'
@@ -200,21 +200,10 @@ const STEPS = new Map<string, Step>([
  * skipped here and not in the call: half of the nodes of a document are text.
  */
 function visitChildren(walk: Walk, node: Node): void {
-  const slots: NodeSlots = node
-  if (!SECONDARY_SLOT_TYPES.has(node.type)) {
-    if (slots.children !== undefined) for (const child of slots.children) if (child.type !== 'text') visit(walk, child, node)
-    return
-  }
   forEachSlot(node, (nodes) => {
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
   }, SOURCE_ORDER)
 }
-
-/** C2-A-024: the node types that can have a slot besides `children`. */
-const SECONDARY_SLOT_TYPES: ReadonlySet<string> = new Set([
-  'table', 'figure', 'figure_group', 'caption', 'citation', 'ruby', 'code_block', 'admonition', 'directive', 'div',
-  'inline_extension', 'block_extension',
-])
 
 /** The slots of a node that may carry a title or a caption (C2-A-025); a caption that owns a number counts the figures below it. */
 function visitSlots(walk: Walk, node: FigureNode | FigureGroupNode | TableNode | AdmonitionNode | DirectiveNode | DivNode): void {

@@ -242,11 +242,11 @@ describe('lists and tasks', () => {
     expect(refusal(documentOf(list))).toBe('/children/0/marker/start: a field of the other kind of marker')
   })
 
-  it('C2-A-058: equality drops a start of 1', () => {
+  it('C2-A-058: equality compares a supplied start of 1', () => {
     const list = (start?: number): DocumentNode => documentOf({
       type: 'list', marker: start === undefined ? { kind: 'ordered' } : { kind: 'ordered', start }, spacing: 'tight', children: [],
     })
-    expect(treesEqual(list(1), list())).toBe(true)
+    expect(treesEqual(list(1), list())).toBe(false)
     expect(treesEqual(list(2), list())).toBe(false)
   })
 
@@ -560,7 +560,7 @@ describe('citations, extension nodes and resources', () => {
   it('C2-A-128: reading a tree keeps payload, props and data as they are and runs nothing in them', () => {
     const node: InlineExtensionNode = {
       type: 'inline_extension', name: 'org.example.x', children: [], fallback: [text('f')],
-      props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { type: 'link' } },
+      props: { run: '<script>' }, payload: [{ format: 'js', value: 'alert(1)' }], data: { 'org.example.x': { kind: 'link' } },
     }
     expect(inlinesOf(decodeTree(encodeTree(documentOf(paragraph(node)))).children[0])[0]).toEqual(node)
   })

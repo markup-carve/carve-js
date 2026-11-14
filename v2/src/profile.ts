@@ -220,7 +220,10 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
     const list = nodes as Node[]
     if (step === 'children') filterChildren(filter, node, depth)
     else if (single) filterNode(filter, list[0]!, depth + 1)
-    else if (blocks && step !== 'title') filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
+    else if (step === 'pairs' || step === 'columns') for (const child of list) filterNode(filter, child, depth + 1)
+    else if (step === 'longDescription' || (blocks && (step === 'fallback' || step.startsWith('slots/')))) {
+      filterList<Block>(filter, list as Block[], true, depth, degradedBlocks)
+    }
     else filterList<Inline>(filter, list as Inline[], false, depth, degradedInline)
   })
 }

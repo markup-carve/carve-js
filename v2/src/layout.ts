@@ -1,6 +1,6 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
 // second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
-import { captionOf, type DocumentNode, type FigureNode, type Node, type TableCellNode, titleOf } from './ast.ts'
+import { captionOf, type DocumentNode, type FigureNode, forEachSlot, type Node, SOURCE_ORDER, type TableCellNode } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
 import { type Facts, measureBlock } from './layout-facts.ts'
@@ -187,11 +187,10 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
   else visitInline(walk, node, path, frame)
   // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
-  const title = titleOf(node)
-  if (title !== undefined) visitList(walk, title, `${path}/title`, inner)
-  if ('children' in node) visitList(walk, node.children, `${path}/children`, inner)
-  const caption = captionOf(node)
-  if (caption !== undefined) visit(walk, caption, `${path}/caption`, inner)
+  forEachSlot(node, (nodes, step, single) => {
+    if (single) visit(walk, nodes[0]!, `${path}/${step}`, inner)
+    else visitList(walk, nodes, `${path}/${step}`, inner)
+  }, SOURCE_ORDER)
 }
 
 function visitList(walk: Walk, nodes: readonly Node[], base: string, frame: Frame): void {

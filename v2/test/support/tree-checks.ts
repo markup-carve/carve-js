@@ -3,6 +3,7 @@
 import {
   decodeTree, encodeTree, type Node, parse, type Position, render, treesEqual, validateTree,
 } from '../../src/index.ts'
+import { forEachSlot } from '../../src/ast.ts'
 
 const VOID_ELEMENTS = ['hr', 'img', 'br', 'input', 'col']
 const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^\s"=<>/]+(?:="[^"]*")?)*)\s*>/y
@@ -11,9 +12,7 @@ const ATTRIBUTE = /\s+([^\s"=<>/]+)(?:="[^"]*")?/g
 /** The slots of a node that hold positioned nodes, in the order a walker visits them (C2-A-025). */
 function slotLists(node: Node): (readonly Node[])[] {
   const lists: (readonly Node[])[] = []
-  if ('children' in node) lists.push(node.children)
-  if ('title' in node && Array.isArray(node.title)) lists.push(node.title)
-  if ('caption' in node && node.caption !== undefined) lists.push([node.caption])
+  forEachSlot(node, (nodes) => lists.push(nodes))
   return lists
 }
 

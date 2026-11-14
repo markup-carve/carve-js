@@ -1,6 +1,7 @@
 // The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
 // node type, told apart by `type`.
 import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node, type NodeOfType } from './ast-nodes.ts'
+import { NODE_SLOTS } from './ast-tables.ts'
 
 export type * from './ast-nodes.ts'
 export { FIELD_VALUES, isFieldValue } from './ast-nodes.ts'
@@ -166,43 +167,49 @@ export const SPEC_ORDER = 0
 export const SOURCE_ORDER = 1
 
 /**
- * C2-A-024, C2-A-025: visits every slot of `node` that holds nodes: `children` first, then `caption`,
- * `short`, `prefix`, `locator` and `suffix`, the `base` and `annotation` of each ruby pair, `title`,
- * `fallback` and each named slot. In source order the title comes first. Strings, URLs, data and
- * payloads are no slots. Every walk over the nodes of a tree goes through this.
+ * C2-A-024, C2-A-025: visits exactly the slots of the generated node table. In source order a title
+ * precedes children. Opaque data and props are not slots.
  */
 export function forEachSlot(node: Node, visit: SlotVisitor, order = SPEC_ORDER): void {
-  const fields = node as unknown as Readonly<Record<string, unknown>>
-  const title = titleOf(node)
-  if (order === SOURCE_ORDER && title !== undefined) visit(title, 'title', false)
-  const children = (node as NodeSlots).children
-  if (children !== undefined) visit(children, 'children', false)
-  const caption = captionOf(node)
-  if (caption !== undefined) visit([caption], 'caption', true)
-  visitInlineSlots(node, visit)
-  if (order === SPEC_ORDER && title !== undefined) visit(title, 'title', false)
-  const fallback = fields['fallback'] as readonly Node[] | undefined
-  if (fallback !== undefined) visit(fallback, 'fallback', false)
-  const slots = fields['slots'] as Readonly<Record<string, readonly Node[]>> | undefined
-  if (slots !== undefined) for (const name in slots) visit(slots[name]!, `slots/${pointerKey(name)}`, false)
+  const slots = NODE_SLOTS.get(node.type) ?? []
+  if (order === SOURCE_ORDER && slots.includes('title')) visitSlot(node, 'title', visit)
+  for (const path of slots) {
+    if (order === SOURCE_ORDER && path === 'title') continue
+    visitSlot(node, path, visit)
+  }
 }
 
-/** The inline slots of a caption, a citation and ruby, in the order of C2-A-024. */
-function visitInlineSlots(node: Node, visit: SlotVisitor): void {
-  if (node.type === 'caption' && node.short !== undefined) visit(node.short, 'short', false)
-  if (node.type === 'citation') {
-    for (const name of ['prefix', 'suffix'] as const) {
-      const list = node[name]
-      if (list !== undefined) visit(list, name, false)
-    }
-    if (node.locator !== undefined) visit(node.locator.children, 'locator/children', false)
+function ownField(value: unknown, name: string): unknown {
+  return isRecord(value) ? value[name] : undefined
+}
+
+function slotValue(node: Node, path: string): unknown {
+  let value: unknown = node
+  for (const name of path.split('.')) value = ownField(value, name)
+  return value
+}
+
+function isNode(value: unknown): value is Node {
+  return isRecord(value) && typeof value['type'] === 'string' && NODE_SLOTS.has(value['type'])
+}
+
+function visitSlot(node: Node, path: string, visit: SlotVisitor): void {
+  if (path.endsWith('.*')) {
+    const slots = slotValue(node, path.slice(0, -2))
+    if (!isRecord(slots)) return
+    for (const [name, value] of Object.entries(slots)) visitValue(value, `${path.slice(0, -2)}/${pointerKey(name)}`, visit)
+    return
   }
-  if (node.type === 'ruby') {
-    node.pairs.forEach((pair, at) => {
-      visit(pair.base, `pairs/${at}/base`, false)
-      visit(pair.annotation, `pairs/${at}/annotation`, false)
-    })
-  }
+  visitValue(slotValue(node, path), path.replaceAll('.', '/'), visit)
+}
+
+function visitValue(value: unknown, step: string, visit: SlotVisitor): void {
+  if (isNode(value)) visit([value], step, true)
+  else if (isNodeList(value)) visit(value, step, false)
+}
+
+function isNodeList(value: unknown): value is Node[] {
+  return Array.isArray(value) && (value.length === 0 || isNode(value[0]))
 }
 
 /** Whether `node` is of type `type`. */
