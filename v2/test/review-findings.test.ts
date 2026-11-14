@@ -316,3 +316,31 @@ describe('writer output that read back as another tree', () => {
     }
   })
 })
+
+describe('what the random writer gates found', () => {
+  const BACKSLASH = '\\'
+
+  it('C2-B-118, C2-W-037: an info string with a backtick has no spelling on a backtick fence, and the writer leaves it out', () => {
+    const output = writeWithDiagnostics(parse(`~~~${BACKTICK}\nx\n~~~`))
+    expect(output.source).toBe('```\nx\n```\n')
+    expect(output.diagnostics.map((finding) => finding.code)).toEqual(['field-unspellable'])
+    expect(format(output.source)).toBe(output.source)
+  })
+
+  it('C2-W-026: a line behind a hard break that would read as a list marker is kept text by an escape', () => {
+    expect(format(` - ${BACKSLASH}\n- a`)).toBe(`- ${BACKSLASH}\n  ${BACKSLASH}- a\n`)
+    expect(format(` - ${BACKSLASH}\n1. a`)).toBe(`- ${BACKSLASH}\n  1${BACKSLASH}. a\n`)
+  })
+
+  it('C2-W-026, C2-W-092: a line that starts inside an inline node and would open a block is escaped', () => {
+    expect(format(' - ^[\n- ]')).toBe(`- ^[\n  ${BACKSLASH}- ]\n`)
+    expect(format(' - /:\n1. a/')).toBe(`- /:\n  1${BACKSLASH}. a/\n`)
+    expect(format('[^a]: /|\n- +/')).toBe(`[^a]: /|\n  ${BACKSLASH}- +/\n`)
+  })
+
+  it('C2-W-088: a content that opens a block on its own is probed behind a word', () => {
+    expect(format(`/:: ${BACKSLASH}${BACKTICK}a/`)).toBe(`/:: ${BACKSLASH}${BACKTICK}a/\n`)
+    expect(format(`{-${BACKSLASH}${BACKTICK}\n||-}`)).toBe(`{-${BACKSLASH}${BACKTICK}\n||-}\n`)
+    expect(format(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*`)).toBe(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*\n`)
+  })
+})

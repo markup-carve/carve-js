@@ -254,6 +254,7 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   escapeInside,
   (c, es, i) => escapeContentConstruct(c, es[i]!),
+  (c, es, i) => escapeContentLine(c, es[i]!),
   (c, es, i, attempt) => {
     if (!hasOtherForm(c, es[i]!)) return false
     for (const escape of attempt.escapes) {
@@ -279,11 +280,36 @@ function escapeContentConstruct(c: Check, e: Node): boolean {
   // The probe has its own attempts and losses, so what it finds in the content stays out of this round.
   const probe = createCheck({ ...c.w, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) })
   probe.flags = c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : 0)
-  const parsed = parseChunk(`${writeInlines(probe.w, e.children, probe.flags)}\n`, c.w.abbreviations).children
-  const block = parsed[0]
-  if (parsed.length !== 1 || block?.type !== 'paragraph') return false
-  compareInlines(probe, e.children, block.children, e)
-  for (const [node, at] of probe.escapes) if (escapeAt(c, node, at)) return true
+  // A content that opens a block on its own line is read again behind a word, which opens none, and
+  // then with its line breaks as spaces, so that no later line opens one either.
+  const word: Node = { type: 'text', value: 'x' }
+  const flat = e.children.map((node): Node => (node.type === 'soft_break' ? { type: 'text', value: ' ' } : node))
+  for (const expected of [e.children, [word, ...e.children], [word, ...flat]]) {
+    const parsed = parseChunk(`${writeInlines(probe.w, expected, probe.flags)}\n`, c.w.abbreviations).children
+    const block = parsed[0]
+    if (parsed.length !== 1 || block?.type !== 'paragraph') continue
+    compareInlines(probe, expected, block.children, e)
+    for (const [node, at] of probe.escapes) if (escapeAt(c, node, at)) return true
+    return false
+  }
+  return false
+}
+
+/**
+ * C2-W-026, C2-W-092: a line inside the content of `e` that has the shape of a block opener may
+ * have opened a block and so ended `e`. The first such line takes the escape of its opener; the
+ * test of C2-W-088 then decides whether it was asked for.
+ */
+function escapeContentLine(c: Check, e: Node): boolean {
+  if (!('children' in e)) return false
+  const nodes = e.children
+  for (let at = 0; at < nodes.length; at++) {
+    const node = nodes[at]!
+    if ('children' in node && escapeContentLine(c, node)) return true
+    const next = nodes[at + 1]
+    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(next)) continue
+    for (const offset of openerOffsets(next.value)) if (escapeAt(c, next, offset)) return true
+  }
   return false
 }
 
@@ -365,7 +391,9 @@ function isBraceLine(node: Node | undefined): boolean {
 function endedEarly(c: Check, es: readonly Node[], i: number, owner: Node): void {
   // C2-W-097: a backslash at the end of the text before took the markup of this node.
   if (i > 0 && escapeEnd(c, lastText(es[i - 1]), false)) return
-  if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, i, 0, owner)
+  // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
+  if (i > 0 && isBreak(es[i - 1])) escapeLineStart(c, es, openerLine(es, i), owner)
+  else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, i, 0, owner)
   else if (isBreak(es[i]) && i + 1 < es.length) escapeLineStart(c, es, openerLine(es, i + 1), owner)
   else c.losses.push([es[i] ?? owner, null])
 }
@@ -396,7 +424,9 @@ function matchCharacters(c: Check, e: TextNode, a: TextNode, at: Cursor): boolea
  */
 /** The parse ended inside the text node `es[at.i]` of `owner`. */
 function parseEndsInText(c: Check, es: readonly Node[], at: Cursor, owner: Node): boolean {
-  if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
+  // C2-W-026, C2-W-092: the content ended at the start of a line, which opened a block.
+  if (at.vi === 0 && at.i > 0 && isBreak(es[at.i - 1])) escapeLineStart(c, es, openerLine(es, at.i), owner)
+  else if (CLOSING_MARKS.has(owner.type)) closedEarly(c, es, at.i, at.vi, owner)
   else c.losses.push([owner, null])
   return false
 }
@@ -675,16 +705,24 @@ function isPending(c: Check, node: Node | undefined): boolean {
   return node?.type === 'text' && c.marks.has(node)
 }
 
-/** Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a block. */
+/**
+ * Escapes the opener of each line of the paragraph `e`, written at `place`, at which the parse has a
+ * block. A line can start inside an inline node, such as emphasis or an inline footnote over two lines.
+ */
 function escapeOpenerLines(c: Check, e: ParagraphNode, place: number, paragraphs: Set<number>, lines: Set<number>): void {
-  const nodes = e.children
-  if (!paragraphs.has(place) && hasOpenerShape(nodes[0]) && !isPending(c, nodes[0])) escapeLineStart(c, nodes, 0, e)
+  const top = e.children
+  if (!paragraphs.has(place) && hasOpenerShape(top[0]) && !isPending(c, top[0])) escapeLineStart(c, top, 0, e)
   let line = Math.floor(place / PLACE_COLUMNS)
-  for (let at = 0; at < nodes.length; at++) {
-    if (!isBreak(nodes[at])) continue
-    line++
-    if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+  const visit = (nodes: readonly Node[]): void => {
+    for (let at = 0; at < nodes.length; at++) {
+      const node = nodes[at]!
+      if ('children' in node) visit(node.children)
+      if (!isBreak(node)) continue
+      line++
+      if (lines.has(line) && hasOpenerShape(nodes[at + 1]) && !isPending(c, nodes[at + 1])) escapeLineStart(c, nodes, at + 1, e)
+    }
   }
+  visit(top)
 }
 
 /**
@@ -712,6 +750,8 @@ export function compareBlocks(c: Check, es: readonly Node[], as: readonly Node[]
   if (es.length === as.length || changes(c) > before || es.some((e) => c.w.lost.has(e))) return
   // A line of a line block that reads as its closer ends the block (C2-B-123).
   const missing = es[as.length]
+  // The blocks below differ in number, so a line of one of them may have opened a block (C2-W-092).
+  c.misaligned = true
   if (owner.type === 'line_block' && missing !== undefined) escapeLineStart(c, childNodes(missing), 0, missing)
   else if (es.length > as.length) missingBlock(c, es[as.length]!)
   else c.losses.push([owner, null])

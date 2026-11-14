@@ -225,6 +225,19 @@ function leftmost(group: readonly Node[], escapes: readonly [TextNode, number][]
   return best
 }
 
+/**
+ * The escapes a round asked for behind the leftmost one wait for the next round (C2-W-091). A node
+ * whose way to form asked for one of them takes that way again then, rather than its next one.
+ */
+function deferEscapes(w: Writer, deferred: readonly [TextNode, number][]): void {
+  for (const attempt of w.attempts.values()) {
+    const kept = attempt.escapes.filter((escape) => !deferred.includes(escape))
+    if (kept.length === attempt.escapes.length) continue
+    attempt.escapes = kept
+    attempt.step--
+  }
+}
+
 /** The tree of the group written with the escapes `escapes`. */
 function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: Map<TextNode, number[]>): DocumentNode {
   w.escapes = escapes
@@ -282,7 +295,11 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   }
   // The node that asked for a dropped escape takes its next way to form in the next round.
   if (dropped && check.escapes.length + check.forms.length + check.retracted.length === 0) return true
-  if (check.escapes.length > 1 && check.escapes.length <= MAX_ORDERED_ESCAPES) check.escapes = [leftmost(group, check.escapes)]
+  if (check.escapes.length > 1 && check.escapes.length <= MAX_ORDERED_ESCAPES) {
+    const first = leftmost(group, check.escapes)
+    deferEscapes(w, check.escapes.filter((escape) => escape !== first))
+    check.escapes = [first]
+  }
   const changes = check.escapes.length + check.forms.length + check.retracted.length
   if (changes === 0 && check.losses.length > 0 && first && !w.blankFirst) {
     // C2-W-005: what only line 1 reads differently is written below one blank line.

@@ -122,14 +122,24 @@ function codeTitle(w: Writer, node: CodeBlockNode): string | null {
   return plainText(title)
 }
 
+/**
+ * C2-B-118: a backtick run whose info string holds a backtick opens no fence, and the writer writes
+ * a backtick fence (C2-W-037). Such a field has no spelling: it is left out and reported, as C2-W-040 does.
+ */
+function spellableInfo(w: Writer, node: CodeBlockNode, field: string, value: string | null): string | null {
+  if (value === null || !value.includes('`')) return value
+  lose(w, node, field)
+  return null
+}
+
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
   const lines = valueLines(w, node)
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
-  let info = node.type === 'raw_block' ? `=${node.format}` : node.syntax ?? ''
+  let info = node.type === 'raw_block' ? `=${node.format}` : spellableInfo(w, node, 'syntax', node.syntax ?? '') ?? ''
   if (node.type === 'code_block') {
-    const title = codeTitle(w, node)
+    const title = spellableInfo(w, node, 'title', codeTitle(w, node))
     // C2-B-120: the title reads escapes, as a quoted attribute value does.
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
