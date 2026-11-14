@@ -99,6 +99,18 @@ describe('the attribute filter', () => {
     expect(render('[x]{.a class="javascript:x"}')).toBe('<p><span class="a">x</span></p>')
     expect(render(decodeTree(JSON.stringify(inParagraph({ type: 'span', lang: 'javascript:x', children: [{ type: 'text', value: 'x' }] }))))).toBe('<p><span lang="">x</span></p>')
   })
+
+  it('C2-H-057: the vertical alignment of a supplied cell is written only as a CSS keyword, so it adds no declaration', () => {
+    const table = (valign: string): string => render(decodeTree(JSON.stringify({
+      type: 'document', astVersion: '2.0', children: [{
+        type: 'table', columns: [{ type: 'table_column' }], children: [{
+          type: 'table_body', children: [{ type: 'table_row', children: [{ type: 'table_cell', header: false, valign, children: [] }] }],
+        }],
+      }],
+    })))
+    expect(table('baseline')).toContain('<td style="vertical-align: baseline;"></td>')
+    expect(table('top; background-image: url(javascript:alert(1))')).toContain('<td></td>')
+  })
 })
 
 describe('the title of a code block', () => {

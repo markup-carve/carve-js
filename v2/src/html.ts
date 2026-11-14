@@ -409,11 +409,21 @@ function blockExtension(r: Render, node: BlockExtensionNode, level: number): voi
 // ---- tables ----
 
 /** C2-B-213: each axis on its own: the mark of the cell, then that of the head cell of its column, then the column. */
+/** A CSS keyword: ASCII letters and hyphens, so a value cannot close its declaration or add another. */
+function isCssKeyword(value: string): boolean {
+  for (let at = 0; at < value.length; at++) {
+    const code = value.charCodeAt(at) | 32
+    if ((code < 97 || code > 122) && value.charCodeAt(at) !== 45) return false
+  }
+  return value !== ''
+}
+
 function cellStyle(cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined): string {
   const align = cell.align ?? column?.resolvedAlign ?? column?.align
   const valign = cell.valign ?? headValign ?? column?.valign
   let declarations = align === undefined ? '' : `text-align: ${align};`
-  if (valign !== undefined) declarations += `${declarations === '' ? '' : ' '}vertical-align: ${valign};`
+  // A vertical alignment has no source spelling, so only a supplied tree holds one; its value is not filtered elsewhere.
+  if (valign !== undefined && isCssKeyword(valign)) declarations += `${declarations === '' ? '' : ' '}vertical-align: ${valign};`
   return declarations
 }
 
