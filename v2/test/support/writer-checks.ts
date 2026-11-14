@@ -422,10 +422,20 @@ export function checkWriter(src: string, undecided: string[] = []): string | nul
   return again === plain.source ? null : `without the record: C2-W-003, ${show(plain.source)} is written again as ${show(again)}`
 }
 
+/** Whether a failure of `checkWriter` is a loss the writer reported (C2-W-011), not a form that reads back differently silently. */
+export function isReportedLoss(failure: string): boolean {
+  return failure.includes(': the writer reports ')
+}
+
 export interface WriterEnumerationResult {
   documents: number
   refused: number
+  /** The first failures of every kind, reported losses included. */
   failures: string[]
+  failureCount: number
+  /** The inputs with a reported loss (C2-W-011), counted and listed apart, and the first of them. */
+  lossCount: number
+  losses: string[]
   /** The inputs whose escapes C2-W-088 does not decide, and the first of them. */
   undecided: number
   undecidedSamples: string[]
@@ -447,14 +457,22 @@ function checkInto(src: string, result: WriterEnumerationResult, maxReported: nu
     if (result.undecidedSamples.length < maxReported) result.undecidedSamples.push(`${show(src)}: ${undecided[0]!}`)
   }
   if (failure === 'refused') result.refused++
-  else if (failure !== null && result.failures.length < maxReported) result.failures.push(`${show(src)}: ${failure}`)
+  else if (failure !== null) {
+    result.failureCount++
+    if (result.failures.length < maxReported) result.failures.push(`${show(src)}: ${failure}`)
+    if (!isReportedLoss(failure)) return
+    result.lossCount++
+    if (result.losses.length < maxReported) result.losses.push(`${show(src)}: ${failure}`)
+  }
 }
 
 /** Checks every document of exactly `length` parts of `alphabet`, joined by `glue` behind `prefix`. */
 export function enumerateWriter(
   alphabet: readonly string[], length: number, glue: string, prefix: string, maxReported = MAX_REPORTED,
 ): WriterEnumerationResult {
-  const result: WriterEnumerationResult = { documents: 0, refused: 0, failures: [], undecided: 0, undecidedSamples: [] }
+  const result: WriterEnumerationResult = {
+    documents: 0, refused: 0, failures: [], failureCount: 0, lossCount: 0, losses: [], undecided: 0, undecidedSamples: [],
+  }
   const choice = new Array<number>(length).fill(0)
   const parts = new Array<string>(length).fill('')
   for (;;) {
@@ -516,6 +534,7 @@ export function seededRandom(seed: number): () => number {
 export interface RandomRunResult {
   documents: number
   refused: number
+  /** The first failures that come with no reported loss. */
   failures: string[]
   failureCount: number
   losses: string[]
@@ -550,7 +569,7 @@ function countGates(result: RandomRunResult, src: string, gates: GateResult, max
   if (gates.failure !== null) {
     result.failureCount++
     if (gates.losses === null) result.silentCount++
-    if (result.failures.length < maxReported) result.failures.push(`${show(src)}: ${gates.failure}`)
+    if (gates.losses === null && result.failures.length < maxReported) result.failures.push(`${show(src)}: ${gates.failure}`)
   }
   if (gates.losses === null) return
   result.lossCount++
