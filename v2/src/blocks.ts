@@ -346,19 +346,29 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   if ((shapes & SHAPE_THEMATIC_BREAK) !== 0 && isThematicBreak(src, pos, end)) return true
   // C2-B-019.
   if ((shapes & SHAPE_TABLE_ROW) !== 0) return rowClosingPipe(src, pos, end) >= 0
-  if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched)
+  if ((shapes & MARK_SHAPES) !== 0) return isDescriptionListMark(src, pos, end) && isSiblingMark(state, matched, end)
   if ((shapes & DEFINITION_SHAPES) !== 0 && pos === lineStart && isSiblingDefinition(state, matched, end)) return true
   return (shapes & MARKER_SHAPES) !== 0 && isListMarker(src, pos, end) && markerInterrupts(state, matched, end)
 }
 
 /** C2-B-016: a mark at the column of the open description list, below a term or below description text. */
-function isSiblingMark(state: BlockState, matched: number): boolean {
+function isSiblingMark(state: BlockState, matched: number, end: number): boolean {
   const containers = state.containers
   const cursor = state.cursor
   const column = cursor.column - cursor.origin
   const depth = containers.depth
-  if (matched === depth) return containers.kind[depth - 1] === DESCRIPTION_LIST && column === containers.column[depth - 1]
+  if (matched === depth) {
+    return containers.kind[depth - 1] === DESCRIPTION_LIST && column === containers.column[depth - 1] && markFits(state, end)
+  }
   return containers.kind[matched] === DESCRIPTION && column === containers.column[matched]
+}
+
+/**
+ * C2-B-190: a mark at the cursor, below the open description list, opens its block. A term is a
+ * leaf and always fits; a description is one more container, and past the cap its mark is text.
+ */
+function markFits(state: BlockState, end: number): boolean {
+  return descriptionMarkEnd(state.src, state.cursor.pos, end) < 0 || state.containers.depth <= MAX_DEPTH
 }
 
 /** C2-B-016: a definition line at column 0 while a definition is open. */
@@ -409,7 +419,7 @@ function closeUnowned(state: BlockState, matched: number, end: number): void {
   if (containers.kind[top] === DESCRIPTION_LIST) {
     // C2-B-071: a term owns no lines, so only a mark at the list's column keeps the list. C2-B-052.
     const sibling = cursor.column - cursor.origin === containers.column[top] &&
-      isDescriptionListMark(src, cursor.pos, end) && state.above.blankCount < LIST_BOUNDARY_BLANKS
+      isDescriptionListMark(src, cursor.pos, end) && markFits(state, end) && state.above.blankCount < LIST_BOUNDARY_BLANKS
     if (!sibling) closeTo(state, top)
   }
 }

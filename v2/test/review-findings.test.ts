@@ -260,3 +260,26 @@ describe('a lone CR', () => {
     expect(writeWithDiagnostics(parse('a\r')).diagnostics.map((finding) => finding.channel)).toEqual(['render-loss'])
   })
 })
+
+describe('the depth cap over blocks and inlines together', () => {
+  /** The children of the innermost quote of `lines`, each behind `quotes` quote marks. */
+  const inQuotes = (quotes: number, lines: string[]): Nested[] => {
+    let node = parse(lines.map((line) => '> '.repeat(quotes) + line).join('\n'), { positions: false }) as unknown as Nested
+    while (node.children[0]?.type === 'block_quote') node = node.children[0]
+    return node.children
+  }
+
+  it('C2-B-190, C2-I-118: a div title counts the blocks around it and the div, so a link past 200 is text', () => {
+    expect(inQuotes(199, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'text', value: '[x](/u)' }])
+    expect(inQuotes(198, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }])
+  })
+
+  it('C2-B-190: a description mark that would open a container past the cap is term text, and nothing crashes', () => {
+    expect(inQuotes(199, [':: t', ': d'])).toEqual([{
+      type: 'definition_list',
+      children: [{ type: 'definition_term', children: [{ type: 'text', value: 't' }, { type: 'soft_break' }, { type: 'text', value: ': d' }] }],
+    }])
+    expect(inQuotes(199, [':: t', '', ': d']).map((node) => node.type)).toEqual(['definition_list', 'paragraph'])
+    expect(inQuotes(198, [':: t', ': d'])[0]!.children.map((node) => node.type)).toEqual(['definition_term', 'definition_description'])
+  })
+})

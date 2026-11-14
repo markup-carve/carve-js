@@ -14,12 +14,8 @@ export function openerTitle(src: string, start: number, end: number): string {
 
 /** The inline content of `[start, end)`, one line of the source: the title of a div, an admonition or a directive. */
 export function captionChildren(ctx: TreeContext, start: number, end: number): Inline[] {
-  // The title is read at depth 0, whatever blocks are open around it.
-  const depth = ctx.depth
-  ctx.depth = 0
-  const nodes = contentNodes(ctx, [start, end], 0, 2, false, FLOW_PLAIN)
-  ctx.depth = depth
-  return nodes
+  // C2-B-190, C2-I-118: the title counts the blocks around it and the div itself.
+  return contentNodes(ctx, [start, end], 0, 2, false, FLOW_PLAIN)
 }
 
 /** C2-B-083: the link definition of `key`, with the destination and the optional quoted title behind its colon. */
