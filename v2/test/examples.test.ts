@@ -131,7 +131,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [122, ['```=html', '<b>x</b>', '```'], 'raw"<b>x</b>"'],
   [123, ['%%%', 'x', '%%% not a closer', '%%%', 'after'], '%%%"x|%%% not a closer" p"after"'],
   [124, ['```python "src/app.py"', 'code', '```'], 'code"code"'],
-  [125, ['~~~', 'code', '~~~'], 'code"code"'],
+  [125, ['~~~', 'code', '~~~'], 'p"~~~|code|~~~"'],
   [126, ['::: note "Title"', 'text', ':::'], 'div[p"text"]'],
   [127, ['```a`b', 'x'], 'p"```a`b|x"'],
   [128, ['```php "t" [Composer]', 'code', '```'], 'code"code"'],

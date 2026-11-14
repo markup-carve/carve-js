@@ -994,10 +994,10 @@
  {
   "file": "syntax-blocks.md",
   "number": 125,
-  "label": "generated",
+  "label": "unverified",
   "flags": [],
   "input": "~~~\ncode\n~~~",
-  "html": "<pre><code>code\n</code></pre>"
+  "html": "<p>~~~\ncode\n~~~</p>"
  },
  {
   "file": "syntax-blocks.md",
@@ -2613,7 +2613,7 @@
   "label": "generated",
   "flags": [],
   "input": "'tis the season and 'em' and rock 'n' roll and 'I told 'em so,' he said.",
-  "html": "<p>’tis the season and ‘em’ and rock ‘n’ roll and ‘I told ’em so,’ he said.</p>"
+  "html": "<p>’tis the season and ‘em’ and rock ’n’ roll and ‘I told ’em so,’ he said.</p>"
  },
  {
   "file": "syntax-inline.md",

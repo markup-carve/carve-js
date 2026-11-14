@@ -43,7 +43,7 @@ describe('the writer and its two gates', () => {
   })
 
   it('C2-W-002: the written form parses to the tree of the input', () => {
-    const src = '{.a}{#b}\n## T\n\n~~~js\nx\n~~~\n\n- [X] a\n   b\n\n[c](/u \'t\') {_d_}'
+    const src = '{.a}{#b}\n## T\n\n```js\nx\n```\n\n- [X] a\n   b\n\n[c](/u \'t\') {_d_}'
     expect(treesEqual(parse(format(src)), parse(src))).toBe(true)
     expect(checkWriter(src)).toBeNull()
   })
@@ -56,7 +56,7 @@ describe('the writer and its two gates', () => {
   })
 
   it('C2-W-004: the rendered output is the same before and after', () => {
-    const src = '# T\n\n~~~\nx\n~~~\n\n1. a\n1. b\n\n[c](/u \'t\') and [x]{kbd=""}\n\n| a |\n+ b |'
+    const src = '# T\n\n```\nx\n```\n\n1. a\n1. b\n\n[c](/u \'t\') and [x]{kbd=""}\n\n| a |\n+ b |'
     expect(render(format(src))).toBe(render(src))
   })
 
@@ -407,8 +407,14 @@ describe('canonical forms: blocks', () => {
     expect(format('*****')).toBe('***\n')
   })
 
-  it('C2-W-037: a tilde fence is rewritten to a backtick fence', () => {
-    expect(format('~~~js\na\n~~~')).toBe('```js\na\n```\n')
+  it('C2-W-037: a code block is written with the shortest backtick run longer than every backtick run in its body', () => {
+    expect(format('`````js\na\n`````')).toBe('```js\na\n```\n')
+    expect(format('`````js\na\n```\n`````')).toBe('````js\na\n```\n````\n')
+  })
+
+  it('C2-W-037, C2-B-108: a tilde run is text, written as it stands', () => {
+    expect(format('~~~js\na\n~~~')).toBe('~~~js\na\n~~~\n')
+    expect(checkWriter('~~~js\na\n~~~')).toBeNull()
   })
 
   it('C2-W-038: the fence is the shortest run longer than every bare backtick run of the value', () => {
@@ -444,7 +450,7 @@ describe('canonical forms: blocks', () => {
   })
 
   it('C2-W-040: the opener of a code fence is the run glued to the language, the title and the label', () => {
-    expect(format('~~~ php   "src/Auth.php"   [Composer]\nx\n~~~')).toBe('```php "src/Auth.php" [Composer]\nx\n```\n')
+    expect(format('```` php   "src/Auth.php"   [Composer]\nx\n````')).toBe('```php "src/Auth.php" [Composer]\nx\n```\n')
   })
 
   it('C2-W-041: the title of a code block stands in the info string, and a title key stays a key', () => {
@@ -876,7 +882,7 @@ describe('the sidecar', () => {
   })
 
   it('C2-W-085: no other fact is read, so the rest is canonical whatever the sidecar records', () => {
-    const src = '---yaml\na: b\n---\n\n#  T\n\n*****\n\n~~~~\nc\n~~~~\n\n   -   a\n       b\n\n\n\n\nx'
+    const src = '---yaml\na: b\n---\n\n#  T\n\n*****\n\n````\nc\n````\n\n   -   a\n       b\n\n\n\n\nx'
     const { document, layout } = parseWithLayout(src)
     expect(write(document, { layout })).toBe('---\na: b\n---\n\n= T\n\n***\n\n```\nc\n```\n\n- a\n  b\n\nx\n')
     expect(write(document, { layout })).toBe(write(document))
@@ -907,7 +913,7 @@ describe('escaping', () => {
   })
 
   it('C2-W-090: one escape makes the whole run of an opener text', () => {
-    expect(format('\\~\\~\\~')).toBe('\\~~~\n')
+    expect(format('\\%\\%\\%')).toBe('\\%%%\n')
     expect(format('\\:\\:\\:\\:')).toBe('\\::::\n')
   })
 
@@ -918,9 +924,14 @@ describe('escaping', () => {
 
   it('C2-W-092: a paragraph line that would read as a block opener is escaped', () => {
     for (const src of [
-      '\\# a', '\\= a', '\\###### a', '\\| a |', '\\```', '\\~~~', '\\:::', '\\%%%', '1\\. a', '\\- a', '\\* a', '\\:: t',
+      '\\# a', '\\= a', '\\###### a', '\\| a |', '\\```', '\\:::', '\\%%%', '1\\. a', '\\- a', '\\* a', '\\:: t',
       ':: t\n: d\n\n\\: x', '\\[a]: /u', '\\[^a]: x', '\\> q', 'a\n\\***', '\\{.a}\nb', '\\{{ a }}', '\\---', 'a \\%% b', '\\%% b',
     ]) expect(format(src)).toBe(`${src}\n`)
+  })
+
+  it('C2-W-092, C2-B-108: a tilde run at a line start opens nothing and takes no escape', () => {
+    expect(format('\\~\\~\\~')).toBe('~~~\n')
+    expect(format('a\n~~~~ b')).toBe('a\n~~~~ b\n')
   })
 
   it('C2-W-092: a line that is no opener where it stands needs no escape', () => {
@@ -996,8 +1007,8 @@ describe('carve fmt', () => {
     expect(write(decodeTree(json))).toBe('. a\n. b\n\n> q\n\n| a b |\n')
   })
 
-  it('Example 2: a tilde fence that holds a backtick fence', () => {
-    expect(format('~~~~js\na\n```\nb\n~~~~\n')).toBe('````js\na\n```\nb\n````\n')
+  it('Example 2: a code block that holds a backtick fence', () => {
+    expect(format('````js\na\n```\nb\n````\n')).toBe('````js\na\n```\nb\n````\n')
   })
 
   it('Example 3: repeated markers and two lists', () => {

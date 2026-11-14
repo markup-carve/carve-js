@@ -370,10 +370,10 @@ describe('measured facts', () => {
     expect(entry('> - a\n', `${FIRST}/children/0/children/0`)!.contentColumn).toBe(2)
   })
 
-  it('C2-L-024: openerRaw tells a tilde from a backtick and gives the length, without the info string', () => {
+  it('C2-L-024: openerRaw gives the length of the run, without the info string', () => {
     const fence = (src: string, path = FIRST): unknown[] => [entry(src, path)!.openerRaw, entry(src, path)!.closerRaw]
     expect(fence('```js\nx\n```\n')).toEqual(['```', '```'])
-    expect(fence('~~~~ js "t"\nx\n~~~~~\n')).toEqual(['~~~~', '~~~~~'])
+    expect(fence('```` js "t"\nx\n`````\n')).toEqual(['````', '`````'])
     expect(fence('```=html\n<b>\n```\n')).toEqual(['```', '```'])
     expect(fence(':::: x\na\n::::\n')).toEqual(['::::', '::::'])
     expect(fence('::: note\na\n:::::\n')).toEqual([':::', ':::::'])
@@ -528,9 +528,9 @@ describe('defaults, from the side of the record', () => {
     expect(entry('{table}\n```csv\n```\n', FIRST)!.sourceFormat).toBe('csv')
   })
 
-  it('C2-L-037: the fence character and its length are in the record and not in the tree', () => {
-    expect(treesEqual(parse('~~~~~\nx\n~~~~~\n'), parse('```\nx\n```\n'))).toBe(true)
-    expect(entry('~~~~~\nx\n~~~~~\n', FIRST)!.openerRaw).toBe('~~~~~')
+  it('C2-L-037: the length of a fence is in the record and not in the tree', () => {
+    expect(treesEqual(parse('`````\nx\n`````\n'), parse('```\nx\n```\n'))).toBe(true)
+    expect(entry('`````\nx\n`````\n', FIRST)!.openerRaw).toBe('`````')
     expect(treesEqual(parse(':::::: x\na\n::::::\n'), parse('::: x\na\n:::\n'))).toBe(true)
   })
 
@@ -563,13 +563,13 @@ describe('defaults, from the side of the record', () => {
   })
 
   it('C2-L-043: the record states the spellings that have one canonical form as typed', () => {
-    const src = '---\na: 1\n---\n\n# a\n\n*****\n\n~~~~\nb\n~~~~\n'
+    const src = '---\na: 1\n---\n\n# a\n\n*****\n\n````\nb\n````\n'
     const nodes = layoutOf(src).nodes
-    expect(nodes.map((node) => node.markerRaw ?? node.openerRaw)).toEqual(['---', '#', '*****', '~~~~'])
+    expect(nodes.map((node) => node.markerRaw ?? node.openerRaw)).toEqual(['---', '#', '*****', '````'])
   })
 
   it('C2-L-044: no fact changes the tree', () => {
-    const typed = '# a\n\n1. b\n\n::: >\nc\n:::\n\n~~~~\nd\n~~~~\n\n*****\n\n| e |\n+ f |\n'
+    const typed = '# a\n\n1. b\n\n::: >\nc\n:::\n\n````\nd\n````\n\n*****\n\n| e |\n+ f |\n'
     const canonical = '= a\n\n. b\n\n> c\n\n```\nd\n```\n\n***\n\n| e f |\n'
     expect(treesEqual(parse(typed), parse(canonical))).toBe(true)
     expect(layoutOf(typed).nodes).not.toEqual(layoutOf(canonical).nodes)

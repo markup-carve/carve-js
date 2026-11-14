@@ -331,7 +331,7 @@ describe('headings, thematic breaks and code', () => {
   })
 
   it('C2-A-073: a code block carries its value, its language word and its title', () => {
-    expect(block('~~~~js "T" [L]\nx\n~~~~')).toEqual({ type: 'code_block', value: 'x\n', syntax: 'js', title: [text('T')], groupLabel: 'L' })
+    expect(block('````js "T" [L]\nx\n````')).toEqual({ type: 'code_block', value: 'x\n', syntax: 'js', title: [text('T')], groupLabel: 'L' })
   })
 })
 

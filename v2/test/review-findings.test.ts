@@ -7,6 +7,7 @@ import {
 } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
+import { documentOf } from './support/tree.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -325,13 +326,22 @@ describe('writer output that read back as another tree', () => {
 describe('what the random writer gates found', () => {
   const BACKSLASH = '\\'
 
-  it('C2-B-118, C2-W-037: an info string with a backtick keeps a tilde fence, the shortest run longer than every tilde run in the body', () => {
-    const output = writeWithDiagnostics(parse(`~~~${BACKTICK}\nx\n~~~`))
-    expect(output.source).toBe(`~~~${BACKTICK}\nx\n~~~\n`)
+  it('C2-B-118, C2-W-037: an info string with a backtick has no spelling, and the writer leaves it out of a supplied tree', () => {
+    const syntax = documentOf({ type: 'code_block', value: 'x\n', syntax: `a${BACKTICK}b` })
+    const output = writeWithDiagnostics(syntax)
+    expect(output.source).toBe('```\nx\n```\n')
+    expect(output.diagnostics.map((finding) => finding.code)).toEqual(['field-unspellable'])
+    expect(format(output.source)).toBe(output.source)
+    const title = documentOf({ type: 'code_block', value: 'x\n', syntax: 'js', title: [{ type: 'text', value: `t${BACKTICK}` }] })
+    expect(writeWithDiagnostics(title).source).toBe('```js\nx\n```\n')
+  })
+
+  it('C2-B-108, C2-B-118: a tilde run with a backtick in its info string is text, and the backtick opens a code span', () => {
+    const source = `~~~${BACKTICK}\nx\n~~~`
+    expect(render(source)).toBe(`<p>~~~<code>\nx\n~~~</code></p>`)
+    const output = writeWithDiagnostics(parse(source))
     expect(output.diagnostics).toEqual([])
-    expect(format(`~~~ js "t${BACKTICK}"\na~~~~b\n~~~`)).toBe(`~~~~~js "t${BACKTICK}"\na~~~~b\n~~~~~\n`)
-    expect(format(`~~~ ~a${BACKTICK}\nx\n~~~`)).toBe(`~~~ ~a${BACKTICK}\nx\n~~~\n`)
-    expect(format('~~~a\nx\n~~~')).toBe('```a\nx\n```\n')
+    expect(treesEqual(parse(output.source), parse(source))).toBe(true)
   })
 
   it('C2-W-016: a braced or editorial comment whose later line would open a block is refused', () => {

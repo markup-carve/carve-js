@@ -4,7 +4,7 @@ import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
-  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
+  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
@@ -253,16 +253,13 @@ export function headingLevel(src: string, pos: number, end: number): number {
   return afterMarkerSpace(src, pos + level, end, 1) < 0 ? 0 : level
 }
 
-/** Length of the backtick or tilde run at `pos` when it opens a code fence, or 0 (C2-B-108). */
+/** Length of the backtick run at `pos` when it opens a code fence, or 0. A tilde run is text (C2-B-108). */
 export function fenceOpenerLength(src: string, pos: number, end: number): number {
-  const code = src.charCodeAt(pos)
-  if (code !== BACKTICK && code !== TILDE) return 0
-  const length = runLength(src, pos, end, code)
+  if (src.charCodeAt(pos) !== BACKTICK) return 0
+  const length = runLength(src, pos, end, BACKTICK)
   if (length < MIN_RUN_LENGTH) return 0
-  if (code === BACKTICK) {
-    // C2-B-118: a backtick in the info string makes the run inline code.
-    for (let p = pos + length; p < end; p++) if (src.charCodeAt(p) === BACKTICK) return 0
-  }
+  // C2-B-118: a backtick in the info string makes the run inline code.
+  for (let p = pos + length; p < end; p++) if (src.charCodeAt(p) === BACKTICK) return 0
   return length
 }
 

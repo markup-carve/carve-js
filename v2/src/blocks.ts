@@ -2,7 +2,7 @@
 // container stack, no recursion. It writes enter, span and exit events and builds nothing.
 // Clause ids (C2-B-nnn) refer to the block chapter of the 0.2 syntax spec.
 import {
-  BACKSLASH, BRACE_OPEN, BYTE_ORDER_MARK, CARET, COLON, CR, DIGIT_0, DIGIT_9, EQUALS, GREATER, HYPHEN, LESS, LOWER_A,
+  BACKSLASH, BACKTICK, BRACE_OPEN, BYTE_ORDER_MARK, CARET, COLON, CR, DIGIT_0, DIGIT_9, EQUALS, GREATER, HYPHEN, LESS, LOWER_A,
   LOWER_I, LOWER_X, PAREN_CLOSE, PERCENT, PIPE, STAR, TILDE, UPPER_A, UPPER_I, UPPER_X,
 } from './chars.ts'
 import {
@@ -685,7 +685,7 @@ function openFence(state: BlockState, end: number): boolean {
     if (attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'table') !== null) flags = FLAG_DELIMITED
   }
   writeEvent(state, enterTag(state, CODE, flags), cursor.pos, length)
-  openOpaqueLeaf(state, CODE, src.charCodeAt(cursor.pos), length)
+  openOpaqueLeaf(state, CODE, BACKTICK, length)
   return true
 }
 

@@ -132,8 +132,8 @@ describe('the parse channel', () => {
     expect(messages('```js\ncode')).toEqual([
       'The ``` fence opened here has no closing fence; it runs to the end of the document. Add a closing ``` where the code should stop.',
     ])
-    expect(messages('- ~~~~\n  x\ny')).toEqual([
-      'The ~~~~ fence opened here has no closing fence; it ends at the end of its container on line 2. Add a closing ~~~~ where the code should stop.',
+    expect(messages('- ````\n  x\ny')).toEqual([
+      'The ```` fence opened here has no closing fence; it ends at the end of its container on line 2. Add a closing ```` where the code should stop.',
     ])
     expect(reports('```=html\n<b>')).toEqual(['unclosed-code-fence /children/0 0-12'])
   })

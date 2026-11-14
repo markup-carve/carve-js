@@ -220,7 +220,7 @@ describe('the rest of the record', () => {
   })
 
   it('C2-L-037, C2-L-038, C2-L-039, C2-L-043: the fence, the heading marker and the thematic break are normalized whatever is recorded', () => {
-    const src = '## T\n\n*****\n\n~~~~js\nc\n~~~~\n\n::::: box\nx\n:::::'
+    const src = '## T\n\n*****\n\n`````js\nc\n`````\n\n::::: box\nx\n:::::'
     expect(format(src)).toBe('== T\n\n***\n\n```js\nc\n```\n\n::: box\nx\n:::\n')
     expect(write(parse(src))).toBe(format(src))
   })

@@ -82,7 +82,7 @@ describe('paragraphs and interrupters', () => {
   })
 
   it('C2-B-014: a code fence line interrupts a paragraph and is then tested for ownership', () => {
-    expect(blocks('a', '~~~', 'x', '~~~')).toBe('p"a" code"x"')
+    expect(blocks('a', '```', 'x', '```')).toBe('p"a" code"x"')
     expect(blocks('- a', '  ```', '  x')).toBe('ul(-)[li[p"a" code!"x"]]')
     expect(blocks('- a', '```', 'x')).toBe('ul(-)[li[p"a"]] code!"x"')
     expect(blocks('> a', '```')).toBe('quote[p"a"] code!""')
@@ -262,7 +262,7 @@ describe('lists', () => {
     expect(blocks('- = a')).toBe('ul(-)[li[h1"a"]]')
     expect(blocks('- > a')).toBe('ul(-)[li[quote[p"a"]]]')
     expect(blocks('- ***')).toBe('ul(-)[li[hr]]')
-    expect(blocks('1. ~~~', '   x', '   ~~~')).toBe('ol(1.)[li[code"x"]]')
+    expect(blocks('1. ```', '   x', '   ```')).toBe('ol(1.)[li[code"x"]]')
     expect(blocks('> = a')).toBe('quote[h1"a"]')
   })
 
@@ -291,10 +291,20 @@ describe('lists', () => {
 })
 
 describe('code fences', () => {
-  it('C2-B-108: a run of three or more backticks or tildes opens a code fence', () => {
+  it('C2-B-108: a run of three or more backticks opens a code fence', () => {
     expect(blocks('```', 'x', '```')).toBe('code"x"')
-    expect(blocks('~~~~', 'x', '~~~~')).toBe('code"x"')
+    expect(blocks('````', 'x', '````')).toBe('code"x"')
     expect(blocks('``', 'x', '``')).toBe('p"``|x|``"')
+  })
+
+  it('C2-B-108, C2-B-014: a tilde run opens nothing, interrupts no paragraph and closes nothing', () => {
+    expect(blocks('~~~~', 'x', '~~~~')).toBe('p"~~~~|x|~~~~"')
+    expect(blocks('~~~js', 'x', '~~~')).toBe('p"~~~js|x|~~~"')
+    expect(blocks('a', '~~~', 'x')).toBe('p"a|~~~|x"')
+    expect(blocks('- ~~~', '  x')).toBe('ul(-)[li[p"~~~|x"]]')
+    expect(blocks('> ~~~', '> x', '> ~~~')).toBe('quote[p"~~~|x|~~~"]')
+    expect(blocks('```', '~~~', '```')).toBe('code"~~~"')
+    expect(blocks('::: note', '~~~', ':::')).toBe('div[p"~~~"]')
   })
 
   it('C2-B-109: the closer has the opener\'s character and at least its length, at any column', () => {
@@ -306,7 +316,7 @@ describe('code fences', () => {
 
   it('C2-B-110: a run followed by other text is content', () => {
     expect(blocks('```', '``` a', '```')).toBe('code"``` a"')
-    expect(blocks('~~~', '~~~ a', '~~~  ')).toBe('code"~~~ a"')
+    expect(blocks('````', '```` a', '````  ')).toBe('code"```` a"')
   })
 
   it('C2-B-111, C2-B-113: an unclosed fence ends with its container, without the blank lines at its end', () => {
@@ -323,7 +333,7 @@ describe('code fences', () => {
 
   it('C2-B-118: a backtick run whose info string holds a backtick is not an opener', () => {
     expect(blocks('```a`b', 'x')).toBe('p"```a`b|x"')
-    expect(blocks('~~~a`b', 'x')).toBe('code!"x"')
+    expect(blocks('~~~a`b', 'x')).toBe('p"~~~a`b|x"')
     expect(blocks('```js', 'x', '```')).toBe('code"x"')
   })
 
@@ -769,7 +779,7 @@ describe('the fence opener and titles', () => {
       return [src.slice(info.wordStart, info.wordEnd), src.slice(info.titleStart, info.titleEnd), info.extra]
     }
     expect(read('```python "src/app.py"\ncode', 3)).toEqual(['python', 'src/app.py', false])
-    expect(read('~~~~\ncode', 4)).toEqual(['', '', false])
+    expect(read('````\ncode', 4)).toEqual(['', '', false])
     expect(read('::: note "A \\" B"', 3)).toEqual(['note', 'A \\" B', false])
     expect(read('::: "Title"', 3)).toEqual(['', 'Title', false])
     expect(read('```js extra words', 3)).toEqual(['js', '', true])
@@ -1179,7 +1189,7 @@ describe('tables', () => {
 
   it('C2-B-180, C2-B-179: a csv or tsv fence under the table attribute is a delimited table', () => {
     expect(blocks('{table}', '```csv', 'a,b', '1,2', '```')).toBe('{table}csv(h1)[a,b / 1,2]')
-    expect(blocks('{.x table header-rows=2}', '~~~tsv', 'a\tb', '```')).toBe('{.x table header-rows=2}csv(h2)[a,b / ```]')
+    expect(blocks('{.x table header-rows=2}', '````tsv', 'a\tb', '```')).toBe('{.x table header-rows=2}csv(h2)[a,b / ```]')
     expect(blocks('{table}', '```csv', '"a ""b"", c",d', '```')).toBe('{table}csv(h1)[a "b", c,d]')
     expect(blocks('{table}', '```csv', 'a,b', '1,', '```')).toBe('{table}csv(h1)[a,b / 1,]')
     expect(blocks('{table}', '```csv', 'a,', '```')).toBe('{table}csv(h1)[a,]')
