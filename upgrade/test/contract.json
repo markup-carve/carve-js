@@ -91,5 +91,6 @@
   {"id": "U-111", "title": "Reference label that wraps", "inputs": ["See [the text][a long\nlabel] here.\n\n[a long label]: /u\n"], "outputs": ["See \\[the text][a long\nlabel] here.\n\n[a long label]: /u\n"], "class": "escape"},
   {"id": "U-112", "title": "Reference label that starts with a caret", "inputs": ["See [x][^n].\n\n[^n]: Note.\n"], "outputs": ["See [x]\\[^n].\n\n[^n]: Note.\n"], "class": "escape"},
   {"id": "U-113", "title": "Markup inside an unresolved reference", "inputs": ["See [*b* and /i/][nope] and [`c`][].\n", "See [a^[note] b][nope].\n"], "outputs": ["See [\\*b\\* and \\/i\\/][nope] and [\\`c\\`][].\n", "See [a\\^[note] b][nope].\n"], "class": "escape"},
-  {"id": "U-114", "title": "New spellings that 0.1 already had", "inputs": [". first\n. second\n", "::: >\nquoted\nsecond\n:::\n", "::: spoiler \"Title\"\nbody\n:::\n", "{start=9}\na) one\nb) two\n", ":::: note\nbody\n:::\nafter\n::::\n"], "outputs": [], "class": "none"}
+  {"id": "U-114", "title": "New spellings that 0.1 already had", "inputs": [". first\n. second\n", "::: >\nquoted\nsecond\n:::\n", "::: spoiler \"Title\"\nbody\n:::\n", "{start=9}\na) one\nb) two\n", ":::: note\nbody\n:::\nafter\n::::\n"], "outputs": [], "class": "none"},
+  {"id": "U-115", "title": "Hyphen run 0.1 kept as typed, and the braced en dash", "inputs": ["a{--}b and --flag\n", "run --verbose (--b) and a-{--}\n"], "outputs": ["a--b and -\\-flag\n", "run -\\-verbose (-\\-b) and a\\---\n"], "class": "escape"}
 ]

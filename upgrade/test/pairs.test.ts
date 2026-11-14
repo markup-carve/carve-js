@@ -1,4 +1,4 @@
-// Every block entry that holds inline text, with every inline entry in that text: 31 times 9
+// Every block entry that holds inline text, with every inline entry in that text: 31 times 10
 // inputs. Both entries are reported, no edit gives way, and the self-check passes.
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
@@ -47,6 +47,7 @@ const INLINES: [string, string][] = [
   ['U-071', "said 'Bob left"],
   ['U-112', 'See [x][^zz] here'],
   ['U-113', 'See [*b*][nope] here'],
+  ['U-115', 'run --flag here'],
 ]
 
 /**

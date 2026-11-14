@@ -190,6 +190,49 @@ function delimiterInBraces(ctx: Context, visit: Visit): void {
   }
 }
 
+const HYPHEN = 0x2d
+const BRACED_EN_DASH = '{--}'
+
+/**
+ * U-115: a run of two or more hyphens is dashes wherever it stands in 0.2 (C2-I-111). 0.1 kept a run
+ * in the place of a command-line flag as typed, so every second hyphen of a run in text is escaped.
+ * The start of a text node behind a smart quote is wrong in the 0.1 tree; its end is right.
+ */
+function flagRuns(ctx: Context, node: Node01): void {
+  const value = node.value
+  if (typeof value !== 'string' || !value.includes('--')) return
+  const end = node.pos!.endOffset
+  const start = end - value.length
+  if (start < 0 || ctx.src.slice(start, end) !== value) return
+  for (let at = 0; at < value.length;) {
+    let run = at
+    while (run < value.length && value.charCodeAt(run) === HYPHEN) run++
+    for (let hyphen = at + 1; hyphen < run; hyphen += 2) {
+      change(ctx, 'U-115', start + hyphen, start + hyphen, '\\', 'hyphen of a run 0.1 kept as typed escaped, the run would be a dash in 0.2')
+    }
+    at = run > at ? run : at + 1
+  }
+}
+
+/**
+ * U-115: `{--}` is no en dash in 0.2 (C2-I-111); two bare hyphens are. A single hyphen beside them
+ * would join their run, so it is escaped.
+ */
+function bracedEnDash(ctx: Context, node: Node01): void {
+  const { startOffset: start, endOffset: end } = node.pos!
+  // A run of hyphens behind it is a dash of its own in 0.1, which no spelling of the pair keeps apart.
+  if (ctx.src.slice(start, end) !== BRACED_EN_DASH || ctx.src.startsWith('--', end)) return
+  const message = 'braced en dash written as two hyphens, 0.2 has no braced form'
+  if (ctx.src.charCodeAt(start - 1) === HYPHEN && ctx.src[start - 2] !== '\\') change(ctx, 'U-115', start - 1, start - 1, '\\', message)
+  change(ctx, 'U-115', start, end, ctx.src.charCodeAt(end) === HYPHEN ? '--\\' : '--', message)
+}
+
+/** U-115: the cells of a delimited table are not read as inline content in 0.2, so they take no escape. */
+function inDelimitedTable(ctx: Context, visit: Visit): boolean {
+  const table = ancestor(visit, 'table')
+  return table?.node.pos !== undefined && ctx.src[table.node.pos.startOffset] !== '|'
+}
+
 /** The blocks U-109 moves: a list has its own column rules (U-023) and a definition its own (U-039). */
 const SHORT_INDENT = new Set(['paragraph', 'block_quote', 'heading', 'code_block', 'table', 'thematic_break'])
 
@@ -201,7 +244,10 @@ export function escapes(ctx: Context): void {
     if (node.pos === undefined) continue
     if (node.type === 'link') reference(ctx, index, headings)
     else if (node.type === 'heading') underHeading(ctx, visit)
-    else if (node.type === 'text') delimiterInBraces(ctx, visit)
+    else if (node.type === 'text') {
+      delimiterInBraces(ctx, visit)
+      if (!inDelimitedTable(ctx, visit)) flagRuns(ctx, node)
+    } else if (node.type === 'smart_punctuation') bracedEnDash(ctx, node)
     else if (node.type === 'paragraph' && visit.parent !== null && ctx.blocks.leaf[node.pos.startLine] === visit) {
       equalsStart(ctx, node)
       fenceOpenerAsText(ctx, node)
