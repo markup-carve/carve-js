@@ -1,6 +1,6 @@
 // The findings of the first code review of the 0.2 engine, one test per finding, named with the clause each one cites.
 import { describe, expect, it } from 'vitest'
-import { CarveTreeError, decodeTree, parse, render, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, decodeTree, parse, render, stringOffsetOfByte, utf8Length, writeWithDiagnostics } from '../src/index.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -114,5 +114,18 @@ describe('the title of a code block', () => {
     const output = writeWithDiagnostics(decodeTree(titled))
     expect(output.source).toBe('``` "Hi there"\na\n```\n')
     expect(output.diagnostics.map((finding) => finding.code)).toContain('field-unspellable')
+  })
+})
+
+describe('byte offsets', () => {
+  it('C2-A-140: an offset inside a four-byte character gives the start of the character, never its second half', () => {
+    expect([0, 1, 2, 3, 4].map((byte) => stringOffsetOfByte('😀x', byte))).toEqual([0, 0, 0, 0, 2])
+    expect(stringOffsetOfByte('a😀', 3)).toBe(1)
+  })
+
+  it('C2-A-010: an unpaired surrogate counts as U+FFFD, three bytes, as UTF-8 encoders write it', () => {
+    for (const text of ['\ud800x\n', 'a\udc00', '\udc00\ud800', '😀\ud800', 'é😀']) expect(utf8Length(text)).toBe(Buffer.byteLength(text))
+    expect(parse('\ud800x\n').srcByteLength).toBe(5)
+    expect(stringOffsetOfByte('\ud800x', 3)).toBe(1)
   })
 })

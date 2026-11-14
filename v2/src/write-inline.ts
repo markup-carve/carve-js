@@ -4,6 +4,7 @@ import {
   type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
   type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode,
 } from './ast.ts'
+import { unitBytes } from './positions.ts'
 import { isAsciiPunctuation } from './unicode.ts'
 import { braceBlock, quoted } from './write-attributes.ts'
 import { lose, trimEnd, type Writer } from './write-state.ts'
@@ -49,13 +50,6 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
   return out + value.slice(start, to)
 }
 
-/** Bytes of the UTF-16 code unit `code` in UTF-8; the halves of a surrogate pair count two each. */
-function unitBytes(code: number): number {
-  if (code < 0x80) return 1
-  if (code < 0x800) return 2
-  return code >= 0xd800 && code <= 0xdfff ? 2 : 3
-}
-
 /** The index of the first entry of the ascending list `offsets` that is not below `from`. */
 export function firstFrom(offsets: readonly number[], from: number): number {
   let low = 0
@@ -82,7 +76,7 @@ export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: numbe
     const code = value.charCodeAt(at)
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    rest -= unitBytes(code) + (asked || (code === BACKSLASH && doubles(value, at)) || (cell && code === PIPE) ? 1 : 0)
+    rest -= unitBytes(value, at) + (asked || (code === BACKSLASH && doubles(value, at)) || (cell && code === PIPE) ? 1 : 0)
   }
   return rest === 0 ? at : -1
 }

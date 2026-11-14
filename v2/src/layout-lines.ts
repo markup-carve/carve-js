@@ -128,7 +128,7 @@ export function byteOffsets(src: string): (offset: number) => number {
   let bytes = 0
   for (let at = 0; at < src.length; at++) {
     table[at] = bytes
-    bytes += unitBytes(src.charCodeAt(at))
+    bytes += unitBytes(src, at)
   }
   table[src.length] = bytes
   return (offset) => table[offset]!
