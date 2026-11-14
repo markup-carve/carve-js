@@ -3,6 +3,7 @@
 // a degraded admonition" added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
 import { format, parse, parseWithDiagnostics, render, renderWithDiagnostics } from '../src/index.ts'
+import { referenceForm } from './support/writer-checks.ts'
 
 describe('link definitions', () => {
   it('C2-B-083: the tail is that of an inline link, with a destination of at least one character', () => {
@@ -193,5 +194,39 @@ describe('the other changed clauses', () => {
     expect(quote.pos).toMatchObject({ startOffset: 1 })
     expect(parse('  - a').children[0]!.pos).toMatchObject({ startOffset: 2 })
     expect(parse('  a').children[0]!.pos).toMatchObject({ startOffset: 2 })
+  })
+})
+
+describe('the escapes the procedure cannot reach', () => {
+  // Each form is canonical: the writer keeps it, and the slow reference of C2-W-088 with C2-W-125 gives it byte for byte.
+  const canonical = (form: string): void => {
+    expect(format(form)).toBe(`${form}\n`)
+    expect(referenceForm(`${form}\n`, parse(form))).toEqual({ form: `${form}\n` })
+  }
+
+  it('C2-W-125: a bare opening brace that reads on into a later construct of the tree gets the backslash', () => {
+    canonical('x\\{#a')
+    canonical('x *\\{*')
+    canonical('x(/u){*\\{/')
+  })
+
+  it('C2-W-125: the right neighbor that decides the direction of a smart quote of the tree gets it', () => {
+    canonical('x/"\\]')
+    canonical("x/'\\]")
+  })
+
+  it('C2-W-125: a sigil before the bracket of a footnote reference of the tree gets it', () => {
+    canonical('x\\^[^[]')
+    canonical('x\\![^[]')
+  })
+
+  it('C2-W-125: the first hyphen behind a dash of the tree gets it where the run ends in text', () => {
+    canonical('x--\\-')
+    canonical('x\\{--\\-}')
+  })
+
+  it('C2-W-090: the backslash stands before the second hyphen of a run, and before the bracket of a sigil run', () => {
+    canonical('x-\\--')
+    canonical('x^\\[a]')
   })
 })

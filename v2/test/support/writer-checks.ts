@@ -140,19 +140,17 @@ function withEscapes(bare: string, added: readonly number[]): { text: string, to
   return { text, toBare }
 }
 
-// C2-W-090 does not say which character of an opener run takes the backslash (_SPEC_GAPS.md): the
-// run of a sigil before a bracket or a backtick run takes it on that bracket or backtick, as the engine places it.
+// C2-W-090: in a sigil glued to a bracket or a backtick the backslash stands before the bracket or the backtick.
 const RUN_ENDS = '[`'
 
 /**
  * C2-W-090, C2-W-099: the offset of the opener of a construct that starts at `start`: its first ASCII
- * punctuation, the second of a hyphen run, and the bracket or backtick that ends a run of sigils, unless that
- * one opens a construct of the tree.
+ * punctuation, the second of a hyphen run unless that one starts a dash of the tree, and the bracket or
+ * backtick that ends a run of sigils, unless that one opens a construct of the tree.
  */
 function openerAt(text: string, start: number, end: number, holdsStart: (at: number) => boolean): number {
   for (let at = start; at < end; at++) {
     if (!isAsciiPunctuation(text.charCodeAt(at)) || text[at] === '\\') continue
-    // Beyond the clause (_SPEC_GAPS.md): where the second hyphen starts a dash of the tree, the first takes it.
     if (text[at] === '-') return text[at + 1] === '-' && !holdsStart(at + 1) ? at + 1 : at
     let run = at
     while (run + 1 < end && '!^$'.includes(text[run]!) && isAsciiPunctuation(text.charCodeAt(run + 1))) run++
@@ -179,7 +177,7 @@ function leftmostUnheld(parsed: Node, text: string, toBare: readonly number[], h
     if (node.type === 'text' || node.type === 'document' || node.pos === undefined) continue
     let start = offsets.get(node.pos.startOffset) ?? -1
     const end = offsets.get(node.pos.endOffset) ?? -1
-    let type: string = node.type
+    let type = constructName(node)
     const heldEnd = held.get(`${constructName(node)}@${toBare[start]!}`)
     if (heldEnd !== undefined) {
       if (node.attrs === undefined || heldEnd >= toBare[end]!) continue
@@ -193,13 +191,104 @@ function leftmostUnheld(parsed: Node, text: string, toBare: readonly number[], h
 
 export type ReferenceForm = { form: string } | { gap: string }
 
+const QUOTE_KINDS = ['left_double_quote', 'right_double_quote', 'left_single_quote', 'right_single_quote']
+const DASH_KINDS = ['en_dash', 'em_dash']
+
+/** The first held construct named `prefix...@start`, as its name and its end, or null. */
+function heldAt(held: Map<string, number>, prefix: string, start: number): [string, number] | null {
+  for (const [key, end] of held) {
+    if (key.startsWith(prefix) && key.endsWith(`@${start}`)) return [key.slice(0, key.lastIndexOf('@')), end]
+  }
+  return null
+}
+
 /**
- * C2-W-088, C2-W-091: the escapes of the procedure, as a slow reference. The text of `written` is
- * taken bare of the escapes of its text nodes and parsed; while the parse holds a construct that
- * `tree` does not hold, the opener of the leftmost one (by start, the outer of two at one start)
- * takes a backslash and the text is parsed again. Quadratic, for small inputs.
+ * C2-W-125, the cases decided at the construct the procedure would escape: where the right neighbor decides
+ * the direction of a smart quote of the tree, the neighbor takes the backslash, and where a hyphen run starts
+ * with a dash of the tree and ends in text, the first hyphen behind the dash takes it. Returns -1 otherwise.
  */
-export function referenceForm(written: string, tree: DocumentNode): ReferenceForm {
+function neighborBackslash(type: string, start: number, bare: string, held: Map<string, number>): number {
+  const kind = type.slice(type.indexOf(':') + 1)
+  if (QUOTE_KINDS.includes(kind)) {
+    const quote = heldAt(held, 'smart_punctuation:', start)
+    const decided = quote !== null && quote[0] !== type && QUOTE_KINDS.includes(quote[0].slice(quote[0].indexOf(':') + 1))
+    return decided && isAsciiPunctuation(bare.charCodeAt(start + 1)) ? start + 1 : -1
+  }
+  if (DASH_KINDS.includes(kind)) {
+    const dash = heldAt(held, 'smart_punctuation:', start)
+    const isDash = dash !== null && DASH_KINDS.includes(dash[0].slice(dash[0].indexOf(':') + 1))
+    return isDash && dash[0] !== type && bare[dash[1]] === '-' ? dash[1] : -1
+  }
+  return -1
+}
+
+/** Where the attribute block that ends the construct `[start, end)` of `bare`, which has one, starts. */
+function ownAttributes(bare: string, start: number, end: number): number {
+  const open = bare.lastIndexOf('{', end - 1)
+  return bare[end - 1] !== '}' || open <= start ? end : open
+}
+
+/** What the cases of C2-W-125 that are decided at the end of the procedure read of the bare text and the tree. */
+interface Unformed {
+  bare: string
+  startsHeld: Set<number>
+  attributed: Set<string>
+  added: readonly number[]
+}
+
+function isBareBrace(u: Unformed, at: number): boolean {
+  return u.bare[at] === '{' && u.bare[at - 1] !== '\\' && !u.startsHeld.has(at) && !u.added.includes(at)
+}
+
+/**
+ * The brace that reads on into the construct `key` of the tree: the one glued before it, unless it is a braced
+ * form, or else the last one inside it before its attribute block, or else the nearest one before it. -1 for none.
+ */
+function braceInto(u: Unformed, key: string, start: number, end: number): number {
+  if (u.bare[start] !== '{' && isBareBrace(u, start - 1)) return start - 1
+  const inner = u.attributed.has(key) ? ownAttributes(u.bare, start, end) : end
+  for (let at = inner - 1; at > start; at--) if (isBareBrace(u, at)) return at
+  for (let at = start - 1; at >= 0; at--) if (isBareBrace(u, at)) return at
+  return -1
+}
+
+/**
+ * C2-W-125, the cases decided where the procedure ends with a node of the tree unformed: a sigil before the
+ * bracket of a footnote reference of the tree takes the backslash, and otherwise the brace that reads on into a
+ * construct of the tree, the leftmost of each. `missing` holds the constructs of the tree that the text with the
+ * backslashes of this clause lacks, as `name@start` with their ends, in bare offsets. Returns -1 where none applies.
+ */
+function addedBackslash(u: Unformed, missing: Map<string, number>): number {
+  let sigil = -1
+  let brace = -1
+  for (const [key, end] of missing) {
+    const at = key.lastIndexOf('@')
+    const start = Number(key.slice(at + 1))
+    const isSigil = key.slice(0, at) === 'footnote_ref' && '^!'.includes(u.bare[start - 1] ?? ' ') && !u.added.includes(start - 1)
+    if (isSigil && (sigil < 0 || start - 1 < sigil)) sigil = start - 1
+    const into = braceInto(u, key, start, end)
+    if (into >= 0 && (brace < 0 || into < brace)) brace = into
+  }
+  return sigil >= 0 ? sigil : brace
+}
+
+/** The constructs of `held` that the parse of `text` does not hold. */
+function missingConstructs(parsed: Node, text: string, toBare: readonly number[], held: Map<string, number>): Map<string, number> {
+  const formed = constructEnds(placedNodes(parsed), stringOffsets(text), (at) => toBare[at] ?? -1)
+  const missing = new Map<string, number>()
+  for (const [key, end] of held) if (!formed.has(key)) missing.set(key, end)
+  return missing
+}
+
+/** The text of `written` bare of the escapes of its text nodes, the constructs of the tree and those with attributes. */
+interface BareText {
+  bare: string
+  held: Map<string, number>
+  startsHeld: Set<number>
+  attributed: Set<string>
+}
+
+function bareText(written: string): BareText {
   const offsets = stringOffsets(written)
   const placed = placedNodes(parse(written))
   const removed = textEscapes(written, placed, offsets)
@@ -210,25 +299,66 @@ export function referenceForm(written: string, tree: DocumentNode): ReferenceFor
     from = at + 1
   }
   bare += written.slice(from)
-  const held = constructEnds(placed, offsets, (at) => at - countBelow(removed, at))
+  const toBare = (at: number): number => at - countBelow(removed, at)
+  const held = constructEnds(placed, offsets, toBare)
   const startsHeld = new Set([...held.keys()].map((key) => Number(key.slice(key.lastIndexOf('@') + 1))))
-  const added: number[] = []
-  for (let round = 0; round <= bare.length; round++) {
-    const { text, toBare } = withEscapes(bare, added)
+  const attributed = new Set(constructEnds(placed.filter(({ node }) => node.attrs !== undefined), offsets, toBare).keys())
+  return { bare, held, startsHeld, attributed }
+}
+
+/** The bare offset the procedure escapes next in the parse of `text`, or -1 where it holds no construct to escape. */
+function nextEscape(text: string, toBare: readonly number[], parsed: Node, source: BareText): { target: number, best: Construct | null } {
+  const best = leftmostUnheld(parsed, text, toBare, source.held)
+  if (best === null) return { target: -1, best }
+  const neighbor = neighborBackslash(best.type, toBare[best.start]!, source.bare, source.held)
+  if (neighbor >= 0) return { target: neighbor, best }
+  const opener = openerAt(text, best.start, best.end, (at) => source.startsHeld.has(toBare[at]!))
+  return { target: opener < 0 ? -1 : toBare[opener]!, best }
+}
+
+/**
+ * The procedure of C2-W-088 from the backslashes `seeds`: the form it reaches, or the text at which it ends
+ * with the tree unformed and the construct it last looked at.
+ */
+type ProcedureEnd = { form: string } | { text: string, best: Construct | null }
+
+function runProcedure(source: BareText, tree: DocumentNode, seeds: readonly number[]): ProcedureEnd {
+  const added = [...seeds].sort((x, y) => x - y)
+  for (;;) {
+    const { text, toBare } = withEscapes(source.bare, added)
     const parsed = parse(text)
     if (treesEqual(parsed, tree)) return { form: text }
-    const best = leftmostUnheld(parsed, text, toBare, held)
-    const holdsStart = (at: number): boolean => startsHeld.has(toBare[at]!)
-    const opener = best === null ? -1 : openerAt(text, best.start, best.end, holdsStart)
-    const target = opener < 0 ? -1 : toBare[opener]!
-    if (target < 0 || added.includes(target)) {
+    const { target, best } = nextEscape(text, toBare, parsed, source)
+    if (target < 0 || added.includes(target)) return { text, best }
+    added.push(target)
+    added.sort((x, y) => x - y)
+  }
+}
+
+/**
+ * C2-W-088, C2-W-091, C2-W-125: the escapes of the procedure, as a slow reference. The text of `written` is
+ * taken bare of the escapes of its text nodes and parsed; while the parse holds a construct that
+ * `tree` does not hold, the opener of the leftmost one (by start, the outer of two at one start)
+ * takes a backslash and the text is parsed again. Where the procedure ends with a node of the tree
+ * unformed, the backslash of C2-W-125 is placed and the procedure runs again with it. Quadratic, for small inputs.
+ */
+export function referenceForm(written: string, tree: DocumentNode): ReferenceForm {
+  const source = bareText(written)
+  const seeds: number[] = []
+  for (let restart = 0; restart <= source.bare.length; restart++) {
+    const result = runProcedure(source, tree, seeds)
+    if ('form' in result) return result
+    const seeded = withEscapes(source.bare, [...seeds].sort((x, y) => x - y))
+    const missing = missingConstructs(parse(seeded.text), seeded.text, seeded.toBare, source.held)
+    const extra = addedBackslash({ ...source, added: seeds }, missing)
+    if (extra < 0) {
+      const best = result.best
       const what = best === null
         ? 'no construct the tree does not hold'
         : `the ${best.type} at ${best.start}, whose opener takes no backslash`
-      return { gap: `the parse of ${JSON.stringify(text)} differs from the tree, and holds ${what}` }
+      return { gap: `the parse of ${JSON.stringify(result.text)} differs from the tree, holds ${what}, and C2-W-125 places nothing` }
     }
-    added.push(target)
-    added.sort((x, y) => x - y)
+    seeds.push(extra)
   }
   return { gap: `no fixed point for ${JSON.stringify(written)}` }
 }
@@ -251,8 +381,8 @@ function show(text: string): string {
 
 /**
  * The gates on one written form: it parses to `tree` (C2-W-002) and its escapes are those of the procedure
- * (C2-W-088), byte for byte. Where the procedure cannot reach the tree, the clause does not decide the form
- * (_SPEC_GAPS.md); such an input is added to `undecided` and only C2-W-002 and C2-W-003 hold for it.
+ * (C2-W-088), byte for byte. Where neither the procedure nor C2-W-125 reaches the tree, the clauses do not
+ * decide the form; such an input is added to `undecided` and only C2-W-002 and C2-W-003 hold for it.
  */
 function checkWritten(
   tree: DocumentNode, written: string, losses: readonly Diagnostic[], path: string, undecided: string[],
