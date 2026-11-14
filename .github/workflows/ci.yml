@@ -67,6 +67,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Public 0.2 declarations with both TypeScript versions
+        if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+        run: npm run check-public-types:v2
+
   test:
     name: corpus + include-conformance (${{ matrix.node-version }}, shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest

@@ -67,6 +67,7 @@
     "test:watch": "vitest",
     "test:v2": "vitest run v2/test",
     "typecheck:v2": "tsc -p v2/tsconfig.json",
+    "check-public-types:v2": "node v2/scripts/check-public-types.ts",
     "enumerate:v2": "node v2/scripts/enumerate.ts",
     "enumerate-inline:v2": "node v2/scripts/enumerate-inline.ts",
     "stress-inline:v2": "node v2/scripts/stress-inline.ts",
@@ -102,6 +103,7 @@
     "micromark-extension-gfm": "^3.0.0",
     "prettier": "^3.9.6",
     "typescript": "^5.7.2",
+    "typescript-5-9": "npm:typescript@^5.9.3",
     "typescript-eslint": "^8.70.1",
     "vitest": "^2.1.8",
     "yaml": "^2.9.0"
