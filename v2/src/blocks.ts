@@ -51,14 +51,15 @@ export function scanBlocks(state: BlockState, src: string): void {
   state.src = src
   state.eventLength = 0
   state.lineCount = 0
-  state.depth = 0
-  state.leaf = NO_LEAF
-  state.pendingBlankLine = NO_LINE
-  state.blankCount = 0
   state.contentEnd = 0
-  state.captionDepth = NO_DEPTH
-  state.attributesDepth = NO_DEPTH
-  state.takeAttributes = false
+  state.containers.depth = 0
+  state.leaf.kind = NO_LEAF
+  const above = state.above
+  above.blankCount = 0
+  above.captionDepth = NO_DEPTH
+  above.attributesDepth = NO_DEPTH
+  above.takeAttributes = false
+  above.heldBlankLine = NO_LINE
   const length = src.length
   push(state, DOCUMENT, 0, 0, 0, 0)
   let lineStart = 0
@@ -80,12 +81,13 @@ export function scanBlocks(state: BlockState, src: string): void {
 
 /** C2-B-161, C2-B-165: line 1 opens frontmatter, after nothing but a byte-order mark. */
 function openFrontmatter(state: BlockState, end: number): boolean {
+  const cursor = state.cursor
   const src = state.src
   const pos = src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0
   if (!isFrontmatterOpener(src, pos, end)) return false
   writeEvent(state, eventTag(ENTER, FRONTMATTER, 0), pos, 0)
-  state.column = 0
-  state.origin = 0
+  cursor.column = 0
+  cursor.origin = 0
   openOpaqueLeaf(state, FRONTMATTER, HYPHEN, 0)
   state.contentEnd = end
   return true
@@ -93,64 +95,68 @@ function openFrontmatter(state: BlockState, end: number): boolean {
 
 /** Closes the open leaf that is not text, which did not take the line. Returns the containers the line still matches. */
 function closeBodyLeaf(state: BlockState, matched: number, end: number, blank: boolean): number {
-  const opaque = state.leaf !== TABLE
+  const opaque = state.leaf.kind !== TABLE
   closeLeaf(state)
   if (!opaque || blank) return matched
   // C2-B-111: the leaf ends with its container. C2-B-135: a comment line is no exception,
   // so the containers that do not own this line close before it is read again.
   closeUnowned(state, matched, end)
-  return state.depth
+  return state.containers.depth
 }
 
 /** C2-B-032: a blank line without the mark ends a quote. C2-B-009: it ends nothing else. */
 function blankLine(state: BlockState, matched: number): void {
+  const above = state.above
   closeLeaf(state)
   closeTo(state, matched)
-  state.blankCount++
-  state.captionDepth = NO_DEPTH
-  state.attributesDepth = NO_DEPTH
+  above.blankCount++
+  above.captionDepth = NO_DEPTH
+  above.attributesDepth = NO_DEPTH
 }
 
 /** C2-B-012: the open text leaf takes the line as a lazy line, whatever its indent or prefix, unless the line interrupts it. */
 function lazyLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
+  const cursor = state.cursor
   if (interruptsLeaf(state, matched, lineStart, end)) return false
-  writeEvent(state, SPAN_TAG, state.pos, end)
+  writeEvent(state, SPAN_TAG, cursor.pos, end)
   state.contentEnd = end
   // C2-B-157: a comment-only line below a block image or a math block does not count.
-  if (!isLineComment(state.src, state.pos, end)) state.leafLines++
+  if (!isLineComment(state.src, cursor.pos, end)) state.leaf.lines++
   return true
 }
 
 function scanLine(state: BlockState, lineStart: number, end: number): void {
+  const leaf = state.leaf
+  const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
-  const blank = state.pos >= end
-  if (state.leaf !== NO_LEAF && !isTextLeaf(state.leaf)) {
+  const blank = cursor.pos >= end
+  if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
   }
   if (blank) return blankLine(state, matched)
   // C2-B-154: a line that does not continue the open heading meets it closed.
-  if (state.leaf === HEADING && !continuesHeading(state, matched)) closeLeaf(state)
-  if (isTextLeaf(state.leaf)) {
-    const captions = state.leaf === PARAGRAPH && captionsAfterParagraph(state, matched, end)
+  if (leaf.kind === HEADING && !continuesHeading(state, matched)) closeLeaf(state)
+  if (isTextLeaf(leaf.kind)) {
+    const captions = leaf.kind === PARAGRAPH && captionsAfterParagraph(state, matched, end)
     if (!captions && lazyLine(state, matched, lineStart, end)) return
     closeLeaf(state)
     return openLine(state, matched, lineStart, end, captions)
   }
   // C2-B-137, C2-B-138: a comment-only line closes nothing and counts neither as blank nor as content.
-  if (isLineComment(state.src, state.pos, end)) return writeComment(state, end)
+  if (isLineComment(state.src, cursor.pos, end)) return writeComment(state, end)
   openLine(state, matched, lineStart, end, captionsAfterBlock(state, matched, end))
 }
 
 /** A line of the open opaque leaf or table. Returns false when the line ends that block. */
 function bodyLine(state: BlockState, matched: number, lineStart: number, end: number, blank: boolean): boolean {
-  const owned = matched === state.depth
-  if (state.leaf !== TABLE) {
+  const owned = matched === state.containers.depth
+  if (state.leaf.kind !== TABLE) {
     if (owned) opaqueLine(state, lineStart, end, blank)
     return owned
   }
   if (blank) return false
-  if (isLineComment(state.src, state.pos, end)) {
+  if (isLineComment(state.src, state.cursor.pos, end)) {
     // C2-B-137: a comment-only line does not end a table.
     writeComment(state, end)
     return true
@@ -160,22 +166,25 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
 
 /** A line that is not blank, not a lazy line and not a comment-only line: it closes and opens blocks. */
 function openLine(state: BlockState, matched: number, lineStart: number, end: number, captions: boolean): void {
-  const takes = state.attributesDepth === state.depth && matched === state.depth
-  state.captionDepth = NO_DEPTH
-  state.attributesDepth = NO_DEPTH
+  const containers = state.containers
+  const above = state.above
+  const cursor = state.cursor
+  const takes = above.attributesDepth === containers.depth && matched === containers.depth
+  above.captionDepth = NO_DEPTH
+  above.attributesDepth = NO_DEPTH
   if (captions) {
     // C2-B-018: a caption line without the mark of the quote closes the quote and captions it.
     closeTo(state, matched)
-    writeEvent(state, eventTag(ENTER, CAPTION, 0), state.pos, 0)
-    openTextLeaf(state, CAPTION, captionContentStart(state.src, state.pos, end), end)
+    writeEvent(state, eventTag(ENTER, CAPTION, 0), cursor.pos, 0)
+    openTextLeaf(state, CAPTION, captionContentStart(state.src, cursor.pos, end), end)
   } else {
     closeUnowned(state, matched, end)
     // C2-B-096: a caption line takes no attribute line, also where it is text.
-    state.takeAttributes = takes && captionContentStart(state.src, state.pos, end) < 0
+    above.takeAttributes = takes && captionContentStart(state.src, cursor.pos, end) < 0
     openBlocks(state, lineStart, end)
-    state.takeAttributes = false
+    above.takeAttributes = false
   }
-  state.blankCount = 0
+  above.blankCount = 0
   state.contentEnd = end
 }
 
@@ -188,20 +197,22 @@ function openLine(state: BlockState, matched: number, lineStart: number, end: nu
  */
 function matchContainers(state: BlockState, lineStart: number, end: number): number {
   const src = state.src
-  const depth = state.depth
-  state.pos = lineStart
-  state.column = 0
-  state.origin = 0
-  state.prefixEnd = lineStart
+  const containers = state.containers
+  const depth = containers.depth
+  const cursor = state.cursor
+  cursor.pos = lineStart
+  cursor.column = 0
+  cursor.origin = 0
+  cursor.prefixEnd = lineStart
   skipIndent(state, end)
   let index = 1
   for (; index < depth; index++) {
-    const kind = state.stackKind[index]!
+    const kind = containers.kind[index]!
     if (kind === QUOTE) {
-      if (!isQuoteMark(src, state.pos, end)) break
+      if (!isQuoteMark(src, cursor.pos, end)) break
       passQuoteMark(state, end)
     } else if (isIndentContainer(kind)) {
-      if (state.pos < end && state.column - state.origin <= state.stackColumn[index]!) break
+      if (cursor.pos < end && cursor.column - cursor.origin <= containers.column[index]!) break
     }
   }
   return index
@@ -209,81 +220,87 @@ function matchContainers(state: BlockState, lineStart: number, end: number): num
 
 /** Moves the cursor past a quote mark. Columns count from behind it (C2-B-003). */
 function passQuoteMark(state: BlockState, end: number): void {
-  state.pos++
-  state.column++
-  state.origin = state.column
-  state.prefixEnd = state.pos
+  const cursor = state.cursor
+  cursor.pos++
+  cursor.column++
+  cursor.origin = cursor.column
+  cursor.prefixEnd = cursor.pos
   skipIndent(state, end)
 }
 
 /** Moves the cursor to the first character that is not a space or a tab (C2-B-004). */
 function skipIndent(state: BlockState, end: number): void {
   const src = state.src
-  let pos = state.pos
-  let column = state.column
+  const cursor = state.cursor
+  let pos = cursor.pos
+  let column = cursor.column
   while (pos < end) {
     const code = src.charCodeAt(pos)
     if (!isSpaceOrTab(code)) break
     column = advanceColumn(column, code)
     pos++
   }
-  state.pos = pos
-  state.column = column
+  cursor.pos = pos
+  cursor.column = column
 }
 
 /** The shapes the line at the cursor can have (data/line-shapes.json). */
 function shapesAt(state: BlockState): number {
-  const code = state.src.charCodeAt(state.pos)
+  const code = state.src.charCodeAt(state.cursor.pos)
   return code < ASCII ? FIRST_CHARACTER_SHAPES[code]! : 0
 }
 
 /** A line of an open opaque leaf that the leaf's container owns. */
 function opaqueLine(state: BlockState, lineStart: number, end: number, blank: boolean): void {
+  const leaf = state.leaf
+  const above = state.above
   const line = state.lineCount - 1
   if (blank) {
     // Held back: blank lines before the end of an unclosed leaf are not its content (C2-B-009).
-    if (state.pendingBlankLine === NO_LINE) state.pendingBlankLine = line
+    if (above.heldBlankLine === NO_LINE) above.heldBlankLine = line
     return
   }
-  if (state.pendingBlankLine !== NO_LINE) {
-    for (let pending = state.pendingBlankLine; pending < line; pending++) {
+  if (above.heldBlankLine !== NO_LINE) {
+    for (let pending = above.heldBlankLine; pending < line; pending++) {
       const pendingEnd = lineEndAt(state.src, state.lineStarts, state.lineCount, pending)
       matchContainers(state, state.lineStarts[pending]!, pendingEnd)
       writeEvent(state, SPAN_TAG, opaqueContentStart(state, pendingEnd), pendingEnd)
     }
-    state.pendingBlankLine = NO_LINE
+    above.heldBlankLine = NO_LINE
     matchContainers(state, lineStart, end)
   }
   state.contentEnd = end
   if (isCloser(state, lineStart, end)) {
-    const kind = state.leaf
+    const kind = leaf.kind
     writeEvent(state, eventTag(EXIT, kind, 0), end, 0)
-    state.leaf = NO_LEAF
-    state.blankCount = 0
+    leaf.kind = NO_LEAF
+    above.blankCount = 0
     // C2-B-147: a code block takes a caption.
-    state.captionDepth = kind === CODE ? state.depth : NO_DEPTH
+    above.captionDepth = kind === CODE ? state.containers.depth : NO_DEPTH
     return
   }
   writeEvent(state, SPAN_TAG, opaqueContentStart(state, end), end)
 }
 
 function isCloser(state: BlockState, lineStart: number, end: number): boolean {
+  const leaf = state.leaf
   // C2-B-162.
-  if (state.leaf === FRONTMATTER) return isFrontmatterCloser(state.src, lineStart, end)
+  if (leaf.kind === FRONTMATTER) return isFrontmatterCloser(state.src, lineStart, end)
   // C2-B-109, C2-B-110, C2-B-123.
-  return isBareRun(state.src, state.pos, end, state.fenceChar, state.fenceLength)
+  return isBareRun(state.src, state.cursor.pos, end, leaf.fenceChar, leaf.fenceLength)
 }
 
 /** C2-B-029: strips at most the opener's indent. C2-B-007: a tab that straddles that column stays. */
 function opaqueContentStart(state: BlockState, end: number): number {
+  const cursor = state.cursor
   const src = state.src
-  let pos = state.prefixEnd
-  let column = state.origin
+  let pos = cursor.prefixEnd
+  let column = cursor.origin
   while (pos < end) {
     const code = src.charCodeAt(pos)
     if (!isSpaceOrTab(code)) break
     const after = advanceColumn(column, code)
-    if (after - state.origin > state.fenceColumn) break
+    if (after - cursor.origin > state.leaf.fenceColumn) break
     column = after
     pos++
   }
@@ -292,23 +309,27 @@ function opaqueContentStart(state: BlockState, end: number): number {
 
 /** C2-B-017, C2-B-018: the two cases in which a caption line ends an open paragraph. */
 function captionsAfterParagraph(state: BlockState, matched: number, end: number): boolean {
+  const containers = state.containers
+  const leaf = state.leaf
   const src = state.src
-  if ((shapesAt(state) & SHAPE_CAPTION) === 0 || captionContentStart(src, state.pos, end) < 0) return false
-  if (matched < state.depth) return state.stackKind[matched] === QUOTE
-  return state.leafLines === 1 &&
-    (isImageOnly(src, state.leafStart, state.leafEnd) || isDisplayMathOnly(src, state.leafStart, state.leafEnd))
+  if ((shapesAt(state) & SHAPE_CAPTION) === 0 || captionContentStart(src, state.cursor.pos, end) < 0) return false
+  if (matched < containers.depth) return containers.kind[matched] === QUOTE
+  return leaf.lines === 1 &&
+    (isImageOnly(src, leaf.start, leaf.end) || isDisplayMathOnly(src, leaf.start, leaf.end))
 }
 
 /** C2-B-146: a caption line directly below a block that takes one, or below a line of an open quote (C2-B-018). */
 function captionsAfterBlock(state: BlockState, matched: number, end: number): boolean {
-  if ((shapesAt(state) & SHAPE_CAPTION) === 0 || captionContentStart(state.src, state.pos, end) < 0) return false
-  if (matched < state.depth) return state.stackKind[matched] === QUOTE
-  return state.captionDepth === state.depth
+  const containers = state.containers
+  if ((shapesAt(state) & SHAPE_CAPTION) === 0 || captionContentStart(state.src, state.cursor.pos, end) < 0) return false
+  if (matched < containers.depth) return containers.kind[matched] === QUOTE
+  return state.above.captionDepth === containers.depth
 }
 
 /** C2-B-154: a heading takes only lines of its own containers that are indented past its marker. */
 function continuesHeading(state: BlockState, matched: number): boolean {
-  return matched === state.depth && state.column - state.origin > state.leafColumn
+  const cursor = state.cursor
+  return matched === state.containers.depth && cursor.column - cursor.origin > state.leaf.column
 }
 
 /**
@@ -317,7 +338,7 @@ function continuesHeading(state: BlockState, matched: number): boolean {
  */
 function interruptsLeaf(state: BlockState, matched: number, lineStart: number, end: number): boolean {
   const src = state.src
-  const pos = state.pos
+  const pos = state.cursor.pos
   const shapes = shapesAt(state)
   // C2-B-014.
   if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return true
@@ -332,54 +353,61 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
 
 /** C2-B-016: a mark at the column of the open description list, below a term or below description text. */
 function isSiblingMark(state: BlockState, matched: number): boolean {
-  const column = state.column - state.origin
-  const depth = state.depth
-  if (matched === depth) return state.stackKind[depth - 1] === DESCRIPTION_LIST && column === state.stackColumn[depth - 1]
-  return state.stackKind[matched] === DESCRIPTION && column === state.stackColumn[matched]
+  const containers = state.containers
+  const cursor = state.cursor
+  const column = cursor.column - cursor.origin
+  const depth = containers.depth
+  if (matched === depth) return containers.kind[depth - 1] === DESCRIPTION_LIST && column === containers.column[depth - 1]
+  return containers.kind[matched] === DESCRIPTION && column === containers.column[matched]
 }
 
 /** C2-B-016: a definition line at column 0 while a definition is open. */
 function isSiblingDefinition(state: BlockState, matched: number, end: number): boolean {
-  return matched === 1 && state.depth > 1 && state.stackKind[1] === FOOTNOTE && isDefinition(state.src, state.pos, end)
+  const containers = state.containers
+  return matched === 1 && containers.depth > 1 && containers.kind[1] === FOOTNOTE && isDefinition(state.src, state.cursor.pos, end)
 }
 
 /** Interrupter (b) for a list marker at the cursor, by the first container the line does not carry. */
 function markerInterrupts(state: BlockState, matched: number): boolean {
-  const depth = state.depth
+  const containers = state.containers
+  const cursor = state.cursor
+  const depth = containers.depth
   if (matched === depth) {
     // C2-B-015: past the marker of the item the leaf sits in, a nested list opens.
-    return isIndentContainer(state.stackKind[depth - 1]!) && depth + 2 <= MAX_DEPTH + 1
+    return isIndentContainer(containers.kind[depth - 1]!) && depth + 2 <= MAX_DEPTH + 1
   }
-  const kind = state.stackKind[matched]
-  const column = state.column - state.origin
+  const kind = containers.kind[matched]
+  const column = cursor.column - cursor.origin
   if (kind === QUOTE) {
     // C2-B-021: without the mark of a quote that sits in an item, the marker closes the quote.
-    return isIndentContainer(state.stackKind[matched - 1]!) && matched + 2 <= MAX_DEPTH + 1
+    return isIndentContainer(containers.kind[matched - 1]!) && matched + 2 <= MAX_DEPTH + 1
   }
   if (kind === ITEM) {
     // The line is not indented past this item. C2-B-015: at its column the marker is a sibling.
     // C2-B-055: between two open lists it joins the deeper one. Left of every open list it is a lazy line.
-    return column === state.stackColumn[matched] || isIndentContainer(state.stackKind[matched - 2]!)
+    return column === containers.column[matched] || isIndentContainer(containers.kind[matched - 2]!)
   }
   // C2-B-022: at the column of a description list a list marker is a lazy line.
-  return kind === DESCRIPTION && column < state.stackColumn[matched]! && isIndentContainer(state.stackKind[matched - 2]!)
+  return kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
 }
 
 /** C2-B-026: closes the containers that do not own the line. */
 function closeUnowned(state: BlockState, matched: number, end: number): void {
+  const containers = state.containers
+  const cursor = state.cursor
   const src = state.src
-  if (matched < state.depth) {
+  if (matched < containers.depth) {
     // Below a marker the list of an item stays open: `openItem` decides between a sibling
     // and a new list (C2-B-049, C2-B-053, C2-B-054). Any other line closes that list too.
     // A description list is judged below.
-    const keepsList = state.stackKind[matched] !== ITEM || isListMarker(src, state.pos, end)
+    const keepsList = containers.kind[matched] !== ITEM || isListMarker(src, cursor.pos, end)
     closeTo(state, keepsList ? matched : matched - 1)
   }
-  const top = state.depth - 1
-  if (state.stackKind[top] === DESCRIPTION_LIST) {
+  const top = containers.depth - 1
+  if (containers.kind[top] === DESCRIPTION_LIST) {
     // C2-B-071: a term owns no lines, so only a mark at the list's column keeps the list. C2-B-052.
-    const sibling = state.column - state.origin === state.stackColumn[top] &&
-      isDescriptionListMark(src, state.pos, end) && state.blankCount < LIST_BOUNDARY_BLANKS
+    const sibling = cursor.column - cursor.origin === containers.column[top] &&
+      isDescriptionListMark(src, cursor.pos, end) && state.above.blankCount < LIST_BOUNDARY_BLANKS
     if (!sibling) closeTo(state, top)
   }
 }
@@ -387,7 +415,7 @@ function closeUnowned(state: BlockState, matched: number, end: number): void {
 /** Opens the blocks that start at the cursor. Containers may stack on one line (C2-B-057, C2-B-058, C2-B-072). */
 function openBlocks(state: BlockState, lineStart: number, end: number): void {
   while (openContainer(state, lineStart, end)) {
-    if (state.pos >= end) return
+    if (state.cursor.pos >= end) return
   }
   openLeaf(state, lineStart, end)
 }
@@ -415,34 +443,38 @@ function openContainerOf(state: BlockState, shape: number, lineStart: number, en
 }
 
 function openQuote(state: BlockState, end: number): boolean {
-  if (!isQuoteMark(state.src, state.pos, end) || state.depth > MAX_DEPTH) return false
-  push(state, QUOTE, 0, state.pos, 0, 0)
+  const cursor = state.cursor
+  if (!isQuoteMark(state.src, cursor.pos, end) || state.containers.depth > MAX_DEPTH) return false
+  push(state, QUOTE, 0, cursor.pos, 0, 0)
   passQuoteMark(state, end)
   return true
 }
 
 /** C2-B-074: a description line with no term above it is text. */
 function openDescription(state: BlockState, end: number): boolean {
-  const markEnd = descriptionMarkEnd(state.src, state.pos, end)
-  if (markEnd < 0 || state.stackKind[state.depth - 1] !== DESCRIPTION_LIST || state.depth > MAX_DEPTH) return false
-  push(state, DESCRIPTION, 0, state.pos, 0, state.column - state.origin)
+  const cursor = state.cursor
+  const markEnd = descriptionMarkEnd(state.src, cursor.pos, end)
+  const containers = state.containers
+  if (markEnd < 0 || containers.kind[containers.depth - 1] !== DESCRIPTION_LIST || containers.depth > MAX_DEPTH) return false
+  push(state, DESCRIPTION, 0, cursor.pos, 0, cursor.column - cursor.origin)
   moveTo(state, markEnd, end)
   return true
 }
 
 /** C2-B-081, C2-B-082: a footnote definition stands at column 0 outside every container. */
 function openFootnote(state: BlockState, lineStart: number, end: number): boolean {
-  if (state.pos !== lineStart || state.depth !== 1) return false
-  const markerEnd = footnoteMarkerEnd(state.src, state.pos, end)
+  const cursor = state.cursor
+  if (cursor.pos !== lineStart || state.containers.depth !== 1) return false
+  const markerEnd = footnoteMarkerEnd(state.src, cursor.pos, end)
   if (markerEnd < 0) return false
-  push(state, FOOTNOTE, 0, state.pos, 0, 0)
+  push(state, FOOTNOTE, 0, cursor.pos, 0, 0)
   moveTo(state, markerEnd, end)
   return true
 }
 
 function openBulletItem(state: BlockState, end: number): boolean {
   const src = state.src
-  const pos = state.pos
+  const pos = state.cursor.pos
   const markerEnd = bulletMarkerEnd(src, pos, end)
   if (markerEnd < 0) return false
   const boxEnd = taskBoxEnd(src, markerEnd, end)
@@ -470,7 +502,7 @@ function letterStart(src: string, pos: number, delimiter: number, style: number)
 
 function openOrderedItem(state: BlockState, end: number): boolean {
   const src = state.src
-  const pos = state.pos
+  const pos = state.cursor.pos
   const delimiter = orderedDelimiter(src, pos, end)
   if (delimiter < 0) return false
   const markerEnd = orderedMarkerEnd(src, pos, delimiter, end)
@@ -497,9 +529,10 @@ function openOrderedItem(state: BlockState, end: number): boolean {
  * Otherwise the marker alone decides (C2-B-042).
  */
 function letterStyle(state: BlockState, style: number, single: boolean, roman: boolean, loneI: boolean): number {
-  const top = state.depth - 1
-  if (state.stackKind[top] === ORDERED_LIST) {
-    const open = state.stackStyle[top]!
+  const containers = state.containers
+  const top = containers.depth - 1
+  if (containers.kind[top] === ORDERED_LIST) {
+    const open = containers.style[top]!
     if ((open & (FLAG_PAREN | FLAG_UPPER)) === style) {
       if ((open & FLAG_ROMAN) !== 0 && roman) return FLAG_ROMAN
       if ((open & FLAG_ALPHA) !== 0 && single) return FLAG_ALPHA
@@ -510,8 +543,9 @@ function letterStyle(state: BlockState, style: number, single: boolean, roman: b
 
 /** Moves the cursor from a marker to `pos` and on to the content column. A marker holds no tab. */
 function moveTo(state: BlockState, pos: number, end: number): void {
-  state.column += pos - state.pos
-  state.pos = pos
+  const cursor = state.cursor
+  cursor.column += pos - cursor.pos
+  cursor.pos = pos
   skipIndent(state, end)
 }
 
@@ -524,41 +558,45 @@ function openItem(
   state: BlockState, listKind: number, style: number, listFlags: number, listAux: number, itemAux: number,
   afterMarker: number,
 ): boolean {
-  let top = state.depth - 1
-  if (isList(state.stackKind[top]!)) {
+  const containers = state.containers
+  const above = state.above
+  const cursor = state.cursor
+  let top = containers.depth - 1
+  if (isList(containers.kind[top]!)) {
     if (
-      state.stackKind[top] !== listKind || state.stackStyle[top] !== style ||
-      state.blankCount >= LIST_BOUNDARY_BLANKS
+      containers.kind[top] !== listKind || containers.style[top] !== style ||
+      above.blankCount >= LIST_BOUNDARY_BLANKS
     ) {
       // C2-B-050, C2-B-052: another kind, or three blank lines, end the list.
       closeTo(state, top)
       top--
-    } else if (state.blankCount > 0) {
+    } else if (above.blankCount > 0) {
       // C2-B-065: a blank line counts for the list whose sibling follows it.
-      state.stackLoose[top] = 1
+      containers.loose[top] = 1
     }
   }
-  const column = state.column - state.origin
-  if (!isList(state.stackKind[top]!)) {
-    if (state.depth + 2 > MAX_DEPTH + 1) return false
-    push(state, listKind, style | listFlags, state.pos, listAux, column)
-    state.stackStyle[state.depth - 1] = style
+  const column = cursor.column - cursor.origin
+  if (!isList(containers.kind[top]!)) {
+    if (containers.depth + 2 > MAX_DEPTH + 1) return false
+    push(state, listKind, style | listFlags, cursor.pos, listAux, column)
+    containers.style[containers.depth - 1] = style
   }
   const itemFlags = state.src.charCodeAt(afterMarker) === BRACE_OPEN ? FLAG_MARKER_ATTRIBUTES : 0
-  push(state, ITEM, itemFlags, state.pos, itemAux, column)
+  push(state, ITEM, itemFlags, cursor.pos, itemAux, column)
   return true
 }
 
 /** Tries the leaf shapes the first character allows, in the order of their bits. C2-B-011: else a paragraph. */
 function openLeaf(state: BlockState, lineStart: number, end: number): void {
+  const cursor = state.cursor
   let shapes = shapesAt(state) & LEAF_SHAPES
   while (shapes !== 0) {
     const shape = shapes & -shapes
     if (openLeafOf(state, shape, lineStart, end)) return
     shapes ^= shape
   }
-  writeEvent(state, enterTag(state, PARAGRAPH, 0), state.pos, 0)
-  openTextLeaf(state, PARAGRAPH, state.pos, end)
+  writeEvent(state, enterTag(state, PARAGRAPH, 0), cursor.pos, 0)
+  openTextLeaf(state, PARAGRAPH, cursor.pos, end)
 }
 
 function openLeafOf(state: BlockState, shape: number, lineStart: number, end: number): boolean {
@@ -582,90 +620,100 @@ function openLeafOf(state: BlockState, shape: number, lineStart: number, end: nu
 
 /** C2-B-136: after a marker the comment is the content of the block that opened. */
 function openComment(state: BlockState, end: number): boolean {
-  if (!isLineComment(state.src, state.pos, end)) return false
-  state.takeAttributes = false
+  if (!isLineComment(state.src, state.cursor.pos, end)) return false
+  state.above.takeAttributes = false
   writeComment(state, end)
   return true
 }
 
 function openCommentBlock(state: BlockState, end: number): boolean {
-  const length = fenceRunLength(state.src, state.pos, end, PERCENT)
+  const cursor = state.cursor
+  const length = fenceRunLength(state.src, cursor.pos, end, PERCENT)
   if (length === 0) return false
-  writeEvent(state, enterTag(state, COMMENT_BLOCK, 0), state.pos, length)
+  writeEvent(state, enterTag(state, COMMENT_BLOCK, 0), cursor.pos, length)
   openOpaqueLeaf(state, COMMENT_BLOCK, PERCENT, length)
   // C2-B-108: text behind the run is the first line of the value.
-  const tail = skipSpaces(state.src, state.pos + length, end)
+  const tail = skipSpaces(state.src, cursor.pos + length, end)
   if (tail < end) writeEvent(state, SPAN_TAG, tail, end)
   return true
 }
 
 /** C2-B-153, C2-B-154: everything after the space is its text, and lines indented past the marker continue it. */
 function openHeading(state: BlockState, end: number): boolean {
-  const pos = state.pos
+  const cursor = state.cursor
+  const pos = cursor.pos
   const level = headingLevel(state.src, pos, end)
   if (level === 0) return false
   writeEvent(state, enterTag(state, HEADING, 0), pos, level)
   openTextLeaf(state, HEADING, skipSpaces(state.src, pos + level, end), end)
-  state.leafColumn = state.column - state.origin
+  state.leaf.column = cursor.column - cursor.origin
   state.contentEnd = end
   return true
 }
 
 function openThematicBreak(state: BlockState, end: number): boolean {
-  if (!isThematicBreak(state.src, state.pos, end)) return false
-  writeEvent(state, enterTag(state, THEMATIC_BREAK, 0), state.pos, 0)
+  const cursor = state.cursor
+  if (!isThematicBreak(state.src, cursor.pos, end)) return false
+  writeEvent(state, enterTag(state, THEMATIC_BREAK, 0), cursor.pos, 0)
   writeEvent(state, eventTag(EXIT, THEMATIC_BREAK, 0), end, 0)
   return true
 }
 
 /** C2-B-189: the fence opens whether or not a closer follows. */
 function openFence(state: BlockState, end: number): boolean {
+  const above = state.above
+  const cursor = state.cursor
   const src = state.src
-  const length = fenceOpenerLength(src, state.pos, end)
+  const length = fenceOpenerLength(src, cursor.pos, end)
   if (length === 0) return false
-  const info = state.pos + length
+  const info = cursor.pos + length
   let flags = isRawInfo(src, info, end) ? FLAG_RAW : 0
   // C2-B-180: a `csv` or `tsv` fence that the `table` attribute marks is a delimited table.
-  if (state.takeAttributes && (isWord(src, info, end, 'csv') || isWord(src, info, end, 'tsv'))) {
-    if (attributeKeyValue(src, state.attributesStart, state.attributesEnd, 'table') !== null) flags = FLAG_DELIMITED
+  if (above.takeAttributes && (isWord(src, info, end, 'csv') || isWord(src, info, end, 'tsv'))) {
+    if (attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'table') !== null) flags = FLAG_DELIMITED
   }
-  writeEvent(state, enterTag(state, CODE, flags), state.pos, length)
-  openOpaqueLeaf(state, CODE, src.charCodeAt(state.pos), length)
+  writeEvent(state, enterTag(state, CODE, flags), cursor.pos, length)
+  openOpaqueLeaf(state, CODE, src.charCodeAt(cursor.pos), length)
   return true
 }
 
 /** C2-B-166: a row opens a table. `footer-rows` on its attribute line is read here (C2-B-187). */
 function openTable(state: BlockState, end: number): boolean {
+  const leaf = state.leaf
+  const above = state.above
+  const cursor = state.cursor
   const src = state.src
-  const closing = rowClosingPipe(src, state.pos, end)
+  const closing = rowClosingPipe(src, cursor.pos, end)
   if (closing < 0) return false
-  state.tableFooterRows = 0
-  if (state.takeAttributes) {
+  leaf.tableFooterRows = 0
+  if (above.takeAttributes) {
     // C2-B-210: a value that is no count has no effect.
-    state.tableFooterRows = Math.max(0, countValue(attributeKeyValue(src, state.attributesStart, state.attributesEnd, 'footer-rows')))
+    const value = attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'footer-rows')
+    leaf.tableFooterRows = Math.max(0, countValue(value))
   }
-  writeEvent(state, enterTag(state, TABLE, 0), state.pos, 0)
-  state.leaf = TABLE
-  state.tableRows = 0
-  state.tableHeadRows = 0
-  state.tableHeadOpen = true
+  writeEvent(state, enterTag(state, TABLE, 0), cursor.pos, 0)
+  leaf.kind = TABLE
+  leaf.tableRows = 0
+  leaf.tableHeadRows = 0
+  leaf.tableHeadOpen = true
   writeRow(state, closing, end)
   return true
 }
 
 /** A row or a continuation row of the open table. Returns false for any other line (C2-B-170). */
 function tableLine(state: BlockState, end: number): boolean {
+  const cursor = state.cursor
   const src = state.src
-  const closing = rowClosingPipe(src, state.pos, end)
+  const closing = rowClosingPipe(src, cursor.pos, end)
   if (closing >= 0) {
     writeRow(state, closing, end)
     return true
   }
-  const last = (shapesAt(state) & SHAPE_CONTINUATION_ROW) === 0 ? -1 : continuationClosingPipe(src, state.pos, end)
+  const last = (shapesAt(state) & SHAPE_CONTINUATION_ROW) === 0 ? -1 : continuationClosingPipe(src, cursor.pos, end)
   if (last < 0) return false
   // C2-B-184, C2-B-185: a fragment is plain text for the cell of its column in the row above.
-  writeEvent(state, eventTag(ENTER, ROW, FLAG_CONTINUATION), state.pos, 0)
-  for (let start = state.pos + 1; start <= last;) {
+  writeEvent(state, eventTag(ENTER, ROW, FLAG_CONTINUATION), cursor.pos, 0)
+  for (let start = cursor.pos + 1; start <= last;) {
     const stop = nextPipe(src, start, last + 1)
     const content = skipSpaces(src, start, stop)
     writeEvent(state, eventTag(ENTER, CELL, 0), start, 0)
@@ -680,12 +728,14 @@ function tableLine(state: BlockState, end: number): boolean {
 
 /** Writes the row at the cursor, whose closing pipe is at `closing`. The aux of a row is the offset of its attribute. */
 function writeRow(state: BlockState, closing: number, end: number): void {
+  const leaf = state.leaf
+  const cursor = state.cursor
   const src = state.src
   const attribute = rowAttributeStart(src, closing, end)
-  writeEvent(state, eventTag(ENTER, ROW, 0), state.pos, attribute < 0 ? 0 : attribute)
+  writeEvent(state, eventTag(ENTER, ROW, 0), cursor.pos, attribute < 0 ? 0 : attribute)
   let headers = 0
   let others = 0
-  for (let pipe = state.pos; pipe < closing;) {
+  for (let pipe = cursor.pos; pipe < closing;) {
     const next = nextPipe(src, pipe + 1, closing + 1)
     const flags = writeCell(state, pipe, next)
     if ((flags & FLAG_HEADER) !== 0) headers++
@@ -694,10 +744,10 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
-  state.tableRows++
+  leaf.tableRows++
   // C2-B-178: the head is the leading rows made only of header cells. A span mark joins another cell and is none itself.
-  state.tableHeadOpen = state.tableHeadOpen && headers > 0 && others === 0
-  if (state.tableHeadOpen) state.tableHeadRows++
+  leaf.tableHeadOpen = leaf.tableHeadOpen && headers > 0 && others === 0
+  if (leaf.tableHeadOpen) leaf.tableHeadRows++
 }
 
 /** Writes the cell between the pipes at `pipe` and `next` and returns its flags. */
@@ -735,24 +785,28 @@ function spanMark(code: number): number {
 
 /** C2-B-092: held pending until the next line. C2-B-102: consecutive lines merge. */
 function openAttributeLine(state: BlockState, end: number): boolean {
-  if (!isAttributeLine(state.src, state.pos, end)) return false
-  if (!state.takeAttributes) state.attributesStart = state.pos
-  state.attributesEnd = end
+  const above = state.above
+  const cursor = state.cursor
+  if (!isAttributeLine(state.src, cursor.pos, end)) return false
+  if (!above.takeAttributes) above.attributesStart = cursor.pos
+  above.attributesEnd = end
   writeLeafLine(state, enterTag(state, ATTRIBUTES, 0), ATTRIBUTES, end)
-  state.attributesDepth = state.depth
+  above.attributesDepth = state.containers.depth
   return true
 }
 
 function openInclude(state: BlockState, end: number): boolean {
-  if (!isIncludeLine(state.src, state.pos, end)) return false
+  if (!isIncludeLine(state.src, state.cursor.pos, end)) return false
   writeLeafLine(state, enterTag(state, INCLUDE, 0), INCLUDE, end)
   return true
 }
 
 /** C2-B-081: a link or abbreviation definition stands at column 0 outside every container. */
 function openDefinitionLine(state: BlockState, kind: number, lineStart: number, end: number): boolean {
-  if (state.pos !== lineStart || state.depth !== 1) return false
-  const matches = kind === LINK_DEFINITION ? isLinkDefinition(state.src, state.pos, end) : isAbbreviation(state.src, state.pos, end)
+  const cursor = state.cursor
+  if (cursor.pos !== lineStart || state.containers.depth !== 1) return false
+  const pos = cursor.pos
+  const matches = kind === LINK_DEFINITION ? isLinkDefinition(state.src, pos, end) : isAbbreviation(state.src, pos, end)
   if (!matches) return false
   writeLeafLine(state, enterTag(state, kind, 0), kind, end)
   return true
@@ -760,8 +814,9 @@ function openDefinitionLine(state: BlockState, kind: number, lineStart: number, 
 
 /** A leaf of one line whose span is the line from the cursor on. */
 function writeLeafLine(state: BlockState, tag: number, kind: number, end: number): void {
-  writeEvent(state, tag, state.pos, 0)
-  writeEvent(state, SPAN_TAG, state.pos, end)
+  const cursor = state.cursor
+  writeEvent(state, tag, cursor.pos, 0)
+  writeEvent(state, SPAN_TAG, cursor.pos, end)
   writeEvent(state, eventTag(EXIT, kind, 0), end, 0)
 }
 
@@ -771,46 +826,53 @@ function writeComment(state: BlockState, end: number): void {
 }
 
 function openTextLeaf(state: BlockState, kind: number, contentStart: number, end: number): void {
+  const leaf = state.leaf
   writeEvent(state, SPAN_TAG, contentStart, end)
-  state.leaf = kind
-  state.leafStart = contentStart
-  state.leafEnd = end
-  state.leafLines = 1
+  leaf.kind = kind
+  leaf.start = contentStart
+  leaf.end = end
+  leaf.lines = 1
 }
 
 function openOpaqueLeaf(state: BlockState, kind: number, closerChar: number, length: number): void {
-  state.leaf = kind
-  state.fenceChar = closerChar
-  state.fenceLength = length
-  state.fenceColumn = state.column - state.origin
-  state.pendingBlankLine = NO_LINE
+  const leaf = state.leaf
+  const cursor = state.cursor
+  leaf.kind = kind
+  leaf.fenceChar = closerChar
+  leaf.fenceLength = length
+  leaf.fenceColumn = cursor.column - cursor.origin
+  state.above.heldBlankLine = NO_LINE
 }
 
 /** C2-B-067, C2-B-069, C2-B-075: a term is one leaf of its description list. */
 function openTerm(state: BlockState, end: number): boolean {
-  const markEnd = termMarkEnd(state.src, state.pos, end)
+  const containers = state.containers
+  const cursor = state.cursor
+  const markEnd = termMarkEnd(state.src, cursor.pos, end)
   if (markEnd < 0) return false
-  if (state.stackKind[state.depth - 1] !== DESCRIPTION_LIST) {
-    if (state.depth > MAX_DEPTH) return false
-    push(state, DESCRIPTION_LIST, 0, state.pos, 0, state.column - state.origin)
+  if (containers.kind[containers.depth - 1] !== DESCRIPTION_LIST) {
+    if (containers.depth > MAX_DEPTH) return false
+    push(state, DESCRIPTION_LIST, 0, cursor.pos, 0, cursor.column - cursor.origin)
   }
-  writeEvent(state, enterTag(state, TERM, 0), state.pos, 0)
+  writeEvent(state, enterTag(state, TERM, 0), cursor.pos, 0)
   openTextLeaf(state, TERM, skipSpaces(state.src, markEnd, end), end)
   return true
 }
 
 /** C2-B-125: a bare colon run closes the innermost open div it is long enough for, and otherwise opens an anonymous div. */
 function openBareRun(state: BlockState, end: number): boolean {
+  const containers = state.containers
+  const cursor = state.cursor
   const src = state.src
-  const length = divRunLength(src, state.pos, end)
-  if (length === 0 || skipSpaces(src, state.pos + length, end) !== end) return false
-  for (let index = state.depth - 1; state.stackKind[index] === DIV; index--) {
-    if (state.stackColumn[index]! > length) continue
-    const captioned = (state.stackStyle[index]! & (FLAG_QUOTE_FENCE | FLAG_FIGURE)) !== 0
+  const length = divRunLength(src, cursor.pos, end)
+  if (length === 0 || skipSpaces(src, cursor.pos + length, end) !== end) return false
+  for (let index = containers.depth - 1; containers.kind[index] === DIV; index--) {
+    if (containers.column[index]! > length) continue
+    const captioned = (containers.style[index]! & (FLAG_QUOTE_FENCE | FLAG_FIGURE)) !== 0
     state.contentEnd = end
     closeTo(state, index)
     // C2-B-147: a quote fence and a figure group take a caption.
-    if (captioned) state.captionDepth = state.depth
+    if (captioned) state.above.captionDepth = containers.depth
     return true
   }
   return pushDiv(state, 0, length)
@@ -819,7 +881,7 @@ function openBareRun(state: BlockState, end: number): boolean {
 /** C2-B-126: a colon run followed by a name or a sigil always opens a div or a line block. */
 function openDiv(state: BlockState, end: number): boolean {
   const src = state.src
-  const pos = state.pos
+  const pos = state.cursor.pos
   const length = divRunLength(src, pos, end)
   const runEnd = pos + length
   if (length === 0 || skipSpaces(src, runEnd, end) === end) return false
@@ -839,69 +901,76 @@ function openDiv(state: BlockState, end: number): boolean {
 
 /** Opens a div. Its run length stands in the column slot of the stack. Returns false at the depth cap. */
 function pushDiv(state: BlockState, style: number, length: number): boolean {
-  if (state.depth > MAX_DEPTH) return false
-  push(state, DIV, style, state.pos, length, length)
-  state.stackStyle[state.depth - 1] = style
+  const containers = state.containers
+  if (containers.depth > MAX_DEPTH) return false
+  push(state, DIV, style, state.cursor.pos, length, length)
+  containers.style[containers.depth - 1] = style
   return true
 }
 
 /** The tag of an enter event. The first block of a line takes the pending attribute lines (C2-B-091). */
 function enterTag(state: BlockState, kind: number, flags: number): number {
-  if (state.takeAttributes) {
-    state.takeAttributes = false
+  const above = state.above
+  if (above.takeAttributes) {
+    above.takeAttributes = false
     flags |= FLAG_ATTRIBUTES
   }
   return eventTag(ENTER, kind, flags)
 }
 
 function push(state: BlockState, kind: number, flags: number, pos: number, aux: number, column: number): void {
-  const depth = state.depth
-  state.stackKind[depth] = kind
-  state.stackColumn[depth] = column
-  state.stackStyle[depth] = 0
-  state.stackLoose[depth] = 0
-  state.depth = depth + 1
+  const containers = state.containers
+  const depth = containers.depth
+  containers.kind[depth] = kind
+  containers.column[depth] = column
+  containers.style[depth] = 0
+  containers.loose[depth] = 0
+  containers.depth = depth + 1
   writeEvent(state, enterTag(state, kind, flags), pos, aux)
 }
 
 /** Closes the open leaf or table. The facts of a leaf are set here (C2-B-191). */
 function closeLeaf(state: BlockState): void {
-  const kind = state.leaf
+  const leaf = state.leaf
+  const kind = leaf.kind
   if (kind === NO_LEAF) return
-  state.leaf = NO_LEAF
+  leaf.kind = NO_LEAF
   if (kind === TABLE) {
     // C2-B-187: the footer rows are the last rows of the body. C2-B-147: a table takes a caption.
-    const footer = Math.min(state.tableFooterRows, state.tableRows - state.tableHeadRows)
-    writeEvent(state, eventTag(EXIT, TABLE, 0), state.contentEnd, state.tableHeadRows | (footer << FACT_SHIFT))
-    state.captionDepth = state.depth
+    const footer = Math.min(leaf.tableFooterRows, leaf.tableRows - leaf.tableHeadRows)
+    writeEvent(state, eventTag(EXIT, TABLE, 0), state.contentEnd, leaf.tableHeadRows | (footer << FACT_SHIFT))
+    state.above.captionDepth = state.containers.depth
     return
   }
   writeEvent(state, eventTag(EXIT, kind, leafFacts(state, kind)), state.contentEnd, 0)
 }
 
 function leafFacts(state: BlockState, kind: number): number {
+  const leaf = state.leaf
+  const above = state.above
   if (isOpaqueLeaf(kind)) {
-    if (state.pendingBlankLine !== NO_LINE) {
+    if (above.heldBlankLine !== NO_LINE) {
       // C2-B-113: the blank lines an unclosed leaf did not take stand between blocks.
-      state.blankCount = state.lineCount - 1 - state.pendingBlankLine
-      state.pendingBlankLine = NO_LINE
+      above.blankCount = state.lineCount - 1 - above.heldBlankLine
+      above.heldBlankLine = NO_LINE
     }
     // C2-B-111, C2-B-163.
     return FLAG_UNCLOSED
   }
-  if (kind !== PARAGRAPH || state.leafLines !== 1) return 0
+  if (kind !== PARAGRAPH || leaf.lines !== 1) return 0
   // C2-B-157, C2-B-158: a paragraph that closes holding nothing but one image or one display math span (block image, block math).
-  if (isImageOnly(state.src, state.leafStart, state.leafEnd)) return FLAG_IMAGE
-  return isDisplayMathOnly(state.src, state.leafStart, state.leafEnd) ? FLAG_BLOCK_MATH : 0
+  if (isImageOnly(state.src, leaf.start, leaf.end)) return FLAG_IMAGE
+  return isDisplayMathOnly(state.src, leaf.start, leaf.end) ? FLAG_BLOCK_MATH : 0
 }
 
 /** Closes the open leaf and the containers above stack index `depth`. Tightness is set here (C2-B-191). */
 function closeTo(state: BlockState, depth: number): void {
   closeLeaf(state)
-  while (state.depth > depth) {
-    const index = --state.depth
-    const kind = state.stackKind[index]!
-    const flags = isList(kind) && state.stackLoose[index] === 0 ? FLAG_TIGHT : 0
+  const containers = state.containers
+  while (containers.depth > depth) {
+    const index = --containers.depth
+    const kind = containers.kind[index]!
+    const flags = isList(kind) && containers.loose[index] === 0 ? FLAG_TIGHT : 0
     writeEvent(state, eventTag(EXIT, kind, flags), state.contentEnd, 0)
   }
 }
