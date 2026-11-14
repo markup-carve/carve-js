@@ -1,7 +1,8 @@
 // The inline elements of C2-H-072 to C2-H-101.
 import { type AstNode, type Attrs, childrenOf, hrefOf, isBreak, keyOf, keyValuesOf, pairsOf, valueOf } from './ast.ts'
 import {
-  attributeBlockText, attributes, destination, escapeText, escapeTextNode, keyValue, loss, type Pair, type Render, type TagParts,
+  attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, keyValue, loss, type Pair, type Render,
+  type TagParts,
 } from './html-attributes.ts'
 
 type InlineWriter = (r: Render, node: AstNode) => string
@@ -197,8 +198,10 @@ function rawInline(r: Render, node: AstNode): string {
     loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format ?? ''} is not written to HTML`)
     return ''
   }
-  const html = r.settings.rawHtml ? valueOf(node) : escapeText(valueOf(node))
-  return r.settings.roundtrip ? `<span data-carve-raw="html">${html}</span>` : html
+  if (r.settings.rawHtml) return r.settings.roundtrip ? `<span data-carve-raw="html">${valueOf(node)}</span>` : valueOf(node)
+  // C2-H-172: the text of a roundtrip carrier keeps its bidirectional controls.
+  if (r.settings.roundtrip) return `<span data-carve-raw="html">${escapeCarrierText(valueOf(node))}</span>`
+  return escapeText(valueOf(node))
 }
 
 function templateUrl(template: string | undefined, name: string): string | null {

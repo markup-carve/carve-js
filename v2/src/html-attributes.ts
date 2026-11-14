@@ -85,8 +85,11 @@ function isClean(text: string): boolean {
   return text.indexOf('&') < 0 && text.indexOf('<') < 0 && text.indexOf('>') < 0 && text.indexOf('\u00a0') < 0
 }
 
-/** C2-H-002: the three markup characters and the no-break space. */
-export function escapeText(text: string): string {
+/**
+ * C2-H-002: the three markup characters and the no-break space. The text keeps its bidirectional
+ * controls, so this is for text known to hold none and for the text of a roundtrip carrier (C2-H-172).
+ */
+export function escapeCarrierText(text: string): string {
   if (text.length >= SEARCH_LENGTH && isClean(text)) return text
   let out = ''
   let from = 0
@@ -102,7 +105,6 @@ export function escapeText(text: string): string {
   return from === 0 ? text : out + text.slice(from)
 }
 
-
 /** C2-H-172: true when `text` holds a bidirectional control. Nine searches are cheaper than a look at each character. */
 function hasBidiControl(text: string): boolean {
   return text.indexOf('\u202a') >= 0 || text.indexOf('\u202b') >= 0 || text.indexOf('\u202c') >= 0 || text.indexOf('\u202d') >= 0
@@ -115,15 +117,15 @@ function hasBidiControl(text: string): boolean {
  * inline content holds none, without its bidirectional controls.
  */
 export function escapeTextNode(r: Render, text: string): string {
-  return r.bidi ? escapeContent(text) : escapeText(text)
+  return r.bidi ? escapeText(text) : escapeCarrierText(text)
 }
 
 /**
- * C2-H-002 and C2-H-172: the content of a code block, escaped and without its bidirectional
- * controls. A short text is read once for both.
+ * C2-H-002 and C2-H-172: text written between tags, escaped and without its bidirectional controls,
+ * which are never written there. A short text is read once for both.
  */
-export function escapeContent(text: string): string {
-  if (text.length >= SEARCH_LENGTH && !hasBidiControl(text)) return escapeText(text)
+export function escapeText(text: string): string {
+  if (text.length >= SEARCH_LENGTH && !hasBidiControl(text)) return escapeCarrierText(text)
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
