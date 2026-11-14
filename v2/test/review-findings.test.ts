@@ -85,3 +85,17 @@ describe('reading a supplied tree', () => {
     expect(refusal(inParagraph({ type: 'ruby', pairs: [{ type: 'rubyPair', base: [], annotation: [], x: 1 }] }))).toBe('/children/0/children/0/pairs/0/x: not a field of rubyPair')
   })
 })
+
+describe('the attribute filter', () => {
+  it('C2-H-075, C2-H-161: the title and the datetime that abbr and time give pass the filter of an authored value', () => {
+    expect(render('[x]{abbr=javascript:alert(1)}')).toBe('<p><abbr title="">x</abbr></p>')
+    expect(render('[x]{time=javascript:alert(1)}')).toBe('<p><time datetime="">x</time></p>')
+    expect(render('[x]{abbr="Shell: bash"}')).toBe('<p><abbr title="">x</abbr></p>')
+    expect(render('[x]{abbr=HTML time=2024}')).toBe('<p><time datetime="2024"><abbr title="HTML">x</abbr></time></p>')
+  })
+
+  it('C2-H-161: an authored class and the language of a supplied tree pass the filter too', () => {
+    expect(render('[x]{.a class="javascript:x"}')).toBe('<p><span class="a">x</span></p>')
+    expect(render(decodeTree(JSON.stringify(inParagraph({ type: 'span', lang: 'javascript:x', children: [{ type: 'text', value: 'x' }] }))))).toBe('<p><span lang="">x</span></p>')
+  })
+})

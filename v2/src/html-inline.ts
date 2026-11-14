@@ -101,8 +101,8 @@ function span(node: SpanNode, r: Render): string {
   found.forEach(([key, target, value], index) => {
     const outermost = index === found.length - 1
     // An authored `title` or `datetime` wins over the derived one.
-    const derived: Pair[] = target === null || (outermost && authoredKey(node, target) !== undefined) ? [] : [[target, value]]
-    html = `<${key}${attributes(r, outermost ? rest : null, { structural: derived, origin: node })}>${html}</${key}>`
+    const derived: [string, string][] = target === null || (outermost && authoredKey(node, target) !== undefined) ? [] : [[target, value]]
+    html = `<${key}${attributes(r, outermost ? rest : null, { derived, origin: node })}>${html}</${key}>`
   })
   return html
 }

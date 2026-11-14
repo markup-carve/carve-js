@@ -35,6 +35,8 @@ export type Pair = readonly [string, string | null]
 export interface TagParts {
   /** C2-H-010: written first, in the order given. A structural name replaces an authored key. */
   structural?: Pair[]
+  /** Written with the structural ones, but the values are authored, so they pass the filter of C2-H-161 (C2-H-075). */
+  derived?: (readonly [string, string])[]
   /** The id to write in place of the authored one, or null for none. */
   id?: string | null
   /** C2-H-012: classes before and behind the ones the author wrote. */
@@ -289,7 +291,10 @@ function hasDangerousCss(value: string): boolean {
   return STYLE_PATTERNS.some((pattern) => probe.includes(pattern))
 }
 
-/** C2-H-161, C2-H-162: the value of an authored key as it is written, which is empty when it fails a test. */
+/**
+ * C2-H-161, C2-H-162: the value of an authored key as it is written, which is empty when it fails a test. Every
+ * authored value reaches the output through here: the keys, the classes, the language, `rel` and the derived values.
+ */
 export function keyValue(name: string, value: string): string {
   const commas = URL_LIST_ATTRIBUTES.get(name)
   // The whole value is tested too: a scheme split by a separator, `java script:`, fails as it does in a single URL.
@@ -331,8 +336,10 @@ class AttributeList {
 function addClasses(list: AttributeList, node: Node | null, parts: TagParts): void {
   const authored = parts.bare === true ? [] : node?.attrs?.classes ?? []
   if (authored.length === 0 && parts.base === undefined && parts.last === undefined) return
-  // A class that occurs twice is written once, at its first place, as in 0.1.
-  const classes = new Set([...(parts.base ?? []), ...authored, ...(parts.last ?? [])])
+  // A class that occurs twice is written once, at its first place, as in 0.1. An authored one that fails C2-H-161 is left out.
+  const classes = new Set(parts.base)
+  for (const name of authored) if (keyValue('class', name) !== '') classes.add(name)
+  for (const name of parts.last ?? []) classes.add(name)
   if (classes.size > 0) list.add('class', [...classes].join(' '))
 }
 
@@ -394,7 +401,7 @@ function sourceLine(r: Render, node: Node | null, parts: TagParts): string | nul
 function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: TagParts): void {
   const authored = parts.bare === true ? null : node
   addClasses(list, node, parts)
-  if (authored?.lang !== undefined) list.add('lang', authored.lang)
+  if (authored?.lang !== undefined) list.add('lang', keyValue('lang', authored.lang))
   const keyValues = authored?.attrs?.keyValues
   if (keyValues !== undefined || parts.style !== undefined) addKeyValues(r, list, keyValues ?? [], parts, parts.origin ?? node)
 }
@@ -404,6 +411,7 @@ function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolea
   if (node !== null && parts.bare !== true && (node.attrs !== undefined || node.lang !== undefined)) return false
   if (parts.id !== undefined && parts.id !== null) return false
   if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
+  if (parts.derived !== undefined && parts.derived.length > 0) return false
   return !(r.settings.sourceLines && parts.block === true)
 }
 
@@ -414,6 +422,11 @@ function structuralText(pairs: Pair[]): string {
   return text
 }
 
+/** C2-H-075, C2-H-161: an attribute whose value the element takes from an authored key passes the filter of that key. */
+function addDerived(list: AttributeList, parts: TagParts): void {
+  for (const [name, value] of parts.derived ?? []) list.add(name, keyValue(name.toLowerCase(), value))
+}
+
 /** C2-H-009: the attributes of one element, each with a leading space. */
 export function attributes(r: Render, node: Node | null, parts: TagParts): string {
   if (isStructuralOnly(r, node, parts)) return structuralText(parts.structural ?? [])
@@ -422,6 +435,7 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   if (parts.idFirst === true && id !== undefined) list.add('id', id)
   if (parts.classFirst === true) addClasses(list, node, parts)
   for (const [name, value] of parts.structural ?? []) list.add(name, value)
+  addDerived(list, parts)
   // The source line is structural, so it replaces an authored key, and it is written last.
   const line = sourceLine(r, node, parts)
   if (line !== null) list.claim('data-source-line')
