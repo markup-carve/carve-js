@@ -347,6 +347,11 @@ describe('what the random writer gates found', () => {
     expect(format(` - ${BACKSLASH}\n1. a`)).toBe(`- ${BACKSLASH}\n  1${BACKSLASH}. a\n`)
   })
 
+  it('C2-W-092: of the later lines inside an inline node, the one that opens a block takes the escape', () => {
+    expect(format(' - *a\n{*\n- (*')).toBe(`- *a\n  {*\n  ${BACKSLASH}- (*\n`)
+    expect(format(' - /)\n}\n- \\{/')).toBe(`- {/)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/}\n`)
+  })
+
   it('C2-W-026, C2-W-092: a line that starts inside an inline node and would open a block is escaped', () => {
     expect(format(' - ^[\n- ]')).toBe(`- ^[\n  ${BACKSLASH}- ]\n`)
     expect(format(' - /:\n1. a/')).toBe(`- /:\n  1${BACKSLASH}. a/\n`)

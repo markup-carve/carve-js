@@ -485,10 +485,18 @@ function escapeContentLine(c: Check, e: Node): boolean {
     const node = nodes[at]!
     if ('children' in node && escapeContentLine(c, node)) return true
     const next = nodes[at + 1]
-    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(next)) continue
+    if (!isBreak(node) || next?.type !== 'text' || !hasOpenerShape(next) || !opensBlockAlone(c, nodes, at + 1)) continue
     for (const offset of openerOffsets(next.value)) if (escapeAt(c, next, offset)) return true
   }
   return false
+}
+
+/** Whether the line that starts at `nodes[from]`, written alone, opens a block: its parse is no single paragraph. */
+function opensBlockAlone(c: Check, nodes: readonly Node[], from: number): boolean {
+  let end = from
+  while (end < nodes.length && !isBreak(nodes[end])) end++
+  const blocks = parseChunk(writeInlines(c.w, nodes.slice(from, end), c.flags), c.w.abbreviations).children
+  return blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
 }
 
 /** How far behind the start of the construct `a` its opener takes the backslash (C2-W-090, C2-W-099). */
