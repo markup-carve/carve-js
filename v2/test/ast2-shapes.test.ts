@@ -40,8 +40,8 @@ describe('AST 2.0 shapes', () => {
       metadata: { bibliography: { title: [text('Book')], authors: ['A'], issued: '2026' } },
     })
     expect(() => validateTree(document)).not.toThrow()
-    const invalidGroup = { ...group, mode: 'normal' } as unknown as Inline
-    const invalidItem = { ...group, children: [{ ...citation, suppressAuthor: false }] } as unknown as Inline
+    const invalidGroup = { ...group, extra: 'normal' } as unknown as Inline
+    const invalidItem = { ...group, children: [{ ...citation, extra: false }] } as unknown as Inline
     expect(() => validateTree(documentOf(paragraph(invalidGroup)))).toThrow('not a field of citation_group')
     expect(() => validateTree(documentOf(paragraph(invalidItem))))
       .toThrow('not a field of citation')

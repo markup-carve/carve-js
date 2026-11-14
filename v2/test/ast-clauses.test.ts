@@ -266,8 +266,8 @@ describe('lists and tasks', () => {
     const item: ListItemNode = { type: 'list_item', children: [], task: { mark: 'x' } }
     const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item] }
     expect(refusal(documentOf(list))).toBeNull()
-    expect(refusal(documentOf({ ...list, children: [{ ...item, task: { mark: 'x', status: 'todo' } as unknown as Task }] })))
-      .toBe('/children/0/children/0/task/status: not a field of task')
+    expect(refusal(documentOf({ ...list, children: [{ ...item, task: { mark: 'x', extra: 'todo' } as unknown as Task }] })))
+      .toBe('/children/0/children/0/task/extra: not a field of task')
   })
 })
 
@@ -544,8 +544,8 @@ describe('citations, extension nodes and resources', () => {
     const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', mode: 'normal' }
     expect(refusal(documentOf(paragraph(citation as unknown as Inline)))).toBe('/children/0/children/0: citation does not stand here')
     expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', children: [citation] })))).toBeNull()
-    const group = { type: 'citation_group', raw: '[@a]', mode: 'paren', children: [citation] } as unknown as Inline
-    expect(refusal(documentOf(paragraph(group)))).toBe('/children/0/children/0/mode: not a field of citation_group')
+    const group = { type: 'citation_group', raw: '[@a]', extra: 'paren', children: [citation] } as unknown as Inline
+    expect(refusal(documentOf(paragraph(group)))).toBe('/children/0/children/0/extra: not a field of citation_group')
   })
 
   it('C2-A-121: a citation definition carries its key and inline children', () => {

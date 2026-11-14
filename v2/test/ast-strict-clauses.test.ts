@@ -39,7 +39,7 @@ describe('AST 2.0 reader checks', () => {
     expect(refusal(documentOf({ ...paragraph(), data: { 'demo.widget': [{ type: 'text', value: 'x' }] } })))
       .toContain('a node in an opaque object')
     expect(refusal(documentOf({ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
-      children: [{ type: 'list_item', task: { mark: 'x', status: 'done' }, children: [] }] } as never)))
+      children: [{ type: 'list_item', task: { mark: 'x', extra: 'done' }, children: [] }] } as never)))
       .toContain('not a field of task')
     const resource = { id: 'r', mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` }
     expect(refusal({ ...documentOf(), resources: [{ ...resource, extra: 1 }] })).toContain('not a field of resource')

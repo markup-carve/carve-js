@@ -41,7 +41,7 @@ describe('references', () => {
     expect(ofType(resolvedInlines('![a][nope] x')[0], 'image').src).toBeUndefined()
   })
 
-  it('C2-A-108: an unresolved reference is still a link or an image node with its children, key, form and attrs', () => {
+  it('C2-A-108: an unresolved reference is still a link or an image node with its children, key, refForm and attrs', () => {
     expect(resolvedInlines('[*a*][nope]{.c}')[0]).toEqual({
       type: 'link', key: 'nope', namespace: 'link', refForm: 'full', children: [{ type: 'strong', children: [text('a')] }], attrs: { classes: ['c'] },
     })
