@@ -253,9 +253,12 @@ function mentionNode(w: Writer, node: MentionNode): string {
 }
 
 /** C2-W-059: the comment forms that inline content holds. */
-function commentNode(_w: Writer, node: CommentNode): string {
+function commentNode(w: Writer, node: CommentNode): string {
   const value = node.value
-  if (node.form === 'braced') return bracedComment(value)
+  // C2-W-005, C2-A-074: where a padded line reads as a block opener, the value stands glued to the marks,
+  // which read the same value where it does not start or end with a space.
+  const glued = (w.forms.get(node) ?? 0) > 0 && !value.startsWith(' ') && !value.endsWith(' ')
+  if (node.form === 'braced') return glued ? `{%${value}%}` : bracedComment(value)
   return value === '' ? '%%' : `%% ${value}`
 }
 
@@ -364,6 +367,18 @@ function writePart(w: Writer, nodes: readonly Node[], at: number, end: number, f
   return node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
 }
 
+/**
+ * The spelling of `nodes[at, end)` behind `out`. C2-W-069: a bare mark glued to the same mark
+ * before it makes one run and opens nothing, so the node is braced.
+ */
+function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, out: string): string {
+  const node = nodes[at]!
+  const part = writePart(w, nodes, at, end, flags)
+  if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.startsWith('{') || !out.endsWith(part[0]!)) return part
+  w.forms.set(node, 1)
+  return writePart(w, nodes, at, end, flags)
+}
+
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
@@ -379,7 +394,7 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
     }
     const end = partEnd(w, nodes, at)
     if (node.type === 'text') doubleLastBackslash(w, node, nodes, end, flags)
-    const part = writePart(w, nodes, at, end, flags)
+    const part = gluedPart(w, nodes, at, end, flags, out)
     out += part
     if (part !== '') lineStart = part.charCodeAt(part.length - 1) === 10
     at = end

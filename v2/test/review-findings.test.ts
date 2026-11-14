@@ -639,6 +639,29 @@ describe('what the random writer gate found after the third review', () => {
     expect(format(`^[${BACKSLASH}[[]]`)).toBe(`^[${BACKSLASH}[[]]\n`)
   })
 
+  it('C2-W-125: every lone bracket of an inline footnote takes the backslash, also beside an escaped backtick', () => {
+    for (const source of [`^[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`, `^[${BACKSLASH}[${BACKSLASH}[]`, `:n[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`]) {
+      expect(format(source)).toBe(`${source}\n`)
+    }
+  })
+
+  it('C2-W-005, C2-A-074: a braced comment whose padded line would open a block is written glued to its marks', () => {
+    expect(format('- {%\n-%}')).toBe('- {%\n  -%}\n')
+    expect(treesEqual(parse(format('{%\n:::%}')), parse('{%\n:::%}'))).toBe(true)
+  })
+
+  it('C2-W-069: emphasis glued behind the closer of emphasis is braced', () => {
+    expect(format(`/${BACKSLASH}${BACKTICK}/{/[/}`)).toBe(`/${BACKSLASH}${BACKTICK}/{/[/}\n`)
+  })
+
+  it('C2-W-088: a content that starts with a line break is probed behind a word', () => {
+    expect(format(`{-\n/${BACKSLASH}${BACKTICK}%-}`)).toBe(`{-\n/${BACKSLASH}${BACKTICK}%-}\n`)
+  })
+
+  it('C2-W-016: a paragraph of only a CR is refused at its text', () => {
+    expect(formatWithDiagnostics('\r').diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+  })
+
   it('C2-W-088: a bracket run stops at a bracket of another opener', () => {
     expect(format(`x![^${BACKSLASH}[]`)).toBe(`x![^${BACKSLASH}[]\n`)
   })

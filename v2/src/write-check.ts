@@ -291,7 +291,7 @@ function respell(c: Check, es: readonly Node[], i: number): boolean {
     if (!step(c, es, i, attempt)) continue
     for (let at = before; at < c.escapes.length; at++) {
       attempt.escapes.push(c.escapes[at]!)
-      c.trials.push(c.escapes[at]!)
+      if (step !== escapeLoneBracket) c.trials.push(c.escapes[at]!)
     }
     return true
   }
@@ -325,9 +325,31 @@ const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   escapeInside,
   (c, es, i) => escapeInContent(c, es[i]!),
-  // C2-W-125: a lone bracket in the content of a bracket construct, where its closer was not asked for.
-  (c, es, i) => CLOSING_MARKS.get(es[i]!.type) === ']' && 'children' in es[i]! && escapeMark(c, es[i]!.children as Node[], 0, 0, '['),
+  escapeLoneBracket,
 ]
+
+/**
+ * C2-W-125: a lone bracket in the content of an inline footnote or extension, where its closer was not asked for.
+ * The clause places it for the node that did not form, so it is no trial: the test of a trial takes
+ * out the escapes behind it, which this one may need.
+ */
+function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
+  const e = es[i]!
+  if ((e.type !== 'inline_footnote' && e.type !== 'inline_extension') || !('children' in e)) return false
+  // Each bracket that no later `]` of the content closes; where every one is closed, the first.
+  const open: [TextNode, number][] = []
+  for (const text of textsBelow(e)) {
+    for (let at = 0; at < text.value.length; at++) {
+      const char = text.value[at]
+      if ((char !== '[' && char !== ']') || isEscaped(c, text, at)) continue
+      if (char === '[') open.push([text, at])
+      else open.pop()
+    }
+  }
+  let asked = false
+  for (const [text, at] of open) asked = escapeAt(c, text, at) || asked
+  return asked || escapeMark(c, e.children as Node[], 0, 0, '[')
+}
 
 /** The flags the content of `e` is written with. */
 function contentFlags(c: Check, e: Node): number {
@@ -337,17 +359,30 @@ function contentFlags(c: Check, e: Node): number {
 // The rounds of one probe: past it, the step runs again in the next round of the writer.
 const MAX_PROBE_ROUNDS = 32
 
+type Takes = (node: TextNode, at: number) => boolean
+
+/**
+ * The writer of a probe of the inlines `expected`: its own attempts, losses and escapes, so that what
+ * it finds stays out of this round until it is taken over. Only the escapes of the probed text nodes
+ * are read, so only those are copied.
+ */
+function probeWriter(c: Check, expected: readonly Node[]): Writer {
+  const escapes = new Map<TextNode, number[]>()
+  for (const text of expected.flatMap((node) => (node.type === 'text' ? [node] : textsBelow(node)))) {
+    const own = c.w.escapes.get(text)
+    if (own !== undefined) escapes.set(text, [...own])
+  }
+  return { ...c.w, escapes, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) }
+}
+
 /**
  * C2-W-088 on the inlines `expected` of `e` written and parsed on their own: while the parse holds a
  * construct that the tree does not, the opener of the leftmost one takes the backslash and they are
  * parsed again. The escapes that `takes` accepts go to `c` as escapes of this round. Null where the
  * inlines do not read as one paragraph, which tells nothing; otherwise whether an escape was asked for.
  */
-type Takes = (node: TextNode, at: number) => boolean
-
 function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: number, takes: Takes = () => true): boolean | null {
-  // The probe has its own attempts, losses and escapes, so what it finds stays out of this round until it is taken over.
-  const w = { ...c.w, escapes: new Map(c.w.escapes), attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) }
+  const w = probeWriter(c, expected)
   let found = false
   for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
     const source = `${writeInlines(w, expected, flags)}\n`
@@ -360,7 +395,8 @@ function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: numbe
     compareInlines(probe, expected, block.children, e)
     extendChains(probe)
     const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
-    if (taken.length === 0) return found
+    // A first parse that differs where no escape helps, as a content that starts with a line break, tells nothing.
+    if (taken.length === 0) return round === 0 && probe.losses.length > 0 ? null : found
     found = true
     for (const [node, at] of taken) w.escapes.set(node, [...(w.escapes.get(node) ?? []), at].sort((x, y) => x - y))
   }
@@ -379,7 +415,9 @@ function escapeContentConstruct(c: Check, e: Node): boolean {
   // then with its line breaks as spaces, so that no later line opens one either.
   const word: Node = { type: 'text', value: 'x' }
   const flat = e.children.map((node): Node => (node.type === 'soft_break' ? { type: 'text', value: ' ' } : node))
-  for (const expected of [e.children, [word, ...e.children], [word, ...flat]]) {
+  // A content that starts with a line break reads as a paragraph only behind the word.
+  const variants = isBreak(e.children[0]) ? [[word, ...e.children], [word, ...flat]] : [e.children, [word, ...e.children], [word, ...flat]]
+  for (const expected of variants) {
     const found = probeEscapes(c, e, expected, contentFlags(c, e))
     if (found !== null) return found
   }
@@ -584,8 +622,11 @@ function escapeBackticks(c: Check, node: TextNode, at: number, a: Node): void {
 
 /** Extends the escapes of `chains` that this round places by the escapes the procedure would place behind each, one per parse. */
 export function extendChains(c: Check): void {
+  if (c.chains.length === 0) return
+  const placed = new Map<TextNode, Set<number>>()
+  for (const [node, at] of c.escapes) placed.set(node, (placed.get(node) ?? new Set()).add(at))
   for (const [node, at, a] of c.chains) {
-    if (!c.escapes.some((escape) => escape[0] === node && escape[1] === at)) continue
+    if (placed.get(node)?.has(at) !== true) continue
     if (node.value[at] === '`') escapeBackticks(c, node, at, a)
     else escapeBrackets(c, node, at, a)
   }
@@ -924,6 +965,12 @@ function blockMismatch(c: Check, e: Node): void {
 
 /** The block `e` has no block in the parse: the block above it took its lines. */
 function missingBlock(c: Check, e: Node): void {
+  // C2-W-016: a paragraph whose line holds only a CR, and spaces, is a blank line once the line ending takes the CR.
+  const first = e.type === 'paragraph' ? e.children[0] : undefined
+  if (first?.type === 'text' && endsLineWithCr(first.value, 0)) {
+    c.losses.push([first, 'value'])
+    return
+  }
   // C2-W-092: a paragraph that reads as a line of the block above. C2-W-059: a comment stands behind a blank line instead.
   if (e.type === 'paragraph' && e.children.length > 0) escapeLineStart(c, e.children, 0, e)
   else if (hasOtherForm(c, e)) changeForm(c, e)
