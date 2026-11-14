@@ -13,6 +13,7 @@
 //   node v2/scripts/writer-gates.ts random [contents] [documents] [seed] [--silent]
 // With --silent a run fails only on a failure with no reported loss.
 import { readFileSync } from 'node:fs'
+import { format, parse, tabsExtensions, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
 import {
@@ -62,7 +63,30 @@ function runExamples(): boolean {
   const passed = summary('examples', counts)
   for (const line of lines) console.log(line)
   for (const entry of undecided) console.log(`  undecided: ${entry}`)
-  return passed
+  return passed && runExtensionExamples()
+}
+
+/** C2-X-049: the writer gates on claims and on a supplied tree with no source form. */
+function runExtensionExamples(): boolean {
+  const inputs = [
+    ':::: tabs\n::: tab "One"\nBody\n:::\n::::\n',
+    ':::: tabs\n::: tab "One"\n::: tabs\n::: tab "Two"\nNested\n:::\n:::\n:::\n::::\n',
+  ]
+  let failures = 0
+  for (const input of inputs) for (const extensions of [tabsExtensions, []]) {
+    const once = format(input, { extensions })
+    const parseOptions = { extensions, positions: false }
+    if (format(once, { extensions }) !== once
+      || !treesEqual(parse(once, parseOptions), parse(input, parseOptions))) failures++
+  }
+  const unknown: DocumentNode = { type: 'document', astVersion: '2.0',
+    extensions: [{ name: 'test.unknown', version: '1', required: false }],
+    children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
+      fallback: [{ type: 'paragraph', children: [{ type: 'text', value: 'Safe' }] }] }] }
+  const written = writeWithDiagnostics(unknown)
+  if (written.source !== 'Safe\n' || !written.diagnostics.some((entry) => entry.code === 'structure-unspellable')) failures++
+  console.log(`extension writer gates: ${inputs.length * 2 + 1} inputs, ${failures} failures`)
+  return failures === 0
 }
 
 function runEnumeration(kind: string, max: number): boolean {

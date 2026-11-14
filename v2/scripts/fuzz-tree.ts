@@ -9,7 +9,7 @@
 // The same seed gives the same mutants.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CarveTreeError, decodeTree, encodeTree, parse, render, write } from '../src/index.ts'
+import { CarveTreeError, decodeTree, encodeTree, parse, render, tabsExtensions, write } from '../src/index.ts'
 import { NODE_TABLE } from '../src/ast-validate.ts'
 
 function option(name: string, fallback: string): string {
@@ -88,9 +88,19 @@ const SEEDS: Json[] = [
     ],
   },
   {
-    astVersion: '2.1', extensions: [{ name: 'org.example.y', required: false }],
+    astVersion: '2.1', extensions: [{ name: 'org.example.y', version: '1', required: false }],
     document: { type: 'document', astVersion: '2.1', children: [PARAGRAPH] },
   },
+  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.unknown', version: '1', required: false }],
+    children: [{ type: 'block_extension', name: 'test.unknown', version: '1', children: [],
+      fallback: [PARAGRAPH], props: { title: 'unknown' } }] },
+  { type: 'document', astVersion: '2.0', extensions: [{ name: 'test.nested', version: '1', required: false }],
+    children: [{ type: 'block_extension', name: 'test.nested', version: '1', fallback: [],
+      children: [{ type: 'block_extension', name: 'test.nested', version: '1', children: [], fallback: [PARAGRAPH] }] }] },
+]
+
+const INVALID_EXTENSION_NODES: Json[] = [
+  { type: 'block_extension', name: 'test.unknown', version: '1', children: [] },
 ]
 
 for (const seed of SEEDS) decodeTree(JSON.stringify(seed))
@@ -304,10 +314,15 @@ if (process.argv[1] === import.meta.filename) {
   const examples = JSON.parse(readFileSync(join(import.meta.dirname, '../data/examples.json'), 'utf8')) as { input: string }[]
   const treeOf = (src: string, positions: boolean): Json => JSON.parse(encodeTree(parse(src, { positions }))) as Json
   const parsed = examples.flatMap(({ input }) => [treeOf(input, true), treeOf(input, false)])
+  const tabs = ':::: tabs\n::: tab "One"\nBody\n:::\n::::\n'
+  parsed.push(JSON.parse(encodeTree(parse(tabs, { extensions: tabsExtensions, positions: true }))) as Json)
+  parsed.push(JSON.parse(encodeTree(parse(tabs, { extensions: tabsExtensions, positions: false }))) as Json)
   for (const seed of SEEDS) decodeTree(JSON.stringify(seed))
   // The seeds hold the rare types, so they are taken as often as all examples together.
   const trees = [...parsed, ...Array.from({ length: parsed.length }, (_, at) => SEEDS[at % SEEDS.length]!)]
-  const nodes = trees.flatMap((tree) => containers(tree, []).filter((value) => !Array.isArray(value) && typeof value['type'] === 'string'))
+  const nodes = [...trees.flatMap((tree) => containers(tree, [])
+    .filter((value) => !Array.isArray(value) && typeof value['type'] === 'string')),
+    ...INVALID_EXTENSION_NODES]
   const next = random(seed)
   const counts: Counts = { mutants: 0, accepted: 0, refused: 0, bugs: [], swaps: 0, swapsAccepted: 0 }
   const started = Date.now()
