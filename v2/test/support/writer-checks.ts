@@ -1,8 +1,9 @@
 // The checks of the writer (spec/0.2/writer.md): its two gates, with and without the sidecar,
 // that a canonical input stays as it is, and that its escapes are those of the procedure of C2-W-088.
 import { format, formatWithDiagnostics, parse, treesEqual, write, writeWithDiagnostics } from '../../src/index.ts'
-import { type AstNode, type DocumentNode, type Node } from '../../src/ast.ts'
+import { type DocumentNode, type Node, type Position, type TextNode } from '../../src/ast.ts'
 import { type Diagnostic } from '../../src/diagnostics.ts'
+import { isNode } from './nodes.ts'
 
 const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline']
 
@@ -45,7 +46,7 @@ function stringOffsets(src: string): Map<number, number> {
 }
 
 interface Placed {
-  node: AstNode
+  node: Node
   inCell: boolean
 }
 
@@ -60,7 +61,7 @@ function placedNodes(tree: Node): Placed[] {
     if (typeof value !== 'object' || value === null) return
     const record = value as Record<string, unknown>
     const cell = inCell || record['type'] === 'table_cell'
-    if (typeof record['type'] === 'string' && record['pos'] !== undefined) out.push({ node: value as AstNode, inCell: cell })
+    if (isNode(value) && value.pos !== undefined) out.push({ node: value, inCell: cell })
     for (const key in record) if (key !== 'pos') visit(record[key], cell)
   }
   visit(tree, false)
@@ -74,16 +75,18 @@ function placedNodes(tree: Node): Placed[] {
 function textEscapes(written: string, placed: readonly Placed[], offsets: Map<number, number>): number[] {
   const out: number[] = []
   for (const { node, inCell } of placed) {
-    if (node.type === 'text' && node.pos !== undefined) nodeEscapes(written, node, inCell, offsets, out)
+    if (node.type === 'text' && node.pos !== undefined) nodeEscapes(written, node, node.pos, inCell, offsets, out)
   }
   return out.sort((x, y) => x - y)
 }
 
 /** Adds the escapes of one text node, walking its source and its value side by side. */
-function nodeEscapes(written: string, node: AstNode, inCell: boolean, offsets: Map<number, number>, out: number[]): void {
-  const value = node.value ?? ''
-  let at = offsets.get(node.pos!.startOffset) ?? -1
-  const end = offsets.get(node.pos!.endOffset) ?? -1
+function nodeEscapes(
+  written: string, node: TextNode, pos: Position, inCell: boolean, offsets: Map<number, number>, out: number[],
+): void {
+  const value = node.value
+  let at = offsets.get(pos.startOffset) ?? -1
+  const end = offsets.get(pos.endOffset) ?? -1
   for (let index = 0; at >= 0 && at < end && index < value.length; index++) {
     const next = written[at + 1]
     if (written[at] === '\\' && at + 1 < end && isAsciiPunctuation(written.charCodeAt(at + 1)) && value[index] === next) {
@@ -106,8 +109,8 @@ function countBelow(sorted: readonly number[], offset: number): number {
 }
 
 /** The name of a construct: its type, and for smart punctuation its kind, which a neighbor can decide (C2-I-104). */
-function constructName(node: AstNode): string {
-  return node.type === 'smart_punctuation' ? `${node.type}:${node.kind ?? ''}` : node.type
+function constructName(node: Node): string {
+  return node.type === 'smart_punctuation' ? `${node.type}:${node.kind}` : node.type
 }
 
 /** The constructs of a parse as `type@offset`, with offsets in the bare text, and the bare offset at which each ends. */
@@ -176,7 +179,7 @@ function leftmostUnheld(parsed: Node, text: string, toBare: readonly number[], h
     if (node.type === 'text' || node.type === 'document' || node.pos === undefined) continue
     let start = offsets.get(node.pos.startOffset) ?? -1
     const end = offsets.get(node.pos.endOffset) ?? -1
-    let type = node.type
+    let type: string = node.type
     const heldEnd = held.get(`${constructName(node)}@${toBare[start]!}`)
     if (heldEnd !== undefined) {
       if (node.attrs === undefined || heldEnd >= toBare[end]!) continue
