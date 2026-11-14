@@ -14,6 +14,7 @@ interface ResultData {
 
 interface SlotData {
   nodes: Record<string, string[]>
+  extensions?: Record<string, { slots: Record<string, unknown> }>
 }
 
 function table<T>(name: string, nodes: Record<string, T[]>, item: (value: T) => string): string[] {
@@ -39,6 +40,11 @@ export function generateAstTables(resultsJson: string, slotsJson: string): strin
     ...table('AST_RESULTS', results.nodes, (value) => JSON.stringify(value)),
     '',
     ...table('NODE_SLOTS', slots.nodes, (value) => JSON.stringify(value)),
+    '',
+    'export const EXTENSION_SLOT_ORDER: ReadonlyMap<string, readonly string[]> = new Map([',
+    ...Object.entries(slots.extensions ?? {}).map(([name, row]) =>
+      `  [${JSON.stringify(name)}, ${JSON.stringify(Object.keys(row.slots))}],`),
+    '])',
     '',
   ].join('\n')
 }

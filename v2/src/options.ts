@@ -2,6 +2,7 @@
 import {
   BOOLEAN_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
 } from './option-tables.ts'
+import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 
 export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii'
 export type Mode = 'interactive' | 'static'
@@ -22,11 +23,11 @@ export interface Social {
 }
 
 export interface Options {
-  extensions?: readonly unknown[]
+  extensions?: readonly ExtensionDefinition[]
   includes?: unknown
   headingIds?: HeadingIds
   mode?: Mode
-  renderers?: Readonly<Record<string, unknown>>
+  renderers?: Readonly<Record<string, ExtensionRenderer>>
   symbols?: Readonly<Record<string, string>>
   labels?: Readonly<Record<string, string>>
   social?: Social | null
@@ -54,6 +55,9 @@ export type RenderOptions = Omit<Options, 'alignTables' | 'normalize' | 'rules' 
 
 /** The options with every default filled in. */
 export interface Settings {
+  extensions: readonly ExtensionDefinition[]
+  renderers: Readonly<Record<string, ExtensionRenderer>>
+  urlPolicy: UrlPolicy
   headingIds: HeadingIds
   mode: Mode
   symbols: Readonly<Record<string, string>>
@@ -225,10 +229,83 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }
   }
-  // 0.2.0 has no extension API, expands no include and has no build-time renderer.
-  for (const name of ['extensions', 'includes', 'renderers']) {
+  for (const name of ['includes']) {
     if (!isEmpty(given[name])) throw new CarveOptionError(name, 'not offered by this engine')
   }
+}
+
+function extensionsValue(value: unknown): readonly ExtensionDefinition[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new CarveOptionError('extensions', 'not a list')
+  const names = new Set<string>()
+  const claims = new Set<string>()
+  for (const entry of value) {
+    if (!isPlainObject(entry) || typeof entry['name'] !== 'string' || typeof entry['version'] !== 'string' ||
+      !isPlainObject(entry['props']) || !isPlainObject(entry['slots'])) {
+      throw new CarveOptionError('extensions', 'an invalid extension registration')
+    }
+    if (!validQualifiedName(entry['name']) || entry['version'] === '') {
+      throw new CarveOptionError('extensions', 'an invalid extension name or version')
+    }
+    checkRegistrationFields(entry)
+    if (names.has(entry['name'])) throw new CarveOptionError('extensions', `duplicate name ${entry['name']}`)
+    names.add(entry['name'])
+    const key = matcherKey(entry)
+    if (key === null) continue
+    if (claims.has(key)) throw new CarveOptionError('extensions', `duplicate claim ${key}`)
+    claims.add(key)
+  }
+  return value as ExtensionDefinition[]
+}
+
+function matcherKey(entry: Readonly<Record<string, unknown>>): string | null {
+  const matcher = entry['matcher']
+  if (matcher === undefined) return null
+  if (!isPlainObject(matcher) || !['inline', 'div', 'fence'].includes(matcher['form'] as string) ||
+    typeof matcher['name'] !== 'string' || matcher['name'] === '' ||
+    typeof entry['transform'] !== 'function') throw new CarveOptionError('extensions', 'an invalid matcher')
+  return `${matcher['form']}:${matcher['name']}`
+}
+
+function validQualifiedName(name: string): boolean {
+  const parts = name.split('.')
+  if (parts.length < 2) return false
+  return parts.every((part) => {
+    const first = part.charCodeAt(0) | 32
+    if (first < 97 || first > 122) return false
+    for (let at = 1; at < part.length; at++) {
+      const code = part.charCodeAt(at) | 32
+      if ((code < 97 || code > 122) && (code < 48 || code > 57) && code !== 45 && code !== 95) return false
+    }
+    return true
+  })
+}
+
+function checkRegistrationFields(entry: Readonly<Record<string, unknown>>): void {
+  const props = entry['props']
+  const slots = entry['slots']
+  if (!isPlainObject(props) || !isPlainObject(slots)) return
+  for (const kind of Object.values(props)) {
+    if (!['string', 'number', 'boolean', 'object', 'array'].includes(kind as string)) {
+      throw new CarveOptionError('extensions', 'an invalid prop schema')
+    }
+  }
+  for (const rule of Object.values(slots)) {
+    if (!isPlainObject(rule) || !['block', 'inline', 'block_extension', 'inline_extension'].includes(rule['kind'] as string)) {
+      throw new CarveOptionError('extensions', 'an invalid slot schema')
+    }
+  }
+}
+
+function renderersValue(value: unknown): Readonly<Record<string, ExtensionRenderer>> {
+  if (value === undefined) return {}
+  if (!isPlainObject(value)) throw new CarveOptionError('renderers', 'not a map')
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry) || typeof entry['version'] !== 'string' || typeof entry['render'] !== 'function') {
+      throw new CarveOptionError('renderers', `invalid renderer ${name}`)
+    }
+  }
+  return value as Readonly<Record<string, ExtensionRenderer>>
 }
 
 /**
@@ -241,6 +318,9 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
   const policy = urlPolicyValue(given)
   const allowed = schemeSet(policy, 'allow')
   return {
+    extensions: extensionsValue(given['extensions']),
+    renderers: renderersValue(given['renderers']),
+    urlPolicy: policy,
     headingIds: enumValue(given, 'headingIds') as HeadingIds,
     mode: enumValue(given, 'mode') as Mode,
     symbols: stringMap(given, 'symbols') ?? {},

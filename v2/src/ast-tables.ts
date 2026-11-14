@@ -683,3 +683,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
     "metadata.bibliography.containerTitle",
   ]],
 ])
+
+export const EXTENSION_SLOT_ORDER: ReadonlyMap<string, readonly string[]> = new Map([
+  ["carve.tab", ["title","body"]],
+  ["carve.tabs", ["tabs"]],
+])

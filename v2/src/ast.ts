@@ -1,7 +1,8 @@
 // The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
 // node type, told apart by `type`.
-import { type Block, type CaptionNode, type DocumentNode, type Inline, type Node, type NodeOfType } from './ast-nodes.ts'
-import { NODE_SLOTS } from './ast-tables.ts'
+import { type Block, type BlockExtensionNode, type CaptionNode, type DocumentNode, type Inline, type InlineExtensionNode,
+  type Node, type NodeOfType } from './ast-nodes.ts'
+import { EXTENSION_SLOT_ORDER, NODE_SLOTS } from './ast-tables.ts'
 
 export type * from './ast-nodes.ts'
 export { FIELD_VALUES, isFieldValue } from './ast-nodes.ts'
@@ -57,6 +58,8 @@ export interface Metadata {
   authors?: string[]
   date?: string
   bibliography?: BibliographyMetadata
+  headers?: { placement: 'default' | 'first' | 'even', children: Block[] }[]
+  footers?: { placement: 'default' | 'first' | 'even', children: Block[] }[]
 }
 
 /** C2-A-120: a citation locator and its inline text. */
@@ -78,7 +81,7 @@ export interface IncludeOptions {
 export interface ExtensionDeclaration {
   name: string
   required: boolean
-  version?: string
+  version: string
 }
 
 export interface Resource {
@@ -216,13 +219,37 @@ function isNode(value: unknown): value is Node {
 }
 
 function visitSlot(node: Node, path: string, visit: SlotVisitor): void {
-  if (path.endsWith('.*')) {
-    const slots = slotValue(node, path.slice(0, -2))
-    if (!isRecord(slots)) return
-    for (const [name, value] of Object.entries(slots)) visitValue(value, `${path.slice(0, -2)}/${pointerKey(name)}`, visit)
+  if (path === 'slots.*' && (node.type === 'block_extension' || node.type === 'inline_extension')) {
+    visitExtensionSlots(node, visit)
     return
   }
+  if (path.includes('.*.')) { visitNestedWildcard(node, path, visit); return }
+  if (path.endsWith('.*')) { visitWildcard(node, path, visit); return }
   visitValue(slotValue(node, path), path.replaceAll('.', '/'), visit)
+}
+
+function visitExtensionSlots(node: BlockExtensionNode | InlineExtensionNode,
+  visit: SlotVisitor): void {
+  const slots = node.slots
+  if (slots === undefined) return
+  for (const name of EXTENSION_SLOT_ORDER.get(node.name) ?? Object.keys(slots)) {
+    visitValue(slots[name], `slots/${pointerKey(name)}`, visit)
+  }
+}
+
+function visitNestedWildcard(node: Node, path: string, visit: SlotVisitor): void {
+  const [before, after] = path.split('.*.')
+  if (before === undefined || after === undefined) return
+  const entries = slotValue(node, before)
+  if (!Array.isArray(entries)) return
+  entries.forEach((entry, index) => visitValue(ownField(entry, after), `${before.replaceAll('.', '/')}/${index}/${after}`, visit))
+}
+
+function visitWildcard(node: Node, path: string, visit: SlotVisitor): void {
+  const stem = path.slice(0, -2)
+  const slots = slotValue(node, stem)
+  if (!isRecord(slots)) return
+  for (const [name, value] of Object.entries(slots)) visitValue(value, `${stem}/${pointerKey(name)}`, visit)
 }
 
 function visitValue(value: unknown, step: string, visit: SlotVisitor): void {
