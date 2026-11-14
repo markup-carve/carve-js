@@ -96,6 +96,20 @@ function longestRun(text: string, code: number): number {
   return longest
 }
 
+/** Whether 0.1 closed the fence `node` on its last line, and did not refuse the line for its indent and keep it in the body. */
+function closedAtEnd(node: Node01): boolean {
+  const { startLine, endLine } = node.pos!
+  if (endLine === startLine) return false
+  const content = node.content
+  if (typeof content === 'string') {
+    const body = content === '' ? 0 : content.split('\n').length - (content.endsWith('\n') ? 1 : 0)
+    return body < endLine - startLine
+  }
+  const rows = Array.isArray(node.rows) ? (node.rows as Node01[]) : []
+  const last = rows[rows.length - 1]?.pos
+  return last === undefined || last.endLine < endLine
+}
+
 /**
  * U-116: 0.2 has no tilde fence (C2-B-108). The opener and the closer become a backtick run longer
  * than every backtick run in the body; an info string with a backtick has no backtick fence (C2-B-118).
@@ -113,7 +127,7 @@ function tildeFence(ctx: Context, node: Node01): void {
   const run = '`'.repeat(Math.max(3, longestRun(ctx.src.slice(openerEnd, end), BACKTICK) + 1))
   const message = 'tilde fence written as a backtick fence'
   change(ctx, 'U-116', start, start + length, run, message)
-  if (endLine === startLine) return
+  if (!closedAtEnd(node)) return
   const text = lineText(ctx.lines, endLine)
   const inner = insideQuotes(text)
   const closer = text.length - inner.length + indentOf(inner)

@@ -56,6 +56,7 @@ const VARIANTS: Variant[] = [
   { entries: 'U-040', input: '[a]: /one\n\ntext\n\n[a]: /two\n\n[x][a]\n', output: '\ntext\n\n[a]: /two\n\n[x][a]\n', check: 'pass', stable: true },
   // A tilde line is text in 0.2, so a backtick fence runs on past the closer 0.1 refused, as 0.1 did.
   { entries: 'U-116', input: '~~~\ncode\n  ~~~\nafter\n', output: '```\ncode\n  ~~~\nafter\n', check: 'pass', stable: true },
+  { entries: 'U-116', input: '- ~~~\n  x\n    ~~~\n', output: '- ```\n  x\n    ~~~\n', check: 'pass', stable: true },
   { entries: 'U-116', input: '> ~~~\n> x\n> ~~~~\n', output: '> ```\n> x\n> ```\n', check: 'pass', stable: true },
   { entries: 'U-116', input: '- ~~~\n  x\n  ~~~\n- b\n', output: '- ```\n  x\n  ```\n- b\n', check: 'pass', stable: true },
   { entries: 'U-116', input: '~~~\n```\n``` a\n~~~\n', output: '````\n```\n``` a\n````\n', check: 'pass', stable: true },
