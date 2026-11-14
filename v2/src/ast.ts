@@ -1,5 +1,9 @@
-// The public tree of contract 2.0 (spec/0.2/ast.md). One interface for every node type: a node
-// carries `type` and the fields its type has, and nothing it does not use (C2-A-021, C2-A-028).
+// The public tree of contract 2.0 (spec/0.2/ast.md). `Node` (ast-nodes.ts) has one interface per
+// node type, told apart by `type`; `AstNode` is the loose view of any node, in which every field is optional.
+import { type Node } from './ast-nodes.ts'
+
+export type * from './ast-nodes.ts'
+export { handle } from './ast-nodes.ts'
 
 export const AST_VERSION = '2.0'
 
@@ -56,6 +60,7 @@ export interface Resource {
   size?: number
 }
 
+/** Any node, with every field of every type optional. A node of type `T` is a `NodeOfType[T]`. */
 export interface AstNode {
   type: string
   children?: AstNode[]
@@ -163,6 +168,14 @@ export const INLINE_PARENTS: readonly string[] = [
 ]
 
 const NONE: readonly never[] = []
+
+/**
+ * The typed view of a node of a tree the parser built or `validateTree` accepted, which has the
+ * shape the node table gives its type. Readers narrow it by `type`.
+ */
+export function asNode(node: AstNode): Node {
+  return node as Node
+}
 
 /** The children of `node`, or none. */
 export function childrenOf(node: AstNode): readonly AstNode[] {

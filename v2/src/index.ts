@@ -41,6 +41,7 @@ export {
   AST_VERSION, type AstNode, type Attrs, type Envelope, type ExtensionDeclaration, type Marker, type Position,
   type Resource, type RubyPair, type Task,
 } from './ast.ts'
+export type * from './ast-nodes.ts'
 export { decodeTree, encodeEnvelope, encodeTree, treesEqual } from './ast-json.ts'
 export { CarveTreeError, MAX_TREE_DEPTH, validateTree } from './ast-validate.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from './layout.ts'

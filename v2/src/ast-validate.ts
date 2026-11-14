@@ -35,10 +35,10 @@ const TABLE_GROUPS = ['table_head', 'table_body', 'table_foot']
 const COMMON = ['type', 'attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
 
 /** What the `children` of a node type hold: `blocks`, `inlines`, `none`, or the member types by name. */
-type Content = 'blocks' | 'inlines' | 'none' | readonly string[]
+export type Content = 'blocks' | 'inlines' | 'none' | readonly string[]
 
 /** The row of one node type in the table of C2-A-050: its children, its required and its optional fields. */
-type Rule = readonly [Content, readonly string[], readonly string[]]
+export type Rule = readonly [Content, readonly string[], readonly string[]]
 
 const REFERENCE = ['key', 'namespace']
 const EXTENSION = ['version', 'props', 'slots', 'payload', 'resourceIds']
@@ -159,6 +159,9 @@ const ENUMS = new Map<string, readonly string[]>([
 ])
 const STAGES = ['referenceResolution', 'tableAlignment']
 const ORDERED_STYLES = ['1', 'a', 'A', 'i', 'I']
+
+/** The node table and the field kinds, which scripts/generate-ast-nodes.ts writes the node interfaces from. */
+export const NODE_TABLE = { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES }
 
 type Value = unknown
 type Fields = Record<string, Value>
