@@ -296,6 +296,8 @@ function hasDangerousCss(value: string): boolean {
  * authored value reaches the output through here: the keys, the classes, the language, `rel` and the derived values.
  */
 export function keyValue(name: string, value: string): string {
+  // Only a value with a colon has a scheme to test, and only `style` has other tests.
+  if (name !== 'style' && !value.includes(':')) return value
   const commas = URL_LIST_ATTRIBUTES.get(name)
   // The whole value is tested too: a scheme split by a separator, `java script:`, fails as it does in a single URL.
   if (hasDeniedPrefix(value, 0, value.length) || (commas !== undefined && listHasDeniedPrefix(value, commas))) return ''
