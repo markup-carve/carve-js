@@ -3,9 +3,9 @@
 import { type IncludeNode, type Inline, type LinkReferenceDefinitionNode } from './ast.ts'
 import { contentNodes, FLOW_PLAIN, type TreeContext } from './ast-inline.ts'
 import { unescape } from './attributes.ts'
+import { APOSTROPHE, QUOTE_MARK } from './chars.ts'
 import { readInclude } from './include.ts'
-import { quotedEnd, skipSpaces } from './lines.ts'
-import { isSpaceOrTab } from './source.ts'
+import { definitionDestinationEnd, quotedEnd, skipSpaces } from './lines.ts'
 
 /** The quoted title of a code fence, without its escapes (C2-B-120). */
 export function openerTitle(src: string, start: number, end: number): string {
@@ -24,14 +24,13 @@ export function captionChildren(ctx: TreeContext, start: number, end: number): I
 
 /** C2-B-083: the link definition of `key`, with the destination and the optional quoted title behind its colon. */
 export function linkDefinitionFields(src: string, pos: number, end: number, key: string): LinkReferenceDefinitionNode {
-  let p = skipSpaces(src, pos, end)
-  const start = p
-  while (p < end && !isSpaceOrTab(src.charCodeAt(p)) && src[p] !== '"') p++
+  const start = skipSpaces(src, pos, end)
+  const p = definitionDestinationEnd(src, start, end)
   const out: LinkReferenceDefinitionNode = { type: 'link_reference_definition', key, namespace: 'link', href: src.slice(start, p) }
-  p = skipSpaces(src, p, end)
-  if (p >= end || src[p] !== '"') return out
-  const after = quotedEnd(src, p, end)
-  if (after >= 0) out.title = unescape(src, p + 1, after - 1)
+  const quote = p + 1 < end ? src.charCodeAt(p + 1) : 0
+  if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return out
+  const after = quotedEnd(src, p + 1, end, quote)
+  if (after >= 0) out.title = unescape(src, p + 2, after - 1)
   return out
 }
 

@@ -301,9 +301,9 @@ describe('one-line blocks in detail', () => {
     expect(render('{{ a.crv   @code:v }}')).toBe('<p>{{ a.crv @code:v }}</p>')
   })
 
-  it('a link definition reads a title behind its destination, and one with no destination', () => {
-    expect(block('[a]: /u  "T \\" x"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u', title: 'T " x' })
-    expect(block('[a]: "T"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '', title: 'T' })
+  it('a link definition reads a title behind its destination, and a quoted destination', () => {
+    expect(block('[a]: /u "T \\" x"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u', title: 'T " x' })
+    expect(block('[a]: "T"')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '"T"' })
     expect(block('[a]: /u ')).toEqual({ type: 'link_reference_definition', key: 'a', namespace: 'link', href: '/u' })
   })
 

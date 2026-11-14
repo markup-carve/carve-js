@@ -2,7 +2,7 @@
 // (the end of the line) and copies nothing.
 import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
-  BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
+  APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
@@ -344,29 +344,37 @@ export function footnoteMarkerEnd(src: string, pos: number, end: number): number
   return marker < 0 ? -1 : afterMarkerSpace(src, marker, end, 1)
 }
 
-/** C2-B-083: `[label]:`, one or more spaces, a URL without spaces that may be empty, and an optional quoted title. */
-/** Whether a destination, a title or both stand from `p` to the line end `end`. A label and a colon alone are text. */
-function hasDefinitionTail(src: string, p: number, end: number): boolean {
-  if (p === end) return false
-  while (p < end && !isSpaceOrTab(src.charCodeAt(p)) && src.charCodeAt(p) !== QUOTE_MARK) p++
-  p = skipSpaces(src, p, end)
-  if (p < end && src.charCodeAt(p) === QUOTE_MARK) p = quotedEnd(src, p, end)
-  return p >= 0 && skipSpaces(src, p, end) === end
+/**
+ * C2-B-083: the end of the destination of a link definition whose tail starts at `p`, or -1. The tail is that of
+ * an inline link (C2-I-067, C2-I-068) with a destination of at least one character: a run without whitespace, then
+ * optionally exactly one space and a title in double or single quotes, then only spaces.
+ */
+export function definitionDestinationEnd(src: string, p: number, end: number): number {
+  const start = p
+  while (p < end && !isSpaceOrTab(src.charCodeAt(p))) p++
+  if (p === start) return -1
+  const destination = p
+  const quote = p + 1 < end && src.charCodeAt(p) === SPACE ? src.charCodeAt(p + 1) : 0
+  if (quote === QUOTE_MARK || quote === APOSTROPHE) {
+    const after = quotedEnd(src, p + 1, end, quote)
+    if (after >= 0 && skipSpaces(src, after, end) === end) return destination
+  }
+  return skipSpaces(src, p, end) === end ? destination : -1
 }
 
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
   const marker = labelEnd(src, pos, end, 1, true)
   if (marker < 0 || marker >= end || src.charCodeAt(marker) !== SPACE) return false
-  return hasDefinitionTail(src, skipSpaces(src, marker + 1, end), end)
+  return definitionDestinationEnd(src, skipSpaces(src, marker + 1, end), end) >= 0
 }
 
 /** Offset after the quoted string at `pos`, or -1. */
-export function quotedEnd(src: string, pos: number, end: number): number {
+export function quotedEnd(src: string, pos: number, end: number, quote = QUOTE_MARK): number {
   for (let p = pos + 1; p < end; p++) {
     const code = src.charCodeAt(p)
     if (code === BACKSLASH) p++
-    else if (code === QUOTE_MARK) return p + 1
+    else if (code === quote) return p + 1
   }
   return -1
 }

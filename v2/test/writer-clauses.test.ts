@@ -568,7 +568,8 @@ describe('canonical forms: blocks', () => {
   })
 
   it('C2-W-056: a link definition is the label, the destination and the title in double quotes', () => {
-    expect(format('[a]:    /a   "t"')).toBe('[a]: /a "t"\n')
+    expect(format('[a]:    /a "t"   ')).toBe('[a]: /a "t"\n')
+    expect(format("[a]: /a 't'")).toBe('[a]: /a "t"\n')
     expect(format('[a]: /a')).toBe('[a]: /a\n')
   })
 
