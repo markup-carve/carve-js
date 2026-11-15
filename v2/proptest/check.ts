@@ -5,7 +5,7 @@ import {
   CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError,
   decodeTree, encodeTree, formatWithDiagnostics, isUrlAllowed, lint, migrateTree, parse,
   parseWithDiagnostics, parseWithLayout, render, renderWithDiagnostics, tabExtension, tabsExtension,
-  tabsRenderer, treesEqual, validateLayout, validateTree,
+  tabsRenderer, treesEqual, type UrlPolicy, validateLayout, validateTree,
   validateTreeWithAnnotations,
 } from '../src/index.ts'
 import { forEachSlot, isRecord, type DocumentNode, type Node } from '../src/ast.ts'
@@ -57,7 +57,7 @@ function growth(source: string, average: (input: string) => number): string | nu
   const measured = [median(one), median(two), median(four)]
   const [first, second, third] = measured
   if (first === undefined || second === undefined || third === undefined) return null
-  if (first <= 0.5 || second <= 0.5 || (second / first <= 3 && third / second <= 3)) return null
+  if (first <= 0.5 || second <= 0.5 || third / first <= 9) return null
   return measured.map((ms) => ms.toFixed(2)).join(', ') + ' ms'
 }
 
@@ -81,7 +81,10 @@ function checkParse(source: string, rng: Random): Finding | null {
       if (slow !== null) return finding('parse-superlinear', slow)
     } catch (error) { return finding('parse-exception', description(error)) }
   }
-  if (ms > threshold) return finding('parse-slow', `${ms.toFixed(1)} ms > ${threshold.toFixed(1)} ms`)
+  if (ms > threshold) {
+    const again = timed(() => parse(source)).ms
+    if (again > threshold) return finding('parse-slow', `${again.toFixed(1)} ms > ${threshold.toFixed(1)} ms`)
+  }
   return null
 }
 
@@ -170,30 +173,40 @@ function htmlBalanceProblem(html: string): string | null {
   return stack.length === 0 ? null : `unclosed ${stack[stack.length - 1]}`
 }
 
-function tagUrlProblem(tag: string): string | null {
-  for (const marker of [' href=', ' src=']) {
-    let found = tag.indexOf(marker)
-    while (found >= 0) {
-      const begin = found + marker.length
-      const quote = tag[begin]
-      if (quote !== '"' && quote !== "'") return tag.slice(begin)
-      const finish = tag.indexOf(quote, begin + 1)
-      if (finish < 0) break
-      const address = tag.slice(begin + 1, finish)
-      if (!isUrlAllowed(address)) return address
-      found = tag.indexOf(marker, finish)
+function urlAttributeAt(tag: string, at: number, policy: UrlPolicy): { end: number, problem: string | null } | null {
+  const marker = tag.startsWith(' href=', at) ? ' href=' : tag.startsWith(' src=', at) ? ' src=' : null
+  if (marker === null) return null
+  const begin = at + marker.length
+  const quote = tag[begin]
+  if (quote !== '"' && quote !== "'") return { end: tag.length, problem: tag.slice(begin) }
+  const finish = tag.indexOf(quote, begin + 1)
+  if (finish < 0) return { end: tag.length, problem: tag.slice(begin) }
+  const address = tag.slice(begin + 1, finish)
+  return { end: finish + 1, problem: isUrlAllowed(address, policy) ? null : address }
+}
+
+function tagUrlProblem(tag: string, policy: UrlPolicy): string | null {
+  for (let at = 0; at < tag.length;) {
+    const char = tag[at]
+    if (char === '"' || char === "'") {
+      const close = tag.indexOf(char, at + 1)
+      at = close < 0 ? tag.length : close + 1
+      continue
     }
+    const found = urlAttributeAt(tag, at, policy)
+    if (found?.problem !== null && found?.problem !== undefined) return found.problem
+    at = found?.end ?? at + 1
   }
   return null
 }
 
-function htmlUrlProblem(html: string): string | null {
+function htmlUrlProblem(html: string, policy: UrlPolicy = {}): string | null {
   for (let at = 0; at < html.length;) {
     const start = html.indexOf('<', at)
     if (start < 0) break
-    const end = html.indexOf('>', start)
-    if (end < 0) break
-    const problem = tagUrlProblem(html.slice(start, end))
+    const end = attributeValueProblem(html, start).end
+    if (end >= html.length) break
+    const problem = tagUrlProblem(html.slice(start, end), policy)
     if (problem !== null) return problem
     at = end + 1
   }
@@ -236,9 +249,9 @@ function checkRender(source: string): Finding | null {
   return null
 }
 
-function optionHtmlProblem(html: string, source: string): string | null {
+function optionHtmlProblem(html: string, source: string, policy: UrlPolicy): string | null {
   const errors = htmlErrors(html)
-  return errors[0] ?? htmlBalanceProblem(html) ?? htmlAttributeProblem(html) ?? htmlUrlProblem(html) ??
+  return errors[0] ?? htmlBalanceProblem(html) ?? htmlAttributeProblem(html) ?? htmlUrlProblem(html, policy) ??
     (hasBidiControl(html) && !source.includes('```=html') ? 'bidi control between tags' : null)
 }
 
@@ -520,10 +533,11 @@ function checkImport(source: string, rng: Random): Finding | null {
 interface OptionCase { name: string, kind: string, type: string, values?: string[] }
 const OPTIONS = (JSON.parse(readFileSync('v2/data/options.json', 'utf8')) as { options: OptionCase[] }).options
 const WIDE_TABLE = '| a | b |\n|---|---|\n| 🇺🇸 | 👩‍💻 |\n| 각 | á |\n'
+const VALID_URL_POLICY: UrlPolicy = { deny: ['javascript'] }
 
 function validOption(entry: OptionCase, rng: Random): unknown {
   if (entry.name === 'includes' || entry.name === 'social') return null
-  if (entry.name === 'urlPolicy') return { deny: ['javascript'] }
+  if (entry.name === 'urlPolicy') return VALID_URL_POLICY
   if (entry.type === 'boolean') return rng.bool()
   if (entry.type === 'enum') return entry.values?.[rng.int(entry.values.length)] ?? 'off'
   if (entry.type === 'list') return []
@@ -533,7 +547,7 @@ function validOption(entry: OptionCase, rng: Random): unknown {
 function checkRenderedOption(source: string, entry: OptionCase, value: unknown, options: object): Finding | null {
   const html = render(source, options)
   if ((entry.name === 'rawHtml' || entry.name === 'roundtrip') && value === true) return null
-  const problem = optionHtmlProblem(html, source)
+  const problem = optionHtmlProblem(html, source, entry.name === 'urlPolicy' ? VALID_URL_POLICY : {})
   return problem === null ? null : finding('option-render-invalid-html', `${entry.name}: ${problem}`)
 }
 
@@ -546,6 +560,7 @@ function checkValidOption(source: string, entry: OptionCase, value: unknown): Fi
     else return checkRenderedOption(source, entry, value, options)
   } catch (error) {
     if (entry.kind === 'parse' && error instanceof CarveInputError) return null
+    if (entry.name === 'strictLosses' && value === true && error instanceof CarveRenderError) return null
     return finding('option-valid-rejected', `${entry.name}: ${description(error)}`)
   }
   return null

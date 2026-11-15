@@ -14,6 +14,22 @@ void test('C2-W-022: an empty document has one final line feed', () => {
   assert.equal(check('format', '', random(1)), null)
 })
 
+void test('C2-B-169: many empty cells do not fail the parse growth check', () => {
+  assert.equal(check('parse', '|'.repeat(4096), { int: () => 0, bool: () => false }), null)
+})
+
+void test('C2-H-130: strict losses may reject a document while accepting the option', () => {
+  assert.equal(check('render', '{{ e }}', random(1829993783)), null)
+})
+
+void test('C2-H-128: a host URL policy can permit a URL denied by the default', () => {
+  assert.equal(check('render', '[](data:)', random(1416196675)), null)
+})
+
+void test('C2-H-002: href text inside a quoted attribute is not an href attribute', () => {
+  assert.equal(check('render', '`L`HTML\n\n*[HTML]: H href=h', random(762805509)), null)
+})
+
 void test('C2-W-022: fmt --check recognizes an empty file as noncanonical', () => {
   const directory = mkdtempSync(join(tmpdir(), 'carve-empty-'))
   try {
