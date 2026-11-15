@@ -255,7 +255,12 @@ interface DivHead {
 
 function divHead(ctx: TreeContext, info: OpenerInfo): DivHead {
   const head: DivHead = {}
-  if (info.titleStart >= 0) head.title = captionChildren(ctx, info.titleStart, info.titleEnd)
+  if (info.titleStart >= 0) {
+    const title = captionChildren(ctx, info.titleStart, info.titleEnd)
+    // C2-I-098: the title of a div is inline flow.
+    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, title)
+    head.title = title
+  }
   if (info.labelStart >= 0) head.groupLabel = ctx.src.slice(info.labelStart, info.labelEnd)
   return head
 }

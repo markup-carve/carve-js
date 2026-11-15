@@ -98,3 +98,20 @@ describe('C2-B-117/119: an opener word is the longest run of its characters', ()
     expect(first('::: box "t" [l]\nq\n:::\n')).toMatchObject({ title: [{ value: 't' }], groupLabel: 'l' })
   })
 })
+
+describe('C2-I-098: abbreviations in every inline flow', () => {
+  const abbr = '<abbr title="Hyper">HT</abbr>'
+
+  it('C2-I-098: a table cell is inline flow', () => {
+    const html = render('|= HT | b |\n| x HT y | *HT* |\n\n*[HT]: Hyper\n')
+    expect(html).toContain(`<th scope="row">${abbr}</th>`)
+    expect(html).toContain(`<td>x ${abbr} y</td><td><strong>${abbr}</strong></td>`)
+    expect(render('| HT |\n+ HT |\n\n*[HT]: Hyper\n')).toContain(`<td>${abbr} ${abbr}</td>`)
+    expect(render('| HT |\n^ HT\n\n*[HT]: Hyper\n')).toContain(`<caption>${abbr}</caption>`)
+  })
+
+  it('C2-I-098: the title of a div, an admonition and a directive is inline flow', () => {
+    expect(render('::: note "HT x"\nq\n:::\n\n*[HT]: Hyper\n')).toContain(`id="adm-1">${abbr} x</p>`)
+    expect(render('::: box "HT"\nq\n:::\n\n*[HT]: Hyper\n')).toContain(abbr)
+  })
+})

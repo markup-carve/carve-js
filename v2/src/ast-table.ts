@@ -4,6 +4,7 @@ import {
   type CellParagraphNode, type CommentNode, isFieldValue, type TableBodyNode, type TableCellNode, type TableColumnNode,
   type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
 } from './ast.ts'
+import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
   FLOW_CELL, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
@@ -70,7 +71,10 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_CELL
-  const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children: leafInlines(ctx, node.spans!, flow) })
+  const children = leafInlines(ctx, node.spans!, flow)
+  // C2-I-098: a cell is inline flow like any other leaf.
+  if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
+  const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children })
   const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if (node.facts > 1) cell.colspan = node.facts
   if (node.rowFacts > 1) cell.rowspan = node.rowFacts
