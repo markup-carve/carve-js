@@ -1303,6 +1303,12 @@
       "name": "unclosed table cell code span",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-215",
+      "name": "invisible percent span between container blocks",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

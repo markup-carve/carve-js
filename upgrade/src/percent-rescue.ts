@@ -79,6 +79,21 @@ function percentLineCandidates(
   return { indented, lengthened }
 }
 
+function opaqueSpanCandidates(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let open = 0; open < lines.length - 2; open++) {
+    if (!(lines[open] ?? '').includes('%%%')) continue
+    for (let close = open + 1; close < Math.min(lines.length - 1, open + 12); close++) {
+      if (!(lines[close] ?? '').includes('%%%')) continue
+      const changed = [...lines]
+      changed.splice(open, close - open + 1)
+      found.push(changed.join('\n'))
+    }
+  }
+  return found
+}
+
 /** C2-B-108, C2-B-110 and C2-B-114: outgrow a closer 0.1 kept inside the comment. */
 export function rescuePercent(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('%%%')) return null
@@ -114,5 +129,8 @@ export function rescuePercent(input: string, output: string, mismatch: ReportRec
         record: recordOf('U-129', mismatch.line, 'the comment fence was lengthened to retain the 0.1 opaque body')
       }
   }
+  const opaque = firstPreserving(expected, opaqueSpanCandidates(input))
+  if (opaque !== null) return { output: opaque, record: recordOf('U-215', mismatch.line,
+    'the invisible percent fence span was removed so the surrounding blocks keep their 0.1 ownership') }
   return null
 }

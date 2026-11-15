@@ -2176,5 +2176,22 @@
       "| a !`b | c d` |\n",
       "| a `b | c d` |\n| e | f |\n"
     ]
+  },
+  {
+    "id": "U-215",
+    "title": "Invisible percent span between container blocks",
+    "class": "rewrite",
+    "inputs": [
+      "> %%%\n> secret\n%%%\n> more\n",
+      ":: t\n%%%\na\n%%%\n: body\n",
+      ":: t\n  %%%\n      a\n  %%%\n:  body\n",
+      ":: t\n%%%\na\n%%%\n:: u\n: body\n"
+    ],
+    "outputs": [
+      "> more\n",
+      ":: t\n: body\n",
+      ":: t\n:  body\n",
+      ":: t\n:: u\n: body\n"
+    ]
   }
 ]
