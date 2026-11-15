@@ -892,6 +892,9 @@ function checkSpanCounts(table: Fields, path: string): void {
   const groups = members(table, 'children')
   groups.forEach((group, groupIndex) => {
     const rows = tableRows(group)
+    const next = groups[groupIndex + 1]
+    const following = isRecord(group) && group['type'] === 'table_body' && isRecord(next) && next['type'] === 'table_foot'
+      ? [...rows, ...tableRows(next)] : rows
     rows.forEach(([row, rowIndex], rowOffset) => {
       const cells = members(row, 'children')
       cells.forEach((cell, cellIndex) => {
@@ -902,8 +905,8 @@ function checkSpanCounts(table: Fields, path: string): void {
           fail(`${cellPath}/colspan`, 'a count contradicts its authored span mark')
         }
         let rowsBelow = 0
-        for (let at = rowOffset + 1; at < rows.length; at++) {
-          const below = members(rows[at]?.[0], 'children')[cellIndex]
+        for (let at = rowOffset + 1; at < following.length; at++) {
+          const below = members(following[at]?.[0], 'children')[cellIndex]
           if (!isRecord(below) || below['span'] !== 'rowspan') break
           rowsBelow++
         }
@@ -1053,7 +1056,8 @@ function sourcePositions(source: string): ReadonlyMap<number, readonly [number, 
   let column = 1
   for (const char of source) {
     offset += utf8Length(char)
-    if (char === '\n') { line++; column = 1 } else column++
+    if (char === '\n') { line++; column = 1 }
+    else if (char !== '\ufeff' || offset !== 3) column++
     positions.set(offset, [line, column])
   }
   return positions

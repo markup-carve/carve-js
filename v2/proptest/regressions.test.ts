@@ -26,6 +26,6 @@ for (const name of readdirSync(directory).filter((file) => file.endsWith('.crv')
       context.todo(`expected failure ${metadata.id}: ${found.kind}`)
       return
     }
-    assert.equal(found?.kind, undefined)
+    assert.equal(found, null)
   })
 }
