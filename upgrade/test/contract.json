@@ -98,5 +98,9 @@
   {"id": "U-118", "title": "Uppercase marker with a dot and one space", "inputs": ["II. Background\n", "MD. Jones\n", "I.  a\nII. b\n"], "outputs": [], "class": "none"},
   {"id": "U-119", "title": "List marker left of every open list under item text", "inputs": ["  - a\n- b\n", " 9. a\n10. b\n", "- a\n    - b\n  - c\n"], "outputs": [], "class": "none"},
   {"id": "U-120", "title": "Ordered task box kept as text", "inputs": ["1. [ ] x\n", "II) [x] y\n"], "outputs": ["1. \\[ ] x\n", "II) \\[x] y\n"], "class": "escape"},
-  {"id": "U-121", "title": "Defined shortcut kept as text", "inputs": ["[text]\n\n[text]: /u\n", "![text]\n\n[text]: /u\n"], "outputs": ["\\[text]\n\n[text]: /u\n", "!\\[text]\n\n[text]: /u\n"], "class": "escape"}
+  {"id": "U-121", "title": "Defined shortcut kept as text", "inputs": ["[text]\n\n[text]: /u\n", "![text]\n\n[text]: /u\n"], "outputs": ["\\[text]\n\n[text]: /u\n", "!\\[text]\n\n[text]: /u\n"], "class": "escape"},
+  {"id": "U-122", "title": "Plus continuation in a list item", "inputs": ["- > +"], "outputs": ["- >"], "class": "rewrite"},
+  {"id": "U-123", "title": "Plus continuation in a description body", "inputs": [":: t\n: +"], "outputs": [":: t\n: {% %}"], "class": "rewrite"},
+  {"id": "U-124", "title": "Plus continuation in a footnote body", "inputs": ["a\n[^n]: +"], "outputs": ["a\n\n[^n]: +"], "class": "rewrite"},
+  {"id": "U-125", "title": "Plus continuation in a quote", "inputs": ["> +\n>"], "outputs": [">\n>"], "class": "rewrite"}
 ]

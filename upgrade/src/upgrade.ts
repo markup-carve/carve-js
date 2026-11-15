@@ -3,6 +3,7 @@ import { type Context, type Finding, makeContext, type Rule } from './context.ts
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
 import { needsPerson, recordOf, type ReportRecord } from './report.ts'
+import { rescuePlus } from './plus-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineOf, lineText, readLines } from './source.ts'
 
@@ -142,7 +143,19 @@ function placeOf(input: string, done: Rewritten, line: number): number {
 /** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */
 export function upgrade(input: string): UpgradeResult {
   const done = rewrite(input)
-  const check = selfCheck(input, done)
+  let check = selfCheck(input, done)
+  if (check === 'mismatch') {
+    const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
+    if (mismatch !== undefined) {
+      const rescued = rescuePlus(input, done.output, mismatch)
+      if (rescued !== null) {
+        done.records.splice(done.records.indexOf(mismatch), 1)
+        done.records.push(rescued.record)
+        done.output = rescued.output
+        check = selfCheck(input, done)
+      }
+    }
+  }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
 }
 

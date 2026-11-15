@@ -100,7 +100,11 @@
     {"id": "U-118", "name": "uppercase marker with a dot and one space", "class": "none", "lint": []},
     {"id": "U-119", "name": "list marker left of every open list under item text", "class": "none", "lint": ["uneven-list-indent"]},
     {"id": "U-120", "name": "ordered task box that 0.1 kept as text", "class": "escape", "lint": []},
-    {"id": "U-121", "name": "defined shortcut that 0.1 kept as text", "class": "escape", "lint": []}
+    {"id": "U-121", "name": "defined shortcut that 0.1 kept as text", "class": "escape", "lint": []},
+    {"id": "U-122", "name": "plus continuation in a list item", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
+    {"id": "U-123", "name": "plus continuation in a description body", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
+    {"id": "U-124", "name": "plus continuation in a footnote body", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
+    {"id": "U-125", "name": "plus continuation in a quote", "class": "rewrite", "lint": ["deprecated-continuation-marker"]}
   ],
   "extensions": [
     {"id": "X-001", "name": "bidirectional control in the source", "class": "none", "lint": []},

@@ -1,0 +1,86 @@
+[
+  {
+    "cause": "C19",
+    "entry": "U-122",
+    "path": "resources/examples/edge-cases/0649-a-first-block-plus-refuses-a-follower-at-an-intervening-column.md",
+    "line": 10,
+    "input": "- > +\n b\n"
+  },
+  {
+    "cause": "C19",
+    "entry": "U-122",
+    "path": "resources/examples/edge-cases/0632-a-continuation-marker-uses-its-container-column.md",
+    "line": 680,
+    "input": "- > +\n> q\n"
+  },
+  {
+    "cause": "C19",
+    "entry": "U-122",
+    "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
+    "line": 707,
+    "input": "- > +\n# h\n"
+  },
+  {
+    "cause": "C16",
+    "entry": "U-123",
+    "path": "resources/examples/edge-cases/0436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not.md",
+    "line": 97,
+    "input": ":: t\n:  +\nflush\n"
+  },
+  {
+    "cause": "C16",
+    "entry": "U-123",
+    "path": "resources/examples/edge-cases/0967-a-block-at-a-pulled-description-column-opens-in-the-description.md",
+    "line": 12,
+    "input": ":: t\n: +\nh\n  # H\n"
+  },
+  {
+    "cause": "C16",
+    "entry": "U-123",
+    "path": "resources/examples/edge-cases/0973-open-state-lifetime-boundaries.md",
+    "line": 474,
+    "input": ":: t\n: +\np\n  # H\n"
+  },
+  {
+    "cause": "C17",
+    "entry": "U-124",
+    "path": "resources/examples/edge-cases/0588-a-block-quote-and-a-footnote-body-take-the-first-block-form.md",
+    "line": 137,
+    "input": "see[^a]\n\n[^a]: +\n"
+  },
+  {
+    "cause": "C17",
+    "entry": "U-124",
+    "path": "resources/examples/edge-cases/0588-a-block-quote-and-a-footnote-body-take-the-first-block-form.md",
+    "line": 161,
+    "input": "[^a]: +\n\nsee[^a]\n"
+  },
+  {
+    "cause": "C17",
+    "entry": "U-124",
+    "path": "resources/examples/edge-cases/0855-a-marker-after-a-note-plus-paragraph-is-text.md",
+    "line": 15,
+    "input": "[^a]: +\nz\n  - y\n\n[^a]\n"
+  },
+  {
+    "cause": "C18",
+    "entry": "U-125",
+    "path": "resources/examples/edge-cases/0851-an-accepted-plus-needs-a-follower-that-reaches-its-host.md",
+    "line": 30,
+    "input": "> +\n>\n"
+  },
+  {
+    "cause": "C18",
+    "entry": "U-125",
+    "path": "resources/examples/edge-cases/0649-a-first-block-plus-refuses-a-follower-at-an-intervening-column.md",
+    "line": 86,
+    "input": "> > +\n  > q\n"
+  },
+  {
+    "cause": "C18",
+    "entry": "U-125",
+    "path": "resources/examples/edge-cases/0633-a-first-block-marker-on-an-indented-opener-reads-only-its-marker-column.md",
+    "line": 868,
+    "input": "> - ```\n> +\n> - s\n"
+  }
+]
