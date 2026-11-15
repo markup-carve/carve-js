@@ -8,7 +8,7 @@ import {
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
-import { isAsciiDigit } from './unicode.ts'
+import { isAsciiDigit, isWhitespace } from './unicode.ts'
 
 const MAX_HEADING_LEVEL = 6
 const MAX_ORDERED_DIGITS = 9
@@ -437,12 +437,44 @@ function pairEnd(src: string, pos: number, end: number, open: number, close: num
 }
 
 /** C2-B-197: exactly one image form, `![alt](destination)` or `![alt][label]`, with optional glued brace blocks. */
+/** C2-I-068: the offset behind a link tail whose title opens at `pos`: a quoted title, spaces and `)`; or -1. */
+function titleTailEnd(src: string, pos: number, end: number): number {
+  const quote = src.charCodeAt(pos)
+  if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return -1
+  const after = quotedEnd(src, pos, end, quote)
+  if (after < 0) return -1
+  const p = skipSpaces(src, after, end)
+  return p < end && src.charCodeAt(p) === PAREN_CLOSE ? p + 1 : -1
+}
+
+/**
+ * C2-I-066 to C2-I-069: the offset behind the link tail whose `(` is at `pos`, or -1. The destination
+ * runs to whitespace with its parentheses balanced or escaped, and a title stands after exactly one space.
+ */
+function linkTailEnd(src: string, pos: number, end: number): number {
+  let depth = 0
+  let p = pos + 1
+  for (; p < end && !isWhitespace(src.charCodeAt(p)); p++) {
+    const code = src.charCodeAt(p)
+    if (code === PAREN_OPEN) depth++
+    else if (code === PAREN_CLOSE && depth-- === 0) return p + 1
+    else if (code === BACKSLASH && isDestinationEscape(src.charCodeAt(p + 1))) p++
+  }
+  return depth === 0 && p < end && src.charCodeAt(p) === SPACE ? titleTailEnd(src, p + 1, end) : -1
+}
+
+/** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
+function isDestinationEscape(code: number): boolean {
+  return code === PAREN_OPEN || code === PAREN_CLOSE || code === BACKSLASH
+}
+
 export function isImageOnly(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
   let p = pairEnd(src, pos + 1, end, BRACKET_OPEN, BRACKET_CLOSE)
   if (p < 0 || p >= end) return false
   const code = src.charCodeAt(p)
-  if (code === PAREN_OPEN) p = pairEnd(src, p, end, PAREN_OPEN, PAREN_CLOSE)
+  // C2-B-197: the shape is that of the inline form, so a tail the inline pass rejects makes no block image line.
+  if (code === PAREN_OPEN) p = linkTailEnd(src, p, end)
   else if (code === BRACKET_OPEN) p = pairEnd(src, p, end, BRACKET_OPEN, BRACKET_CLOSE)
   else return false
   return p >= 0 && skipSpaces(src, attributeBlocksEnd(src, p, end), end) === end

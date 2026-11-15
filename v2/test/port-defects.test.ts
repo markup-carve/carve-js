@@ -226,3 +226,18 @@ describe('C2-I-111: a hyphen run is decided as a whole', () => {
     expect(dashes(16)).toBe('––––––––')
   })
 })
+
+describe('C2-B-017/197: only a block image line takes a caption below a paragraph', () => {
+  it('C2-B-197: a tail the inline pass rejects makes no block image line, so the caption is a lazy line', () => {
+    for (const line of ['![]( )', '![alt](  *****a.png)', '![alt](a b)', '![a](u  "t")', '![a](u "t)', '![a](u(x)', '![a](u\tv)']) {
+      expect(types(`${line}\n^ C\n`), line).toEqual(['paragraph'])
+    }
+  })
+
+  it('C2-B-197: every tail of the inline form still makes one', () => {
+    for (const line of ['![a](u)', '![a]()', '![a](u "t")', "![a](u 't')", '![a](u "t"  )', '![a](u(x))', '![a](u\\))', '![a](u){.c}']) {
+      expect(types(`${line}\n^ C\n`), line).toEqual(['figure'])
+    }
+    expect(types('![a][l]\n^ C\n\n[l]: u\n')).toEqual(['figure', 'link_reference_definition'])
+  })
+})
