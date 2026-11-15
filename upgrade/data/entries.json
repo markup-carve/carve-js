@@ -1411,6 +1411,12 @@
       "name": "literal curly quote for old smart quote direction",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-234",
+      "name": "literal backslash run in unresolved reference",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

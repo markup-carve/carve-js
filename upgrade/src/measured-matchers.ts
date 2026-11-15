@@ -112,9 +112,14 @@ function imageReferenceMatch(input: string, expected: string, actual: string): s
   return null
 }
 
+function unresolvedEscapedLabel(input: string, expected: string, actual: string): boolean {
+  return input.startsWith('[\\') && input.includes('][]') && !expected.includes('<a') && !actual.includes('<a')
+}
+
 function referenceMatch(input: string, expected: string, actual: string): string | null {
   if (input.includes('javascript:') || input.includes('\u202e')) return 'U-164'
   if (input.includes('][@')) return 'U-166'
+  if (unresolvedEscapedLabel(input, expected, actual)) return 'U-158'
   if (input.includes('][') && input.includes(']{') && expected.includes('{') && actual.includes('{')
     && !expected.includes('<a') && !actual.includes('<a')) return 'U-158'
   const footnote = footnoteReferenceMatch(input, expected, actual)

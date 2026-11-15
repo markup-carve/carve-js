@@ -379,6 +379,21 @@ function smartQuoteCandidates(output: string, expected: string): Candidate[] {
     candidate('U-233', form, 'the smart quote direction was written with a literal curly quote'))
 }
 
+function unresolvedReferenceBackslashes(output: string): Candidate[] {
+  if (!output.includes('][')) return []
+  const found: Candidate[] = []
+  for (let at = 0; at < output.length; at++) {
+    if (output[at] !== '\\' || output[at - 1] === '\\') continue
+    let end = at
+    while (output[end] === '\\') end++
+    if (end - at > 8 || end - at === 1 && !output.startsWith('[')
+      || output[end] !== '^' && output[end] !== '\n') continue
+    found.push(candidate('U-234', output.slice(0, at) + '\\\\' + output.slice(at),
+      'the unresolved reference keeps the 0.1 literal backslash run'))
+  }
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -405,7 +420,8 @@ export function rescueMinor(
     ...noteItemFollower(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output),
-    ...smartQuoteCandidates(output, expected)
+    ...smartQuoteCandidates(output, expected),
+    ...unresolvedReferenceBackslashes(output)
   ]
   for (const item of candidates) {
     try {

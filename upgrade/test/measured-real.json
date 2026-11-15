@@ -3065,5 +3065,27 @@
     "entries": [
       "U-233"
     ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-079",
+    "path": "resources/examples/edge-cases/0314-a-footnote-in-an-unresolved-reference-is-not-a-reference.md",
+    "line": 54,
+    "input": "a [t\\\\^[n]][nope] b\n",
+    "check": "pass",
+    "entries": [
+      "U-234"
+    ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-079",
+    "path": "resources/examples/edge-cases/0965-unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi.md",
+    "line": 64,
+    "input": "[a\\\\\\\nb][missing]\n",
+    "check": "pass",
+    "entries": [
+      "U-234"
+    ]
   }
 ]

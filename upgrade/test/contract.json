@@ -1560,7 +1560,8 @@
       "[a][a]{.c}{#i}\n",
       "[a][b]{.c}{.d}\n",
       "x[a][a]{key=v}{#i}\n",
-      "[a][]{#i}{.c}\n"
+      "[a][]{#i}{.c}\n",
+      "[\\*][]"
     ],
     "outputs": [],
     "class": "report"
@@ -2445,6 +2446,21 @@
     ],
     "outputs": [
       ":a:“q\"\n:long-name:‘q'\n"
+    ]
+  },
+  {
+    "id": "U-234",
+    "title": "Literal backslash run in unresolved reference",
+    "class": "rewrite",
+    "inputs": [
+      "[\\^][]",
+      "a [t\\\\^[n]][nope] b\n",
+      "[a\\\\\\\nb][missing]\n"
+    ],
+    "outputs": [
+      "[\\\\\\^][]",
+      "a [t\\\\\\\\\\^[n]][nope] b\n",
+      "[a\\\\\\\\\\\\\nb][missing]\n"
     ]
   }
 ]
