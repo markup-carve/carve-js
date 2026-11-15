@@ -2,7 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
-import { ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
+import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
 export interface LeafPlace {
@@ -94,7 +94,7 @@ function anyLine(leaf: Leaf, at: number, value: number): number {
   if (value === 96) return end - at >= 3 ? at : NO_ESCAPE
   if (value === 58 || value === 37) return end - at < 3 ? NO_ESCAPE : fence(leaf, at, end)
   if (value === 42) return end - at >= 3 && restIsBlank(leaf, end) ? at : NO_ESCAPE
-  if (value === 124) return lineEndsWith(leaf, at, 124) ? at : NO_ESCAPE
+  if (value === 124) return pipeLine(leaf, at)
   return NO_ESCAPE
 }
 
@@ -125,6 +125,15 @@ function hyphenLine(leaf: Leaf, at: number): number {
   if (end - at < 3 || !restIsBlank(leaf, end)) return bullet(leaf, at)
   for (let unit = at; unit < end; unit++) if (leaf.kinds[unit] !== TEXT) return UNDECIDED
   return bullet(leaf, at)
+}
+
+/** C2-B-166, C2-B-167: a table row ends with a pipe, a row attribute or a line comment may follow it. */
+function pipeLine(leaf: Leaf, at: number): number {
+  if (lineEndsWith(leaf, at, 124)) return at
+  for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) {
+    if (leaf.codes[unit] === 124) return UNDECIDED
+  }
+  return NO_ESCAPE
 }
 
 /** C2-B-133: a line comment at the start of a line. */
@@ -159,6 +168,8 @@ function colon(leaf: Leaf, at: number, place: LeafPlace): number {
 /** A later line of a paragraph: list markers only inside an item (C2-B-015). */
 function laterLine(leaf: Leaf, at: number, place: LeafPlace): number {
   const value = code(leaf, at)
+  // C2-B-092: an attribute line is no interrupter, so below a line of the paragraph it is text.
+  if (value === 123) return NO_ESCAPE
   // C2-B-016: a description mark or a term mark opens on every line inside a description list.
   if (place.inDescriptionList && value === 58) return colon(leaf, at, place)
   // C2-B-036: an ordered marker interrupts a paragraph only with the number 1.
@@ -232,7 +243,13 @@ function letterMarker(leaf: Leaf, at: number): boolean {
  * line of a paragraph. The unit that takes the backslash must be text.
  */
 export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {
+  const owner = leaf.kinds[at] === ATOM && leaf.owners[at - 1] !== leaf.owners[at] ? leaf.owners[at] : undefined
+  // C2-B-138, C2-B-139: a comment of the tree at a line start stays a comment of the paragraph, except that a
+  // line comment would make the first line a comment-only line.
+  if (owner?.type === 'comment') return first && owner.form === 'line' ? UNDECIDED : NO_ESCAPE
   const value = code(leaf, at)
+  // C2-B-165: a byte-order mark at the start of the source is skipped.
+  if (value === 0xfeff && first) return UNDECIDED
   if (value < 0 || value >= 128) return NO_ESCAPE
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape

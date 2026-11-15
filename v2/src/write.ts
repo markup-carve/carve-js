@@ -531,6 +531,8 @@ function uncovered(nodes: readonly Node[], plan: Plan): boolean {
 function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: number): string | null {
   if (plan.undecided !== null) return plan.undecided
   if (w.losses.entries.length !== reported) return 'loss'
+  // C2-W-016: a CR in any written value, of a block as of an inline, may join a line end.
+  if (w.lines.some((line) => line.includes('\r'))) return 'control'
   return uncovered(group, plan) ? 'coverage' : null
 }
 

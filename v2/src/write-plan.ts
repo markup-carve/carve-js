@@ -13,7 +13,7 @@ import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
 import { checkSmart } from './write-plan-smart.ts'
 import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
-import { INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
+import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
 import { type Writer } from './write-state.ts'
 
 /** What one planned write of a group collects. */
@@ -138,6 +138,15 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
   if ((before === ATOM || before === CLOSE) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
   undecidedIf(nextIs(leaf, at, '%#_='), leaf, 'brace')
+  // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
+  undecidedIf(leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS), leaf, 'brace')
+}
+
+/** A closing brace behind an atom whose source ends in a braced mark. */
+function closingBrace(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  if (isLiteral(leaf, at, escaped) || leaf.kinds[at - 1] !== ATOM) return
+  const before = code(leaf, at - 1)
+  undecidedIf(before >= 0 && BRACED_CLOSER_MARKS.includes(String.fromCharCode(before)), leaf, 'brace')
 }
 
 /** A mark before a closing brace is paired in write-plan-pairs.ts; the other contexts of a mark are table entries. */
@@ -244,7 +253,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '`': always('backtick'),
   '{': brace,
   '|': () => undefined,
-  '}': () => undefined,
+  '}': closingBrace,
   '~': () => undefined,
 }
 
@@ -352,11 +361,17 @@ function checkAtomEnd(leaf: Leaf, end: number, node: Node): void {
   }
 }
 
+function isLineEndAfterCr(codes: readonly number[], at: number): boolean {
+  return at === codes.length || codes[at] === LF || codes[at] === CR
+}
+
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   const codes = leaf.codes
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
     leaf.cursor = at
     const kind = leaf.kinds[at]
+    // C2-W-016: a CR before a line end joins it, in text and in the value of an atom alike.
+    if (codes[at] === CR && isLineEndAfterCr(codes, at + 1)) return undecide(leaf, 'control')
     if (kind === ATOM && !continuesAtom(leaf, at)) {
       const node = leaf.owners[at]!
       checkAtom(leaf, at, node)
@@ -365,10 +380,8 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
     }
     if (kind !== TEXT) continue
     const value = codes[at]!
-    // C2-W-016: a CR before a line end would join it; a line feed of text is left to the reparse.
-    if (value === LF || (value === CR && (at + 1 === codes.length || codes[at + 1] === LF || codes[at + 1] === CR))) {
-      return undecide(leaf, 'control')
-    }
+    // A line feed of text is left to the reparse.
+    if (value === LF) return undecide(leaf, 'control')
     if (value >= 128 || INLINE_TRIGGERS[value] === 0) continue
     RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
   }
