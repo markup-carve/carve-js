@@ -9,17 +9,24 @@ import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
 
+function optionRandom(name: string): { int(limit: number): number, bool(): boolean } {
+  const data = JSON.parse(readFileSync(join(import.meta.dirname, '../data/options.json'), 'utf8')) as { options: { name: string }[] }
+  const index = data.options.findIndex((entry) => entry.name === name)
+  assert.notEqual(index, -1)
+  return { int(limit) { assert.equal(limit, data.options.length); return index }, bool() { return true } }
+}
+
 void test('C2-W-022: an empty document has one final line feed', () => {
   assert.equal(format(''), '\n')
   assert.equal(check('format', '', random(1)), null)
 })
 
 void test('C2-H-130: strict losses may reject a document while accepting the option', () => {
-  assert.equal(check('render', '{{ e }}', random(1829993783)), null)
+  assert.equal(check('render', '{{ e }}', optionRandom('strictLosses')), null)
 })
 
 void test('C2-H-128: a host URL policy can permit a URL denied by the default', () => {
-  assert.equal(check('render', '[](data:)', random(1416196675)), null)
+  assert.equal(check('render', '[](data:)', optionRandom('urlPolicy')), null)
 })
 
 void test('C2-H-002: href text inside a quoted attribute is not an href attribute', () => {
