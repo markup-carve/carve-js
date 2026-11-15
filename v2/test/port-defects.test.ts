@@ -205,3 +205,24 @@ describe('C2-I-002: spaces and tabs at the end of every line of a content are no
     expect(render('- a\\\t\n  b\n')).toContain('a<br>\n')
   })
 })
+
+describe('C2-I-111: a hyphen run is decided as a whole', () => {
+  const dashes = (length: number): string => {
+    const html = render(`a ${'-'.repeat(length)} b`)
+    return html.slice(html.indexOf('a ') + 2, html.lastIndexOf(' b'))
+  }
+  const expected = (length: number): string => {
+    if (length % 3 === 0) return '—'.repeat(length / 3)
+    if (length % 2 === 0) return '–'.repeat(length / 2)
+    return `—${expected(length - 3)}`
+  }
+
+  it('C2-I-111: runs of 2 to 40 hyphens', () => {
+    for (let length = 2; length <= 40; length++) expect(dashes(length), `run of ${length}`).toBe(expected(length))
+    expect(dashes(8)).toBe('––––')
+    expect(dashes(10)).toBe('–––––')
+    expect(dashes(11)).toBe('—––––')
+    expect(dashes(14)).toBe('–––––––')
+    expect(dashes(16)).toBe('––––––––')
+  })
+})
