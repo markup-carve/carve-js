@@ -3571,5 +3571,27 @@
     "entries": [
       "U-246"
     ]
+  },
+  {
+    "cause": "C72",
+    "clause": "C2-B-025 C2-B-026",
+    "path": "resources/examples/edge-cases/0612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence.md",
+    "line": 240,
+    "input": "::: note\n10. para\n   | t |\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-247"
+    ]
+  },
+  {
+    "cause": "C72",
+    "clause": "C2-B-025 C2-B-026",
+    "path": "tests/corpus/612-a-block-at-an-item-content-column-ends-its-paragraph-before-an-unclosed-fence-8.crv",
+    "line": 1,
+    "input": "::: note\n10. para\n   | t |\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-247"
+    ]
   }
 ]

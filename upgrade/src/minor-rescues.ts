@@ -88,6 +88,20 @@ function unresolvedFootnoteHeadingId(output: string): Candidate[] {
   return [candidate('U-246', rewritten, 'the unresolved attribute was escaped and the heading id moved above its text')]
 }
 
+function tableAfterOrderedItem(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 1; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    const previous = lines[at - 1] ?? ''
+    if (!value.startsWith('   |') || !previous.includes('. ')) continue
+    const changed = [...lines]
+    changed[at] = value.trimStart()
+    found.push(candidate('U-247', changed.join('\n'), 'the table row was moved outside the preceding ordered item'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -569,6 +583,7 @@ export function rescueMinor(
     ...blockAttributeAcrossFootnote(output),
     ...quotedItemFenceBlank(output),
     ...unresolvedFootnoteHeadingId(output),
+    ...tableAfterOrderedItem(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),

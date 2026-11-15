@@ -1489,6 +1489,12 @@
       "name": "unresolved footnote attribute and heading id",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-247",
+      "name": "table row outside preceding ordered item",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

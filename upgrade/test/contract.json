@@ -2610,5 +2610,16 @@
     "outputs": [
       "x[^n]{\\#i}\n\n{#i}\n## \\{#i}\n"
     ]
+  },
+  {
+    "id": "U-247",
+    "title": "A table row moves outside the preceding ordered item",
+    "class": "rewrite",
+    "inputs": [
+      "::: note\n10. para\n   | t |\n```\ncode\n::::\n:::\nafter *b*\n"
+    ],
+    "outputs": [
+      "::: note\n10. para\n| t |\n```\ncode\n::::\n:::\nafter *b*\n"
+    ]
   }
 ]
