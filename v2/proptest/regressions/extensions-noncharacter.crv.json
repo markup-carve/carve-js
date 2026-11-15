@@ -1,0 +1,9 @@
+{
+  "kind": "tabs-invalid-html",
+  "detail": "noncharacter-in-input-stream",
+  "clause": "C2-H-002",
+  "id": "95e0120abc47953b",
+  "seed": 1,
+  "inputJson": "\ufdd5",
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198"
+}

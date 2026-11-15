@@ -1,0 +1,11 @@
+{
+  "kind": "tabs-format-not-idempotent",
+  "detail": "tab formatting changed on second pass",
+  "seed": 856409603,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "\r",
+  "originalBytes": 22,
+  "minimizedBytes": 1,
+  "clause": "C2-W-003",
+  "id": "875ac5bf930f4e69"
+}

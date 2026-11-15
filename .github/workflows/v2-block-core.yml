@@ -282,3 +282,34 @@ jobs:
       # `npm ci` builds the 0.1 engine into dist/, which the second table compares with.
       - name: Block pass, inline pass, source to HTML and source to canonical source, CPU time per document
         run: npm run bench:v2 -- --files test/fixtures/bench-commonmark-core.crv,docs/extensions.md,docs/migration.md --rounds 20
+
+  proptest:
+    name: source property tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix import --ignore-scripts
+      - name: Regression corpus
+        run: npm run test:proptest:v2
+      - name: Source property targets
+        shell: bash
+        run: |
+          status=0
+          date_seed="$(date -u +%Y%m%d)"
+          for target in parse render format diagnostics extensions decode cli lint migrate import; do
+            for seed in 1794696020 "$date_seed"; do
+              node v2/proptest/run.ts --target "$target" --seed "$seed" --count 100000000 --minutes 1 --max-bytes 4096 || status=1
+            done
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proptest-findings
+          path: v2/proptest/findings

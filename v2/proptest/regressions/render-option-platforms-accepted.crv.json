@@ -1,0 +1,13 @@
+{
+  "kind": "option-invalid-accepted",
+  "detail": "platforms",
+  "seed": 554792843,
+  "runSeed": 1794696020,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "",
+  "originalBytes": 31,
+  "minimizedBytes": 0,
+  "minimizationTimedOut": false,
+  "clause": "C2-H-137 C2-W-109",
+  "id": "2231d7ecc63389a9"
+}

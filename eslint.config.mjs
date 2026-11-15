@@ -36,7 +36,7 @@ export default [{
   languageOptions: {
     parser: tseslint.parser,
     parserOptions: {
-      project: ['./v2/tsconfig.json', './import/tsconfig.json'],
+      project: ['./v2/tsconfig.json', './import/tsconfig.json', './v2/proptest/tsconfig.json'],
       disallowAutomaticSingleRunInference: true,
       tsconfigRootDir: fileURLToPath(new URL('.', import.meta.url)),
     },

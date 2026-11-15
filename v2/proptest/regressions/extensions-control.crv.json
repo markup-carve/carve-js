@@ -1,0 +1,8 @@
+{
+  "kind": "tabs-invalid-html",
+  "clause": "C2-H-002",
+  "id": "2c5d307aba5f19f1",
+  "seed": 1,
+  "inputJson": "\u0006",
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198"
+}

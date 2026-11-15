@@ -1,0 +1,11 @@
+{
+  "kind": "extension-renderer-exception",
+  "detail": "Error: intentional renderer error",
+  "seed": 571628487,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "",
+  "originalBytes": 3038,
+  "minimizedBytes": 0,
+  "clause": "C2-X-034",
+  "id": "e807c9ad49ef4b6c"
+}

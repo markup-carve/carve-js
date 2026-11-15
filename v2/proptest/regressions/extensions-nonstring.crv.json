@@ -1,0 +1,11 @@
+{
+  "kind": "extension-nonstring-unreported",
+  "detail": "renderer returned a number without a diagnostic",
+  "seed": 2058639777,
+  "engineCommit": "43b9d3d00134b149a9d934d3f3979a012fdef198",
+  "inputJson": "",
+  "originalBytes": 1123,
+  "minimizedBytes": 0,
+  "clause": "C2-X-034",
+  "id": "b6171f085067b303"
+}
