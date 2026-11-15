@@ -2988,5 +2988,38 @@
     "entries": [
       "U-141"
     ]
+  },
+  {
+    "cause": "C95",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0390-a-table-cell-s-marker-run-ends-at-a-space.md",
+    "line": 55,
+    "input": "|{.total} 99 |\n|{.total}99 |\n",
+    "check": "explained",
+    "entries": [
+      "U-165"
+    ]
+  },
+  {
+    "cause": "C95",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0923-an-authored-rowspan-or-colspan-on-a-cell-is-dropped.md",
+    "line": 12,
+    "input": "|{rowspan=2} a | b |\n| c | d |\n",
+    "check": "explained",
+    "entries": [
+      "U-165"
+    ]
+  },
+  {
+    "cause": "C95",
+    "clause": "C2-B-171",
+    "path": "tests/corpus/390-a-table-cell-s-marker-run-ends-at-a-space-3.crv",
+    "line": 1,
+    "input": "|{.total} 99 |\n|{.total}99 |\n",
+    "check": "explained",
+    "entries": [
+      "U-165"
+    ]
   }
 ]

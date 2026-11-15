@@ -76,8 +76,8 @@ function tableMetadataMatch(input: string): string | null {
 
 function tableMarkMatch(input: string): string | null {
   if (lineStarts(input, ['+']) && input.includes('|')) return 'U-147'
-  if (input.includes('|{') && input.includes('}|')) return 'U-165'
   if (input.includes('|:') && input.includes('|=')) return 'U-167'
+  if (input.includes('|{')) return 'U-165'
   if (input.includes('|=|') || input.includes('|= ') || lineStarts(input, ['|=', '||='])) return 'U-168'
   if (input.includes('<|') || input.includes('| ^') || input.includes('|^')) return 'U-152'
   return null

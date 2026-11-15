@@ -1623,9 +1623,11 @@
   },
   {
     "id": "U-165",
-    "title": "A brace attribute immediately after a table cell marker attaches to that cell",
+    "title": "A brace attribute after a table cell marker attaches to that cell, and a structural span can replace it",
     "inputs": [
-      "|{#x}|"
+      "|{#x}|",
+      "|{.total} 99 |\n|{.total}99 |\n",
+      "|{rowspan=2} a | b |\n| c | d |\n"
     ],
     "outputs": [],
     "class": "report"

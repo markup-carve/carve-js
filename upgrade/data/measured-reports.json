@@ -112,7 +112,7 @@
   {
     "id": "U-165",
     "input": "|{#x}|",
-    "message": "C2-B-171,C2-B-167: a brace attribute immediately after a table cell marker attaches to that cell"
+    "message": "C2-B-167,C2-B-171,C2-H-013: a brace attribute after a table cell marker attaches to that cell, and a structural span attribute can replace an authored one"
   },
   {
     "id": "U-166",
