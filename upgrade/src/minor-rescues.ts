@@ -46,7 +46,8 @@ function emptyItemAttribute(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
   for (let line = 1; line <= lines.count; line++) {
-    const text = lineText(lines, line).trimStart()
+    let text = lineText(lines, line).trimStart()
+    while (text.startsWith('> ')) text = text.slice(2).trimStart()
     const item = text.startsWith('- {') || text.startsWith('* {') || text.startsWith('. {')
     const description = text.startsWith(': {')
     if (!item && !description) continue
@@ -68,6 +69,16 @@ function emptyItemAttribute(output: string): Candidate[] {
     }
   }
   return found
+}
+
+function emptyDescriptionSentinels(output: string): Candidate[] {
+  let changed = false
+  const rewritten = output.split('\n').map((line) => {
+    if (line.trimStart() !== ': {empty}') return line
+    changed = true
+    return line.replace('{empty}', '{% %}')
+  }).join('\n')
+  return changed ? [candidate('U-142', rewritten, 'all empty description sentinels became empty comments')] : []
 }
 
 function quotedAttribute(output: string): Candidate[] {
@@ -423,6 +434,7 @@ export function rescueMinor(
     ...trailingFence(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
+    ...emptyDescriptionSentinels(output),
     ...quotedAttribute(output),
     ...multilineQuotedAttribute(output),
     ...conflictingListStart(output),

@@ -3219,5 +3219,49 @@
     "entries": [
       "U-236"
     ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-101",
+    "path": "resources/examples/edge-cases/0438-an-empty-description-body-is-written-with-the-empty-sentinel.md",
+    "line": 105,
+    "input": ":: t1\n: {empty}\n:: t2\n: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-142"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-101",
+    "path": "tests/corpus/438-an-empty-description-body-is-written-with-the-empty-sentinel-5.crv",
+    "line": 1,
+    "input": ":: t1\n: {empty}\n:: t2\n: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-142"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-101",
+    "path": "resources/examples/edge-cases/0614-a-quoted-item-comment-ends-the-quote-before-an-unclosed-fence.md",
+    "line": 45,
+    "input": "::: note\n> - para\n> - {#x}\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-137"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-101",
+    "path": "tests/corpus/614-a-quoted-item-comment-ends-the-quote-before-an-unclosed-fence-2.crv",
+    "line": 1,
+    "input": "::: note\n> - para\n> - {#x}\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-137"
+    ]
   }
 ]

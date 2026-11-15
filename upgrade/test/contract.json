@@ -1328,13 +1328,15 @@
       "- {k}",
       "- {.k}\ntail\n",
       "- {.a}\ntail\n",
-      "-{} A bare item via the empty block.\n"
+      "-{} A bare item via the empty block.\n",
+      "::: note\n> - para\n> - {#x}\n```\ncode\n::::\n:::\nafter *b*\n"
     ],
     "outputs": [
       "- {% %}",
       "- {% %}\n\ntail\n",
       "- {% %}\n\ntail\n",
-      "- A bare item via the empty block.\n"
+      "- A bare item via the empty block.\n",
+      "::: note\n> - para\n> - {% %}\n```\ncode\n::::\n:::\nafter *b*\n"
     ],
     "class": "rewrite"
   },
@@ -1393,11 +1395,13 @@
     "title": "Attribute text in an otherwise empty description",
     "inputs": [
       ":: t\n: {empty}\n",
-      ":: t\n: {empty}\nflush\n"
+      ":: t\n: {empty}\nflush\n",
+      ":: t1\n: {empty}\n:: t2\n: {empty}\n"
     ],
     "outputs": [
       ":: t\n: {% %}\n",
-      ":: t\n: {% %}\n\nflush\n"
+      ":: t\n: {% %}\n\nflush\n",
+      ":: t1\n: {% %}\n:: t2\n: {% %}\n"
     ],
     "class": "rewrite"
   },
