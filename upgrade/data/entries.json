@@ -1531,6 +1531,18 @@
       "name": "open div is closed before a footnote definition",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-254",
+      "name": "inline delimiter and comment ownership changes",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-255",
+      "name": "slash delimiter pairs across escaped HTML tags",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

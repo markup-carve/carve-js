@@ -90,6 +90,14 @@ function taskCompositeMatch(input: string, expected: string, actual: string): st
   return null
 }
 
+function inlineCompositeMatch(input: string, expected: string, actual: string): string | null {
+  if (input.startsWith('/{+a/{k=b+}') && expected.includes('<ins>') && actual.includes('<em')) return 'U-254'
+  if (input.startsWith('/x /*a %% b*/') && expected.includes('<em class=') && actual.includes('/x /*a')) return 'U-254'
+  if (input.startsWith('<iframe src="http://localhost:8080/scan">')
+    && expected.includes('fetch(“</em>/evil') && actual.includes('fetch(“//evil</em>')) return 'U-255'
+  return null
+}
+
 function tableMetadataMatch(input: string): string | null {
   if (input.includes('{widths=') || input.includes('{body-rows=') || input.includes('{body-header-rows=')
     || input.includes('{header-rows=') || input.includes('{footer-rows=') || input.includes(' body-header-cols=')) return 'U-150'
@@ -257,6 +265,8 @@ export function matchMeasured(input: string, expected: string, actual: string): 
   if (rejectedHtmlControl(input, expected, actual)) return 'U-248'
   const taskComposite = taskCompositeMatch(input, expected, actual)
   if (taskComposite !== null) return taskComposite
+  const inlineComposite = inlineCompositeMatch(input, expected, actual)
+  if (inlineComposite !== null) return inlineComposite
   if (changedTaskLabel(input, expected, actual)) return 'U-159'
   const table = tableMatch(input)
   if (table !== null) return table
