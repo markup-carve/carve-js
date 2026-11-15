@@ -2735,5 +2735,60 @@
     "entries": [
       "U-224"
     ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
+    "line": 120,
+    "input": "![alt](u)\n^ %% hidden\n",
+    "check": "pass",
+    "entries": [
+      "U-225"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "tests/corpus/518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator-8.crv",
+    "line": 1,
+    "input": "![alt](u)\n^ %% hidden\n",
+    "check": "pass",
+    "entries": [
+      "U-225"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds.md",
+    "line": 52,
+    "input": "![a](/i) %% c\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-216"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds.md",
+    "line": 70,
+    "input": "![a](/i){%%}\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-216"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "tests/corpus/870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds-3.crv",
+    "line": 1,
+    "input": "![a](/i) %% c\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-216"
+    ]
   }
 ]

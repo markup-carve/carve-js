@@ -2231,12 +2231,16 @@
     "inputs": [
       "{%%}![alt](x.png)\n",
       "{.c}\n{%%}![a](x.png)\n",
-      "{% c %} %% t\n{% d %} %% u\n\nz\n"
+      "{% c %} %% t\n{% d %} %% u\n\nz\n",
+      "![a](/i) %% c\n^ cap\n",
+      "![a](/i){%%}\n^ cap\n"
     ],
     "outputs": [
       "![alt](x.png)\n",
       "![a](x.png){.c}\n",
-      "\nz\n"
+      "\nz\n",
+      "![a](/i)\n^ cap\n",
+      "![a](/i)\n^ cap\n"
     ]
   },
   {
@@ -2326,5 +2330,16 @@
       ":: t\n: d\n%%%\nc\n%%%\n : d2\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-225",
+    "title": "Caption caret followed by an empty comment",
+    "class": "escape",
+    "inputs": [
+      "![alt](u)\n^ %% hidden\n"
+    ],
+    "outputs": [
+      "![alt](u)\n\\^ %% hidden\n"
+    ]
   }
 ]

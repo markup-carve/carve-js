@@ -165,11 +165,24 @@ function emptyFootnoteBody(output: string): Candidate[] {
   return found
 }
 
+function trailingImageComment(lines: string[], at: number): Candidate | null {
+  const value = lines[at] ?? ''
+  if (!value.startsWith('![') || !(lines[at + 1] ?? '').trimStart().startsWith('^ ')) return null
+  const trailing = value.indexOf(' %%')
+  const kept = value.endsWith('{%%}') ? value.slice(0, -4) : trailing > 0 ? value.slice(0, trailing) : null
+  if (kept === null) return null
+  const shifted = [...lines]
+  shifted[at] = kept
+  return candidate('U-216', shifted.join('\n'), 'the invisible comment after the block image was removed')
+}
+
 function invisibleCommentCandidates(input: string): Candidate[] {
   const lines = input.split('\n')
   const found: Candidate[] = []
   for (let at = 0; at < lines.length; at++) {
     const value = lines[at] ?? ''
+    const trailing = trailingImageComment(lines, at)
+    if (trailing !== null) found.push(trailing)
     if (!value.startsWith('{%%}![')) continue
     const changed = [...lines]
     changed[at] = value.slice(4)
@@ -187,6 +200,19 @@ function invisibleCommentCandidates(input: string): Candidate[] {
     return !trimmed.startsWith('{%') || close < 0 || tail !== '' && !tail.startsWith('%%')
   })
   if (kept.length < lines.length) found.push(candidate('U-216', kept.join('\n'), 'comment-only lines were removed'))
+  return found
+}
+
+function commentedCaptionCaret(output: string): Candidate[] {
+  const found: Candidate[] = []
+  const lines = readLines(output)
+  for (let line = 2; line <= lines.count; line++) {
+    const caret = lineText(lines, line).trimStart()
+    if (!caret.startsWith('^ %%') || !lineText(lines, line - 1).trimStart().startsWith('![')) continue
+    const at = lineStart(lines, line) + lineText(lines, line).indexOf('^')
+    found.push(candidate('U-225', output.slice(0, at) + '\\' + output.slice(at),
+      'the caption caret with an empty comment was written literally'))
+  }
   return found
 }
 
@@ -242,6 +268,7 @@ export function rescueMinor(
     ...emptyFootnote(output),
     ...emptyFootnoteBody(output),
     ...invisibleCommentCandidates(input),
+    ...commentedCaptionCaret(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output)
   ]
