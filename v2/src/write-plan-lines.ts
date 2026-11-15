@@ -14,6 +14,8 @@ export interface LeafPlace {
   inDescriptionList: boolean
   /** The type of the block before the paragraph, or null. */
   before: string | null
+  /** The leaf starts the document: its first line is line 1. */
+  documentStart: boolean
 }
 
 export const NO_ESCAPE = -1
@@ -119,10 +121,10 @@ function bareDot(leaf: Leaf, at: number): number {
   return code(leaf, content) === 46 && (isBlank(next) || isLineEnd(next)) ? NO_ESCAPE : at
 }
 
-/** C2-B-159: a run of three or more hyphens alone on its line, written by an atom, is a thematic break. */
-function hyphenLine(leaf: Leaf, at: number): number {
+/** C2-B-160, C2-B-161: a hyphen run is text, but on line 1 three hyphens open frontmatter. */
+function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
   const end = runEnd(leaf, at, 45)
-  if (end - at < 3 || !restIsBlank(leaf, end)) return bullet(leaf, at)
+  if (end - at < 3 || !place.documentStart) return bullet(leaf, at)
   for (let unit = at; unit < end; unit++) if (leaf.kinds[unit] !== TEXT) return UNDECIDED
   return bullet(leaf, at)
 }
@@ -148,7 +150,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (value >= 48 && value <= 57) return digits(leaf, at)
   switch (value) {
     case 62: return quoteMark(leaf, at)
-    case 45: return hyphenLine(leaf, at)
+    case 45: return hyphenLine(leaf, at, place)
     case 42: return runEnd(leaf, at, 42) - at >= 3 ? anyLine(leaf, at, 42) : bullet(leaf, at)
     case 46: return bareDot(leaf, at)
     case 58: return colon(leaf, at, place)

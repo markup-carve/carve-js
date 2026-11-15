@@ -1,7 +1,7 @@
 // The content of one inline leaf as the reader sees it, built from the tree with the writer's own
 // spellings, with the origin of every code unit: a text node and its offset, a mark of a node, or the
 // body of an atom (C2-W-088). The planner compares it with what the writer wrote for the leaf.
-import { type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
+import { forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
   BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference, target,
@@ -122,10 +122,22 @@ function braced(mark: string): ContainerModel<'underline' | 'strike' | 'highligh
   }
 }
 
+/** C2-W-067: a reference written as its source holds the texts below it as typed, so none of them takes a decision. */
+function coverSource(w: Writer, node: Node): void {
+  const covered = w.plan?.covered
+  if (covered === undefined) return
+  const pending: Node[] = [node]
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (next.type === 'text') covered.add(next)
+    forEachSlot(next, (children) => { pending.push(...children) })
+  }
+}
+
 function linkUnits(w: Writer, leaf: Leaf, node: LinkNode, flags: number): boolean {
   const raw = rawReference(w, node, flags)
   if (raw !== null) {
     pushString(leaf, raw, ATOM, node)
+    coverSource(w, node)
     return true
   }
   pushString(leaf, '[', OPEN, node)

@@ -401,7 +401,7 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
 }
 
 /** Records the depth bound of every list of nodes below `nodes`: twice the number of nodes around its owner. */
-export function noteDepths(plan: Plan, nodes: readonly Node[]): void {
+export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): void {
   const pending: [readonly Node[], number, LeafPlace][] = [[nodes, 0, TOP_PLACE]]
   for (;;) {
     const item = pending.pop()
@@ -410,6 +410,7 @@ export function noteDepths(plan: Plan, nodes: readonly Node[]): void {
     for (let at = 0; at < list.length; at++) {
       const node = list[at]!
       const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
+      inner.documentStart = first && level === 0 && at === 0
       forEachSlot(node, (children) => {
         plan.depths.set(children, 2 * level)
         plan.places.set(children, inner)
@@ -419,7 +420,9 @@ export function noteDepths(plan: Plan, nodes: readonly Node[]): void {
   }
 }
 
-const TOP_PLACE: LeafPlace = { paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, before: null }
+const TOP_PLACE: LeafPlace = {
+  paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, before: null, documentStart: false,
+}
 
 /** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
 function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPlace {
@@ -431,6 +434,7 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
     inQuote: place.inQuote || type === 'block_quote',
     inDescriptionList: place.inDescriptionList || type === 'definition_list',
     before,
+    documentStart: false,
   }
 }
 

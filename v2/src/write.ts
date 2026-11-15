@@ -548,10 +548,10 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
  * first write of the repair would have done too, where the plan does not decide the group.
  */
 /** One planned write of the group. */
-function planWrite(w: Writer, group: readonly Node[]): Plan {
+function planWrite(w: Writer, group: readonly Node[], first: boolean): Plan {
   resetLines(w)
   w.plan = createPlan()
-  noteDepths(w.plan, group)
+  noteDepths(w.plan, group, first)
   writeBlocks(w, group, '', 0, false)
   const plan = w.plan
   w.plan = null
@@ -562,10 +562,10 @@ function planWrite(w: Writer, group: readonly Node[]): Plan {
 const MAX_PLAN_ROUNDS = 4
 
 /** The plan of the group, with the braced forms it asks for in place. Null where it decides nothing. */
-function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], reported: number): Plan | null {
+function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], first: boolean, reported: number): Plan | null {
   const respelled: Node[] = []
   for (let round = 0; round < MAX_PLAN_ROUNDS; round++) {
-    const plan = planWrite(w, group)
+    const plan = planWrite(w, group, first)
     const why = planReason(w, group, plan, reported)
     if (why === null && plan.respell.length === 0) return plan
     if (why !== null || round === MAX_PLAN_ROUNDS - 1) {
@@ -583,7 +583,7 @@ function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], reported
 
 function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean): boolean {
   const reported = w.losses.entries.length
-  const plan = settledPlan(w, run, group, reported)
+  const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
   const kept = w.escapes
   if (plan.escapes.size > 0) {
