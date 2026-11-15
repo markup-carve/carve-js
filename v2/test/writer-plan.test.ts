@@ -110,6 +110,20 @@ describe('the planned writer', () => {
     expect(result.stats.planned).toBe(0)
   })
 
+  // `format` writes a planned group with no parse, so a block the plan cannot check goes to the repair, which reports the loss.
+  const UNCHECKED_BLOCKS: readonly [string, string, string][] = [
+    ['C2-B-158: a paragraph of one display math and no role', '$$`x^', 'field-unspellable'],
+    ['C2-B-157: a container on the first line of a footnote', '[^f]: - :::', 'structure-unspellable'],
+  ]
+  for (const [clause, source, code] of UNCHECKED_BLOCKS) {
+    it(`${clause} is left to the repair, which reports ${code}`, () => {
+      const parsed = parseWithLayout(source, { extensions: [] })
+      const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
+      expect(result.stats.planned).toBe(0)
+      expect(result.output.diagnostics.map((entry) => entry.code)).toContain(code)
+    })
+  }
+
   it('C2-W-099: a run of hyphens of text is planned with every second hyphen escaped', () => {
     const result = formatBy('a -\\-- b\n', 'both')
     expect(result.output.source).toBe('a -\\-- b\n')
@@ -119,7 +133,7 @@ describe('the planned writer', () => {
 })
 
 // Five shapes that the repair wrote in time above linear: each doubling of the input may at most
-// multiply the time of `format` by 2.6 on average. The fastest of five runs is taken against the noise of the machine.
+// multiply the time of the writer by 2.6 on average. The fastest of five runs is taken against the noise of the machine.
 const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
   ['unclosed braced emphasis openers', (n) => ` ${'{/a {/b /} { '.repeat(n)}\n`],
   ['braced strong around code spans', (n) => `${'{*a {*b `c` *} {*a {*b `c`'.repeat(n)}\n`],
@@ -128,11 +142,13 @@ const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
   ['table rows', (n) => '| a | b *c* |\n'.repeat(n)],
 ]
 
+/** The fastest of five writes of the parse of `source`; the parse itself is not timed. */
 function fastest(source: string): number {
+  const parsed = parseWithLayout(source, { extensions: [] })
   let best = Infinity
   for (let run = 0; run < 5; run++) {
     const started = performance.now()
-    formatBy(source, 'plan')
+    writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
     best = Math.min(best, performance.now() - started)
   }
   return best

@@ -499,6 +499,8 @@ export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): 
     const [list, level, place] = item
     for (let at = 0; at < list.length; at++) {
       const node = list[at]!
+      const shape = blockShape(node)
+      if (shape !== null && plan.undecided === null) plan.undecided = shape
       const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
       inner.documentStart = first && level === 0 && at === 0
       forEachSlot(node, (children) => {
@@ -508,6 +510,28 @@ export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): 
       })
     }
   }
+}
+
+/** True when `children` is one node for which `test` holds, besides comments and breaks, as the reader tests it. */
+function holdsOnly(children: readonly Node[], test: (node: Node) => boolean): boolean {
+  let found = 0
+  for (const child of children) {
+    if (test(child)) found++
+    else if (child.type !== 'comment' && child.type !== 'soft_break' && child.type !== 'hard_break') return false
+  }
+  return found === 1
+}
+
+/**
+ * A block whose spelling the plan does not check, or null. C2-B-157, C2-B-158: a paragraph of one image or one
+ * display math and no role may read back with one. A footnote reads the columns of a container on its first line
+ * from behind its label, where the writer indents by two, so only a paragraph is planned there.
+ */
+function blockShape(node: Node): string | null {
+  if (node.type === 'paragraph' && node.role === undefined && holdsOnly(node.children,
+    (child) => child.type === 'image' || (child.type === 'math' && child.display))) return 'block role'
+  if (node.type === 'footnote' && node.children.length > 0 && node.children[0]!.type !== 'paragraph') return 'footnote container'
+  return null
 }
 
 const TOP_PLACE: LeafPlace = {

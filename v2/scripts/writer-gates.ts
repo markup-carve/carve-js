@@ -11,9 +11,16 @@
 //   node v2/scripts/writer-gates.ts lines 3
 //   node v2/scripts/writer-gates.ts tokens 4
 //   node v2/scripts/writer-gates.ts random [contents] [documents] [seed] [--silent] [--all-losses]
+//   node v2/scripts/writer-gates.ts plan-check [contents] [documents] [seed] [property documents]
+// The plan check counts the groups the plan decides that do not read back as their tree, on the random inputs,
+// the documents of the property generator and the examples. `format` writes such a group with no parse, so each
+// one is a loss it would not report.
 // With --silent a run fails only on a failure with no reported loss.
 import { readFileSync } from 'node:fs'
+import { parseWithLayout } from '../src/api.ts'
 import { format, parse, tabsExtensions, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
+import { writeTreeWithStats } from '../src/write.ts'
+import { generate, loadCorpus, random as propertyRandom } from '../proptest/generate.ts'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
 import {
@@ -156,11 +163,43 @@ function runRandom(contents: number, documents: number, seed: number): boolean {
   return inline && blocks
 }
 
+/** Whether the plan decides a group of `src` that does not read back (C2-W-089). */
+function planMisses(src: string): boolean {
+  const parsed = parseWithLayout(src, { extensions: [] })
+  return (writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true).stats.reasons.get('check') ?? 0) > 0
+}
+
+function runPlanCheck(contents: number, documents: number, seed: number, property: number): boolean {
+  const started = Date.now()
+  const missed: string[] = []
+  const inputs: [number, () => string][] = []
+  const contentRandom = seededRandom(seed)
+  const documentRandom = seededRandom(seed + 1)
+  for (let at = 0; at < contents; at++) inputs.push([0, () => randomContent(contentRandom)])
+  for (let at = 0; at < documents; at++) inputs.push([1, () => randomDocument(documentRandom)])
+  const examples = JSON.parse(readFileSync(new URL('../data/examples.json', import.meta.url), 'utf8')) as Example[]
+  for (const example of examples) inputs.push([2, () => example.input])
+  const corpus = loadCorpus(undefined)
+  const generator = propertyRandom(seed)
+  for (let at = 0; at < property; at++) inputs.push([3, () => generate(generator, corpus, 4096)])
+  let count = 0
+  for (const [, build] of inputs) {
+    const src = build()
+    if (!planMisses(src)) continue
+    count++
+    if (missed.length < 20) missed.push(JSON.stringify(src))
+  }
+  console.log(`plan check, ${Date.now() - started} ms: ${inputs.length} inputs, ${count} with a planned group read back as another tree`)
+  for (const src of missed) console.log(`  ${src}`)
+  return count === 0
+}
+
 const kind = process.argv[2] ?? 'examples'
 const numbers = process.argv.filter((value) => value !== '--silent')
 const argument = (at: number, fallback: number): number => Number(numbers[at] ?? fallback)
 let passed: boolean
 if (kind === 'examples') passed = runExamples()
+else if (kind === 'plan-check') passed = runPlanCheck(argument(3, 500_000), argument(4, 500_000), argument(5, 1), argument(6, 20_000))
 else if (kind === 'random') passed = runRandom(argument(3, 5_000_000), argument(4, 500_000), argument(5, 1))
 else passed = runEnumeration(kind, argument(3, 2))
 process.exitCode = passed ? 0 : 1
