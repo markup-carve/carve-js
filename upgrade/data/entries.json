@@ -1507,6 +1507,12 @@
       "name": "inline math class key is canonicalized",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-250",
+      "name": "note fence moved outside an empty list item",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

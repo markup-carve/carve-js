@@ -2641,5 +2641,16 @@
       "$`a`{CLASS=c}\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-250",
+    "title": "A note fence moves outside an empty list item",
+    "class": "rewrite",
+    "inputs": [
+      "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n"
+    ],
+    "outputs": [
+      "x[^1]\n\n- {% %}\n\n[^1]: ```\n      code\n\n      ```\nafter\n"
+    ]
   }
 ]

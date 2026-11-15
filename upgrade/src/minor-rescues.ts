@@ -102,6 +102,22 @@ function tableAfterOrderedItem(output: string): Candidate[] {
   return found
 }
 
+function nestedFootnoteFence(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    const marker = lines[at] ?? ''
+    const code = lines[at + 1] ?? ''
+    if (!marker.startsWith('- [^') || !marker.endsWith(']: ```')) continue
+    if (!code.startsWith('    ') || lines[at + 2] !== '') continue
+    const definition = marker.slice(2)
+    const changed = [...lines]
+    changed.splice(at, 3, '- {% %}', '', definition, '      ' + code.trimStart(), '', '      ```')
+    found.push(candidate('U-250', changed.join('\n'), 'the note fence was moved outside the empty list item and closed'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -584,6 +600,7 @@ export function rescueMinor(
     ...quotedItemFenceBlank(output),
     ...unresolvedFootnoteHeadingId(output),
     ...tableAfterOrderedItem(output),
+    ...nestedFootnoteFence(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),

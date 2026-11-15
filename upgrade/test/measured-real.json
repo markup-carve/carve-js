@@ -3683,5 +3683,23 @@
     "input": "$`a`{CLASS=c}\n",
     "check": "explained",
     "entries": ["U-249"]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-082 C2-B-108 C2-B-110",
+    "path": "resources/examples/edge-cases/0864-an-item-hands-its-blank-run-to-a-description-or-note-child-s-open-fence.md",
+    "line": 43,
+    "input": "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n",
+    "check": "pass",
+    "entries": ["U-250"]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-082 C2-B-108 C2-B-110",
+    "path": "tests/corpus/864-an-item-hands-its-blank-run-to-a-description-or-note-child-s-open-fence-2.crv",
+    "line": 1,
+    "input": "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n",
+    "check": "pass",
+    "entries": ["U-250"]
   }
 ]
