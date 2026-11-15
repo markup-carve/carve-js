@@ -33,13 +33,16 @@ export interface Leaf {
   /** The unit being decided, and the unit at which the leaf lost its decision, for the report of the gates. */
   cursor: number
   where: number
+  /** The first `{` of the leaf, or -1. */
+  firstBrace: number
 }
 
 export function createLeaf(): Leaf {
-  return { codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0 }
+  return { codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, firstBrace: -1 }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
+  if (code === 123 && leaf.firstBrace < 0) leaf.firstBrace = leaf.codes.length
   leaf.codes.push(code)
   leaf.kinds.push(kind)
   leaf.owners.push(owner)

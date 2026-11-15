@@ -9,6 +9,8 @@ import {
   ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
 } from './write-plan-model.ts'
 import { checkPairs } from './write-plan-pairs.ts'
+import { checkSmart } from './write-plan-smart.ts'
+import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
 import { type Writer } from './write-state.ts'
 
@@ -25,11 +27,15 @@ export interface Plan {
   respell: Node[]
   /** C2-I-118: for each list of nodes of the group, twice the number of blocks around it, a bound of its depth. */
   depths: Map<readonly Node[], number>
+  /** Where each list of nodes of the group stands, for the rules of its line starts. */
+  places: Map<readonly Node[], LeafPlace>
   leaves: number
 }
 
 export function createPlan(): Plan {
-  return { undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], depths: new Map(), leaves: 0 }
+  return {
+    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], depths: new Map(), places: new Map(), leaves: 0,
+  }
 }
 
 /** How the caller of a leaf ends it: as `writeContent`, as `writeInlines`, or as a line of a line block. */
@@ -71,7 +77,7 @@ function undecidedIf(condition: boolean, leaf: Leaf, why: string): void {
 
 /** C2-W-099: a run of hyphens of text takes a backslash before every second hyphen. */
 function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  if (code(leaf, at - 1) === 45) return
+  if (code(leaf, at - 1) === 45) return undecidedIf(leaf.kinds[at - 1] !== TEXT, leaf, 'hyphen neighbor')
   let end = at
   while (code(leaf, end) === 45) {
     if (leaf.kinds[end] !== TEXT || isLiteral(leaf, end, escaped)) return undecide(leaf, 'hyphen run')
@@ -86,6 +92,8 @@ function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
 /** C2-W-095: a straight quote of text would read as a smart quote. */
 function quote(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
+  // A quote behind a brace may stand in an attribute, where it reads as itself.
+  if (leaf.firstBrace >= 0 && leaf.firstBrace < at) return undecide(leaf, 'quote in braces')
   escaped[at] = 1
 }
 
@@ -148,12 +156,71 @@ function always(why: string): Resolver {
   return (leaf, at, escaped) => undecidedIf(!isLiteral(leaf, at, escaped), leaf, why)
 }
 
+/** Whether the atom unit `at` continues the atom before it; two atoms in a row are two nodes. */
+function continuesAtom(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at - 1] === ATOM && leaf.owners[at - 1] === leaf.owners[at]
+}
+
+/** Whether the unit `at` is the opening bracket of a link of the tree. */
+function opensLink(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at] === OPEN && leaf.codes[at] === 91 && leaf.owners[at]?.type === 'link'
+}
+
+/** Whether the unit `at` starts a code span of the tree. */
+function opensCode(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at] === ATOM && !continuesAtom(leaf, at) && leaf.owners[at]?.type === 'code'
+}
+
+/**
+ * C2-W-090: a sigil glued to a bracket or a backtick of a construct of the tree takes the backslash, as the image
+ * sigil before a link and the math sigil before a code span. Where the sigil stands before text, the bracket or
+ * backtick decides, and the leaf is left to the repair.
+ */
+function gluedSigil(leaf: Leaf, at: number, escaped: Uint8Array, opens: (leaf: Leaf, at: number) => boolean, rest: string): void {
+  if (isLiteral(leaf, at, escaped)) return
+  if (opens(leaf, at + 1)) {
+    escaped[at] = 1
+    return
+  }
+  undecidedIf(nextIs(leaf, at, rest), leaf, `sigil ${String.fromCharCode(code(leaf, at))}`)
+}
+
+/** C2-I-073, C2-I-096, C2-I-117: an autolink, a cross-reference or an arrow or comparison that opens at `<`. */
+function angle(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  if (isLiteral(leaf, at, escaped)) return
+  const next = code(leaf, at + 1)
+  if (next === 61 && leaf.kinds[at + 1] === TEXT) {
+    escaped[at] = 1
+    return
+  }
+  if (next === 45 || next === 47 || next === 61) return undecide(leaf, 'angle')
+  for (let unit = at + 1; unit < leaf.codes.length; unit++) {
+    const value = leaf.codes[unit]!
+    if (value === 62) return undecide(leaf, 'angle')
+    if (isSpace(value) || value === 60) return
+  }
+}
+
+/** C2-B-133: `%%` at the start of a line or after whitespace opens a line comment; its first `%` takes the backslash. */
+function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  if (isLiteral(leaf, at, escaped)) return
+  if (nextIs(leaf, at, '}')) return undecide(leaf, 'mark %')
+  if (!nextIs(leaf, at, '%')) return
+  const before = code(leaf, at - 1)
+  if (before === 37 || before === 123) return undecide(leaf, 'mark %')
+  if (isSpace(before)) escaped[at] = 1
+}
+
 const RESOLVERS: Readonly<Record<string, Resolver>> = {
-  '!': mark('[`='),
+  '!': (leaf, at, escaped) => {
+    if (nextIs(leaf, at, '=') && leaf.kinds[at - 1] !== TEXT && at > 0) undecide(leaf, 'sigil !')
+    else if (nextIs(leaf, at, '=') && leaf.kinds[at + 1] === TEXT && !isLiteral(leaf, at, escaped)) escaped[at] = 1
+    else gluedSigil(leaf, at, escaped, (l, unit) => opensLink(l, unit) || opensCode(l, unit), '[`=')
+  },
   '"': quote,
   '#': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
-  '$': mark('`$'),
-  '%': mark('%}'),
+  '$': (leaf, at, escaped) => gluedSigil(leaf, at, escaped, opensCode, '`$'),
+  '%': percent,
   '\'': quote,
   '(': (leaf, at) => undecidedIf(nextIs(leaf, at, 't') && code(leaf, at + 2) === 109, leaf, 'trademark'),
   '*': () => undefined,
@@ -163,14 +230,17 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '.': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) dots(leaf, at) },
   '/': () => undefined,
   ':': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) colon(leaf, at) },
-  '<': mark('/-=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+  '<': angle,
   '=': mark('=>'),
   '>': mark('='),
   '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
   '[': bracket,
   '\\': () => undefined,
   ']': bracket,
-  '^': mark('['),
+  '^': (leaf, at, escaped) => {
+    if (code(leaf, at - 1) === 91) undecide(leaf, 'footnote bracket')
+    else gluedSigil(leaf, at, escaped, opensLink, '[')
+  },
   '_': () => undefined,
   '`': always('backtick'),
   '{': brace,
@@ -238,11 +308,19 @@ function definitionShape(leaf: Leaf, at: number): boolean {
   return false
 }
 
-function checkLines(leaf: Leaf, start: number): void {
-  if (start === LINE_START && opensBlock(leaf, 0)) return undecide(leaf, 'line start')
-  for (let at = 0; at < leaf.codes.length; at++) {
-    leaf.cursor = at
-    if (leaf.codes[at] === LF && leaf.kinds[at] !== TEXT && opensBlock(leaf, at + 1)) return undecide(leaf, 'line start')
+/** C2-W-092: the line starts of a paragraph by the rules of write-plan-lines.ts; of any other leaf, none may open a block. */
+function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, escaped: Uint8Array): void {
+  const rules = place?.paragraph === true && start === LINE_START ? place : null
+  for (let at = -1; at < leaf.codes.length && leaf.undecided === null; at++) {
+    leaf.cursor = Math.max(at, 0)
+    if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
+    if (rules === null) {
+      undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
+      continue
+    }
+    const escape = lineEscape(leaf, at + 1, at < 0, rules)
+    if (escape === UNDECIDED) undecide(leaf, `line start ${String.fromCharCode(code(leaf, at + 1))}`)
+    else if (escape >= 0) escaped[escape] = 1
   }
 }
 
@@ -253,7 +331,8 @@ function checkAtom(leaf: Leaf, at: number, node: Node): void {
     const before = code(leaf, at - 1)
     if (before >= 0 && isWordCharacter(before)) return undecide(leaf, 'sigil boundary')
   }
-  undecidedIf(type === 'smart_punctuation' || type === 'abbreviation', leaf, type)
+  if (type === 'smart_punctuation') checkSmart(leaf, at, node)
+  undecidedIf(type === 'abbreviation', leaf, type)
 }
 
 function atomEnd(leaf: Leaf, at: number): number {
@@ -279,7 +358,7 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
     leaf.cursor = at
     const kind = leaf.kinds[at]
-    if (kind === ATOM && leaf.kinds[at - 1] !== ATOM) {
+    if (kind === ATOM && !continuesAtom(leaf, at)) {
       const node = leaf.owners[at]!
       checkAtom(leaf, at, node)
       checkAtomEnd(leaf, atomEnd(leaf, at), node)
@@ -296,24 +375,41 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
 
 /** Records the depth bound of every list of nodes below `nodes`: twice the number of nodes around its owner. */
 export function noteDepths(plan: Plan, nodes: readonly Node[]): void {
-  const pending: [readonly Node[], number][] = [[nodes, 0]]
+  const pending: [readonly Node[], number, LeafPlace][] = [[nodes, 0, TOP_PLACE]]
   for (;;) {
     const item = pending.pop()
     if (item === undefined) return
-    const [list, level] = item
-    for (const node of list) {
+    const [list, level, place] = item
+    for (let at = 0; at < list.length; at++) {
+      const node = list[at]!
+      const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
       forEachSlot(node, (children) => {
         plan.depths.set(children, 2 * level)
-        pending.push([children, level + 1])
+        plan.places.set(children, inner)
+        pending.push([children, level + 1, inner])
       })
     }
   }
 }
 
-function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number): Uint8Array {
+const TOP_PLACE: LeafPlace = { paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, before: null }
+
+/** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
+function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPlace {
+  const type = node.type
+  return {
+    paragraph: type === 'paragraph',
+    inItem: place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote',
+    inQuote: place.inQuote || type === 'block_quote',
+    inDescriptionList: place.inDescriptionList || type === 'definition_list',
+    before,
+  }
+}
+
+function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number, place: LeafPlace | undefined): Uint8Array {
   const escaped = new Uint8Array(leaf.codes.length)
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
-  if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start)
+  if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkPairs(leaf, escaped, bound)
   return escaped
@@ -351,7 +447,7 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
   if (leaf.undecided === null && leafText(leaf) !== content) undecide(leaf, 'model')
   const bound = plan.depths.get(nodes)
   if (bound === undefined) undecide(leaf, 'depth')
-  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, bound ?? 0) : new Uint8Array(0)
+  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, bound ?? 0, plan.places.get(nodes)) : new Uint8Array(0)
   plan.leaves++
   if (leaf.undecided !== null) {
     plan.undecided = leaf.undecided
