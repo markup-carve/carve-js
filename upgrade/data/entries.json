@@ -1279,6 +1279,18 @@
       "name": "definition consumed inside a description body",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-211",
+      "name": "multiline block attribute boundary",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-212",
+      "name": "literal caret after a quote line",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [

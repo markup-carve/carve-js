@@ -341,7 +341,7 @@
     "input": "> >\n^ cap\n",
     "check": "pass",
     "entries": [
-      "U-138"
+      "U-212"
     ]
   },
   {
@@ -1620,9 +1620,9 @@
     "path": "resources/examples/edge-cases/1055-an-item-marker-line-brace-run-measures-from-its-written-brace.md",
     "line": 64,
     "input": "- [ ] {.x\n       }\n       z\n",
-    "check": "explained",
+    "check": "pass",
     "entries": [
-      "U-159"
+      "U-211"
     ]
   },
   {

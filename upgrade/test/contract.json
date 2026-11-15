@@ -2114,5 +2114,35 @@
       "[^q]: note\n\n:: t\n: {% %}\n   * child\n\nr[^q]\n",
       "[^q]: note\n\n:: t\n: {% %}\n\n  - child\n\nr[^q]\n"
     ]
+  },
+  {
+    "id": "U-211",
+    "title": "Multiline block attribute boundary",
+    "class": "rewrite",
+    "inputs": [
+      "{.a\n\t.b}\n\nparagraph\n",
+      "> {.x\n>   .y}\n> # H\n",
+      "> {.a}{title=\"𝒜𝒜\"}{.b\n>                   .c}\n> p\n"
+    ],
+    "outputs": [
+      "{.a .b}\nparagraph\n",
+      "> {.x .y}\n> # H\n",
+      "> {.a}{title=\"𝒜𝒜\"}{.b .c}\n> p\n"
+    ]
+  },
+  {
+    "id": "U-212",
+    "title": "Literal caret after a quote line",
+    "class": "escape",
+    "inputs": [
+      "> a\n ^ cap\n",
+      "> ^ x\n ^ cap\n",
+      "> q\n^ %% x\n"
+    ],
+    "outputs": [
+      "> a\n \\^ cap\n",
+      "> ^ x\n \\^ cap\n",
+      "> q\n\\^ %% x\n"
+    ]
   }
 ]

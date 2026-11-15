@@ -253,6 +253,38 @@ function lineCandidates(output: string): Candidate[] {
   return found
 }
 
+function multilineAttributeCandidates(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    const head = lines[at] ?? ''
+    const continuation = (lines[at + 1] ?? '').trimStart()
+    if (head.lastIndexOf('{') <= head.lastIndexOf('}') || !continuation.includes('}')) continue
+    const body = continuation.startsWith('>') ? continuation.slice(1).trimStart() : continuation
+    const changed = [...lines]
+    changed[at] = head.trimEnd() + ' ' + body
+    changed.splice(at + 1, 1)
+    found.push({ id: 'U-211', output: changed.join('\n') })
+    if ((changed[at + 1] ?? '') !== '') continue
+    changed.splice(at + 1, 1)
+    found.push({ id: 'U-211', output: changed.join('\n') })
+  }
+  return found
+}
+
+function quotedCaretCandidates(input: string): Candidate[] {
+  const lines = readLines(input)
+  const found: Candidate[] = []
+  for (let line = 2; line <= lines.count; line++) {
+    const value = lineText(lines, line)
+    if (!value.trimStart().startsWith('^ ')) continue
+    if (!lineText(lines, line - 1).trimStart().startsWith('> ')) continue
+    const at = lineStart(lines, line) + value.length - value.trimStart().length
+    found.push({ id: 'U-212', output: input.slice(0, at) + '\\' + input.slice(at) })
+  }
+  return found
+}
+
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
 export function rescueTargeted(
   input: string,
@@ -264,6 +296,8 @@ export function rescueTargeted(
     ...simpleCandidates(output),
     ...bracketCandidates(output),
     ...lineCandidates(output),
+    ...multilineAttributeCandidates(input),
+    ...quotedCaretCandidates(input),
     ...smartQuoteCandidates(output, expected),
     ...metadataCandidates(output),
     ...languageCandidates(output),
