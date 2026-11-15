@@ -6,11 +6,11 @@ HTML normalization parses with parse5, orders attributes, removes whitespace onl
 
 Raw HTML dependent examples count an imported `raw_block` or `raw_inline`; comparisons render with `rawHtml: true`.
 
-Mutation campaign: 1924 suite inputs imported without error; 100000 byte mutations returned 100000 trees and 0 typed errors.
+Mutation campaign: 1927 suite inputs included 253 writer refusals; 100000 byte mutations returned 85852 stable trees, 0 typed errors and 14148 writer refusals.
 
 ## CommonMark
 
-Cases: 652; canonical round trips: 652; raw HTML nodes: 72.
+Cases: 652; canonical round trips: 645; raw HTML nodes: 72.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
@@ -18,7 +18,7 @@ Cases: 652; canonical round trips: 652; raw HTML nodes: 72.
 | Backslash escapes | 12 | 1 | 0 |
 | Entity and numeric character references | 13 | 3 | 1 |
 | Precedence | 1 | 0 | 0 |
-| Thematic breaks | 18 | 0 | 1 |
+| Thematic breaks | 19 | 0 | 0 |
 | ATX headings | 17 | 0 | 1 |
 | Setext headings | 25 | 0 | 2 |
 | Indented code blocks | 10 | 0 | 2 |
@@ -28,8 +28,8 @@ Cases: 652; canonical round trips: 652; raw HTML nodes: 72.
 | Paragraphs | 8 | 0 | 0 |
 | Blank lines | 1 | 0 | 0 |
 | Block quotes | 25 | 0 | 0 |
-| List items | 25 | 3 | 20 |
-| Lists | 15 | 4 | 7 |
+| List items | 26 | 2 | 20 |
+| Lists | 17 | 3 | 6 |
 | Inlines | 1 | 0 | 0 |
 | Code spans | 18 | 4 | 0 |
 | Emphasis and strong emphasis | 127 | 2 | 3 |
@@ -43,20 +43,20 @@ Cases: 652; canonical round trips: 652; raw HTML nodes: 72.
 
 Different examples by cause:
 
-- block structure differs: CM-4, CM-98, CM-108, CM-109, CM-256, CM-258, CM-259, CM-262, CM-277, CM-300, CM-307, CM-316, CM-319, CM-325
-- writer cannot spell tree field: CM-5, CM-39, CM-49, CM-79, CM-254, CM-263, CM-264, CM-270, CM-271, CM-280, CM-281, CM-282, CM-283, CM-284, CM-286, CM-287, CM-288, CM-290, CM-312, CM-315, CM-411, CM-415, CM-429, CM-489, CM-520, CM-554, CM-555, CM-572, CM-574, CM-575, CM-576, CM-577, CM-578, CM-580, CM-581, CM-582, CM-583, CM-584, CM-585, CM-586
+- block structure differs: CM-4, CM-5, CM-98, CM-108, CM-109, CM-254, CM-256, CM-258, CM-259, CM-262, CM-263, CM-264, CM-270, CM-271, CM-277, CM-286, CM-287, CM-288, CM-290, CM-300, CM-307, CM-316, CM-319, CM-325
+- writer cannot spell tree field: CM-39, CM-79, CM-280, CM-281, CM-282, CM-283, CM-284, CM-315, CM-411, CM-415, CM-429, CM-489, CM-520, CM-554, CM-555, CM-572, CM-574, CM-575, CM-576, CM-577, CM-578, CM-580, CM-581, CM-582, CM-583, CM-584, CM-585, CM-586
 - visible text differs: CM-96
 - degraded foreign node: CM-195, CM-196, CM-200, CM-317, CM-573, CM-588, CM-589, CM-591, CM-609
 
 ## GFM
 
-Cases: 648; canonical round trips: 648; raw HTML nodes: 71.
+Cases: 648; canonical round trips: 641; raw HTML nodes: 71.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
 | Tabs | 8 | 1 | 2 |
 | Precedence | 1 | 0 | 0 |
-| Thematic breaks | 18 | 0 | 1 |
+| Thematic breaks | 19 | 0 | 0 |
 | ATX headings | 17 | 0 | 1 |
 | Setext headings | 25 | 0 | 2 |
 | Indented code blocks | 10 | 0 | 2 |
@@ -66,8 +66,8 @@ Cases: 648; canonical round trips: 648; raw HTML nodes: 71.
 | Paragraphs | 8 | 0 | 0 |
 | Blank lines | 1 | 0 | 0 |
 | Block quotes | 25 | 0 | 0 |
-| List items | 25 | 3 | 20 |
-| Lists | 16 | 4 | 7 |
+| List items | 26 | 2 | 20 |
+| Lists | 18 | 3 | 6 |
 | Backslash escapes | 12 | 1 | 0 |
 | Entity and numeric character references | 13 | 3 | 1 |
 | Code spans | 18 | 4 | 0 |
@@ -82,14 +82,14 @@ Cases: 648; canonical round trips: 648; raw HTML nodes: 71.
 
 Different examples by cause:
 
-- block structure differs: GFM-4, GFM-68, GFM-78, GFM-79, GFM-226, GFM-228, GFM-229, GFM-232, GFM-247, GFM-270, GFM-277, GFM-286, GFM-289, GFM-295
-- writer cannot spell tree field: GFM-5, GFM-19, GFM-49, GFM-224, GFM-233, GFM-234, GFM-240, GFM-241, GFM-250, GFM-251, GFM-252, GFM-253, GFM-254, GFM-256, GFM-257, GFM-258, GFM-260, GFM-282, GFM-285, GFM-325, GFM-410, GFM-414, GFM-428, GFM-486, GFM-516, GFM-550, GFM-551, GFM-568, GFM-570, GFM-571, GFM-572, GFM-573, GFM-574, GFM-576, GFM-577, GFM-578, GFM-579, GFM-580, GFM-581, GFM-582
+- block structure differs: GFM-4, GFM-5, GFM-68, GFM-78, GFM-79, GFM-224, GFM-226, GFM-228, GFM-229, GFM-232, GFM-233, GFM-234, GFM-240, GFM-241, GFM-247, GFM-256, GFM-257, GFM-258, GFM-260, GFM-270, GFM-277, GFM-286, GFM-289, GFM-295
+- writer cannot spell tree field: GFM-49, GFM-250, GFM-251, GFM-252, GFM-253, GFM-254, GFM-285, GFM-325, GFM-410, GFM-414, GFM-428, GFM-486, GFM-516, GFM-550, GFM-551, GFM-568, GFM-570, GFM-571, GFM-572, GFM-573, GFM-574, GFM-576, GFM-577, GFM-578, GFM-579, GFM-580, GFM-581, GFM-582
 - visible text differs: GFM-66
 - degraded foreign node: GFM-164, GFM-165, GFM-169, GFM-287, GFM-569, GFM-584, GFM-585, GFM-587, GFM-605
 
 ## Djot
 
-Cases: 253; canonical round trips: 253; raw HTML nodes: 3.
+Cases: 253; canonical round trips: 248; raw HTML nodes: 3.
 
 | Section | Same | Same text | Different |
 | --- | ---: | ---: | ---: |
@@ -126,10 +126,10 @@ Different examples by cause:
 
 ## HTML rendered specification round trip
 
-Cases: 371.
+Cases: 374.
 
 | Exact | Same meaning | Same rendering | Same text | Lossy |
 | ---: | ---: | ---: | ---: | ---: |
-| 103 | 4 | 217 | 34 | 13 |
+| 124 | 4 | 204 | 31 | 11 |
 
-Lossy examples: syntax-blocks.md:14, syntax-blocks.md:77, syntax-blocks.md:130, syntax-blocks.md:146, syntax-blocks.md:148, syntax-blocks.md:156, syntax-blocks.md:165, syntax-blocks.md:166, syntax-inline.md:88, html.md:29, html.md:13, html.md:14, html.md:26.
+Lossy examples: syntax-blocks.md:146, syntax-blocks.md:148, syntax-blocks.md:156, syntax-blocks.md:165, syntax-blocks.md:166, syntax-inline.md:88, syntax-inline.md:93, html.md:29, html.md:13, html.md:14, html.md:26.

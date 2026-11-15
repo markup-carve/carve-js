@@ -337,7 +337,7 @@ function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
   let changed = false
   for (let at = 0; at < group.length; at++) {
     const child = group[at]
-    if (child?.type === 'soft_break') { group[at] = text(' '); changed = true }
+    if (child?.type === 'soft_break' || child?.type === 'hard_break') { group[at] = text(' '); changed = true }
     else if (child?.type === 'ruby') for (const pair of child.pairs) pending.push(pair.base, pair.annotation)
     else if (child !== undefined && 'children' in child && child.type !== 'citation_group') pending.push(child.children)
   }
@@ -352,7 +352,7 @@ function cellInline(node: Html.Element, context: Context): Inline[] {
     const group = pending.pop()
     if (group !== undefined) changed = flattenCellGroup(group, pending) || changed
   }
-  if (changed) degraded(context, node, 'HTML table cell line ending normalized to a space')
+  if (changed) degraded(context, node, 'HTML table cell line break normalized to a space')
   return coalesce(children)
 }
 

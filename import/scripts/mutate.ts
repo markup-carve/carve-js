@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { format } from '../../v2/src/index.ts'
+import { writerHasLoss } from '../../v2/src/write.ts'
 import { importDocument, ImportInputError, type Format } from '../src/index.ts'
 import { commonmarkCases, djotCases, gfmCases } from './suites.ts'
 
@@ -13,6 +14,7 @@ const seeds: Seed[] = [
   ...djotCases().map(entry => ({ from: 'djot' as const, input: entry.input })),
   ...specs.map(entry => ({ from: 'html' as const, input: entry.html })),
 ]
+const MAX_SUITE_WRITER_REFUSALS = 253
 
 function generator(seed: number): () => number {
   let state = seed
@@ -40,10 +42,11 @@ function mutate(input: string, random: () => number): string {
   return Buffer.from(bytes).toString('utf8')
 }
 
-function check(seed: Seed): 'tree' | 'typed-error' {
+function check(seed: Seed): 'tree' | 'typed-error' | 'writer-refusal' {
   try {
     const result = importDocument(seed.input, { from: seed.from })
-    if (format(result.source) !== result.source) throw new Error('source is not stable')
+    if (writerHasLoss(result.diagnostics)) return 'writer-refusal'
+    if (format(result.source) !== result.source) throw new Error(`source is not stable: ${seed.from} ${JSON.stringify(seed.input)}`)
     return 'tree'
   } catch (error) {
     if (error instanceof ImportInputError) return 'typed-error'
@@ -56,17 +59,25 @@ function run(): void {
   const count = process.argv.includes('--sample') ? 300 : 100_000
   let trees = 0
   let typedErrors = 0
+  let writerRefusals = 0
+  let suiteWriterRefusals = 0
   for (const seed of seeds) {
-    if (check(seed) !== 'tree') throw new Error(`Suite input failed: ${seed.from}`)
+    const result = check(seed)
+    if (result === 'typed-error') throw new Error(`Suite input failed: ${seed.from} ${JSON.stringify(seed.input)}`)
+    if (result === 'writer-refusal') suiteWriterRefusals++
+  }
+  if (suiteWriterRefusals > MAX_SUITE_WRITER_REFUSALS) {
+    throw new Error(`Suite writer refusals increased from ${MAX_SUITE_WRITER_REFUSALS} to ${suiteWriterRefusals}`)
   }
   for (let at = 0; at < count; at++) {
     const base = seeds[random() % seeds.length]
     if (base === undefined) throw new Error('No mutation seed')
     const result = check({ from: base.from, input: mutate(base.input, random) })
     if (result === 'tree') trees++
+    else if (result === 'writer-refusal') writerRefusals++
     else typedErrors++
   }
-  const result = { suiteInputs: seeds.length, mutations: count, trees, typedErrors }
+  const result = { suiteInputs: seeds.length, suiteWriterRefusals, mutations: count, trees, typedErrors, writerRefusals }
   if (!process.argv.includes('--sample')) {
     writeFileSync(join(import.meta.dirname, '../docs/mutations.json'), `${JSON.stringify(result, null, 2)}\n`)
   }

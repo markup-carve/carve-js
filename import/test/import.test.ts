@@ -86,12 +86,14 @@ describe('Carve 0.2 importers', () => {
   it.each(['<table><tr><td>a\nb</td></tr></table>',
     '<table><tr><td>a <b>x</b>\n b</td></tr></table>',
     '<table><tr><td><b>a\nb</b></td></tr></table>',
-    '<table><tr><td><a href="http://x.y">a\nb</a></td></tr></table>'])(
+    '<table><tr><td><a href="http://x.y">a\nb</a></td></tr></table>',
+    '<table><tr><td>a<br>t</td><td>b</td></tr></table>'])(
     'C2-W-007 spells an HTML table cell line ending: %s', (input) => {
       const result = importDocument(input, { from: 'html' })
       expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
         .includes(entry.code))).toBe(false)
       expect(result.diagnostics.some((entry) => entry.code === 'import-degraded')).toBe(true)
+      expect(format(result.source)).toBe(result.source)
     })
 
   it.each(['<pre>a\nb</pre>', '<pre><code>a</code></pre>'])(
@@ -116,6 +118,12 @@ describe('Carve 0.2 importers', () => {
     const item = result.document.children[0]
     if (item?.type === 'list') expect(item.children[0]?.children).toEqual([])
     expect(result.diagnostics.some((entry) => entry.code === 'structure-unspellable')).toBe(true)
+  })
+
+  it('C2-W-134 names a writer refusal for an imported leading tab', () => {
+    const result = importDocument('&#9;foo\n', { from: 'markdown' })
+    validateTree(result.document)
+    expect(result.diagnostics.some((entry) => entry.code === 'field-unspellable')).toBe(true)
   })
 
   it('C2-W-007 maps Markdown line breaks and code content to spellable nodes', () => {

@@ -1,6 +1,8 @@
 {
-  "suiteInputs": 1924,
+  "suiteInputs": 1927,
+  "suiteWriterRefusals": 253,
   "mutations": 100000,
-  "trees": 100000,
-  "typedErrors": 0
+  "trees": 85852,
+  "typedErrors": 0,
+  "writerRefusals": 14148
 }

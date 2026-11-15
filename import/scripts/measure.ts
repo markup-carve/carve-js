@@ -137,7 +137,8 @@ function measureTreeSuite(limit: number): string[] {
 const sample = process.argv.includes('--sample')
 const limit = sample ? 20 : Number.POSITIVE_INFINITY
 const mutationRecord = readFileSync(join(import.meta.dirname, '../docs/mutations.json'), 'utf8')
-const mutations = JSON.parse(mutationRecord) as { suiteInputs: number, mutations: number, trees: number, typedErrors: number }
+const mutations = JSON.parse(mutationRecord) as { suiteInputs: number, suiteWriterRefusals: number, mutations: number,
+  trees: number, typedErrors: number, writerRefusals: number }
 const lines = ['# Import conformance', '',
   'Versions: CommonMark `commonmark.json` 0.31.0; GFM `cmark-gfm` 0.29.0.gfm.13 `test/spec.txt`; ' +
     'Djot `@djot/djot` 0.3.2 (`fa7a699`).', '',
@@ -148,8 +149,9 @@ const lines = ['# Import conformance', '',
     'attributes, paragraph role and section wrappers. `same-rendering` compares normalized HTML; ' +
     '`same-text` compares visible text alone.', '',
   'Raw HTML dependent examples count an imported `raw_block` or `raw_inline`; comparisons render with `rawHtml: true`.', '',
-  `Mutation campaign: ${mutations.suiteInputs} suite inputs imported without error; ${mutations.mutations} byte mutations ` +
-    `returned ${mutations.trees} trees and ${mutations.typedErrors} typed errors.`, '',
+  `Mutation campaign: ${mutations.suiteInputs} suite inputs included ${mutations.suiteWriterRefusals} writer refusals; ` +
+    `${mutations.mutations} byte mutations returned ${mutations.trees} stable trees, ${mutations.typedErrors} typed errors ` +
+    `and ${mutations.writerRefusals} writer refusals.`, '',
   ...measureHtmlSuite('CommonMark', 'markdown', commonmarkCases(), limit),
   ...measureHtmlSuite('GFM', 'gfm', gfmCases(), limit),
   ...measureHtmlSuite('Djot', 'djot', djotCases(), limit),
