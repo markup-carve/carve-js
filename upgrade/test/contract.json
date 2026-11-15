@@ -1403,7 +1403,12 @@
     "id": "U-143",
     "title": "Adjacent inline delimiters use the 0.2 flanking and nesting rules",
     "inputs": [
-      "/{/"
+      "/{/",
+      "*a *b*{.x}\n",
+      "//a/ and snake_/case/\n",
+      "*{=a*{k=b=}\n",
+      "={/a={k=b/}\n",
+      "a*{_k=b_}\n"
     ],
     "outputs": [],
     "class": "report"

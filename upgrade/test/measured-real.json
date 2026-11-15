@@ -2669,5 +2669,38 @@
     "entries": [
       "U-223"
     ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "docs/validation.md",
+    "line": 583,
+    "input": "*a *b*{.x}\n",
+    "check": "explained",
+    "entries": [
+      "U-143"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "resources/examples/core.md",
+    "line": 164,
+    "input": "//a/ and snake_/case/\n",
+    "check": "explained",
+    "entries": [
+      "U-143"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
+    "line": 56,
+    "input": "*{=a*{k=b=}\n",
+    "check": "explained",
+    "entries": [
+      "U-143"
+    ]
   }
 ]

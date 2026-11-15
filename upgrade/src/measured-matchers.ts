@@ -177,15 +177,22 @@ function bracedBoundary(input: string): boolean {
     ['{_', '{-', '{+', '{~', '{='].some((shape) => line.trimStart().startsWith(shape)) && line.includes('%%'))
 }
 
+function adjacentDelimiterMatch(input: string, expected: string, actual: string): string | null {
+  if (adjacentBracedDelimiter(input) && (expected.includes('<em>') || expected.includes('<strong>'))) return 'U-143'
+  if (actual.includes('<em>') && adjacentBracedDelimiter(input)) return 'U-143'
+  if ((input.includes('_/') || input.includes('*{') || input.includes('={/'))
+    && ['<em', '<strong', '<u', '<mark'].some((tag) => expected.includes(tag) || actual.includes(tag)))
+    return 'U-143'
+  return null
+}
+
 function inlineDelimiterMatch(input: string, expected: string, actual: string): string | null {
   if (mixedDelimiterShape(input, expected, actual)) return 'U-145'
   if (bracedQuote(input)) return 'U-144'
   if (bracedBoundary(input)) return 'U-201'
   if (!input.includes('`') && !input.includes('%%') && (input.includes('/*') || input.includes('*/'))) return 'U-145'
   if (input.includes('_{') || input.includes('~{')) return 'U-151'
-  if (adjacentBracedDelimiter(input) && (expected.includes('<em>') || expected.includes('<strong>'))) return 'U-143'
-  if (actual.includes('<em>') && adjacentBracedDelimiter(input)) return 'U-143'
-  return null
+  return adjacentDelimiterMatch(input, expected, actual)
 }
 
 function inlineMatch(input: string, expected: string, actual: string): string | null {
