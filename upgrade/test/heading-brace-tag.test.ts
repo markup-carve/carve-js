@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-I-044 C2-I-090: tag inside a heading brace', () => {
+describe('C2-I-044 C2-I-090: tag inside a failed brace attribute', () => {
   it('escapes the brace closer to keep the old tag scan', () => {
     const result = upgrade('# H {#id .cls}\n')
     expect(result.output).toBe('# H {#id .cls\\}\n')
@@ -24,6 +24,23 @@ describe('C2-I-044 C2-I-090: tag inside a heading brace', () => {
   it('handles two affected headings together', () => {
     const result = upgrade('# A {#x .y}\n\n# B {#z .q}\n')
     expect(result.output).toBe('# A {#x .y\\}\n\n# B {#z .q\\}\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('keeps a tag visible after a failed inline brace opener', () => {
+    const result = upgrade('{%~{#i}\n')
+    expect(result.output).toBe('{%~\\{#i}\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-256')
+  })
+
+  it('keeps an unrelated table defect beside that inline opener', () => {
+    expect(upgrade('{%~{#i}\n\n|= ^|').check).toBe('mismatch')
+  })
+
+  it('leaves an identical code span alone while escaping prose', () => {
+    const result = upgrade('`{%~{#i}` {%~{#i}\n')
+    expect(result.output).toBe('`{%~{#i}` {%~\\{#i}\n')
     expect(result.check).toBe('pass')
   })
 })

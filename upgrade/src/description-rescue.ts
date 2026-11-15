@@ -285,6 +285,33 @@ function descriptionListPlusVariants(input: string): string[] {
   return found
 }
 
+function ownLineFenceAt(lines: string[], at: number): { fence: string; marker: string } | null {
+  if (!(lines[at - 2] ?? '').startsWith(':: ')) return null
+  if (!(lines[at - 1] ?? '').startsWith(': ') || (lines[at] ?? '').trim() !== '+') return null
+  if ((lines[at + 1] ?? '').startsWith(' ')) return null
+  const fence = (lines[at + 1] ?? '').trimStart()
+  const marker = fenceMarker(fence)
+  return marker === null ? null : { fence, marker }
+}
+
+function ownLineDescriptionFenceVariants(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 2; at < lines.length - 4 && found.length < 32; at++) {
+    const match = ownLineFenceAt(lines, at)
+    if (match === null) continue
+    let site = 0
+    for (let boundary = at + 3; boundary < lines.length - 1 && site < 4; boundary++) {
+      if ((lines[boundary] ?? '').trim() !== '' || (lines[boundary + 1] ?? '').trim() === '') continue
+      const payload = lines.slice(at + 2, boundary + 1).map((line) => line.trim() === '' ? line : '  ' + line)
+      found.push([...lines.slice(0, at), '', '  ' + '`'.repeat(match.marker.length) + match.fence.slice(match.marker.length),
+        ...payload, '  ' + '`'.repeat(match.marker.length), ...lines.slice(boundary + 1)].join('\n'))
+      site++
+    }
+  }
+  return found
+}
+
 function descriptionPlusCandidates(source: string): string[] {
   const lines = source.split('\n')
   const plain = combinedPlainPlus(source)
@@ -294,7 +321,8 @@ function descriptionPlusCandidates(source: string): string[] {
   const mixed = combinedMixedDescriptionPlus(source)
   const candidates = [plain, quote, fence, list, mixed].filter((value): value is string => value !== null)
   return [...candidates, ...plusVariants(source), ...quotedPlusVariants(source),
-    ...descriptionFenceVariants(source), ...descriptionListPlusVariants(source)]
+    ...descriptionFenceVariants(source), ...descriptionListPlusVariants(source),
+    ...ownLineDescriptionFenceVariants(source)]
 }
 
 function combinedMixedDescriptionPlus(source: string): string | null {

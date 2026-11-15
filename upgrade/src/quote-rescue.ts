@@ -8,10 +8,37 @@ interface Rescue {
   record: ReportRecord
 }
 
-/** C2-B-031 and C2-B-032: a quote that 0.1 opens after text may be a lazy line in 0.2. */
+function quoteCodeParagraphVariants(input: string, output: string): string[] {
+  if (!input.includes('> +') || !input.includes(': ```')) return []
+  const lines = output.split('\n')
+  const found: string[] = []
+  const all = [...lines]
+  let count = 0
+  for (let at = lines.length - 2; at >= 0; at--) {
+    const value = lines[at] ?? ''
+    if (!value.trimStart().startsWith('> : ```') || !(lines[at + 1] ?? '').trimStart().startsWith('> ')) continue
+    const mark = value.slice(0, value.indexOf('>')) + '>'
+    all.splice(at + 1, 0, mark)
+    if (found.length < 8) {
+      const one = [...lines]
+      one.splice(at + 1, 0, mark)
+      found.push(one.join('\n'))
+    }
+    count++
+  }
+  if (count > 1) found.unshift(all.join('\n'))
+  return found
+}
+
+/** C2-B-031, C2-B-032, C2-B-059, C2-I-015: a quote boundary may separate code-span paragraphs. */
 export function rescueQuote(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('>')) return null
   const expected = html01(input)
+  for (const candidate of quoteCodeParagraphVariants(input, output)) {
+    if (!compareHtml(expected, html02(candidate, false)).equal) continue
+    return { output: candidate, record: recordOf('U-125', mismatch.line,
+      'an empty quote line separates the old code span and following paragraph') }
+  }
   const lines = readLines(output)
   const near = Math.max(1, mismatch.line)
   for (let line = Math.max(2, near - 3); line <= Math.min(lines.count, near + 3); line++) {

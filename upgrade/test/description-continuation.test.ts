@@ -195,4 +195,16 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
     expect(result.output).toBe('  :: t\n  : ```\n    a\n    ```\nafter\n')
     expect(result.check).toBe('pass')
   })
+
+  it('closes an attached fence before the following description sibling', () => {
+    const source = ':: t\n: n\n+\n```\na\n  b\n\nsee\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(':: t\n: n\n\n  ```\n  a\n    b\n\n  ```\nsee\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('keeps an unrelated table defect after the attached fence', () => {
+    const source = ':: t\n: n\n+\n```\na\n  b\n\nsee\n\n|= ^|'
+    expect(upgrade(source).check).toBe('mismatch')
+  })
 })

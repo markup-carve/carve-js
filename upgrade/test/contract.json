@@ -1143,10 +1143,12 @@
     "id": "U-125",
     "title": "Plus continuation in a quote",
     "inputs": [
-      "> +\n>"
+      "> +\n>",
+      "> +\n: ```\n> q\n"
     ],
     "outputs": [
-      ">\n>"
+      ">\n>",
+      "> : ```\n>\n> q\n"
     ],
     "class": "rewrite"
   },
@@ -2690,13 +2692,15 @@
   },
   {
     "id": "U-256",
-    "title": "Tag inside a failed heading brace attribute",
+    "title": "Tag inside a failed brace attribute",
     "class": "rewrite",
     "inputs": [
-      "# H {#id .cls}\n"
+      "# H {#id .cls}\n",
+      "{%~{#i}\n"
     ],
     "outputs": [
-      "# H {#id .cls\\}\n"
+      "# H {#id .cls\\}\n",
+      "{%~\\{#i}\n"
     ]
   },
   {
