@@ -104,6 +104,7 @@ function longerColonClose(input: string): number {
   let opener = 0
   for (let line = 1; line <= lines.count; line++) {
     let value = lineText(lines, line).trim()
+    while (value.startsWith('> ')) value = value.slice(2).trimStart()
     if (value.startsWith('- ')) value = value.slice(2).trimStart()
     let run = 0
     while (value.charCodeAt(run) === 0x3a) run++

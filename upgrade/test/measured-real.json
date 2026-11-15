@@ -3307,5 +3307,49 @@
     "entries": [
       "U-237"
     ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-091",
+    "path": "resources/examples/edge-cases/1058-a-quoted-item-run-measures-its-written-brace.md",
+    "line": 74,
+    "input": "> > - {.x\n> >    .y}\nplain\n",
+    "check": "pass",
+    "entries": [
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-091",
+    "path": "tests/corpus/1058-a-quoted-item-run-measures-its-written-brace-4.crv",
+    "line": 1,
+    "input": "> > - {.x\n> >    .y}\nplain\n",
+    "check": "pass",
+    "entries": [
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-109",
+    "path": "resources/examples/edge-cases/0871-a-div-closes-only-on-a-run-of-its-own-width.md",
+    "line": 65,
+    "input": "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n",
+    "check": "explained",
+    "entries": [
+      "U-219"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-109",
+    "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width-3.crv",
+    "line": 1,
+    "input": "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n",
+    "check": "explained",
+    "entries": [
+      "U-219"
+    ]
   }
 ]

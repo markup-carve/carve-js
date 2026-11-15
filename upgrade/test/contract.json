@@ -1379,14 +1379,16 @@
       "> {k}\nt\n",
       "> {x}\nt\n",
       "> {#x}\na\n",
-      "- > {.x\n  >  .y}\nplain\n"
+      "- > {.x\n  >  .y}\nplain\n",
+      "> > - {.x\n> >    .y}\nplain\n"
     ],
     "outputs": [
       ">\nt",
       ">\nt\n",
       ">\nt\n",
       ">\na\n",
-      "- >\nplain\n"
+      "- >\nplain\n",
+      "> > - {% %}\n\nplain\n"
     ],
     "class": "rewrite"
   },
@@ -2278,7 +2280,8 @@
       ":::\n::::\n",
       ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
       ":::\n:::e\n::::\nq\n:::\nafter\n",
-      "- :::\n  :::e\n  ::::\n  :::\nl\n"
+      "- :::\n  :::e\n  ::::\n  :::\nl\n",
+      "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n"
     ],
     "outputs": []
   },

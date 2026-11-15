@@ -114,6 +114,15 @@ function multilineQuotedAttribute(output: string): Candidate[] {
     changed.splice(at, 2, '- >')
     found.push(candidate('U-141', changed.join('\n'), 'the multiline attribute consumed by the quote was removed'))
   }
+  for (let at = 0; at < lines.length - 2; at++) {
+    const head = lines[at] ?? ''
+    const tail = lines[at + 1] ?? ''
+    if (!head.startsWith('> > - {') || !tail.startsWith('> >    ') || !tail.trimEnd().endsWith('}')) continue
+    const changed = [...lines]
+    changed.splice(at, 2, '> > - {% %}', '')
+    found.push(candidate('U-141', changed.join('\n'),
+      'the multiline attribute consumed inside the quoted item became an empty comment'))
+  }
   return found
 }
 
