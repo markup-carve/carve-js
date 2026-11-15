@@ -206,8 +206,10 @@ export function releaseInlineState(state: InlineState): void {
   state.src = ''
   state.text = ''
   state.definitions = null
-  state.codeRuns = null
-  state.codeRunCursors.clear()
+  if (state.codeRuns !== null) {
+    state.codeRuns = null
+    state.codeRunCursors.clear()
+  }
   if (pool.length < POOL_SIZE) pool.push(state)
 }
 
