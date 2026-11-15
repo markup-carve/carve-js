@@ -2424,5 +2424,16 @@
     "outputs": [
       "{id=\"a\\\"b&c\"}\n# H\n\n</#a\"b&c>\n"
     ]
+  },
+  {
+    "id": "U-232",
+    "title": "Table row after a description body at the document column",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n: para\n | a |\n"
+    ],
+    "outputs": [
+      ":: t\n: para\n| a |\n"
+    ]
   }
 ]

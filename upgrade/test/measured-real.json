@@ -3021,5 +3021,27 @@
     "entries": [
       "U-165"
     ]
+  },
+  {
+    "cause": "C23",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0616-a-line-is-read-in-the-container-whose-column-it-reaches.md",
+    "line": 393,
+    "input": ":: t\n: para\n | a |\n",
+    "check": "pass",
+    "entries": [
+      "U-232"
+    ]
+  },
+  {
+    "cause": "C23",
+    "clause": "C2-B-171",
+    "path": "tests/corpus/616-a-line-is-read-in-the-container-whose-column-it-reaches-17.crv",
+    "line": 1,
+    "input": ":: t\n: para\n | a |\n",
+    "check": "pass",
+    "entries": [
+      "U-232"
+    ]
   }
 ]

@@ -89,7 +89,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 207 entries', () => {
-    expect(cases.length).toBe(207)
+  it('covers all 208 entries', () => {
+    expect(cases.length).toBe(208)
   })
 })

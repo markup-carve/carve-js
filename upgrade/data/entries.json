@@ -1399,6 +1399,12 @@
       "name": "double quote inside a quoted id value",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-232",
+      "name": "table row after description body",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

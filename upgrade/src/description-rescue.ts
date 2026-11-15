@@ -176,6 +176,21 @@ function descriptionSiblingVariants(input: string): string[] {
   return found
 }
 
+function descriptionTableVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 2; at < lines.length; at++) {
+    if (!(lines[at - 2] ?? '').trimStart().startsWith(':: ')) continue
+    if (!(lines[at - 1] ?? '').trimStart().startsWith(': ')) continue
+    const value = lines[at] ?? ''
+    if (!value.startsWith(' ') || !value.trimStart().startsWith('|')) continue
+    const changed = [...lines]
+    changed[at] = value.trimStart()
+    found.push(changed.join('\n'))
+  }
+  return found
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -212,6 +227,9 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   const sibling = firstPreserving(expected, descriptionSiblingVariants(input))
   if (sibling !== null) return { output: sibling, record: recordOf('U-228', mismatch.line,
     'the sibling block was moved to the description content column') }
+  const table = firstPreserving(expected, descriptionTableVariants(input))
+  if (table !== null) return { output: table, record: recordOf('U-232', mismatch.line,
+    'the table row was moved to the description boundary column') }
   const plus = firstPreserving(expected, plusVariants(input))
   if (plus !== null)
     return {
