@@ -40,17 +40,22 @@ export interface Leaf {
   inlineFootnote: boolean
   /** The end of the last cross-reference scan that found no `>`. */
   angleFailEnd: number
+  /** The leaf is the content of a table cell. */
+  inCell: boolean
+  /** The last backtick written by an atom, or -1. */
+  lastAtomTick: number
 }
 
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, firstBrace: -1,
-    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1,
+    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1,
   }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
   if (code === 123 && leaf.firstBrace < 0) leaf.firstBrace = leaf.codes.length
+  if (code === 96 && kind === ATOM) leaf.lastAtomTick = leaf.codes.length
   leaf.codes.push(code)
   leaf.kinds.push(kind)
   leaf.owners.push(owner)

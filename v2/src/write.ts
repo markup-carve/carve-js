@@ -600,10 +600,12 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
 }
 
 /** C2-W-089: the group as the repair writes it, compared with the plan in `both`. */
-function compareWithRepair(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
+/** The `both` path: the repair runs from the escapes as they stood before the plan, and the two forms are compared. */
+function compareWithRepair(
+  w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean, before: ReadonlyMap<TextNode, number[]>,
+): number {
   const planned = w.lines
-  const escapes = w.escapes
-  w.escapes = new Map(escapes)
+  w.escapes = new Map(before)
   const end = repairGroup(w, document, from, first, w.losses.entries.length)
   if (w.lines.join('\n') !== planned.join('\n')) {
     run.stats.differences.push(`${JSON.stringify(planned.join('\n'))} repair ${JSON.stringify(w.lines.join('\n'))}`)
@@ -620,9 +622,10 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   const reported = w.losses.entries.length
   if (run.path !== 'repair') {
     const end = groupEnd(w, document.children, from)
+    const before = w.escapes
     if (planGroup(w, run, document.children.slice(from, end), first)) {
       run.stats.planned++
-      return run.path === 'both' ? compareWithRepair(w, run, document, from, first) : end
+      return run.path === 'both' ? compareWithRepair(w, run, document, from, first, before) : end
     }
   }
   run.stats.repaired++

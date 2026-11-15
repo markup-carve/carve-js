@@ -176,10 +176,6 @@ function mark(chars: string): Resolver {
   }
 }
 
-function always(why: string): Resolver {
-  return (leaf, at, escaped) => undecidedIf(!isLiteral(leaf, at, escaped), leaf, why)
-}
-
 /** Whether the atom unit `at` continues the atom before it; two atoms in a row are two nodes. */
 function continuesAtom(leaf: Leaf, at: number): boolean {
   return leaf.kinds[at - 1] === ATOM && leaf.owners[at - 1] === leaf.owners[at]
@@ -246,7 +242,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   },
   '"': quote,
   '#': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
-  '$': (leaf, at, escaped) => gluedSigil(leaf, at, escaped, opensCode, '`$'),
+  '$': (leaf, at, escaped) => gluedSigil(leaf, at, escaped, opensCode, '$'),
   '%': percent,
   '\'': quote,
   '(': (leaf, at) => undecidedIf(nextIs(leaf, at, 't') && code(leaf, at + 2) === 109, leaf, 'trademark'),
@@ -270,7 +266,14 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
     else gluedSigil(leaf, at, escaped, treeBracket, '')
   },
   '_': () => undefined,
-  '`': always('backtick'),
+  // C2-I-017, C2-W-091: a backtick run opens a code span even unclosed, so each backtick of text takes a backslash.
+  '`': (leaf, at, escaped) => {
+    if (isLiteral(leaf, at, escaped)) return
+    // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
+    // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
+    if (leaf.inCell || leaf.lastAtomTick > at) undecide(leaf, 'backtick')
+    else escaped[at] = 1
+  },
   '{': brace,
   '|': () => undefined,
   '}': closingBrace,
@@ -447,6 +450,7 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
 
 function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number, place: LeafPlace | undefined): Uint8Array {
   const escaped = new Uint8Array(leaf.codes.length)
+  leaf.inCell = (flags & IN_CELL) !== 0
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
