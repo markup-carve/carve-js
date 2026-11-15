@@ -2097,5 +2097,22 @@
       ":: t\n: +\n```\na\n\n  ```\n  c\n",
       "- a\n  - +\n  > b\n"
     ]
+  },
+  {
+    "id": "U-210",
+    "title": "Definition consumed inside a description body",
+    "class": "rewrite",
+    "inputs": [
+      ":: term\n:  [r]: /u\n\nsee [t][r]\n",
+      ":: term\n:  [^f]: x\n\nsee[^f]\n",
+      ":: t\n:  [^q]: note\n   * child\n\nr[^q]\n",
+      ":: t\n: [^q]: note\n\n  - child\n\nr[^q]\n"
+    ],
+    "outputs": [
+      "[r]: /u\n\n:: term\n: {% %}\n\nsee [t][r]\n",
+      "[^f]: x\n\n:: term\n: {% %}\n\nsee[^f]\n",
+      "[^q]: note\n\n:: t\n: {% %}\n   * child\n\nr[^q]\n",
+      "[^q]: note\n\n:: t\n: {% %}\n\n  - child\n\nr[^q]\n"
+    ]
   }
 ]

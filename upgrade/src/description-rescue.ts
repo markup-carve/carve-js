@@ -110,6 +110,23 @@ function boundaryVariants(output: string): string[] {
   return found
 }
 
+function definitionVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 1; at < lines.length; at++) {
+    const value = (lines[at] ?? '').trimStart()
+    if (!value.startsWith(': ')) continue
+    const body = value.slice(2).trimStart()
+    const close = body.indexOf(']:')
+    if (!body.startsWith('[') || close < 2) continue
+    if (!(lines[at - 1] ?? '').trimStart().startsWith(':: ')) continue
+    const changed = [...lines]
+    changed[at] = (lines[at] ?? '').slice(0, (lines[at] ?? '').length - value.length) + ': {% %}'
+    found.push(body + '\n\n' + changed.join('\n'))
+  }
+  return found
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -137,6 +154,9 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
       )
     }
   }
+  const definition = firstPreserving(expected, definitionVariants(input))
+  if (definition !== null) return { output: definition, record: recordOf('U-210', mismatch.line,
+    'the definition was moved to document scope and the description kept its empty 0.1 body') }
   const plus = firstPreserving(expected, plusVariants(input))
   if (plus !== null)
     return {

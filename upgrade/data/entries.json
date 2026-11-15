@@ -1273,6 +1273,12 @@
       "name": "unresolved container continuation ownership",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-210",
+      "name": "definition consumed inside a description body",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
