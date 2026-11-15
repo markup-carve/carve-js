@@ -3071,7 +3071,7 @@
     "clause": "C2-I-079",
     "path": "resources/examples/edge-cases/0314-a-footnote-in-an-unresolved-reference-is-not-a-reference.md",
     "line": 54,
-    "input": "a [t\\\\^[n]][nope] b\n",
+    "input": "a [t\\^[n]][nope] b\n",
     "check": "pass",
     "entries": [
       "U-234"

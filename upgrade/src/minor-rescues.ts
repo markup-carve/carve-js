@@ -386,8 +386,7 @@ function unresolvedReferenceBackslashes(output: string): Candidate[] {
     if (output[at] !== '\\' || output[at - 1] === '\\') continue
     let end = at
     while (output[end] === '\\') end++
-    if (end - at > 8 || end - at === 1 && !output.startsWith('[')
-      || output[end] !== '^' && output[end] !== '\n') continue
+    if (end - at > 8 || output[end] !== '^' && output[end] !== '\n') continue
     found.push(candidate('U-234', output.slice(0, at) + '\\\\' + output.slice(at),
       'the unresolved reference keeps the 0.1 literal backslash run'))
   }

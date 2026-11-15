@@ -2454,11 +2454,13 @@
     "class": "rewrite",
     "inputs": [
       "[\\^][]",
+      "a [t\\^[n]][nope] b\n",
       "a [t\\\\^[n]][nope] b\n",
       "[a\\\\\\\nb][missing]\n"
     ],
     "outputs": [
       "[\\\\\\^][]",
+      "a [t\\\\\\^[n]][nope] b\n",
       "a [t\\\\\\\\\\^[n]][nope] b\n",
       "[a\\\\\\\\\\\\\nb][missing]\n"
     ]

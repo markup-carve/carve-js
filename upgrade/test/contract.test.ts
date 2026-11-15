@@ -33,8 +33,8 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-114#4': { entry: 'U-114', check: 'explained' }
 }
 
-/** U-014 and U-015 write the input of U-018, so a second run reads their output as a loose list. */
-const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-167#0',
+/** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
+const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-113#1', 'U-167#0',
   'U-129#8', 'U-129#9', 'U-129#10', 'U-129#11',
   'U-228#0', 'U-228#1', 'U-228#2'])
 
