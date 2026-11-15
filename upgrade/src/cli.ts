@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { ENGINE_01_VERSION } from './engines.ts'
 import { formatRecord } from './report.ts'
-import { needsAttention, upgrade, type UpgradeResult } from './upgrade.ts'
+import { canWriteUpgrade, needsAttention, upgrade, type UpgradeResult } from './upgrade.ts'
 
 const USAGE = 'usage: carve-upgrade [--check] [--write] [--json] [--force] FILE...'
 
@@ -38,7 +38,7 @@ function readFlags(args: string[]): Flags | null {
 function emit(flags: Flags, file: string, result: UpgradeResult): void {
   if (flags.check) return
   // The file is not written over a difference no entry explains, unless forced (contract, section 1).
-  const blocked = result.check === 'mismatch' && !flags.force
+  const blocked = !canWriteUpgrade(result) && !flags.force
   if (flags.write) {
     if (result.changed && !blocked) writeFileSync(file, result.output)
   } else if (flags.files.length === 1 && !flags.json) {
@@ -49,8 +49,19 @@ function emit(flags: Flags, file: string, result: UpgradeResult): void {
 function run(flags: Flags): number {
   let status = 0
   const all: object[] = []
+  const sources: { file: string; source: string }[] = []
   for (const file of flags.files) {
-    const result = upgrade(readFileSync(file, 'utf8'))
+    try {
+      const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(file))
+      sources.push({ file, source })
+    }
+    catch (error) {
+      process.stderr.write(`carve[input-unreadable]: ${file}: ${String(error)}\n`)
+      return 2
+    }
+  }
+  for (const { file, source } of sources) {
+    const result = upgrade(source)
     emit(flags, file, result)
     if (needsAttention(result) || (flags.check && result.changed)) status = 1
     if (flags.json) all.push({ file, changed: result.changed, check: result.check, records: result.records })

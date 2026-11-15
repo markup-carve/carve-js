@@ -89,8 +89,7 @@ function afterName(ctx: Context, node: Node01): number {
 }
 
 /**
- * U-037, U-051: 0.1 dropped an attribute block or unquoted words after a fence language or a
- * div name; 0.2 reports them (C2-B-105, C2-B-122), so they are removed.
+ * U-037: a brace suffix can become part of the 0.2 fence language (C2-B-105).
  */
 function openerTail(ctx: Context, node: Node01): void {
   if (node.label !== undefined || node.header !== undefined || node.title !== undefined || node.attrs !== undefined)
@@ -102,15 +101,6 @@ function openerTail(ctx: Context, node: Node01): void {
   if (rest === '' || rest.startsWith('"')) return
   if (rest.startsWith('{'))
     change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
-  else
-    change(
-      ctx,
-      'U-051',
-      at,
-      end,
-      '',
-      'unquoted words after the fence language or div name removed, as 0.1 dropped them'
-    )
 }
 
 function rank(name: string): number {

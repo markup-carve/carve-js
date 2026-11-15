@@ -6,8 +6,8 @@ describe('C2-I-062 C2-W-116 empty replacement sides', () => {
     const source = '{~a~>~} deletes, {~~>b~} inserts, and {~~>~} still does both to nothing.\n'
     const result = upgrade(source)
     expect(result.output).toBe(source)
-    expect(result.check).toBe('explained')
+    expect(result.check).toBe('mismatch')
     expect(result.records.filter((record) => record.entry === 'U-198')).toHaveLength(3)
-    expect(result.records.map((record) => record.entry)).not.toContain('upgrade-mismatch')
+    expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
 })

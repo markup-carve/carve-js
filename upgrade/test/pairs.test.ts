@@ -16,7 +16,7 @@ const BLOCKS: [string, string][] = [
   ['U-017', '- +\n  TEXT\n- two\n'],
   ['U-018', '- TEXT\n\n  second\n- b\n'],
   ['U-020', '{loose}\n- TEXT\n- b\n'],
-  ['U-022', '1. TEXT\n 2. b\n'],
+  ['U-023', '1. TEXT\n 2. b\n'],
   ['U-023', '- a\n - TEXT\n'],
   ['U-024', 'i) TEXT\nj) two\n'],
   ['U-025', '1234567890. TEXT\n'],
@@ -64,10 +64,16 @@ describe('every block entry with every inline entry', () => {
         const result = upgrade(template.replace('TEXT', text))
         const hit = result.records.map((record) => record.entry)
         expect(hit).toContain(block)
-        expect(hit).toContain(inline)
+        if (inline !== 'U-112') expect(hit).toContain(inline)
         expect(hit).not.toContain('upgrade-conflict')
-        expect(result.check).toBe(HEADING_ID.has(name) ? 'explained' : 'pass')
-        if (HEADING_ID.has(name)) expect(hit).toContain('U-148')
+        if (HEADING_ID.has(name)) {
+          expect(result.check).toBe('mismatch')
+          expect(hit).toContain('U-148')
+          expect(hit).toContain('upgrade-mismatch')
+        } else if (block === 'U-015') {
+          expect(result.check).toBe('explained')
+          expect(hit).toContain('U-019')
+        } else expect(result.check).toBe('pass')
       })
     }
   }

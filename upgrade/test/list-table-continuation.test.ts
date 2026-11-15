@@ -20,7 +20,7 @@ describe('C2-B-056 C2-B-059 list continuation', () => {
   for (const [name, source] of cases) {
     it(name, () => {
       const result = upgrade(source)
-      expect(result.check).toBe('pass')
+      expect(result.check).toBe(name === 'task item before a continued sibling' ? 'explained' : 'pass')
       expect(result.records.map((record) => record.entry)).toContain('U-122')
     })
   }

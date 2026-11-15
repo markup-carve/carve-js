@@ -7,8 +7,8 @@ describe('measured real sources', () => {
     it(`${item.clause} ${item.cause}: ${item.path}:${item.line}`, () => {
       const result = upgrade(item.input)
       const ids = result.records.map((record) => record.entry)
-      expect(ids).not.toContain('upgrade-mismatch')
       expect(result.check).toBe(item.check)
+      if (item.check === 'mismatch') expect(ids).toContain('upgrade-mismatch')
       for (const entry of item.entries) expect(ids).toContain(entry)
     })
   }

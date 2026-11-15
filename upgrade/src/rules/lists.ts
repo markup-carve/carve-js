@@ -308,7 +308,7 @@ function listAbove(ctx: Context, visit: Visit): Node01 | null {
 }
 
 /**
- * U-022, U-023: a marker right of the marker above it and short of that item's content column
+ * U-023: a marker right of the marker above it and short of that item's content column
  * nests in 0.2 (C2-B-056), so it moves to the column of the list. A marker at or left of the
  * marker above continues the list (C2-B-030, C2-B-054) and stays.
  */
@@ -331,10 +331,9 @@ function markerColumns(ctx: Context, visit: Visit): void {
       continue
     }
     previous = base
-    const id = visit.node.ordered === true && above === null ? 'U-022' : 'U-023'
     dedentLines(
       ctx,
-      id,
+      'U-023',
       item.pos!.startLine,
       item.pos!.endLine,
       column - base,

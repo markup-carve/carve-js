@@ -113,7 +113,7 @@ function takeSourceLine(parts: string[]): number {
   return 0
 }
 
-function readTag(html: string, start: number, end: number, line: number): Token {
+function readTag(html: string, start: number, end: number, line: number, normalizeTask: boolean): Token {
   if (html.charCodeAt(start + 1) === SLASH) {
     const name = html.slice(start + 2, end).trim()
     return { kind: CLOSE, name, text: `</${name}>`, line }
@@ -123,20 +123,20 @@ function readTag(html: string, start: number, end: number, line: number): Token 
   const name = body.slice(0, split)
   const parts = splitAttributes(body, split)
   const own = takeSourceLine(parts)
-  if (name === 'li' && isTaskItem(parts)) { dropTaskClass(parts); dropTaskStyle(parts) }
+  if (normalizeTask && name === 'li' && isTaskItem(parts)) { dropTaskClass(parts); dropTaskStyle(parts) }
   parts.sort()
   const text = parts.length === 0 ? `<${name}>` : `<${name} ${parts.join(' ')}>`
   return { kind: OPEN, name, text, line: own > 0 ? own : line }
 }
 
-function tokenize(html: string): Token[] {
+function tokenize(html: string, normalizeTask = true): Token[] {
   const tokens: Token[] = []
   let line = 0
   let at = 0
   while (at < html.length) {
     if (html.charCodeAt(at) === LT) {
       const end = tagEnd(html, at)
-      const tag = readTag(html, at, end, line)
+      const tag = readTag(html, at, end, line, normalizeTask)
       line = tag.line
       tokens.push(tag)
       at = end + 1
@@ -192,7 +192,7 @@ interface Reduced {
  * `only`, every paragraph element directly in the only item of a list is dropped too: 0.1 could
  * make such a list loose and 0.2 cannot (U-021).
  */
-function dropParagraphs(tokens: Token[], only: Set<number>): Reduced {
+function dropParagraphs(tokens: Token[], only: Set<number>, laterParagraphs = true): Reduced {
   const out: Token[] = []
   const stack: Frame[] = []
   const dropped: boolean[] = []
@@ -210,7 +210,7 @@ function dropParagraphs(tokens: Token[], only: Set<number>): Reduced {
       return
     }
     const inItem = token.text === '<p>' && top !== undefined && top.name === 'li'
-    const later = inItem && top.children > 0
+    const later = laterParagraphs && isLaterParagraph(inItem, top)
     const drop = later || (inItem && only.has(top.open))
     if (top !== undefined) top.children++
     if (later) count++
@@ -220,6 +220,10 @@ function dropParagraphs(tokens: Token[], only: Set<number>): Reduced {
     dropped.push(drop)
   })
   return { tokens: out, laterParagraphs: count }
+}
+
+function isLaterParagraph(inItem: boolean, top: Frame | undefined): boolean {
+  return inItem && top !== undefined && top.children > 0
 }
 
 /** Trims the whitespace a pretty printer put at the edges of `text` and after its line breaks. */
@@ -309,4 +313,47 @@ export function compareHtml(html01: string, html02: string, singleItems = false)
   if (at === a.length && at === b.length) return { equal: true, difference: null, gainedParagraphs }
   const line = at < b.length ? b[at]!.line : b.length > 0 ? b[b.length - 1]!.line : 0
   return { equal: false, difference: { line, expected: excerpt(a, at), actual: excerpt(b, at) }, gainedParagraphs }
+}
+
+export function htmlTokens(html: string): string[] {
+  return settle(tokenize(html, false)).map((token) => token.text)
+}
+
+interface ItemParagraphFrame {
+  name: string
+  open: number
+  firstSeen: boolean
+  dropped: boolean
+}
+
+/** C2-B-062: only the first direct paragraph of the sole item loses its wrapper. */
+export function dropOnlyItemParagraphs(html: string): string {
+  const tokens = tokenize(html, false)
+  const only = onlyItems(tokens)
+  const stack: ItemParagraphFrame[] = []
+  const out: string[] = []
+  tokens.forEach((token, index) => {
+    if (token.kind === TEXT) { out.push(token.text); return }
+    if (token.kind === CLOSE) {
+      const frame = stack.pop()
+      if (frame?.dropped !== true) out.push(token.text)
+      return
+    }
+    const parent = stack[stack.length - 1]
+    const firstParagraph = token.name === 'p' && parent?.name === 'li' && only.has(parent.open) && !parent.firstSeen
+    if (token.name === 'p' && parent?.name === 'li') parent.firstSeen = true
+    if (!firstParagraph) out.push(token.text)
+    if (!VOID.has(token.name)) stack.push({ name: token.name, open: index, firstSeen: false, dropped: firstParagraph })
+  })
+  return out.join('')
+}
+
+export function compareHtmlExact(old: string, next: string): Comparison {
+  const a = settle(tokenize(old, false))
+  const b = settle(tokenize(next, false))
+  let at = 0
+  while (at < a.length && at < b.length && a[at]?.text === b[at]?.text) at++
+  if (at === a.length && at === b.length) return { equal: true, difference: null, gainedParagraphs: 0 }
+  const line = at < b.length ? b[at]?.line ?? 0 : b[b.length - 1]?.line ?? 0
+  return { equal: false, difference: { line, expected: excerpt(a, at), actual: excerpt(b, at) }, gainedParagraphs: 0 }
 }

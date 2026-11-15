@@ -7,20 +7,24 @@ node upgrade/src/cli.ts [--check] [--write] [--json] [--force] FILE...
 ```
 
 - Without `--write` the rewritten source of one file goes to stdout and the report to stderr.
-- `--write` writes each file in place. A file whose HTML differs in a way no contract entry
-  explains is not written unless `--force` is given.
+- `--write` writes a file only when its self-check is `pass` or `explained`, unless `--force` is
+  given. `--force` explicitly overrides the check.
 - `--check` writes nothing and exits 1 when a file would change or needs a person.
 - `--json` prints the report as JSON on stdout.
 
 Exit status: 0 when nothing needs a person, 1 when a report entry hit or the self-check found a
-difference, 2 for a usage error.
+difference, 2 for a usage or unreadable-input error. Malformed UTF-8 is an unreadable-input error;
+`--write` leaves its bytes untouched.
+Pure CRLF input is rewritten with LF internally and returned with CRLF. The command reads every
+input before it writes any file, so an unreadable file prevents writes to earlier files.
 
 As a function:
 
 ```ts
-import { upgrade } from './src/index.ts'
+import { canWriteUpgrade, upgrade } from './src/index.ts'
 
-const { output, records, check } = upgrade(source)
+const result = upgrade(source)
+const writable = canWriteUpgrade(result)
 ```
 
 ## How it works
@@ -29,13 +33,20 @@ The tool reads the input with the 0.1 engine of this repository (the build of `s
 `dist/`, so run `npm ci` or `npm run build` at the repository root first), collects edits from
 the 0.1 tree and its positions, and applies them from the end of the text backward. It changes
 only the spans a contract entry names. It then renders the input with the 0.1 engine and the
-output with the 0.2 engine (`v2/`) and compares the HTML after sorting attributes, dropping
-whitespace between tags and dropping the class `task` of a list item, which 0.2 writes on every
-boxed item and 0.1 did not.
+output with the 0.2 engine (`v2/`). The check sorts attributes and drops layout whitespace between
+tags. `explained` requires the cited entries' HTML transformations to reproduce the 0.2 result
+exactly. The transformations are in `data/html-transformations.json`; U-019 and U-021 also have
+rules for list paragraph wrappers. U-133 handles task item presentation, and U-154 moves a
+footnote mark that immediately follows text inside its containing link. Other footnote shapes
+remain unverified. A source shape alone never clears the check. The tool discards an edit when
+removing it leaves both engines' HTML unchanged; a needless U-037 brace-tail edit remains an
+informational `none` record.
 
 Each record of the report names a contract entry (`U-001` onward, see `data/entries.json`), its
-class (`rewrite`, `escape`, `report`), the line of the input and the 0.2 lint rule where one
-exists. The self-check adds `upgrade-mismatch` for a difference no entry explains, and one
+class (`rewrite`, `escape`, `report`, or `none`), the line of the input and the 0.2 lint rule where one
+exists. A report whose HTML change has no applicable transformation becomes
+`unverified explanation`; the remaining difference is also reported as `upgrade-mismatch`. The
+self-check adds one
 `U-019` summary line that counts the later paragraphs of list items that gain a paragraph
 element in 0.2.
 

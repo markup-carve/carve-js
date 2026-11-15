@@ -138,11 +138,10 @@ describe('the comparison of section 1', () => {
 })
 
 describe('the report', () => {
-  it('holds the 231 entries of the contract with their classes', () => {
+  it('holds the 229 entries of the contract with their classes', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
-    // U-048 is `none` by the ruling of 2026-11-13, so one rewrite less and one none more than the summary table.
     expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([
-      231, 108, 32, 71, 20
+      229, 106, 32, 71, 20
     ])
     // The tool's own entries, for cases the specification does not decide, stand apart.
     expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002'])
@@ -197,9 +196,9 @@ describe('the report', () => {
   it('U-114: reports the div difference with the line of the shorter closer', () => {
     // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
     const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
-    expect(result.check).toBe('explained')
+    expect(result.check).toBe('mismatch')
     const record = result.records.find((entry) => entry.entry === 'U-114')
-    expect([record?.class, record?.line]).toEqual(['report', 5])
+    expect([record?.class, record?.line]).toEqual(['unverified explanation', 5])
     expect(record?.message).toContain('0.1 opens another anonymous div')
   })
 
@@ -212,14 +211,14 @@ describe('the report', () => {
     // The same list, and after it the block of U-114 that 0.1 and 0.2 read differently.
     const other = upgrade('- item\n\n  ***\n\n:::: note\nbody\n:::\nafter\n::::\n')
     expect([other.check, other.records.map((record) => record.entry)]).toEqual([
-      'explained',
-      ['U-021', 'U-114', 'upgrade-difference']
+      'mismatch',
+      ['U-021', 'U-114', 'upgrade-mismatch']
     ])
   })
 
   it('prints one summary line for the later paragraphs of tight items', () => {
     const result = upgrade('- a\n+\nsecond\n- b\n+\nthird\n')
-    expect(result.records.filter((record) => record.class === 'summary')).toEqual([
+    expect(result.records.filter((record) => record.entry === 'U-019')).toEqual([
       {
         entry: 'U-019',
         class: 'summary',
@@ -227,7 +226,7 @@ describe('the report', () => {
         message: '2 later paragraph(s) of list items gain a paragraph element in 0.2'
       }
     ])
-    expect(result.check).toBe('pass')
+    expect(result.check).toBe('explained')
   })
 })
 

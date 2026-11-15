@@ -9,7 +9,7 @@ interface Variant {
   entries: string
   input: string
   output: string
-  check: 'pass' | 'explained'
+  check: 'pass' | 'explained' | 'mismatch'
   stable: boolean
 }
 
@@ -147,31 +147,31 @@ const VARIANTS: Variant[] = [
     stable: true
   },
   {
-    entries: 'U-117',
+    entries: 'U-117 U-133',
     input: '- x\n  - [ ] a\n  - b\n',
     output: '- x\n  - [ ] a\n\n\n\n  - b\n',
-    check: 'pass',
+    check: 'explained',
     stable: true
   },
   {
-    entries: 'U-117',
+    entries: 'U-117 U-133',
     input: 'Text[^n].\n\n[^n]: - [ ] a\n  - b\n',
     output: 'Text[^n].\n\n[^n]: - [ ] a\n\n\n\n  - b\n',
-    check: 'pass',
+    check: 'explained',
     stable: true
   },
   {
-    entries: 'U-117',
+    entries: 'U-117 U-133',
     input: ':: t\n: - [ ] a\n  - b\n',
     output: ':: t\n: - [ ] a\n\n\n\n  - b\n',
-    check: 'pass',
+    check: 'explained',
     stable: true
   },
   {
-    entries: 'U-117',
+    entries: 'U-117 U-133',
     input: '* a\n* [x] b\n* c\n',
     output: '* a\n\n\n\n* [x] b\n\n\n\n* c\n',
-    check: 'pass',
+    check: 'explained',
     stable: true
   },
   {
@@ -197,7 +197,7 @@ const VARIANTS: Variant[] = [
   },
   { entries: 'U-065 U-067', input: '| =m= | _u_ |\n', output: '| {=m=} | {_u_} |\n', check: 'pass', stable: true },
   { entries: 'U-065 U-066', input: '# A _b_ ~c~\n', output: '# A {_b_} {~c~}\n', check: 'pass', stable: true },
-  { entries: 'U-101', input: '- [ ] = x\n', output: '- [ ] \\= x\n', check: 'pass', stable: true },
+  { entries: 'U-101 U-133', input: '- [ ] = x\n', output: '- [ ] \\= x\n', check: 'explained', stable: true },
   { entries: 'U-101', input: ':: = x\n: = y\n', output: ':: = x\n: \\= y\n', check: 'pass', stable: true },
   { entries: 'U-103', input: '> a. one\n> b. two\n', output: '> a\\. one\n> b. two\n', check: 'pass', stable: true },
   { entries: 'U-103', input: '- a. one\n  b. two\n', output: '- a\\. one\n  b\\. two\n', check: 'pass', stable: true },
@@ -212,7 +212,7 @@ const VARIANTS: Variant[] = [
     entries: 'U-001 U-019 U-102',
     input: '# H\n\n- a\n  # Inner\n    more\n',
     output: '# H\n\n- a\n\n  # Inner\n  more\n',
-    check: 'pass',
+    check: 'explained',
     stable: true
   },
   {
@@ -293,14 +293,6 @@ const VARIANTS: Variant[] = [
     entries: 'U-050',
     input: '> %%%\n> hidden\n> %%% visible\n> after\n',
     output: '> %%%\n> hidden\n> visible\n> %%%\n> after\n',
-    check: 'pass',
-    stable: true
-  },
-  { entries: 'U-051', input: '```js title\ncode\n```\n', output: '```js\ncode\n```\n', check: 'pass', stable: true },
-  {
-    entries: 'U-051',
-    input: '::: warning Be careful\nbody\n:::\n',
-    output: '::: warning\nbody\n:::\n',
     check: 'pass',
     stable: true
   },

@@ -27,7 +27,7 @@
     "path": "resources/examples/edge-cases/0853-a-whitespace-run-after-a-tab-sets-the-content-column-where-the-content-starts.md",
     "line": 12,
     "input": "- \t e\n\n\tf\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-021",
       "U-153"
@@ -39,9 +39,10 @@
     "path": "resources/examples/edge-cases/0725-a-quoted-include-with-no-resolver-parses-inline-content.md",
     "line": 6,
     "input": "{{ \"a}}b\" @code }}\n",
-    "check": "explained",
+    "check": "pass",
     "entries": [
-      "U-011"
+      "U-011",
+      "U-190"
     ]
   },
   {
@@ -50,7 +51,7 @@
     "path": "resources/examples/edge-cases/0737-model-inline-frames-and-html-attributes.md",
     "line": 71,
     "input": "{{ d @lines:0 }}*a*\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-011"
     ]
@@ -61,7 +62,7 @@
     "path": "resources/examples/edge-cases/0854-a-standalone-code-include-with-no-resolver-is-literal-in-every-host.md",
     "line": 24,
     "input": "> {{ a @code:a,b }}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-011"
     ]
@@ -138,7 +139,7 @@
     "path": "resources/examples/edge-cases/0879-a-line-comment-hides-a-substitution-arrow.md",
     "line": 72,
     "input": "x:foo[\"q\"]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-073"
     ]
@@ -160,7 +161,7 @@
     "path": "resources/examples/edge-cases/0605-an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter.md",
     "line": 76,
     "input": "{-a {#x-}#} b-}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-072"
     ]
@@ -171,9 +172,10 @@
     "path": "resources/examples/edge-cases/0873-a-delimited-body-s-overlapping-header-and-footer-make-no-header-cells.md",
     "line": 33,
     "input": "|= a |\n| ^  |\n+ | c |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
-      "U-060"
+      "U-060",
+      "U-147"
     ]
   },
   {
@@ -182,9 +184,10 @@
     "path": "resources/examples/edge-cases/0101-table-header-cell-rowspan.md",
     "line": 10,
     "input": "|= H |= G |\n| ^ | b |\n| ^ | c |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
-      "U-060"
+      "U-060",
+      "U-168"
     ]
   },
   {
@@ -193,7 +196,7 @@
     "path": "resources/examples/edge-cases/0318-composite-figures.md",
     "line": 279,
     "input": "::: figure\n:::: figure\n![one](a.png)\n^ (a) One\n::::\n:::\n^ Figure #: Outer only\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-114"
     ]
@@ -204,7 +207,7 @@
     "path": "resources/examples/edge-cases/0659-table-spans-keep-alignment-defaults-in-physical-columns.md",
     "line": 139,
     "input": "|a|{?^} \\<|\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-162"
     ]
@@ -215,7 +218,7 @@
     "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
     "line": 16,
     "input": "|=> Price |= Item |= Size |= Mood |\n| 12 |< pen |>^ big |~~ ok |\n|?v 3 | ink |>{.num} 9 | fine |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-056",
       "U-162"
@@ -227,7 +230,7 @@
     "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
     "line": 40,
     "input": "|={>} Price |= Item |= Size |= Mood |\n| 12 |{<} pen |{>^} big |{~~} ok |\n|{?v} 3 | ink |{> .num} 9 | fine |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-162"
     ]
@@ -238,7 +241,7 @@
     "path": "resources/examples/edge-cases/0574-a-head-row-alignment-marker-sets-the-whole-column.md",
     "line": 10,
     "input": "|={>} a |= b |\n|:-- |:-- |\n| 1 | 2 |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-055",
       "U-167"
@@ -250,7 +253,7 @@
     "path": "resources/examples/edge-cases/0574-a-head-row-alignment-marker-sets-the-whole-column.md",
     "line": 31,
     "input": "|={~} a |= b |\n|--: |:-- |\n| 1 |{>} 2 |\n| 3 | 4 |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-055",
       "U-167"
@@ -262,7 +265,7 @@
     "path": "resources/examples/core.md",
     "line": 2950,
     "input": "a------- b-------- c---------- d----------- e-------------\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-173"
     ]
@@ -273,7 +276,7 @@
     "path": "docs/blocks-and-attributes.md",
     "line": 478,
     "input": "{loose}\n:: Term\n: Definition.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-172"
     ]
@@ -284,7 +287,7 @@
     "path": "resources/examples/edge-cases/0407-one-consumed-boolean-spells-the-looseness-no-blank-line-can.md",
     "line": 45,
     "input": "{loose}\n:: Term\n:  Definition.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-172"
     ]
@@ -394,7 +397,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 147,
     "input": "``` js [a `]` b]\nc\n```\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-157"
     ]
@@ -464,7 +467,6 @@
     "input": "[^a]: +\nz\n  - y\n\n[^a]\n",
     "check": "pass",
     "entries": [
-      "U-008",
       "U-124"
     ]
   },
@@ -476,7 +478,6 @@
     "input": "> +\n>\n",
     "check": "pass",
     "entries": [
-      "U-017",
       "U-017",
       "U-125"
     ]
@@ -513,7 +514,6 @@
     "input": "- > +\n b\n",
     "check": "pass",
     "entries": [
-      "U-109",
       "U-122"
     ]
   },
@@ -545,7 +545,7 @@
     "path": "resources/examples/edge-cases/0856-a-continuation-cell-past-the-last-column-is-a-new-cell.md",
     "line": 51,
     "input": "| a |\n+ b | |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-147"
     ]
@@ -556,7 +556,7 @@
     "path": "resources/examples/edge-cases/1026-an-escaped-row-closer-stays-in-an-open-code-span.md",
     "line": 48,
     "input": "| a `b |\n+ c\\|\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-057",
       "U-147"
@@ -568,7 +568,7 @@
     "path": "resources/examples/edge-cases/0333-a-continuation-row-s-open-run-and-an-escaped-closing-pipe.md",
     "line": 14,
     "input": "| a `b |\n+ c` |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-147"
     ]
@@ -579,7 +579,7 @@
     "path": "resources/examples/edge-cases/0589-an-explicitly-delimited-row-of-blank-cells-is-a-table.md",
     "line": 655,
     "input": "| | < |\n| ^ | ^ |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-152"
     ]
@@ -590,7 +590,7 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 261,
     "input": "| a | b |\n|\t^ | c |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-140"
     ]
@@ -601,7 +601,7 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 279,
     "input": "| a | b |\n| c |\t< |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-140"
     ]
@@ -623,7 +623,7 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 24,
     "input": "|\ta |\tb |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-140"
     ]
@@ -634,7 +634,7 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 80,
     "input": "| a\t| b\t|\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-140"
     ]
@@ -645,7 +645,7 @@
     "path": "resources/examples/edge-cases/0952-native-head-rows-with-span-placeholders.md",
     "line": 135,
     "input": "| =^ |\n|=^x |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-168"
     ]
@@ -689,7 +689,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 62,
     "input": ":::[`x`]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-195"
     ]
@@ -700,7 +700,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 194,
     "input": ":::[a `]` b]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-195"
     ]
@@ -711,7 +711,7 @@
     "path": "resources/examples/edge-cases/0532-a-container-label-preserves-closed-inline-constructs-before-cutting-a-comment.md",
     "line": 76,
     "input": ":::[`a %% secret`]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-195"
     ]
@@ -722,7 +722,7 @@
     "path": "tests/corpus/68-nested-containers-3.crv",
     "line": 1,
     "input": ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-219"
     ]
@@ -733,7 +733,7 @@
     "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width.crv",
     "line": 1,
     "input": ":::\n:::e\n::::\nq\n:::\nafter\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-219"
     ]
@@ -744,7 +744,7 @@
     "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width-2.crv",
     "line": 1,
     "input": "- :::\n  :::e\n  ::::\n  :::\nl\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-219"
     ]
@@ -824,7 +824,6 @@
     "check": "pass",
     "entries": [
       "U-017",
-      "U-017",
       "U-128"
     ]
   },
@@ -858,7 +857,7 @@
     "path": "resources/examples/edge-cases/0352-a-bracketed-construct-s-identifiers-stay-on-one-line.md",
     "line": 28,
     "input": "x[^f\ng]\n\n[^f g]: n\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-160"
     ]
@@ -869,7 +868,7 @@
     "path": "resources/examples/core.md",
     "line": 3594,
     "input": "Wrapped[^two\nwords].\n\n[^two words]: This definition is not referenced.\n\n[^broken\nlabel]: This is not a definition.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-160"
     ]
@@ -880,7 +879,7 @@
     "path": "resources/examples/core.md",
     "line": 2738,
     "input": "[r]:\n\n[x][r]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -891,7 +890,7 @@
     "path": "resources/examples/core.md",
     "line": 2752,
     "input": "[r]:   \n\n[x][r]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -902,7 +901,7 @@
     "path": "resources/examples/edge-cases/0840-a-refused-plus-reads-like-a-letter.md",
     "line": 15,
     "input": "[^a]: +\n- b\n\nr[^a]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-131"
     ]
@@ -983,7 +982,8 @@
     "check": "explained",
     "entries": [
       "U-122",
-      "U-133"
+      "U-133",
+      "U-209"
     ]
   },
   {
@@ -992,7 +992,7 @@
     "path": "resources/examples/edge-cases/0632-a-continuation-marker-uses-its-container-column.md",
     "line": 660,
     "input": "- - [ ] +\n> q\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-133"
     ]
@@ -1003,7 +1003,7 @@
     "path": "resources/examples/edge-cases/0695-a-promoted-image-leaves-the-task-checkbox-unnamed.md",
     "line": 8,
     "input": "- [ ] ![x](x)\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-133"
     ]
@@ -1102,7 +1102,7 @@
     "path": "resources/examples/edge-cases/0406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content.md",
     "line": 74,
     "input": "## \tx\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-174"
     ]
@@ -1139,7 +1139,6 @@
     "check": "pass",
     "entries": [
       "U-003",
-      "U-031",
       "U-141"
     ]
   },
@@ -1237,7 +1236,7 @@
     "path": "tests/corpus/523-a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not.crv",
     "line": 1,
     "input": "[a](/u \"t\nu\")\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-221"
     ]
@@ -1248,7 +1247,7 @@
     "path": "tests/corpus/523-a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not-2.crv",
     "line": 1,
     "input": "[a](/u 't\nu')\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-221"
     ]
@@ -1259,7 +1258,7 @@
     "path": "tests/corpus/523-a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not-3.crv",
     "line": 1,
     "input": "![a](/i \"t\nu\")\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-221"
     ]
@@ -1270,7 +1269,7 @@
     "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
     "line": 54,
     "input": ":foo[%% c] d\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-149"
     ]
@@ -1281,7 +1280,7 @@
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 123,
     "input": "-{#k} [x] {#h}\n # h\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-109",
       "U-133"
@@ -1293,7 +1292,7 @@
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 45,
     "input": "-{#k} [x] {#h}\n  # h\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-133"
     ]
@@ -1304,9 +1303,8 @@
     "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
     "line": 12,
     "input": "/***/\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
-      "U-068",
       "U-068",
       "U-145"
     ]
@@ -1317,7 +1315,7 @@
     "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
     "line": 24,
     "input": "*/**/*\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-145"
     ]
@@ -1328,7 +1326,7 @@
     "path": "resources/examples/edge-cases/0602-the-combined-bold-italic-token-does-not-open-after-an-underscore-or-a-slash.md",
     "line": 10,
     "input": "a_/*y*/ x\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-145"
     ]
@@ -1339,7 +1337,7 @@
     "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
     "line": 8,
     "input": "a\t%% hidden\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-155"
     ]
@@ -1350,7 +1348,7 @@
     "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
     "line": 32,
     "input": "/{^a/{k=b^}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-155"
     ]
@@ -1361,7 +1359,7 @@
     "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
     "line": 44,
     "input": "~{,a~{k=b,}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-151"
     ]
@@ -1372,7 +1370,7 @@
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 68,
     "input": "-{#k} {#h}\n # h\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-109",
       "U-169"
@@ -1417,7 +1415,7 @@
     "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
     "line": 80,
     "input": "_{~a_{k=b~}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-151"
     ]
@@ -1428,7 +1426,7 @@
     "path": "resources/examples/edge-cases/0779-a-block-glued-to-a-split-combined-token-or-a-forced-span-s-own-delimiter.md",
     "line": 56,
     "input": "{_x _b_{t=a_}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-151"
     ]
@@ -1439,9 +1437,8 @@
     "path": "resources/examples/edge-cases/0776-an-attribute-block-that-attaches-to-nothing-is-text-from-the-first-pass.md",
     "line": 56,
     "input": "_x /*a*/{.q} b/{c_} c_\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
-      "U-065",
       "U-065",
       "U-145"
     ]
@@ -1452,7 +1449,7 @@
     "path": "resources/examples/edge-cases/0848-a-quote-before-a-span-closer-closes.md",
     "line": 36,
     "input": "{+\"Wait-\"+}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-144"
     ]
@@ -1463,7 +1460,7 @@
     "path": "resources/examples/edge-cases/0490-a-comment-inside-a-forced-span-or-the-combined-token-ends-at-its-closer.md",
     "line": 12,
     "input": "{*a %% b*} y\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-143"
     ]
@@ -1474,7 +1471,7 @@
     "path": "resources/examples/edge-cases/0779-a-block-glued-to-a-split-combined-token-or-a-forced-span-s-own-delimiter.md",
     "line": 44,
     "input": "{*x *b*{t=a*}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-143"
     ]
@@ -1485,7 +1482,7 @@
     "path": "resources/examples/edge-cases/0788-whitespace-after-a-leading-content-tab-is-not-content.md",
     "line": 8,
     "input": "- \t e\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-153"
     ]
@@ -1496,7 +1493,7 @@
     "path": "resources/examples/edge-cases/0684-a-post-marker-tab-keeps-a-quote-literal.md",
     "line": 8,
     "input": "- \t> a\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-153"
     ]
@@ -1507,7 +1504,7 @@
     "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
     "line": 59,
     "input": "- \t- B\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-153"
     ]
@@ -1540,7 +1537,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 28,
     "input": ":::[/i/]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-195"
     ]
@@ -1562,7 +1559,7 @@
     "path": "resources/examples/edge-cases/0439-a-colon-followed-by-only-whitespace-is-not-a-description.md",
     "line": 176,
     "input": ":: t\n: \ttext\n\nflush\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-193"
     ]
@@ -1584,7 +1581,7 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 358,
     "input": "|=h|=  i |\n|a|  b  |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-168"
     ]
@@ -1595,7 +1592,7 @@
     "path": "resources/examples/edge-cases/0759-invalid-body-row-metadata-leaves-one-table-body.md",
     "line": 6,
     "input": "{body-rows=x}\n|= A |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-150"
     ]
@@ -1606,7 +1603,7 @@
     "path": "resources/examples/edge-cases/0717-citation-shaped-lines-remain-core-text.md",
     "line": 18,
     "input": "[@key]: entry\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -1617,7 +1614,7 @@
     "path": "tests/corpus-optional/99-citations-definition-space-run.crv",
     "line": 1,
     "input": "[@a] and [@b].\n\n[@a]:  Alpha.\n[@b]:   Beta.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -1628,7 +1625,7 @@
     "path": "tests/corpus-optional/51-references-placement-inside-a-quote.crv",
     "line": 1,
     "input": "See [@x].\n\n> ::: references\n> :::\n\n[@x]: Source\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -1639,7 +1636,7 @@
     "path": "resources/examples/edge-cases/0309-a-note-s-content-recognizes-no-note.md",
     "line": 43,
     "input": "x ^[a [^1] c]\n\n[^1]: n\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-154"
     ]
@@ -1661,7 +1658,7 @@
     "path": "resources/examples/edge-cases/0309-a-note-s-content-recognizes-no-note.md",
     "line": 88,
     "input": "x ^[a [^1]{.k} c]\n\n[^1]: n\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-154"
     ]
@@ -1672,7 +1669,7 @@
     "path": "resources/examples/edge-cases/0660-an-empty-link-destination-takes-spaces.md",
     "line": 6,
     "input": "[t](  )\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-175"
     ]
@@ -1716,7 +1713,7 @@
     "path": "resources/examples/edge-cases/0935-a-name-ending-in-a-hyphen-leaves-the-next-marker-free.md",
     "line": 12,
     "input": "x #a-#b and @a-@b\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-170"
     ]
@@ -1727,7 +1724,7 @@
     "path": "resources/examples/edge-cases/0935-a-name-ending-in-a-hyphen-leaves-the-next-marker-free.md",
     "line": 26,
     "input": "See #a--#b-#c, #a-@b and #a#b\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-170"
     ]
@@ -1771,7 +1768,7 @@
     "path": "resources/examples/edge-cases/0871-a-widths-list-writes-one-col-per-entry.md",
     "line": 35,
     "input": "{widths=,50}\n| a | b | c |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-150"
     ]
@@ -1782,7 +1779,7 @@
     "path": "resources/examples/edge-cases/0871-a-widths-list-writes-one-col-per-entry.md",
     "line": 12,
     "input": "{widths=25,50}\n| a | b | c |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-150"
     ]
@@ -1793,7 +1790,7 @@
     "path": "resources/examples/edge-cases/0544-explicit-body-counts-include-native-header-cells.md",
     "line": 6,
     "input": "{body-rows=2}\n|= A |= B |\n| c | d |\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-150"
     ]
@@ -1804,7 +1801,7 @@
     "path": "resources/examples/edge-cases/0191-a-blank-after-a-comment-still-ends-the-item.md",
     "line": 8,
     "input": "- - a\n %% c\n\n b\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-019",
       "U-146"
@@ -1816,7 +1813,7 @@
     "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
     "line": 192,
     "input": "[%% hidden](/u)\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -1827,7 +1824,7 @@
     "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
     "line": 412,
     "input": ":: c\n%% note\nmore\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -1838,7 +1835,7 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-2.crv",
     "line": 1,
     "input": "^[a %% c] d\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -1849,7 +1846,7 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-4.crv",
     "line": 1,
     "input": ":foo[a %% c] d\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -1860,7 +1857,7 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-5.crv",
     "line": 1,
     "input": "[a %% c] d\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -1871,7 +1868,7 @@
     "path": "resources/examples/edge-cases/0856-a-wide-gap-before-a-task-box-leaves-the-lazy-frame-out-of-a-term.md",
     "line": 12,
     "input": "-  [ ] - [^f]: :: t\n          c\n\n[^f]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-106",
       "U-163"
@@ -1883,9 +1880,10 @@
     "path": "resources/examples/edge-cases/0413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not.md",
     "line": 70,
     "input": "- [x] a\n  # h\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-001",
+      "U-133",
       "U-159"
     ]
   },
@@ -1895,9 +1893,11 @@
     "path": "resources/examples/edge-cases/1055-an-item-marker-line-brace-run-measures-from-its-written-brace.md",
     "line": 64,
     "input": "- [ ] {.x\n       }\n       z\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-211"
+      "U-211",
+      "U-133",
+      "U-159"
     ]
   },
   {
@@ -1906,8 +1906,9 @@
     "path": "resources/examples/edge-cases/0766-an-editorial-comment-contributes-nothing-to-a-heading-id.md",
     "line": 25,
     "input": "- [ ] x {#c#} y\n- [x] {# note #}done\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
+      "U-133",
       "U-159"
     ]
   },
@@ -1917,7 +1918,7 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 10,
     "input": "* [d]: \n :::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-131"
     ]
@@ -1928,9 +1929,8 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 30,
     "input": "* [d]: \n text\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
-      "U-109",
       "U-131"
     ]
   },
@@ -1940,7 +1940,7 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 49,
     "input": "* [d]: /u\n :::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-131"
     ]
@@ -1951,7 +1951,7 @@
     "path": "resources/examples/edge-cases/0887-a-reference-label-across-a-line-stays-verbatim-in-every-form.md",
     "line": 40,
     "input": "![*x*][a\nb]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-161"
     ]
@@ -1962,7 +1962,7 @@
     "path": "resources/examples/edge-cases/0887-a-reference-label-across-a-line-stays-verbatim-in-every-form.md",
     "line": 70,
     "input": "*[y]: z\n\n[x][y\nq]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-111",
       "U-161"
@@ -1974,7 +1974,7 @@
     "path": "resources/examples/edge-cases/0346-a-line-block-s-last-body-line-keeps-its-backslash.md",
     "line": 42,
     "input": "::: |\na  \\\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -1985,7 +1985,7 @@
     "path": "resources/examples/edge-cases/0380-a-terminal-comment-line-still-leaves-an-empty-verse-line.md",
     "line": 10,
     "input": "::: |\n`\n%%\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -1996,7 +1996,7 @@
     "path": "resources/examples/edge-cases/1077-a-column-after-an-astral-character-is-one-code-point.md",
     "line": 56,
     "input": "::: |\n😀\tx\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -2007,7 +2007,7 @@
     "path": "tests/corpus/575-a-line-block-takes-a-lazy-line-whatever-its-last-payload-line.crv",
     "line": 1,
     "input": "> ::: |\n> ```\n> x\nafter\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -2018,7 +2018,7 @@
     "path": "tests/corpus/562-a-quoted-item-that-ends-on-a-block-past-its-column-holds-no-paragraph-4.crv",
     "line": 1,
     "input": "- ::: |\n  - ```\ntail\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -2029,7 +2029,7 @@
     "path": "tests/corpus/581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2.crv",
     "line": 1,
     "input": "> 1. ::: box\n>    - ::: |\n>      ```\n>      x\n>      ```\n>      :::\n>     ```\n>     - x\n> ```\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -2040,7 +2040,7 @@
     "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
     "line": 193,
     "input": "{table}\n```csv\na\n\n```\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-061"
     ]
@@ -2051,7 +2051,7 @@
     "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
     "line": 148,
     "input": "{table}\n```csv\n\"bad\n```\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-061"
     ]
@@ -2062,7 +2062,7 @@
     "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
     "line": 239,
     "input": "{table}\n```csv\na\"b,c\n```\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-061"
     ]
@@ -2073,7 +2073,7 @@
     "path": "resources/examples/edge-cases/0351-a-bracketed-construct-spanning-a-line-boundary.md",
     "line": 71,
     "input": "![a\nb](/i)\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-171"
     ]
@@ -2084,7 +2084,7 @@
     "path": "resources/examples/edge-cases/0351-a-bracketed-construct-spanning-a-line-boundary.md",
     "line": 87,
     "input": "![a\nb](/i)\n^ A caption.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-171"
     ]
@@ -2216,7 +2216,7 @@
     "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
     "line": 6,
     "input": "::: e[]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-156"
     ]
@@ -2227,7 +2227,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 96,
     "input": "::: note [/i/]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-156"
     ]
@@ -2238,7 +2238,7 @@
     "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
     "line": 113,
     "input": "::: note [`x`]\nbody\n:::\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-156"
     ]
@@ -2249,7 +2249,7 @@
     "path": "resources/examples/edge-cases/0781-an-opener-is-open-where-it-stands-so-a-combined-token-after-a-guarded-star-stays-split.md",
     "line": 32,
     "input": "_*/*a**/\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-145"
     ]
@@ -2260,7 +2260,7 @@
     "path": "resources/examples/edge-cases/0739-opaque-reference-and-inline-bounds.md",
     "line": 76,
     "input": "_*x\n/*b*/\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-145"
     ]
@@ -2271,7 +2271,7 @@
     "path": "resources/examples/edge-cases/0576-an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text.md",
     "line": 21,
     "input": "*/a // b/*\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-145"
     ]
@@ -2282,7 +2282,7 @@
     "path": "resources/examples/edge-cases/0855-attribute-hardening-probes-the-value-as-emitted.md",
     "line": 32,
     "input": "*x*{k=\"‮javascript:x\"}\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-164"
     ]
@@ -2293,7 +2293,7 @@
     "path": "resources/examples/edge-cases/0716-url-sinks-reject-schemes-after-emitted-value-normalization.md",
     "line": 6,
     "input": "[x](‮javascript:alert(1))\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-164"
     ]
@@ -2304,7 +2304,7 @@
     "path": "resources/examples/edge-cases/0855-attribute-hardening-probes-the-value-as-emitted.md",
     "line": 19,
     "input": "{srcset=\"a 1x,java‮script:x 2x\"}\np\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-164"
     ]
@@ -2349,11 +2349,12 @@
     "path": "resources/examples/edge-cases/0627-a-refused-marker-leaves-an-open-fence-s-blank-payload.md",
     "line": 8,
     "input": "- ```\n+\n  x\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
       "U-015",
       "U-127",
-      "U-019"
+      "U-019",
+      "U-209"
     ]
   },
   {
@@ -2409,7 +2410,7 @@
     "path": "resources/examples/edge-cases/0908-a-line-block-in-a-note-or-description-takes-a-lazy-line-whatever-its-last-payload-line.md",
     "line": 10,
     "input": ":: t\n: > :::: |\n  > ~~~\nb\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-130"
     ]
@@ -2421,7 +2422,9 @@
     "line": 22,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
     "check": "pass",
-    "entries": ["U-190"]
+    "entries": [
+      "U-190"
+    ]
   },
   {
     "cause": "C43",
@@ -2430,7 +2433,9 @@
     "line": 1,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
     "check": "pass",
-    "entries": ["U-190"]
+    "entries": [
+      "U-190"
+    ]
   },
   {
     "cause": "C90",
@@ -2504,7 +2509,7 @@
     "path": "resources/examples/edge-cases/0082-blockquote-lazy-continuation.md",
     "line": 107,
     "input": "> [f]: ~\n/\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-038",
       "U-134"
@@ -2516,7 +2521,7 @@
     "path": "resources/examples/edge-cases/0802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block.md",
     "line": 12,
     "input": "> [^b]: +\n# H\n\nr[^b]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-038",
       "U-134"
@@ -2528,7 +2533,7 @@
     "path": "resources/examples/edge-cases/0840-a-refused-plus-reads-like-a-letter.md",
     "line": 41,
     "input": "> [^a]: +\n- b\n\nr[^a]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-038",
       "U-134"
@@ -2551,7 +2556,7 @@
     "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
     "line": 14,
     "input": "# [g][]\\\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-148"
     ]
@@ -2562,7 +2567,7 @@
     "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
     "line": 31,
     "input": "# g\\\n\n[g][]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-148"
     ]
@@ -2573,7 +2578,7 @@
     "path": "resources/examples/edge-cases/1026-nested-reference-labels-contribute-to-heading-text.md",
     "line": 28,
     "input": "# [[x][]][]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-148"
     ]
@@ -2584,7 +2589,7 @@
     "path": "tests/corpus/250-line-endings-and-a-byte-order-mark-2.crv",
     "line": 1,
     "input": "# Title\r\ra\rb\r",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-176"
     ]
@@ -2595,7 +2600,7 @@
     "path": "resources/examples/edge-cases/1026-nested-reference-labels-contribute-to-heading-text.md",
     "line": 12,
     "input": "# a [\\[x][]][]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-148"
     ]
@@ -2606,7 +2611,7 @@
     "path": "resources/examples/edge-cases/0193-a-collapsed-reference-is-matched-by-the-label-the-author-wrote.md",
     "line": 26,
     "input": "[bold]: /x\n\nsee [\\*bold\\*][]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -2617,7 +2622,7 @@
     "path": "resources/examples/edge-cases/0884-a-failed-cross-line-reference-label-stays-verbatim.md",
     "line": 12,
     "input": "\\[\\*x\\*\ny][]\n\n[*x* y]: /u\n\n[\\*z\\*\nw][missing]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-132"
     ]
@@ -2628,7 +2633,7 @@
     "path": "resources/examples/edge-cases/0334-a-label-beginning-with-an-at-sign-is-not-a-reference-label.md",
     "line": 8,
     "input": "[t][@a]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-166"
     ]
@@ -2639,7 +2644,7 @@
     "path": "resources/examples/edge-cases/0334-a-label-beginning-with-an-at-sign-is-not-a-reference-label.md",
     "line": 22,
     "input": "![t][@a]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-166"
     ]
@@ -2650,7 +2655,7 @@
     "path": "tests/corpus-optional/43-citations-at-label-in-reference-position.crv",
     "line": 1,
     "input": "[t][@a] and ![t][@a] and [@a] alone.\n\n[@a]: {author=\"A\" year=\"2020\"} A. (2020). Work.\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-166"
     ]
@@ -2727,7 +2732,7 @@
     "path": "resources/examples/edge-cases/0556-a-closed-block-leaves-no-frame-for-the-line-below.md",
     "line": 420,
     "input": "- ::: box\n  %%%%\n%% j\n  x\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-224"
     ]
@@ -2738,7 +2743,7 @@
     "path": "resources/examples/edge-cases/0888-a-comment-span-in-a-quote-closes-at-an-unmarked-closer.md",
     "line": 46,
     "input": "> %%%\n> secret\n  %%%\nafter\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-224"
     ]
@@ -2749,7 +2754,7 @@
     "path": "resources/examples/edge-cases/0936-an-invisible-line-keeps-a-description-entry-open.md",
     "line": 79,
     "input": ":: t\n: d\n%%%\nc\n%%%\n : d2\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-224"
     ]
@@ -2848,7 +2853,7 @@
     "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
     "line": 27,
     "input": "> :: c\n>   %% note\n>   more\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-146"
     ]
@@ -2859,7 +2864,7 @@
     "path": "resources/examples/edge-cases/0824-a-closerless-comment-fence-opens-no-span-in-a-body.md",
     "line": 39,
     "input": "[^n]: head\n\n  %%%\n%% below\n\n  tail\n\nr[^n]\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-224"
     ]
@@ -2870,7 +2875,7 @@
     "path": "resources/examples/edge-cases/0940-a-comment-span-on-a-description-or-note-marker-line-closes-below-its-column.md",
     "line": 105,
     "input": "x[^n]\n\n[^n]: %%%\n    n\n\n%%%\nc\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-224"
     ]
@@ -3103,6 +3108,7 @@
     "input": "[a\\\\\\\nb][missing]\n",
     "check": "pass",
     "entries": [
+      "U-113",
       "U-234"
     ]
   },
@@ -3112,9 +3118,10 @@
     "path": "resources/examples/edge-cases/0381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item.md",
     "line": 125,
     "input": "* * [d]: u\n  :\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-235"
+      "U-235",
+      "U-019"
     ]
   },
   {
@@ -3134,9 +3141,10 @@
     "path": "tests/corpus/381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item-6.crv",
     "line": 1,
     "input": "* * [d]: u\n  :\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-235"
+      "U-235",
+      "U-019"
     ]
   },
   {
@@ -3288,9 +3296,10 @@
     "path": "resources/examples/edge-cases/0482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in.md",
     "line": 142,
     "input": "- x\n  - ::: d\n   y\n    :::\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-237"
+      "U-237",
+      "U-019"
     ]
   },
   {
@@ -3310,9 +3319,10 @@
     "path": "tests/corpus/482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in-6.crv",
     "line": 1,
     "input": "- x\n  - ::: d\n   y\n    :::\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-237"
+      "U-237",
+      "U-019"
     ]
   },
   {
@@ -3354,7 +3364,7 @@
     "path": "resources/examples/edge-cases/0871-a-div-closes-only-on-a-run-of-its-own-width.md",
     "line": 65,
     "input": "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-219"
     ]
@@ -3365,7 +3375,7 @@
     "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width-3.crv",
     "line": 1,
     "input": "> :::\n> :::e\n> ::::\n> q\n> :::\n\nafter\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-219"
     ]
@@ -3376,9 +3386,11 @@
     "path": "docs/validation.md",
     "line": 318,
     "input": "- ```\n  x\n\n+\ntail\n",
-    "check": "pass",
+    "check": "explained",
     "entries": [
-      "U-238"
+      "U-238",
+      "U-019",
+      "U-209"
     ]
   },
   {
@@ -3409,7 +3421,7 @@
     "path": "resources/examples/edge-cases/0559-a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker.md",
     "line": 64,
     "input": "see [^a\tb]\n\n[^a b]: note\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-160"
     ]
@@ -3420,7 +3432,7 @@
     "path": "tests/corpus/559-a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker-4.crv",
     "line": 1,
     "input": "see [^a\tb]\n\n[^a b]: note\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-160"
     ]
@@ -3475,7 +3487,7 @@
     "path": "resources/examples/edge-cases/0523-a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not.md",
     "line": 61,
     "input": "[a](/u \"t\\\"\nu\")\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-221"
     ]
@@ -3486,7 +3498,7 @@
     "path": "tests/corpus/523-a-link-title-crosses-a-soft-wrap-and-an-attribute-value-does-not-4.crv",
     "line": 1,
     "input": "[a](/u \"t\\\"\nu\")\n",
-    "check": "explained",
+    "check": "mismatch",
     "entries": [
       "U-221"
     ]
@@ -3617,9 +3629,11 @@
     "clause": "C2-H-176",
     "path": "resources/examples/edge-cases/0261-a-blank-line-holds-spaces-and-tabs-and-nothing-else.md",
     "line": 88,
-    "input": "a\n\u000b\n\u000c\n\u0085\n\u2028\n\u2029\nb\n",
-    "check": "explained",
-    "entries": ["U-248"]
+    "input": "a\n\u000b\n\f\n\u0085\n\u2028\n\u2029\nb\n",
+    "check": "mismatch",
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3628,7 +3642,9 @@
     "line": 52,
     "input": "c\u000bd\n",
     "check": "explained",
-    "entries": ["U-248"]
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3636,8 +3652,10 @@
     "path": "resources/examples/edge-cases/0498-a-comment-line-s-text-is-content-and-a-block-body-is-payload.md",
     "line": 88,
     "input": "%%\u000b\n\ntext\u000b\n",
-    "check": "explained",
-    "entries": ["U-248"]
+    "check": "mismatch",
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3646,16 +3664,20 @@
     "line": 12,
     "input": "# a\u007fb\n\n# a!\u007f?b\n",
     "check": "explained",
-    "entries": ["U-248"]
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
     "clause": "C2-H-176",
     "path": "tests/corpus/261-a-blank-line-holds-spaces-and-tabs-and-nothing-else-3.crv",
     "line": 1,
-    "input": "a\n\u000b\n\u000c\n\u0085\n\u2028\n\u2029\nb\n",
-    "check": "explained",
-    "entries": ["U-248"]
+    "input": "a\n\u000b\n\f\n\u0085\n\u2028\n\u2029\nb\n",
+    "check": "mismatch",
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3664,7 +3686,9 @@
     "line": 1,
     "input": "c\u000bd\n",
     "check": "explained",
-    "entries": ["U-248"]
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3672,8 +3696,10 @@
     "path": "tests/corpus/498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-5.crv",
     "line": 1,
     "input": "%%\u000b\n\ntext\u000b\n",
-    "check": "explained",
-    "entries": ["U-248"]
+    "check": "mismatch",
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "unassigned",
@@ -3682,7 +3708,9 @@
     "line": 1,
     "input": "# a\u007fb\n\n# a!\u007f?b\n",
     "check": "explained",
-    "entries": ["U-248"]
+    "entries": [
+      "U-248"
+    ]
   },
   {
     "cause": "C40",
@@ -3691,7 +3719,9 @@
     "line": 361,
     "input": "$`a`{CLASS=c}\n",
     "check": "explained",
-    "entries": ["U-249"]
+    "entries": [
+      "U-249"
+    ]
   },
   {
     "cause": "C40",
@@ -3700,7 +3730,9 @@
     "line": 1,
     "input": "$`a`{CLASS=c}\n",
     "check": "explained",
-    "entries": ["U-249"]
+    "entries": [
+      "U-249"
+    ]
   },
   {
     "cause": "C88",
@@ -3709,7 +3741,9 @@
     "line": 43,
     "input": "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n",
     "check": "pass",
-    "entries": ["U-250"]
+    "entries": [
+      "U-250"
+    ]
   },
   {
     "cause": "C88",
@@ -3718,7 +3752,9 @@
     "line": 1,
     "input": "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n",
     "check": "pass",
-    "entries": ["U-250"]
+    "entries": [
+      "U-250"
+    ]
   },
   {
     "cause": "C87",
@@ -3726,8 +3762,11 @@
     "path": "resources/examples/edge-cases/0924-a-task-item-reads-a-definition-after-extra-box-padding.md",
     "line": 39,
     "input": "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n",
-    "check": "explained",
-    "entries": ["U-251"]
+    "check": "mismatch",
+    "entries": [
+      "U-133",
+      "U-251"
+    ]
   },
   {
     "cause": "C87",
@@ -3735,8 +3774,11 @@
     "path": "tests/corpus/924-a-task-item-reads-a-definition-after-extra-box-padding-2.crv",
     "line": 1,
     "input": "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n",
-    "check": "explained",
-    "entries": ["U-251"]
+    "check": "mismatch",
+    "entries": [
+      "U-133",
+      "U-251"
+    ]
   },
   {
     "cause": "C31",
@@ -3744,8 +3786,11 @@
     "path": "resources/examples/edge-cases/0949-a-task-box-gap-keeps-a-nested-description-at-its-content-column.md",
     "line": 38,
     "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
-    "check": "explained",
-    "entries": ["U-252"]
+    "check": "mismatch",
+    "entries": [
+      "U-133",
+      "U-252"
+    ]
   },
   {
     "cause": "C31",
@@ -3753,8 +3798,11 @@
     "path": "tests/corpus/949-a-task-box-gap-keeps-a-nested-description-at-its-content-column-4.crv",
     "line": 1,
     "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
-    "check": "explained",
-    "entries": ["U-252"]
+    "check": "mismatch",
+    "entries": [
+      "U-133",
+      "U-252"
+    ]
   },
   {
     "cause": "C90",

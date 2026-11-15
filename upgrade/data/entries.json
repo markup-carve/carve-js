@@ -160,19 +160,12 @@
       ]
     },
     {
-      "id": "U-022",
-      "name": "right-aligned ordered markers",
-      "class": "rewrite",
-      "lint": [
-        "ordered-marker-right-aligned"
-      ]
-    },
-    {
       "id": "U-023",
       "name": "marker short of the content column",
       "class": "rewrite",
       "lint": [
-        "list-marker-below-content-column"
+        "list-marker-below-content-column",
+        "ordered-marker-right-aligned"
       ]
     },
     {
@@ -209,7 +202,7 @@
     },
     {
       "id": "U-029",
-      "name": "comment line, uneven columns, empty box, `- -`",
+      "name": "comment line, empty box, `- -`",
       "class": "none",
       "lint": [
         "uneven-list-indent"
@@ -372,14 +365,6 @@
       "class": "rewrite",
       "lint": [
         "comment-fence-closer-with-text"
-      ]
-    },
-    {
-      "id": "U-051",
-      "name": "unquoted words after fence language or div name",
-      "class": "rewrite",
-      "lint": [
-        "fence-title-syntax"
       ]
     },
     {

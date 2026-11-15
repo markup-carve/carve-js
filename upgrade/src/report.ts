@@ -12,7 +12,7 @@ export interface Entry {
 /** One line of the report. `class` is the class of the entry, or what the self-check found. */
 export interface ReportRecord {
   entry: string
-  class: EntryClass | 'summary' | 'mismatch'
+  class: EntryClass | 'summary' | 'unverified explanation' | 'mismatch'
   /** Line of the input, from 1. 0 for a record about the whole file. */
   line: number
   message: string
@@ -45,7 +45,7 @@ export function recordOf(id: string, line: number, message: string): ReportRecor
 
 /** Whether `record` asks for a person: a report entry or an unexplained difference. */
 export function needsPerson(record: ReportRecord): boolean {
-  return record.class === 'report' || record.class === 'mismatch'
+  return record.class === 'report' || record.class === 'unverified explanation' || record.class === 'mismatch'
 }
 
 export function formatRecord(file: string, record: ReportRecord): string {

@@ -1,4 +1,4 @@
-import { compareHtml } from './compare.ts'
+import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
@@ -8,22 +8,19 @@ import { rescueQuote } from './quote-rescue.ts'
 import { rescueFence } from './fence-rescue.ts'
 import { rescueDescription } from './description-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
-import { MEASURED_REPORT_IDS, measuredReport } from './measured-reports.ts'
+import { measuredReport } from './measured-reports.ts'
+import { addTaskPresentation, applyHtmlTransformations, wrapLaterItemParagraphs } from './html-transform.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
 import { RULES } from './rules/index.ts'
 import { lineOf, lineText, readLines } from './source.ts'
-
-/** Report entries after which the HTML of 0.2 differs from the HTML of 0.1 by the contract. */
-const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077',
-  'U-130', 'U-131', 'U-132', 'U-133', 'U-134', 'U-140', 'U-198'])
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
   output: string
   changed: boolean
   records: ReportRecord[]
-  /** `pass`: the HTML is kept. `explained`: it differs and report entries say why. `mismatch`: it differs otherwise. */
+  /** Only `pass` and `explained` may clear the write gate. */
   check: 'pass' | 'explained' | 'mismatch'
   /** The version of the 0.1 engine that read the input. */
   engine01: string
@@ -47,14 +44,52 @@ function rewrite(input: string): Rewritten {
   for (const finding of ctx.findings) {
     if (finding.edit !== null) collected.push(finding.edit)
   }
-  const edits = selectEdits(collected)
+  const selected = selectEdits(collected)
+  const rawHtml = ctx.findings.some((finding) => finding.record.entry === 'U-076' || finding.record.entry === 'U-077')
+  const edits = removeNoEffectEntries(input, selected, rawHtml)
   const kept = new Set(edits)
+  const accepted = new Set(selected)
   const records: ReportRecord[] = [...failures]
   for (const finding of ctx.findings) {
     if (finding.edit === null || kept.has(finding.edit)) records.push(finding.record)
-    else records.push(conflict(finding))
+    else if (!accepted.has(finding.edit)) records.push(conflict(finding))
+    else if (finding.record.entry === 'U-037') records.push({ ...finding.record, class: 'none',
+      message: 'brace tail kept because removing it has no HTML effect in either engine' })
   }
-  return { output: applyEdits(input, edits), records, edits }
+  const output = applyEdits(input, edits)
+  if (output !== input && noHtmlEffect(input, output, records)) {
+    return { output: input, records: records.filter((record) => record.class === 'report' || record.class === 'none'
+      || record.entry === 'upgrade-error'), edits: [] }
+  }
+  return { output, records, edits }
+}
+
+function sameBothEngines(left: string, right: string, rawHtml: boolean): boolean {
+  try {
+    return compareHtmlExact(html01(left), html01(right)).equal
+      && compareHtmlExact(html02(left, rawHtml), html02(right, rawHtml)).equal
+  } catch { return false }
+}
+
+function removeNoEffectEntries(input: string, selected: Edit[], rawHtml: boolean): Edit[] {
+  let kept = selected
+  let output = applyEdits(input, kept)
+  for (const entry of new Set(selected.map((edit) => edit.entry))) {
+    const without = kept.filter((edit) => edit.entry !== entry)
+    const candidate = applyEdits(input, without)
+    if (!sameBothEngines(output, candidate, rawHtml)) continue
+    kept = without
+    output = candidate
+  }
+  return kept
+}
+
+function noHtmlEffect(input: string, output: string, records: ReportRecord[]): boolean {
+  try {
+    if (!compareHtmlExact(html01(input), html01(output)).equal) return false
+    const rawHtml = hasEntry(records, 'U-076') || hasEntry(records, 'U-077')
+    return compareHtmlExact(html02(input, rawHtml), html02(output, rawHtml)).equal
+  } catch { return false }
 }
 
 /** A rule that fails on a tree it did not expect leaves no edit behind, and the failure is reported. */
@@ -124,78 +159,103 @@ function recordMeasured(input: string, done: Rewritten, comparison: ReturnType<t
   if (measured !== null && !hasEntry(done.records, measured.entry)) done.records.push(measured)
 }
 
-function oneItemComparison(old: string, next: string, records: ReportRecord[], strict: ReturnType<typeof compareHtml>):
-  { comparison: ReturnType<typeof compareHtml>, explained: boolean } {
-  const normalized = compareHtml(old, next, true)
-  const wrapperLost = normalized.difference === null && strict.difference?.expected.includes('<p>') === true
-  const explained = hasEntry(records, 'U-021') || wrapperLost
-  if (explained && !hasEntry(records, 'U-021')) records.push(recordOf('U-021', 0,
-    'the one-item list loses the loose paragraph wrapper under C2-B-062 and C2-H-036'))
-  return { comparison: explained ? normalized : strict, explained }
-}
-
-function reportTaskHtml(input: string, old: string, next: string, records: ReportRecord[],
-  strict: ReturnType<typeof compareHtml>): boolean {
-  if (strict.difference !== null) return false
+function reportTaskHtml(old: string, next: string, records: ReportRecord[]): void {
   const changed = old.includes('<input') && next.includes('class="task"') && !old.includes('class="task"')
-  if (!changed || records.length > 0 && input.trimEnd() !== '- [ ] +') return false
+  if (!changed) return
   if (!hasEntry(records, 'U-133')) records.push(recordOf('U-133', 0,
     'C2-H-032 adds the task class, style, and plain-text checkbox label'))
-  return true
 }
 
-/** Renders both sides and adds what the comparison found to `records`. */
+function preserveLineEndings(input: string, output: string): string {
+  if (!input.includes('\r\n') || input.replaceAll('\r\n', '').includes('\n')) return output
+  return output.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
+}
+
+function addDifferenceReports(input: string, done: Rewritten, old: string, next: string,
+  compared: ReturnType<typeof compareHtmlExact>, diagnose: boolean): void {
+  const { records } = done
+  const normalized = compareHtml(old, next)
+  reportTaskHtml(old, next, records)
+  if (normalized.gainedParagraphs > 0) {
+    const message = `${normalized.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
+    records.push({ entry: 'U-019', class: 'summary', line: 0, message })
+  }
+  if (!normalized.equal && compareHtml(old, next, true).equal && !hasEntry(records, 'U-021')) {
+    records.push(recordOf('U-021', 0, 'the one-item list loses its loose paragraph wrapper under C2-B-062 and C2-H-036'))
+  }
+  if (diagnose) recordMeasured(input, done, compared)
+  const colonLine = innerColonClose(input)
+  if (colonLine > 0 && !hasEntry(records, 'U-114')) {
+    records.push(recordOf('U-114', colonLine,
+      'after the shorter inner div closer, 0.1 opens another anonymous div and 0.2 closes the outer div'))
+  }
+  const longerLine = colonLine === 0 ? longerColonClose(input) : 0
+  if (longerLine > 0 && !hasEntry(records, 'U-219') && colonLine === 0) {
+    records.push(recordOf('U-219', longerLine,
+      'C2-B-109 makes the longer bare colon run close the shorter div; no preserving 0.2 spelling was verified'))
+  }
+}
+
+function applyCitedHtml(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
+  const transformed = applyHtmlTransformations(old, records.map((record) => record.entry))
+  if (hasEntry(records, 'U-021')) {
+    const without = dropOnlyItemParagraphs(transformed.html)
+    if (without !== transformed.html) { transformed.html = without; transformed.applied.push('U-021') }
+  }
+  if (hasEntry(records, 'U-019')) {
+    const wrapped = wrapLaterItemParagraphs(transformed.html, next)
+    transformed.html = wrapped.html
+    transformed.applied.push(...wrapped.applied)
+  }
+  if (hasEntry(records, 'U-133')) {
+    const task = addTaskPresentation(transformed.html, next)
+    transformed.html = task.html
+    transformed.applied.push(...task.applied)
+  }
+  return transformed
+}
+
+function classifyDifference(input: string, done: Rewritten, old: string, next: string,
+  compared: ReturnType<typeof compareHtmlExact>): UpgradeResult['check'] {
+  const { records } = done
+  const difference = compared.difference
+  if (difference === null) return 'pass'
+  const transformed = applyCitedHtml(old, next, records)
+  if (transformed.applied.length > 0 && compareHtmlExact(transformed.html, next).equal) {
+    const entries = [...new Set(transformed.applied)]
+    const message = `the HTML matches after the declared transformations of ${entries.join(', ')}`
+    records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, difference.line), message })
+    return 'explained'
+  }
+  const applied = new Set(transformed.applied)
+  for (const record of records) {
+    if ((record.class === 'report' || record.entry === 'U-019') && !applied.has(record.entry)) {
+      record.class = 'unverified explanation'
+    }
+  }
+  const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
+  const { line, expected, actual } = remainder
+  const message = `the HTML differs: 0.1 gives ${JSON.stringify(expected)}, 0.2 gives ${JSON.stringify(actual)}`
+  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: placeOf(input, done, line), message })
+  return 'mismatch'
+}
+
 function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeResult['check'] {
-  const { output, records } = done
   let old: string
   let next: string
   try {
     old = html01(input)
     // U-076, U-077: raw HTML passes through only under the host option, so the check sets it.
-    next = html02(output, hasEntry(records, 'U-076') || hasEntry(records, 'U-077'))
+    next = html02(done.output, hasEntry(done.records, 'U-076') || hasEntry(done.records, 'U-077'))
   } catch (error) {
-    records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0, message: `an engine failed: ${String(error)}` })
+    done.records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0,
+      message: `an engine failed: ${String(error)}` })
     return 'mismatch'
   }
-  const strict = compareHtml(old, next)
-  const taskReport = reportTaskHtml(input, old, next, records, strict)
-  if (strict.gainedParagraphs > 0) {
-    const message = `${strict.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
-    records.push({ entry: 'U-019', class: 'summary', line: 0, message })
-  }
-  if (strict.difference === null) return taskReport ? 'explained' : 'pass'
-  // U-021: a list of one item is tight in 0.2, so its paragraph elements are left out of a second comparison.
-  const { comparison: compared, explained: oneItem } = oneItemComparison(old, next, records, strict)
-  if (diagnose) recordMeasured(input, done, compared)
-  const explained = records.filter((record) => HTML_CHANGING.has(record.entry)
-    || MEASURED_REPORT_IDS.includes(record.entry)).map((record) => record.entry)
-  if (oneItem) explained.unshift('U-021')
-  if (compared.difference === null || explained.length > (oneItem ? 1 : 0)) {
-    const line = compared.difference === null ? strict.difference.line : compared.difference.line
-    const message = `the HTML differs, as the entries ${[...new Set(explained)].join(', ')} say`
-    records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, line), message })
-    return 'explained'
-  }
-  const colonLine = innerColonClose(input)
-  if (colonLine > 0) {
-    records.push(recordOf('U-114', colonLine,
-      'after the shorter inner div closer, 0.1 opens another anonymous div and 0.2 closes the outer div'))
-    records.push({ entry: 'upgrade-difference', class: 'summary', line: colonLine,
-      message: 'the HTML differs, as U-114 says' })
-    return 'explained'
-  }
-  const longerLine = longerColonClose(input)
-  if (longerLine > 0) {
-    records.push(recordOf('U-219', longerLine,
-      'C2-B-109 makes the longer bare colon run close the shorter div; no preserving 0.2 spelling was verified'))
-    records.push({ entry: 'upgrade-difference', class: 'summary', line: longerLine,
-      message: 'the HTML differs, as U-219 says' })
-    return 'explained'
-  }
-  const { line, expected, actual } = compared.difference
-  const message = `the HTML differs: 0.1 gives ${JSON.stringify(expected)}, 0.2 gives ${JSON.stringify(actual)}`
-  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: placeOf(input, done, line), message })
-  return 'mismatch'
+  const compared = compareHtmlExact(old, next)
+  if (compared.difference === null) return 'pass'
+  addDifferenceReports(input, done, old, next, compared, diagnose)
+  return classifyDifference(input, done, old, next, compared)
 }
 
 /** The line of the input for the line `line` of the output that the comparison names. */
@@ -203,9 +263,9 @@ function placeOf(input: string, done: Rewritten, line: number): number {
   return line === 0 ? 0 : inputLine(input, done.edits, readLines(done.output).starts[line - 1] ?? done.output.length)
 }
 
-/** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */
-export function upgrade(input: string): UpgradeResult {
+function upgradeCore(input: string): UpgradeResult {
   const done = rewrite(input)
+  const rewrittenRecords = done.records.map((record) => ({ ...record }))
   let check = selfCheck(input, done)
   if (check === 'mismatch') {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
@@ -214,7 +274,7 @@ export function upgrade(input: string): UpgradeResult {
         ?? rescueQuote(input, done.output, mismatch) ?? rescueDescription(input, done.output, mismatch)
         ?? rescuePercent(input, done.output, mismatch) ?? rescueTargeted(input, done.output, mismatch)
         ?? rescueMinor(input, done.output, mismatch)
-      done.records = done.records.filter((record) => record.entry !== 'upgrade-mismatch' && record.entry !== 'U-019')
+      done.records = rewrittenRecords
       if (rescued !== null) {
         done.records.push(rescued.record)
         done.output = rescued.output
@@ -225,7 +285,37 @@ export function upgrade(input: string): UpgradeResult {
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
 }
 
+function normalizationPreservesHtml(input: string, normalized: string, output: string, restored: string,
+  records: readonly ReportRecord[]): boolean {
+  try {
+    const rawHtml = records.some((record) => record.entry === 'U-076' || record.entry === 'U-077')
+    return compareHtmlExact(html01(input), html01(normalized)).equal
+      && compareHtmlExact(html02(output, rawHtml), html02(restored, rawHtml)).equal
+  } catch { return false }
+}
+
+/** Rewrites the Carve 0.1 document `input` into Carve 0.2 and checks the result against both engines. */
+export function upgrade(input: string): UpgradeResult {
+  const withoutBom = input.startsWith('\ufeff') ? input.slice(1) : input
+  const crlf = withoutBom.includes('\r\n') && !withoutBom.replaceAll('\r\n', '').includes('\n')
+  if (withoutBom === input && !crlf) return upgradeCore(input)
+  const normalized = crlf ? withoutBom.replaceAll('\r\n', '\n') : withoutBom
+  const result = upgradeCore(normalized)
+  const restored = crlf ? preserveLineEndings(withoutBom, result.output) : result.output
+  const output = withoutBom === input ? restored : '\ufeff' + restored
+  if (normalizationPreservesHtml(input, normalized, result.output, output, result.records)) {
+    return { ...result, output, changed: output !== input }
+  }
+  result.records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: 0,
+    message: 'the original and normalized BOM or line endings render differently' })
+  return { ...result, output, changed: output !== input, check: 'mismatch' }
+}
+
 /** Whether a person has to look at the result: a report entry hit, or the self-check found a difference. */
 export function needsAttention(result: UpgradeResult): boolean {
   return result.records.some(needsPerson)
+}
+
+export function canWriteUpgrade(result: UpgradeResult): boolean {
+  return result.check === 'pass' || result.check === 'explained'
 }

@@ -11,8 +11,9 @@ describe('C2-I-060, C2-I-062, C2-I-119 braced boundary reports', () => {
   ]) {
     it(`U-201 explains ${source.trim()}`, () => {
       const result = upgrade(source)
-      expect(result.check).toBe('explained')
+      expect(result.check).toBe(source.startsWith('{-{#') ? 'mismatch' : 'explained')
       expect(result.records.map((record) => record.entry)).toContain('U-201')
+      if (source.startsWith('{-{#')) expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
     })
   }
 

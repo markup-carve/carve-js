@@ -3,10 +3,11 @@ import { upgrade } from '../src/index.ts'
 
 describe('C2-I-052 mixed delimiter reports', () => {
   for (const source of ['/*a %% b*/ y\n', '_*`/`/*a*/\n', '*x /*a %% b*/ y*\n']) {
-    it(`U-145 explains ${source.trim()}`, () => {
+    it(`U-145 reports the unverified delimiter change in ${source.trim()}`, () => {
       const result = upgrade(source)
-      expect(result.check).toBe('explained')
+      expect(result.check).toBe('mismatch')
       expect(result.records.map((record) => record.entry)).toContain('U-145')
+      expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
     })
   }
   it('C2-I-047 leaves a separate engine defect visible', () => {

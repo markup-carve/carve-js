@@ -17,20 +17,30 @@ const cases = JSON.parse(readFileSync(join(import.meta.dirname, 'contract.json')
 
 /** U-053: the contract's input is also a one-item loose list, so U-021 explains a difference. */
 const WITH_REPORT = new Set(['U-053#0'])
+const WITH_PARAGRAPH_TRANSFORM = new Set(['U-015#0', 'U-102#1', 'U-129#2', 'U-129#7',
+  'U-235#0', 'U-237#0', 'U-238#0'])
+const WITH_TASK_TRANSFORM = new Set(['U-117#0', 'U-117#1', 'U-117#2'])
+const UNVERIFIED_REPORTS = new Set([
+  'U-059#0', 'U-060#0', 'U-061#0', 'U-130#0', 'U-130#1', 'U-130#2', 'U-130#3',
+  'U-131#0', 'U-132#0', 'U-134#0', 'U-146#0', 'U-146#1', 'U-146#2', 'U-146#3',
+  'U-146#4', 'U-147#0', 'U-149#0', 'U-150#0', 'U-154#0', 'U-160#0', 'U-160#1',
+  'U-169#0', 'U-195#0', 'U-206#2', 'U-209#0', 'U-209#1', 'U-209#2', 'U-209#3',
+  'U-219#0', 'U-219#1', 'U-219#2', 'U-219#3', 'U-219#4', 'U-221#0', 'U-221#1',
+  'U-221#2', 'U-224#0', 'U-224#1', 'U-224#2', 'U-224#3', 'U-224#4', 'U-251#0',
+  'U-252#0',
+])
 
 /**
  * Inputs where the 0.2 engine or the 0.1 engine does not do what the contract states. Each is in
  * _SPEC_GAPS.md under "Contract entries that do not hold"; the test pins what the tool does.
  */
 const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: string }> = {
-  // Since C2-B-030 and C2-B-054 were ruled, 0.2 reads right-aligned markers as one list, as 0.1 did, so nothing moves (U-119).
-  'U-022#0': { check: 'pass' },
   // 0.1 makes this one-item list loose, which is U-021.
   'U-046#1': { entry: 'U-021', check: 'explained' },
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
-  'U-114#4': { entry: 'U-114', check: 'explained' }
+  'U-114#4': { entry: 'U-114', check: 'mismatch' }
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
@@ -59,7 +69,8 @@ describe('the contract', () => {
         it(`${key} gives the output of the contract and keeps the HTML`, () => {
           const result = upgrade(input)
           expect(result.output).toBe(entry.outputs[index])
-          expect(result.check).toBe(WITH_REPORT.has(key) ? 'explained' : 'pass')
+          expect(result.check).toBe(WITH_REPORT.has(key) || WITH_PARAGRAPH_TRANSFORM.has(key)
+            || WITH_TASK_TRANSFORM.has(key) ? 'explained' : 'pass')
           expect(entries(input)).toContain(entry.id)
         })
       } else if (entry.class === 'report') {
@@ -67,8 +78,12 @@ describe('the contract', () => {
           const result = upgrade(input)
           const expectedOutput = key === 'U-133#0' ? '- [ ] {% %}' : (entry.outputs[index] ?? input)
           expect(result.output).toBe(expectedOutput)
-          expect(entries(input)).toContain(entry.id)
-          expect(result.check).not.toBe('mismatch')
+          if (key === 'U-133#0') expect(entries(input)).toContain('U-122')
+          else expect(entries(input)).toContain(entry.id)
+          if (UNVERIFIED_REPORTS.has(key)) {
+            expect(result.check).toBe('mismatch')
+            expect(entries(input)).toContain('upgrade-mismatch')
+          } else expect(result.check).not.toBe('mismatch')
         })
       } else {
         it(`${key} reads the same and is left alone`, () => {
@@ -89,7 +104,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 231 entries', () => {
-    expect(cases.length).toBe(231)
+  it('covers all 229 entries', () => {
+    expect(cases.length).toBe(229)
   })
 })
