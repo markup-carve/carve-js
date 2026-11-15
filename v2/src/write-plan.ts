@@ -305,7 +305,8 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
     if (isLiteral(leaf, at, escaped)) return
     // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
     // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
-    if (leaf.inCell || leaf.lastAtomTick > at) undecide(leaf, 'backtick')
+    // Inside a mark of the tree, behind a delimiter of text, the procedure escapes that delimiter first.
+    if (leaf.inCell || leaf.lastAtomTick > at || (leaf.textMark && leaf.openDepth > 0)) undecide(leaf, 'backtick')
     else escaped[at] = 1
   },
   '{': brace,
@@ -435,7 +436,9 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
       checkAtomEnd(leaf, atomEnd(leaf, at), node)
       continue
     }
-    if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
+    if (kind === OPEN) leaf.openDepth++
+    else if (kind === CLOSE) leaf.openDepth--
+    else if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
   }
 }
 
