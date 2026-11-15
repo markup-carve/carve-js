@@ -4,7 +4,8 @@ import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, 
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
 import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
-import { ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
+import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
+import { decodeUpgradeBytes } from '../../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
 import { migrateTree } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
@@ -41,10 +42,10 @@ function options(args: ParsedArgs, names: readonly string[]): Record<string, unk
   return result
 }
 
-function read(path: string): string {
+function read(path: string, upgradeInput = false): string {
   try {
     const bytes = path === '-' ? readFileSync(0) : readFileSync(path)
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    return upgradeInput ? decodeUpgradeBytes(bytes) : new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
 }
 
@@ -138,7 +139,10 @@ function diagnosticLines(path: string, source: string, diagnostics: readonly Dia
 
 function upgradeOne(path: string, source: string, args: ParsedArgs): { status: number, record: object } {
   const result = upgrade(source)
-  const blocked = result.check === 'mismatch' && args.values['force'] !== true
+  const blocked = !canWriteUpgrade(result)
+  if (blocked && args.values['force'] === true) {
+    process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
+  }
   if (args.values['write'] === true && result.changed && !blocked) writeFile(path, result.output)
   else if (args.values['write'] !== true && args.values['check'] !== true && args.values['json'] !== true) process.stdout.write(result.output)
   if (args.values['json'] !== true) for (const entry of result.records) process.stderr.write(`${formatRecord(path, entry)}\n`)
@@ -160,7 +164,7 @@ function formatFile(path: string, display: string, source: string, args: ParsedA
 }
 
 function executeFile(path: string, args: ParsedArgs): { status: number, record?: object, escapedRawHtml?: boolean } {
-  const source = read(path)
+  const source = read(path, args.command === 'upgrade')
   const display = path === '-' ? '<stdin>' : path
   switch (args.command) {
     case 'render': {

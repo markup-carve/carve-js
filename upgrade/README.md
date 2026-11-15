@@ -8,7 +8,7 @@ node upgrade/src/cli.ts [--check] [--write] [--json] [--force] FILE...
 
 - Without `--write` the rewritten source of one file goes to stdout and the report to stderr.
 - `--write` writes a file only when its self-check is `pass` or `explained`.
-- `--force` remains accepted for existing scripts, but it cannot override the HTML check.
+- `--force` is accepted by both commands for existing scripts. It does not override the HTML check or permit a mismatched rewrite to be written.
 - `--check` writes nothing and exits 1 when a file would change or needs a person.
 - `--json` prints the report as JSON on stdout.
 

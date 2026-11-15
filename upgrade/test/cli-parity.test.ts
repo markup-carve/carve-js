@@ -12,7 +12,57 @@ function run(file: string, integrated: boolean): ReturnType<typeof spawnSync> {
   return spawnSync(process.execPath, args)
 }
 
+function writeRun(file: string, integrated: boolean, force = false): ReturnType<typeof spawnSync> {
+  const args = integrated ? [carve2, 'upgrade', '--write'] : [standalone, '--write']
+  if (force) args.push('--force')
+  return spawnSync(process.execPath, [...args, file])
+}
+
 describe('C2-W-100: upgrade command record and exit parity', () => {
+  it('C2-W-100: force cannot write a mismatch through either command', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const bytes = Buffer.from('/***/\n')
+      for (const integrated of [false, true]) {
+        writeFileSync(file, bytes)
+        const done = writeRun(file, integrated, true)
+        expect(done.status).toBe(1)
+        expect(readFileSync(file)).toEqual(bytes)
+      }
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
+  it('C2-W-100: both commands preserve a BOM and CRLF while rewriting', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const bytes = Buffer.from('\ufeff```js{1,3}\r\na\r\n```\r\n')
+      for (const integrated of [false, true]) {
+        writeFileSync(file, bytes)
+        const done = writeRun(file, integrated)
+        expect(done.status).toBe(0)
+        const output = readFileSync(file).toString('utf8')
+        expect(output.startsWith('\ufeff')).toBe(true)
+        expect(output).toContain('\r\n')
+        expect(output.replaceAll('\r\n', '\n')).not.toBe(bytes.toString('utf8').replaceAll('\r\n', '\n'))
+      }
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
+  it('C2-W-101: malformed UTF-8 stays byte identical with write and force', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const bytes = Buffer.from([0xef, 0xbb, 0xbf, 0xff])
+      for (const integrated of [false, true]) {
+        writeFileSync(file, bytes)
+        const done = writeRun(file, integrated, true)
+        expect(done.status).toBe(2)
+        expect(readFileSync(file)).toEqual(bytes)
+      }
+    } finally { rmSync(dir, { recursive: true }) }
+  })
   it.each([
     ['plain', 'text\n'],
     ['rewrite', '```js{1,3}\na\n```\n'],

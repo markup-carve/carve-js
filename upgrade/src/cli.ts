@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { ENGINE_01_VERSION } from './engines.ts'
 import { formatRecord } from './report.ts'
 import { canWriteUpgrade, needsAttention, upgrade, type UpgradeResult } from './upgrade.ts'
+import { decodeUpgradeBytes } from './bytes.ts'
 
 const USAGE = 'usage: carve-upgrade [--check] [--write] [--json] [--force] FILE...'
 
@@ -50,7 +51,7 @@ function decodeFiles(files: readonly string[]): { file: string; source: string }
   const sources: { file: string; source: string }[] = []
   for (const file of files) {
     try {
-      const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(file))
+      const source = decodeUpgradeBytes(readFileSync(file))
       sources.push({ file, source })
     }
     catch (error) {
