@@ -1207,6 +1207,12 @@
       "name": "quoted brace in a block attribute value",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-197",
+      "name": "attribute consumed at a list boundary",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

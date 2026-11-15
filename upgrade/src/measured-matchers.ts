@@ -68,7 +68,8 @@ function changedTaskLabel(input: string, expected: string, actual: string): bool
 }
 
 function tableMetadataMatch(input: string): string | null {
-  if (input.includes('{widths=') || input.includes('{body-rows=') || input.includes('{body-header-rows=')) return 'U-150'
+  if (input.includes('{widths=') || input.includes('{body-rows=') || input.includes('{body-header-rows=')
+    || input.includes('{header-rows=') || input.includes('{footer-rows=') || input.includes(' body-header-cols=')) return 'U-150'
   if (input.includes('?v') || input.includes('{?')) return 'U-162'
   return null
 }
@@ -130,6 +131,12 @@ function inlinePunctuationMatch(input: string, expected: string): string | null 
   return null
 }
 
+function listMarkerTab(input: string, expected: string, actual: string): boolean {
+  if (!expected.includes('\t') || actual.includes('\t')) return false
+  return input.split('\n').some((line) => line.includes('- \t') || line.includes('* \t')
+    || line.includes('. \t') || line.includes('.\t'))
+}
+
 function adjacentBracedDelimiter(input: string): boolean {
   const source = input.trimStart()
   return ['/{', '{*', '{_', '{~', '{=', '{+', '{-'].some((prefix) => source.startsWith(prefix))
@@ -160,6 +167,6 @@ export function matchMeasured(input: string, expected: string, actual: string): 
   if (lineStarts(input, ['# ']) && (input.includes('][') || input.includes('%%'))) return 'U-148'
   const inline = inlineMatch(input, expected, actual)
   if (inline !== null) return inline
-  if (lineStarts(input, ['- \t', '* \t', '. \t'])) return 'U-153'
+  if (listMarkerTab(input, expected, actual)) return 'U-153'
   return null
 }

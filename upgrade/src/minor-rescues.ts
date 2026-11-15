@@ -70,6 +70,23 @@ function quotedAttribute(output: string): Candidate[] {
   return found
 }
 
+function consumedListAttribute(output: string): Candidate[] {
+  const found: Candidate[] = []
+  const lines = readLines(output)
+  for (let line = 2; line < lines.count; line++) {
+    const value = lineText(lines, line).trim()
+    if (!value.startsWith('{') || !value.endsWith('}')) continue
+    const next = lineText(lines, line + 1).trimStart()
+    if (!next.startsWith('# ') && !next.startsWith(':::') && !next.startsWith('```')) continue
+    const start = lineStart(lines, line)
+    const after = lineStart(lines, line + 1)
+    const blank = lineText(lines, line - 1).trim() === '' ? '' : '\n'
+    found.push(candidate('U-197', output.slice(0, start) + blank + output.slice(after),
+      'the attribute consumed at the list boundary was removed before the next block'))
+  }
+  return found
+}
+
 function captionBoundary(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -101,7 +118,7 @@ function emptyFootnote(output: string): Candidate[] {
 export function rescueMinor(input: string, output: string, mismatch: ReportRecord): { output: string, record: ReportRecord } | null {
   const expected = html01(input)
   const candidates = [...trailingFence(output), ...inlineComment(output), ...emptyItemAttribute(output),
-    ...quotedAttribute(output), ...captionBoundary(output), ...emptyFootnote(output)]
+    ...quotedAttribute(output), ...consumedListAttribute(output), ...captionBoundary(output), ...emptyFootnote(output)]
   for (const item of candidates) {
     try {
       if (!compareHtml(expected, html02(item.output, false)).equal) continue

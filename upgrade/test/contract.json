@@ -1875,5 +1875,16 @@
     "outputs": [
       "{k=\"x}y\"}\np\n"
     ]
+  },
+  {
+    "id": "U-197",
+    "title": "Attribute consumed at a list boundary",
+    "class": "rewrite",
+    "inputs": [
+      "- a\n  {.k}\n# H\n"
+    ],
+    "outputs": [
+      "- a\n\n# H\n"
+    ]
   }
 ]

@@ -116,10 +116,10 @@ describe('the comparison of section 1', () => {
 })
 
 describe('the report', () => {
-  it('holds the 175 entries of the contract with their classes', () => {
+  it('holds the 176 entries of the contract with their classes', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
     // U-048 is `none` by the ruling of 2026-11-13, so one rewrite less and one none more than the summary table.
-    expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([175, 74, 25, 56, 20])
+    expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([176, 75, 25, 56, 20])
     // The tool's own entries, for cases the specification does not decide, stand apart.
     expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002'])
   })

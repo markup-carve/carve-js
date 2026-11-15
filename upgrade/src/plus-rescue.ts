@@ -114,6 +114,37 @@ function nestedQuoteCandidates(source: string): string[] {
   return found
 }
 
+function nestedMarkedQuoteCandidates(source: string): string[] {
+  const found: string[] = []
+  const lines = readLines(source)
+  for (let line = 2; line < lines.count; line++) {
+    if (lineText(lines, line).trimStart() !== '> +') continue
+    if (!lineText(lines, line - 1).trimStart().startsWith('> >')) continue
+    const next = lineText(lines, line + 1).trimStart()
+    if (!next.startsWith('> ')) continue
+    const moved = replaceLine(source, line + 1, '> ' + next)
+    found.push(replaceLine(moved, line, '> >'))
+  }
+  return found
+}
+
+function listDivCandidates(source: string): string[] {
+  const found: string[] = []
+  const lines = readLines(source)
+  for (let line = 2; line < lines.count; line++) {
+    if (lineText(lines, line).trim() !== '+') continue
+    const next = lineText(lines, line + 1).trimStart()
+    for (let open = Math.max(1, line - 3); open < line; open++) {
+      const value = lineText(lines, open)
+      const at = value.indexOf(':::')
+      if (at < 0 || !value.slice(0, at).includes('- ') && !value.slice(0, at).includes('. ')) continue
+      const moved = replaceLine(source, line + 1, ' '.repeat(at) + next)
+      found.push(replaceLine(moved, line, ' '.repeat(at) + ':::'))
+    }
+  }
+  return found
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -128,7 +159,9 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
   if (!hasStructuralPlus(input)) return null
   const entry = plusEntry(input)
   const expected = html01(input)
-  for (const candidate of [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input)]) {
+  const variants = [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input),
+    ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input)]
+  for (const candidate of variants) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
       return { output: candidate, record: recordOf(entry, mismatch.line,

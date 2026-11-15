@@ -44,14 +44,28 @@ function missingTab(input: string, expected: string, actual: string): string | n
 function quoteDefinition(input: string, expected: string, actual: string): boolean {
   if (!expected.includes('<blockquote') && !actual.includes('<blockquote')) return false
   return hasDefinitionLine(input, '> [', true) || hasDefinitionLine(input, '>[', true)
-    || input.split('\n').some((value) => value.trimStart().startsWith('> *['))
+    || input.split('\n').some((value) => value.trimStart().startsWith('> *[')
+      || value.includes('> [') && value.includes(']:'))
+}
+
+function nestedItemDefinition(input: string): boolean {
+  for (const line of input.split('\n')) {
+    let value = line.trimStart()
+    while (value.startsWith('- ') || value.startsWith('* ') || value.startsWith('. ')) {
+      value = value.slice(2).trimStart()
+    }
+    const close = value.indexOf(']:')
+    if (value.startsWith('[') && close > 2) return true
+    if (value.startsWith('*[') && close > 3) return true
+  }
+  return false
 }
 
 function itemDefinition(input: string, expected: string, actual: string): boolean {
   if (!expected.includes('<li') && !actual.includes('<li')) return false
   return hasDefinitionLine(input, '- [', true) || hasDefinitionLine(input, '* [', true)
     || hasDefinitionLine(input, '. [', true)
-    || input.split('\n').some((value) => value.trimStart().startsWith('- *['))
+    || nestedItemDefinition(input)
 }
 
 function legacyMeasured(input: string, expected: string, actual: string, line: number): ReportRecord | null {
@@ -72,7 +86,8 @@ function measuredTabOrDiv(input: string, expected: string, actual: string, line:
   const tab = missingTab(input, expected, actual)
   if (tab !== null) return recordOf(tab, line,
     'C2-B-027, C2-B-067, and C2-B-171 trim a tab that 0.1 retained as content; no preserving spelling is verified')
-  if (input.includes(':::[') && expected.includes('<div>') && actual.includes('<p>')) return recordOf('U-195', line,
+  if (input.includes(':::[') && (expected.includes('<div>') || expected.includes('<code>')
+    || expected.includes('<strong>'))) return recordOf('U-195', line,
     'C2-B-119 and C2-B-121 place div labels in a metadata slot whose inline contents can change; no preserving spelling is verified')
   return null
 }
@@ -83,6 +98,11 @@ function unresolvedEngineShape(input: string, expected: string, actual: string):
   return (expected.includes('<td') || actual.includes('<td')) && input.includes('\\|') && input.includes(']')
 }
 
+function lineCommentInContainer(input: string): boolean {
+  if (input.includes('%%%')) return false
+  return input.split('\n').some((line) => line.trimStart().startsWith('%% '))
+}
+
 /** Reports the measured, clause-backed HTML changes that have no source rewrite. */
 export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
@@ -90,6 +110,8 @@ export function measuredReport(input: string, expected: string, actual: string, 
   const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
   if (tabOrDiv !== null) return tabOrDiv
   if (unresolvedEngineShape(input, expected, actual)) return null
+  if (lineCommentInContainer(input)) return recordOf('U-146', line,
+    'C2-B-133 and C2-I-044 end the percent line comment at its container boundary')
   if (input.includes('{{') && input.includes('}}')) return recordOf('U-011', line,
     'C2-B-201 and C2-B-206 read the include-looking directive as an include')
   if (input.includes('{table') && input.includes('```csv')) return recordOf('U-061', line,

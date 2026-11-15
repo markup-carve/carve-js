@@ -389,6 +389,17 @@
     ]
   },
   {
+    "cause": "C15",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 147,
+    "input": "``` js [a `]` b]\nc\n```\n",
+    "check": "explained",
+    "entries": [
+      "U-157"
+    ]
+  },
+  {
     "cause": "C16",
     "clause": "C2-B-059",
     "path": "resources/examples/edge-cases/0436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not.md",
@@ -465,6 +476,7 @@
     "input": "> +\n>\n",
     "check": "pass",
     "entries": [
+      "U-017",
       "U-017",
       "U-125"
     ]
@@ -628,6 +640,17 @@
     ]
   },
   {
+    "cause": "C24",
+    "clause": "C2-B-179",
+    "path": "resources/examples/edge-cases/0952-native-head-rows-with-span-placeholders.md",
+    "line": 135,
+    "input": "| =^ |\n|=^x |\n",
+    "check": "explained",
+    "entries": [
+      "U-168"
+    ]
+  },
+  {
     "cause": "C25",
     "clause": "C2-B-108",
     "path": "resources/examples/edge-cases/0445-a-degraded-comment-fence-at-a-container-s-column-0-keeps-the-follower-in-the-item.md",
@@ -641,23 +664,23 @@
   {
     "cause": "C25",
     "clause": "C2-B-108",
-    "path": "resources/examples/edge-cases/0939-a-line-after-a-comment-block-in-a-line-block-reads-the-stanza-without-it.md",
-    "line": 66,
-    "input": "- ::: |\n  x\n  %%%\nb\n",
-    "check": "explained",
+    "path": "resources/examples/edge-cases/0864-a-comment-fence-on-a-nested-marker-line-closes-at-the-first-exact-width-closer.md",
+    "line": 12,
+    "input": ". - %%%\n%%%\nx\n%%%\n",
+    "check": "pass",
     "entries": [
-      "U-130"
+      "U-129"
     ]
   },
   {
     "cause": "C25",
     "clause": "C2-B-108",
-    "path": "resources/examples/edge-cases/0939-a-line-after-a-comment-block-in-a-line-block-reads-the-stanza-without-it.md",
-    "line": 129,
-    "input": ":: t\n: ::: |\n  x\n  %%%\nb\n  :::\n",
-    "check": "explained",
+    "path": "resources/examples/edge-cases/0945-a-column-0-comment-before-a-sibling-keeps-the-blank-that-loosens-the-list.md",
+    "line": 32,
+    "input": "- %%%\n\n%%%\n%% z\n- c\n",
+    "check": "pass",
     "entries": [
-      "U-130"
+      "U-129"
     ]
   },
   {
@@ -696,37 +719,37 @@
   {
     "cause": "C27",
     "clause": "C2-B-069",
-    "path": "resources/examples/edge-cases/0658-a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns.md",
-    "line": 8,
-    "input": ":: a\n: b\n\t:: t\n  : zq\n",
+    "path": "resources/examples/edge-cases/0757-an-intervening-column-refuses-a-description-hosted-first-block.md",
+    "line": 6,
+    "input": ":: t\n: - +\n # H\n",
     "check": "pass",
     "entries": [
-      "U-004",
+      "U-017",
+      "U-017",
       "U-128"
     ]
   },
   {
     "cause": "C27",
     "clause": "C2-B-069",
-    "path": "resources/examples/edge-cases/0813-a-description-line-between-two-lists-columns-is-an-outer-sibling.md",
-    "line": 38,
-    "input": ":: t\n: d\n  :: u\n  : v\n\n : e\n",
+    "path": "resources/examples/edge-cases/0616-a-line-is-read-in-the-container-whose-column-it-reaches.md",
+    "line": 350,
+    "input": ":: t\n: para\n # H\n",
     "check": "pass",
     "entries": [
-      "U-004",
+      "U-001",
       "U-128"
     ]
   },
   {
     "cause": "C27",
     "clause": "C2-B-069",
-    "path": "resources/examples/edge-cases/0686-nested-term-after-a-list-in-a-description.md",
-    "line": 8,
-    "input": ":: term\n: - a\n   :: sub\n: def\n",
+    "path": "resources/examples/edge-cases/0616-a-line-is-read-in-the-container-whose-column-it-reaches.md",
+    "line": 327,
+    "input": ":: t\n: > para\n # H\n",
     "check": "pass",
     "entries": [
-      "U-009",
-      "U-106",
+      "U-001",
       "U-128"
     ]
   },
@@ -777,12 +800,12 @@
   {
     "cause": "C29",
     "clause": "C2-B-081",
-    "path": "resources/examples/edge-cases/0265-a-reference-definition-s-metadata-slots-take-exactly-one-space.md",
-    "line": 72,
-    "input": "[a]: /u {.c}\n\n[a][]\n",
+    "path": "resources/examples/edge-cases/0840-a-refused-plus-reads-like-a-letter.md",
+    "line": 15,
+    "input": "[^a]: +\n- b\n\nr[^a]\n",
     "check": "explained",
     "entries": [
-      "U-132"
+      "U-131"
     ]
   },
   {
@@ -810,9 +833,9 @@
   {
     "cause": "C30",
     "clause": "C2-B-031",
-    "path": "resources/examples/edge-cases/0647-a-quote-opened-on-its-own-line-in-an-item-takes-the-first-block-form.md",
-    "line": 10,
-    "input": "- a\n  > +\n  q\n",
+    "path": "resources/examples/edge-cases/0955-a-quote-plus-after-a-quote-attached-paragraph-is-a-letter.md",
+    "line": 14,
+    "input": "> +\nq\n> +\n",
     "check": "pass",
     "entries": [
       "U-017",
@@ -827,6 +850,7 @@
     "input": "- [ ] +\n",
     "check": "explained",
     "entries": [
+      "U-122",
       "U-133"
     ]
   },
@@ -932,6 +956,17 @@
   {
     "cause": "C35",
     "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0854-a-single-quoted-value-holds-a-closing-brace-on-a-block-attribute-line.md",
+    "line": 12,
+    "input": "{k='x}y'}\np\n",
+    "check": "pass",
+    "entries": [
+      "U-196"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
     "path": "resources/examples/edge-cases/0329-a-floating-attribute-is-scoped-to-the-container-that-holds-it.md",
     "line": 41,
     "input": "> q\n> {.k}\ntail\n",
@@ -951,18 +986,6 @@
     "entries": [
       "U-003",
       "U-031",
-      "U-141"
-    ]
-  },
-  {
-    "cause": "C35",
-    "clause": "C2-B-090",
-    "path": "resources/examples/edge-cases/0458-a-wrapped-attribute-block-ends-at-its-quote-and-reaches-no-line-below-it.md",
-    "line": 30,
-    "input": "> > q\n> > {.k #x}\ntail\n",
-    "check": "pass",
-    "entries": [
-      "U-003",
       "U-141"
     ]
   },
@@ -1041,6 +1064,7 @@
     "input": "/***/\n",
     "check": "explained",
     "entries": [
+      "U-068",
       "U-068",
       "U-145"
     ]
@@ -1175,6 +1199,7 @@
     "input": "_x /*a*/{.q} b/{c_} c_\n",
     "check": "explained",
     "entries": [
+      "U-065",
       "U-065",
       "U-145"
     ]
@@ -1314,23 +1339,23 @@
   {
     "cause": "C52",
     "clause": "C2-B-179",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 358,
+    "input": "|=h|=  i |\n|a|  b  |\n",
+    "check": "explained",
+    "entries": [
+      "U-168"
+    ]
+  },
+  {
+    "cause": "C52",
+    "clause": "C2-B-179",
     "path": "resources/examples/edge-cases/0759-invalid-body-row-metadata-leaves-one-table-body.md",
     "line": 6,
     "input": "{body-rows=x}\n|= A |\n",
     "check": "explained",
     "entries": [
       "U-150"
-    ]
-  },
-  {
-    "cause": "C52",
-    "clause": "C2-B-179",
-    "path": "resources/examples/edge-cases/0870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds.md",
-    "line": 33,
-    "input": "| < |= a |\n+ | | c |\n",
-    "check": "explained",
-    "entries": [
-      "U-147"
     ]
   },
   {
@@ -1444,6 +1469,28 @@
     ]
   },
   {
+    "cause": "C58",
+    "clause": "C2-I-092",
+    "path": "resources/examples/edge-cases/0935-a-name-ending-in-a-hyphen-leaves-the-next-marker-free.md",
+    "line": 12,
+    "input": "x #a-#b and @a-@b\n",
+    "check": "explained",
+    "entries": [
+      "U-170"
+    ]
+  },
+  {
+    "cause": "C58",
+    "clause": "C2-I-092",
+    "path": "resources/examples/edge-cases/0935-a-name-ending-in-a-hyphen-leaves-the-next-marker-free.md",
+    "line": 26,
+    "input": "See #a--#b-#c, #a-@b and #a#b\n",
+    "check": "explained",
+    "entries": [
+      "U-170"
+    ]
+  },
+  {
     "cause": "C60",
     "clause": "C2-B-103",
     "path": "resources/examples/edge-cases/0298-a-boolean-lang-is-the-third-spelling-of-the-same-key.md",
@@ -1512,6 +1559,18 @@
   {
     "cause": "C64",
     "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0191-a-blank-after-a-comment-still-ends-the-item.md",
+    "line": 8,
+    "input": "- - a\n %% c\n\n b\n",
+    "check": "explained",
+    "entries": [
+      "U-019",
+      "U-146"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
     "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
     "line": 192,
     "input": "[%% hidden](/u)\n",
@@ -1523,12 +1582,12 @@
   {
     "cause": "C64",
     "clause": "C2-B-133",
-    "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
-    "line": 180,
-    "input": "[a\t%% hidden](/u)\n",
+    "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
+    "line": 412,
+    "input": ":: c\n%% note\nmore\n",
     "check": "explained",
     "entries": [
-      "U-155"
+      "U-146"
     ]
   },
   {
@@ -1637,17 +1696,6 @@
   {
     "cause": "C70",
     "clause": "C2-B-123",
-    "path": "resources/examples/edge-cases/1077-a-column-after-an-astral-character-is-one-code-point.md",
-    "line": 56,
-    "input": "::: |\n😀\tx\n:::\n",
-    "check": "explained",
-    "entries": [
-      "U-130"
-    ]
-  },
-  {
-    "cause": "C70",
-    "clause": "C2-B-123",
     "path": "resources/examples/edge-cases/0346-a-line-block-s-last-body-line-keeps-its-backslash.md",
     "line": 42,
     "input": "::: |\na  \\\n:::\n",
@@ -1662,6 +1710,17 @@
     "path": "resources/examples/edge-cases/0380-a-terminal-comment-line-still-leaves-an-empty-verse-line.md",
     "line": 10,
     "input": "::: |\n`\n%%\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "resources/examples/edge-cases/1077-a-column-after-an-astral-character-is-one-code-point.md",
+    "line": 56,
+    "input": "::: |\n😀\tx\n:::\n",
     "check": "explained",
     "entries": [
       "U-130"
@@ -2072,13 +2131,12 @@
   {
     "cause": "C90",
     "clause": "C2-B-072",
-    "path": "resources/examples/edge-cases/0325-an-attribute-line-after-a-continuation-marker-attributes-the-attached-block.md",
-    "line": 141,
-    "input": ":: t\n: d\n+\n{.x}\n```\n: x\n```\n",
+    "path": "resources/examples/edge-cases/0678-a-below-column-fence-stays-in-a-definition-paragraph.md",
+    "line": 8,
+    "input": ":: t\n: d\n ```\nx\n```\n",
     "check": "pass",
     "entries": [
-      "U-014",
-      "U-122"
+      "U-128"
     ]
   },
   {

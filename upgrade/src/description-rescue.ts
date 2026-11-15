@@ -8,6 +8,10 @@ interface Rescue {
   record: ReportRecord
 }
 
+function startsBlock(value: string): boolean {
+  return ['# ', '```', ':::', '***', '- ', '* '].some((prefix) => value.startsWith(prefix))
+}
+
 function variants(output: string, mismatchLine: number): string[] {
   const lines = readLines(output)
   const found = new Set<string>()
@@ -23,13 +27,32 @@ function variants(output: string, mismatchLine: number): string[] {
       }
     }
     const above = lineText(lines, line - 1).trimStart()
-    const block = trimmed.startsWith('# ') || trimmed.startsWith('```') || trimmed.startsWith(':::')
+    const block = startsBlock(trimmed)
     if (value !== trimmed && block && (above.startsWith(': ') || above === '')) {
       found.add(output.slice(0, start) + trimmed + output.slice(end))
       if (above !== '') found.add(output.slice(0, start) + '\n' + trimmed + output.slice(end))
     }
   }
   return [...found]
+}
+
+function plusVariants(input: string): string[] {
+  const found: string[] = []
+  const lines = input.split('\n')
+  for (let line = 1; line < Math.min(lines.length - 1, 10); line++) {
+    const body = (lines[line] ?? '').trimStart()
+    const term = (lines[line - 1] ?? '').trimStart()
+    if (!term.startsWith(':: ') || !body.startsWith(': ') || body.slice(1).trim() !== '+') continue
+    const follower = (lines[line + 1] ?? '').trimStart()
+    for (let indent = 0; indent <= 4; indent++) {
+      const changed = [...lines]
+      changed[line - 1] = ' '.repeat(indent) + term
+      changed[line] = ' '.repeat(indent) + ': {% %}'
+      changed[line + 1] = '\n' + ' '.repeat(indent) + follower
+      found.push(changed.join('\n'))
+    }
+  }
+  return found
 }
 
 /** C2-B-069, C2-B-076 and C2-B-078: put the mark and body at an owning column. */
@@ -42,6 +65,13 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
       const id = input.startsWith(':: ') && candidate.startsWith(' :: ') ? 'U-180' : 'U-128'
       return { output: candidate, record: recordOf(id, mismatch.line,
         'the description mark was moved to its 0.2 ownership column while preserving 0.1 HTML') }
+    } catch { /* A candidate can fail to parse under the new grammar. */ }
+  }
+  for (const candidate of plusVariants(input)) {
+    try {
+      if (!compareHtml(expected, html02(candidate, false)).equal) continue
+      return { output: candidate, record: recordOf('U-123', mismatch.line,
+        'the description continuation was written as an empty block and a separated follower') }
     } catch { /* A candidate can fail to parse under the new grammar. */ }
   }
   return null
