@@ -108,6 +108,18 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
     expect(result.check).toBe('pass')
   })
 
+  it('accepts trailing space on the old continuation marker', () => {
+    const result = upgrade(':: t\n: + \n```\na\n```\n')
+    expect(result.output).toBe(':: t\n: ```\n  a\n  ```\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('uses a long 0.2 fence around backticks from a tilde fence', () => {
+    const result = upgrade(':: a\n: +\n~~~\n```\nx\n```\n~~~\n')
+    expect(result.output).toBe(':: a\n: ````\n  ```\n  x\n  ```\n  ````\n')
+    expect(result.check).toBe('pass')
+  })
+
   it('separates a heading from an empty list in a description body', () => {
     const result = upgrade(':: t\n: - +\n   # H\n')
     expect(result.output).toBe(':: t\n: - {% %}\n\n  # H\n')
@@ -116,5 +128,71 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
 
   it('keeps an earlier table defect beside that empty list', () => {
     expect(upgrade('|= ^|\n\n:: t\n: - +\n   # H\n').check).toBe('mismatch')
+  })
+
+  it('rewrites two quote-hosted continuations in one document', () => {
+    const source = '> :: a\n> : +\npara\n\n> :: b\n> : +\npara2\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('> :: a\n> : {% %}\n\npara\n\n> :: b\n> : {% %}\n\npara2\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('leaves an unrelated defect visible with two continuations', () => {
+    const source = '|= ^|\n\n> :: a\n> : +\npara\n\n> :: b\n> : +\npara2\n'
+    expect(upgrade(source).check).toBe('mismatch')
+  })
+
+  it('rewrites two plain description continuations together', () => {
+    const source = ':: a\n: +\npara\n\n:: b\n: +\npara2\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(':: a\n: para\n\n:: b\n: para2\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('keeps an unrelated table defect beside two plain continuations', () => {
+    expect(upgrade('|= ^|\n\n:: a\n: +\npara\n\n:: b\n: +\npara2\n').check).toBe('mismatch')
+  })
+
+  it('rewrites two separate description fences in one document', () => {
+    const source = ':: a\n: +\n```\nx\n```\n\n:: b\n: +\n~~~\ny\n~~~\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(':: a\n: ```\n  x\n  ```\n\n:: b\n: ```\n  y\n  ```\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('rewrites a quote continuation and a fence continuation together', () => {
+    const source = '> :: a\n> : +\npara\n\n:: b\n: +\n```\ny\n```\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('> :: a\n> : {% %}\n\npara\n\n:: b\n: ```\n  y\n  ```\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('rewrites two empty lists followed by headings in descriptions', () => {
+    const source = ':: a\n: - +\n   # A\n\n:: b\n: - +\n   # B\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(':: a\n: - {% %}\n\n  # A\n\n:: b\n: - {% %}\n\n  # B\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('keeps a separate rewrite while moving a description fence', () => {
+    const source = ':: t\n: +\n```\na\n```\nafter\n\n~~~\nx\n~~~\n'
+    const result = upgrade(source)
+    expect(result.output).toContain(':: t\n: ```\n  a\n  ```\nafter')
+    expect(result.output).toContain('```\nx\n```')
+    expect(result.check).toBe('pass')
+  })
+
+  it('finds a detached description after earlier lines', () => {
+    const source = '\n'.repeat(12) + '  :: t\n: +\n  h\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('\n'.repeat(12) + ':: t\n: h\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('keeps an indented fence host at its own column', () => {
+    const source = '  :: t\n  : +\n  ```\n  a\n  ```\nafter\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('  :: t\n  : ```\n    a\n    ```\nafter\n')
+    expect(result.check).toBe('pass')
   })
 })

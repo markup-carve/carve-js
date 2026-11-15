@@ -62,7 +62,7 @@ function alignedFollowerVariants(
 function plusVariants(input: string): string[] {
   const found: string[] = []
   const lines = input.split('\n')
-  for (let line = 1; line < Math.min(lines.length - 1, 10); line++) {
+  for (let line = 1; line < lines.length - 1 && found.length < 16; line++) {
     const body = (lines[line] ?? '').trimStart()
     const term = (lines[line - 1] ?? '').trimStart()
     if (!term.startsWith(':: ') || !body.startsWith(': ') || body.slice(1).trim() !== '+') continue
@@ -90,12 +90,56 @@ function plusVariants(input: string): string[] {
   return found
 }
 
+function combinedPlainPlus(source: string, minimum = 2): string | null {
+  const lines = source.split('\n')
+  const moved = [...lines]
+  let count = 0
+  for (let at = lines.length - 3; at >= 0; at--) {
+    if (!(lines[at] ?? '').trimStart().startsWith(':: ')) continue
+    if ((lines[at + 1] ?? '').trim() !== ': +') continue
+    const follower = (moved[at + 2] ?? '').trimStart()
+    if (follower.startsWith('```') || follower.startsWith('~~~')) continue
+    moved[at] = (lines[at] ?? '').trimStart()
+    moved[at + 1] = ': ' + follower
+    moved.splice(at + 2, 1)
+    const sibling = moved[at + 2] ?? ''
+    if (sibling.trimStart().startsWith(': ') && sibling !== sibling.trimStart()) moved[at + 2] = sibling.trimStart()
+    count++
+  }
+  return count >= minimum ? moved.join('\n') : null
+}
+
+function quotedPlusAt(lines: string[], at: number): boolean {
+  return (lines[at] ?? '').trimStart().startsWith('> :: ')
+    && (lines[at + 1] ?? '').trimStart().trimEnd() === '> : +'
+}
+
+function combinedQuotedPlus(lines: string[], minimum = 2): string | null {
+  const moved = [...lines]
+  let count = 0
+  for (let at = lines.length - 3; at >= 0; at--) {
+    if (!quotedPlusAt(lines, at)) continue
+    const prefix = (lines[at] ?? '').slice(0, (lines[at] ?? '').indexOf('>'))
+    const follower = (moved[at + 2] ?? '').trimStart()
+    if (follower.startsWith('> ')) {
+      moved[at + 1] = prefix + '> : ' + follower.slice(2)
+      moved.splice(at + 2, 1)
+      const sibling = (moved[at + 2] ?? '').trimStart()
+      if (sibling.startsWith('>  : ')) moved[at + 2] = prefix + '> : ' + sibling.slice(5)
+    } else {
+      moved[at + 1] = prefix + '> : {% %}'
+      moved[at + 2] = `\n${follower}`
+    }
+    count++
+  }
+  return count >= minimum ? moved.join('\n') : null
+}
+
 function quotedPlusVariants(input: string): string[] {
   const lines = input.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
-    if (!(lines[at] ?? '').trimStart().startsWith('> :: ')) continue
-    if ((lines[at + 1] ?? '').trimStart() !== '> : +') continue
+    if (!quotedPlusAt(lines, at)) continue
     const prefix = (lines[at] ?? '').slice(0, (lines[at] ?? '').indexOf('>'))
     const moved = [...lines]
     moved[at + 1] = prefix + '> : {% %}'
@@ -114,16 +158,39 @@ function quotedPlusVariants(input: string): string[] {
         found.push(dedented.join('\n'))
       }
     }
+    if (found.length >= 8) break
   }
+  const combined = combinedQuotedPlus(lines)
+  if (combined !== null) found.push(combined)
   return found
 }
 
+function fenceClose(value: string, marker: string): boolean {
+  const body = value.trim()
+  if (body.length < marker.length) return false
+  for (const character of body) if (character !== marker[0]) return false
+  return true
+}
+
+function fenceMarker(value: string): string | null {
+  const character = value[0]
+  if (character !== '`' && character !== '~') return null
+  let length = 0
+  while (value[length] === character) length++
+  return length >= 3 ? character.repeat(length) : null
+}
+
 function descriptionFenceCandidate(lines: string[], at: number, fence: string, marker: string): string {
-  const close = lines.findIndex((line, index) => index > at + 2 && line.trim() === marker)
+  const close = lines.findIndex((line, index) => index > at + 2 && fenceClose(line, marker))
   const moved = [...lines]
-  moved[at + 1] = ': ```' + fence.slice(3)
+  const column = (lines[at + 1] ?? '').indexOf(':')
+  moved[at + 1] = ' '.repeat(column) + ': ' + '`'.repeat(marker.length) + fence.slice(marker.length)
   moved.splice(at + 2, 1)
-  if (close >= 0) moved[close - 1] = '```'
+  if (close >= 0) {
+    const closer = lines[close] ?? ''
+    const prefix = closer.slice(0, closer.length - closer.trimStart().length)
+    moved[close - 1] = prefix + '`'.repeat(closer.trim().length)
+  }
   const end = close < 0 ? moved.length : close
   for (let next = at + 2; next < end; next++) {
     if (moved[next]?.trim() !== '') moved[next] = `  ${moved[next]}`
@@ -131,35 +198,117 @@ function descriptionFenceCandidate(lines: string[], at: number, fence: string, m
   return moved.join('\n')
 }
 
+function descriptionFenceAt(lines: string[], at: number): { fence: string; marker: string } | null {
+  if (!(lines[at] ?? '').trimStart().startsWith(':: ')) return null
+  if ((lines[at + 1] ?? '').trim() !== ': +') return null
+  const fence = (lines[at + 2] ?? '').trimStart()
+  const marker = fenceMarker(fence)
+  if (marker === null) return null
+  return { fence, marker }
+}
+
+function combinedDescriptionFences(lines: string[], minimum = 2): string | null {
+  const moved: string[] = []
+  let count = 0
+  for (let at = 0; at < lines.length;) {
+    const match = descriptionFenceAt(lines, at)
+    if (match === null) { moved.push(lines[at] ?? ''); at++; continue }
+    moved.push(lines[at] ?? '')
+    const column = (lines[at + 1] ?? '').indexOf(':')
+    moved.push(' '.repeat(column) + ': ' + '`'.repeat(match.marker.length) + match.fence.slice(match.marker.length))
+    at += 3
+    while (at < lines.length) {
+      const line = lines[at] ?? ''
+      if (fenceClose(line, match.marker)) {
+        const prefix = line.slice(0, line.length - line.trimStart().length)
+        moved.push('  ' + prefix + '`'.repeat(line.trim().length))
+        at++
+        break
+      }
+      moved.push(line.trim() === '' ? line : '  ' + line)
+      at++
+    }
+    count++
+  }
+  return count >= minimum ? moved.join('\n') : null
+}
+
 function descriptionFenceVariants(input: string): string[] {
   const lines = input.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
-    if (!(lines[at] ?? '').trimStart().startsWith(':: ')) continue
-    if ((lines[at + 1] ?? '').trimStart() !== ': +') continue
-    const fence = (lines[at + 2] ?? '').trimStart()
-    const marker = fence.slice(0, 3)
-    if (marker !== '```' && marker !== '~~~' || fence[3] === marker[0]) continue
-    found.push(descriptionFenceCandidate(lines, at, fence, marker))
+    const match = descriptionFenceAt(lines, at)
+    if (match === null) continue
+    found.push(descriptionFenceCandidate(lines, at, match.fence, match.marker))
+    if (found.length >= 8) break
   }
+  const combined = combinedDescriptionFences(lines)
+  if (combined !== null) found.push(combined)
   return found
+}
+
+function descriptionListAt(lines: string[], at: number): boolean {
+  return (lines[at] ?? '').trimStart().startsWith(':: ')
+    && (lines[at + 1] ?? '').trimStart() === ': - +'
+    && (lines[at + 2] ?? '').trimStart().startsWith('# ')
+}
+
+function descriptionListCandidate(lines: string[], at: number): string[] {
+  const moved = [...lines]
+  const column = (lines[at + 1] ?? '').indexOf(':')
+  moved[at + 1] = ' '.repeat(column) + ': - {% %}'
+  moved[at + 2] = '\n' + ' '.repeat(column + 2) + (lines[at + 2] ?? '').trimStart()
+  return moved
+}
+
+function combinedDescriptionLists(lines: string[], minimum = 2): string | null {
+  let moved = [...lines]
+  let count = 0
+  for (let at = lines.length - 3; at >= 0; at--) {
+    if (!descriptionListAt(lines, at)) continue
+    moved = descriptionListCandidate(moved, at)
+    count++
+  }
+  return count >= minimum ? moved.join('\n') : null
 }
 
 function descriptionListPlusVariants(input: string): string[] {
   const lines = input.split('\n')
   const found: string[] = []
   for (let at = 0; at < lines.length - 2; at++) {
-    if (!(lines[at] ?? '').trimStart().startsWith(':: ')) continue
-    if ((lines[at + 1] ?? '').trimStart() !== ': - +') continue
-    const heading = (lines[at + 2] ?? '').trimStart()
-    if (!heading.startsWith('# ')) continue
-    const column = (lines[at + 1] ?? '').indexOf(':')
-    const moved = [...lines]
-    moved[at + 1] = ' '.repeat(column) + ': - {% %}'
-    moved[at + 2] = '\n' + ' '.repeat(column + 2) + heading
-    found.push(moved.join('\n'))
+    if (!descriptionListAt(lines, at)) continue
+    found.push(descriptionListCandidate(lines, at).join('\n'))
+    if (found.length >= 8) break
   }
+  const combined = combinedDescriptionLists(lines)
+  if (combined !== null) found.push(combined)
   return found
+}
+
+function descriptionPlusCandidates(source: string): string[] {
+  const lines = source.split('\n')
+  const plain = combinedPlainPlus(source)
+  const quote = combinedQuotedPlus(lines)
+  const fence = combinedDescriptionFences(lines)
+  const list = combinedDescriptionLists(lines)
+  const mixed = combinedMixedDescriptionPlus(source)
+  const candidates = [plain, quote, fence, list, mixed].filter((value): value is string => value !== null)
+  return [...candidates, ...plusVariants(source), ...quotedPlusVariants(source),
+    ...descriptionFenceVariants(source), ...descriptionListPlusVariants(source)]
+}
+
+function combinedMixedDescriptionPlus(source: string): string | null {
+  let output = source
+  let kinds = 0
+  const quote = combinedQuotedPlus(output.split('\n'), 1)
+  if (quote !== null) { output = quote; kinds++ }
+  const fence = combinedDescriptionFences(output.split('\n'), 1)
+  if (fence !== null) { output = fence; kinds++ }
+  const plain = combinedPlainPlus(output, 1)
+  if (plain !== null) { output = plain; kinds++ }
+  const list = combinedDescriptionLists(output.split('\n'), 1)
+  if (list !== null) { output = list; kinds++ }
+  return kinds > 1 ? output : null
 }
 
 function isListMarker(value: string): boolean {
@@ -349,15 +498,14 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   if (compound !== null) return { output: compound, record: recordOf('U-236', mismatch.line,
     'the description sibling was moved to its 0.2 owning column') }
   const plus = firstPreserving(expected,
-    [...plusVariants(input), ...quotedPlusVariants(input), ...descriptionFenceVariants(input),
-      ...descriptionListPlusVariants(input)])
+    [...descriptionPlusCandidates(output), ...(output === input ? [] : descriptionPlusCandidates(input))])
   if (plus !== null)
     return {
       output: plus,
       record: recordOf(
         'U-123',
         mismatch.line,
-        'the description continuation was written at its 0.2 owning column while preserving the full HTML'
+        'the description continuation was rewritten with 0.2 blocks after the complete HTML check'
       )
     }
   const boundary = firstPreserving(expected, [...boundaryVariants(input), ...boundaryVariants(output)])
