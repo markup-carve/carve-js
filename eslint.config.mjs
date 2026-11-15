@@ -32,11 +32,11 @@ export default [{
   rules: { complexity: ['error', { max: 99 }] },
 }, {
   // The 0.2 engine: the same typed rules, against its own project, and a complexity cap of 15.
-  files: ['v2/**/*.ts', 'import/**/*.ts'],
+  files: ['v2/**/*.ts', 'import/**/*.ts', 'upgrade/**/*.ts'],
   languageOptions: {
     parser: tseslint.parser,
     parserOptions: {
-      project: ['./v2/tsconfig.json', './import/tsconfig.json', './v2/proptest/tsconfig.json'],
+      project: ['./v2/tsconfig.json', './import/tsconfig.json', './v2/proptest/tsconfig.json', './upgrade/tsconfig.json'],
       disallowAutomaticSingleRunInference: true,
       tsconfigRootDir: fileURLToPath(new URL('.', import.meta.url)),
     },
@@ -49,7 +49,7 @@ export default [{
   },
 }, {
   // width-data.ts holds the Unicode tables of the 0.1 engine, copied unchanged from its generator.
-  files: ['v2/**/*.ts', 'import/**/*.ts'],
+  files: ['v2/**/*.ts', 'import/**/*.ts', 'upgrade/**/*.ts'],
   ignores: ['v2/test/*.test.ts', 'v2/src/width-data.ts'],
   rules: { 'max-len': ['error', { code: 140, ignoreUrls: true }] },
 }, {

@@ -22,7 +22,7 @@ const WITH_REPORT = new Set(['U-053#0'])
  * Inputs where the 0.2 engine or the 0.1 engine does not do what the contract states. Each is in
  * _SPEC_GAPS.md under "Contract entries that do not hold"; the test pins what the tool does.
  */
-const DOES_NOT_HOLD: Record<string, { output?: string, entry?: string, check: string }> = {
+const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: string }> = {
   // Since C2-B-030 and C2-B-054 were ruled, 0.2 reads right-aligned markers as one list, as 0.1 did, so nothing moves (U-119).
   'U-022#0': { check: 'pass' },
   // 0.1 makes this one-item list loose, which is U-021.
@@ -30,7 +30,7 @@ const DOES_NOT_HOLD: Record<string, { output?: string, entry?: string, check: st
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
-  'U-114#4': { entry: 'U-114', check: 'explained' },
+  'U-114#4': { entry: 'U-114', check: 'explained' }
 }
 
 /** U-014 and U-015 write the input of U-018, so a second run reads their output as a loose list. */
@@ -63,7 +63,7 @@ describe('the contract', () => {
       } else if (entry.class === 'report') {
         it(`${key} is reported`, () => {
           const result = upgrade(input)
-          const expectedOutput = key === 'U-133#0' ? '- [ ] {% %}' : entry.outputs[index] ?? input
+          const expectedOutput = key === 'U-133#0' ? '- [ ] {% %}' : (entry.outputs[index] ?? input)
           expect(result.output).toBe(expectedOutput)
           expect(entries(input)).toContain(entry.id)
           expect(result.check).not.toBe('mismatch')
@@ -75,7 +75,10 @@ describe('the contract', () => {
           expect(result.check).toBe('pass')
         })
       }
-      it(`${key} ${NOT_IDEMPOTENT.has(key) ? 'is changed again by a second run (U-018 reads the output)' : 'is stable under a second run'}`, () => {
+      const stability = NOT_IDEMPOTENT.has(key)
+        ? 'is changed again by a second run (U-018 reads the output)'
+        : 'is stable under a second run'
+      it(`${key} ${stability}`, () => {
         const first = upgrade(input).output
         const second = upgrade(first).output
         if (NOT_IDEMPOTENT.has(key)) expect(second).not.toBe(first)
@@ -84,7 +87,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 184 entries', () => {
-    expect(cases.length).toBe(184)
+  it('covers all 185 entries', () => {
+    expect(cases.length).toBe(185)
   })
 })

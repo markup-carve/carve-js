@@ -4,7 +4,16 @@ import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { quotePrefix } from './blank-lines.ts'
-import { attributeLinesAbove, bodyOffset, dedentLines, indentLines, insideQuotes, isBlankInQuotes, isGap, removeAttribute } from './lines.ts'
+import {
+  attributeLinesAbove,
+  bodyOffset,
+  dedentLines,
+  indentLines,
+  insideQuotes,
+  isBlankInQuotes,
+  isGap,
+  removeAttribute
+} from './lines.ts'
 
 const SPACE = 0x20
 
@@ -44,7 +53,15 @@ function plusInBody(ctx: Context, column: number, visit: Visit, line: number): v
   const first = child.pos!.startLine
   // The block is measured after the quote marks of the quotes its host stands in.
   const depth = quotesOf(visit).length
-  indentLines(ctx, id, first, child.pos!.endLine, column - bodyOffset(lineText(ctx.lines, first), depth), message, depth)
+  indentLines(
+    ctx,
+    id,
+    first,
+    child.pos!.endLine,
+    column - bodyOffset(lineText(ctx.lines, first), depth),
+    message,
+    depth
+  )
 }
 
 function quotesOfLine(text: string): number {
@@ -115,7 +132,8 @@ function emptyFirst(ctx: Context, host: Visit, from: number, text: string): void
   const message = '+ of a first block that attaches nothing removed, 0.1 left the container empty'
   change(ctx, 'U-017', from, lineEnd(ctx.lines, line), text, message)
   const outer = host.node.type === 'list_item' ? host.parent! : host
-  if (leavesHost(ctx, outer, line)) change(ctx, 'U-017', lineStart(ctx.lines, line + 1), lineStart(ctx.lines, line + 1), '\n', message)
+  if (leavesHost(ctx, outer, line))
+    change(ctx, 'U-017', lineStart(ctx.lines, line + 1), lineStart(ctx.lines, line + 1), '\n', message)
 }
 
 /**
@@ -137,7 +155,14 @@ function plusFirst(ctx: Context, visit: Visit): void {
   if (first.pos === undefined || first.pos.startLine !== line + 1) return
   const column = markerEnd + 1 - lineStart(ctx.lines, line)
   if (first.type !== 'paragraph' && first.pos.startColumn - 1 !== column) return
-  change(ctx, 'U-017', markerEnd + 1, first.pos.startOffset, '', '+ after the marker removed, the block moved to the marker line')
+  change(
+    ctx,
+    'U-017',
+    markerEnd + 1,
+    first.pos.startOffset,
+    '',
+    '+ after the marker removed, the block moved to the marker line'
+  )
 }
 
 /** U-017 in a quote: a `+` after the quote mark attached the first block of the quote. */
@@ -154,7 +179,14 @@ function plusFirstInQuote(ctx: Context, visit: Visit): void {
     return
   }
   if (first.pos === undefined || first.pos.startLine !== line + 1 || first.type !== 'paragraph') return
-  change(ctx, 'U-017', plus, first.pos.startOffset, '', '+ after the quote mark removed, the paragraph moved to the line of the mark')
+  change(
+    ctx,
+    'U-017',
+    plus,
+    first.pos.startOffset,
+    '',
+    '+ after the quote mark removed, the paragraph moved to the line of the mark'
+  )
 }
 
 function itemsOf(list: Node01): Node01[] {
@@ -173,7 +205,8 @@ function blankBetween(ctx: Context, items: Node01[]): boolean {
 function looseLine(ctx: Context, list: Node01): number {
   for (const line of attributeLinesAbove(ctx, list.pos!.startLine)) {
     const text = lineText(ctx.lines, line)
-    if (text.includes('{loose}') || text.includes('{loose ') || text.includes(' loose}') || text.includes(' loose ')) return line
+    if (text.includes('{loose}') || text.includes('{loose ') || text.includes(' loose}') || text.includes(' loose '))
+      return line
   }
   return 0
 }
@@ -188,9 +221,21 @@ function tightness(ctx: Context, visit: Visit): void {
   if (list.tight !== false || items.length === 0) return
   const keyLine = looseLine(ctx, list)
   if (items.length === 1) {
-    note(ctx, 'U-021', list.pos!.startLine, 'a loose list with one item is tight in 0.2, its first paragraph loses the paragraph element')
+    note(
+      ctx,
+      'U-021',
+      list.pos!.startLine,
+      'a loose list with one item is tight in 0.2, its first paragraph loses the paragraph element'
+    )
     // The key stays an attribute of the list in 0.2 (C2-B-066) and would be written as `loose=""`.
-    if (keyLine > 0) removeAttribute(ctx, 'U-020', keyLine, (token) => token === 'loose', 'key loose removed, it does nothing in 0.2 and would be written as an attribute')
+    if (keyLine > 0)
+      removeAttribute(
+        ctx,
+        'U-020',
+        keyLine,
+        (token) => token === 'loose',
+        'key loose removed, it does nothing in 0.2 and would be written as an attribute'
+      )
     return
   }
   if (blankBetween(ctx, items)) return
@@ -218,7 +263,14 @@ const BOUNDARY_BLANKS = 3
 function taskBoundary(ctx: Context, visit: Visit): void {
   const list = visit.node
   const above = visit.index > 0 ? visit.siblings[visit.index - 1] : undefined
-  if (list.ordered === true || above === undefined || above.type !== 'list' || above.ordered === true || above.pos === undefined) return
+  if (
+    list.ordered === true ||
+    above === undefined ||
+    above.type !== 'list' ||
+    above.ordered === true ||
+    above.pos === undefined
+  )
+    return
   const last = itemsOf(above).at(-1)
   const first = itemsOf(list)[0]
   if (last === undefined || first === undefined || isTask(last) === isTask(first)) return
@@ -231,7 +283,14 @@ function taskBoundary(ctx: Context, visit: Visit): void {
   if (blanks >= BOUNDARY_BLANKS) return
   const blank = quotePrefix(lineText(ctx.lines, list.pos!.startLine), quotesOf(visit).length) + '\n'
   const at = lineStart(ctx.lines, list.pos!.startLine)
-  change(ctx, 'U-117', at, at, blank.repeat(BOUNDARY_BLANKS - blanks), 'blank lines put between a list of task items and a list of plain items, which 0.2 would join')
+  change(
+    ctx,
+    'U-117',
+    at,
+    at,
+    blank.repeat(BOUNDARY_BLANKS - blanks),
+    'blank lines put between a list of task items and a list of plain items, which 0.2 would join'
+  )
 }
 
 function markerColumn(ctx: Context, item: Node01): number {
@@ -273,7 +332,14 @@ function markerColumns(ctx: Context, visit: Visit): void {
     }
     previous = base
     const id = visit.node.ordered === true && above === null ? 'U-022' : 'U-023'
-    dedentLines(ctx, id, item.pos!.startLine, item.pos!.endLine, column - base, 'marker moved to the column of its list')
+    dedentLines(
+      ctx,
+      id,
+      item.pos!.startLine,
+      item.pos!.endLine,
+      column - base,
+      'marker moved to the column of its list'
+    )
   }
 }
 
@@ -347,7 +413,14 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
   } else if (node.type === 'block_quote') {
     plusFirstInQuote(ctx, visit)
   } else if (node.type === 'comment') {
-    indentLines(ctx, 'U-026', node.pos.startLine, node.pos.endLine, commentShift(ctx, visit), 'comment block indented into the item above')
+    indentLines(
+      ctx,
+      'U-026',
+      node.pos.startLine,
+      node.pos.endLine,
+      commentShift(ctx, visit),
+      'comment block indented into the item above'
+    )
   }
 }
 
@@ -355,7 +428,14 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
 function danglingPlus(ctx: Context, used: Set<number>): void {
   for (let line = 1; line <= ctx.lines.count; line++) {
     if (used.has(line) || !isGap(ctx, line) || lineText(ctx.lines, line).trim() !== '+') continue
-    change(ctx, 'U-014', lineStart(ctx.lines, line), lineStart(ctx.lines, line + 1), '', '+ line that attaches no block removed, 0.1 rendered nothing for it')
+    change(
+      ctx,
+      'U-014',
+      lineStart(ctx.lines, line),
+      lineStart(ctx.lines, line + 1),
+      '',
+      '+ line that attaches no block removed, 0.1 rendered nothing for it'
+    )
   }
 }
 

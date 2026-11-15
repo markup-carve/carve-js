@@ -7,8 +7,19 @@ import { indentOf, lineStart, lineText } from '../source.ts'
 const GT = 0x3e
 const DEFINITIONS = new Set(['link_reference_definition', 'abbreviation_def'])
 const BLOCK_LEAVES = new Set([
-  'paragraph', 'heading', 'code_block', 'raw_block', 'table', 'thematic_break', 'link_reference_definition',
-  'abbreviation_def', 'comment', 'line_block', 'math_block', 'block_quote', 'image',
+  'paragraph',
+  'heading',
+  'code_block',
+  'raw_block',
+  'table',
+  'thematic_break',
+  'link_reference_definition',
+  'abbreviation_def',
+  'comment',
+  'line_block',
+  'math_block',
+  'block_quote',
+  'image'
 ])
 
 type Above = 'paragraph' | 'term' | 'caption'
@@ -55,7 +66,11 @@ function listEntry(below: Visit, above: Visit, line: number): string | null {
   // C2-B-022: a description list is not a list for the marker interrupter.
   if (descriptions !== null && !isInside(below, descriptions)) return 'U-008'
   // The text of a footnote body takes a marker as a lazy line in the same way.
-  return above.parent!.parent === null && above.siblings !== below.siblings && ancestor(below, 'list')?.parent?.parent === null ? 'U-008' : null
+  return above.parent!.parent === null &&
+    above.siblings !== below.siblings &&
+    ancestor(below, 'list')?.parent?.parent === null
+    ? 'U-008'
+    : null
 }
 
 function underItem(above: Visit, below: Visit, plain: string, inItem: string): string {
@@ -84,17 +99,29 @@ function blockEntry(ctx: Context, above: Visit, below: Visit, line: number, note
 }
 
 /** The entry that puts a blank line between `above` and the block `below` that starts on `line`. */
-function entryFor(ctx: Context, kind: Above, above: Visit, below: Visit, line: number, notes: Set<number>): string | null {
+function entryFor(
+  ctx: Context,
+  kind: Above,
+  above: Visit,
+  below: Visit,
+  line: number,
+  notes: Set<number>
+): string | null {
   const plain = below.node.type === 'paragraph' && !notes.has(line)
   if (kind === 'caption') {
     // U-107: a second caret line continues the caption (C2-B-148); any other text 0.1 folded too.
-    if (plain) return ctx.src[below.node.pos!.startOffset] === '^' && opensAt(below, above, 'list_item', line) === null ? 'U-107' : null
+    if (plain)
+      return ctx.src[below.node.pos!.startOffset] === '^' && opensAt(below, above, 'list_item', line) === null
+        ? 'U-107'
+        : null
     return blockEntry(ctx, above, below, line, notes) === null ? null : 'U-010'
   }
   if (kind !== 'term') return blockEntry(ctx, above, below, line, notes)
   if (isTerm(below) || isInside(below, above.parent!)) return null
   // U-106: a term continues like paragraph text (C2-B-069), so text that 0.1 put after the list needs the blank line.
-  return plain || blockEntry(ctx, above, below, line, notes) !== null || opensAt(below, above, 'list', line) !== null ? 'U-106' : null
+  return plain || blockEntry(ctx, above, below, line, notes) !== null || opensAt(below, above, 'list', line) !== null
+    ? 'U-106'
+    : null
 }
 
 /** The start of `text` through its `count`-th quote mark: what a blank line inside those quotes holds. */
@@ -120,7 +147,13 @@ function sharedQuotes(above: Visit, below: Visit): number {
 
 export function isAttributeLine(text: string): boolean {
   const trimmed = text.trim()
-  return trimmed.length > 2 && trimmed.startsWith('{') && trimmed.endsWith('}') && !trimmed.startsWith('{{') && !trimmed.startsWith('{%')
+  return (
+    trimmed.length > 2 &&
+    trimmed.startsWith('{') &&
+    trimmed.endsWith('}') &&
+    !trimmed.startsWith('{{') &&
+    !trimmed.startsWith('{%')
+  )
 }
 
 /** U-003, U-033: an attribute line is no leaf of the 0.1 tree, so it is read off the line. */
@@ -132,7 +165,14 @@ function attributeLine(ctx: Context, above: Visit, line: number): void {
   if (!inner.startsWith('{') || inner.startsWith('{{') || inner.startsWith('{%') || inner.length < 3) return
   const entry = ancestor(above, 'list_item') === null ? 'U-003' : 'U-033'
   const at = lineStart(ctx.lines, line)
-  change(ctx, entry, at, at, prefix + '\n', 'blank line put above the attribute line, which 0.2 reads as text directly under text')
+  change(
+    ctx,
+    entry,
+    at,
+    at,
+    prefix + '\n',
+    'blank line put above the attribute line, which 0.2 reads as text directly under text'
+  )
 }
 
 export function blankLines(ctx: Context): void {
@@ -151,6 +191,13 @@ export function blankLines(ctx: Context): void {
     if (entry === null) continue
     const prefix = quotePrefix(lineText(ctx.lines, line), sharedQuotes(above, below))
     const at = lineStart(ctx.lines, line)
-    change(ctx, entry, at, at, prefix + '\n', 'blank line put above a block that 0.2 reads as a lazy line directly under text')
+    change(
+      ctx,
+      entry,
+      at,
+      at,
+      prefix + '\n',
+      'blank line put above a block that 0.2 reads as a lazy line directly under text'
+    )
   }
 }

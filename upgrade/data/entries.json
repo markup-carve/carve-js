@@ -1261,6 +1261,12 @@
       "name": "literal attribute after an unresolved footnote",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-208",
+      "name": "literal dash before a braced insertion",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [

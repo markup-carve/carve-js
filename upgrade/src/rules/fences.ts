@@ -26,7 +26,14 @@ function commentCloser(ctx: Context, visit: Visit): void {
   // The text goes to the end of the line above, so the closer line keeps its place and its indent.
   // The new line takes the indent U-026 gives the block, or it would leave the item.
   const above = lineEnd(ctx.lines, line - 1)
-  change(ctx, 'U-050', above, above, `\n${' '.repeat(commentShift(ctx, visit))}${text.slice(0, indent)}${rest}`, message)
+  change(
+    ctx,
+    'U-050',
+    above,
+    above,
+    `\n${' '.repeat(commentShift(ctx, visit))}${text.slice(0, indent)}${rest}`,
+    message
+  )
   change(ctx, 'U-050', start + at, lineEnd(ctx.lines, line), '', message)
 }
 
@@ -38,7 +45,14 @@ function commentInLineBlock(ctx: Context, visit: Visit): void {
   for (let at = visit.parent; at !== null; at = at.parent) inLineBlock ||= at.node.type === 'line_block'
   if (!inLineBlock) return
   const { startOffset: start, endOffset: end } = node.pos!
-  change(ctx, 'U-052', start, end, `{% ${ctx.src.slice(start + 2, end).trim()} %}`, 'comment line in a line block written as a braced comment')
+  change(
+    ctx,
+    'U-052',
+    start,
+    end,
+    `{% ${ctx.src.slice(start + 2, end).trim()} %}`,
+    'comment line in a line block written as a braced comment'
+  )
 }
 
 function runLength(text: string, at: number, code: number): number {
@@ -60,7 +74,8 @@ function longestBareRun(content: string, code: number): number {
 /** The prefix of a closer line for the fence that opens at `start`: quote marks kept, a list marker as spaces. */
 function closerPrefix(ctx: Context, start: number, line: number): string {
   let out = ''
-  for (let at = lineStart(ctx.lines, line); at < start; at++) out += ctx.src[at] === '>' || ctx.src[at] === '\t' ? ctx.src[at]! : ' '
+  for (let at = lineStart(ctx.lines, line); at < start; at++)
+    out += ctx.src[at] === '>' || ctx.src[at] === '\t' ? ctx.src[at]! : ' '
   return out
 }
 
@@ -153,9 +168,17 @@ function tabsInCode(ctx: Context, node: Node01): void {
     const lead = indentOf(body[index]!)
     const sourceLead = indentOf(text)
     const tail = text.slice(indent.length, sourceLead)
-    if (!text.startsWith(indent) || !tail.includes('\t') || text.slice(sourceLead) !== body[index]!.slice(lead)) continue
+    if (!text.startsWith(indent) || !tail.includes('\t') || text.slice(sourceLead) !== body[index]!.slice(lead))
+      continue
     const at = lineStart(ctx.lines, line) + indent.length
-    change(ctx, 'U-053', at, at + tail.length, ' '.repeat(lead), 'tab after the stripped indent of a code line written as the spaces 0.1 rendered')
+    change(
+      ctx,
+      'U-053',
+      at,
+      at + tail.length,
+      ' '.repeat(lead),
+      'tab after the stripped indent of a code line written as the spaces 0.1 rendered'
+    )
   }
 }
 

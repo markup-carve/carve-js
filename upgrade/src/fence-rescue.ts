@@ -40,23 +40,29 @@ function variants(output: string, mismatchLine: number): string[] {
   return [...found]
 }
 
+function lengthenedCloser(output: string, lines: ReturnType<typeof readLines>, open: number, middle: number): string[] {
+  const found: string[] = []
+  for (let close = middle + 1; close <= Math.min(lines.count, middle + 6); close++) {
+    if (lineText(lines, close) !== '```') continue
+    let candidate = output
+    for (const line of [close, open]) {
+      const at = lineStart(lines, line)
+      candidate = candidate.slice(0, at) + '`' + candidate.slice(at)
+    }
+    found.push(candidate)
+  }
+  return found
+}
+
 function longerFence(output: string): string[] {
   const lines = readLines(output)
   const found: string[] = []
   for (let open = 1; open < lines.count - 2; open++) {
     if (lineText(lines, open).trim() !== '```') continue
     for (let middle = open + 1; middle < lines.count - 1; middle++) {
-      if (lineText(lines, middle).trim() !== '```') continue
       const middleText = lineText(lines, middle)
-      if (middleText === '```') continue
-      for (let close = middle + 1; close <= Math.min(lines.count, middle + 6); close++) {
-        if (lineText(lines, close) !== '```') continue
-        let candidate = output
-        for (const line of [close, open]) {
-          const at = lineStart(lines, line)
-          candidate = candidate.slice(0, at) + '`' + candidate.slice(at)
-        }
-        found.push(candidate)
+      if (middleText.trim() === '```' && middleText !== '```') {
+        found.push(...lengthenedCloser(output, lines, open, middle))
       }
     }
   }
@@ -77,16 +83,61 @@ function secondFence(output: string): string[] {
   return found
 }
 
+function descriptionFenceBoundary(output: string): string[] {
+  const lines = output.split('\n')
+  const found: string[] = []
+  for (let open = 1; open < lines.length - 3; open++) {
+    const opener = lines[open] ?? ''
+    if (opener.trim() !== '```' || !(lines[open - 1] ?? '').trimStart().startsWith(': ')) continue
+    const indent = opener.length - opener.trimStart().length
+    if (indent === 0) continue
+    for (let follower = open + 2; follower < Math.min(lines.length - 1, open + 12); follower++) {
+      const value = lines[follower] ?? ''
+      const column = value.length - value.trimStart().length
+      if (value.trim() === '' || column === 0 || column >= indent) continue
+      if (!lines.slice(follower + 1, follower + 12).some((line) => line.trim() === '```')) continue
+      const moved = [...lines]
+      moved[follower] = value.trimStart()
+      moved.splice(follower, 0, ' '.repeat(indent) + '```')
+      found.push(moved.join('\n'))
+    }
+  }
+  return found
+}
+
 /** C2-B-057, C2-B-109 and C2-B-111: close an item fence where 0.1 kept its body. */
 export function rescueFence(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('```')) return null
   const expected = html01(input)
-  for (const candidate of [...variants(output, Math.max(1, mismatch.line)), ...longerFence(output), ...secondFence(output)]) {
+  for (const candidate of descriptionFenceBoundary(output)) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      return { output: candidate, record: recordOf('U-127', mismatch.line,
-        'the fence was closed at the item boundary while preserving 0.1 HTML') }
-    } catch { /* A candidate can fail to parse under the new grammar. */ }
+      return {
+        output: candidate,
+        record: recordOf(
+          'U-179',
+          mismatch.line,
+          'the description fence was closed before the following block at its 0.1 boundary'
+        )
+      }
+    } catch {
+      /* A candidate can fail to parse under the new grammar. */
+    }
+  }
+  for (const candidate of [
+    ...variants(output, Math.max(1, mismatch.line)),
+    ...longerFence(output),
+    ...secondFence(output)
+  ]) {
+    try {
+      if (!compareHtml(expected, html02(candidate, false)).equal) continue
+      return {
+        output: candidate,
+        record: recordOf('U-127', mismatch.line, 'the fence was closed at the item boundary while preserving 0.1 HTML')
+      }
+    } catch {
+      /* A candidate can fail to parse under the new grammar. */
+    }
   }
   return null
 }

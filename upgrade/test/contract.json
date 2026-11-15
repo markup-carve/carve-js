@@ -1308,10 +1308,16 @@
     "id": "U-137",
     "title": "Attribute text in an otherwise empty list item",
     "inputs": [
-      "- {k}"
+      "- {k}",
+      "- {.k}\ntail\n",
+      "- {.a}\ntail\n",
+      "-{} A bare item via the empty block.\n"
     ],
     "outputs": [
-      "- {% %}"
+      "- {% %}",
+      "- {% %}\n\ntail\n",
+      "- {% %}\n\ntail\n",
+      "- A bare item via the empty block.\n"
     ],
     "class": "rewrite"
   },
@@ -1367,10 +1373,12 @@
     "id": "U-142",
     "title": "Attribute text in an otherwise empty description",
     "inputs": [
-      ":: t\n: {empty}\n"
+      ":: t\n: {empty}\n",
+      ":: t\n: {empty}\nflush\n"
     ],
     "outputs": [
-      ":: t\n: {% %}\n"
+      ":: t\n: {% %}\n",
+      ":: t\n: {% %}\n\nflush\n"
     ],
     "class": "rewrite"
   },
@@ -1718,10 +1726,18 @@
     "id": "U-179",
     "title": "Fence at a description boundary",
     "inputs": [
-      ":: t\n: ```\n y"
+      ":: t\n: ```\n y",
+      ":: t\n: a\n  ```\n  b\n y\n  ```",
+      ":: t\n: a\n  ```\n  b\n\n y\n  ```",
+      ":: t\n: a\n  ```\n  b\n y\n```",
+      ":: t\n: a\n  ```\n  :::\n y\n  ```"
     ],
     "outputs": [
-      ":: t\n: ```\ny"
+      ":: t\n: ```\ny",
+      ":: t\n: a\n  ```\n  b\n  ```\ny\n  ```",
+      ":: t\n: a\n  ```\n  b\n\n  ```\ny\n  ```",
+      ":: t\n: a\n  ```\n  b\n  ```\ny\n```",
+      ":: t\n: a\n  ```\n  :::\n  ```\ny\n  ```"
     ],
     "class": "rewrite"
   },
@@ -2046,6 +2062,17 @@
     "outputs": [
       "Text[^a]\\{.ref}.\n",
       "x[^n]{\\#i}\n\n## i\n"
+    ]
+  },
+  {
+    "id": "U-208",
+    "title": "Literal dash before a braced insertion",
+    "class": "escape",
+    "inputs": [
+      "-{+a+} text\n"
+    ],
+    "outputs": [
+      "\\-{+a+} text\n"
     ]
   }
 ]

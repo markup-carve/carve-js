@@ -18,7 +18,7 @@ interface Bare {
 const BARE: Record<string, Bare> = {
   underline: { mark: '_', entry: 'U-065', name: 'underline' },
   strike: { mark: '~', entry: 'U-066', name: 'strike' },
-  highlight: { mark: '=', entry: 'U-067', name: 'highlight' },
+  highlight: { mark: '=', entry: 'U-067', name: 'highlight' }
 }
 
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
@@ -49,9 +49,13 @@ function substitution(ctx: Context, node: Node01): void {
   if (node.pos === undefined) return
   const { startOffset: start, endOffset: end, startLine } = node.pos
   if (!ctx.src.startsWith('{~', start) || !ctx.src.startsWith('~}', end - 2)) return
-  if (Array.isArray(node.old) && node.old.length === 0 || Array.isArray(node.new) && node.new.length === 0) {
-    note(ctx, 'U-198', startLine,
-      'an empty side of the 0.1 replacement has no 0.2 inline spelling under C2-I-062 and C2-W-116')
+  if ((Array.isArray(node.old) && node.old.length === 0) || (Array.isArray(node.new) && node.new.length === 0)) {
+    note(
+      ctx,
+      'U-198',
+      startLine,
+      'an empty side of the 0.1 replacement has no 0.2 inline spelling under C2-I-062 and C2-W-116'
+    )
     return
   }
   const arrow = ctx.src.indexOf('~>', lastEnd(node.old, start + 2))
@@ -74,7 +78,10 @@ const APOSTROPHE_WORDS = new Set(smartPunctuation.apostrophe_words.words)
 function isElision(src: string, at: number): boolean {
   let end = at + 1
   while (end < src.length && isAsciiLetter(src.charCodeAt(end))) end++
-  return APOSTROPHE_WORDS.has(src.slice(at + 1, end).toLowerCase()) && !(end < src.length && src.charCodeAt(end) >= 0x80 && isWordCharacter(src.codePointAt(end)!))
+  return (
+    APOSTROPHE_WORDS.has(src.slice(at + 1, end).toLowerCase()) &&
+    !(end < src.length && src.charCodeAt(end) >= 0x80 && isWordCharacter(src.codePointAt(end)!))
+  )
 }
 
 /** U-071: 0.1 demoted an opening single quote with no closer; 0.2 never changes an emitted quote (C2-I-110). */
@@ -83,7 +90,14 @@ function demotedQuote(ctx: Context, node: Node01): void {
   if (node.kind !== 'right_single_quote' || ctx.src[start] !== "'" || !isOpeningPlace(ctx.src, start)) return
   const next = ctx.src.charCodeAt(start + 1)
   if (Number.isNaN(next) || next === 0x20 || next === 0x0a || isElision(ctx.src, start)) return
-  change(ctx, 'U-071', start, start + 1, '\u2019', 'opening single quote that 0.1 printed as an apostrophe written as the apostrophe')
+  change(
+    ctx,
+    'U-071',
+    start,
+    start + 1,
+    '\u2019',
+    'opening single quote that 0.1 printed as an apostrophe written as the apostrophe'
+  )
 }
 
 const SIGILS = new Set(['tag', 'mention', 'inline_extension', 'symbol'])
@@ -111,7 +125,12 @@ function rawHtml(ctx: Context, node: Node01): void {
   if (node.type === 'raw_inline') {
     note(ctx, 'U-077', node.pos!.startLine, 'a raw HTML span is written escaped unless the host sets --raw-html')
   } else {
-    note(ctx, 'U-076', node.pos!.startLine, 'a raw HTML block is written as a code block unless the host sets --raw-html')
+    note(
+      ctx,
+      'U-076',
+      node.pos!.startLine,
+      'a raw HTML block is written as a code block unless the host sets --raw-html'
+    )
   }
 }
 

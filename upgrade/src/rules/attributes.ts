@@ -22,23 +22,40 @@ function detached(ctx: Context, line: number): void {
   if (next === 0) {
     let first = line
     while (first > 1 && isGap(ctx, first - 1) && isBlank(lineText(ctx.lines, first - 1))) first--
-    for (let at = first; at <= ctx.lines.count; at++) removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
+    for (let at = first; at <= ctx.lines.count; at++)
+      removeLine(ctx, 'U-034', at, 'attribute line that reaches no block removed')
     return
   }
   if (isGap(ctx, next) && !isAttributeGap(ctx, next)) return
-  for (let at = line + 1; at < next; at++) removeLine(ctx, 'U-031', at, 'blank line between the attribute line and its block removed')
+  for (let at = line + 1; at < next; at++)
+    removeLine(ctx, 'U-031', at, 'blank line between the attribute line and its block removed')
 }
 
 /** U-032: a valid attribute block is all on one line (C2-I-028). */
 function wrapped(ctx: Context, line: number): number {
   const text = insideQuotes(lineText(ctx.lines, line)).trim()
-  if (!isGap(ctx, line) || !text.startsWith('{') || text.startsWith('{{') || text.startsWith('{%') || text.endsWith('}')) return line
+  if (
+    !isGap(ctx, line) ||
+    !text.startsWith('{') ||
+    text.startsWith('{{') ||
+    text.startsWith('{%') ||
+    text.endsWith('}')
+  )
+    return line
   let last = line + 1
-  while (isGap(ctx, last) && !lineText(ctx.lines, last).trimEnd().endsWith('}') && !isBlank(lineText(ctx.lines, last))) last++
+  while (isGap(ctx, last) && !lineText(ctx.lines, last).trimEnd().endsWith('}') && !isBlank(lineText(ctx.lines, last)))
+    last++
   if (!isGap(ctx, last) || isBlank(lineText(ctx.lines, last))) return line
   for (let at = line; at < last; at++) {
     const next = lineStart(ctx.lines, at + 1)
-    change(ctx, 'U-032', lineEnd(ctx.lines, at), next + indentOf(lineText(ctx.lines, at + 1)), ' ', 'attribute block joined onto one line')
+    change(
+      ctx,
+      'U-032',
+      lineEnd(ctx.lines, at),
+      next + indentOf(lineText(ctx.lines, at + 1)),
+      ' ',
+      'attribute block joined onto one line'
+    )
   }
   return last
 }
@@ -76,14 +93,24 @@ function afterName(ctx: Context, node: Node01): number {
  * div name; 0.2 reports them (C2-B-105, C2-B-122), so they are removed.
  */
 function openerTail(ctx: Context, node: Node01): void {
-  if (node.label !== undefined || node.header !== undefined || node.title !== undefined || node.attrs !== undefined) return
+  if (node.label !== undefined || node.header !== undefined || node.title !== undefined || node.attrs !== undefined)
+    return
   const at = afterName(ctx, node)
   const end = lineEnd(ctx.lines, node.pos!.startLine)
   if (at < 0) return
   const rest = ctx.src.slice(at, end).trim()
   if (rest === '' || rest.startsWith('"')) return
-  if (rest.startsWith('{')) change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
-  else change(ctx, 'U-051', at, end, '', 'unquoted words after the fence language or div name removed, as 0.1 dropped them')
+  if (rest.startsWith('{'))
+    change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
+  else
+    change(
+      ctx,
+      'U-051',
+      at,
+      end,
+      '',
+      'unquoted words after the fence language or div name removed, as 0.1 dropped them'
+    )
 }
 
 function rank(name: string): number {
@@ -112,5 +139,11 @@ export function openers(ctx: Context): void {
     if (reordered === null && isReordered(visit.node)) reordered = visit
   }
   // U-036: once per file.
-  if (reordered !== null) note(ctx, 'U-036', reordered.node.pos!.startLine, 'attributes are written in the order id, classes, keys in 0.2, not as authored')
+  if (reordered !== null)
+    note(
+      ctx,
+      'U-036',
+      reordered.node.pos!.startLine,
+      'attributes are written in the order id, classes, keys in 0.2, not as authored'
+    )
 }

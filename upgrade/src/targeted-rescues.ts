@@ -14,6 +14,8 @@ const SIMPLE: readonly [string, string, string][] = [
   ['U-185', '|=|', '|\\=|'],
   ['U-188', ':+-:', ':\\+-:'],
   ['U-189', '[^]', '[\\^]'],
+  ['U-137', '-{} ', '- '],
+  ['U-208', '-{+', '\\-{+']
 ]
 
 function simpleCandidates(output: string): Candidate[] {
@@ -96,8 +98,13 @@ function languageCandidates(output: string): Candidate[] {
     const open = output.lastIndexOf('{', at)
     const close = output.indexOf('}', at)
     const space = output.indexOf(' ', at)
-    if (open >= 0 && close > at && space > at + 1 && space < close
-      && output.slice(space + 1, close).startsWith('lang')) {
+    if (
+      open >= 0 &&
+      close > at &&
+      space > at + 1 &&
+      space < close &&
+      output.slice(space + 1, close).startsWith('lang')
+    ) {
       const next = output.slice(0, at) + output.slice(space + 1)
       found.push({ id: 'U-192', output: next })
       combined = combined.replace(output.slice(at, space + 1), '')
@@ -153,10 +160,19 @@ function floatingAttributeCandidates(output: string): Candidate[] {
     const start = lineStart(lines, line)
     const end = lineEnd(lines, line)
     if (trimmed.startsWith('> {') && trimmed.endsWith('}')) {
-      found.push({ id: 'U-141', output: output.slice(0, start) + value.slice(0, value.indexOf('>') + 1) + output.slice(end) })
+      found.push({
+        id: 'U-141',
+        output: output.slice(0, start) + value.slice(0, value.indexOf('>') + 1) + output.slice(end)
+      })
     }
     if (!['{.', '{#', '{:', '{lang='].some((prefix) => trimmed.startsWith(prefix)) || !trimmed.endsWith('}')) continue
-    const id = trimmed.startsWith('{:') && lineText(lines, line + 1).trimStart().startsWith('{lang=') ? 'U-192' : 'U-197'
+    const id =
+      trimmed.startsWith('{:') &&
+      lineText(lines, line + 1)
+        .trimStart()
+        .startsWith('{lang=')
+        ? 'U-192'
+        : 'U-197'
     found.push({ id, output: output.slice(0, start) + output.slice(lineStart(lines, line + 1)) })
     found.push({ id, output: output.slice(0, start) + output.slice(end) })
   }
@@ -176,12 +192,40 @@ function underlineBoundaryCandidates(output: string): Candidate[] {
 function unresolvedFootnoteAttributeCandidates(output: string): Candidate[] {
   if (!output.includes('[^')) return []
   const found: Candidate[] = []
-  for (const [marker, offset] of [[']{.', 1], [']{#', 2]] as const) {
+  for (const [marker, offset] of [
+    [']{.', 1],
+    [']{#', 2]
+  ] as const) {
     let at = output.indexOf(marker)
     while (at >= 0) {
       found.push({ id: 'U-207', output: output.slice(0, at + offset) + '\\' + output.slice(at + offset) })
       at = output.indexOf(marker, at + marker.length)
     }
+  }
+  return found
+}
+
+function descriptionLineCandidates(
+  output: string,
+  lines: ReturnType<typeof readLines>,
+  line: number,
+  descriptionFence: number
+): Candidate[] {
+  const value = lineText(lines, line)
+  const start = lineStart(lines, line)
+  const found: Candidate[] = []
+  if (
+    value.trimStart().startsWith(':: ') &&
+    lineText(lines, line + 1)
+      .trimStart()
+      .startsWith(': ')
+  ) {
+    for (let indent = 1; indent <= 4; indent++) {
+      found.push({ id: 'U-180', output: output.slice(0, start) + ' '.repeat(indent) + output.slice(start) })
+    }
+  }
+  if (descriptionFence > 0 && line > descriptionFence && line - descriptionFence <= 5 && value.startsWith(' ')) {
+    found.push({ id: 'U-179', output: output.slice(0, start) + value.trimStart() + output.slice(lineEnd(lines, line)) })
   }
   return found
 }
@@ -193,38 +237,53 @@ function lineCandidates(output: string): Candidate[] {
   for (let line = 1; line <= lines.count; line++) {
     const value = lineText(lines, line)
     const start = lineStart(lines, line)
-    if (value.startsWith('[@]:')) found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
-    if (value.startsWith('![') && lineText(lines, line + 1).trimStart().startsWith('^ ')) {
+    if (value.startsWith('[@]:'))
+      found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
+    if (
+      value.startsWith('![') &&
+      lineText(lines, line + 1)
+        .trimStart()
+        .startsWith('^ ')
+    ) {
       found.push({ id: 'U-183', output: output.slice(0, start) + '\\' + output.slice(start) })
     }
-    if (value.trimStart().startsWith(':: ') && lineText(lines, line + 1).trimStart().startsWith(': ')) {
-      for (let indent = 1; indent <= 4; indent++) {
-        found.push({ id: 'U-180', output: output.slice(0, start) + ' '.repeat(indent) + output.slice(start) })
-      }
-    }
     if (value.includes(': ```')) descriptionFence = line
-    if (descriptionFence > 0 && line > descriptionFence && line - descriptionFence <= 5 && value.startsWith(' ')) {
-      found.push({ id: 'U-179', output: output.slice(0, start) + value.trimStart() + output.slice(lineEnd(lines, line)) })
-    }
+    found.push(...descriptionLineCandidates(output, lines, line, descriptionFence))
   }
   return found
 }
 
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
-export function rescueTargeted(input: string, output: string, mismatch: ReportRecord):
-  { output: string, record: ReportRecord } | null {
+export function rescueTargeted(
+  input: string,
+  output: string,
+  mismatch: ReportRecord
+): { output: string; record: ReportRecord } | null {
   const expected = html01(input)
-  const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
-    ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
-    ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output),
-    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output), ...underlineBoundaryCandidates(output),
-    ...unresolvedFootnoteAttributeCandidates(output)]
+  const candidates = [
+    ...simpleCandidates(output),
+    ...bracketCandidates(output),
+    ...lineCandidates(output),
+    ...smartQuoteCandidates(output, expected),
+    ...metadataCandidates(output),
+    ...languageCandidates(output),
+    ...quotedBraceCandidates(output),
+    ...substitutionAttributeCandidates(input, output),
+    ...nestedFootnoteCandidates(output),
+    ...floatingAttributeCandidates(output),
+    ...underlineBoundaryCandidates(output),
+    ...unresolvedFootnoteAttributeCandidates(output)
+  ]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
-      return { output: candidate.output, record: recordOf(candidate.id, mismatch.line,
-        'the clause-backed spelling preserves the complete 0.1 HTML') }
-    } catch { /* A candidate can fail to parse under the new grammar. */ }
+      return {
+        output: candidate.output,
+        record: recordOf(candidate.id, mismatch.line, 'the clause-backed spelling preserves the complete 0.1 HTML')
+      }
+    } catch {
+      /* A candidate can fail to parse under the new grammar. */
+    }
   }
   return null
 }

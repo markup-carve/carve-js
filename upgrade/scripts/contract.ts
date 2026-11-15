@@ -24,13 +24,18 @@ for (const entry of cases) {
     const result = upgrade(input)
     const want = entry.class === 'rewrite' || entry.class === 'escape' ? (entry.outputs[index] ?? input) : input
     const hit = result.records.some((record) => record.entry === entry.id)
-    const ok = result.output === want && (entry.class !== 'report' || hit) && (entry.class === 'report' || result.check === 'pass')
+    const ok =
+      result.output === want &&
+      (entry.class !== 'report' || hit) &&
+      (entry.class === 'report' || result.check === 'pass')
     if (ok) good++
     else bad++
     if (ok && !verbose) return
-    console.log(`${ok ? 'ok  ' : 'FAIL'} ${entry.id}#${index} ${entry.class} check=${result.check} output=${result.output === want ? 'same' : 'differs'}`)
+    const status = result.output === want ? 'same' : 'differs'
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${entry.id}#${index} ${entry.class} check=${result.check} output=${status}`)
     if (result.output !== want) console.log(JSON.stringify(result.output) + '\n' + JSON.stringify(want))
-    for (const record of result.records) console.log(`     ${record.entry} ${record.class} ${record.line}: ${record.message}`)
+    for (const record of result.records)
+      console.log(`     ${record.entry} ${record.class} ${record.line}: ${record.message}`)
   })
 }
 console.log(`${good} ok, ${bad} failing`)

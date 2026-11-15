@@ -12,6 +12,19 @@ function startsBlock(value: string): boolean {
   return ['# ', '```', ':::', '***', '- ', '* '].some((prefix) => value.startsWith(prefix))
 }
 
+function blockVariants(
+  output: string,
+  value: string,
+  trimmed: string,
+  above: string,
+  start: number,
+  end: number
+): string[] {
+  if (value === trimmed || !startsBlock(trimmed) || (!above.startsWith(': ') && above !== '')) return []
+  const first = output.slice(0, start) + trimmed + output.slice(end)
+  return above === '' ? [first] : [first, output.slice(0, start) + '\n' + trimmed + output.slice(end)]
+}
+
 function variants(output: string, mismatchLine: number): string[] {
   const lines = readLines(output)
   const found = new Set<string>()
@@ -27,11 +40,7 @@ function variants(output: string, mismatchLine: number): string[] {
       }
     }
     const above = lineText(lines, line - 1).trimStart()
-    const block = startsBlock(trimmed)
-    if (value !== trimmed && block && (above.startsWith(': ') || above === '')) {
-      found.add(output.slice(0, start) + trimmed + output.slice(end))
-      if (above !== '') found.add(output.slice(0, start) + '\n' + trimmed + output.slice(end))
-    }
+    for (const candidate of blockVariants(output, value, trimmed, above, start, end)) found.add(candidate)
   }
   return [...found]
 }
@@ -101,31 +110,52 @@ function boundaryVariants(output: string): string[] {
   return found
 }
 
+function firstPreserving(expected: string, candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    try {
+      if (compareHtml(expected, html02(candidate, false)).equal) return candidate
+    } catch {
+      /* A candidate can fail to parse under the new grammar. */
+    }
+  }
+  return null
+}
+
 /** C2-B-069, C2-B-076 and C2-B-078: put the mark and body at an owning column. */
 export function rescueDescription(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('::')) return null
   const expected = html01(input)
-  for (const candidate of variants(output, Math.max(1, mismatch.line))) {
-    try {
-      if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      const id = input.startsWith(':: ') && candidate.startsWith(' :: ') ? 'U-180' : 'U-128'
-      return { output: candidate, record: recordOf(id, mismatch.line,
-        'the description mark was moved to its 0.2 ownership column while preserving 0.1 HTML') }
-    } catch { /* A candidate can fail to parse under the new grammar. */ }
+  const mark = firstPreserving(expected, variants(output, Math.max(1, mismatch.line)))
+  if (mark !== null) {
+    const id = input.startsWith(':: ') && mark.startsWith(' :: ') ? 'U-180' : 'U-128'
+    return {
+      output: mark,
+      record: recordOf(
+        id,
+        mismatch.line,
+        'the description mark was moved to its 0.2 ownership column while preserving 0.1 HTML'
+      )
+    }
   }
-  for (const candidate of plusVariants(input)) {
-    try {
-      if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      return { output: candidate, record: recordOf('U-123', mismatch.line,
-        'the description continuation was written as an empty block and a separated follower') }
-    } catch { /* A candidate can fail to parse under the new grammar. */ }
-  }
-  for (const candidate of [...boundaryVariants(input), ...boundaryVariants(output)]) {
-    try {
-      if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      return { output: candidate, record: recordOf('U-199', mismatch.line,
-        'the description boundary was written at its 0.2 owning column while preserving 0.1 HTML') }
-    } catch { /* A candidate can fail to parse under the new grammar. */ }
-  }
+  const plus = firstPreserving(expected, plusVariants(input))
+  if (plus !== null)
+    return {
+      output: plus,
+      record: recordOf(
+        'U-123',
+        mismatch.line,
+        'the description continuation was written as an empty block and a separated follower'
+      )
+    }
+  const boundary = firstPreserving(expected, [...boundaryVariants(input), ...boundaryVariants(output)])
+  if (boundary !== null)
+    return {
+      output: boundary,
+      record: recordOf(
+        'U-199',
+        mismatch.line,
+        'the description boundary was written at its 0.2 owning column while preserving 0.1 HTML'
+      )
+    }
   return null
 }

@@ -35,14 +35,18 @@ function carveBlocks(path: string): Document[] {
     const length = fenceLength(lines[at]!)
     if (length < 3 || lines[at]!.slice(length) !== 'carve') continue
     const first = at + 1
-    while (at + 1 < lines.length && !(fenceLength(lines[at + 1]!) >= length && lines[at + 1]!.trim().length === fenceLength(lines[at + 1]!))) at++
+    while (
+      at + 1 < lines.length &&
+      !(fenceLength(lines[at + 1]!) >= length && lines[at + 1]!.trim().length === fenceLength(lines[at + 1]!))
+    )
+      at++
     out.push({ name: `${path}:${first + 1}`, text: lines.slice(first, at + 1).join('\n') + '\n' })
     at++
   }
   return out
 }
 
-function readArguments(args: string[]): { list: boolean, smallest: number, documents: Document[] } {
+function readArguments(args: string[]): { list: boolean; smallest: number; documents: Document[] } {
   const documents: Document[] = []
   let list = false
   let smallest = 0
@@ -68,7 +72,7 @@ const perEntry = new Map<string, number>()
 const perEntryDocuments = new Map<string, number>()
 const checks = { pass: 0, explained: 0, mismatch: 0 }
 let changed = 0
-const mismatches: { name: string, line: number, message: string, text: string }[] = []
+const mismatches: { name: string; line: number; message: string; text: string }[] = []
 for (const document of documents) {
   const result = upgrade(document.text)
   if (result.changed) changed++
@@ -77,13 +81,17 @@ for (const document of documents) {
   for (const record of result.records) {
     perEntry.set(record.entry, (perEntry.get(record.entry) ?? 0) + 1)
     seen.add(record.entry)
-    if (record.class === 'mismatch') mismatches.push({ name: document.name, line: record.line, message: record.message, text: document.text })
+    if (record.class === 'mismatch')
+      mismatches.push({ name: document.name, line: record.line, message: record.message, text: document.text })
   }
   for (const entry of seen) perEntryDocuments.set(entry, (perEntryDocuments.get(entry) ?? 0) + 1)
 }
-console.log(`documents ${documents.length}, changed ${changed}, check pass ${checks.pass}, explained ${checks.explained}, mismatch ${checks.mismatch}`)
+console.log(
+  `documents ${documents.length}, changed ${changed}, check pass ${checks.pass}, explained ${checks.explained}, mismatch ${checks.mismatch}`
+)
 console.log('entry\trecords\tdocuments')
-for (const [entry, count] of [...perEntry].sort()) console.log(`${entry}\t${count}\t${perEntryDocuments.get(entry) ?? 0}`)
+for (const [entry, count] of [...perEntry].sort())
+  console.log(`${entry}\t${count}\t${perEntryDocuments.get(entry) ?? 0}`)
 if (list) for (const entry of mismatches) console.log(`${entry.name}:${entry.line}: ${entry.message}`)
 if (smallest > 0) {
   mismatches.sort((a, b) => a.text.length - b.text.length)

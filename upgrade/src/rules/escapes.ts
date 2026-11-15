@@ -16,7 +16,8 @@ function equalsStart(ctx: Context, paragraph: Node01): void {
   let at = start
   while (ctx.src.charCodeAt(at) === EQUALS) at++
   const run = at - start
-  if (run === 0 || run > HEADING_MAX || ctx.src[at] !== ' ' || at + 1 >= lineEnd(ctx.lines, paragraph.pos!.startLine)) return
+  if (run === 0 || run > HEADING_MAX || ctx.src[at] !== ' ' || at + 1 >= lineEnd(ctx.lines, paragraph.pos!.startLine))
+    return
   change(ctx, 'U-101', start, start, '\\', '= at the start of a block escaped, it would open a heading in 0.2')
 }
 
@@ -42,7 +43,11 @@ function letterLine(ctx: Context, start: number, line: number): void {
 }
 
 function inBody(visit: Visit, ctx: Context): boolean {
-  return ancestor(visit, 'list_item') !== null || ancestor(visit, 'definition_list') !== null || visit.siblings !== ctx.doc.children
+  return (
+    ancestor(visit, 'list_item') !== null ||
+    ancestor(visit, 'definition_list') !== null ||
+    visit.siblings !== ctx.doc.children
+  )
 }
 
 function letterMarkers(ctx: Context, visit: Visit): void {
@@ -63,7 +68,14 @@ function rowAttribute(ctx: Context, paragraph: Node01): void {
     const brace = ctx.src.lastIndexOf('{', end)
     if (!text.trimStart().startsWith('|') || ctx.src[end - 1] !== '}' || brace < lineStart(ctx.lines, line)) continue
     if (ctx.src.startsWith('| ', brace - 2) && ctx.src[brace - 3] !== '\\') {
-      change(ctx, 'U-108', brace, brace, '\\', 'brace after the closing pipe escaped, it would be a row attribute in 0.2')
+      change(
+        ctx,
+        'U-108',
+        brace,
+        brace,
+        '\\',
+        'brace after the closing pipe escaped, it would be a row attribute in 0.2'
+      )
     }
   }
 }
@@ -121,7 +133,8 @@ function markupInside(ctx: Context, link: Node01): void {
     const message = 'markup inside an unresolved reference escaped, 0.1 wrote it as typed'
     change(ctx, 'U-113', start, start, '\\', message)
     const last = ctx.src[end - 1]!
-    if (end - start > 1 && last === ctx.src[start] && !'[]{}'.includes(last)) change(ctx, 'U-113', end - 1, end - 1, '\\', message)
+    if (end - start > 1 && last === ctx.src[start] && !'[]{}'.includes(last))
+      change(ctx, 'U-113', end - 1, end - 1, '\\', message)
   }
 }
 
@@ -135,18 +148,39 @@ function reference(ctx: Context, index: number, headings: Set<string>): void {
   const collapsed = raw.endsWith('[]')
   if (ref.startsWith('^')) {
     // C2-I-078: `[^n]` behind a bracket pair is a footnote reference.
-    change(ctx, 'U-112', end - ref.length - 2, end - ref.length - 2, '\\', 'label that starts with a caret escaped, it would be a footnote reference in 0.2')
+    change(
+      ctx,
+      'U-112',
+      end - ref.length - 2,
+      end - ref.length - 2,
+      '\\',
+      'label that starts with a caret escaped, it would be a footnote reference in 0.2'
+    )
   } else if (ref.includes('\n')) {
     // C2-I-080: a label may wrap in 0.2.
-    change(ctx, 'U-111', start, start, '\\', 'reference with a wrapped label escaped, the label folds and may resolve in 0.2')
+    change(
+      ctx,
+      'U-111',
+      start,
+      start,
+      '\\',
+      'reference with a wrapped label escaped, the label folds and may resolve in 0.2'
+    )
     if (ctx.doc.children?.some((node) => node.type === 'link_reference_definition' && node.label === foldLabel(ref))) {
-      change(ctx, 'U-111', end - ref.length - 2, end - ref.length - 2, '\\',
-        'the wrapped label escaped because it would become a shortcut after the first escape')
+      change(
+        ctx,
+        'U-111',
+        end - ref.length - 2,
+        end - ref.length - 2,
+        '\\',
+        'the wrapped label escaped because it would become a shortcut after the first escape'
+      )
     }
     markupInside(ctx, link)
   } else if (headings.has(collapsed ? plainText(ctx.visits, index) : ref)) {
     // C2-I-081: the heading lookup applies to the full form too.
-    if (!collapsed) change(ctx, 'U-110', start, start, '\\', 'full reference to a heading escaped, it would link in 0.2')
+    if (!collapsed)
+      change(ctx, 'U-110', start, start, '\\', 'full reference to a heading escaped, it would link in 0.2')
   } else {
     markupInside(ctx, link)
   }
@@ -165,7 +199,15 @@ function fenceOpenerAsText(ctx: Context, paragraph: Node01): void {
   // The 0.2 engine says whether the line opens a block there.
   if (probe02(line + '\nx\n').startsWith('<p>')) return
   if (colon) change(ctx, 'U-104', start, start, '\\', 'fence opener that 0.1 read as text escaped')
-  else change(ctx, 'U-105', start, start, '{%%}', 'fence opener that 0.1 read as text kept from opening by an empty braced comment')
+  else
+    change(
+      ctx,
+      'U-105',
+      start,
+      start,
+      '{%%}',
+      'fence opener that 0.1 read as text kept from opening by an empty braced comment'
+    )
 }
 
 const SPAN_MARKS = '*/_~=^,'
@@ -185,13 +227,25 @@ function delimiterInBraces(ctx: Context, visit: Visit): void {
   if (visit.node.value !== ctx.src.slice(start, end)) return
   let braced = false
   let marks = ''
-  for (let at = visit.parent; at !== null && at.node.pos !== undefined && at.node.type !== 'paragraph'; at = at.parent) {
+  for (
+    let at = visit.parent;
+    at !== null && at.node.pos !== undefined && at.node.type !== 'paragraph';
+    at = at.parent
+  ) {
     if (ctx.src[at.node.pos.startOffset] === '{') braced = true
     else if (braced) marks += bareMark(ctx, at.node)
   }
   if (marks === '') return
   for (let at = start; at < end; at++) {
-    if (marks.includes(ctx.src[at]!)) change(ctx, 'U-070', at, at, '\\', 'delimiter of an outer span escaped inside a braced span, where it would close the outer span in 0.2')
+    if (marks.includes(ctx.src[at]!))
+      change(
+        ctx,
+        'U-070',
+        at,
+        at,
+        '\\',
+        'delimiter of an outer span escaped inside a braced span, where it would close the outer span in 0.2'
+      )
   }
 }
 
@@ -213,7 +267,14 @@ function flagRuns(ctx: Context, node: Node01): void {
     let run = at
     while (run < value.length && value.charCodeAt(run) === HYPHEN) run++
     for (let hyphen = at + 1; hyphen < run; hyphen += 2) {
-      change(ctx, 'U-115', start + hyphen, start + hyphen, '\\', 'hyphen of a run 0.1 kept as typed escaped, the run would be a dash in 0.2')
+      change(
+        ctx,
+        'U-115',
+        start + hyphen,
+        start + hyphen,
+        '\\',
+        'hyphen of a run 0.1 kept as typed escaped, the run would be a dash in 0.2'
+      )
     }
     at = run > at ? run : at + 1
   }
@@ -228,7 +289,8 @@ function bracedEnDash(ctx: Context, node: Node01): void {
   // A run of hyphens behind it is a dash of its own in 0.1, which no spelling of the pair keeps apart.
   if (ctx.src.slice(start, end) !== BRACED_EN_DASH || ctx.src.startsWith('--', end)) return
   const message = 'braced en dash written as two hyphens, 0.2 has no braced form'
-  if (ctx.src.charCodeAt(start - 1) === HYPHEN && ctx.src[start - 2] !== '\\') change(ctx, 'U-115', start - 1, start - 1, '\\', message)
+  if (ctx.src.charCodeAt(start - 1) === HYPHEN && ctx.src[start - 2] !== '\\')
+    change(ctx, 'U-115', start - 1, start - 1, '\\', message)
   change(ctx, 'U-115', start, end, ctx.src.charCodeAt(end) === HYPHEN ? '--\\' : '--', message)
 }
 
@@ -240,6 +302,16 @@ function inDelimitedTable(ctx: Context, visit: Visit): boolean {
 
 /** The blocks U-109 moves: a list has its own column rules (U-023) and a definition its own (U-039). */
 const SHORT_INDENT = new Set(['paragraph', 'block_quote', 'heading', 'code_block', 'table', 'thematic_break'])
+
+function paragraphEscapes(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  if (node.type !== 'paragraph' || visit.parent === null || node.pos === undefined) return
+  if (ctx.blocks.leaf[node.pos.startLine] !== visit) return
+  equalsStart(ctx, node)
+  fenceOpenerAsText(ctx, node)
+  letterMarkers(ctx, visit)
+  rowAttribute(ctx, node)
+}
 
 export function escapes(ctx: Context): void {
   const headings = headingTexts(ctx)
@@ -253,12 +325,7 @@ export function escapes(ctx: Context): void {
       delimiterInBraces(ctx, visit)
       if (!inDelimitedTable(ctx, visit)) flagRuns(ctx, node)
     } else if (node.type === 'smart_punctuation') bracedEnDash(ctx, node)
-    else if (node.type === 'paragraph' && visit.parent !== null && ctx.blocks.leaf[node.pos.startLine] === visit) {
-      equalsStart(ctx, node)
-      fenceOpenerAsText(ctx, node)
-      letterMarkers(ctx, visit)
-      rowAttribute(ctx, node)
-    }
+    else if (node.type === 'paragraph') paragraphEscapes(ctx, visit)
     if (visit.parent !== null && SHORT_INDENT.has(node.type)) shortIndent(ctx, visit)
   }
 }

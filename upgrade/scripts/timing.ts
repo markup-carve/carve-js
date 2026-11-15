@@ -3,28 +3,29 @@
 //   node upgrade/scripts/timing.ts
 import { upgrade } from '../src/upgrade.ts'
 
-const UNIT = [
-  'Some _text_ with ~marks~ and =more= here',
-  '# Heading',
-  '',
-  '- step one',
-  '+',
-  '> a note',
-  '- step two',
-  '',
-  '| a | b |',
-  '|---|--:|',
-  '| 1 | 2 |',
-  '',
-  '> See [ref][].',
-  '>',
-  '> [ref]: https://example.com',
-  '',
-  '---',
-  '',
-  '= 4 is the answer',
-  '',
-].join('\n') + '\n'
+const UNIT =
+  [
+    'Some _text_ with ~marks~ and =more= here',
+    '# Heading',
+    '',
+    '- step one',
+    '+',
+    '> a note',
+    '- step two',
+    '',
+    '| a | b |',
+    '|---|--:|',
+    '| 1 | 2 |',
+    '',
+    '> See [ref][].',
+    '>',
+    '> [ref]: https://example.com',
+    '',
+    '---',
+    '',
+    '= 4 is the answer',
+    ''
+  ].join('\n') + '\n'
 const UNIT_LINES = 20
 
 for (const size of [2000, 8000, 32000]) {
@@ -32,5 +33,8 @@ for (const size of [2000, 8000, 32000]) {
   const started = performance.now()
   const result = upgrade(input)
   const elapsed = performance.now() - started
-  console.log(`${size} lines: ${elapsed.toFixed(0)} ms, ${(elapsed / size * 1000).toFixed(1)} us per line, ${result.records.length} records, check ${result.check}`)
+  const perLine = ((elapsed / size) * 1000).toFixed(1)
+  console.log(
+    `${size} lines: ${elapsed.toFixed(0)} ms, ${perLine} us per line, ${result.records.length} records, check ${result.check}`
+  )
 }
