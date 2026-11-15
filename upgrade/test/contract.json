@@ -1493,7 +1493,10 @@
     "id": "U-154",
     "title": "A footnote reference inside a link renders its own anchor",
     "inputs": [
-      "^[ [^1]]\n[^1]: n"
+      "^[ [^1]]\n[^1]: n",
+      "a [t^[n]](/u) b\n",
+      "[[ ^[b]]()]()\n",
+      "[t ^[x [a](u) b]](/w)\n"
     ],
     "outputs": [
       "^[ [^1]]\n\n[^1]: n"

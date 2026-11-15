@@ -90,6 +90,8 @@ function tableMatch(input: string): string | null {
 
 function footnoteReferenceMatch(input: string, expected: string, actual: string): string | null {
   if (input.includes('[^') && expected.includes('<sup') && actual.includes('role="doc-noteref"')) return 'U-154'
+  if (input.includes('^[') && expected.includes('<sup') && actual.includes('</a><a')
+    && actual.includes('role="doc-noteref"')) return 'U-154'
   if (input.includes('^[') && input.includes('[^') && actual.includes('<a')) return 'U-154'
   const footnote = input.indexOf('[^')
   const footnoteEnd = input.indexOf(']', footnote + 2)

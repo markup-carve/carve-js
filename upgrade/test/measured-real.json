@@ -1078,6 +1078,39 @@
     ]
   },
   {
+    "cause": "C36",
+    "clause": "C2-H-088",
+    "path": "tests/corpus/310-a-footnote-in-link-text-nests-the-anchors-2.crv",
+    "line": 1,
+    "input": "a [t^[n]](/u) b\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
+    "cause": "C36",
+    "clause": "C2-H-088",
+    "path": "tests/corpus/1026-nested-link-with-an-inline-note-unwraps.crv",
+    "line": 1,
+    "input": "[[ ^[b]]()]()\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
+    "cause": "C36",
+    "clause": "C2-H-088",
+    "path": "tests/corpus/778-inside-a-note-a-nested-note-opener-is-a-caret-and-a-bracket-run-4.crv",
+    "line": 1,
+    "input": "[t ^[x [a](u) b]](/w)\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
     "cause": "C37",
     "clause": "C2-I-044",
     "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
