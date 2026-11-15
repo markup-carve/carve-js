@@ -83,6 +83,18 @@ function blankBodyBoundary(lines: string[], at: number, found: string[]): void {
   found.push(changed.join('\n'))
 }
 
+function dedentRefusedFollower(lines: string[], at: number, found: string[]): void {
+  const previous = (lines[at - 1] ?? '').trimStart()
+  if (!previous.startsWith(': ')) return
+  const body = previous.slice(2).trimStart()
+  if (body !== '%%' && !body.startsWith('%% ') && !body.startsWith(':::')) return
+  const written = lines[at] ?? ''
+  if (!written.startsWith(' ') || written.trim() === '') return
+  const changed = [...lines]
+  changed[at] = written.trimStart()
+  found.push(changed.join('\n'))
+}
+
 function boundaryVariants(output: string): string[] {
   const lines = output.split('\n')
   const found: string[] = []
@@ -90,6 +102,7 @@ function boundaryVariants(output: string): string[] {
     const previous = (lines[at - 1] ?? '').trimStart()
     const current = (lines[at] ?? '').trimStart()
     blankBodyBoundary(lines, at, found)
+    dedentRefusedFollower(lines, at, found)
     if (previous.startsWith(': ') && current.startsWith('>')) {
       const changed = [...lines]
       changed[at] = '\n' + current

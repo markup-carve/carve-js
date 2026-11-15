@@ -1980,14 +1980,20 @@
       ":: term\n:  definition\n > quote\n",
       "- one\n :: term\n :  def\n",
       ":: term\n: first\n\n second\n",
-      ":: term\n:  first\n\n  second\n"
+      ":: term\n:  first\n\n  second\n",
+      ":: t\n:  %% c\n flush\n",
+      ":: t\n:  %% c\n  flush\n",
+      ":: t\n: :::\n y\n  :::\n"
     ],
     "outputs": [
       ":: t\n:  d\n\ntail\n",
       ":: term\n:  definition\n\n> quote\n",
       "- one\n\n:: term\n:  def\n",
       ":: term\n: first\n\nsecond\n",
-      ":: term\n:  first\n\nsecond\n"
+      ":: term\n:  first\n\nsecond\n",
+      ":: t\n:  %% c\nflush\n",
+      ":: t\n:  %% c\nflush\n",
+      ":: t\n: :::\ny\n  :::\n"
     ]
   },
   {

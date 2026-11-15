@@ -751,6 +751,39 @@
   },
   {
     "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "tests/corpus/436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not.crv",
+    "line": 1,
+    "input": ":: t\n:  %% c\n flush\n",
+    "check": "pass",
+    "entries": [
+      "U-199"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "tests/corpus/436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not-3.crv",
+    "line": 1,
+    "input": ":: t\n:  %% c\n  flush\n",
+    "check": "pass",
+    "entries": [
+      "U-199"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "tests/corpus/480-a-bare-colon-opener-in-a-description-body-is-an-opener.crv",
+    "line": 1,
+    "input": ":: t\n: :::\n y\n  :::\n",
+    "check": "pass",
+    "entries": [
+      "U-199"
+    ]
+  },
+  {
+    "cause": "C27",
     "clause": "C2-B-069",
     "path": "resources/examples/edge-cases/0757-an-intervening-column-refuses-a-description-hosted-first-block.md",
     "line": 6,
