@@ -170,6 +170,19 @@ describe('time linear in the output', () => {
   }
 })
 
+describe('time linear in the number of groups', () => {
+  it('C2-W-089: planned and repaired groups that alternate take time linear in their count', () => {
+    const shape = (n: number): string => '\\# a\n\n\\- b\n\n'.repeat(n)
+    const small = formatBy(shape(10), 'plan').stats
+    expect(small.planned).toBeGreaterThan(0)
+    expect(small.repaired).toBeGreaterThan(0)
+    fastest(shape(4000))
+    const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
+    const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
+    expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.6)
+  })
+})
+
 // The two inputs of the property harness that the repair took 2.7 and 23 seconds to format.
 describe('the slow inputs of the repair', () => {
   for (const name of ['a4da2114c87f7869', 'b01dcd98fddcd1f4']) {

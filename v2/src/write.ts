@@ -506,14 +506,25 @@ function noteReason(run: WriterRun, why: string, detail: string): void {
   if (!run.stats.samples.has(why)) run.stats.samples.set(why, detail)
 }
 
-/** The escapes of `w` with the planned ones added. */
-function withPlanned(w: Writer, plan: Plan): Map<TextNode, number[]> {
-  const escapes = new Map(w.escapes)
+/**
+ * Adds the planned escapes to those of `w` in place and returns what they replaced. Copying the map of the
+ * whole document for each group made the writer quadratic in the number of groups.
+ */
+function addPlanned(w: Writer, plan: Plan): [TextNode, number[] | undefined][] {
+  const replaced: [TextNode, number[] | undefined][] = []
   for (const [node, offsets] of plan.escapes) {
-    const merged = [...new Set([...(escapes.get(node) ?? []), ...offsets])].sort((a, b) => a - b)
-    escapes.set(node, merged)
+    const previous = w.escapes.get(node)
+    replaced.push([node, previous])
+    w.escapes.set(node, [...new Set([...(previous ?? []), ...offsets])].sort((a, b) => a - b))
   }
-  return escapes
+  return replaced
+}
+
+function restoreEscapes(w: Writer, replaced: readonly [TextNode, number[] | undefined][]): void {
+  for (const [node, previous] of replaced) {
+    if (previous === undefined) w.escapes.delete(node)
+    else w.escapes.set(node, previous)
+  }
 }
 
 /** The text nodes below `nodes` that no planned leaf held. */
@@ -585,14 +596,13 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   const reported = w.losses.entries.length
   const plan = settledPlan(w, run, group, first, reported)
   if (plan === null) return false
-  const kept = w.escapes
-  if (plan.escapes.size > 0) {
-    w.escapes = withPlanned(w, plan)
+  const replaced = addPlanned(w, plan)
+  if (replaced.length > 0) {
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
   }
   if (run.check && w.lines.length > 0 && !readsBack(w, group, first)) {
-    w.escapes = kept
+    restoreEscapes(w, replaced)
     noteReason(run, 'check', '')
     return false
   }
@@ -622,7 +632,8 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
   const reported = w.losses.entries.length
   if (run.path !== 'repair') {
     const end = groupEnd(w, document.children, from)
-    const before = w.escapes
+    // The `both` path compares with a repair from the escapes before the plan, which `planGroup` changes in place.
+    const before = run.path === 'both' ? new Map(w.escapes) : w.escapes
     if (planGroup(w, run, document.children.slice(from, end), first)) {
       run.stats.planned++
       return run.path === 'both' ? compareWithRepair(w, run, document, from, first, before) : end
