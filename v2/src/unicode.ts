@@ -110,32 +110,15 @@ export function holdsBidiControl(text: string, start: number, end: number): bool
   return false
 }
 
-const HIGH_SURROGATE_FIRST = 0xd800
-const LOW_SURROGATE_FIRST = 0xdc00
-const SURROGATE_LAST = 0xdfff
-
-/** The length of the surrogate pair at `at`, 2, or 0 when the code unit there is an unpaired surrogate. */
-function pairLength(text: string, at: number): number {
-  const code = text.charCodeAt(at)
-  if (code >= LOW_SURROGATE_FIRST) return 0
-  const next = text.charCodeAt(at + 1)
-  return next >= LOW_SURROGATE_FIRST && next <= SURROGATE_LAST ? 2 : 0
+// ES2024 methods, in Node since 20 (the `engines` floor); the ES2022 lib of the build does not declare them.
+declare global {
+  interface String {
+    isWellFormed(): boolean
+    toWellFormed(): string
+  }
 }
 
 /** C2-B-218: `text` with each unpaired surrogate read as U+FFFD. Both are one code unit, so every offset stays. */
 export function withoutUnpairedSurrogates(text: string): string {
-  let out = ''
-  let from = 0
-  for (let at = 0; at < text.length; at++) {
-    const code = text.charCodeAt(at)
-    if (code < HIGH_SURROGATE_FIRST || code > SURROGATE_LAST) continue
-    const pair = pairLength(text, at)
-    if (pair === 2) {
-      at++
-      continue
-    }
-    out += `${text.slice(from, at)}�`
-    from = at + 1
-  }
-  return from === 0 ? text : out + text.slice(from)
+  return text.isWellFormed() ? text : text.toWellFormed()
 }
