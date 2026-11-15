@@ -22,6 +22,10 @@ for (const name of readdirSync(directory).filter((file) => file.endsWith('.crv')
   const target = name.split('-')[0] as Target
   void test(`${metadata.clause} ${metadata.id} ${metadata.kind} ${name}`, (context) => {
     const found = check(target, source, random(metadata.seed))
+    if (found?.kind === 'writer-accounting') {
+      assert.ok((found.losses ?? 0) + (found.refusals ?? 0) > 0)
+      return
+    }
     if (found !== null) {
       context.todo(`expected failure ${metadata.id}: ${found.kind}`)
       return
