@@ -56,6 +56,18 @@ describe('C2-W-100: the upgrade self-check', () => {
     } finally { rmSync(dir, { recursive: true }) }
   })
 
+  it('C2-W-100: force does not bypass a residual HTML mismatch', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-force-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const input = 'Some text\n# Heading\n\n' + unrelated
+      writeFileSync(file, input)
+      const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', '--force', file])
+      expect(done.status).toBe(1)
+      expect(readFileSync(file, 'utf8')).toBe(input)
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
   it('C2-W-100: a rewrite with no HTML effect on either engine leaves the source alone', () => {
     const input = '* [d]: \n text\n'
     const result = upgrade(input)

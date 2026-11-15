@@ -37,8 +37,8 @@ function readFlags(args: string[]): Flags | null {
 
 function emit(flags: Flags, file: string, result: UpgradeResult): void {
   if (flags.check) return
-  // The file is not written over a difference no entry explains, unless forced (contract, section 1).
-  const blocked = !canWriteUpgrade(result) && !flags.force
+  const blocked = !canWriteUpgrade(result)
+  if (blocked && flags.force) process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
   if (flags.write) {
     if (result.changed && !blocked) writeFileSync(file, result.output)
   } else if (flags.files.length === 1 && !flags.json) {
