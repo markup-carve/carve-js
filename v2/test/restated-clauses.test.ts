@@ -498,13 +498,13 @@ describe('the profiles', () => {
 
   check([
     ['C2-H-163: article accepts everything but raw content', `# h\n\n| a |\n\n\`<b>\`{=html} x\n\n${FENCE}=html\n<i>\n${FENCE}`,
-      '<section id="h">\n  <h1>h</h1>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n  <p>&lt;b&gt; x</p>\n  <p>&lt;i&gt;</p>\n</section>', { profile: 'article', rawHtml: true }],
+      '<section id="h">\n  <h1>h</h1>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n  </table>\n  <p>`&lt;b&gt;`{=html} x</p>\n  <p>&lt;i&gt;</p>\n</section>', { profile: 'article', rawHtml: true }],
     ['C2-H-163: comment accepts the listed types and writes rel on every link', `See [docs](https://x.org "t"){rel="me nofollow"} and *bold* \`c\`.\n\n> q\n\n- i\n\n${FENCE}js\nx\n${FENCE}`,
       '<p>See <a href="https://x.org" title="t" rel="me nofollow ugc">docs</a> and <strong>bold</strong> <code>c</code>.</p>\n<blockquote><p>q</p></blockquote>\n<ul>\n  <li>i</li>\n</ul>\n<pre><code class="language-js">x\n</code></pre>', { profile: 'comment' }],
     ['C2-H-163: minimal degrades a link, a quote, a heading, a code block and a rule to their text', `See [docs *x*](https://x.org).\n\n> q *r*\n\n## h\n\n${FENCE}\nc\n${FENCE}\n\n***`,
       '<p>See docs x.</p>\n<p>&gt; q r</p>\n<p>## h</p>\n<p>c</p>\n<p>---</p>', { profile: 'minimal' }],
     ['C2-H-163: a table degrades to one line per row, an image to its alt text, and a note reference to its source', '| a | b |\n| c | d |\n\n![alt](i.png) x[^n] :s: $`m`\n\n[^n]: note',
-      '<p>a | b<br>\nc | d</p>\n<p>[img: alt] x[^n] :s: m</p>', { profile: 'comment' }],
+      '<p>a | b<br>\nc | d</p>\n<p>[img: alt] x[^n] :s: $`m`</p>', { profile: 'comment' }],
     ['C2-H-163: a definition is no construct that renders, so a reference through it still resolves', '[a][r]\n\n[r]: /u\n\n%% c',
       '<p><a href="/u" rel="nofollow ugc">a</a></p>', { profile: 'comment' }],
     ['C2-H-164: a literal-text span stands where code stands', '!`a` `b`', '<p>a <code>b</code></p>', { profile: 'minimal' }],
@@ -528,7 +528,7 @@ describe('the profiles', () => {
 
   it('C2-H-163: a denied reference takes no footnote number, and a note body is filtered like the document', () => {
     expect(render('a[^n]\n\n[^n]: note', { profile: 'comment' })).toBe('<p>a[^n]</p>')
-    expect(render('a[^n]\n\n[^n]: x `<b>`{=html}', { profile: 'article', rawHtml: true })).toContain('<p>x &lt;b&gt;<a href="#fnref1"')
+    expect(render('a[^n]\n\n[^n]: x `<b>`{=html}', { profile: 'article', rawHtml: true })).toContain('<p>x `&lt;b&gt;`{=html}<a href="#fnref1"')
   })
 
   it('C2-H-163: an input longer than max_length bytes is refused before it is parsed', () => {

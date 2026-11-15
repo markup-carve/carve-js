@@ -158,8 +158,43 @@ function degradedBlocks(node: Node): ParagraphNode[] {
   return out
 }
 
+/** The backtick run that fences `value`: one longer than the longest run in it (C2-I-015). */
+function fenceOf(value: string): string {
+  let longest = 0
+  let run = 0
+  for (let at = 0; at < value.length; at++) {
+    run = value.charCodeAt(at) === 96 ? run + 1 : 0
+    if (run > longest) longest = run
+  }
+  return '`'.repeat(longest + 1)
+}
+
+/** A verbatim value in its code span form behind `prefix`, padded where C2-I-016 would take a space or a backtick would join the run. */
+function fenced(prefix: string, value: string): string {
+  const fence = fenceOf(value)
+  const edge = value.startsWith('`') || value.endsWith('`') || (value.startsWith(' ') && value.endsWith(' ') && value.trim() !== '')
+  const pad = edge ? ' ' : ''
+  return `${prefix}${fence}${pad}${value}${pad}${fence}`
+}
+
+// C2-H-165: an inline node with no children, outside the profile itself, is written as its source text.
+const SOURCE_TEXT: NodeHandlers<string> = {
+  math: (node) => fenced(node.display ? '$$' : '$', node.value),
+  autolink: (node) => `<${node.text ?? node.href}>`,
+  raw_inline: (node) => `${fenced('', node.value)}{=${node.format}}`,
+  code: (node) => fenced('', node.value),
+  literal_inline: (node) => fenced('!', node.value),
+  tag: (node) => `#${node.name}`,
+  // C2-H-165 names "a comment"; an editorial comment is read as one, as C2-H-143 lists both as giving nothing.
+  critic_comment: () => '',
+}
+
+function sourceText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): string | undefined {
+  return SOURCE_TEXT[type]?.(node, undefined)
+}
+
 function degradedInline(node: Inline): TextNode[] {
-  const text = inlineText(node)
+  const text = sourceText(node.type, node) ?? inlineText(node)
   return text === '' ? [] : [{ type: 'text', value: text }]
 }
 

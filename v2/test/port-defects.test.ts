@@ -427,6 +427,22 @@ describe('C2-I-118: an image and a link meet the depth cap alike', () => {
   })
 })
 
+describe('C2-H-165: a degraded inline node with no children is written as its source text', () => {
+  it('C2-H-165: math, an autolink, raw content, code and a literal span keep their marks', () => {
+    expect(render('a $`m` b <https://a.b> c {#cc#}', { profile: 'minimal' })).toBe('<p>a $`m` b &lt;https://a.b&gt; c </p>')
+    expect(render('$$`m`', { profile: 'minimal' })).toBe('<p>$$`m`</p>')
+    expect(render('a <x@y.z>', { profile: 'minimal' })).toBe('<p>a &lt;x@y.z&gt;</p>')
+    expect(render('`<b>`{=html}', { profile: 'article' })).toBe('<p>`&lt;b&gt;`{=html}</p>')
+    expect(render('a $``b`c`` d', { profile: 'minimal' })).toBe('<p>a $``b`c`` d</p>')
+    expect(render('a $```` `b ```` d', { profile: 'minimal' })).toBe('<p>a $`` `b `` d</p>')
+  })
+
+  it('C2-H-165: a comment and an editorial comment give no text', () => {
+    expect(render('a {#c#} b', { profile: 'minimal' })).toBe('<p>a  b</p>')
+    expect(render('{#c#}', { profile: 'minimal' })).toBe('')
+  })
+})
+
 describe('C2-H-121: the profile changes no tree', () => {
   const SRC = 'See [docs](https://x.org) and *bold*.'
 
