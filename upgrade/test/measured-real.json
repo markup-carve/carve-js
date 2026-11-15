@@ -3737,5 +3737,16 @@
     "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
     "check": "explained",
     "entries": ["U-252"]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-082 C2-B-109",
+    "path": "tests/lint-authoring/unguided/12.crv",
+    "line": 1,
+    "input": "# Rollback durchführen\n\n:::note\nPrüfe vor dem Rollback, ob die betroffene Transaktion noch offen ist. Bereits bestätigte Änderungen lassen sich mit `ROLLBACK` nicht rückgängig machen.\n:::\n\n1. Identifiziere die betroffene, noch offene Transaktion.\n2. Führe in derselben Sitzung den Rollback aus:\n\n```sql\nROLLBACK;\n```\n\nBackups werden sieben Tage aufbewahrt.[^1]\n\n[^1]: Nach Ablauf der sieben Tage ist eine Wiederherstellung aus diesen Backups nicht mehr möglich.",
+    "check": "pass",
+    "entries": [
+      "U-253"
+    ]
   }
 ]

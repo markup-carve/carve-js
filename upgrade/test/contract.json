@@ -2670,5 +2670,20 @@
       "- [x]   - :: term\n           : desc\n           :: next\n           : body\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-253",
+    "title": "An open div is closed before a footnote definition",
+    "class": "rewrite",
+    "inputs": [
+      ":::\nb[^1]\n\n[^1]: c",
+      ":::\nb[^1]\n[^1]: c",
+      ":::\nb[^1]\n\n[^1]: c\n"
+    ],
+    "outputs": [
+      ":::\nb[^1]\n\n:::\n\n[^1]: c",
+      ":::\nb[^1]\n\n:::\n\n[^1]: c",
+      ":::\nb[^1]\n\n:::\n\n[^1]: c\n"
+    ]
   }
 ]

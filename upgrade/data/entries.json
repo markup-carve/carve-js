@@ -1525,6 +1525,12 @@
       "name": "task item changes nested description ownership",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-253",
+      "name": "open div is closed before a footnote definition",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

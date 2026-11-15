@@ -118,6 +118,19 @@ function nestedFootnoteFence(output: string): Candidate[] {
   return found
 }
 
+function closeDivBeforeFootnote(output: string): Candidate[] {
+  if (!output.includes(':::') || !output.includes('[^')) return []
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 1; at < lines.length; at++) {
+    if (!(lines[at] ?? '').startsWith('[^') || !(lines[at] ?? '').includes(']:')) continue
+    const changed = [...lines]
+    changed.splice(at, 0, ':::', '')
+    found.push(candidate('U-253', changed.join('\n'), 'the open div was closed before the footnote definition'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -601,6 +614,7 @@ export function rescueMinor(
     ...unresolvedFootnoteHeadingId(output),
     ...tableAfterOrderedItem(output),
     ...nestedFootnoteFence(output),
+    ...closeDivBeforeFootnote(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),
