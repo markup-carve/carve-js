@@ -28,10 +28,15 @@ export interface Leaf {
   offsets: number[]
   /** Why the leaf has no decision, or null. */
   undecided: string | null
+  /** C2-W-069: the bare emphasis and strong that take their braced form. */
+  respell: Node[]
+  /** The unit being decided, and the unit at which the leaf lost its decision, for the report of the gates. */
+  cursor: number
+  where: number
 }
 
 export function createLeaf(): Leaf {
-  return { codes: [], kinds: [], owners: [], offsets: [], undecided: null }
+  return { codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0 }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
@@ -46,7 +51,9 @@ function pushString(leaf: Leaf, value: string, kind: number, owner: Node): void 
 }
 
 export function undecide(leaf: Leaf, why: string): void {
-  if (leaf.undecided === null) leaf.undecided = why
+  if (leaf.undecided !== null) return
+  leaf.undecided = why
+  leaf.where = leaf.cursor
 }
 
 const BACKSLASH = 92

@@ -3,8 +3,9 @@
 // marks are the marks of one node of the tree; every other pair, and a wanted mark left unpaired,
 // leaves the leaf undecided.
 import { type Node } from './ast.ts'
+import { DEPTH_CAP } from './inline-tables.ts'
 import { isBoundarySpace, isJoining, isWordCharacter, NO_CHARACTER } from './unicode.ts'
-import { ATOM, CLOSE, ESCAPE, type Leaf, OPEN, undecide } from './write-plan-model.ts'
+import { ATOM, CLOSE, ESCAPE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const BRACE_OPEN = 123
 const BRACE_CLOSE = 125
@@ -54,6 +55,16 @@ interface Stack {
   floor: number
   lastSlash: number
   lastStar: number
+  /** C2-I-118: the open containers around the leaf and the open entries count toward the depth cap. */
+  base: number
+  live: number
+  deepest: number
+  /** A bracket of the tree past the cap, which the reader demotes to text. */
+  demoted: boolean
+}
+
+function depth(s: Stack): number {
+  return s.base + s.live
 }
 
 /** A token whose units are partly a mark of the tree and partly something else. */
@@ -182,12 +193,15 @@ function scan(leaf: Leaf, escaped: Uint8Array): Token[] {
 
 function push(s: Stack, token: number, cls: number, below: number): number {
   s.entries.push({ token, cls, below, slash: s.lastSlash, star: s.lastStar })
+  s.live++
+  s.deepest = Math.max(s.deepest, s.live)
   return s.entries.length - 1
 }
 
 function unlink(s: Stack, at: number): void {
   const entry = s.entries[at]!
   s.top[entry.cls] = entry.below
+  s.live--
 }
 
 function removeAbove(s: Stack, at: number): void {
@@ -230,7 +244,7 @@ function bareDelimiter(s: Stack, token: number): void {
     else s.lastStar = token
   } else if ((t.flags & CAN_CLOSE) !== 0 && top > s.floor) {
     closeBare(s, top, token, slash ? s.lastSlash : s.lastStar)
-  } else if ((t.flags & CAN_OPEN) !== 0) {
+  } else if ((t.flags & CAN_OPEN) !== 0 && depth(s) < DEPTH_CAP) {
     s.top[cls] = push(s, token, cls, top)
   }
 }
@@ -255,6 +269,10 @@ function bracedCloser(s: Stack, token: number): void {
 }
 
 function enter(s: Stack, token: number): void {
+  if (depth(s) >= DEPTH_CAP) {
+    s.demoted = true
+    return
+  }
   s.floor = push(s, token, BARRIER, s.floor)
   s.lastSlash = -1
   s.lastStar = -1
@@ -268,19 +286,29 @@ function leave(s: Stack): void {
   s.floor = entry.below
   s.lastSlash = entry.slash
   s.lastStar = entry.star
+  s.live--
   pop(s)
 }
 
-function pairAll(tokens: Token[]): void {
-  const s: Stack = { tokens, entries: [], top: new Array<number>(BARRIER).fill(-1), floor: -1, lastSlash: -1, lastStar: -1 }
+function braceOpener(s: Stack, token: number): void {
+  const mark = s.tokens[token]!.mark
+  if (depth(s) < DEPTH_CAP) s.top[mark] = push(s, token, mark, s.top[mark]!)
+}
+
+function pairAll(tokens: Token[], base: number): Stack {
+  const s: Stack = {
+    tokens, entries: [], top: new Array<number>(BARRIER).fill(-1), floor: -1, lastSlash: -1, lastStar: -1,
+    base, live: 0, deepest: 0, demoted: false,
+  }
   for (let at = 0; at < tokens.length; at++) {
     const kind = tokens[at]!.kind
     if (kind === DELIMITER) bareDelimiter(s, at)
-    else if (kind === BRACED_OPEN) s.top[tokens[at]!.mark] = push(s, at, tokens[at]!.mark, s.top[tokens[at]!.mark]!)
+    else if (kind === BRACED_OPEN) braceOpener(s, at)
     else if (kind === BRACED_CLOSE) bracedCloser(s, at)
     else if (kind === ENTER) enter(s, at)
-    else leave(s)
+    else if (!s.demoted) leave(s)
   }
+  return s
 }
 
 const DELIMITED: readonly string[] = ['emphasis', 'strong', 'underline', 'strike', 'highlight', 'superscript', 'subscript',
@@ -291,6 +319,7 @@ function formedNodes(leaf: Leaf, tokens: readonly Token[]): Set<Node> | null {
   const formed = new Set<Node>()
   for (const token of tokens) {
     if (token.kind === ENTER || token.kind === LEAVE) continue
+    leaf.cursor = token.start
     const owner = ownerOf(leaf, token.start, token.end)
     if (owner === MIXED) return null
     if (token.pair < 0) continue
@@ -301,16 +330,42 @@ function formedNodes(leaf: Leaf, tokens: readonly Token[]): Set<Node> | null {
   return formed
 }
 
+// C2-W-125: the characters before a mark that the repair escapes before it gives a node its other spelling.
+const JOINING = '\\!^$`{'
+
+/** The unit of the closing mark of `owner` behind `at`. */
+function closerOf(leaf: Leaf, at: number, owner: Node): number {
+  for (let unit = at + 1; unit < leaf.codes.length; unit++) if (leaf.kinds[unit] === CLOSE && leaf.owners[unit] === owner) return unit
+  return -1
+}
+
+/**
+ * C2-W-069: a bare emphasis or strong whose own opener cannot open or whose closer cannot close at
+ * its neighbors takes the braced form. Where a character before the opener could take an escape
+ * instead (C2-W-125), the leaf is left undecided.
+ */
+function respell(leaf: Leaf, at: number, owner: Node): void {
+  const close = closerOf(leaf, at, owner)
+  if ((owner.type !== 'emphasis' && owner.type !== 'strong') || close < 0) return undecide(leaf, 'mark of the tree does not pair')
+  const before = at > 0 && leaf.kinds[at - 1] === TEXT ? String.fromCharCode(leaf.codes[at - 1]!) : ''
+  const intrinsic = (flanking(leaf, at) & CAN_OPEN) === 0 || (flanking(leaf, close) & CAN_CLOSE) === 0
+  if (!intrinsic || (before !== '' && JOINING.includes(before))) return undecide(leaf, 'mark of the tree does not pair')
+  leaf.respell.push(owner)
+}
+
 /** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
-export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
+export function checkPairs(leaf: Leaf, escaped: Uint8Array, depthBound: number): void {
   const tokens = scan(leaf, escaped)
-  pairAll(tokens)
+  // C2-I-118: the plan knows the depth of a leaf at the top level only; elsewhere the cap must stay out of reach.
+  const s = pairAll(tokens, 0)
+  if (s.demoted || (depthBound > 0 && s.deepest + depthBound >= DEPTH_CAP)) return undecide(leaf, 'depth cap')
   const formed = formedNodes(leaf, tokens)
   if (formed === null) return undecide(leaf, 'text pairs')
-  for (let at = 0; at < leaf.codes.length; at++) {
+  for (let at = 0; at < leaf.codes.length && leaf.undecided === null; at++) {
+    leaf.cursor = at
     const owner = leaf.owners[at]!
-    if (leaf.kinds[at] === OPEN && DELIMITED.includes(owner.type) && !formed.has(owner)) {
-      return undecide(leaf, 'mark of the tree does not pair')
-    }
+    if (leaf.kinds[at] !== OPEN || !DELIMITED.includes(owner.type) || formed.has(owner)) continue
+    if (leaf.codes[at] === BRACE_OPEN) return undecide(leaf, 'mark of the tree does not pair')
+    respell(leaf, at, owner)
   }
 }

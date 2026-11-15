@@ -68,3 +68,51 @@ describe('the planned writer', () => {
     expect(result.stats.repaired).toBe(0)
   })
 })
+
+// Five shapes that the repair wrote in time above linear: each doubling of the input may at most
+// multiply the time of `format` by 2.6 on average. The fastest of five runs is taken against the noise of the machine.
+const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
+  ['unclosed braced emphasis openers', (n) => ` ${'{/a {/b /} { '.repeat(n)}\n`],
+  ['braced strong around code spans', (n) => `${'{*a {*b `c` *} {*a {*b `c`'.repeat(n)}\n`],
+  ['prose with marks', (n) => `${'word /em/ *strong* `code` [link](/u) -\\-- '.repeat(n)}end\n`],
+  ['paragraphs', (n) => 'A paragraph with a line,\nand a second line.\n\n'.repeat(n)],
+  ['table rows', (n) => '| a | b *c* |\n'.repeat(n)],
+]
+
+function fastest(source: string): number {
+  let best = Infinity
+  for (let run = 0; run < 5; run++) {
+    const started = performance.now()
+    formatBy(source, 'plan')
+    best = Math.min(best, performance.now() - started)
+  }
+  return best
+}
+
+describe('time linear in the output', () => {
+  for (const [name, shape] of STRESS_SHAPES) {
+    it(`C2-W-089: ${name} take time linear in their size`, () => {
+      const small = formatBy(shape(50), 'both').stats
+      expect(small.repaired).toBe(0)
+      expect(small.differences).toEqual([])
+      const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
+      // The mean growth per doubling over three doublings, so one noisy step does not decide.
+      const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
+      expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.6)
+    })
+  }
+})
+
+// The two inputs of the property harness that the repair took 2.7 and 23 seconds to format.
+describe('the slow inputs of the repair', () => {
+  for (const name of ['a4da2114c87f7869', 'b01dcd98fddcd1f4']) {
+    it(`C2-W-089: ${name} is planned with no parse and keeps the bytes of the repair`, () => {
+      const source = readFileSync(join(root, 'test/fixtures/writer-slow', `${name}.crv`), 'utf8')
+      const result = formatBy(source, 'plan')
+      expect(result.output.source).toBe(readFileSync(join(root, 'test/fixtures/writer-slow', `${name}.out`), 'utf8'))
+      expect(result.stats.repaired).toBe(0)
+      expect(result.stats.parses).toBe(0)
+      expect(fastest(source)).toBeLessThan(500)
+    })
+  }
+})

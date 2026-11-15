@@ -11,7 +11,7 @@ import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
-import { createPlan, type Plan } from './write-plan.ts'
+import { createPlan, noteDepths, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -42,8 +42,9 @@ export interface WriterStats {
   repaired: number
   /** Groups whose plan and repair wrote different lines, in `both`. */
   differences: string[]
-  /** Why each group the plan did not decide was repaired, by reason. */
+  /** Why each group the plan did not decide was repaired, by reason, and one place of each reason. */
   reasons: Map<string, number>
+  samples: Map<string, string>
   parses: number
 }
 
@@ -500,8 +501,9 @@ function resetLines(w: Writer): void {
   w.starts.clear()
 }
 
-function noteReason(run: WriterRun, why: string): void {
+function noteReason(run: WriterRun, why: string, detail: string): void {
   run.stats.reasons.set(why, (run.stats.reasons.get(why) ?? 0) + 1)
+  if (!run.stats.samples.has(why)) run.stats.samples.set(why, detail)
 }
 
 /** The escapes of `w` with the planned ones added. */
@@ -543,18 +545,44 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
  * and once more with the planned escapes. Returns false, with `w` as before but for what the
  * first write of the repair would have done too, where the plan does not decide the group.
  */
-function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean): boolean {
-  const reported = w.losses.entries.length
+/** One planned write of the group. */
+function planWrite(w: Writer, group: readonly Node[]): Plan {
   resetLines(w)
   w.plan = createPlan()
+  noteDepths(w.plan, group)
   writeBlocks(w, group, '', 0, false)
   const plan = w.plan
   w.plan = null
-  const why = planReason(w, group, plan, reported)
-  if (why !== null) {
-    noteReason(run, why)
-    return false
+  return plan
+}
+
+// C2-W-069: each round gives more nodes their braced form, so a few rounds settle a group.
+const MAX_PLAN_ROUNDS = 4
+
+/** The plan of the group, with the braced forms it asks for in place. Null where it decides nothing. */
+function settledPlan(w: Writer, run: WriterRun, group: readonly Node[], reported: number): Plan | null {
+  const respelled: Node[] = []
+  for (let round = 0; round < MAX_PLAN_ROUNDS; round++) {
+    const plan = planWrite(w, group)
+    const why = planReason(w, group, plan, reported)
+    if (why === null && plan.respell.length === 0) return plan
+    if (why !== null || round === MAX_PLAN_ROUNDS - 1) {
+      noteReason(run, why ?? 'respell rounds', plan.detail)
+      break
+    }
+    for (const node of plan.respell) {
+      w.forms.set(node, 1)
+      respelled.push(node)
+    }
   }
+  for (const node of respelled) w.forms.delete(node)
+  return null
+}
+
+function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean): boolean {
+  const reported = w.losses.entries.length
+  const plan = settledPlan(w, run, group, reported)
+  if (plan === null) return false
   const kept = w.escapes
   if (plan.escapes.size > 0) {
     w.escapes = withPlanned(w, plan)
@@ -563,7 +591,7 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
   }
   if (run.check && w.lines.length > 0 && !readsBack(w, group, first)) {
     w.escapes = kept
-    noteReason(run, 'check')
+    noteReason(run, 'check', '')
     return false
   }
   return true
@@ -763,7 +791,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false): { output: WriteOutput, stats: WriterStats } {
-  const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), parses: 0 }
+  const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0 }
   const run: WriterRun = { path, check, stats }
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()

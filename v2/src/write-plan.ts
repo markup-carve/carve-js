@@ -2,7 +2,7 @@
 // looked up by its code in the tables of write-tables.ts, and a unit that can start a construct goes
 // to the resolver of its context. A resolver returns bare, an escape, or no decision; a leaf with no
 // decision is left to the repair of write.ts.
-import { type Node, type TextNode } from './ast.ts'
+import { forEachSlot, type Node, type TextNode } from './ast.ts'
 import { isWordCharacter } from './unicode.ts'
 import { IN_CELL } from './write-inline.ts'
 import {
@@ -15,15 +15,21 @@ import { type Writer } from './write-state.ts'
 /** What one planned write of a group collects. */
 export interface Plan {
   undecided: string | null
+  /** Where the plan lost its decision: the leaf around the unit, for the report of the gates. */
+  detail: string
   /** The text nodes that a planned leaf holds. */
   covered: Set<TextNode>
   /** The escapes the plan places, by text node, in ascending order. */
   escapes: Map<TextNode, number[]>
+  /** C2-W-069: the bare emphasis and strong that the next write gives their braced form. */
+  respell: Node[]
+  /** C2-I-118: for each list of nodes of the group, twice the number of blocks around it, a bound of its depth. */
+  depths: Map<readonly Node[], number>
   leaves: number
 }
 
 export function createPlan(): Plan {
-  return { undecided: null, covered: new Set(), escapes: new Map(), leaves: 0 }
+  return { undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], depths: new Map(), leaves: 0 }
 }
 
 /** How the caller of a leaf ends it: as `writeContent`, as `writeInlines`, or as a line of a line block. */
@@ -125,7 +131,8 @@ function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
   const before = leaf.kinds[at - 1]
-  if (before === ATOM || before === CLOSE) return undecide(leaf, 'attribute block')
+  // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
+  if ((before === ATOM || before === CLOSE) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
   undecidedIf(nextIs(leaf, at, '%#_='), leaf, 'brace')
 }
 
@@ -216,7 +223,8 @@ function lineOpener(leaf: Leaf, at: number, first: number): boolean {
     case 58: return isSpace(next) || next === 58
     case 96: return next === 96
     case 37: return next === 37
-    case 123: return lineEndsWith(leaf, at, 125)
+    // C2-B-090: a braced opener is no attribute block, so it opens no attribute line.
+    case 123: return !nextIs(leaf, at, '*+,-/^~=') && lineEndsWith(leaf, at, 125)
     case 91: return definitionShape(leaf, at)
     default: return true
   }
@@ -233,6 +241,7 @@ function definitionShape(leaf: Leaf, at: number): boolean {
 function checkLines(leaf: Leaf, start: number): void {
   if (start === LINE_START && opensBlock(leaf, 0)) return undecide(leaf, 'line start')
   for (let at = 0; at < leaf.codes.length; at++) {
+    leaf.cursor = at
     if (leaf.codes[at] === LF && leaf.kinds[at] !== TEXT && opensBlock(leaf, at + 1)) return undecide(leaf, 'line start')
   }
 }
@@ -261,13 +270,14 @@ function checkAtomEnd(leaf: Leaf, end: number, node: Node): void {
   if (type === 'mention' || type === 'tag' || type === 'caption_number') {
     undecidedIf(isAsciiAlphanumeric(next) || next === 95 || next === 45 || next === 46, leaf, 'sigil end')
   } else if (type === 'code' || type === 'literal_inline' || type === 'math' || type === 'raw_inline') {
-    undecidedIf(next === 96 || next === 123, leaf, 'code end')
+    undecidedIf(next === 96, leaf, 'code end')
   }
 }
 
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   const codes = leaf.codes
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
+    leaf.cursor = at
     const kind = leaf.kinds[at]
     if (kind === ATOM && leaf.kinds[at - 1] !== ATOM) {
       const node = leaf.owners[at]!
@@ -284,12 +294,28 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   }
 }
 
-function analyze(w: Writer, leaf: Leaf, start: number, flags: number): Uint8Array {
+/** Records the depth bound of every list of nodes below `nodes`: twice the number of nodes around its owner. */
+export function noteDepths(plan: Plan, nodes: readonly Node[]): void {
+  const pending: [readonly Node[], number][] = [[nodes, 0]]
+  for (;;) {
+    const item = pending.pop()
+    if (item === undefined) return
+    const [list, level] = item
+    for (const node of list) {
+      forEachSlot(node, (children) => {
+        plan.depths.set(children, 2 * level)
+        pending.push([children, level + 1])
+      })
+    }
+  }
+}
+
+function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number): Uint8Array {
   const escaped = new Uint8Array(leaf.codes.length)
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
-  if (leaf.undecided === null) checkPairs(leaf, escaped)
+  if (leaf.undecided === null) checkPairs(leaf, escaped, bound)
   return escaped
 }
 
@@ -323,16 +349,22 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
     leaf.offsets.push(-1)
   }
   if (leaf.undecided === null && leafText(leaf) !== content) undecide(leaf, 'model')
-  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags) : new Uint8Array(0)
+  const bound = plan.depths.get(nodes)
+  if (bound === undefined) undecide(leaf, 'depth')
+  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, bound ?? 0) : new Uint8Array(0)
   plan.leaves++
-  if (leaf.undecided !== null) plan.undecided = leaf.undecided
-  else record(plan, leaf, escaped)
+  if (leaf.undecided !== null) {
+    plan.undecided = leaf.undecided
+    plan.detail = JSON.stringify(leafText(leaf).slice(Math.max(0, leaf.where - 24), leaf.where + 24))
+  } else record(plan, leaf, escaped)
+  plan.respell.push(...leaf.respell)
   return content
 }
 
 /** A leaf the planner does not model: the group it stands in is undecided. */
 export function unplanned(w: Writer, why: string): void {
-  if (w.plan !== null && w.plan.undecided === null) w.plan.undecided = why
+  if (w.plan === null || w.plan.undecided !== null) return
+  w.plan.undecided = why
 }
 
 export { OPEN }
