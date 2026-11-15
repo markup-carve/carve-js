@@ -213,11 +213,12 @@ function demote(state: InlineState, open: number): void {
 
 /** C2-I-007: a bracket construct bounds the delimiters inside it. */
 function enterConstruct(state: InlineState, open: number): void {
-  if (state.tokens[open + TOKEN_C] === IMAGE) return
+  // C2-I-118: an image is a bracket construct like a link and is held to the same cap; it bounds no delimiter.
   if (depth(state) >= DEPTH_CAP) {
     demote(state, open)
     return
   }
+  if (state.tokens[open + TOKEN_C] === IMAGE) return
   state.stackFloor = push(state, open, BARRIER, state.stackFloor)
   state.lastSlash = NONE
   state.lastStar = NONE

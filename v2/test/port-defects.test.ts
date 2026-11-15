@@ -407,3 +407,22 @@ describe('C2-A-213: a supplied shortcut reference with no definition stays unres
     expect(renderTree(resolveTree(linkTo('full')))).toContain('<a href="#H">H</a>')
   })
 })
+
+describe('C2-I-118: an image and a link meet the depth cap alike', () => {
+  const leaf = (depth: number, content: string): unknown[] => {
+    let node = parse(`${'> '.repeat(depth)}${content}`) as unknown as { children: { type: string }[] }
+    while (node.children[0]!.type !== 'paragraph') node = node.children[0] as unknown as typeof node
+    return (node.children[0] as unknown as { children: { type: string }[] }).children.map((child) => child.type)
+  }
+
+  it('C2-I-118: an open delimiter entry counts for both bracket constructs', () => {
+    expect(leaf(197, '- *![x](u)')).toEqual(leaf(197, '- *[x](u)'))
+    expect(leaf(197, '- *![x](u)')).toEqual(['text'])
+    expect(leaf(197, '- *a* ![x](u)')).toEqual(['strong', 'text', 'image'])
+    expect(leaf(197, '- *a* [x](u)')).toEqual(['strong', 'text', 'link'])
+    expect(leaf(197, '- ![x](u)')).toEqual(['image'])
+    expect(leaf(197, '- [x](u)')).toEqual(['link'])
+    expect(leaf(198, '- ![x](u)')).toEqual(['text'])
+    expect(leaf(196, '- *![x](u)')).toEqual(['text', 'image'])
+  })
+})
