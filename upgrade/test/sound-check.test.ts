@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -124,12 +124,30 @@ describe('C2-W-100: the upgrade self-check', () => {
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
 
+  it('C2-B-066: a cited description-list attribute changes only the list that owns it', () => {
+    const result = upgrade('{loose}\n:: T\n\npara\n\n:: U\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toContain('U-172')
+  })
+
+  it('C2-W-100: two separate verified HTML changes can be cited in one source', () => {
+    const result = upgrade('- [ ] a\n\n{loose}\n:: T\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toContain('U-133')
+    expect(result.records.map((record) => record.entry)).toContain('U-172')
+  })
+
   it('C2-H-032: task class and generated style are real HTML differences', () => {
     expect(compareHtmlExact('<li>x</li>', '<li class="task" style="list-style: none">x</li>').equal).toBe(false)
   })
 
   it.each(['- [ ] x\n\n- a\n\n  c\n', '- a\n\n  c\n\n- [ ] x\n'])
   ('C2-H-032: task presentation verifies beside a loose one-item list in either order', (input) => {
+    expect(upgrade(input).check).toBe('explained')
+  })
+
+  it.each(['-{.foo} [ ] a\n', '-{style="color: red"} [ ] a\n'])
+  ('C2-H-032: generated task presentation preserves authored attributes', (input) => {
     expect(upgrade(input).check).toBe('explained')
   })
 
@@ -189,6 +207,21 @@ describe('C2-W-100: the upgrade self-check', () => {
       const done = spawnSync(process.execPath,
         [join(import.meta.dirname, '../src/cli.ts'), '--write', file, join(dir, 'missing.crv')])
       expect(done.status).toBe(2)
+      expect(readFileSync(file, 'utf8')).toBe(input)
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
+  it('C2-W-101: a write failure has a categorized status without a stack trace', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-readonly-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const input = '```js{1,3}\na\n```\n'
+      writeFileSync(file, input)
+      chmodSync(file, 0o444)
+      const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', file])
+      expect(done.status).toBe(2)
+      expect(done.stderr.toString()).toMatch(/^carve\[input-unreadable\]:/)
+      expect(done.stderr.toString()).not.toContain('\n    at ')
       expect(readFileSync(file, 'utf8')).toBe(input)
     } finally { rmSync(dir, { recursive: true }) }
   })

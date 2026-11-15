@@ -46,23 +46,33 @@ function emit(flags: Flags, file: string, result: UpgradeResult): void {
   }
 }
 
-function run(flags: Flags): number {
-  let status = 0
-  const all: object[] = []
+function decodeFiles(files: readonly string[]): { file: string; source: string }[] | null {
   const sources: { file: string; source: string }[] = []
-  for (const file of flags.files) {
+  for (const file of files) {
     try {
       const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(file))
       sources.push({ file, source })
     }
     catch (error) {
       process.stderr.write(`carve[input-unreadable]: ${file}: ${String(error)}\n`)
-      return 2
+      return null
     }
   }
+  return sources
+}
+
+function run(flags: Flags): number {
+  let status = 0
+  const all: object[] = []
+  const sources = decodeFiles(flags.files)
+  if (sources === null) return 2
   for (const { file, source } of sources) {
     const result = upgrade(source)
-    emit(flags, file, result)
+    try { emit(flags, file, result) }
+    catch (error) {
+      process.stderr.write(`carve[input-unreadable]: ${file}: ${String(error)}\n`)
+      return 2
+    }
     if (needsAttention(result) || (flags.check && result.changed)) status = 1
     if (flags.json) all.push({ file, changed: result.changed, check: result.check, records: result.records })
     else for (const record of result.records) process.stderr.write(formatRecord(file, record) + '\n')

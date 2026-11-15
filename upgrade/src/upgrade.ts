@@ -197,7 +197,7 @@ function addDifferenceReports(input: string, done: Rewritten, old: string, next:
 }
 
 function applyCitedHtml(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
-  const transformed = applyHtmlTransformations(old, records.map((record) => record.entry))
+  const transformed = applyHtmlTransformations(old, next, records.map((record) => record.entry))
   if (hasEntry(records, 'U-021')) {
     const without = dropOnlyItemParagraphs(transformed.html)
     if (without !== transformed.html) { transformed.html = without; transformed.applied.push('U-021') }
@@ -215,12 +215,28 @@ function applyCitedHtml(old: string, next: string, records: ReportRecord[]): Ret
   return transformed
 }
 
+function transformWithRemainderReports(input: string, done: Rewritten, old: string, next: string):
+  ReturnType<typeof applyHtmlTransformations> {
+  let transformed = applyCitedHtml(old, next, done.records)
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const remainder = compareHtmlExact(transformed.html, next).difference
+    if (remainder === null) break
+    const report = measuredReport(input, remainder.expected, remainder.actual, placeOf(input, done, remainder.line))
+    if (report === null || hasEntry(done.records, report.entry)) break
+    done.records.push(report)
+    const nextTransform = applyCitedHtml(old, next, done.records)
+    if (nextTransform.html === transformed.html) break
+    transformed = nextTransform
+  }
+  return transformed
+}
+
 function classifyDifference(input: string, done: Rewritten, old: string, next: string,
   compared: ReturnType<typeof compareHtmlExact>): UpgradeResult['check'] {
   const { records } = done
   const difference = compared.difference
   if (difference === null) return 'pass'
-  const transformed = applyCitedHtml(old, next, records)
+  const transformed = transformWithRemainderReports(input, done, old, next)
   if (transformed.applied.length > 0 && compareHtmlExact(transformed.html, next).equal) {
     const entries = [...new Set(transformed.applied)]
     const message = `the HTML matches after the declared transformations of ${entries.join(', ')}`
@@ -235,7 +251,7 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   }
   const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
   const { line, expected, actual } = remainder
-  const message = `the HTML differs: 0.1 gives ${JSON.stringify(expected)}, 0.2 gives ${JSON.stringify(actual)}`
+  const message = `the HTML still differs after cited transformations: left ${JSON.stringify(expected)}, 0.2 ${JSON.stringify(actual)}`
   records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: placeOf(input, done, line), message })
   return 'mismatch'
 }

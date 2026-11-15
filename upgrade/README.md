@@ -13,7 +13,7 @@ node upgrade/src/cli.ts [--check] [--write] [--json] [--force] FILE...
 - `--json` prints the report as JSON on stdout.
 
 Exit status: 0 when nothing needs a person, 1 when a report entry hit or the self-check found a
-difference, 2 for a usage or unreadable-input error. Malformed UTF-8 is an unreadable-input error;
+difference, 2 for a usage or file I/O error. Malformed UTF-8 is an unreadable-input error;
 `--write` leaves its bytes untouched.
 Pure CRLF input is rewritten with LF internally and returned with CRLF. The command reads every
 input before it writes any file, so an unreadable file prevents writes to earlier files.

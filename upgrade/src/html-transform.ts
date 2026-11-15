@@ -1,5 +1,5 @@
 import transformations from '../data/html-transformations.json' with { type: 'json' }
-import { htmlTokens } from './compare.ts'
+import { compareHtml, htmlTokens } from './compare.ts'
 
 interface Result { html: string; applied: string[] }
 
@@ -12,8 +12,7 @@ export function addTaskPresentation(old: string, next: string): Result {
     const before = source[at]
     const after = target[at]
     if (before === undefined || after === undefined || !before.startsWith('<li') || !after.startsWith('<li')) continue
-    const stripped = after.replace(' class="task"', '').replace(' style="list-style: none"', '')
-    if (stripped !== before || stripped === after) continue
+    if (before === after || !after.includes('task') || !compareHtml(before, after).equal) continue
     source[at] = after
     changed = true
   }
@@ -129,15 +128,22 @@ function moveNoteReference(tokens: string[]): boolean {
   return changed
 }
 
-export function applyHtmlTransformations(old: string, entries: readonly string[]): Result {
+function targetMatches(change: { after: string[]; right: string | null }, target: readonly string[], index: number): boolean {
+  if (change.after.length > 0) return at(target, change.after, null, null, index)
+  return change.right === null ? index === target.length : target[index] === change.right
+}
+
+export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
   const tokens = htmlTokens(old)
+  const target = htmlTokens(next)
   const applied: string[] = []
   const cited = new Set(entries)
   if (cited.has('U-154') && moveNoteReference(tokens)) applied.push('U-154')
   for (const change of transformations) {
     if (!cited.has(change.id)) continue
     for (let index = 0; index <= tokens.length - change.before.length;) {
-      if (!at(tokens, change.before, change.left, change.right, index)) { index++; continue }
+      if (!at(tokens, change.before, change.left, change.right, index)
+        || !targetMatches(change, target, index)) { index++; continue }
       tokens.splice(index, change.before.length, ...change.after)
       applied.push(change.id)
       index += change.after.length
