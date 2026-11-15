@@ -1900,12 +1900,14 @@
   },
   {
     "id": "U-190",
-    "title": "Smart Quote In A Punctuation Boundary",
+    "title": "Smart quote in punctuation and opaque attribute boundaries",
     "inputs": [
-      "-\"\\\n"
+      "-\"\\\n",
+      "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n"
     ],
     "outputs": [
-      "-”\\\n"
+      "-”\\\n",
+      "x{.k title=“`\"} y\n\nx{title=“[a\"}](u)\n\nx{*a { b*} c\n"
     ],
     "class": "rewrite"
   },

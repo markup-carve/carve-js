@@ -2415,6 +2415,24 @@
     ]
   },
   {
+    "cause": "C43",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0152-leading-attribute-brace-before-an-inline-span-stays-literal.md",
+    "line": 22,
+    "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
+    "check": "pass",
+    "entries": ["U-190"]
+  },
+  {
+    "cause": "C43",
+    "clause": "C2-I-035",
+    "path": "tests/corpus/152-leading-attribute-brace-before-an-inline-span-stays-literal-2.crv",
+    "line": 1,
+    "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
+    "check": "pass",
+    "entries": ["U-190"]
+  },
+  {
     "cause": "C90",
     "clause": "C2-B-072",
     "path": "resources/examples/edge-cases/0478-a-definition-body-s-open-code-fence-ends-at-a-line-below-its-column.md",

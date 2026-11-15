@@ -62,6 +62,9 @@ function bracketCandidates(output: string): Candidate[] {
 function smartQuoteCandidates(output: string, expected: string): Candidate[] {
   const found: Candidate[] = []
   if (output.includes('{+') || output.includes('{-')) return found
+  if (expected.includes('“') && output.split('="').length > 2) {
+    found.push({ id: 'U-190', output: output.replaceAll('="', '=“') })
+  }
   for (const quote of ['\u2018', '\u2019', '\u201c', '\u201d']) {
     if (!expected.includes(quote)) continue
     const plain = quote === '\u2018' || quote === '\u2019' ? "'" : '"'
