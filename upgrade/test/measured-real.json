@@ -2213,10 +2213,8 @@
     "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
     "line": 6,
     "input": "::: e[]\n",
-    "check": "mismatch",
-    "entries": [
-      "U-156"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C84",

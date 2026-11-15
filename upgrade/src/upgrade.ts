@@ -65,7 +65,7 @@ function rewrite(input: string): Rewritten {
       message: 'brace tail kept because removing it has no HTML effect in either engine' })
   }
   const output = applyEdits(input, edits)
-  if (output !== input && noHtmlEffect(input, output, records)) {
+  if (output !== input && !edits.some((edit) => edit.diagnosed === true) && noHtmlEffect(input, output, records)) {
     return { output: input, records: records.filter((record) => record.class === 'report' || record.class === 'none'
       || record.entry === 'upgrade-error'), edits: [] }
   }
@@ -83,6 +83,7 @@ function removeNoEffectEntries(input: string, selected: Edit[], rawHtml: boolean
   let kept = selected
   let output = applyEdits(input, kept)
   for (const entry of new Set(selected.map((edit) => edit.entry))) {
+    if (selected.some((edit) => edit.entry === entry && edit.diagnosed === true)) continue
     const without = kept.filter((edit) => edit.entry !== entry)
     const candidate = applyEdits(input, without)
     if (!sameBothEngines(output, candidate, rawHtml)) continue

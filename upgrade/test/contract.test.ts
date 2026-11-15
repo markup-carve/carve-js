@@ -40,7 +40,13 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
-  'U-114#4': { entry: 'U-114', check: 'mismatch' }
+  'U-114#4': { entry: 'U-114', check: 'mismatch' },
+  // C2-B-119: the div name ends at its character set, so 0.2 writes the class `e` as 0.1 does.
+  'U-156#0': { check: 'pass' },
+  // C2-I-111: the run is decided as a whole, so 0.2 writes four en dashes as 0.1 does.
+  'U-173#0': { check: 'pass' },
+  // C2-I-034, C2-B-101: an invalid brace block makes no list marker, so 0.2 reads the paragraph of 0.1.
+  'U-208#0': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */

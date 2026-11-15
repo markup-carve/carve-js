@@ -17,10 +17,9 @@ describe('C2-B-090, C2-B-100, C2-B-101 empty attribute boundaries', () => {
     })
   }
 
-  it('U-208 keeps a braced insertion after a literal dash in a paragraph', () => {
+  it('U-208, C2-I-034: a braced insertion after a dash needs no escape, as no engine reads a list item', () => {
     const result = upgrade('-{+a+} text\n')
-    expect(result.output).toBe('\\-{+a+} text\n')
+    expect(result.output).toBe('-{+a+} text\n')
     expect(result.check).toBe('pass')
-    expect(result.records.map((record) => record.entry)).toContain('U-208')
   })
 })

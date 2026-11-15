@@ -1,6 +1,6 @@
 // Contract 2.3: attribute lines, and what follows a fence language or a div name.
 import { change, type Context, note, type Visit } from '../context.ts'
-import { type Node01 } from '../engines.ts'
+import { type Node01, reported02 } from '../engines.ts'
 import { indentOf, isBlank, lineEnd, lineStart, lineText } from '../source.ts'
 import { insideQuotes, isAttributeGap, isBlankInQuotes, isGap, removeLine } from './lines.ts'
 
@@ -99,8 +99,11 @@ function openerTail(ctx: Context, node: Node01): void {
   if (at < 0) return
   const rest = ctx.src.slice(at, end).trim()
   if (rest === '' || rest.startsWith('"')) return
-  if (rest.startsWith('{'))
-    change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
+  if (!rest.startsWith('{')) return
+  change(ctx, 'U-037', at, end, '', 'attribute block after the fence language or div name removed, as 0.1 dropped it')
+  // C2-B-105: 0.2 opens the block without the tail too, but reports it, so the edit stays though no HTML changes.
+  const edit = ctx.findings[ctx.findings.length - 1]?.edit
+  if (edit !== null && edit !== undefined && reported02(ctx.src, 'fence-opener-fallback', at)) edit.diagnosed = true
 }
 
 function rank(name: string): number {

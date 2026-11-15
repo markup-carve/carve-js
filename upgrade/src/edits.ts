@@ -7,6 +7,8 @@ export interface Edit {
   entry: string
   /** Order of collection, the last key of the sort. */
   sequence: number
+  /** The 0.2 engine reports the span this edit removes, so the edit stays when it changes no HTML. */
+  diagnosed?: boolean
 }
 
 function before(a: Edit, b: Edit): number {

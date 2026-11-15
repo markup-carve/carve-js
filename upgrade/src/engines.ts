@@ -1,7 +1,7 @@
 // The two engines the tool stands between. The 0.1 engine is the build of `src/` of this
 // repository; the 0.2 engine is `v2/`. Nothing here is imported by either.
 import { carveToHtml, LIB_VERSION, parse } from '../../dist/index.js'
-import { render } from '../../v2/src/index.ts'
+import { type Diagnostic, parseWithDiagnostics, render, utf8Length } from '../../v2/src/index.ts'
 
 export interface Pos {
   startLine: number
@@ -42,4 +42,11 @@ export function html02(src: string, rawHtml: boolean): string {
 /** The HTML the 0.2 engine gives for the fragment `src`, for a rule that asks how 0.2 reads a line. */
 export function probe02(src: string): string {
   return render(src)
+}
+
+/** Whether the 0.2 engine reports `code` for a range that holds the string offset `offset` of `src`. */
+export function reported02(src: string, code: string, offset: number): boolean {
+  const at = utf8Length(src.slice(0, offset))
+  return parseWithDiagnostics(src).diagnostics.some((diagnostic: Diagnostic) => diagnostic.code === code
+    && diagnostic.range !== undefined && diagnostic.range.startOffset <= at && at < diagnostic.range.endOffset)
 }
