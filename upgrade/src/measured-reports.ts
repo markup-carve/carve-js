@@ -1,12 +1,30 @@
 import { recordOf, type ReportRecord } from './report.ts'
 import measuredExamples from '../data/measured-reports.json' with { type: 'json' }
+import transformations from '../data/html-transformations.json' with { type: 'json' }
 import { matchMeasured } from './measured-matchers.ts'
 
 export const MEASURED_REPORT_IDS: readonly string[] = measuredExamples.map((item) => item.id)
+export const TASK_PRESENTATION_MESSAGE =
+  'C2-H-032 adds the task class and generated list style; the checkbox label follows 0.2 plain text'
 
 export function exactMeasuredReport(input: string, line: number): ReportRecord | null {
   const example = measuredExamples.find((item) => item.input === input)
   return example === undefined ? null : recordOf(example.id, line, example.message)
+}
+
+function catalogDifference(expected: string, actual: string, line: number): ReportRecord | null {
+  for (const change of transformations) {
+    const before = change.before.join('')
+    const after = change.after.join('')
+    if (before.length === 0 || after.length === 0 || !expected.includes(before) || !actual.includes(after)) continue
+    const example = measuredExamples.find((item) => item.id === change.id)
+    if (example !== undefined) return recordOf(example.id, line, example.message)
+  }
+  return null
+}
+
+function remainderCatalog(expected: string, actual: string, line: number, remainder: boolean): ReportRecord | null {
+  return remainder ? catalogDifference(expected, actual, line) : null
 }
 
 function hasDefinitionLine(input: string, prefix: string, includeFootnote = false): boolean {
@@ -105,7 +123,7 @@ function boundaryReport(input: string, expected: string, actual: string, line: n
   if (input.includes('</#') && expected.includes('<a href=') && actual.includes('<a href=')) return recordOf('U-206', line,
     'C2-H-095 and C2-H-096 use plain heading text or the caption label and number for a resolved cross-reference')
   if (taskLabelBoundary(input, expected, actual)) return recordOf('U-133', line,
-    'C2-H-032 derives the task item aria label from its 0.2 plain text boundary')
+    TASK_PRESENTATION_MESSAGE)
   if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,
     'C2-I-060, C2-I-062, and C2-I-119 close the nested braced inline form at its own boundary')
   return null
@@ -170,7 +188,8 @@ function lateMeasuredReport(input: string, expected: string, actual: string, lin
 }
 
 /** Reports the measured, clause-backed HTML changes that have no source rewrite. */
-export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
+export function measuredReport(input: string, expected: string, actual: string, line: number,
+  remainder = false): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
   if (exact !== null) return exact
   if (wrappedLinkTitle(input, expected)) return recordOf('U-221', line,
@@ -185,7 +204,9 @@ export function measuredReport(input: string, expected: string, actual: string, 
   if (input.includes('{table') && input.includes('```csv')) return recordOf('U-061', line,
     'the delimited table with malformed quoting changes ownership under the 0.2 table rules')
   if (taskDifference(expected, actual)) return recordOf('U-133', line,
-    'C2-H-032 adds the task item class, style, and plain-text checkbox label')
+    TASK_PRESENTATION_MESSAGE)
+  const catalog = remainderCatalog(expected, actual, line, remainder)
+  if (catalog !== null) return catalog
   const measuredId = matchMeasured(input, expected, actual)
   if (measuredId !== null) {
     const example = measuredExamples.find((item) => item.id === measuredId)

@@ -61,6 +61,11 @@ function decodeFiles(files: readonly string[]): { file: string; source: string }
   return sources
 }
 
+function attentionStatus(status: number, flags: Flags, result: UpgradeResult): number {
+  if (status === 2) return status
+  return needsAttention(result) || (flags.check && result.changed) ? 1 : status
+}
+
 function run(flags: Flags): number {
   let status = 0
   const all: object[] = []
@@ -70,10 +75,10 @@ function run(flags: Flags): number {
     const result = upgrade(source)
     try { emit(flags, file, result) }
     catch (error) {
-      process.stderr.write(`carve[input-unreadable]: ${file}: ${String(error)}\n`)
-      return 2
+      process.stderr.write(`carve[output-unwritable]: ${file}: ${String(error)}\n`)
+      status = 2
     }
-    if (needsAttention(result) || (flags.check && result.changed)) status = 1
+    status = attentionStatus(status, flags, result)
     if (flags.json) all.push({ file, changed: result.changed, check: result.check, records: result.records })
     else for (const record of result.records) process.stderr.write(formatRecord(file, record) + '\n')
   }
@@ -83,6 +88,10 @@ function run(flags: Flags): number {
 }
 
 const flags = readFlags(process.argv.slice(2))
+process.stdout.on('error', (error) => {
+  process.stderr.write(`carve[output-unwritable]: stdout: ${String(error)}\n`)
+  process.exitCode = 2
+})
 if (flags === null) {
   process.stderr.write(USAGE + '\n')
   process.exitCode = 2

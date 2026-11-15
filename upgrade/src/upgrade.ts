@@ -2,14 +2,15 @@ import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
-import { needsPerson, recordOf, type ReportRecord } from './report.ts'
+import { ENTRIES, needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { rescuePlus } from './plus-rescue.ts'
 import { rescueQuote } from './quote-rescue.ts'
 import { rescueFence } from './fence-rescue.ts'
 import { rescueDescription } from './description-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
-import { measuredReport } from './measured-reports.ts'
-import { addTaskPresentation, applyHtmlTransformations, wrapLaterItemParagraphs } from './html-transform.ts'
+import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
+import { addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
+  wrapLaterItemParagraphs } from './html-transform.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
 import { RULES } from './rules/index.ts'
@@ -150,20 +151,10 @@ function longerColonClose(input: string): number {
   return 0
 }
 
-function recordMeasured(input: string, done: Rewritten, comparison: ReturnType<typeof compareHtml>): void {
-  const difference = comparison.difference
-  if (difference === null) return
-  const { expected, actual, line } = difference
-  const place = placeOf(input, done, line)
-  const measured = measuredReport(input, expected, actual, place)
-  if (measured !== null && !hasEntry(done.records, measured.entry)) done.records.push(measured)
-}
-
 function reportTaskHtml(old: string, next: string, records: ReportRecord[]): void {
-  const changed = old.includes('<input') && next.includes('class="task"') && !old.includes('class="task"')
+  const changed = old.includes('<input') && hasTaskPresentationDifference(old, next)
   if (!changed) return
-  if (!hasEntry(records, 'U-133')) records.push(recordOf('U-133', 0,
-    'C2-H-032 adds the task class, style, and plain-text checkbox label'))
+  if (!hasEntry(records, 'U-133')) records.push(recordOf('U-133', 0, TASK_PRESENTATION_MESSAGE))
 }
 
 function preserveLineEndings(input: string, output: string): string {
@@ -171,8 +162,7 @@ function preserveLineEndings(input: string, output: string): string {
   return output.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
 }
 
-function addDifferenceReports(input: string, done: Rewritten, old: string, next: string,
-  compared: ReturnType<typeof compareHtmlExact>, diagnose: boolean): void {
+function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
@@ -183,7 +173,6 @@ function addDifferenceReports(input: string, done: Rewritten, old: string, next:
   if (!normalized.equal && compareHtml(old, next, true).equal && !hasEntry(records, 'U-021')) {
     records.push(recordOf('U-021', 0, 'the one-item list loses its loose paragraph wrapper under C2-B-062 and C2-H-036'))
   }
-  if (diagnose) recordMeasured(input, done, compared)
   const colonLine = innerColonClose(input)
   if (colonLine > 0 && !hasEntry(records, 'U-114')) {
     records.push(recordOf('U-114', colonLine,
@@ -196,21 +185,45 @@ function addDifferenceReports(input: string, done: Rewritten, old: string, next:
   }
 }
 
-function applyCitedHtml(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
-  const transformed = applyHtmlTransformations(old, next, records.map((record) => record.entry))
-  if (hasEntry(records, 'U-021')) {
-    const without = dropOnlyItemParagraphs(transformed.html)
-    if (without !== transformed.html) { transformed.html = without; transformed.applied.push('U-021') }
-  }
+function applyCitedStep(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
+  const entries = records.map((record) => record.entry)
+  const transformed: ReturnType<typeof applyHtmlTransformations> = { html: old, applied: [] }
   if (hasEntry(records, 'U-019')) {
     const wrapped = wrapLaterItemParagraphs(transformed.html, next)
     transformed.html = wrapped.html
     transformed.applied.push(...wrapped.applied)
   }
-  if (hasEntry(records, 'U-133')) {
-    const task = addTaskPresentation(transformed.html, next)
-    transformed.html = task.html
-    transformed.applied.push(...task.applied)
+  if (hasEntry(records, 'U-133') || hasEntry(records, 'U-159')) {
+    const labels = applyHtmlTransformations(transformed.html, next,
+      entries.filter((entry) => entry === 'U-133' || entry === 'U-159'))
+    transformed.html = labels.html
+    transformed.applied.push(...labels.applied)
+    if (hasEntry(records, 'U-133')) {
+      const task = addTaskPresentation(transformed.html, next)
+      transformed.html = task.html
+      transformed.applied.push(...task.applied)
+    }
+  }
+  const catalog = applyHtmlTransformations(transformed.html, next,
+    entries.filter((entry) => entry !== 'U-154' && entry !== 'U-133' && entry !== 'U-159'))
+  transformed.html = catalog.html
+  transformed.applied.push(...catalog.applied)
+  return transformed
+}
+
+function applyCitedHtml(old: string, next: string, records: ReportRecord[]): ReturnType<typeof applyHtmlTransformations> {
+  const transformed = applyHtmlTransformations(old, next, hasEntry(records, 'U-154') ? ['U-154'] : [])
+  if (hasEntry(records, 'U-021')) {
+    const without = dropOnlyItemParagraphs(transformed.html)
+    if (without !== transformed.html) { transformed.html = without; transformed.applied.push('U-021') }
+  }
+  const seen = new Set<string>()
+  while (!seen.has(transformed.html)) {
+    seen.add(transformed.html)
+    const step = applyCitedStep(transformed.html, next, records)
+    if (step.html === transformed.html) break
+    transformed.html = step.html
+    transformed.applied.push(...step.applied)
   }
   return transformed
 }
@@ -218,10 +231,11 @@ function applyCitedHtml(old: string, next: string, records: ReportRecord[]): Ret
 function transformWithRemainderReports(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
   let transformed = applyCitedHtml(old, next, done.records)
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < ENTRIES.length; attempt++) {
     const remainder = compareHtmlExact(transformed.html, next).difference
     if (remainder === null) break
-    const report = measuredReport(input, remainder.expected, remainder.actual, placeOf(input, done, remainder.line))
+    const report = measuredReport(input, remainder.expected, remainder.actual, placeOf(input, done, remainder.line),
+      transformed.applied.length > 0)
     if (report === null || hasEntry(done.records, report.entry)) break
     done.records.push(report)
     const nextTransform = applyCitedHtml(old, next, done.records)
@@ -231,24 +245,28 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
   return transformed
 }
 
+function markUnusedReports(records: ReportRecord[], applied: Set<string>): void {
+  for (const record of records) {
+    if ((record.class === 'report' || record.entry === 'U-019') && !applied.has(record.entry)) {
+      record.class = 'unverified explanation'
+    }
+  }
+}
+
 function classifyDifference(input: string, done: Rewritten, old: string, next: string,
   compared: ReturnType<typeof compareHtmlExact>): UpgradeResult['check'] {
   const { records } = done
   const difference = compared.difference
   if (difference === null) return 'pass'
   const transformed = transformWithRemainderReports(input, done, old, next)
-  if (transformed.applied.length > 0 && compareHtmlExact(transformed.html, next).equal) {
+  const equal = compareHtmlExact(transformed.html, next).equal
+  if (transformed.applied.length > 0 && equal) {
     const entries = [...new Set(transformed.applied)]
     const message = `the HTML matches after the declared transformations of ${entries.join(', ')}`
     records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, difference.line), message })
     return 'explained'
   }
-  const applied = new Set(transformed.applied)
-  for (const record of records) {
-    if ((record.class === 'report' || record.entry === 'U-019') && !applied.has(record.entry)) {
-      record.class = 'unverified explanation'
-    }
-  }
+  markUnusedReports(records, new Set(transformed.applied))
   const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
   const { line, expected, actual } = remainder
   const message = `the HTML still differs after cited transformations: left ${JSON.stringify(expected)}, 0.2 ${JSON.stringify(actual)}`
@@ -256,7 +274,7 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   return 'mismatch'
 }
 
-function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeResult['check'] {
+function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
   let old: string
   let next: string
   try {
@@ -270,7 +288,7 @@ function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeRes
   }
   const compared = compareHtmlExact(old, next)
   if (compared.difference === null) return 'pass'
-  addDifferenceReports(input, done, old, next, compared, diagnose)
+  addDifferenceReports(input, done, old, next)
   return classifyDifference(input, done, old, next, compared)
 }
 
@@ -295,7 +313,7 @@ function upgradeCore(input: string): UpgradeResult {
         done.records.push(rescued.record)
         done.output = rescued.output
       }
-      check = selfCheck(input, done, true)
+      check = selfCheck(input, done)
     }
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }

@@ -3,6 +3,33 @@ import { compareHtml, htmlTokens } from './compare.ts'
 
 interface Result { html: string; applied: string[] }
 
+export function hasTaskClass(token: string): boolean {
+  const start = token.indexOf(' class="')
+  if (start < 0) return false
+  const end = token.indexOf('"', start + 8)
+  return end > start && token.slice(start + 8, end).split(' ').includes('task')
+}
+
+function taskStyle(token: string): boolean {
+  return token.includes(' style="list-style: none"') || token.includes(' style="list-style: none; ')
+}
+
+function taskPresentationChange(before: string, after: string): boolean {
+  return isLiOpen(before) && isLiOpen(after) && before !== after && hasTaskClass(after) && taskStyle(after)
+    && !(hasTaskClass(before) && taskStyle(before)) && compareHtml(before, after).equal
+}
+
+export function hasTaskPresentationDifference(old: string, next: string): boolean {
+  const before = htmlTokens(old).filter(isLiOpen)
+  const after = htmlTokens(next).filter(isLiOpen)
+  for (let index = 0; index < Math.min(before.length, after.length); index++) {
+    const left = before[index]
+    const right = after[index]
+    if (left !== undefined && right !== undefined && taskPresentationChange(left, right)) return true
+  }
+  return false
+}
+
 /** C2-H-032: add only the generated task class and list style to an existing task item tag. */
 export function addTaskPresentation(old: string, next: string): Result {
   const source = htmlTokens(old)
@@ -12,7 +39,7 @@ export function addTaskPresentation(old: string, next: string): Result {
     const before = source[at]
     const after = target[at]
     if (before === undefined || after === undefined || !before.startsWith('<li') || !after.startsWith('<li')) continue
-    if (before === after || !after.includes('task') || !compareHtml(before, after).equal) continue
+    if (!taskPresentationChange(before, after)) continue
     source[at] = after
     changed = true
   }

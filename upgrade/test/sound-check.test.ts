@@ -137,6 +137,45 @@ describe('C2-W-100: the upgrade self-check', () => {
     expect(result.records.map((record) => record.entry)).toContain('U-172')
   })
 
+  it.each([
+    '- a\n\n  c\n\n{loose}\n:: T\n',
+    '- a\n+\nsecond\n- b\n+\nthird\n\n{loose}\n:: T\n',
+    'a [t^[n]](/u) b\n\npara\n\n{loose}\n:: T\n',
+    '{loose}\n:: T\n\npara\n\n/{/\n',
+    '{loose}\n:: T\n\npara\n\n- a\n+\nsecond\n- b\n+\nthird\n',
+    '|{#x}|\n\n-{.foo} [ ] a\n',
+  ])('C2-W-100: independent cited HTML changes verify in source order', (input) => {
+    expect(upgrade(input).check).toBe('explained')
+  })
+
+  it('C2-W-100: an unrelated ownership report does not block a verified change', () => {
+    const result = upgrade('- ```\n  x\n\n+\ntail\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).not.toContain('U-209')
+  })
+
+  it('C2-H-032: authored task class still needs the generated style', () => {
+    const result = upgrade('-{.task} [ ] a\n')
+    expect(result.check).toBe('explained')
+    expect(result.records.map((record) => record.entry)).toContain('U-133')
+  })
+
+  it('C2-H-032: an unchanged authored task class does not cite task presentation', () => {
+    const result = upgrade('-{.task} x\n\n`<input>`{=html}\n\nc--------\n')
+    expect(result.records.map((record) => record.entry)).not.toContain('U-133')
+  })
+
+  it('C2-W-100: repeated independent changes settle beyond four passes', () => {
+    const unit = '- a\n+\nsecond\n- b\n+\nthird\n\n{loose}\n:: T\n\n'
+    expect(upgrade(unit.repeat(5)).check).toBe('explained')
+  })
+
+  it('C2-H-032: a report with no HTML effect does not block a task transformation', () => {
+    const result = upgrade('Some text\n{{ other.crv }}\n\n- [ ] a\n')
+    expect(result.check).toBe('explained')
+    expect(canWriteUpgrade(result)).toBe(true)
+  })
+
   it('C2-H-032: task class and generated style are real HTML differences', () => {
     expect(compareHtmlExact('<li>x</li>', '<li class="task" style="list-style: none">x</li>').equal).toBe(false)
   })
@@ -211,18 +250,34 @@ describe('C2-W-100: the upgrade self-check', () => {
     } finally { rmSync(dir, { recursive: true }) }
   })
 
-  it('C2-W-101: a write failure has a categorized status without a stack trace', () => {
+  it.skipIf(process.getuid?.() === 0)('C2-W-101: a write failure has a categorized status without a stack trace', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-readonly-'))
     try {
       const file = join(dir, 'case.crv')
       const input = '```js{1,3}\na\n```\n'
       writeFileSync(file, input)
       chmodSync(file, 0o444)
-      const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', file])
+      const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', '--json', file])
       expect(done.status).toBe(2)
-      expect(done.stderr.toString()).toMatch(/^carve\[input-unreadable\]:/)
+      expect(done.stderr.toString()).toMatch(/^carve\[output-unwritable\]:/)
       expect(done.stderr.toString()).not.toContain('\n    at ')
+      const report: unknown = JSON.parse(done.stdout.toString())
+      expect(report).toMatchObject({ files: [{ file }] })
       expect(readFileSync(file, 'utf8')).toBe(input)
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
+  it('C2-W-101: a closed stdout has a categorized status without a stack trace', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-stdout-'))
+    try {
+      const file = join(dir, 'case.crv')
+      writeFileSync(file, 'a\n')
+      const command = '"$1" "$2" "$3" > /dev/full'
+      const done = spawnSync('bash', ['-c', command, '_', process.execPath,
+        join(import.meta.dirname, '../src/cli.ts'), file])
+      expect(done.status).toBe(2)
+      expect(done.stderr.toString()).toMatch(/carve\[output-unwritable\]: stdout:/)
+      expect(done.stderr.toString()).not.toContain('\n    at ')
     } finally { rmSync(dir, { recursive: true }) }
   })
 
