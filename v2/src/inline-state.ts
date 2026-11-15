@@ -249,12 +249,28 @@ export function writeInlineEvent(state: InlineState, tag: number, a: number, b: 
 }
 
 const LINE_FEED = 10
+const SPACE = 32
+const TAB = 9
+const BACKSLASH = 92
 
-/** The lines `spans[from..to)` of the source with one line feed between two. */
+/**
+ * C2-I-002: the end of the line `[start, end)` without its spaces and tabs at the end, on every line of
+ * the content. A space that a backslash escapes stays (C2-I-011): an odd number of backslashes stands before it.
+ */
+function lineEnd(src: string, start: number, end: number): number {
+  let trimmed = end
+  while (trimmed > start && (src.charCodeAt(trimmed - 1) === SPACE || src.charCodeAt(trimmed - 1) === TAB)) trimmed--
+  if (trimmed === end || src.charCodeAt(trimmed) !== SPACE) return trimmed
+  let first = trimmed
+  while (first > start && src.charCodeAt(first - 1) === BACKSLASH) first--
+  return (trimmed - first) % 2 === 1 ? trimmed + 1 : trimmed
+}
+
+/** The lines `spans[from..to)` of the source, each without its trailing spaces, with one line feed between two. */
 function joinLines(src: string, spans: ArrayLike<number>, from: number, to: number): string {
   if (from >= to) return ''
-  let text = src.slice(spans[from], spans[from + 1])
-  for (let at = from + 2; at < to; at += 2) text += `\n${src.slice(spans[at], spans[at + 1])}`
+  let text = src.slice(spans[from], lineEnd(src, spans[from]!, spans[from + 1]!))
+  for (let at = from + 2; at < to; at += 2) text += `\n${src.slice(spans[at], lineEnd(src, spans[at]!, spans[at + 1]!))}`
   return text
 }
 
@@ -269,16 +285,16 @@ export function setContent(state: InlineState, src: string, spans: ArrayLike<num
   let joined = true
   let length = 0
   for (let at = from, line = 0; at < to; at += 2, line++) {
-    if (line > 0) {
-      joined &&= spans[at] === spans[at - 1]! + 1 && src.charCodeAt(spans[at - 1]!) === LINE_FEED
-      length++
-    }
+    const end = lineEnd(src, spans[at]!, spans[at + 1]!)
+    if (line > 0) length++
+    // A line that loses spaces before a line feed makes the content a copy.
+    joined &&= at + 2 >= to ? true : end === spans[at + 1] && spans[at + 2] === end + 1 && src.charCodeAt(end) === LINE_FEED
     state.lineText[line] = length
     state.lineSource[line] = spans[at]!
-    length += spans[at + 1]! - spans[at]!
+    length += end - spans[at]!
   }
   state.src = src
-  state.text = joined && to > from ? src.slice(spans[from], spans[to - 1]) : joinLines(src, spans, from, to)
+  state.text = joined && to > from ? src.slice(spans[from], lineEnd(src, spans[to - 2]!, spans[to - 1]!)) : joinLines(src, spans, from, to)
   state.lineCount = lines
   if (length + 2 > state.tailDepth.length) {
     state.tailDepth = new Int32Array(length * 2 + 2)

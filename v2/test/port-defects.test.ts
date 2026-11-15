@@ -170,3 +170,38 @@ describe('C2-H-145: every reversed glyph is written as its source in a slug', ()
     expect(id('# a­b\n')).toBe('ab')
   })
 })
+
+describe('C2-I-002: spaces and tabs at the end of every line of a content are not part of it', () => {
+  const nodes = (src: string): unknown[] => {
+    const strip = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, inner: unknown) => (key === 'pos' ? undefined : inner)))
+    return strip((parse(src).children[0] as unknown as { children: unknown[] }).children) as unknown[]
+  }
+
+  it('C2-I-002: a verbatim value loses the spaces before an inner line end', () => {
+    expect(nodes('`a  \n  b` x\n')[0]).toEqual({ type: 'code', value: 'a\nb' })
+    expect(nodes('`a \t\nb`\n')[0]).toEqual({ type: 'code', value: 'a\nb' })
+    expect(nodes('{# \n#}\n')[0]).toEqual({ type: 'critic_comment', value: '\n' })
+    expect(nodes('$`a \nb`\n')[0]).toEqual({ type: 'math', display: false, value: 'a\nb' })
+    expect(nodes('$$`a \nb`\n')[0]).toEqual({ type: 'math', display: true, value: 'a\nb' })
+    expect(nodes('!`a \nb`\n')[0]).toEqual({ type: 'literal_inline', value: 'a\nb' })
+    expect(nodes('![a \nb](u)\n')[0]).toEqual({ type: 'image', src: 'u', alt: 'a\nb' })
+    expect(nodes('a {% x \ny %} b\n')[1]).toEqual({ type: 'comment', form: 'braced', value: 'x\ny' })
+    expect(nodes('a %% x  \nb\n')[1]).toEqual({ type: 'comment', form: 'line', value: 'x' })
+  })
+
+  it('C2-I-011: an escaped space at the end of a line stays, on every line', () => {
+    expect(nodes('a\\ \nb\n')).toEqual([
+      { type: 'text', value: 'a' }, { type: 'non_breaking_space' }, { type: 'soft_break' }, { type: 'text', value: 'b' },
+    ])
+    expect(nodes('a\\  \nb\n')[1]).toEqual({ type: 'non_breaking_space' })
+    expect(nodes('a\\\\ \nb\n')).toEqual([{ type: 'text', value: 'a\\' }, { type: 'soft_break' }, { type: 'text', value: 'b' }])
+  })
+
+  it('C2-I-102: a backslash before trailing tabs ends the line, on every line', () => {
+    expect(nodes('Qz a\\\t\nb\n')).toEqual([{ type: 'text', value: 'Qz a' }, { type: 'hard_break' }, { type: 'text', value: 'b' }])
+    expect(nodes('Qz a\\\t \t\nb\n')[1]).toEqual({ type: 'hard_break' })
+    expect(nodes('Qz a\\\t\n')).toEqual([{ type: 'text', value: 'Qz a' }, { type: 'hard_break' }])
+    expect(nodes('- a\\\t\n  b\n')).toEqual([expect.objectContaining({ type: 'list_item' })])
+    expect(render('- a\\\t\n  b\n')).toContain('a<br>\n')
+  })
+})
