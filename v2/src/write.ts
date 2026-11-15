@@ -467,6 +467,7 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     if (repeatedRepair(w, group, history)) return end
     if (!settle(w, document, group, first && !w.blankFirst)) {
       if (w.losses.entries.length === reported) reportUnread(w, group)
+      pruneGroupEscapes(w, group, first && !w.blankFirst)
       return end
     }
   }
@@ -582,13 +583,18 @@ function prunableOpener(source: string, at: number): boolean {
   return close >= 0 && (escapedDash < 0 || escapedDash > close)
 }
 
-/** C2-W-088: remove candidate escapes only when the whole tree stays equal. */
-function necessaryBracketEscapes(source: string, document: DocumentNode, w: Writer): string {
+/** C2-W-088 and C2-W-089: test candidate escapes within the group that wrote them. */
+function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): void {
+  let source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   let at = source.indexOf('\\')
   while (at >= 0) {
     if (prunableOpener(source, at)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
-      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys), document)) {
+      const parsed = parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys).children
+      if (parsed.length === group.length && parsed.every((node, index) => {
+        const expected = group[index]
+        return expected !== undefined && treesEqual(node, expected)
+      })) {
         source = candidate
         at = source.indexOf('\\', at)
         continue
@@ -596,7 +602,7 @@ function necessaryBracketEscapes(source: string, document: DocumentNode, w: Writ
     }
     at = source.indexOf('\\', at + 1)
   }
-  return source
+  w.lines = source.slice(first ? 0 : 1, -1).split('\n')
 }
 
 /** Writes a tree that is known to be valid. */
@@ -607,8 +613,7 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
   w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
-  const written = writeDocument(w, document)
-  const source = written.includes('\\') ? necessaryBracketEscapes(written, document, w) : written
+  const source = writeDocument(w, document)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)

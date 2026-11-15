@@ -78,7 +78,7 @@ describe('generated parser findings', () => {
     expect(parsed.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
   })
 
-  it('C2-X-050: a claim preparation failure retains the core tabs node', () => {
+  it('C2-X-051: a claim preparation failure retains the core tabs node', () => {
     const body = readFileSync(join(import.meta.dirname, '../proptest/fixtures/writer-cycle.crv'), 'utf8')
     const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
     const options = { extensions: [tabExtension, tabsExtension] }
