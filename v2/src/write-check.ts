@@ -10,7 +10,7 @@ import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { AST_RESULTS } from './ast-tables.ts'
-import { stringOffsetOfByte, utf8Length } from './positions.ts'
+import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
@@ -627,11 +627,45 @@ function escapeLabels(c: Check, node: TextNode, at: number, end: number): void {
 // The constructs a backtick run opens, alone or behind `!` or `$` (C2-I-014, C2-I-018).
 const SPAN_TYPES: readonly string[] = ['code', 'literal_inline', 'math']
 
-/** Whether the backtick at `at` of `source` is escaped: an odd number of backslashes stands before it. */
-function isEscapedBacktick(source: string, at: number): boolean {
-  let before = at
-  while (before > 0 && source[before - 1] === '\\') before--
-  return (at - before) % 2 === 1
+interface BacktickIndex {
+  offsets: Map<number, number>
+  lastBare: number
+}
+
+/** C2-W-088: source offsets and the last bare backtick, read once for all chains in a comparison. */
+function backtickIndex(source: string, wanted: number[]): BacktickIndex {
+  const offsets = new Map<number, number>()
+  const bytes = [...new Set(wanted)].sort((a, b) => a - b)
+  let next = 0
+  let byte = 0
+  let slashes = 0
+  let lastBare = -1
+  for (let at = 0; at < source.length;) {
+    const units = isSecondHalf(source, at + 1) ? 2 : 1
+    const width = units === 2 ? 4 : unitBytes(source, at)
+    while (next < bytes.length && bytes[next]! < byte + width) offsets.set(bytes[next++]!, at)
+    const char = source[at]
+    if (char === '`' && slashes % 2 === 0) lastBare = at
+    slashes = char === '\\' ? slashes + 1 : 0
+    byte += width
+    at += units
+  }
+  while (next < bytes.length) offsets.set(bytes[next++]!, source.length)
+  return { offsets, lastBare }
+}
+
+/** C2-W-088: each equal-length run before the last one becomes the next opener when the one before it is escaped. */
+function escapeFollowingRuns(c: Check, node: TextNode, from: number, width: number): void {
+  const value = node.value
+  const starts: number[] = []
+  for (let start = value.indexOf('`', from); start >= 0;) {
+    let end = start + 1
+    while (value[end] === '`') end++
+    if (end - start !== width) return
+    starts.push(start)
+    start = value.indexOf('`', end)
+  }
+  for (let at = 0; at + 1 < starts.length; at++) escapeAt(c, node, starts[at]!)
 }
 
 /**
@@ -640,18 +674,22 @@ function isEscapedBacktick(source: string, at: number): boolean {
  * opens a span to the same end, which changes nothing before it, so the procedure of C2-W-088
  * escapes each backtick of the run in turn (C2-I-017). They are placed in one round.
  */
-function escapeBackticks(c: Check, node: TextNode, at: number, a: Node): void {
+function escapeBackticks(c: Check, node: TextNode, at: number, a: Node, index: BacktickIndex | null): void {
   const source = c.source
   const value = node.value
-  if (source === null || a.pos === undefined) return
   let run = at
   while (value[run] === '`') run++
-  let start = source.indexOf('`', stringOffsetOfByte(source, a.pos.startOffset))
+  if (source === null) return
+  if (a.pos === undefined || index === null) {
+    escapeFollowingRuns(c, node, run, run - at)
+    return
+  }
+  let start = source.indexOf('`', index.offsets.get(a.pos.startOffset) ?? source.length)
   if (start < 0) return
   const end = start + run - at
   while (start < end && source[start] === '`') start++
   if (start !== end || source[end] === '`') return
-  for (let k = source.indexOf('`', end); k >= 0; k = source.indexOf('`', k + 1)) if (!isEscapedBacktick(source, k)) return
+  if (index.lastBare >= end) return
   for (let k = at + 1; k < run; k++) escapeAt(c, node, k)
 }
 
@@ -660,9 +698,13 @@ export function extendChains(c: Check): void {
   if (c.chains.length === 0) return
   const placed = new Map<TextNode, Set<number>>()
   for (const [node, at] of c.escapes) placed.set(node, (placed.get(node) ?? new Set()).add(at))
+  const backticks = c.chains.filter(([node, at, a]) => placed.get(node)?.has(at) === true && node.value[at] === '`' &&
+    a.pos !== undefined)
+  const offsets = backticks.flatMap(([, , a]) => a.pos === undefined ? [] : [a.pos.startOffset])
+  const index = c.source === null || offsets.length === 0 ? null : backtickIndex(c.source, offsets)
   for (const [node, at, a] of c.chains) {
     if (placed.get(node)?.has(at) !== true) continue
-    if (node.value[at] === '`') escapeBackticks(c, node, at, a)
+    if (node.value[at] === '`') escapeBackticks(c, node, at, a, index)
     else escapeBrackets(c, node, at, a)
   }
 }

@@ -29,33 +29,41 @@ type InlineWriters = { [T in keyof NodeOfType]?: (w: Writer, node: NodeOfType[T]
 
 type InlineWriter = (w: Writer, node: InlineParent, flags: number) => string
 
+interface BraceQuoteCursor {
+  at: number
+  brace: boolean
+  quote: number
+}
+
 /** C2-W-097: a backslash that the next character of the same text would make an escape is written twice. */
-function doubles(value: string, at: number): boolean {
+function doubles(value: string, at: number, cursor: BraceQuoteCursor): boolean {
   if (at + 1 >= value.length) return false
   const next = value.charCodeAt(at + 1)
-  return (next === SPACE || isAsciiPunctuation(next)) && !inQuotedBrace(value, at)
+  return (next === SPACE || isAsciiPunctuation(next)) && !inQuotedBrace(value, at, cursor)
 }
 
 /** C2-I-033: a quoted brace value is opaque, including its backslashes. */
-function inQuotedBrace(value: string, at: number): boolean {
-  let brace = false
-  let quote = 0
-  for (let p = 0; p < at; p++) {
-    const code = value.charCodeAt(p)
-    if (quote !== 0) {
-      if (code === BACKSLASH) p++
-      else if (code === quote) quote = 0
-    } else if (code === 123) brace = true
-    else if (code === 125) brace = false
-    else if (brace && (code === 34 || code === 39)) quote = code
+function inQuotedBrace(value: string, at: number, cursor: BraceQuoteCursor): boolean {
+  while (cursor.at < at) {
+    const code = value.charCodeAt(cursor.at)
+    if (cursor.quote !== 0) {
+      if (code === BACKSLASH) {
+        cursor.at += 2
+        continue
+      }
+      if (code === cursor.quote) cursor.quote = 0
+    } else if (code === 123) cursor.brace = true
+    else if (code === 125) cursor.brace = false
+    else if (cursor.brace && (code === 34 || code === 39)) cursor.quote = code
+    cursor.at++
   }
-  return quote !== 0
+  return cursor.quote !== 0
 }
 
 /** Whether the character `at` of a text takes a backslash whatever the reparse finds: C2-W-097, C2-W-098. */
-function alwaysEscaped(value: string, at: number, flags: number): boolean {
+function alwaysEscaped(value: string, at: number, flags: number, cursor: BraceQuoteCursor): boolean {
   const code = value.charCodeAt(at)
-  return (code === BACKSLASH && doubles(value, at)) || ((flags & IN_CELL) !== 0 && code === PIPE) ||
+  return (code === BACKSLASH && doubles(value, at, cursor)) || ((flags & IN_CELL) !== 0 && code === PIPE) ||
     ((flags & IN_BRACKET) !== 0 && (code === 91 || code === 93))
 }
 
@@ -65,10 +73,11 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
   let out = ''
   let next = firstFrom(escapes, from)
   let start = from
+  const cursor: BraceQuoteCursor = { at: 0, brace: false, quote: 0 }
   for (let at = from; at < to; at++) {
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    if (!asked && !alwaysEscaped(value, at, flags)) continue
+    if (!asked && !alwaysEscaped(value, at, flags, cursor)) continue
     out += `${value.slice(start, at)}\\`
     start = at
   }
@@ -97,10 +106,11 @@ export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: numbe
   let next = firstFrom(escapes, from)
   let rest = bytes
   let at = from
+  const cursor: BraceQuoteCursor = { at: 0, brace: false, quote: 0 }
   for (; rest > 0 && at < value.length; at++) {
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    rest -= unitBytes(value, at) + (asked || alwaysEscaped(value, at, flags) ? 1 : 0)
+    rest -= unitBytes(value, at) + (asked || alwaysEscaped(value, at, flags, cursor) ? 1 : 0)
   }
   return rest === 0 ? at : -1
 }

@@ -1,6 +1,6 @@
 // Edges of the block writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
-import { format, parse, treesEqual, write } from '../src/index.ts'
+import { CarveWriteError, decodeTree, encodeTree, format, parse, treesEqual, write } from '../src/index.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 
 const TICK = '`'
@@ -21,6 +21,39 @@ describe('blocks', () => {
     expect(format(`${long}\n${FENCE} \n\t${FENCE}${TICK}\n${long}`)).toBe(`${FENCE}${TICK}${TICK}\n${FENCE} \n\t${FENCE}${TICK}\n${FENCE}${TICK}${TICK}\n`)
     expect(format(`${long}\n${FENCE} x\n${TICK}${TICK} y\n${long}`)).toBe(`${FENCE}\n${FENCE} x\n${TICK}${TICK} y\n${FENCE}\n`)
   })
+
+  it('C2-W-088: a backtick chain after multibyte text uses its source position', () => {
+    for (const prefix of ['é', '😀']) {
+      const source = `| ${prefix} ${` \\${TICK}${TICK}x`.repeat(8)} |`
+      const written = format(source)
+      expect(format(written)).toBe(written)
+      expect(treesEqual(parse(written), parse(source))).toBe(true)
+    }
+  })
+
+  it('C2-W-088: a decoded continuation row with a backtick chain writes the same tree', () => {
+    const source = `| a |\n+${` \\${TICK}${TICK}x`.repeat(20)} |`
+    const document = decodeTree(encodeTree(parse(source, { positions: false })))
+    expect(treesEqual(parse(write(document), { positions: false }), document)).toBe(true)
+  })
+
+  it('C2-W-097: a long backslash line settles within the writer time bound', () => {
+    const source = `x ${'\\'.repeat(100_000)}`
+    const written = format(source)
+    expect(format(written)).toBe(written)
+    expect(treesEqual(parse(written), parse(source))).toBe(true)
+  }, 10_000)
+
+  it('C2-W-133: a long repeated reference label chain reports its repair limit', () => {
+    const source = `x ${'[a][\\]'.repeat(4_000)}`
+    try {
+      format(source)
+      throw new Error('expected a reported refusal')
+    } catch (error) {
+      expect(error).toBeInstanceOf(CarveWriteError)
+      if (error instanceof CarveWriteError) expect(error.diagnostics.map((entry) => entry.code)).toContain('writer-refused')
+    }
+  }, 20_000)
 
   it('C2-W-035, C2-B-040: level six is written as it is, and the last uppercase letter takes two spaces', () => {
     expect(format('###### a')).toBe('====== a\n')
@@ -59,6 +92,15 @@ describe('continuation rows', () => {
     expect(written).toBe(`${src}\n`)
     expect(treesEqual(parse(written), parse(src))).toBe(true)
   }
+
+  it('C2-W-088: equal backtick runs in a continuation row settle in one pass', () => {
+    const escaped = `\\${TICK}${TICK}x`
+    const source = `| a |\n+${` ${escaped}`.repeat(10_000)} |`
+    const written = `| a |\n+${` ${escaped}`.repeat(9_999)} ${TICK}${TICK}x |\n`
+    expect(format(source)).toBe(written)
+    expect(format(written)).toBe(written)
+    expect(treesEqual(parse(written), parse(source))).toBe(true)
+  }, 10_000)
 
   it('C2-W-067, C2-L-020: the offsets of a wrap are bytes, also behind characters of two, three and four bytes', () => {
     stays('| é ü |\n+ ö 😀 |\n+ ß |')

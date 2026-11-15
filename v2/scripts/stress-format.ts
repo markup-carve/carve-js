@@ -3,9 +3,10 @@
 // scripts/stress-inline.ts, at three sizes ten times apart. A linear pass takes about ten times
 // longer per step. It prints and fails only when a step takes more than `--limit` times the step
 // before it (default 60, as for the tree: the last size leaves the caches that hold the one before).
+// C2-W-133: a reported repair-limit refusal is a completed writer pass.
 //   node v2/scripts/stress-format.ts [--sizes 1000,10000,100000] [--limit N] [--only TEXT]
 import { loadavg } from 'node:os'
-import { format } from '../src/index.ts'
+import { CarveWriteError, format } from '../src/index.ts'
 import { SHAPES } from './stress-inline.ts'
 import { BLOCK_SHAPES, type Shape } from './stress-tree.ts'
 
@@ -57,6 +58,19 @@ function time(action: () => void): number {
   return best / 1000
 }
 
+function formatOrRefuse(source: string): void {
+  try {
+    format(source)
+  } catch (error) {
+    if (error instanceof CarveWriteError) {
+      const losses = error.diagnostics.filter((entry) => entry.code === 'writer-refused' || entry.code === 'field-unspellable' ||
+        entry.code === 'structure-unspellable')
+      if (losses.length > 0 && losses.every((entry) => entry.code === 'writer-refused')) return
+    }
+    throw error
+  }
+}
+
 console.log(`Node ${process.version}, load average ${loadavg().map((n) => n.toFixed(2)).join(' ')}`)
 console.log(`CPU milliseconds of format at the sizes ${sizes.join(', ')}; a step is the last size over the one before it`)
 console.log('')
@@ -65,7 +79,7 @@ console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|`)
 let worst = 0
 for (const [name, build] of [...BLOCK_SHAPES, ...WRITER_SHAPES, ...INLINE_SHAPES]) {
   if (!name.includes(only)) continue
-  const times = sizes.map(build).map((src) => time(() => void format(src)))
+  const times = sizes.map(build).map((src) => time(() => formatOrRefuse(src)))
   const step = times[times.length - 1]! / Math.max(times[times.length - 2]!, 0.5)
   worst = Math.max(worst, step)
   console.log(`| ${name.replaceAll('|', '\\|')} | ${times.map((ms) => ms.toFixed(1)).join(' | ')} | ${step.toFixed(1)} |`)

@@ -1,6 +1,6 @@
 // Random single mutations of the trees of every example of the specification, through `decodeTree`. The only
 // allowed outcomes are a refusal with a `CarveTreeError` whose path leads into the mutant (C2-A-167), or an
-// accepted tree that `render` and `write` then take without throwing. Anything else is printed and fails.
+// accepted tree that `render` and `writeWithDiagnostics` then take without throwing. Anything else is printed and fails.
 //   node v2/scripts/fuzz-tree.ts [--count N] [--seed S] [--report N]
 // A mutation picks one object or list anywhere in the tree, positions included, and then deletes a field, sets
 // it to null, a number, a list, an object or a long string, adds an unknown field, swaps the type of a node, or
@@ -9,7 +9,7 @@
 // The same seed gives the same mutants.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { CarveTreeError, decodeTree, encodeTree, parse, render, tabsExtensions, write } from '../src/index.ts'
+import { CarveTreeError, decodeTree, encodeTree, parse, render, tabsExtensions, writeWithDiagnostics } from '../src/index.ts'
 import { NODE_TABLE } from '../src/ast-validate.ts'
 
 function option(name: string, fallback: string): string {
@@ -298,7 +298,7 @@ function check(mutant: Json, what: string, counts: Counts): void {
     return
   }
   counts.accepted++
-  for (const [stage, run] of [['render', render], ['write', write]] as const) {
+  for (const [stage, run] of [['render', render], ['writeWithDiagnostics', writeWithDiagnostics]] as const) {
     try {
       run(document)
     } catch (error) {

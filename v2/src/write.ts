@@ -433,13 +433,25 @@ interface RepairHistory {
   recent: string[]
   seen: Set<string>
   rounds: number
+  remainingChars: number
 }
 
-/** C2-W-133: a repeated state cannot lead to a new spelling on the next deterministic round. */
+const MAX_REPAIR_CHARS = 20_000_000
+const MIN_REPAIR_ROUNDS = 32
+
+/** C2-W-133: stop a repeated repair state or an exhausted repair budget. */
 function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistory): boolean {
+  const chars = w.lines.reduce((total, line) => total + line.length + 1, 0)
+  if (history.rounds === 0) history.remainingChars = Math.max(history.remainingChars, chars * MIN_REPAIR_ROUNDS)
   history.rounds++
+  history.remainingChars -= chars
+  if (history.rounds > 8192 || history.remainingChars < 0) {
+    const host = group[0]
+    if (host !== undefined) refuseRepair(w, host)
+    return true
+  }
   const key = repairKey(w, history.ids, group)
-  if (history.seen.has(key) || history.rounds > 8192) {
+  if (history.seen.has(key)) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
     return true
@@ -461,7 +473,7 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
 function writeGroup(w: Writer, document: DocumentNode, from: number, first: boolean): number {
   const nodes = document.children
   const reported = w.losses.entries.length
-  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0 }
+  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, remainingChars: MAX_REPAIR_CHARS }
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
