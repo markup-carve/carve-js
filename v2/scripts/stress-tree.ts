@@ -91,6 +91,8 @@ export const BLOCK_SHAPES: readonly Shape[] = [
   ['continuation rows', (size) => `| a | b |\n${'+ c | d |\n'.repeat(size)}`],
   ['head rows with alignment marks', (size) => '|={>} a |={~} b |\n'.repeat(size)],
   ['tables with a caption', (size) => '| a |\n^ Table #: x\n\n'.repeat(size)],
+  ['empty cells in one pipe row', (size) => '|'.repeat(size)],
+  ['one backtick run in one cell', (size) => `| ${'`'.repeat(size)} |\n|---|\n`],
   // A backtick run behind an escaped backtick closes only on a run of its own length (C2-B-169),
   // so a scan for its closer from every opener reads the rest of the line each time.
   ['backtick runs without a closer in one row', (size) => `|${` ${ESCAPED_RUN}x`.repeat(size)} |`],

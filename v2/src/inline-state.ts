@@ -66,6 +66,8 @@ export interface InlineState {
   /** C2-I-015: backtick runs indexed by length for repeated cell scans. */
   codeRuns: Map<number, number[]> | null
   codeRunCursors: Map<number, number>
+  /** End of the last backtick run tried inside a cell (C2-I-015). */
+  codeRunEnd: number
   /** C2-H-172: whether the text the scan has read so far holds a bidirectional control. */
   bidi: boolean
   /** Open containers of the block pass around this content (C2-I-118). */
@@ -145,6 +147,7 @@ function createState(): InlineState {
     cell: false,
     codeRuns: null,
     codeRunCursors: new Map(),
+    codeRunEnd: 0,
     bidi: false,
     baseDepth: 0,
     definitions: null,

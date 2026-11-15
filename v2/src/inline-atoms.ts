@@ -150,7 +150,8 @@ function rawMarkerEnd(text: string, pos: number, end: number): number {
 /** A code span whose token starts at `start` and whose opening run starts at `run` (C2-I-014 to C2-I-022). */
 function codeSpan(state: InlineState, start: number, run: number, kind: number, flags: number): number {
   const text = state.text
-  const open = backtickRunEnd(text, run, state.end)
+  const open = state.cell && run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
+  if (state.cell) state.codeRunEnd = open
   const close = state.cell ? indexedClosingRun(state, open, open - run) : closingRun(text, open, state.end, open - run)
   if (close === NONE) {
     if (state.cell) return start + 1
