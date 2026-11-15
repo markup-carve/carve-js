@@ -1233,7 +1233,10 @@
     "id": "U-130",
     "title": "Line block body text and whitespace",
     "inputs": [
-      "::: |\n\tx"
+      "::: |\n\tx",
+      "> ::: |\n> ```\n> x\nafter\n",
+      "- ::: |\n  - ```\ntail\n",
+      "> 1. ::: box\n>    - ::: |\n>      ```\n>      x\n>      ```\n>      :::\n>     ```\n>     - x\n> ```\n"
     ],
     "outputs": [],
     "class": "report"

@@ -81,7 +81,9 @@ function legacyMeasured(input: string, expected: string, actual: string, line: n
   if (itemDefinition(input, expected, actual)) return recordOf('U-131', line,
     'C2-B-081 and C2-B-083 read a definition-shaped item line as text')
   if (input.includes('::: |')) return recordOf('U-130', line,
-    'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace')
+    input.includes('```')
+      ? 'C2-B-123 and C2-B-130 change code fence ownership inside the line block body'
+      : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace')
   if (!expected.includes('<td') && !actual.includes('<td') && hasDefinitionLine(input, '[')) return recordOf('U-132', line,
     'C2-B-081 and C2-B-083 read the empty or container-local definition as text')
   return null
@@ -111,7 +113,8 @@ function boundaryReport(input: string, expected: string, actual: string, line: n
 
 function unresolvedEngineShape(input: string, expected: string, actual: string): boolean {
   if (expected.includes('class="tag"') && actual.includes('#') && input.includes('{#')) return true
-  if (input.includes('```') && expected.includes('<code>') && actual.includes('<code>')) return true
+  if (input.includes('```') && !input.includes('::: |') && expected.includes('<code>')
+    && actual.includes('<code>')) return true
   return (expected.includes('<td') || actual.includes('<td')) && input.includes('\\|') && input.includes(']')
 }
 

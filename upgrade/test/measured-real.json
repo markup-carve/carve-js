@@ -1903,6 +1903,39 @@
     ]
   },
   {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "tests/corpus/575-a-line-block-takes-a-lazy-line-whatever-its-last-payload-line.crv",
+    "line": 1,
+    "input": "> ::: |\n> ```\n> x\nafter\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "tests/corpus/562-a-quoted-item-that-ends-on-a-block-past-its-column-holds-no-paragraph-4.crv",
+    "line": 1,
+    "input": "- ::: |\n  - ```\ntail\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "tests/corpus/581-a-fence-that-leaves-a-closed-nested-item-opens-in-the-host-it-lands-in-2.crv",
+    "line": 1,
+    "input": "> 1. ::: box\n>    - ::: |\n>      ```\n>      x\n>      ```\n>      :::\n>     ```\n>     - x\n> ```\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
     "cause": "C72",
     "clause": "C2-B-166",
     "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
