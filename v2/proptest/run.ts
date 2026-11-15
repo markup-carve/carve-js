@@ -77,7 +77,7 @@ class Checker {
     return new Promise((resolve) => {
       // C2-W-089: the writer may need several repair passes for one group.
       const writerTarget = this.target === 'render' || this.target === 'format' || this.target === 'diagnostics' ||
-        this.target === 'extensions'
+        this.target === 'extensions' || this.target === 'import'
       const timeout = Math.max(writerTarget ? 30000 : 3000, Buffer.byteLength(source) / 10240 * 500)
       const timer = setTimeout(() => {
         worker.removeAllListeners('message')
@@ -251,18 +251,12 @@ async function replayOne(checker: Checker, options: Settings, replay: string): P
   return found === null ? 0 : 1
 }
 
-interface Counts { failures: number, known: number, losses: number, refusals: number }
-
-function isKnown(target: Target, found: Finding): boolean {
-  if (target !== 'render') return false
-  return (found.kind === 'option-invalid-accepted' && (found.detail === 'rules' || found.detail === 'platforms')) ||
-    (found.kind === 'option-invalid-error' && found.detail.startsWith('platforms:'))
-}
+interface Counts { failures: number, losses: number, refusals: number }
 
 async function recordFinding(checker: Checker, options: Settings, source: string, caseSeed: number,
-  found: Finding, commit: string, coverageOnly: boolean, index: number, seen: Set<string>, allowKnown: boolean): Promise<Counts> {
+  found: Finding, commit: string, coverageOnly: boolean, index: number, seen: Set<string>): Promise<Counts> {
   if (found.kind === 'writer-accounting') {
-    return { failures: 0, known: 0, losses: found.losses ?? 0, refusals: found.refusals ?? 0 }
+    return { failures: 0, losses: found.losses ?? 0, refusals: found.refusals ?? 0 }
   }
   const key = signature(found)
   if (!coverageOnly && !seen.has(key)) {
@@ -270,8 +264,7 @@ async function recordFinding(checker: Checker, options: Settings, source: string
     const file = await save(checker, options.target, source, caseSeed, options.seed, found, commit)
     console.log(`${options.target} ${found.kind} seed=${options.seed} case=${index} file=${file}`)
   }
-  const known = allowKnown && isKnown(options.target, found)
-  return { failures: known ? 0 : 1, known: known ? 1 : 0, losses: 0, refusals: 0 }
+  return { failures: 1, losses: 0, refusals: 0 }
 }
 
 async function main(): Promise<number> {
@@ -287,13 +280,11 @@ async function main(): Promise<number> {
   }
   const corpus = loadCorpus(options.corpus)
   const coverageOnly = process.argv.includes('--coverage')
-  const allowKnown = process.argv.includes('--allow-known')
   const rng = random(options.seed)
   const start = Date.now()
   const deadline = options.minutes > 0 ? start + options.minutes * 60_000 : Infinity
   const commit = engineCommit()
   let failures = 0
-  let known = 0
   let writerLosses = 0
   let writerRefusals = 0
   const seen = new Set<string>()
@@ -304,13 +295,12 @@ async function main(): Promise<number> {
     const caseSeed = rng.int(0x7fffffff)
     const found = await checker.check(source, caseSeed)
     if (found === null) continue
-    const result = await recordFinding(checker, options, source, caseSeed, found, commit, coverageOnly, cases, seen, allowKnown)
+    const result = await recordFinding(checker, options, source, caseSeed, found, commit, coverageOnly, cases, seen)
     failures += result.failures
-    known += result.known
     writerLosses += result.losses
     writerRefusals += result.refusals
   }
-  console.log(JSON.stringify({ target: options.target, seed: options.seed, cases, findings: failures, known,
+  console.log(JSON.stringify({ target: options.target, seed: options.seed, cases, findings: failures,
     writerLosses, writerRefusals, seconds: (Date.now() - start) / 1000, engineCommit: commit, corpus: corpus.documents.length,
     dictionary: corpus.dictionary.length }))
   await checker.close()

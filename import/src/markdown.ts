@@ -9,7 +9,7 @@ import { directive } from 'micromark-extension-directive'
 import { directiveFromMarkdown } from 'mdast-util-directive'
 import type { RootContent, PhrasingContent, TableRow } from 'mdast'
 import type { Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
+import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, softText,
   type Context, type ImportResult } from './kit.ts'
 
 function range(node: { position?: { start: { offset?: number | undefined }, end: { offset?: number | undefined } } | undefined }):
@@ -35,7 +35,7 @@ function isPlainInline(node: PhrasingContent): node is PlainInline {
 
 function plainInline(node: PlainInline, context: Context): Inline[] {
   switch (node.type) {
-    case 'text': return [text(node.value)]
+    case 'text': return softText(node.value)
     case 'break': return [{ type: 'hard_break' }]
     case 'inlineCode': return [{ type: 'code', value: node.value }]
     case 'inlineMath': return [{ type: 'math', display: false, value: node.value }]
@@ -141,9 +141,33 @@ function plainBlock(node: PlainBlock, context: Context): DocumentNode['children'
   }
 }
 
+function blankFenceValue(node: Extract<RootContent, { type: 'code' }>, context: Context): string {
+  const [start, end] = range(node)
+  if (start === undefined || end === undefined) return ''
+  const raw = context.input.slice(start, end)
+  let lineEnds = 0
+  let lastLineStart = 0
+  for (let at = 0; at < raw.length; at++) {
+    if (raw[at] === '\r') {
+      if (raw[at + 1] === '\n') at++
+      lineEnds++
+      lastLineStart = at + 1
+    } else if (raw[at] === '\n') { lineEnds++; lastLineStart = at + 1 }
+  }
+  const delimiter = raw[0]
+  let fenceRun = 0
+  for (let at = lastLineStart; at < raw.length; at++) {
+    fenceRun = raw[at] === delimiter ? fenceRun + 1 : 0
+    if (fenceRun >= 3) break
+  }
+  const terminal = raw.endsWith('\n') || raw.endsWith('\r') || fenceRun >= 3
+  return '\n'.repeat(Math.max(0, lineEnds - (terminal ? 1 : 0)))
+}
+
 function codeBlock(node: Extract<RootContent, { type: 'code' }>, context: Context): Block[] {
   if (node.meta) loss(context, node, `Code fence meta ${node.meta} has no typed Carve field`)
-  return [{ type: 'code_block', value: node.value, ...(node.lang ? { syntax: node.lang } : {}) }]
+  return [{ type: 'code_block', value: node.value === '' ? blankFenceValue(node, context) : `${node.value}\n`,
+    ...(node.lang ? { syntax: node.lang } : {}) }]
 }
 
 type StructuredBlock = Extract<RootContent, { type: 'blockquote' | 'list' | 'table' | 'leafDirective' |
@@ -175,20 +199,25 @@ function structuredBlock(node: StructuredBlock, context: Context): DocumentNode[
   }
 }
 
+function removeAlertMarker(children: Block[], marker: string): void {
+  const first = children[0]
+  if (first?.type !== 'paragraph' || first.children[0]?.type !== 'text') return
+  const prefix = marker.slice(0, marker.indexOf(']') + 1)
+  const remainder = first.children[0].value.slice(prefix.length)
+  const remaining = remainder.startsWith('\n') ? remainder.slice(1) : remainder
+  if (remaining) first.children[0].value = remaining
+  else first.children.shift()
+  if (first.children.at(0)?.type === 'soft_break') first.children.shift()
+  if (first.children.length === 0) children.shift()
+}
+
 function markdownQuote(node: Extract<RootContent, { type: 'blockquote' }>, context: Context): Block {
   const children = contentBlocks(node.children, context)
   const first = children[0]
   const marker = first?.type === 'paragraph' && first.children[0]?.type === 'text' ? first.children[0].value : ''
   const kind = context.format === 'gfm' ? alertKind(marker) : undefined
   if (kind === undefined) return { type: 'block_quote', children }
-  const prefix = marker.slice(0, marker.indexOf(']') + 1)
-  if (first?.type === 'paragraph' && first.children[0]?.type === 'text') {
-    const remainder = first.children[0].value.slice(prefix.length)
-    const remaining = remainder.startsWith('\n') ? remainder.slice(1) : remainder
-    if (remaining) first.children[0].value = remaining
-    else first.children.shift()
-    if (first.children.length === 0) children.shift()
-  }
+  removeAlertMarker(children, marker)
   return { type: 'admonition', kind, children }
 }
 

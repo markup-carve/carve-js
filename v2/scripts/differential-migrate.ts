@@ -4,11 +4,12 @@ import { join, relative } from 'node:path'
 import { carveToAstJson, carveToHtml } from '../../dist/index.js'
 import { compareHtml } from '../../upgrade/src/compare.ts'
 import { AST_RESULTS } from '../src/ast-tables.ts'
-import { format, migrateTree, parse, render, treesEqual, write } from '../src/index.ts'
+import { formatWithDiagnostics, migrateTree, parse, render, treesEqual, type Diagnostic, writeWithDiagnostics } from '../src/index.ts'
 import { object } from '../migrate/shared.ts'
 
 interface Input { name: string, source: string }
 interface Finding { count: number, example: Input, path: string }
+interface RefusalCase { name: string, classes: string[] }
 
 const ROOT = join(import.meta.dirname, '../..')
 const OMIT = new Set(['.git', 'node_modules', 'dist', '.next'])
@@ -120,6 +121,11 @@ function add(findings: Map<string, Finding>, key: string, input: Input, path = k
   }
 }
 
+function refusalCodes(diagnostics: readonly Diagnostic[]): string[] {
+  return [...new Set(diagnostics.filter((entry) => ['field-unspellable', 'structure-unspellable',
+    'writer-refused'].includes(entry.code)).map((entry) => entry.code))]
+}
+
 function classify(source: string): string[] {
   try {
     if (!compareHtml(carveToHtml(source), render(source)).equal) return []
@@ -129,7 +135,13 @@ function classify(source: string): string[] {
     if (!treesEqual(migrated.document, parsed)) {
       groups.push(fieldGroup(migrated.document, firstDifference(migrated.document, parsed) ?? 'unknown'))
     }
-    if (write(migrated.document, { layout: migrated.layout }) !== format(source)) groups.push('writer/bytes')
+    const written = writeWithDiagnostics(migrated.document, { layout: migrated.layout })
+    const canonical = formatWithDiagnostics(source)
+    for (const code of refusalCodes(written.diagnostics)) groups.push(`writer-refusal/${code}`)
+    for (const code of refusalCodes(canonical.diagnostics)) groups.push(`source-writer-refusal/${code}`)
+    if (!groups.some((entry) => entry.includes('writer-refusal/')) && written.source !== canonical.source) {
+      groups.push('writer/bytes')
+    }
     return groups
   } catch { return [] }
 }
@@ -150,12 +162,33 @@ function lineMinimal(source: string, group: string): string {
   return lines.join('\n')
 }
 
+function compareWritten(migrated: ReturnType<typeof migrateTree>, input: Input, findings: Map<string, Finding>,
+  refusalCases: RefusalCase[]):
+  'equal' | 'different' | 'refused' {
+  const written = writeWithDiagnostics(migrated.document, { layout: migrated.layout })
+  const canonical = formatWithDiagnostics(input.source)
+  const migratedRefusals = refusalCodes(written.diagnostics)
+  const sourceRefusals = refusalCodes(canonical.diagnostics)
+  if (migratedRefusals.length > 0 || sourceRefusals.length > 0) {
+    const classes = [...migratedRefusals.map((code) => `writer-refusal/${code}`),
+      ...sourceRefusals.map((code) => `source-writer-refusal/${code}`)]
+    for (const group of classes) add(findings, group, input)
+    refusalCases.push({ name: input.name, classes })
+    return 'refused'
+  }
+  if (written.source === canonical.source) return 'equal'
+  add(findings, 'writer/bytes', input)
+  return 'different'
+}
+
 function run(all: Input[]): void {
   let sameReading = 0
   let equalTrees = 0
   let equalBytes = 0
   let equalTreeBytes = 0
   let migrationErrors = 0
+  let writerRefusals = 0
+  const refusalCases: RefusalCase[] = []
   const findings = new Map<string, Finding>()
   for (const input of all) {
     try {
@@ -171,14 +204,16 @@ function run(all: Input[]): void {
         const path = firstDifference(migrated.document, parsed) ?? 'unknown'
         add(findings, fieldGroup(migrated.document, path), input, path)
       }
-      if (write(migrated.document, { layout: migrated.layout }) === format(input.source)) {
+      const writing = compareWritten(migrated, input, findings, refusalCases)
+      if (writing === 'refused') writerRefusals++
+      else if (writing === 'equal') {
         equalBytes++
         if (equal) equalTreeBytes++
       }
-      else add(findings, 'writer/bytes', input)
     } catch (error) { migrationErrors++; add(findings, `error/${String(error).slice(0, 140)}`, input) }
   }
   console.log(JSON.stringify({ inputs: all.length, sameReading, equalTrees, equalBytes, equalTreeBytes, migrationErrors,
+    writerRefusals, refusalCases,
     differing: [...findings].map(
       ([group, item]) => ({ group, path: item.path, count: item.count, example: item.example.name,
         source: process.argv.includes('--minimize') ? lineMinimal(item.example.source, group) : item.example.source }),

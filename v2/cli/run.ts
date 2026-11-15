@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, render, type Diagnostic,
+import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError, CarveWriteError,
+  decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, render, type Diagnostic,
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
+import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
 import { ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
 import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
@@ -8,11 +10,27 @@ import { migrateTree } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
 
 export class CliError extends Error {
-  readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid'
-  constructor(category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid', message: string) {
+  readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid' | 'import-tree-invalid'
+  constructor(category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid' | 'import-tree-invalid',
+    message: string) {
     super(message)
     this.category = category
   }
+}
+
+export interface CliFailure { category: string, status: 1 | 2 }
+
+/** C2-W-101, C2-W-134: give each public engine error a command line category. */
+export function classifyCliError(error: unknown): CliFailure {
+  if (error instanceof CliError) return { category: error.category, status: error.category === 'import-tree-invalid' ? 1 : 2 }
+  if (error instanceof CarveOptionError) return { category: 'usage', status: 2 }
+  if (error instanceof CarveInputError) return { category: 'input-invalid', status: 2 }
+  if (error instanceof CarveTreeError || error instanceof CarveLayoutError) {
+    return { category: 'ast-json-invalid', status: 2 }
+  }
+  if (error instanceof CarveWriteError) return { category: 'writer-refused', status: 1 }
+  if (error instanceof CarveRenderError) return { category: 'render-loss', status: 1 }
+  return { category: 'usage', status: 2 }
 }
 
 function camel(name: string): string { return name.replaceAll(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase()) }
@@ -47,9 +65,17 @@ function migrateAst(text: string): DocumentNode {
 }
 
 function importSource(text: string, format: Format): string {
-  try { return importDocument(text, { from: format }).source }
+  try {
+    const result = importDocument(text, { from: format })
+    if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
+    for (const diagnostic of result.diagnostics) {
+      process.stderr.write(`carve[${diagnostic.code}]: ${diagnostic.message}\n`)
+    }
+    return result.source
+  }
   catch (error) {
     if (error instanceof ImportInputError) throw new CliError('import-input-invalid', error.message)
+    if (error instanceof CarveTreeError) throw new CliError('import-tree-invalid', error.message)
     throw error
   }
 }

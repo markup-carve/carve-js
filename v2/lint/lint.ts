@@ -1,6 +1,7 @@
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
+import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
 import { LINE_RULES } from './spelling.ts'
 import { finishStructure, NODE_RULES } from './structure.ts'
@@ -10,6 +11,32 @@ import { type Line, type LintContext, type LintOptions, type Rule } from './type
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
   ids: string[]
+}
+
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const prototype: unknown = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+/** C2-H-137, C2-W-109: validate the lint options before reading any value. */
+function validateOptions(options: unknown): asserts options is LintOptions {
+  if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
+  for (const name of Object.keys(options)) {
+    if (name !== 'rules' && name !== 'platforms') throw new CarveOptionError(name, 'unknown option')
+  }
+  const platforms = options['platforms']
+  if (platforms !== undefined && (!Array.isArray(platforms) || !platforms.every((item) => item === 'github'))) {
+    throw new CarveOptionError('platforms', 'not a list of supported platform names')
+  }
+  const rules = options['rules']
+  if (rules === undefined) return
+  if (!plainRecord(rules)) throw new CarveOptionError('rules', 'not a map')
+  for (const [name, value] of Object.entries(rules)) {
+    if (!Object.hasOwn(CATALOG, name) || (value !== 'on' && value !== 'off')) {
+      throw new CarveOptionError('rules', `invalid rule ${name}`)
+    }
+  }
 }
 
 function active(id: RuleId, options: LintOptions): boolean {
@@ -192,6 +219,7 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
 
 /** C2-W-103, C2-W-109: lint a 0.2 source with catalog messages and byte ranges. */
 export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
+  validateOptions(options)
   const parsed = parseWithLayout(source)
   const position = sourceLines(source)
   const context: LintContext = {

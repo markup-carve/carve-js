@@ -21,6 +21,11 @@ void test('C2-W-022: an empty document has one final line feed', () => {
   assert.equal(check('format', '', random(1)), null)
 })
 
+void test('C2-A-167: the saved inline import case does not return an invalid tree', () => {
+  const source = readFileSync(join(import.meta.dirname, 'regressions/import-inline-timeout.crv'), 'utf8')
+  assert.equal(check('import', source, random(1286657655)), null)
+})
+
 void test('C2-H-130: strict losses may reject a document while accepting the option', () => {
   assert.equal(check('render', '{{ e }}', optionRandom('strictLosses')), null)
 })

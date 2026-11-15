@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError,
+  CarveWriteError, render } from '../../src/index.ts'
 import { FLAGS } from '../flags.ts'
+import { classifyCliError } from '../run.ts'
 
 const root = join(import.meta.dirname, '../../..')
 const main = join(root, 'v2/cli/main.ts')
@@ -23,6 +26,19 @@ function cli(args: string[], input = ''): { status: number | null, stdout: strin
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
 
 describe('carve2 process', () => {
+  it('C2-W-101 and C2-W-134 classify every public engine error type', () => {
+    const cases = [
+      [new CarveOptionError('mode', 'bad'), 'usage', 2],
+      [new CarveInputError('minimal', 1), 'input-invalid', 2],
+      [new CarveTreeError('/children', 'bad'), 'ast-json-invalid', 2],
+      [new CarveLayoutError('/nodes', 'bad'), 'ast-json-invalid', 2],
+      [new CarveRenderError([]), 'render-loss', 1],
+      [new CarveWriteError([]), 'writer-refused', 1],
+    ] as const
+    for (const [error, category, status] of cases) {
+      expect(classifyCliError(error)).toEqual({ category, status })
+    }
+  })
   it('C2-H-137: every flag is shown in its command help and the parser accepts its value', () => {
     for (const flag of FLAGS) {
       const value = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? `=${flag.values?.[0]}` : '={}'
@@ -42,6 +58,53 @@ describe('carve2 process', () => {
     const invalid = cli(['fmt', '--from-ast'], '{')
     expect(invalid.status).toBe(2)
     expect(invalid.stderr).toMatch(/^carve\[ast-json-invalid\]:/)
+  })
+
+  it('C2-W-134: a writer refusal has its own category and failure status', () => {
+    const result = cli(['fmt'], '\r')
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/^carve\[writer-refused\]:/)
+  })
+
+  it('C2-H-130: strict render loss has its own category and failure status', () => {
+    const result = cli(['render', '--strict-losses'], '{{ e }}')
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/^carve\[render-loss\]:/)
+  })
+
+  it('C2-W-134: importing a writer refusal exits with a named category', () => {
+    const result = cli(['import', '--from=djot'], '[^f]: - :::')
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/^carve\[writer-refused\]:/)
+    expect(result.stderr).toMatch(/structure-unspellable/)
+  })
+
+  it('C2-W-011: normalized Markdown imports return source and report degradation', () => {
+    for (const input of ['line one\nline two\n', '```js\nlet a = 1\n```\n']) {
+      const result = cli(['import', '--from=markdown'], input)
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe(input)
+      expect(result.stderr).toBe('')
+    }
+  })
+
+  it('C2-W-007: paragraph-edge HTML line endings import without a writer refusal', () => {
+    for (const [source, expected] of [['<p>\n  foo\n</p>', 'foo\n'], ['<h1>\n  Title\n</h1>', '= Title\n']]) {
+      const result = cli(['import', '--from=html'], source)
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe(expected)
+      expect(result.stderr).toMatch(/^carve\[import-degraded\]:/)
+    }
+  })
+
+  it('C2-W-007: imported marker text stays visible through HTML normalization', () => {
+    const preserved = cli(['import', '--from=html'], '- a\nx\n%%%\n- b')
+    expect(preserved.status).toBe(0)
+    expect(render(preserved.stdout)).toContain('- b')
+    const normalized = cli(['import', '--from=html'], '\n- a\n b')
+    expect(normalized.status).toBe(0)
+    expect(normalized.stdout).toBe('\\- a\nb\n')
+    expect(normalized.stderr).toMatch(/^carve\[import-degraded\]:/)
   })
 
   it('C2-H-052: render uses stdin, explicit stdin, files, options and one raw HTML notice', () => {

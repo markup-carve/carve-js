@@ -1,6 +1,6 @@
 import { defaultTreeAdapter, parse, parseFragment, serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type { Attrs, Block, Inline, RubyPairNode, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { attrsOf, cell, classNames, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
+import { attrsOf, cell, classNames, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, softText, text,
   type Context, type ImportResult } from './kit.ts'
 
 function attr(node: Html.Element, name: string): string | undefined {
@@ -97,11 +97,107 @@ function plain(node: Html.ChildNode): string {
 }
 
 function inlineChildren(node: Html.Element, context: Context): Inline[] {
-  return coalesce(content(node).flatMap(child => inline(child, context)))
+  const children = normalizeBreaks(coalesce(content(node).flatMap(child => inline(child, context))), node, context)
+  const edges = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption']
+  return edges.includes(node.tagName) ? trimInlineEdges(children, node, context) : children
+}
+
+function horizontal(code: number): boolean { return code === 32 || code === 9 }
+
+function trimStart(value: string): string {
+  let at = 0
+  while (at < value.length && horizontal(value.charCodeAt(at))) at++
+  return value.slice(at)
+}
+
+function trimEnd(value: string): string {
+  let at = value.length
+  while (at > 0 && horizontal(value.charCodeAt(at - 1))) at--
+  return value.slice(0, at)
+}
+
+function appendSoft(result: Inline[], child: Extract<Inline, { type: 'soft_break' }>): boolean {
+  let changed = false
+  const previous = result.at(-1)
+  if (previous?.type === 'text') {
+    const value = trimEnd(previous.value)
+    if (value !== previous.value) { previous.value = value; changed = true }
+    if (value === '') result.pop()
+  }
+  const before = result.at(-1)
+  if (before?.type === 'soft_break' || before?.type === 'hard_break') return true
+  result.push(child)
+  return changed
+}
+
+function appendHard(result: Inline[], child: Extract<Inline, { type: 'hard_break' }>): boolean {
+  const previous = result.at(-1)
+  if (previous?.type === 'soft_break') result.pop()
+  result.push(child)
+  return previous?.type === 'soft_break'
+}
+
+function appendText(result: Inline[], child: Extract<Inline, { type: 'text' }>): boolean {
+  const previous = result.at(-1)
+  if (previous?.type !== 'soft_break' && previous?.type !== 'hard_break') { result.push(child); return false }
+  const value = trimStart(child.value)
+  const changed = value !== child.value
+  if (value !== '') { child.value = value; result.push(child) }
+  return changed || value === ''
+}
+
+function normalizeBreaks(children: Inline[], node: Html.ChildNode, context: Context): Inline[] {
+  const result: Inline[] = []
+  let changed = false
+  for (const child of children) {
+    if (child.type === 'soft_break') changed = appendSoft(result, child) || changed
+    else if (child.type === 'hard_break') changed = appendHard(result, child) || changed
+    else if (child.type === 'text') changed = appendText(result, child) || changed
+    else result.push(child)
+  }
+  if (changed) degraded(context, node, 'HTML whitespace around line ending normalized')
+  return result
+}
+
+function trimLeading(children: Inline[]): boolean {
+  let trimmed = false
+  while (true) {
+    const first = children[0]
+    if (first?.type === 'soft_break' || (trimmed && first?.type === 'text' && trimStart(first.value) === '')) {
+      children.shift()
+      trimmed = true
+    } else break
+  }
+  const first = children[0]
+  if (trimmed && first?.type === 'text') first.value = trimStart(first.value)
+  return trimmed
+}
+
+function trimTrailing(children: Inline[]): boolean {
+  let trimmed = false
+  while (true) {
+    const last = children.at(-1)
+    const before = children.at(-2)
+    if (last?.type === 'soft_break' || (last?.type === 'text' && trimEnd(last.value) === ''
+      && before?.type === 'soft_break')) {
+      children.pop()
+      trimmed = true
+    } else break
+  }
+  const last = children.at(-1)
+  if (trimmed && last?.type === 'text') last.value = trimEnd(last.value)
+  return trimmed
+}
+
+function trimInlineEdges(children: Inline[], node: Html.ChildNode, context: Context): Inline[] {
+  const leading = trimLeading(children)
+  const trailing = trimTrailing(children)
+  if (leading || trailing) degraded(context, node, 'HTML line ending at block edge omitted')
+  return children
 }
 
 function inline(node: Html.ChildNode, context: Context): Inline[] {
-  if (isText(node)) return [text(node.value)]
+  if (isText(node)) return softText(node.value)
   if (isComment(node)) return [{ type: 'raw_inline', format: 'html', value: serializeOuter(node) }]
   if (isElement(node)) return inlineElement(node, context)
   unsupported(context, node, 'Doctype has no inline representation')
@@ -222,7 +318,7 @@ function tableCell(node: Html.Element, context: Context): TableCellNode {
   const hasBlocks = elements(node).some(child => ['p', 'ul', 'ol', 'div', 'blockquote', 'pre', 'table', 'dl', 'figure']
     .includes(child.tagName))
   const result: TableCellNode = hasBlocks ? { type: 'table_cell', header: node.tagName === 'th',
-    children: blockChildren(node, context) } : cell(inlineChildren(node, context), node.tagName === 'th')
+    children: blockChildren(node, context) } : cell(cellInline(node, context), node.tagName === 'th')
   const colspan = htmlSpan(attr(node, 'colspan'))
   const rowspan = htmlRowspan(node, context)
   if (colspan !== undefined) result.colspan = colspan
@@ -235,6 +331,29 @@ function tableCell(node: Html.Element, context: Context): TableCellNode {
   if (valign === 'top' || valign === 'middle' || valign === 'bottom' || valign === 'baseline') result.valign = valign
   Object.assign(result, attrs(node, ['colspan', 'rowspan', 'scope', 'align', 'valign']))
   return result
+}
+
+function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
+  let changed = false
+  for (let at = 0; at < group.length; at++) {
+    const child = group[at]
+    if (child?.type === 'soft_break') { group[at] = text(' '); changed = true }
+    else if (child?.type === 'ruby') for (const pair of child.pairs) pending.push(pair.base, pair.annotation)
+    else if (child !== undefined && 'children' in child && child.type !== 'citation_group') pending.push(child.children)
+  }
+  return changed
+}
+
+function cellInline(node: Html.Element, context: Context): Inline[] {
+  const children = inlineChildren(node, context)
+  const pending: Inline[][] = [children]
+  let changed = false
+  while (pending.length > 0) {
+    const group = pending.pop()
+    if (group !== undefined) changed = flattenCellGroup(group, pending) || changed
+  }
+  if (changed) degraded(context, node, 'HTML table cell line ending normalized to a space')
+  return coalesce(children)
 }
 
 function rows(node: Html.Element, context: Context): TableRowNode[] {
@@ -294,7 +413,8 @@ function listItem(node: Html.Element, context: Context): Extract<Block, { type: 
   }
   const children = content(node).filter(child => child !== checkbox).flatMap((child, index) => {
     if (checkbox && index === 0 && isText(child) && child.value.startsWith(' ')) {
-      return [paragraph([text(child.value.slice(1))])]
+      const inline = trimInlineEdges(normalizeBreaks(softText(child.value.slice(1)), child, context), child, context)
+      return inline.length ? [paragraph(inline)] : []
     }
     return block(child, context)
   })
@@ -303,7 +423,10 @@ function listItem(node: Html.Element, context: Context): Extract<Block, { type: 
 }
 
 function block(node: Html.ChildNode, context: Context): Block[] {
-  if (isText(node)) return node.value.trim() ? [paragraph([text(node.value)])] : []
+  if (isText(node)) {
+    if (!node.value.trim()) return []
+    return [paragraph(trimInlineEdges(normalizeBreaks(softText(node.value), node, context), node, context))]
+  }
   if (isComment(node)) return [{ type: 'raw_block', format: 'html', value: serializeOuter(node) }]
   if (isElement(node)) return blockElement(node, context)
   degraded(context, node, 'Doctype omitted from Carve tree')
@@ -347,7 +470,9 @@ function htmlPre(node: Html.Element, context: Context): Block[] {
   if (code && (code.attrs.some(entry => entry.name !== 'class') || classes.some(name => !name.startsWith('language-')))) {
     degraded(context, code, 'Code element attributes other than language omitted')
   }
-  return [{ type: 'code_block', value: code ? plain(code) : plain(node), ...(language ? { syntax: language } : {}),
+  const value = code ? plain(code) : plain(node)
+  return [{ type: 'code_block', value: value && !value.endsWith('\n') ? `${value}\n` : value,
+    ...(language ? { syntax: language } : {}),
     ...attrs(node) }]
 }
 
@@ -356,7 +481,7 @@ function htmlList(node: Html.Element, context: Context): Block[] {
   for (const child of elements(node)) if (child.tagName !== 'li') unsupported(context, child, 'Non-item child in HTML list')
   const start = htmlInteger(attr(node, 'start'))
   const result = list(node.tagName === 'ol', items, !items.some(item => item.children.some(child =>
-    child.type === 'paragraph' && item.children.length > 1)), start)
+    child.type === 'paragraph' && item.children.filter(entry => entry.type !== 'list').length > 1)), start)
   return [{ ...result, ...attrs(node, ['start', 'type']) }]
 }
 

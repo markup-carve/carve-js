@@ -11,8 +11,8 @@ const { document, source, diagnostics } = importDocument('**hello**', { from: 'g
 
 `from` is `markdown`, `gfm`, `djot` or `html`. `markdown` uses CommonMark syntax plus frontmatter, math and
 directives; `gfm` also enables GFM tables, tasks, strikethrough, autolinks and footnotes. `document` is the
-validated 2.0 tree, `source` is stable canonical Carve text, and `diagnostics` combines `import-unsupported`,
-`import-degraded` and the writer's C2-W-011 findings. Foreign parse or tree failures are `ImportInputError`.
+validated 2.0 tree. `source` is canonical when the writer settles, and `diagnostics` records unsupported input,
+degradation and any writer refusal. Foreign parse or tree failures are `ImportInputError`.
 Raw HTML nodes render as HTML only when the caller enables the engine's `rawHtml` option.
 
 ```sh

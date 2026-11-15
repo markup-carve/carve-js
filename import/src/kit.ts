@@ -1,5 +1,6 @@
 import {
-  format, isUrlAllowed, MAX_TREE_DEPTH, validateTree, writeWithDiagnostics, type Attrs, type Block, type Diagnostic, type DocumentNode,
+  isUrlAllowed, MAX_TREE_DEPTH, validateTree, writeWithDiagnostics,
+  type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../v2/src/index.ts'
 
@@ -64,7 +65,7 @@ export function complete(context: Context, children: DocumentNode['children']): 
   const document = documentOf(context, children)
   validateTree(document)
   const written = writeWithDiagnostics(document)
-  return { document, source: format(written.source), diagnostics: [...context.diagnostics, ...written.diagnostics] }
+  return { document, source: written.source, diagnostics: [...context.diagnostics, ...written.diagnostics] }
 }
 
 export function attrsOf(entries: Iterable<readonly [string, string]>): Attrs | undefined {
@@ -96,6 +97,20 @@ export function safeUrl(context: Context, foreignType: string, url: string, star
 }
 
 export function text(value: string): Inline { return { type: 'text', value: value.replaceAll('\0', '\ufffd') } }
+export function softText(value: string): Inline[] {
+  const limit = value.length
+  const result: Inline[] = []
+  let start = 0
+  for (let at = 0; at < limit; at++) {
+    if (value[at] !== '\n' && value[at] !== '\r') continue
+    if (at > start) result.push(text(value.slice(start, at)))
+    result.push({ type: 'soft_break' })
+    if (value[at] === '\r' && value[at + 1] === '\n') at++
+    start = at + 1
+  }
+  if (start < limit) result.push(text(value.slice(start, limit)))
+  return result
+}
 export function paragraph(children: Inline[]): Block { return { type: 'paragraph', children: coalesce(children) } }
 export function coalesce(children: Inline[]): Inline[] {
   const result: Inline[] = []

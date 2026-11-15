@@ -20,6 +20,137 @@ const expectedHtmlSource: Record<string, string> = {
 }
 
 describe('Carve 0.2 importers', () => {
+  it.each(['markdown', 'gfm', 'djot', 'html'] as const)(
+    'C2-W-022 writes one line feed for empty and whitespace-only %s input', (from) => {
+      for (const input of ['', ' ', '\t', '\n', ' \t\n']) {
+        const result = importDocument(input, { from })
+        validateTree(result.document)
+        expect(result.source).toBe('\n')
+      }
+    })
+
+  it('C2-A-167 keeps the saved inline importer case valid in every format', () => {
+    const input = readFileSync(join(import.meta.dirname, '../../v2/proptest/regressions/import-inline-timeout.crv'), 'utf8')
+    for (const from of ['markdown', 'gfm', 'djot', 'html'] as const) {
+      const result = importDocument(input, { from })
+      expect(() => validateTree(result.document)).not.toThrow()
+      if (from === 'markdown') expect(format(result.source)).toBe(result.source)
+    }
+  })
+
+  it('C2-W-134 returns writer refusal diagnostics with a valid imported tree', () => {
+    const result = importDocument('[^f]: - :::', { from: 'djot' })
+    expect(() => validateTree(result.document)).not.toThrow()
+    expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
+      .includes(entry.code))).toBe(true)
+  })
+
+  it('C2-W-022 keeps one final line ending for imported HTML text', () => {
+    const result = importDocument('a\n', { from: 'html' })
+    expect(result.source).toBe('a\n')
+    expect(result.diagnostics.some((entry) => entry.code === 'import-degraded')).toBe(true)
+  })
+
+  it.each([
+    '<p>\n    foo\n  </p>',
+    '<p>\n \nfoo</p>',
+    '<p><em>\nfoo</em></p>',
+    '<ul><li><input type="checkbox"> foo\nbar\n</li></ul>',
+    '<p>foo\n    bar</p>',
+    '<p>a <b>b</b>\n  c</p>',
+    '<p>a<br>\nb</p>',
+    '<p>a<br>\n    b</p>',
+    '<div>\n  foo\n\n  bar\n</div>',
+    '<p> \nfoo</p>',
+    '<ul>\n<li>a\n    b</li>\n</ul>',
+  ])('C2-W-007 spells HTML line endings at inline edges: %s', (input) => {
+    const result = importDocument(input, { from: 'html' })
+    expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
+      .includes(entry.code))).toBe(false)
+    expect(result.source).not.toBe('')
+  })
+
+  it('C2-W-007 spells a nested HTML list with its supported spacing', () => {
+    const result = importDocument('<ul><li>foo<ul><li>bar</li></ul></li></ul>', { from: 'html' })
+    expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
+      .includes(entry.code))).toBe(false)
+    expect(result.source).toBe('- foo\n  - bar\n')
+  })
+
+  it('C2-W-007 keeps a multi-paragraph list loose even with a nested list', () => {
+    const result = importDocument('<ul><li><p>a</p><p>b</p><ul><li>c</li></ul></li></ul>', { from: 'html' })
+    const first = result.document.children[0]
+    expect(first?.type === 'list' ? first.spacing : undefined).toBe('loose')
+  })
+
+  it.each(['<table><tr><td>a\nb</td></tr></table>',
+    '<table><tr><td>a <b>x</b>\n b</td></tr></table>',
+    '<table><tr><td><b>a\nb</b></td></tr></table>',
+    '<table><tr><td><a href="http://x.y">a\nb</a></td></tr></table>'])(
+    'C2-W-007 spells an HTML table cell line ending: %s', (input) => {
+      const result = importDocument(input, { from: 'html' })
+      expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
+        .includes(entry.code))).toBe(false)
+      expect(result.diagnostics.some((entry) => entry.code === 'import-degraded')).toBe(true)
+    })
+
+  it.each(['<pre>a\nb</pre>', '<pre><code>a</code></pre>'])(
+    'C2-W-007 terminates an HTML preformatted code value: %s', (input) => {
+      const result = importDocument(input, { from: 'html' })
+      const first = result.document.children[0]
+      expect(first?.type === 'code_block' ? first.value.endsWith('\n') : false).toBe(true)
+      expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
+        .includes(entry.code))).toBe(false)
+    })
+
+  it.each(['<p>\n&nbsp;foo</p>', '<p>foo&nbsp;\n</p>'])(
+    'C2-W-007 preserves nonbreaking space at an HTML line edge: %s', (input) => {
+      const result = importDocument(input, { from: 'html' })
+      const first = result.document.children[0]
+      expect(first?.type === 'paragraph' ? first.children.some((node) => node.type === 'text'
+        && node.value.includes('\u00a0')) : false).toBe(true)
+    })
+
+  it('C2-W-134 names the refusal for an empty checkbox item', () => {
+    const result = importDocument('<ul><li><input type="checkbox"> </li></ul>', { from: 'html' })
+    const item = result.document.children[0]
+    if (item?.type === 'list') expect(item.children[0]?.children).toEqual([])
+    expect(result.diagnostics.some((entry) => entry.code === 'structure-unspellable')).toBe(true)
+  })
+
+  it('C2-W-007 maps Markdown line breaks and code content to spellable nodes', () => {
+    const lines = importDocument('line one\nline two\n', { from: 'markdown' })
+    const paragraph = lines.document.children[0]
+    expect(paragraph?.type).toBe('paragraph')
+    if (paragraph?.type === 'paragraph') expect(paragraph.children.map((node) => node.type)).toEqual([
+      'text', 'soft_break', 'text',
+    ])
+  })
+
+  it.each([
+    ['```js\nlet a = 1\n```\n', 'let a = 1\n'],
+    ['```\na\n\n```\n', 'a\n\n'],
+    ['```\n\n```\n', '\n'],
+    ['> ```\n>\n> ```\n', '\n'],
+    ['```\n\n', '\n'],
+    ['```\r\r```', '\n'],
+    ['> ```\n>\n>\n\nx\n', '\n\n'],
+    ['- ```\n\n  \nx\n', '\n\n'],
+  ])('C2-W-007 preserves Markdown fenced code lines: %s', (source, expected) => {
+    const result = importDocument(source, { from: 'markdown' })
+    const first = result.document.children[0]
+    const code = first?.type === 'block_quote' ? first.children[0] :
+      first?.type === 'list' ? first.children[0]?.children[0] : first
+    expect(code?.type === 'code_block' ? code.value : undefined).toBe(expected)
+  })
+
+  it('C2-W-007 maps a lone carriage return to a soft break', () => {
+    const result = importDocument('<p>a&#13;b</p>', { from: 'html' })
+    const first = result.document.children[0]
+    expect(first?.type === 'paragraph' ? first.children.map((node) => node.type) : []).toEqual([
+      'text', 'soft_break', 'text',
+    ])
+  })
   it.each([
     ['C2-B-041', 'markdown', '0. zero\n'],
     ['C2-H-030', 'html', '<ol start="0"><li>zero</li></ol>'],
@@ -258,6 +389,6 @@ describe('Carve 0.2 importers', () => {
     const finding = result.diagnostics.find(row => row.code === 'import-unsupported')
     expect(finding?.foreignType).toBe('input')
     expect(finding?.range).toEqual({ startOffset: 0, endOffset: 19 })
-    expect(result.source).toBe('')
+    expect(result.source).toBe('\n')
   })
 })

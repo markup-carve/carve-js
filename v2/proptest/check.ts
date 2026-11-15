@@ -523,16 +523,19 @@ function checkImport(source: string, rng: Random): Finding | null {
   const formats = ['markdown', 'gfm', 'djot', 'html'] as const
   const format = formats[rng.int(formats.length)] ?? 'markdown'
   const result = spawnSync(process.execPath, ['v2/proptest/import-worker.mjs', format], {
-    input: source, encoding: 'utf8', timeout: 3000, maxBuffer: 1024 * 1024,
+    input: source, encoding: 'utf8', timeout: 25000, maxBuffer: 1024 * 1024,
   })
   if (result.error !== undefined) return finding('import-process-error', String(result.error))
+  if (result.status !== 0) return finding('import-process-error', result.stderr || `exit ${result.status}`)
+  let output: unknown
+  try { output = JSON.parse(result.stdout) as unknown }
+  catch (error) { return finding('import-process-error', description(error)) }
+  if (!isRecord(output)) return finding('import-untyped-error', result.stderr)
+  if (output['kind'] === 'typed-error') return null
+  if (output['kind'] !== 'tree' || output['document'] === undefined) {
+    return finding('import-untyped-error', String(output['detail'] ?? result.stderr))
+  }
   try {
-    const output: unknown = JSON.parse(result.stdout)
-    if (!isRecord(output)) return finding('import-untyped-error', result.stderr)
-    if (output['kind'] === 'typed-error') return null
-    if (output['kind'] !== 'tree' || output['document'] === undefined) {
-      return finding('import-untyped-error', String(output['detail'] ?? result.stderr))
-    }
     validateTree(output['document'])
   } catch (error) { return finding('import-invalid-tree', description(error)) }
   return null

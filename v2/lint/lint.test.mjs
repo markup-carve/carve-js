@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CarveOptionError } from '../src/options.ts'
 import fs from 'node:fs'
 import { format } from '../src/format.ts'
 import { lint } from './lint.ts'
@@ -161,6 +162,14 @@ function catalogMessageMatches(id, message) {
 }
 
 describe('C2-W-106 catalog rules', () => {
+  it('C2-H-137 and C2-W-109 reject invalid lint options with CarveOptionError', () => {
+    for (const platforms of [true, 'github', ['other'], [1]]) {
+      expect(() => lint('<', { platforms })).toThrowError(CarveOptionError)
+    }
+    for (const rules of [true, [], { 'platform-mention-token': true }, { unknown: 'on' }, { toString: 'on' }]) {
+      expect(() => lint('', { rules })).toThrowError(CarveOptionError)
+    }
+  })
   it('registers each lint catalog row exactly once', () => {
     const implemented = IMPLEMENTED_RULES.map((rule) => rule.id)
     expect(new Set(implemented).size).toBe(implemented.length)

@@ -18,7 +18,7 @@ node v2/proptest/run.ts --target parse --seed 0 --count 0 --replay v2/proptest/f
 
 Without a sidecar, `--replay` reads the `.crv` file directly. Run `npm run test:proptest:v2` to replay the curated regression corpus. A matching known finding is marked as an expected failure; a fixed case becomes a passing test automatically, and a different failure fails the suite.
 
-The CI job uses the fixed seed and `--allow-known`. This counts the three lint option failures under `known` and keeps writing their minimized inputs; any other finding still fails the job. Local runs omit this flag and return status 1 for those failures.
+The CI job uses a fixed seed. Every finding fails the job and keeps its minimized input.
 
 To add a target, add its name to `Target` and `TARGETS` in `targets.ts`, implement a pure check function returning a finding or `null`, add a dispatch arm, and add it to the CI loop. Keep random choices on the passed seeded generator. The four source generators live in `generate.ts`.
 
