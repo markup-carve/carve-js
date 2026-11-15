@@ -2588,5 +2588,16 @@
     "outputs": [
       "[^f]: note\n\n{.a}\nVisible\n"
     ]
+  },
+  {
+    "id": "U-245",
+    "title": "A quoted list fence retains its blank code line",
+    "class": "rewrite",
+    "inputs": [
+      "> a\n>\n> 1. ```\n>    x\n>\n> y\n"
+    ],
+    "outputs": [
+      "> a\n>\n> 1. ```\n>    x\n>\n>    ```\n> y\n"
+    ]
   }
 ]

@@ -59,6 +59,19 @@ function blockAttributeAcrossFootnote(output: string): Candidate[] {
   return found
 }
 
+function quotedItemFenceBlank(output: string): Candidate[] {
+  if (!output.includes('> 1. ```')) return []
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    if (lines[at] !== '>' || !(lines[at + 1] ?? '').startsWith('> ')) continue
+    const changed = [...lines]
+    changed.splice(at + 1, 0, '>    ```')
+    found.push(candidate('U-245', changed.join('\n'), 'the quoted list fence was explicitly closed after its blank code line'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -538,6 +551,7 @@ export function rescueMinor(
     ...trailingFence(output),
     ...indentedFenceRunAsContent(output),
     ...blockAttributeAcrossFootnote(output),
+    ...quotedItemFenceBlank(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),

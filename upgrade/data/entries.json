@@ -1477,6 +1477,12 @@
       "name": "floating block attribute across a footnote definition",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-245",
+      "name": "quoted list fence retains its blank code line",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

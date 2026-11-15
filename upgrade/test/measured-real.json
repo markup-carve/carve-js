@@ -3538,5 +3538,16 @@
     "entries": [
       "U-244"
     ]
+  },
+  {
+    "cause": "C15",
+    "clause": "C2-B-108 C2-B-110",
+    "path": "resources/examples/edge-cases/0947-a-quote-s-next-is-not-payload-of-an-item-fence-the-last-block-left-open.md",
+    "line": 38,
+    "input": "> a\n>\n> 1. ```\n>    x\n>\n> y\n",
+    "check": "pass",
+    "entries": [
+      "U-245"
+    ]
   }
 ]
