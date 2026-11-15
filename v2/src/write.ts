@@ -35,9 +35,15 @@ export interface WriteOutput {
 /** C2-W-133: the source-only writer cannot return a repair that it refused. */
 export class CarveWriteError extends Error {
   constructor() {
-    super('the writer could not complete its repair')
+    super('the writer cannot return this source without a loss report')
     this.name = 'CarveWriteError'
   }
+}
+
+/** C2-W-133, C2-W-134: losses that a source-only writer cannot return silently. */
+export function writerHasLoss(diagnostics: readonly Diagnostic[]): boolean {
+  return diagnostics.some((entry) => entry.code === 'writer-refused' || entry.code === 'structure-unspellable' ||
+    entry.code === 'field-unspellable')
 }
 
 /** Whether `value`, read at a pointer into a valid tree, is a node. */
@@ -574,7 +580,11 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
 /** C2-W-088, C2-W-125: only these opener shapes can lose a backslash without changing the ordered repair. */
 function prunableOpener(source: string, at: number): boolean {
   const next = source[at + 1]
-  if (next === '[') return source[at + 2] === '^' && source[at + 3] === ']'
+  if (next === '[') {
+    const close = source.indexOf(']', at + 2)
+    const lineEnd = source.indexOf('\n', at + 2)
+    return source[at - 1] !== '^' || close < 0 || (lineEnd >= 0 && close > lineEnd)
+  }
   if (next !== '{') return false
   if (source[at + 2] === '/') return true
   if (source[at + 2] !== '#') return false
@@ -629,6 +639,6 @@ export function writeWithDiagnostics(document: DocumentNode, options?: WriteOpti
 /** The canonical Carve source of a tree (C2-W-001). */
 export function write(document: DocumentNode, options?: WriteOptions): string {
   const result = writeWithDiagnostics(document, options)
-  if (result.diagnostics.some((entry) => entry.code === 'writer-refused')) throw new CarveWriteError()
+  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError()
   return result.source
 }

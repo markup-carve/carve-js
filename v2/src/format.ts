@@ -3,7 +3,7 @@ import { parseWithLayout } from './api.ts'
 import { CarveOptionError, checkType, type Options } from './options.ts'
 import { OPTION_KINDS } from './option-tables.ts'
 import { type Diagnostic } from './diagnostics.ts'
-import { CarveWriteError, writeTree } from './write.ts'
+import { CarveWriteError, writeTree, writerHasLoss } from './write.ts'
 
 /** The options of the formatter (C2-H-137): `alignTables` (C2-W-068) and `normalize` (C2-W-127). */
 export type FormatOptions = Pick<Options, 'alignTables' | 'normalize' | 'extensions'>
@@ -41,6 +41,6 @@ export function formatWithDiagnostics(source: string, options?: FormatOptions): 
 /** The canonical form of `source` (spec/0.2/writer.md). C2-W-002: it parses to the tree of `source`. */
 export function format(source: string, options?: FormatOptions): string {
   const result = formatWithDiagnostics(source, options)
-  if (result.diagnostics.some((entry) => entry.code === 'writer-refused')) throw new CarveWriteError()
+  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError()
   return result.source
 }

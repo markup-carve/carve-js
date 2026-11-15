@@ -3,7 +3,7 @@
 // writer-layout.test.ts, the gates on the enumerations in writer-gates.test.ts.
 import { describe, expect, it } from 'vitest'
 import {
-  type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type IncludeOptions,
+  CarveWriteError, type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type IncludeOptions,
   type Inline, type LinkNode, parse,
   parseWithLayout, render, treesEqual, write, writeWithDiagnostics,
 } from '../src/index.ts'
@@ -21,6 +21,11 @@ function edited(src: string, change: (blocks: DocumentChild[]) => void): Documen
 /** What the writer could not write of `tree`, each as the code and the path. */
 function losses(tree: DocumentNode): string[] {
   return writeWithDiagnostics(tree).diagnostics.map((entry) => `${entry.code} ${entry.path ?? ''}`)
+}
+
+/** The nearest source and its losses are returned by the diagnostic writer (C2-W-134). */
+function nearest(tree: DocumentNode): string {
+  return writeWithDiagnostics(tree).source
 }
 
 function code(value: string): CodeNode {
@@ -100,53 +105,53 @@ describe('the writer and its two gates', () => {
 describe('what the writer cannot spell', () => {
   it('C2-W-011: an interchange-only shape is written as the table of C2-A-175 names and reported', () => {
     const smallCaps = documentOf(paragraph(inline('small_caps', 'abc')))
-    expect(write(smallCaps)).toBe('abc\n')
+    expect(nearest(smallCaps)).toBe('abc\n')
     expect(losses(smallCaps)).toEqual(['structure-unspellable /children/0/children/0'])
 
     const section = documentOf({ type: 'section', children: [paragraph('a'), paragraph('b')] })
-    expect(write(section)).toBe('a\n\nb\n')
+    expect(nearest(section)).toBe('a\n\nb\n')
     expect(losses(section)).toEqual(['structure-unspellable /children/0'])
 
     const ruby = documentOf(paragraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: [text('漢')], annotation: [text('kan')] }] }))
-    expect(write(ruby)).toBe('漢(kan)\n')
+    expect(nearest(ruby)).toBe('漢(kan)\n')
     expect(losses(ruby)).toEqual(['structure-unspellable /children/0/children/0'])
 
     const short = edited('| a |\n^ cap', (blocks) => { ofType(ofType(blocks[0], 'table').caption, 'caption').short = [text('s')] })
-    expect(write(short)).toBe('| a |\n^ cap\n')
+    expect(nearest(short)).toBe('| a |\n^ cap\n')
     expect(losses(short)).toEqual(['field-unspellable /children/0/caption'])
 
     const figure = documentOf({ type: 'figure', caption: { type: 'caption', children: [paragraph('fig')] }, children: [ofType(parse('| a |').children[0], 'table')] })
-    expect(write(figure)).toBe('| a |\n^ fig\n')
+    expect(nearest(figure)).toBe('| a |\n^ fig\n')
     expect(losses(figure)).toEqual(['structure-unspellable /children/0'])
   })
 
   it('C2-W-117: a field no clause writes is left out and reported as field-unspellable', () => {
     const loose = edited('- a', (blocks) => { ofType(blocks[0], 'list').spacing = 'loose' })
-    expect(write(loose)).toBe('- a\n')
+    expect(nearest(loose)).toBe('- a\n')
     expect(losses(loose)).toEqual(['field-unspellable /children/0'])
 
     const kind = edited('![i](u)\n^ cap', (blocks) => { ofType(blocks[0], 'figure').kind = 'image' })
-    expect(write(kind)).toBe('![i](u)\n^ cap\n')
+    expect(nearest(kind)).toBe('![i](u)\n^ cap\n')
     expect(losses(kind)).toEqual(['field-unspellable /children/0'])
 
     const tocTarget = edited('::: toc\n:::', (blocks) => { ofType(blocks[0], 'directive').tocTarget = 'figures' })
-    expect(write(tocTarget)).toBe('::: toc\n\n:::\n')
+    expect(nearest(tocTarget)).toBe('::: toc\n\n:::\n')
     expect(losses(tocTarget)).toEqual(['field-unspellable /children/0'])
 
     const autolink = edited('<https://a.b>', (blocks) => { ofType(inlinesOf(blocks[0])[0], 'autolink').text = 'other' })
-    expect(write(autolink)).toBe('<https://a.b>\n')
+    expect(nearest(autolink)).toBe('<https://a.b>\n')
     expect(losses(autolink)).toEqual(['field-unspellable /children/0/children/0'])
 
     const label = edited('@user', (blocks) => { ofType(inlinesOf(blocks[0])[0], 'mention').label = 'L' })
-    expect(write(label)).toBe('@user\n')
+    expect(nearest(label)).toBe('@user\n')
     expect(losses(label)).toEqual(['field-unspellable /children/0/children/0'])
 
     const team = edited('@user', (blocks) => { ofType(inlinesOf(blocks[0])[0], 'mention').kind = 'team' })
-    expect(write(team)).toBe('@user\n')
+    expect(nearest(team)).toBe('@user\n')
     expect(losses(team)).toEqual(['field-unspellable /children/0/children/0'])
 
     const metadata = edited('para', (blocks) => { blocks[0]!.metadata = { authors: ['A'] } })
-    expect(write(metadata)).toBe('para\n')
+    expect(nearest(metadata)).toBe('para\n')
     expect(losses(metadata)).toEqual(['field-unspellable /children/0'])
   })
 
@@ -155,7 +160,8 @@ describe('what the writer cannot spell', () => {
     expect(losses(hyphens)).toContain('field-unspellable /children/0')
 
     const spaced = edited('{.a}\npara', (blocks) => { blocks[0]!.attrs!.classes = ['a b'] })
-    expect(write(spaced)).toBe('{class="a b"}\npara\n')
+    expect(writeWithDiagnostics(spaced).source).toBe('{class="a b"}\npara\n')
+    expect(() => write(spaced)).toThrow(CarveWriteError)
     expect(losses(spaced)).toEqual(['field-unspellable /children/0'])
 
     const folded = edited('[a]: /u', (blocks) => { ofType(blocks[0], 'link_reference_definition').key = ' ' })
@@ -170,18 +176,18 @@ describe('what the writer cannot spell', () => {
 
   it('C2-W-117: a node with no spelling is left out and reported as structure-unspellable', () => {
     const empty = documentOf({ type: 'paragraph', children: [] }, paragraph('x'))
-    expect(write(empty)).toBe('x\n')
+    expect(nearest(empty)).toBe('x\n')
     expect(losses(empty)).toEqual(['structure-unspellable /children/0'])
 
     const list = edited('- a\n\nx', (blocks) => { ofType(blocks[0], 'list').children = [] })
-    expect(write(list)).toBe('x\n')
+    expect(nearest(list)).toBe('x\n')
     expect(losses(list)).toEqual(['structure-unspellable /children/0'])
 
     const blocks = edited('| a |\n^ cap', (nodes) => { ofType(ofType(nodes[0], 'table').caption, 'caption').children.push(paragraph('two')) })
     expect(losses(blocks)).toContain('structure-unspellable /children/0/caption')
 
     const abbreviation = documentOf(paragraph({ type: 'abbreviation', key: 'HTML', namespace: 'abbr', expansion: 'Hyper' }, ' x'))
-    expect(write(abbreviation)).toBe('HTML x\n')
+    expect(nearest(abbreviation)).toBe('HTML x\n')
     expect(losses(abbreviation)).toEqual(['structure-unspellable /children/0/children/0'])
   })
 
@@ -197,12 +203,12 @@ describe('what the writer cannot spell', () => {
 
   it('C2-W-012: a separator stands between the content of two blocks written into an inline slot', () => {
     const caption = edited('| a |\n^ cap', (blocks) => { ofType(ofType(blocks[0], 'table').caption, 'caption').children = [paragraph('one'), paragraph('two')] })
-    expect(write(caption)).toBe('| a |\n^ one two\n')
+    expect(nearest(caption)).toBe('| a |\n^ one two\n')
   })
 
   it('C2-W-012: a separator stands between two blocks written into a cell', () => {
     const cell = edited('| a |', (blocks) => { ofType(childrenOf(childrenOf(childrenOf(blocks[0])[0])[0])[0], 'table_cell').children = [paragraph('x'), paragraph('y')] })
-    expect(write(cell)).toBe('| x y |\n')
+    expect(nearest(cell)).toBe('| x y |\n')
   })
 
   it('C2-W-013: a wrapper whose only node reads back as another block is lost, and the loss is reported', () => {
@@ -215,7 +221,7 @@ describe('what the writer cannot spell', () => {
 
   it('C2-W-014: only the loss of a bare wrapper leaves the rest of the tree as it was', () => {
     const bare = documentOf(paragraph('a'), paragraph({ type: 'comment', form: 'line', value: 'c' }), paragraph('b'))
-    const back = parse(write(bare))
+    const back = parse(nearest(bare))
     expect(back.children!.map((node) => node.type)).toEqual(['paragraph', 'comment', 'paragraph'])
     expect(treesEqual(documentOf(back.children![0]!, back.children![2]!), documentOf(paragraph('a'), paragraph('b')))).toBe(true)
 
@@ -240,7 +246,7 @@ describe('what the writer cannot spell', () => {
   it('C2-W-112: the content of a second adjacent code span is written into the first', () => {
     const tree = documentOf(paragraph(code('a'), code('b')))
     expect(losses(tree)).toContain('structure-unspellable /children/0/children/1')
-    expect(write(tree)).toBe('`ab`\n')
+    expect(nearest(tree)).toBe('`ab`\n')
   })
 
   it('C2-W-112: the second of two adjacent code spans is reported', () => {
@@ -294,7 +300,7 @@ describe('layout', () => {
 
   it('C2-W-022: a link definition with an empty destination is written with no space at the end of its line', () => {
     const tree = edited('[a]: /u', (blocks) => { ofType(blocks[0], 'link_reference_definition').href = '' })
-    expect(write(tree)).not.toMatch(/[ \t]\n/)
+    expect(nearest(tree)).not.toMatch(/[ \t]\n/)
   })
 
   it('C2-W-023: a line that ends in a line comment has no space at its end', () => {
@@ -348,7 +354,7 @@ describe('layout', () => {
 
   it('C2-W-029: two lists are adjacent also when the block between them writes nothing', () => {
     const tree = documentOf(parse('- a').children![0]!, { type: 'paragraph', children: [] }, parse('- b').children![0]!)
-    expect(write(tree)).toBe('- a\n\n\n\n- b\n')
+    expect(nearest(tree)).toBe('- a\n\n\n\n- b\n')
     expect(losses(tree)).toEqual(['structure-unspellable /children/1'])
   })
 
@@ -378,10 +384,10 @@ describe('layout', () => {
 
   it('C2-W-033: a code or raw block whose value has no final line break gets one, and value is reported', () => {
     const fence = documentOf({ type: 'code_block', value: 'x' })
-    expect(write(fence)).toBe('```\nx\n```\n')
+    expect(nearest(fence)).toBe('```\nx\n```\n')
     expect(losses(fence)).toEqual(['field-unspellable /children/0'])
     const raw = documentOf({ type: 'raw_block', format: 'html', value: '<b>' })
-    expect(write(raw)).toBe('```=html\n<b>\n```\n')
+    expect(nearest(raw)).toBe('```=html\n<b>\n```\n')
     expect(losses(raw)).toEqual(['field-unspellable /children/0'])
   })
 
@@ -409,7 +415,7 @@ describe('canonical forms: blocks', () => {
 
   it('C2-W-035: a level above six is written with six markers and reported', () => {
     const tree = documentOf({ type: 'heading', level: 7, children: [text('T')] })
-    expect(write(tree)).toBe('====== T\n')
+    expect(nearest(tree)).toBe('====== T\n')
     expect(losses(tree)).toEqual(['field-unspellable /children/0'])
   })
 
@@ -455,13 +461,13 @@ describe('canonical forms: blocks', () => {
 
   it('C2-W-040: a title with a double quote and a label with a closing bracket are left out and reported', () => {
     const title = edited('::: tip "T" [l]\nx\n:::', (blocks) => { ofType(blocks[0], 'admonition').title = [text('a "b"')] })
-    expect(write(title)).toBe('::: tip [l]\nx\n:::\n')
+    expect(nearest(title)).toBe('::: tip [l]\nx\n:::\n')
     expect(losses(title)).toEqual(['field-unspellable /children/0'])
     const label = edited('::: box "T" [l]\nx\n:::', (blocks) => { ofType(blocks[0], 'div').groupLabel = 'a]b' })
-    expect(write(label)).toBe('::: box "T"\nx\n:::\n')
+    expect(nearest(label)).toBe('::: box "T"\nx\n:::\n')
     expect(losses(label)).toEqual(['field-unspellable /children/0'])
     const broken = edited('```php "T" [l]\nx\n```', (blocks) => { ofType(blocks[0], 'code_block').groupLabel = 'a\nb' })
-    expect(write(broken)).toBe('```php "T"\nx\n```\n')
+    expect(nearest(broken)).toBe('```php "T"\nx\n```\n')
     expect(losses(broken)).toEqual(['field-unspellable /children/0'])
   })
 
@@ -500,9 +506,9 @@ describe('canonical forms: blocks', () => {
 
   it('C2-W-044: a start value of more than nine digits has no spelling, and the list is written from 1', () => {
     const period = edited('1. a\n2. b', (blocks) => { ofType(blocks[0], 'list').marker.start = 1234567890 })
-    expect(write(period)).toBe('. a\n. b\n')
+    expect(nearest(period)).toBe('. a\n. b\n')
     const paren = edited('1) a\n2) b', (blocks) => { ofType(blocks[0], 'list').marker.start = 1234567890 })
-    expect(write(paren)).toBe('1) a\n2) b\n')
+    expect(nearest(paren)).toBe('1) a\n2) b\n')
   })
 
   it('C2-W-044: a later marker whose number would have more than nine digits is written as 1', () => {
@@ -768,7 +774,7 @@ describe('canonical forms: inline', () => {
   it('C2-W-069: strong in a caption joined from two blocks is written bare where the bare form reads back', () => {
     const tree = edited('| a |\n^ cap', (blocks) => { ofType(ofType(blocks[0], 'table').caption, 'caption').children = [paragraph('one'), paragraph(inline('strong', 'two'))] })
     expect(inlinesOf(ofType(ofType(parse('| a |\n^ one *two*').children[0], 'table').caption, 'caption').children[0])[1]?.type).toBe('strong')
-    expect(write(tree)).toBe('| a |\n^ one *two*\n')
+    expect(nearest(tree)).toBe('| a |\n^ one *two*\n')
   })
 
   it('C2-W-070: emphasis or strong inside its own kind is written in the braced form', () => {
@@ -848,7 +854,7 @@ describe('canonical forms: inline', () => {
 
   it('C2-W-116: an emphasis with no children is left out and reported', () => {
     const tree = documentOf(paragraph('a', inline('emphasis'), 'b'))
-    expect(write(tree)).toBe('ab\n')
+    expect(nearest(tree)).toBe('ab\n')
     expect(losses(tree)).toEqual(['structure-unspellable /children/0/children/1'])
   })
 

@@ -36,7 +36,11 @@ describe('the gates of the writer', () => {
 
 describe('the gates of the writer on its own token alphabet', () => {
   it('C2-W-002, C2-W-003: every content of up to 2 writer tokens, escaped backticks, escaped delimiters and code spans included', () => {
-    for (const tokens of [1, 2]) expect(enumerateWriter(WRITER_TOKENS, tokens, '', 'x').failures).toEqual([])
+    for (const tokens of [1, 2]) {
+      const result = enumerateWriter(WRITER_TOKENS, tokens, '', 'x')
+      expect(result.failures).toEqual([])
+      expect(result.refused).toBe(0)
+    }
   })
 
   it('C2-W-011: in a seeded random run, no written form reads back as another tree without a reported loss', () => {

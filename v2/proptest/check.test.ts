@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CarveWriteError, format, formatWithDiagnostics, parse, write } from '../src/index.ts'
+import { CarveWriteError, format, formatWithDiagnostics, parse, tabsExtensions, write } from '../src/index.ts'
 import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
@@ -45,6 +45,11 @@ void test('C2-W-125: ordered repairs keep required bracket and brace escapes', (
   for (const [source, expected] of cases) assert.equal(format(source), expected)
 })
 
+void test('C2-W-088: an escape before a dash run is removed when unasked', () => {
+  const cases = ['x[----\\--', 'x^[----\\--------', 'x[\\[----\\--', 'x[-----\\---*a', 'x[----\\--a<a:b>']
+  for (const source of cases) assert.equal(format(source), `${source.replace('\\[', '[')}\n`)
+})
+
 void test('C2-W-133: a repeated writer repair state is reported', () => {
   const source = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8')
   const script = 'const r = require("./v2/src/index.ts").formatWithDiagnostics(process.env.CARVE_SOURCE);' +
@@ -62,6 +67,21 @@ void test('C2-W-133: a repeated writer repair state is reported', () => {
   assert.throws(() => write(parse(source)), CarveWriteError)
   assert.equal(checkWriter(source), 'refused')
   assert.equal(checkGates(source).refused, true)
+})
+
+void test('C2-W-134: source-only writer calls refuse an unspellable field', () => {
+  const source = '\r'
+  assert.equal(formatWithDiagnostics(source).diagnostics[0]?.code, 'field-unspellable')
+  assert.throws(() => format(source), CarveWriteError)
+  assert.throws(() => write(parse(source)), CarveWriteError)
+})
+
+void test('C2-W-134: source-only formatting refuses a loss in an extension claim', () => {
+  const body = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8').trimEnd()
+  const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
+  const result = formatWithDiagnostics(source, { extensions: tabsExtensions })
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'structure-unspellable'), true)
+  assert.throws(() => format(source, { extensions: tabsExtensions }), CarveWriteError)
 })
 
 void test('C2-W-007: a space in an image alt value is content', () => {
