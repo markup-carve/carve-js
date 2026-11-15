@@ -4,8 +4,8 @@
 import { forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
-  BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference, target,
-  writeInline,
+  BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, openSpanAtEnd, rawReference,
+  target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
 
@@ -224,6 +224,7 @@ export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
 
 /** `writeContent`: no space or tab of text at the end, and no line ending of a final hard break (C2-W-022). */
 export function modelContent(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {
+  if (openSpanAtEnd(nodes, flags) !== null) return undecide(leaf, 'open span')
   modelInlines(w, leaf, nodes, flags)
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') trimText(leaf, 0)
