@@ -353,7 +353,8 @@ function findTargets(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Ma
     const key = reference.key
     if (key === undefined) continue
     let target: Target | undefined = walk.resolution.definitions.get(key)
-    if (target === undefined && reference.type === 'link') {
+    // C2-I-081, C2-A-213: a heading alone never forms a shortcut reference, so a supplied one stays unresolved.
+    if (target === undefined && reference.type === 'link' && reference.refForm !== 'shortcut') {
       headings ??= headingIndex(walk, mode, facts)
       target = headings.get(key)
     }

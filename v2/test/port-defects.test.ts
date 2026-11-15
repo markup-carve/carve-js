@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, parseTree, parseWithDiagnostics, render } from '../src/index.ts'
+import { AST_VERSION, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree } from '../src/index.ts'
 
 const FENCE = '```'
 
@@ -390,5 +390,20 @@ describe('C2-A-138: the text beside a caption number keeps its position', () => 
     expect(before).toMatchObject({ value: 'Fig. ', pos: { startOffset: 8, endOffset: 14 } })
     expect(after).toMatchObject({ value: ': c', pos: { startOffset: 15, endOffset: 18 } })
     expect(captionText('| a |\n^ Table #: one\n', { positions: false }).every((node) => node.pos === undefined)).toBe(true)
+  })
+})
+
+describe('C2-A-213: a supplied shortcut reference with no definition stays unresolved', () => {
+  const linkTo = (refForm: 'shortcut' | 'collapsed' | 'full'): DocumentNode => ({
+    type: 'document', astVersion: AST_VERSION, children: [
+      { type: 'heading', level: 1, children: [{ type: 'text', value: 'H' }] },
+      { type: 'paragraph', children: [{ type: 'link', refForm, key: 'H', namespace: 'link', children: [{ type: 'text', value: 'H' }] }] },
+    ],
+  })
+
+  it('C2-A-109/213: the heading lookup is for the full and the collapsed form only', () => {
+    expect(renderTree(resolveTree(linkTo('shortcut')))).toContain('<p>[H]</p>')
+    expect(renderTree(resolveTree(linkTo('collapsed')))).toContain('<a href="#H">H</a>')
+    expect(renderTree(resolveTree(linkTo('full')))).toContain('<a href="#H">H</a>')
   })
 })
