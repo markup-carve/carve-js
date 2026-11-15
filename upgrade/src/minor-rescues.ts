@@ -250,6 +250,21 @@ function percentRunInsideBraceComment(output: string): Candidate[] {
   return found
 }
 
+function noteItemFollower(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 1; at < lines.length; at++) {
+    const head = lines[at - 1] ?? ''
+    const follower = lines[at] ?? ''
+    if (!head.startsWith('[^') || !head.includes(']: - ') || !follower.startsWith('       ')) continue
+    if (!follower.trimStart().startsWith(':::::') && !follower.trimStart().startsWith('^ ')) continue
+    const changed = [...lines]
+    changed[at] = '      ' + follower.trimStart()
+    found.push(candidate('U-229', changed.join('\n'), 'the line after the note item was moved to the note content column'))
+  }
+  return found
+}
+
 function promotedImageAttributes(output: string): Candidate[] {
   const lines = readLines(output)
   const found: Candidate[] = []
@@ -305,6 +320,7 @@ export function rescueMinor(
     ...commentedCaptionCaret(output),
     ...displayMathCaption(output),
     ...percentRunInsideBraceComment(output),
+    ...noteItemFollower(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output)
   ]

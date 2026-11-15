@@ -2385,5 +2385,18 @@
       ":: term\n: - a\n\n - c\t\n",
       ":: term\n: - a\n\n - c\n"
     ]
+  },
+  {
+    "id": "U-229",
+    "title": "Note item follower at note content column",
+    "class": "rewrite",
+    "inputs": [
+      "[^f]: - :::::\n       :::::\n\n[^f]\n",
+      "[^f]: - | a |\n       ^ cap\n\n[^f]\n"
+    ],
+    "outputs": [
+      "[^f]: - :::::\n      :::::\n\n[^f]\n",
+      "[^f]: - | a |\n      ^ cap\n\n[^f]\n"
+    ]
   }
 ]

@@ -2922,5 +2922,38 @@
     "entries": [
       "U-228"
     ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-076",
+    "path": "resources/examples/edge-cases/0863-a-closer-or-caption-at-a-note-marker-line-item-s-content-column-is-the-item-s.md",
+    "line": 112,
+    "input": "[^f]: - :::::\n       :::::\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-229"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-076",
+    "path": "resources/examples/edge-cases/0863-a-closer-or-caption-at-a-note-marker-line-item-s-content-column-is-the-item-s.md",
+    "line": 145,
+    "input": "[^f]: - | a |\n       ^ cap\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-229"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-076",
+    "path": "tests/corpus/863-a-closer-or-caption-at-a-note-marker-line-item-s-content-column-is-the-item-s-4.crv",
+    "line": 1,
+    "input": "[^f]: - :::::\n       :::::\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-229"
+    ]
   }
 ]

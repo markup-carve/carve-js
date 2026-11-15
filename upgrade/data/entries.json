@@ -1381,6 +1381,12 @@
       "name": "description sibling after a list item",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-229",
+      "name": "note item follower at note content column",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
