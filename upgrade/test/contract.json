@@ -2193,5 +2193,20 @@
       ":: t\n:  body\n",
       ":: t\n:: u\n: body\n"
     ]
+  },
+  {
+    "id": "U-216",
+    "title": "Invisible brace comment before a block image or paragraph",
+    "class": "rewrite",
+    "inputs": [
+      "{%%}![alt](x.png)\n",
+      "{.c}\n{%%}![a](x.png)\n",
+      "{% c %} %% t\n{% d %} %% u\n\nz\n"
+    ],
+    "outputs": [
+      "![alt](x.png)\n",
+      "![a](x.png){.c}\n",
+      "\nz\n"
+    ]
   }
 ]

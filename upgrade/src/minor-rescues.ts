@@ -151,6 +151,31 @@ function emptyFootnote(output: string): Candidate[] {
   return found
 }
 
+function invisibleCommentCandidates(input: string): Candidate[] {
+  const lines = input.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if (!value.startsWith('{%%}![')) continue
+    const changed = [...lines]
+    changed[at] = value.slice(4)
+    found.push(candidate('U-216', changed.join('\n'), 'the invisible comment before the block image was removed'))
+    const above = lines[at - 1] ?? ''
+    if (!above.startsWith('{') || !above.endsWith('}')) continue
+    changed[at] += above
+    changed.splice(at - 1, 1)
+    found.push(candidate('U-216', changed.join('\n'), 'the block attribute was moved after its image'))
+  }
+  const kept = lines.filter((value) => {
+    const trimmed = value.trimStart()
+    const close = trimmed.indexOf('%}')
+    const tail = trimmed.slice(close + 2).trimStart()
+    return !trimmed.startsWith('{%') || close < 0 || tail !== '' && !tail.startsWith('%%')
+  })
+  if (kept.length < lines.length) found.push(candidate('U-216', kept.join('\n'), 'comment-only lines were removed'))
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -165,7 +190,8 @@ export function rescueMinor(
     ...quotedAttribute(output),
     ...consumedListAttribute(output),
     ...captionBoundary(output),
-    ...emptyFootnote(output)
+    ...emptyFootnote(output),
+    ...invisibleCommentCandidates(input)
   ]
   for (const item of candidates) {
     try {

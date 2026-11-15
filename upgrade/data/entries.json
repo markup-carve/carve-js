@@ -1309,6 +1309,12 @@
       "name": "invisible percent span between container blocks",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-216",
+      "name": "invisible brace comment before a block image or paragraph",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
