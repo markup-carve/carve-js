@@ -2297,5 +2297,18 @@
       "- one\n::: note\n b\n :::\n",
       ":: t\n: - :::\n    :::\nq\n"
     ]
+  },
+  {
+    "id": "U-223",
+    "title": "Note-hosted description body column",
+    "class": "rewrite",
+    "inputs": [
+      "[^f]: :: t\n  : | a |\n ^ cap\n\n[^f]\n",
+      "[^n]: :: t\n  : # H\n    # I\nz\n\n[^n]\n"
+    ],
+    "outputs": [
+      "[^f]: :: t\n      : | a |\n^ cap\n\n[^f]\n",
+      "[^n]: :: t\n      : # H\n        # I\nz\n\n[^n]\n"
+    ]
   }
 ]

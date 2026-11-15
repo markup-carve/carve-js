@@ -140,6 +140,26 @@ function definitionVariants(input: string): string[] {
   return found
 }
 
+function noteDescriptionVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    const head = (lines[at] ?? '').trimStart()
+    const body = lines[at + 1] ?? ''
+    if (!head.startsWith('[^') || !head.includes(']: :: ') || !body.startsWith('  : ')) continue
+    const changed = [...lines]
+    changed[at + 1] = '      ' + body.trimStart()
+    for (let next = at + 2; next < lines.length; next++) {
+      const value = lines[next] ?? ''
+      if (value.trim() === '' || !value.startsWith(' ')) break
+      const indent = value.length - value.trimStart().length
+      changed[next] = indent < 2 ? value.trimStart() : '    ' + value
+    }
+    found.push(changed.join('\n'))
+  }
+  return found
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -170,6 +190,9 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   const definition = firstPreserving(expected, definitionVariants(input))
   if (definition !== null) return { output: definition, record: recordOf('U-210', mismatch.line,
     'the definition was moved to document scope and the description kept its empty 0.1 body') }
+  const note = firstPreserving(expected, noteDescriptionVariants(input))
+  if (note !== null) return { output: note, record: recordOf('U-223', mismatch.line,
+    'the note-hosted description body was moved to its content column') }
   const plus = firstPreserving(expected, plusVariants(input))
   if (plus !== null)
     return {

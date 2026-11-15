@@ -1345,6 +1345,12 @@
       "name": "div boundary at its owning column",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-223",
+      "name": "note-hosted description body column",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

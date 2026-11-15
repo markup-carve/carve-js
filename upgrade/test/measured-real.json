@@ -2636,5 +2636,38 @@
     "entries": [
       "U-166"
     ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-087",
+    "path": "resources/examples/edge-cases/0856-a-line-below-the-column-after-a-note-hosted-description-leaves-the-note.md",
+    "line": 12,
+    "input": "[^f]: :: t\n  : | a |\n ^ cap\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-223"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-087",
+    "path": "tests/corpus/856-a-line-below-the-column-after-a-note-hosted-description-leaves-the-note.crv",
+    "line": 1,
+    "input": "[^f]: :: t\n  : | a |\n ^ cap\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-223"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-087",
+    "path": "resources/examples/edge-cases/0868-a-line-below-a-note-description-past-a-closed-block-leaves-the-note.md",
+    "line": 12,
+    "input": "[^n]: :: t\n  : # H\n    # I\nz\n\n[^n]\n",
+    "check": "pass",
+    "entries": [
+      "U-223"
+    ]
   }
 ]
