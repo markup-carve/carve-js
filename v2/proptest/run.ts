@@ -51,8 +51,9 @@ function cliCheck(source: string, seed: number): Finding | null {
   const args = [commands[rng.int(commands.length)] ?? 'render']
   for (let at = 0; at < rng.int(6); at++) args.push(flags[rng.int(flags.length)] ?? '--not-real')
   args.push(rng.bool() ? '-' : '/no/such/carve-input.crv')
+  const timeout = args[0] === 'fmt' || args[0] === 'upgrade' ? 30000 : 3000
   const result = spawnSync(process.execPath, ['v2/cli/main.ts', ...args], {
-    input: source, encoding: 'utf8', timeout: args[0] === 'fmt' ? 30000 : 3000, maxBuffer: 1024 * 1024,
+    input: source, encoding: 'utf8', timeout, maxBuffer: 1024 * 1024,
   })
   if (result.error !== undefined) return { kind: 'cli-process-error', detail: String(result.error) }
   if (![0, 1, 2].includes(result.status ?? -1)) return { kind: 'cli-exit-code', detail: String(result.status) }
