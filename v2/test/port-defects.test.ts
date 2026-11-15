@@ -354,3 +354,14 @@ describe('C2-H-069: a comment-only line is a line of the leaf, not of an inline 
     expect(render('a\n%% c\n')).toBe('<p>a</p>')
   })
 })
+
+describe('C2-H-064: every panel of a figure group has a panel figure', () => {
+  it('C2-A-084, C2-H-064: a table panel, captioned or not, is wrapped; its caption and attributes stay on the table', () => {
+    const html = render(':::: figure\n![a](a.png)\n^ First\n\n{.t}\n| t |\n^ Second\n::::\n^ Group #: G\n')
+    expect(html).toContain('  <figure class="carve-figure-panel">\n    <table class="t">\n      <caption>Second</caption>')
+    expect(html).toContain('</table>\n  </figure>\n  <figcaption>Group 1: G</figcaption>')
+    expect(render(':::: figure\n| t |\n\n| u |\n::::\n')).toContain('<figure class="carve-figure-panel">\n    <table>')
+    expect(render(':::: figure\n| t |\n::::\n', { sourceLines: true })).toContain('<figure class="carve-figure-panel" data-source-line="2">')
+    expect(render('| t |\n^ Alone\n')).toMatch(/^<table>/)
+  })
+})

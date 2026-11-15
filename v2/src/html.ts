@@ -321,13 +321,20 @@ function captionLine(r: Render, caption: CaptionNode, name: string, level: numbe
   line(r, level, `</${name}>`)
 }
 
+function tablePanel(r: Render, node: TableNode, level: number): void {
+  line(r, level, `<figure${tag(r, node, { base: PANEL_CLASSES, bare: true })}>`)
+  writeBlock(r, node.type, node, level + 1)
+  line(r, level, '</figure>')
+}
+
 function figureOf(r: Render, node: FigureNode | FigureGroupNode, level: number, base: readonly string[]): void {
   line(r, level, `<figure${tag(r, node, { base })}>`)
   const before = r.count
   const group = base === GROUP_CLASSES
   for (const child of node.children) {
-    // C2-H-064: each panel of a group.
+    // C2-H-064, C2-A-084: each panel of a group, a figure or a table; a table keeps its caption and attributes (C2-H-061).
     if (group && child.type === 'figure') figureOf(r, child, level + 1, PANEL_CLASSES)
+    else if (group && child.type === 'table') tablePanel(r, child, level + 1)
     else writeBlock(r, child.type, child, level + 1)
   }
   const caption = node.caption
