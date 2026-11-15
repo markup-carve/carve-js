@@ -145,6 +145,44 @@ function listDivCandidates(source: string): string[] {
   return found
 }
 
+function listPlusColumn(value: string): number {
+  const trimmed = value.trimStart()
+  if (!trimmed.startsWith('- +') && !trimmed.startsWith('* +') && !trimmed.startsWith('. +')) return -1
+  return value.length - trimmed.length + 2
+}
+
+function isSibling(value: string, markerColumn: number): boolean {
+  const trimmed = value.trimStart()
+  const indent = value.length - trimmed.length
+  if (indent > markerColumn) return false
+  return trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('. ')
+    || trimmed.startsWith('# ') || trimmed.startsWith(':::') || trimmed.startsWith(':: ')
+}
+
+function indentListPlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    const column = listPlusColumn(lines[at] ?? '')
+    if (column < 0) continue
+    let end = at + 1
+    while (end < Math.min(lines.length, at + 14) && !isSibling(lines[end] ?? '', column - 2)) end++
+    if (end === at + 1) continue
+    let least = column
+    for (let line = at + 1; line < end; line++) {
+      const value = lines[line] ?? ''
+      if (value.trim() !== '') least = Math.min(least, value.length - value.trimStart().length)
+    }
+    const moved = [...lines]
+    moved[at] = (lines[at] ?? '').slice(0, column) + '{% %}'
+    for (let line = at + 1; line < end; line++) {
+      if (moved[line]?.trim() !== '') moved[line] = ' '.repeat(column - least) + moved[line]
+    }
+    found.push(moved.join('\n'))
+  }
+  return found
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -160,7 +198,7 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
   const entry = plusEntry(input)
   const expected = html01(input)
   const variants = [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input),
-    ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input)]
+    ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input), ...indentListPlus(output)]
   for (const candidate of variants) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
