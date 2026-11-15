@@ -12,7 +12,7 @@ import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { opensAngleAtom } from './write-plan-angle.ts'
 import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
-import { NAME, sigilName, UNKNOWN } from './write-plan-sigil.ts'
+import { colonName, NAME, sigilName, UNKNOWN } from './write-plan-sigil.ts'
 import { checkSmart } from './write-plan-smart.ts'
 import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
@@ -134,12 +134,13 @@ function sigil(leaf: Leaf, at: number, escaped: Uint8Array): void {
 }
 
 /** C2-I-093, C2-I-094: a symbol or an inline extension. */
-function colon(leaf: Leaf, at: number): void {
-  let end = at + 1
-  while (end < leaf.codes.length && (isAsciiAlphanumeric(code(leaf, end)) || '+-_'.includes(String.fromCharCode(code(leaf, end))))) end++
-  if (end === at + 1) return
-  const after = code(leaf, end)
-  undecidedIf(after === 58 || after === 91, leaf, 'symbol')
+function colon(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  const before = codePointBefore(leaf, at - 1)
+  if (before === -2 || behindBracedComment(leaf, at)) return undecide(leaf, 'symbol')
+  if (before >= 0 && isWordCharacter(before)) return
+  const name = colonName(leaf, at)
+  if (name === UNKNOWN) undecide(leaf, 'symbol')
+  else if (name === NAME) escaped[at] = 1
 }
 
 function nextIs(leaf: Leaf, at: number, chars: string): boolean {
@@ -231,6 +232,8 @@ function opensCode(leaf: Leaf, at: number): boolean {
 function gluedSigil(leaf: Leaf, at: number, escaped: Uint8Array, opens: (leaf: Leaf, at: number) => boolean, rest: string): void {
   if (isLiteral(leaf, at, escaped)) return
   if (opens(leaf, at + 1)) {
+    // C2-W-091: bare, the construct does not form, and a delimiter before it may pair into its source first.
+    if (leaf.textMark) return undecide(leaf, 'sigil order')
     escaped[at] = 1
     return
   }
@@ -278,7 +281,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '-': hyphen,
   '.': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) dots(leaf, at) },
   '/': () => undefined,
-  ':': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) colon(leaf, at) },
+  ':': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) colon(leaf, at, escaped) },
   '<': angle,
   '=': mark('=>'),
   '>': mark('='),
@@ -440,11 +443,13 @@ function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
   const block = value === 123 ? attributeBlockEnd(leaf, at, escaped) : -1
   if (block >= 0) return opaqueBlock(leaf, at, block)
   RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
+  if (DELIMITER_CHARACTERS.includes(String.fromCharCode(value))) leaf.textMark = true
   return at + 1
 }
 
 // C2-I-028: a valid attribute block stands on one line; a longer stretch is left to the repair.
 const LONGEST_BLOCK = 256
+const DELIMITER_CHARACTERS = '*+,-/=^_~{'
 
 /** C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. */
 function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number {

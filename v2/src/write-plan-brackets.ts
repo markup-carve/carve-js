@@ -68,6 +68,13 @@ function closePair(scan: Scan, at: number): void {
   // With an opener left below it, the closing bracket would pair with that one once this opener is escaped.
   if (reading === NO_DECISION || (reading === ESCAPE_OPENER && openers.length > 0)) return undecide(leaf, 'bracket pair')
   if (reading === ESCAPE_OPENER) scan.escaped[opener] = 1
+  // C2-I-094: a closed inline extension forms whatever follows it; its colon takes the backslash (C2-W-090), and
+  // the pair it leaves is read as any other.
+  const colon = leaf.extensions.get(opener)
+  if (colon === undefined) return
+  // C2-W-125: the backslash may turn a quote before the colon; the procedure then escapes the bracket.
+  if (colon > 0 && leaf.kinds[colon - 1] !== TEXT) return undecide(leaf, 'extension')
+  scan.escaped[colon] = 1
 }
 
 export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean): void {

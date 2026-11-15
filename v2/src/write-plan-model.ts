@@ -46,12 +46,17 @@ export interface Leaf {
   lastAtomTick: number
   /** The last `%}` and the last `#}`, once a brace asked for them. */
   closes: [number, number] | null
+  /** C2-I-094: the opening bracket of each inline extension of text, with its colon. */
+  extensions: Map<number, number>
+  /** Whether a delimiter character of text came before the unit in the scan. */
+  textMark: boolean
 }
 
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null,
+    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null, extensions: new Map(),
+    textMark: false,
   }
 }
 
