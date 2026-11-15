@@ -383,9 +383,9 @@ describe('what the random writer gates found', () => {
 })
 
 describe('one UTF-8 width for positions, the layout record and the writer', () => {
-  it('C2-W-067, C2-A-010: a continuation row behind an unpaired surrogate stays where the record puts it', () => {
-    expect(format('| \ud800 |\n+ more |')).toBe('| \ud800 |\n+ more |\n')
-    expect(format('| \ud800 a |\n+ more |')).toBe('| \ud800 a |\n+ more |\n')
+  it('C2-W-067, C2-B-218: a continuation row behind an unpaired surrogate stays where the record puts it, and the surrogate is U+FFFD', () => {
+    expect(format('| \ud800 |\n+ more |')).toBe('| \ufffd |\n+ more |\n')
+    expect(format('| \ud800 a |\n+ more |')).toBe('| \ufffd a |\n+ more |\n')
     expect(format('| 😀 a |\n+ more |')).toBe('| 😀 a |\n+ more |\n')
   })
 
