@@ -64,12 +64,23 @@ function isListMarker(value: string): boolean {
   return value.startsWith('- ') || value.startsWith('* ') || value.startsWith('. ')
 }
 
+function blankBodyBoundary(lines: string[], at: number, found: string[]): void {
+  if (at < 2 || (lines[at - 1] ?? '').trim() !== '') return
+  if (!(lines[at - 2] ?? '').trimStart().startsWith(': ')) return
+  const current = lines[at] ?? ''
+  if (current === current.trimStart() || current.trim() === '') return
+  const changed = [...lines]
+  changed[at] = current.trimStart()
+  found.push(changed.join('\n'))
+}
+
 function boundaryVariants(output: string): string[] {
   const lines = output.split('\n')
   const found: string[] = []
   for (let at = 1; at < lines.length - 1; at++) {
     const previous = (lines[at - 1] ?? '').trimStart()
     const current = (lines[at] ?? '').trimStart()
+    blankBodyBoundary(lines, at, found)
     if (previous.startsWith(': ') && current.startsWith('>')) {
       const changed = [...lines]
       changed[at] = '\n' + current

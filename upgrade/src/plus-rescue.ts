@@ -357,6 +357,17 @@ function percentListPlus(source: string): string[] {
   return found
 }
 
+function repeatedQuotePluses(source: string): string[] {
+  const lines = source.split('\n')
+  let removed = 0
+  const moved = lines.map((line) => {
+    if (!line.trimEnd().endsWith('> +')) return line
+    removed++
+    return line.trimEnd().slice(0, -2)
+  })
+  return removed > 1 ? [moved.join('\n')] : []
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -374,7 +385,8 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
   const variants = [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input),
     ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input), ...indentListPlus(output),
     ...footnoteFencePlus(input), ...listQuotePlus(input), ...listFirstBlock(input), ...listOutsideFence(input),
-    ...listCommentHeading(input), ...taskListBoundaryPlus(input), ...percentListPlus(input)]
+    ...listCommentHeading(input), ...taskListBoundaryPlus(input), ...percentListPlus(input),
+    ...repeatedQuotePluses(input)]
   for (const candidate of variants) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue

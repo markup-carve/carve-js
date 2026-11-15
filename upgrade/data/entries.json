@@ -1237,6 +1237,12 @@
       "name": "nested braced inline closer boundary",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-202",
+      "name": "literal nested inline footnote opener",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [

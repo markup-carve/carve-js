@@ -1909,12 +1909,16 @@
     "inputs": [
       ":: t\n:  d\n   {.k}\ntail\n",
       ":: term\n:  definition\n > quote\n",
-      "- one\n :: term\n :  def\n"
+      "- one\n :: term\n :  def\n",
+      ":: term\n: first\n\n second\n",
+      ":: term\n:  first\n\n  second\n"
     ],
     "outputs": [
       ":: t\n:  d\n\ntail\n",
       ":: term\n:  definition\n\n> quote\n",
-      "- one\n\n:: term\n:  def\n"
+      "- one\n\n:: term\n:  def\n",
+      ":: term\n: first\n\nsecond\n",
+      ":: term\n:  first\n\nsecond\n"
     ]
   },
   {
@@ -1945,6 +1949,23 @@
       "{-{_a-}_} b-}\n",
       "{-a-}{+{+b~}+}+}\n",
       "{=a\\ %% c=} t and b \\ %% d\n"
+    ]
+  },
+  {
+    "id": "U-202",
+    "title": "Literal nested inline footnote opener",
+    "class": "escape",
+    "inputs": [
+      "x ^[a ^[b] c]\n",
+      "x ^[a ^[b ^[c] d] e]\n",
+      "^[x ^[a](u) b]\n",
+      "^[x ^[a]{.c} b]\n"
+    ],
+    "outputs": [
+      "x ^[a \\^[b] c]\n",
+      "x ^[a \\^[b \\^[c] d] e]\n",
+      "^[x \\^[a](u) b]\n",
+      "^[x \\^[a]{.c} b]\n"
     ]
   }
 ]

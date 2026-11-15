@@ -137,6 +137,13 @@ function substitutionAttributeCandidates(input: string, output: string): Candida
   return found
 }
 
+function nestedFootnoteCandidates(output: string): Candidate[] {
+  const first = output.indexOf('^[')
+  if (first < 0 || output.indexOf('^[', first + 2) < 0) return []
+  const prefix = output.slice(0, first + 2)
+  return [{ id: 'U-202', output: prefix + output.slice(first + 2).replaceAll('^[', '\\^[') }]
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -167,7 +174,8 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   const expected = html01(input)
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
     ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
-    ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output)]
+    ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output),
+    ...nestedFootnoteCandidates(output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
