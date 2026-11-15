@@ -45,6 +45,20 @@ function variants(output: string, mismatchLine: number): string[] {
   return [...found]
 }
 
+function alignedFollowerVariants(
+  lines: string[], line: number, markerColumn: number, term: string, follower: string, direct: string[]
+): string[] {
+  if ((lines[line - 1] ?? '').indexOf(':') === markerColumn) return []
+  const found: string[] = []
+  for (let indent = 0; indent <= 4; indent++) {
+    const aligned = [...direct]
+    aligned[line - 1] = ' '.repeat(indent) + term
+    aligned[line] = ' '.repeat(indent) + ': ' + follower
+    found.push(aligned.join('\n'))
+  }
+  return found
+}
+
 function plusVariants(input: string): string[] {
   const found: string[] = []
   const lines = input.split('\n')
@@ -65,12 +79,85 @@ function plusVariants(input: string): string[] {
     direct[line] = (lines[line] ?? '').slice(0, markerColumn) + ': ' + follower
     direct.splice(line + 1, 1)
     found.push(direct.join('\n'))
+    found.push(...alignedFollowerVariants(lines, line, markerColumn, term, follower, direct))
     const sibling = direct[line + 1] ?? ''
     if (sibling.trimStart().startsWith(': ') && sibling !== sibling.trimStart()) {
       const atColumn = [...direct]
       atColumn[line + 1] = sibling.trimStart()
       found.push(atColumn.join('\n'))
     }
+  }
+  return found
+}
+
+function quotedPlusVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    if (!(lines[at] ?? '').trimStart().startsWith('> :: ')) continue
+    if ((lines[at + 1] ?? '').trimStart() !== '> : +') continue
+    const prefix = (lines[at] ?? '').slice(0, (lines[at] ?? '').indexOf('>'))
+    const moved = [...lines]
+    moved[at + 1] = prefix + '> : {% %}'
+    moved[at + 2] = `\n${(lines[at + 2] ?? '').trimStart()}`
+    found.push(moved.join('\n'))
+    const follower = (lines[at + 2] ?? '').trimStart()
+    if (follower.startsWith('> ')) {
+      const attached = [...lines]
+      attached[at + 1] = prefix + '> : ' + follower.slice(2)
+      attached.splice(at + 2, 1)
+      found.push(attached.join('\n'))
+      const sibling = (attached[at + 2] ?? '').trimStart()
+      if (sibling.startsWith('>  : ')) {
+        const dedented = [...attached]
+        dedented[at + 2] = prefix + '> : ' + sibling.slice(5)
+        found.push(dedented.join('\n'))
+      }
+    }
+  }
+  return found
+}
+
+function descriptionFenceCandidate(lines: string[], at: number, fence: string, marker: string): string {
+  const close = lines.findIndex((line, index) => index > at + 2 && line.trim() === marker)
+  const moved = [...lines]
+  moved[at + 1] = ': ```' + fence.slice(3)
+  moved.splice(at + 2, 1)
+  if (close >= 0) moved[close - 1] = '```'
+  const end = close < 0 ? moved.length : close
+  for (let next = at + 2; next < end; next++) {
+    if (moved[next]?.trim() !== '') moved[next] = `  ${moved[next]}`
+  }
+  return moved.join('\n')
+}
+
+function descriptionFenceVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    if (!(lines[at] ?? '').trimStart().startsWith(':: ')) continue
+    if ((lines[at + 1] ?? '').trimStart() !== ': +') continue
+    const fence = (lines[at + 2] ?? '').trimStart()
+    const marker = fence.slice(0, 3)
+    if (marker !== '```' && marker !== '~~~' || fence[3] === marker[0]) continue
+    found.push(descriptionFenceCandidate(lines, at, fence, marker))
+  }
+  return found
+}
+
+function descriptionListPlusVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    if (!(lines[at] ?? '').trimStart().startsWith(':: ')) continue
+    if ((lines[at + 1] ?? '').trimStart() !== ': - +') continue
+    const heading = (lines[at + 2] ?? '').trimStart()
+    if (!heading.startsWith('# ')) continue
+    const column = (lines[at + 1] ?? '').indexOf(':')
+    const moved = [...lines]
+    moved[at + 1] = ' '.repeat(column) + ': - {% %}'
+    moved[at + 2] = '\n' + ' '.repeat(column + 2) + heading
+    found.push(moved.join('\n'))
   }
   return found
 }
@@ -261,14 +348,16 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   const compound = firstPreserving(expected, compoundDescriptionVariants(input))
   if (compound !== null) return { output: compound, record: recordOf('U-236', mismatch.line,
     'the description sibling was moved to its 0.2 owning column') }
-  const plus = firstPreserving(expected, plusVariants(input))
+  const plus = firstPreserving(expected,
+    [...plusVariants(input), ...quotedPlusVariants(input), ...descriptionFenceVariants(input),
+      ...descriptionListPlusVariants(input)])
   if (plus !== null)
     return {
       output: plus,
       record: recordOf(
         'U-123',
         mismatch.line,
-        'the description continuation was written as an empty block and a separated follower'
+        'the description continuation was written at its 0.2 owning column while preserving the full HTML'
       )
     }
   const boundary = firstPreserving(expected, [...boundaryVariants(input), ...boundaryVariants(output)])
