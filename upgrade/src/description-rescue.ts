@@ -51,6 +51,11 @@ function plusVariants(input: string): string[] {
       changed[line + 1] = '\n' + ' '.repeat(indent) + follower
       found.push(changed.join('\n'))
     }
+    const direct = [...lines]
+    const markerColumn = (lines[line] ?? '').indexOf(':')
+    direct[line] = (lines[line] ?? '').slice(0, markerColumn) + ': ' + follower
+    direct.splice(line + 1, 1)
+    found.push(direct.join('\n'))
   }
   return found
 }

@@ -9,12 +9,22 @@ interface Rescue {
 }
 
 function plusEntry(source: string): string {
-  const line = source.split('\n').find((value) => value.includes('+'))?.trimStart() ?? ''
+  const lines = source.split('\n')
+  const at = lines.findIndex((value) => value.includes('+'))
+  const line = lines[at]?.trimStart() ?? ''
   if (line.startsWith('[^') || line.includes(']: +')) return 'U-124'
-  if (line === '+' && source.includes('[^') && source.includes(']:')) return 'U-177'
+  if (line === '+') return standalonePlusEntry(source, lines, at)
   if (line.startsWith('::') || line.startsWith(':')) return 'U-123'
   if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('. ')) return 'U-122'
   if (line.startsWith('>')) return 'U-125'
+  return 'U-122'
+}
+
+function standalonePlusEntry(source: string, lines: string[], at: number): string {
+  if (source.includes('[^') && source.includes(']:')) return 'U-177'
+  const before = lines.slice(0, at).reverse().find((value) => value.trim() !== '')?.trimStart() ?? ''
+  if (before.startsWith('>')) return 'U-125'
+  if (before.startsWith(':')) return 'U-123'
   return 'U-122'
 }
 
@@ -183,6 +193,44 @@ function indentListPlus(source: string): string[] {
   return found
 }
 
+function footnoteFencePlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    const definition = (lines[at] ?? '').trimStart()
+    if (!definition.startsWith('[^') || !definition.endsWith(']: +')) continue
+    if ((lines[at + 1] ?? '').trim() !== '```') continue
+    const close = lines.findIndex((line, index) => index > at + 1 && line.trim() === '```')
+    if (close < 0 || close > at + 20) continue
+    const moved = [...lines]
+    moved[at] = (lines[at] ?? '').slice(0, -1) + '```'
+    moved.splice(at + 1, 1)
+    for (let line = at + 1; line < close; line++) moved[line] = '  ' + moved[line]
+    found.push(moved.join('\n'))
+  }
+  return found
+}
+
+function listQuotePlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 2; at < lines.length - 1; at++) {
+    const marker = lines[at] ?? ''
+    if (marker.trim() !== '+') continue
+    const quote = lines[at - 1] ?? ''
+    const indent = marker.length - marker.trimStart().length
+    if (quote.slice(0, indent) !== marker.slice(0, indent) || !quote.slice(indent).startsWith('> ')) continue
+    const item = (lines[at - 2] ?? '').trimStart()
+    if (!item.startsWith('- ') && !item.startsWith('* ') && !item.startsWith('. ')) continue
+    const moved = [...lines]
+    moved[at] = marker.slice(0, indent) + '>'
+    moved[at + 1] = marker.slice(0, indent) + '> ' + (lines[at + 1] ?? '').trimStart()
+    moved.splice(at - 1, 0, '')
+    found.push(moved.join('\n'))
+  }
+  return found
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -198,7 +246,8 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
   const entry = plusEntry(input)
   const expected = html01(input)
   const variants = [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input),
-    ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input), ...indentListPlus(output)]
+    ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input), ...indentListPlus(output),
+    ...footnoteFencePlus(input), ...listQuotePlus(input)]
   for (const candidate of variants) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
