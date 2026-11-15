@@ -172,9 +172,6 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content.
   const next = code(leaf, at + 1)
   undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')
-  // Trap (C2-I-025): the reader marks the closer missing when a delimiter looks past a comment to an unclosed `{%`,
-  // and the comment before it then reads as text too.
-  undecidedIf(next === 37 && leaf.firstComment >= 0 && leaf.firstComment < at, leaf, 'brace')
   // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
   undecidedIf(leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS), leaf, 'brace')
 }

@@ -92,15 +92,17 @@ describe('the planned writer', () => {
     expect(writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false).stats.planned).toBe(0)
   })
 
-  it('C2-I-025: an unclosed brace of text behind a braced comment leaves the group to the repair', () => {
+  it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
-    expect(result.output.source).toBe('x/{% * %}\\{%<a:b>\n')
-    expect(result.stats.planned).toBe(0)
+    expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')
+    expect(result.stats.planned).toBe(1)
+    expect(result.stats.differences).toEqual([])
   })
 
   it('C2-B-101: a bullet before a brace leaves the group to the repair', () => {
     const result = formatBy('\\-{[^*} {x=1}[^^]\n', 'both')
-    expect(result.output.source).toBe('\\-{[^*} {x=1}[^^]\n')
+    // C2-I-034: the block after the dash is no valid attribute block, so the line opens no item and the dash stays bare.
+    expect(result.output.source).toBe('-{[^*} {x=1}[^^]\n')
     expect(result.stats.planned).toBe(0)
   })
 
