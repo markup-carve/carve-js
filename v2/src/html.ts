@@ -430,23 +430,27 @@ function rendererHost(r: Render): ExtensionRenderHost {
     blocks: (nodes) => {
       const previous = r.out
       const bidi = r.bidi
+      const count = r.count
       r.bidi = true
       let html = ''
-      for (const node of nodes.filter(isBlockNode)) {
-        r.out = ''
-        writeBlocks(r, [node], 0)
-        html += r.out.slice(1)
+      try {
+        for (const node of nodes.filter(isBlockNode)) {
+          r.out = ''
+          writeBlocks(r, [node], 0)
+          html += r.out.slice(1)
+        }
+        return html
+      } finally {
+        r.out = previous
+        r.bidi = bidi
+        r.count = count
       }
-      r.out = previous
-      r.bidi = bidi
-      return html
     },
     inlines: (nodes) => {
       const bidi = r.bidi
       r.bidi = true
-      const html = inlineHtml(r, nodes.filter(isInlineNode))
-      r.bidi = bidi
-      return html
+      try { return inlineHtml(r, nodes.filter(isInlineNode)) }
+      finally { r.bidi = bidi }
     },
     plainText: (nodes) => plainText(nodes.filter(isInlineNode)),
     escapeText,
@@ -787,11 +791,28 @@ export function renderDocument(
   r.renderExtension = (node) => {
     const renderer = settings.renderers[node.name]
     if (renderer === undefined || renderer.version !== node.version) return null
+    const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
+      usedIds: new Set(r.usedIds), lossCount: r.losses.entries.length, nodeCount: r.losses.nodes.length,
+      linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
+      backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
     try {
       const result: unknown = renderer.render(node, rendererHost(r))
       if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
       return result
     } catch (error) {
+      r.out = before.out
+      r.count = before.count
+      r.bidi = before.bidi
+      r.extensionIds = before.extensionIds
+      r.usedIds = before.usedIds
+      r.losses.entries.length = before.lossCount
+      r.losses.nodes.length = before.nodeCount
+      r.linkDepth = before.linkDepth
+      r.linkNotes = before.linkNotes
+      r.abbrDepth = before.abbrDepth
+      r.backlinkHost = before.backlinkHost
+      r.backlinks = before.backlinks
+      r.longDescriptions = before.longDescriptions
       const detail = error instanceof Error ? error.message : String(error)
       loss(r, node, 'extension-renderer-failed', `the extension ${node.name} renderer failed: ${detail}`)
       return null

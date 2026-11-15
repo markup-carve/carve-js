@@ -1,4 +1,3 @@
-import { performance } from 'node:perf_hooks'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { parseFragment } from 'parse5'
@@ -28,8 +27,8 @@ function description(error: unknown): string {
 function finding(kind: string, detail: string): Finding { return { kind, detail } }
 
 function timed<T>(work: () => T): { value: T, ms: number } {
-  const start = performance.now()
-  return { value: work(), ms: performance.now() - start }
+  const start = cpuMicros()
+  return { value: work(), ms: (cpuMicros() - start) / 1000 }
 }
 
 function cpuMicros(): number {

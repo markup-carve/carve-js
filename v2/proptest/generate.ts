@@ -54,12 +54,12 @@ export interface Corpus {
 export function loadCorpus(extra?: string): Corpus {
   const paths: string[] = []
   const focusedPaths: string[] = []
-  files('.', '.crv', paths)
-  files('../carve', '.crv', paths)
+  files('v2/test/fixtures', '.crv', paths)
   files('v2/proptest/corpus', '.crv', focusedPaths)
   if (extra !== undefined) files(extra, '.crv', paths)
   const examples = JSON.parse(readFileSync('v2/data/examples.json', 'utf8')) as { input: string }[]
-  const documents = [...examples.map((item) => item.input), ...paths.map((path) => readFileSync(path, 'utf8'))]
+  const documents = [...examples.map((item) => item.input), ...paths.map((path) => readFileSync(path, 'utf8')),
+    ...focusedPaths.map((path) => readFileSync(path, 'utf8'))]
   const dictionary: string[] = []
   for (const name of readdirSync('v2/data').sort()) {
     if (!name.endsWith('.json')) continue

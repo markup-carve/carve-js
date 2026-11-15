@@ -22,10 +22,25 @@ describe('generated parser findings', () => {
     expect(() => validateTree(parse(source), undefined, source)).not.toThrow()
   })
 
+  it('C2-A-138, C2-A-156: a literal fence title has a position', () => {
+    const source = '```python "src/app.py"\ncode\n```'
+    const document = parse(source)
+    const block = document.children[0]
+    expect(block?.type).toBe('code_block')
+    if (block?.type !== 'code_block') return
+    expect(block.title?.[0]?.pos?.startOffset).toBe(source.indexOf('src/app.py'))
+    expect(() => validateTree(document, undefined, source)).not.toThrow()
+    const escaped = parse('```python "a\\"b"\ncode\n```').children[0]
+    if (escaped?.type !== 'code_block') return
+    expect(escaped.title?.[0]?.pos).toBeUndefined()
+  })
+
   it('C2-H-176: text that HTML cannot carry literally is replaced', () => {
     for (const character of ['\u001d', '\ufdd5', '\ud800', '\u0000', '\u007f', '\ud83f\udffe']) {
       expect(render(character)).toBe('<p>\ufffd</p>')
     }
+    expect(render('👍🏾 👍🏿')).toBe('<p>👍🏾 👍🏿</p>')
+    expect(render('{title="\u001d"}\na')).toBe('<p title="\ufffd">a</p>')
   })
 
   it('C2-H-176, C2-X-043: tab content uses the same HTML text rule', () => {
@@ -59,5 +74,28 @@ describe('generated parser findings', () => {
     const parsed = parseWithDiagnostics('::: failure\nBody\n:::', { extensions: [definition] })
     expect(parsed.document.children[0]?.type).toBe('div')
     expect(parsed.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
+  })
+
+  it('C2-X-050: a renderer helper failure keeps earlier and later output', () => {
+    const rendered = renderWithDiagnostics('before\n\n::: failure\nBody\n:::\n\nafter', {
+      extensions: [failureExtension], renderers: { 'test.failure': { version: '1', render: (_node, host) => {
+        const malformed = { type: 'paragraph' as const, children: [] }
+        Reflect.deleteProperty(malformed, 'children')
+        return host.blocks([malformed])
+      } } },
+    })
+    expect(rendered.html).toBe('<p>before</p>\n<p>Body</p>\n<p>after</p>')
+    expect(rendered.diagnostics.some((entry) => entry.code === 'extension-renderer-failed')).toBe(true)
+  })
+
+  it('C2-X-050: a failed renderer does not duplicate findings from its partial output', () => {
+    const rendered = renderWithDiagnostics('::: failure\n[bad](javascript:alert)\n:::', {
+      extensions: [failureExtension], renderers: { 'test.failure': { version: '1', render: (node, host) => {
+        if (node.type === 'block_extension') host.blocks(node.fallback)
+        host.nextId('tabs')
+        throw new Error('test failure')
+      } } },
+    })
+    expect(rendered.diagnostics.filter((entry) => entry.code === 'destination-denied')).toHaveLength(1)
   })
 })

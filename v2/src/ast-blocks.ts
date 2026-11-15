@@ -125,7 +125,12 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
   const out: CodeBlockNode = { type: 'code_block', value }
   if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
   if (word !== '') out.syntax = word
-  if (info.titleStart >= 0) out.title = [{ type: 'text', value: openerTitle(src, info.titleStart, info.titleEnd) }]
+  if (info.titleStart >= 0) {
+    const value = openerTitle(src, info.titleStart, info.titleEnd)
+    const title: Inline = { type: 'text', value }
+    if (value === src.slice(info.titleStart, info.titleEnd)) place(ctx, title, info.titleStart, info.titleEnd)
+    out.title = [title]
+  }
   if (info.labelStart >= 0) out.groupLabel = src.slice(info.labelStart, info.labelEnd)
   if (word !== '') ctx.sourceNames?.set(out, word)
   return out
