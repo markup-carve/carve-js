@@ -245,7 +245,12 @@ function lineCandidates(output: string): Candidate[] {
         .trimStart()
         .startsWith('^ ')
     ) {
-      found.push({ id: 'U-183', output: output.slice(0, start) + '\\' + output.slice(start) })
+      const escaped = output.slice(0, start) + '\\' + output.slice(start)
+      found.push({ id: 'U-183', output: escaped })
+      if (lineText(lines, line + 2).trimStart().startsWith('^ ')) {
+        const nextCaption = lineStart(lines, line + 2) + 1
+        found.push({ id: 'U-183', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
+      }
     }
     if (value.includes(': ```')) descriptionFence = line
     found.push(...descriptionLineCandidates(output, lines, line, descriptionFence))

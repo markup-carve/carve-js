@@ -1784,10 +1784,12 @@
     "id": "U-183",
     "title": "Unresolved block image before a caption",
     "inputs": [
-      "![][]\n^ a"
+      "![][]\n^ a",
+      "![a][r]\n^ cap\n^ cap\n"
     ],
     "outputs": [
-      "\\![][]\n^ a"
+      "\\![][]\n^ a",
+      "\\![a][r]\n^ cap\n\n^ cap\n"
     ],
     "class": "escape"
   },
