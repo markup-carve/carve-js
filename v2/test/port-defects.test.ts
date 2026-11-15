@@ -321,3 +321,20 @@ describe('C2-B-133/167: a trailing line comment of a row stands after whitespace
     }
   })
 })
+
+describe('C2-I-032: an unquoted value may hold an opening brace in every block brace block', () => {
+  it('C2-I-032: on an attribute line, after a marker, in a cell prefix, behind a row and a block image', () => {
+    expect(parse('{s={}\nx\n').children[0]).toMatchObject({ type: 'paragraph', attrs: { keyValues: [['s', '{']] } })
+    expect(parse('{s=a{b c=d}\nx\n').children[0]).toMatchObject({ attrs: { keyValues: [['s', 'a{b'], ['c', 'd']] } })
+    expect(parse('-{s={} x\n').children[0]).toMatchObject({ type: 'list', children: [{ attrs: { keyValues: [['s', '{']] } }] })
+    expect(render('|{s={} a |\n')).toContain('<td s="{">a</td>')
+    expect(render('| a |{s={}\n')).toContain('<tr s="{">')
+    expect(types('![a](u){s={}\n^ c\n')).toEqual(['figure'])
+  })
+
+  it('C2-I-029/034: a brace inside a part that is no value still makes no block', () => {
+    expect(types('{.a{.b}\nx\n')).toEqual(['paragraph'])
+    expect(types('{#a{b}\nx\n')).toEqual(['paragraph'])
+    expect(types('{a{=b}\nx\n')).toEqual(['paragraph'])
+  })
+})

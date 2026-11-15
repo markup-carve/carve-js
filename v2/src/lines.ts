@@ -42,7 +42,10 @@ function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: n
   return skipSpaces(src, contentStart, end) < end ? contentStart : -1
 }
 
-/** Offset after the brace block at `pos`, or -1. A quoted value may hold a closing brace. */
+/**
+ * Offset after the brace block at `pos`, or -1. A quoted value may hold a closing brace, and an unquoted
+ * one an opening brace (C2-I-032); whether the block is valid is read by the attribute grammar.
+ */
 function braceBlockEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACE_OPEN) return -1
   const first = src.charCodeAt(pos + 1)
@@ -50,7 +53,6 @@ function braceBlockEnd(src: string, pos: number, end: number): number {
   if (first === PERCENT || first === BRACE_OPEN || first === BRACE_CLOSE) return -1
   for (let p = pos + 1; p < end; p++) {
     const code = src.charCodeAt(p)
-    if (code === BRACE_OPEN) return -1
     if (code === BRACE_CLOSE) return p + 1
     if (code !== QUOTE_MARK) continue
     const after = quotedEnd(src, p, end)
