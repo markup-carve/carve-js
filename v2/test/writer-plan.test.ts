@@ -92,6 +92,12 @@ describe('the planned writer', () => {
     expect(writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false).stats.planned).toBe(0)
   })
 
+  it('C2-I-025: an unclosed brace of text behind a braced comment leaves the group to the repair', () => {
+    const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
+    expect(result.output.source).toBe('x/{% * %}\\{%<a:b>\n')
+    expect(result.stats.planned).toBe(0)
+  })
+
   it('C2-W-099: a run of hyphens of text is planned with every second hyphen escaped', () => {
     const result = formatBy('a -\\-- b\n', 'both')
     expect(result.output.source).toBe('a -\\-- b\n')

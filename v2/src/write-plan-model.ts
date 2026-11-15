@@ -50,18 +50,21 @@ export interface Leaf {
   extensions: Map<number, number>
   /** Whether a delimiter character of text came before the unit in the scan. */
   textMark: boolean
+  /** The first unit of a braced comment of the tree, or -1. */
+  firstComment: number
 }
 
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null, extensions: new Map(),
-    textMark: false,
+    textMark: false, firstComment: -1,
   }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
   if (code === 96 && kind === ATOM) leaf.lastAtomTick = leaf.codes.length
+  if (leaf.firstComment < 0 && kind === ATOM && owner.type === 'comment' && owner.form === 'braced') leaf.firstComment = leaf.codes.length
   leaf.codes.push(code)
   leaf.kinds.push(kind)
   leaf.owners.push(owner)
