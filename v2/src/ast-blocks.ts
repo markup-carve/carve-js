@@ -31,7 +31,7 @@ import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
-import { isAsciiNameCharacter } from './unicode.ts'
+import { isAsciiNameCharacter, withoutUnpairedSurrogates } from './unicode.ts'
 
 /** A child of the document or of a block container: a block, or a definition or frontmatter, which the document alone takes. */
 type DocumentChild = DocumentNode['children'][number]
@@ -597,8 +597,8 @@ export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
   collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null,
 ): ParsedTree {
-  // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
-  const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
+  // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
+  const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
   const blocks = acquireState()
   const inline = acquireInlineState()
   inline.bidi = false

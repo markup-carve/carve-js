@@ -292,3 +292,21 @@ describe('C2-H-016: the paragraph of an unexpanded include carries its source li
     expect(render('{{ x.crv }}\n')).toBe('<p>{{ x.crv }}</p>')
   })
 })
+
+describe('C2-B-218: an unpaired surrogate is read as U+FFFD in every value', () => {
+  const json = (src: string): string => JSON.stringify(parse(src))
+
+  it('C2-B-218: in text, code, math, attributes, a heading id and a destination', () => {
+    for (const src of ['a\ud800b', '`x\udc00`', '$`\ud800`', '{k="\udc00"}\npara', '# \udc00h', '[a](u\ud800)', 'a\udc00\ud800b']) {
+      const tree = json(src)
+      expect(tree, JSON.stringify(src)).not.toMatch(/\\ud[89a-f][0-9a-f]{2}/u)
+      expect(tree).toContain('�')
+    }
+    expect(json('😀')).toContain('😀')
+  })
+
+  it('C2-B-218: it counts three bytes, so the offsets stay those of the source', () => {
+    expect(parse('a\ud800b').children[0]!.pos).toMatchObject({ startOffset: 0, endOffset: 5 })
+    expect(parse('\ud800\n\nb').children[1]!.pos).toMatchObject({ startOffset: 5, startLine: 3 })
+  })
+})
