@@ -1213,6 +1213,12 @@
       "name": "attribute consumed at a list boundary",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-198",
+      "name": "empty side of a replacement",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

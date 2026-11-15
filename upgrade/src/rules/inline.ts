@@ -22,7 +22,8 @@ const BARE: Record<string, Bare> = {
 }
 
 function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
-  const { startOffset: start, endOffset: end } = node.pos!
+  if (node.pos === undefined) return
+  const { startOffset: start, endOffset: end } = node.pos
   if (ctx.src[start] !== bare.mark || ctx.src[end - 1] !== bare.mark || end - start < 2) return
   // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
   change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)
@@ -45,8 +46,14 @@ function lastEnd(nodes: unknown, fallback: number): number {
 
 /** U-069: there is no arrow form in 0.2 (C2-I-062). */
 function substitution(ctx: Context, node: Node01): void {
-  const { startOffset: start, endOffset: end } = node.pos!
+  if (node.pos === undefined) return
+  const { startOffset: start, endOffset: end, startLine } = node.pos
   if (!ctx.src.startsWith('{~', start) || !ctx.src.startsWith('~}', end - 2)) return
+  if (Array.isArray(node.old) && node.old.length === 0 || Array.isArray(node.new) && node.new.length === 0) {
+    note(ctx, 'U-198', startLine,
+      'an empty side of the 0.1 replacement has no 0.2 inline spelling under C2-I-062 and C2-W-116')
+    return
+  }
   const arrow = ctx.src.indexOf('~>', lastEnd(node.old, start + 2))
   if (arrow < 0 || arrow >= end - 2) return
   const message = 'substitution arrow respelled as a deletion and an insertion'

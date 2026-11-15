@@ -1886,5 +1886,20 @@
     "outputs": [
       "- a\n\n# H\n"
     ]
+  },
+  {
+    "id": "U-198",
+    "title": "Empty side of a replacement",
+    "class": "report",
+    "inputs": [
+      "{~a~>~}\n",
+      "{~~>b~}\n",
+      "{~~>~}\n"
+    ],
+    "outputs": [
+      "{~a~>~}\n",
+      "{~~>b~}\n",
+      "{~~>~}\n"
+    ]
   }
 ]

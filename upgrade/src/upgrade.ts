@@ -16,7 +16,7 @@ import { lineOf, lineText, readLines } from './source.ts'
 
 /** Report entries after which the HTML of 0.2 differs from the HTML of 0.1 by the contract. */
 const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077',
-  'U-130', 'U-131', 'U-132', 'U-133', 'U-134', 'U-140'])
+  'U-130', 'U-131', 'U-132', 'U-133', 'U-134', 'U-140', 'U-198'])
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
