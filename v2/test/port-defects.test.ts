@@ -468,7 +468,7 @@ describe('C2-H-121: the profile changes no tree', () => {
     expect(table).toContain('Figure 1: cap')
   })
 
-  it('C2-H-165: a degraded footnote reference writes no note, and a live one keeps its number', () => {
+  it('C2-H-165: a degraded footnote reference writes no note and no footnote section', () => {
     expect(render('a[^n]\n\n[^n]: note', { profile: 'comment' })).toBe('<p>a[^n]</p>')
     const both = render('a[^n] *b*[^m]\n\n[^n]: x\n\n[^m]: y', { profile: 'comment' })
     expect(both).not.toContain('<section')
