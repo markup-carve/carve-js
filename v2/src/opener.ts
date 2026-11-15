@@ -61,6 +61,12 @@ function wordEnd(src: string, p: number, end: number, fence: boolean): number {
   return at
 }
 
+/** Whether `word` reads whole as the language word of a fence, or with `raw` as the format of a raw block (C2-B-116, C2-B-117). */
+export function isFenceWord(word: string, raw: boolean): boolean {
+  const src = raw ? `=${word}` : word
+  return word !== '' && wordEnd(src, 0, src.length, true) === src.length
+}
+
 /** Reads the word at `p` into `info` and returns the offset behind it, or `p` when there is none. */
 function readWord(src: string, p: number, end: number, info: OpenerInfo, fence: boolean): number {
   if (p >= end) return p

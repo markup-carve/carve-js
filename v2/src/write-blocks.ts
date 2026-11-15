@@ -10,6 +10,7 @@ import {
 import { treesEqual } from './ast-json.ts'
 import { plainText } from './ast-text.ts'
 import { includeSource } from './include.ts'
+import { isFenceWord } from './opener.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
@@ -120,13 +121,29 @@ function spellableInfo(w: Writer, node: CodeBlockNode, field: string, value: str
   return null
 }
 
+/**
+ * C2-W-037, C2-B-117: a language outside the characters of `language_word` reads back as a shorter word and further
+ * words, so it has no spelling either: a parse never gives one, and for a supplied tree it is left out and reported.
+ */
+function fenceInfo(w: Writer, node: CodeBlockNode | RawBlockNode): string {
+  if (node.type === 'raw_block') {
+    // C2-B-116: a raw block needs its format, so a format the reader would cut short is written as it is and reported.
+    if (!isFenceWord(node.format, true)) lose(w, node, 'format')
+    return `=${node.format}`
+  }
+  const syntax = node.syntax ?? ''
+  if (syntax === '' || isFenceWord(syntax, false)) return syntax
+  lose(w, node, 'syntax')
+  return ''
+}
+
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
   const continuation = w.lead !== null && w.lead.startsWith('[^') && prefix.length > 2 ? ' '.repeat(w.lead.length) : prefix
   const lines = valueLines(w, node)
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
-  let info = node.type === 'raw_block' ? `=${node.format}` : spellableInfo(w, node, 'syntax', node.syntax ?? '') ?? ''
+  let info = fenceInfo(w, node)
   if (node.type === 'code_block') {
     const title = spellableInfo(w, node, 'title', codeTitle(w, node))
     // C2-B-120: the title reads escapes, as a quoted attribute value does.
