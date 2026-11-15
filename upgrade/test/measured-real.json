@@ -3516,5 +3516,27 @@
     "entries": [
       "U-243"
     ]
+  },
+  {
+    "cause": "C29",
+    "clause": "C2-B-082 C2-B-091 C2-B-095",
+    "path": "resources/examples/edge-cases/0089-block-attribute-lines.md",
+    "line": 136,
+    "input": "{.a}\n[^f]: note\n\nVisible\n",
+    "check": "pass",
+    "entries": [
+      "U-244"
+    ]
+  },
+  {
+    "cause": "C29",
+    "clause": "C2-B-082 C2-B-091 C2-B-095",
+    "path": "tests/corpus/89-block-attribute-lines-8.crv",
+    "line": 1,
+    "input": "{.a}\n[^f]: note\n\nVisible\n",
+    "check": "pass",
+    "entries": [
+      "U-244"
+    ]
   }
 ]

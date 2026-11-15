@@ -2577,5 +2577,16 @@
     "outputs": [
       "- {% a\n   \\```\n   z %}\nplain\n"
     ]
+  },
+  {
+    "id": "U-244",
+    "title": "A floating block attribute crosses a footnote definition",
+    "class": "rewrite",
+    "inputs": [
+      "{.a}\n[^f]: note\n\nVisible\n"
+    ],
+    "outputs": [
+      "[^f]: note\n\n{.a}\nVisible\n"
+    ]
   }
 ]

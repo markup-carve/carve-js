@@ -43,6 +43,22 @@ function indentedFenceRunAsContent(output: string): Candidate[] {
   return found
 }
 
+function blockAttributeAcrossFootnote(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 3; at++) {
+    const attribute = lines[at] ?? ''
+    const definition = lines[at + 1] ?? ''
+    if (!attribute.startsWith('{') || !attribute.endsWith('}') || !definition.startsWith('[^')) continue
+    if (!definition.includes(']:') || lines[at + 2] !== '' || (lines[at + 3] ?? '') === '') continue
+    const changed = [...lines]
+    changed.splice(at, 1)
+    changed.splice(at + 2, 0, attribute)
+    found.push(candidate('U-244', changed.join('\n'), 'the floating block attribute was moved after the footnote definition'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -521,6 +537,7 @@ export function rescueMinor(
   const candidates = [
     ...trailingFence(output),
     ...indentedFenceRunAsContent(output),
+    ...blockAttributeAcrossFootnote(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),

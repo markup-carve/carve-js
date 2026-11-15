@@ -1471,6 +1471,12 @@
       "name": "backtick fence run inside a multiline brace comment",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-244",
+      "name": "floating block attribute across a footnote definition",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
