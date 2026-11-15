@@ -88,7 +88,10 @@ function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
   }
   const before = code(leaf, at - 1)
   const after = code(leaf, end)
-  if (before === 123 || before === 60 || before === 43 || after === 125 || after === 62) return undecide(leaf, 'hyphen neighbor')
+  // C2-I-115, C2-I-117: an arrow, a braced mark or `+-` that the run could make with its neighbors.
+  if (before === 43 || (end - at > 1 && (before === 123 || before === 60 || after === 125 || after === 62))) {
+    return undecide(leaf, 'hyphen neighbor')
+  }
   for (let unit = at + 1; unit < end; unit += 2) escaped[unit] = 1
 }
 
@@ -131,12 +134,22 @@ function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
   undecidedIf(!isLiteral(leaf, at, escaped) && nextIs(leaf, at, '^'), leaf, 'footnote bracket')
 }
 
+// C2-I-037: the atoms that are no host of an attribute block.
+const NO_HOSTS: ReadonlySet<string> = new Set([
+  'mention', 'tag', 'xref', 'comment', 'critic_comment', 'raw_inline', 'smart_punctuation', 'soft_break', 'hard_break',
+])
+
+function behindHost(leaf: Leaf, at: number): boolean {
+  const kind = leaf.kinds[at - 1]
+  if (kind === CLOSE) return true
+  return kind === ATOM && !NO_HOSTS.has(leaf.owners[at - 1]!.type)
+}
+
 /** C2-W-096: a brace that opens a comment or an attribute block; a braced opener is paired in write-plan-pairs.ts. */
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
-  const before = leaf.kinds[at - 1]
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
-  if ((before === ATOM || before === CLOSE) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
+  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
   undecidedIf(nextIs(leaf, at, '%#_='), leaf, 'brace')
   // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
   undecidedIf(leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS), leaf, 'brace')

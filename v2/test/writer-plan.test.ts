@@ -61,6 +61,37 @@ describe('the planned writer', () => {
     expect(result.stats.parses).toBe(0)
   })
 
+  // Each source is written by the plan alone, with the bytes the repair writes.
+  const PLANNED: readonly [string, string][] = [
+    ['C2-B-006: a marker before a tab is text', '-\ta\n'],
+    ['C2-B-020: a list marker inside a quote of an item does not interrupt', '- > a\n  > - b\n'],
+    ['C2-B-043: a bare dot before a dot and a space is no marker', '. . . and then silence\n'],
+    ['C2-B-092: an attribute-shaped later line is text', 'a\n{.x}\n'],
+    ['C2-B-138: a line comment on a later line stays in the paragraph', 'a\n%% c\nb\n'],
+    ['C2-B-166: a pipe line without a closing pipe is text', 'a\n| b\n'],
+    ['C2-I-065: a bracket pair with nothing glued to it is text', 'x [a] y\n'],
+    ['C2-I-073: an autolink of text takes its backslash, a broken one none', '\\<a:b> and <a b>\n'],
+    ['C2-I-089: an inline footnote of text takes the backslash on its bracket', 'x ^\\[a] and ^[a\n'],
+    ['C2-I-096: a cross-reference of text takes its backslash, an empty one none', '\\</#a> and </#>\n'],
+    ['C2-I-104: straight quotes that read as smart quotes', 'a \'b\' c and it\'s, a "b" c\n'],
+    ['C2-I-115: an arrow of one hyphen stays as typed', 'a <- b and \\<= c\n'],
+    ['C2-I-074: an image sigil before a link of the tree, and before an open bracket', '\\![a](/u) and ![a\n'],
+  ]
+  for (const [clause, source] of PLANNED) {
+    it(`${clause}, planned with no parse`, () => {
+      const result = formatBy(source, 'plan')
+      expect(result.output.source).toBe(source)
+      expect(result.stats.repaired).toBe(0)
+      expect(result.stats.parses).toBe(0)
+      expect(formatBy(source, 'both').stats.differences).toEqual([])
+    })
+  }
+
+  it('C2-W-016: a CR before a line end in the value of an atom leaves the group to the repair', () => {
+    const parsed = parseWithLayout('x %% c\r', { extensions: [] })
+    expect(writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false).stats.planned).toBe(0)
+  })
+
   it('C2-W-099: a run of hyphens of text is planned with every second hyphen escaped', () => {
     const result = formatBy('a -\\-- b\n', 'both')
     expect(result.output.source).toBe('a -\\-- b\n')
