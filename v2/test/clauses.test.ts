@@ -1141,7 +1141,8 @@ describe('tables', () => {
     expect(blocks('| a | b |', '| ^ | c |', '| ^ | d |')).toBe('table[tr[td(r3)"a" td"b"] tr[td"c"] tr[td"d"]]')
     expect(blocks('| a | ^ |', '| b | c |')).toBe('table[tr[td"a" td""] tr[td"b" td"c"]]')
     expect(blocks('| << | a |')).toBe('table[tr[td"<<" td"a"]]')
-    expect(blocks('|= < | a |')).toBe('table[tr[th"<" td"a"]]')
+    // C2-B-171: the header mark is the prefix, so the cell holds only the mark, which fails and leaves a body cell (C2-B-173).
+    expect(blocks('|= < | a |')).toBe('table[tr[td"" td"a"]]')
   })
 
   it('C2-B-173: a failed span is an empty cell', () => {
@@ -1153,7 +1154,8 @@ describe('tables', () => {
 
   it('C2-B-174: a row span does not cross the head boundary', () => {
     expect(blocks('|= H |', '| ^ |', '| a |')).toBe('table(h1)[tr[th"H"] tr[td""] tr[td"a"]]')
-    expect(blocks('|= H |', '|= ^ |')).toBe('table(h2)[tr[th"H"] tr[th"^"]]')
+    // Both rows are head rows, so the span stays inside the head.
+    expect(blocks('|= H |', '|= ^ |')).toBe('table(h2)[tr[th(r2)"H"] tr[]]')
     expect(blocks('|= H |', '| a |', '| ^ |')).toBe('table(h1)[tr[th"H"] tr[td(r2)"a"] tr[]]')
   })
 

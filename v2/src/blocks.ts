@@ -801,7 +801,8 @@ function writeCell(state: BlockState, pipe: number, next: number): number {
   if (blocksEnd > p) flags |= FLAG_CELL_ATTRIBUTES
   const content = skipSpaces(src, blocksEnd, next)
   const contentEnd = trimEnd(src, content, next)
-  if (contentEnd - content === 1 && blocksEnd === pipe + 1) flags |= spanMark(src.charCodeAt(content))
+  // C2-B-171, C2-B-172: the prefix is no content, so a cell behind one may hold only a span mark too.
+  if (contentEnd - content === 1) flags |= spanMark(src.charCodeAt(content))
   writeEvent(state, eventTag(ENTER, CELL, flags), pipe, alignment)
   writeEvent(state, SPAN_TAG, content, contentEnd)
   writeEvent(state, eventTag(EXIT, CELL, 0), next, 0)

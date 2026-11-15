@@ -187,11 +187,10 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
       left = cell
     }
   }
-  // C2-B-173: a failed mark in an otherwise all-header row remains a header cell.
-  if (kept.some((cell) => (cell.flags & FLAG_HEADER) !== 0) &&
-    kept.every((cell) => (cell.flags & FLAG_HEADER) !== 0 || failed.includes(cell))) {
-    for (const cell of failed) cell.flags |= FLAG_HEADER
-  }
+  // C2-B-173: a failed mark is a header cell in an otherwise all-header row, and a body cell in any other row.
+  const headers = kept.some((cell) => (cell.flags & FLAG_HEADER) !== 0) &&
+    kept.every((cell) => (cell.flags & FLAG_HEADER) !== 0 || failed.includes(cell))
+  for (const cell of failed) cell.flags = headers ? cell.flags | FLAG_HEADER : cell.flags & ~FLAG_HEADER
   row.children = kept
   return owners
 }
