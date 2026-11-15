@@ -499,15 +499,21 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
   }
 }
 
-/** C2-W-088: an escape before a brace is kept only when removing it changes the tree. */
-function necessaryBraceEscapes(source: string, document: DocumentNode, w: Writer): string {
-  let at = source.indexOf('\\{')
+/** C2-W-088: prune needless bracket and attribute-brace escapes without changing the order of C2-W-125. */
+function necessaryBracketEscapes(source: string, document: DocumentNode, w: Writer): string {
+  let at = source.indexOf('\\')
   while (at >= 0) {
-    if (source[at + 2] === '/') {
+    const next = source[at + 1]
+    const brace = next === '{' && (source[at + 2] === '/' || source[at + 2] === '#')
+    if (next === '[' || brace) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
-      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys), document)) source = candidate
+      if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys), document)) {
+        source = candidate
+        at = source.indexOf('\\', at)
+        continue
+      }
     }
-    at = source.indexOf('\\{', at + 1)
+    at = source.indexOf('\\', at + 1)
   }
   return source
 }
@@ -521,7 +527,7 @@ export function writeTree(document: DocumentNode, options: WriteOptions | undefi
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
   const written = writeDocument(w, document)
-  const source = written.includes('\\{') ? necessaryBraceEscapes(written, document, w) : written
+  const source = written.includes('\\') ? necessaryBracketEscapes(written, document, w) : written
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)

@@ -8,6 +8,8 @@ node v2/proptest/run.ts --target parse --seed 1794696020 --count 100000 --minute
 
 Targets are `parse`, `render`, `format`, `diagnostics`, `extensions`, `decode`, `cli`, `lint`, `migrate`, and `import`. Four input families are mixed: random Unicode or decoded bytes, corpus mutations, grammar shapes, and dictionary splices. The checked-in `corpus/` seeds Unicode, container, tab, and link shapes; the runner also reads the specification examples and `v2/test/fixtures/`. This fixed source list makes a seed reproducible on the same commit. `--corpus DIR` adds `.crv` files to the corpus. The runner stops at the case limit or the minute limit, whichever comes first. It prints each finding, writes one minimized `.crv` input and JSON sidecar per finding signature under `findings/TARGET/`, and exits with status 1 if any finding occurred. The sidecar records the finding kind, case seed, run seed, and engine commit. Reduction has a 20-second limit per input; `minimizationTimedOut` identifies any case that needs further reduction. The format summary counts reported writer losses and refusals separately from findings. `inputJson` preserves UTF-16 surrogate halves that a UTF-8 source file cannot encode.
 
+The per-case timeout is 30 seconds for targets that run the writer and three seconds for other in-process targets. The writer may need repeated repair passes for one group (C2-W-089), so a three-second timeout can mislabel a slow, terminating format as a hang.
+
 Reproduce a finding, including its original case seed and any surrogate halves, with:
 
 ```sh

@@ -1,10 +1,36 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
+import { format } from '../src/index.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
 
-void test('C2-W-022: an empty document has an empty canonical form', () => {
+void test('C2-W-022: an empty document has one final line feed', () => {
+  assert.equal(format(''), '\n')
   assert.equal(check('format', '', random(1)), null)
+})
+
+void test('C2-W-022: fmt --check recognizes an empty file as noncanonical', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'carve-empty-'))
+  try {
+    const path = join(directory, 'empty.crv')
+    writeFileSync(path, '')
+    const result = spawnSync(process.execPath, ['v2/cli/main.ts', 'fmt', '--check', path], {
+      cwd: join(import.meta.dirname, '../..'), encoding: 'utf8',
+    })
+    assert.equal(result.status, 1)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+void test('C2-W-088: needless bracket and brace escapes are removed', () => {
+  for (const source of [String.raw`x[[^](/u)`, String.raw`x:n[[^](/u)`, String.raw`x{#a\_}`, String.raw`x{#a\_-}`]) {
+    assert.equal(format(source), `${source}\n`)
+  }
 })
 
 void test('C2-W-007: a space in an image alt value is content', () => {

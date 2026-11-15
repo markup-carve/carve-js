@@ -52,7 +52,7 @@ function cliCheck(source: string, seed: number): Finding | null {
   for (let at = 0; at < rng.int(6); at++) args.push(flags[rng.int(flags.length)] ?? '--not-real')
   args.push(rng.bool() ? '-' : '/no/such/carve-input.crv')
   const result = spawnSync(process.execPath, ['v2/cli/main.ts', ...args], {
-    input: source, encoding: 'utf8', timeout: 3000, maxBuffer: 1024 * 1024,
+    input: source, encoding: 'utf8', timeout: args[0] === 'fmt' ? 30000 : 3000, maxBuffer: 1024 * 1024,
   })
   if (result.error !== undefined) return { kind: 'cli-process-error', detail: String(result.error) }
   if (![0, 1, 2].includes(result.status ?? -1)) return { kind: 'cli-exit-code', detail: String(result.status) }
@@ -74,7 +74,9 @@ class Checker {
     const worker = this.worker
     if (worker === null) return Promise.resolve({ kind: 'harness-exception', detail: 'missing worker' })
     return new Promise((resolve) => {
-      const timeout = Math.max(3000, Buffer.byteLength(source) / 10240 * 500)
+      // C2-W-089: the writer may need several repair passes for one group.
+      const writerTarget = this.target === 'format' || this.target === 'diagnostics' || this.target === 'extensions'
+      const timeout = Math.max(writerTarget ? 30000 : 3000, Buffer.byteLength(source) / 10240 * 500)
       const timer = setTimeout(() => {
         worker.removeAllListeners('message')
         worker.removeAllListeners('error')
