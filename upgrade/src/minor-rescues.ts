@@ -151,6 +151,20 @@ function emptyFootnote(output: string): Candidate[] {
   return found
 }
 
+function emptyFootnoteBody(output: string): Candidate[] {
+  const found: Candidate[] = []
+  const lines = readLines(output)
+  for (let line = 1; line <= lines.count; line++) {
+    const value = lineText(lines, line)
+    const marker = value.indexOf(']: {empty}')
+    if (!value.trimStart().startsWith('[^') || marker < 2) continue
+    const open = lineStart(lines, line) + marker + 3
+    found.push(candidate('U-218', output.slice(0, open) + '{% %}' + output.slice(open + 7),
+      'the empty footnote body sentinel was written as an empty brace comment'))
+  }
+  return found
+}
+
 function invisibleCommentCandidates(input: string): Candidate[] {
   const lines = input.split('\n')
   const found: Candidate[] = []
@@ -191,6 +205,7 @@ export function rescueMinor(
     ...consumedListAttribute(output),
     ...captionBoundary(output),
     ...emptyFootnote(output),
+    ...emptyFootnoteBody(output),
     ...invisibleCommentCandidates(input)
   ]
   for (const item of candidates) {

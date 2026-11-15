@@ -2210,5 +2210,18 @@
       "![a](x.png){.c}\n",
       "\nz\n"
     ]
+  },
+  {
+    "id": "U-218",
+    "title": "Empty footnote body sentinel",
+    "class": "rewrite",
+    "inputs": [
+      "See[^f]\n\n[^f]: {empty}\n",
+      "See[^f]\n\n[^f]: {empty}\n\n"
+    ],
+    "outputs": [
+      "See[^f]\n\n[^f]: {% %}\n",
+      "See[^f]\n\n[^f]: {% %}\n\n"
+    ]
   }
 ]

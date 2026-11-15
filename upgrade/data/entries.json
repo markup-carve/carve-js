@@ -1315,6 +1315,12 @@
       "name": "invisible brace comment before a block image or paragraph",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-218",
+      "name": "empty footnote body sentinel",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

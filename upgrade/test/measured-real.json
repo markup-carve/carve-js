@@ -910,6 +910,28 @@
     ]
   },
   {
+    "cause": "C32",
+    "clause": "C2-B-082",
+    "path": "resources/examples/edge-cases/0283-an-empty-footnote-body-is-written-with-the-empty-sentinel.md",
+    "line": 10,
+    "input": "See[^f]\n\n[^f]: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-218"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-082",
+    "path": "tests/corpus/283-an-empty-footnote-body-is-written-with-the-empty-sentinel.crv",
+    "line": 1,
+    "input": "See[^f]\n\n[^f]: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-218"
+    ]
+  },
+  {
     "cause": "C33",
     "clause": "C2-B-056",
     "path": "resources/examples/edge-cases/0656-the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth.md",
