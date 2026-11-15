@@ -93,7 +93,29 @@ const SEARCH_LENGTH = 24
 
 /** True when `text` holds none of the characters that C2-H-002 escapes. */
 function isClean(text: string): boolean {
-  return text.indexOf('&') < 0 && text.indexOf('<') < 0 && text.indexOf('>') < 0 && text.indexOf('\u00a0') < 0
+  if (text.indexOf('&') >= 0 || text.indexOf('<') >= 0 || text.indexOf('>') >= 0 || text.indexOf('\u00a0') >= 0) return false
+  for (let at = 0; at < text.length; at++) if (invalidHtmlWidth(text, at) > 0) return false
+  return true
+}
+
+/** C2-H-176: the width of a source character that HTML cannot carry literally. */
+function invalidSurrogateWidth(text: string, at: number, code: number): number {
+  if (code >= 0xdc00) {
+    const before = text.charCodeAt(at - 1)
+    return before >= 0xd800 && before <= 0xdbff ? 0 : 1
+  }
+  const next = text.charCodeAt(at + 1)
+  if (!(next >= 0xdc00 && next <= 0xdfff)) return 1
+  return next === 0xdffe || next === 0xdfff ? 2 : 0
+}
+
+function invalidHtmlWidth(text: string, at: number): number {
+  const code = text.charCodeAt(at)
+  if (code < 32) return code === 9 || code === 10 || code === 12 || code === 13 ? 0 : 1
+  if (code >= 127 && code <= 159) return 1
+  if (code >= 0xfdd0 && code <= 0xfdef) return 1
+  if (code >= 0xfffe && code <= 0xffff) return 1
+  return code >= 0xd800 && code <= 0xdfff ? invalidSurrogateWidth(text, at, code) : 0
 }
 
 /**
@@ -105,6 +127,13 @@ export function escapeCarrierText(text: string): string {
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
+    const invalid = invalidHtmlWidth(text, at)
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
     const code = text.charCodeAt(at)
     // Every character that is escaped is one of four; the test keeps the common case to one comparison.
     if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE) continue
@@ -140,6 +169,13 @@ export function escapeText(text: string): string {
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
+    const invalid = invalidHtmlWidth(text, at)
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
     const code = text.charCodeAt(at)
     if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE && code < BIDI_FIRST) continue
     const entity = textEntity(code)
@@ -168,6 +204,13 @@ export function escapeAttribute(text: string): string {
   let out = ''
   let from = 0
   for (let at = 0; at < text.length; at++) {
+    const invalid = invalidHtmlWidth(text, at)
+    if (invalid > 0) {
+      out += text.slice(from, at) + '\ufffd'
+      at += invalid - 1
+      from = at + 1
+      continue
+    }
     const entity = attributeEntity(text.charCodeAt(at))
     if (entity === '') continue
     out += text.slice(from, at) + entity

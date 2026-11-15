@@ -101,9 +101,9 @@ describe('character ranges', () => {
     expect(starts).toEqual([[1, 1, 0], [4, 1, 9], [3, 1, 4], [7, 1, 20]])
   })
 
-  it('text is escaped at the four characters and at nothing beside them', () => {
+  it('C2-H-002, C2-H-176: text escaping also replaces invalid HTML input characters', () => {
     expect(render('a=b?c;d>e<f&g')).toBe('<p>a=b?c;d&gt;e&lt;f&amp;g</p>')
-    expect(render(documentOf(paragraph('\u00a0\u009f\u00a1')))).toBe('<p>&nbsp;\u009f\u00a1</p>')
+    expect(render(documentOf(paragraph('\u00a0\u009f\u00a1')))).toBe('<p>&nbsp;\ufffd\u00a1</p>')
     expect(render(documentOf(paragraph({ type: 'span', children: [], attrs: { keyValues: [['k', '\u00a0<>&"\'?']] } })))).toBe('<p><span k="\u00a0&lt;&gt;&amp;&quot;&apos;?"></span></p>')
   })
 
