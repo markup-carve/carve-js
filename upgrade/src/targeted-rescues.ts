@@ -108,6 +108,22 @@ function languageCandidates(output: string): Candidate[] {
   return found
 }
 
+function quotedBraceCandidates(output: string): Candidate[] {
+  const found: Candidate[] = []
+  let at = output.indexOf("='")
+  while (at >= 0) {
+    const close = output.indexOf("'", at + 2)
+    if (close > at + 2) {
+      const value = output.slice(at + 2, close)
+      if (value.includes('}') && !value.includes('"')) {
+        found.push({ id: 'U-196', output: output.slice(0, at + 1) + '"' + value + '"' + output.slice(close + 1) })
+      }
+    }
+    at = output.indexOf("='", at + 2)
+  }
+  return found
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -137,7 +153,8 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   { output: string, record: ReportRecord } | null {
   const expected = html01(input)
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
-    ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output)]
+    ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
+    ...quotedBraceCandidates(output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue

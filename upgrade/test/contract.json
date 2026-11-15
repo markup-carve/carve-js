@@ -1864,5 +1864,16 @@
       ":::[`x`]\nbody\n:::\n"
     ],
     "class": "report"
+  },
+  {
+    "id": "U-196",
+    "title": "Quoted brace in a block attribute value",
+    "class": "rewrite",
+    "inputs": [
+      "{k='x}y'}\np\n"
+    ],
+    "outputs": [
+      "{k=\"x}y\"}\np\n"
+    ]
   }
 ]

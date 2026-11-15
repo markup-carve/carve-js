@@ -1201,6 +1201,12 @@
       "name": "inline markup in a div label metadata slot",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-196",
+      "name": "quoted brace in a block attribute value",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

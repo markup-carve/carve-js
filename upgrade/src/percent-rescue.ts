@@ -26,6 +26,17 @@ export function rescuePercent(input: string, output: string, mismatch: ReportRec
     const run = percentRun(value)
     if (run < 3) continue
     const start = lineStart(lines, line) + value.length - value.trimStart().length
+    if (value.trim() === '%'.repeat(run)) {
+      for (let indent = 1; indent <= 8; indent++) {
+        const candidate = output.slice(0, lineStart(lines, line)) + ' '.repeat(indent) + value.trimStart()
+          + output.slice(lineStart(lines, line) + value.length)
+        try {
+          if (!compareHtml(expected, html02(candidate, false)).equal) continue
+          return { output: candidate, record: recordOf('U-129', mismatch.line,
+            'the comment closer was moved to its owning column while preserving 0.1 HTML') }
+        } catch { /* A candidate can fail to parse under the new grammar. */ }
+      }
+    }
     for (let length = run + 1; length <= Math.max(8, run + 3); length++) {
       const candidate = output.slice(0, start) + '%'.repeat(length) + output.slice(start + run)
       try {

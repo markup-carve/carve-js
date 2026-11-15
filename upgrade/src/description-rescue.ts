@@ -14,12 +14,19 @@ function variants(output: string, mismatchLine: number): string[] {
   for (let line = Math.max(1, mismatchLine - 3); line <= Math.min(lines.count, mismatchLine + 3); line++) {
     const value = lineText(lines, line)
     const trimmed = value.trimStart()
-    if (!trimmed.startsWith(':: ') && !trimmed.startsWith(': ')) continue
     const start = lineStart(lines, line)
     const end = lineEnd(lines, line)
-    for (let indent = 0; indent <= 8; indent++) {
-      const candidate = output.slice(0, start) + ' '.repeat(indent) + trimmed + output.slice(end)
-      if (candidate !== output) found.add(candidate)
+    if (trimmed.startsWith(':: ') || trimmed.startsWith(': ')) {
+      for (let indent = 0; indent <= 8; indent++) {
+        const candidate = output.slice(0, start) + ' '.repeat(indent) + trimmed + output.slice(end)
+        if (candidate !== output) found.add(candidate)
+      }
+    }
+    const above = lineText(lines, line - 1).trimStart()
+    const block = trimmed.startsWith('# ') || trimmed.startsWith('```') || trimmed.startsWith(':::')
+    if (value !== trimmed && block && (above.startsWith(': ') || above === '')) {
+      found.add(output.slice(0, start) + trimmed + output.slice(end))
+      if (above !== '') found.add(output.slice(0, start) + '\n' + trimmed + output.slice(end))
     }
   }
   return [...found]

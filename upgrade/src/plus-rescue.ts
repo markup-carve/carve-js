@@ -53,7 +53,7 @@ function blankCandidates(source: string, lines: Lines, mismatchLine: number, fou
     if (Math.abs(line - mismatchLine) > 6) continue
     const value = lineText(lines, line)
     if (!value.trimStart().startsWith('{') || lineText(lines, line - 1).trim() !== '') continue
-    for (const indent of [2, 3, 4, 5, 6, 7, 8, 1]) {
+    for (const indent of [0, 2, 3, 4, 5, 6, 7, 8, 1]) {
       found.add(replaceLine(source, line, ' '.repeat(indent) + value.trimStart()))
     }
   }
@@ -87,13 +87,31 @@ function plusCandidates(source: string, lines: Lines, mismatchLine: number, foun
 }
 
 function quoteBlankCandidates(source: string, lines: Lines, mismatchLine: number, found: Set<string>): void {
-  for (let line = 2; line < lines.count; line++) {
+  for (let line = 2; line <= lines.count; line++) {
     if (Math.abs(line - mismatchLine) > 6) continue
+    if (lineText(lines, line).trimStart() === '> +' && lineText(lines, line - 1).trimStart().startsWith('>')) {
+      const at = lineStart(lines, line)
+      found.add(source.slice(0, at) + '>\n' + source.slice(at))
+    }
     if (lineText(lines, line).trim() !== '') continue
     if (lineText(lines, line - 1).trim().startsWith('>') && lineText(lines, line + 1).trim().startsWith('>')) {
       found.add(removeLine(source, line))
     }
   }
+}
+
+function nestedQuoteCandidates(source: string): string[] {
+  const found: string[] = []
+  const lines = readLines(source)
+  for (let line = 2; line < lines.count; line++) {
+    const current = lineText(lines, line)
+    if (current.trim() !== '+' || !lineText(lines, line - 1).includes('- >')) continue
+    const next = lineText(lines, line + 1)
+    const indent = current.slice(0, current.length - current.trimStart().length)
+    const moved = replaceLine(source, line + 1, `${indent}> ${next.trimStart()}`)
+    found.push(replaceLine(moved, line, `${indent}>`))
+  }
+  return found
 }
 
 function candidates(source: string, mismatchLine: number): string[] {
@@ -110,7 +128,7 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
   if (!hasStructuralPlus(input)) return null
   const entry = plusEntry(input)
   const expected = html01(input)
-  for (const candidate of candidates(output, Math.max(1, mismatch.line))) {
+  for (const candidate of [...candidates(output, Math.max(1, mismatch.line)), ...nestedQuoteCandidates(input)]) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
       return { output: candidate, record: recordOf(entry, mismatch.line,
