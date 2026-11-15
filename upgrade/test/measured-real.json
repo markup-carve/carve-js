@@ -3175,5 +3175,49 @@
     "entries": [
       "U-182"
     ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-069",
+    "path": "resources/examples/edge-cases/0419-a-definition-list-inside-a-footnote-body-carries-its-authored-base.md",
+    "line": 90,
+    "input": "[^n]: intro\n\n   :: term\n   :  definition\n\n     > quote\n\nsee[^n]\n",
+    "check": "pass",
+    "entries": [
+      "U-236"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-069",
+    "path": "resources/examples/edge-cases/0799-a-description-sibling-is-recognized-at-any-column.md",
+    "line": 12,
+    "input": ":: t\n :: u\n: d\n : e\n",
+    "check": "pass",
+    "entries": [
+      "U-236"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-069",
+    "path": "tests/corpus/419-a-definition-list-inside-a-footnote-body-carries-its-authored-base-3.crv",
+    "line": 1,
+    "input": "[^n]: intro\n\n   :: term\n   :  definition\n\n     > quote\n\nsee[^n]\n",
+    "check": "pass",
+    "entries": [
+      "U-236"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-069",
+    "path": "tests/corpus/799-a-description-sibling-is-recognized-at-any-column.crv",
+    "line": 1,
+    "input": ":: t\n :: u\n: d\n : e\n",
+    "check": "pass",
+    "entries": [
+      "U-236"
+    ]
   }
 ]

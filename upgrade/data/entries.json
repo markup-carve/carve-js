@@ -1423,6 +1423,12 @@
       "name": "nested item definition boundary",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-236",
+      "name": "compound description sibling columns",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

@@ -191,6 +191,28 @@ function descriptionTableVariants(input: string): string[] {
   return found
 }
 
+function compoundDescriptionVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const marks = lines.map((line) => {
+    const trimmed = line.trimStart()
+    return line.startsWith(' ') && (trimmed.startsWith(':: ') || trimmed.startsWith(': ')) ? trimmed : line
+  })
+  const found = marks.join('\n') === input ? [] : [marks.join('\n')]
+  for (let at = 3; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if (!value.startsWith('    ') || !value.trimStart().startsWith('>')) continue
+    if ((lines[at - 1] ?? '').trim() !== '') continue
+    if (!(lines[at - 2] ?? '').trimStart().startsWith(': ')) continue
+    if (!(lines[at - 3] ?? '').trimStart().startsWith(':: ')) continue
+    for (const indent of [3, 2, 1]) {
+      const changed = [...lines]
+      changed[at] = ' '.repeat(indent) + value.trimStart()
+      found.push(changed.join('\n'))
+    }
+  }
+  return found
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -230,6 +252,9 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   const table = firstPreserving(expected, descriptionTableVariants(input))
   if (table !== null) return { output: table, record: recordOf('U-232', mismatch.line,
     'the table row was moved to the description boundary column') }
+  const compound = firstPreserving(expected, compoundDescriptionVariants(input))
+  if (compound !== null) return { output: compound, record: recordOf('U-236', mismatch.line,
+    'the description sibling was moved to its 0.2 owning column') }
   const plus = firstPreserving(expected, plusVariants(input))
   if (plus !== null)
     return {

@@ -2481,5 +2481,18 @@
       "* * {% %}\n\n  :\n",
       "* * {% %}\n\n:\n"
     ]
+  },
+  {
+    "id": "U-236",
+    "title": "Compound description sibling columns",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n :: u\n: d\n : e\n",
+      "[^n]: intro\n\n   :: term\n   :  definition\n\n     > quote\n\nsee[^n]\n"
+    ],
+    "outputs": [
+      ":: t\n:: u\n: d\n: e\n",
+      "[^n]: intro\n\n   :: term\n   :  definition\n\n   > quote\n\nsee[^n]\n"
+    ]
   }
 ]
