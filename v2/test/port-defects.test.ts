@@ -282,3 +282,13 @@ describe('C2-I-025/060: a later unclosed braced opener does not reach back', () 
     expect(render('*[^a] [^\n\n[^a]: n\n')).toContain('role="doc-noteref"')
   })
 })
+
+describe('C2-H-016: the paragraph of an unexpanded include carries its source line', () => {
+  it('C2-H-016/133: at the top level and inside a container', () => {
+    const html = render('para\n\n{{ x.crv }}\n\n# h\n', { sourceLines: true })
+    expect(html).toContain('<p data-source-line="3">{{ x.crv }}</p>')
+    expect(render('- a\n\n  {{ x.crv }}\n', { sourceLines: true })).toContain('<p data-source-line="3">{{ x.crv }}</p>')
+    expect(render('> {{ x.crv }}\n', { sourceLines: true })).toContain('<p data-source-line="1">{{ x.crv }}</p>')
+    expect(render('{{ x.crv }}\n')).toBe('<p>{{ x.crv }}</p>')
+  })
+})

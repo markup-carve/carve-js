@@ -406,7 +406,8 @@ function lineBlock(r: Render, node: LineBlockNode, level: number): void {
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: IncludeNode, level: number): void {
   loss(r, node, 'include-unresolved', `the include of ${node.path} was not expanded`)
-  line(r, level, `<p>${escapeText(includeSource(node))}</p>`)
+  // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
+  line(r, level, `<p${tag(r, node, { bare: true })}>${escapeText(includeSource(node))}</p>`)
 }
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */
