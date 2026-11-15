@@ -717,6 +717,39 @@
     ]
   },
   {
+    "cause": "C26",
+    "clause": "C2-B-109",
+    "path": "tests/corpus/68-nested-containers-3.crv",
+    "line": 1,
+    "input": ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-219"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-109",
+    "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width.crv",
+    "line": 1,
+    "input": ":::\n:::e\n::::\nq\n:::\nafter\n",
+    "check": "explained",
+    "entries": [
+      "U-219"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-109",
+    "path": "tests/corpus/871-a-div-closes-only-on-a-run-of-its-own-width-2.crv",
+    "line": 1,
+    "input": "- :::\n  :::e\n  ::::\n  :::\nl\n",
+    "check": "explained",
+    "entries": [
+      "U-219"
+    ]
+  },
+  {
     "cause": "C27",
     "clause": "C2-B-069",
     "path": "resources/examples/edge-cases/0757-an-intervening-column-refuses-a-description-hosted-first-block.md",

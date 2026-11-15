@@ -99,6 +99,21 @@ function innerColonClose(input: string): number {
   return 0
 }
 
+function longerColonClose(input: string): number {
+  const lines = readLines(input)
+  let opener = 0
+  for (let line = 1; line <= lines.count; line++) {
+    let value = lineText(lines, line).trim()
+    if (value.startsWith('- ')) value = value.slice(2).trimStart()
+    let run = 0
+    while (value.charCodeAt(run) === 0x3a) run++
+    if (run < 3 || value.length !== run) continue
+    if (opener > 0 && run > opener) return line
+    if (opener === 0) opener = run
+  }
+  return 0
+}
+
 function recordMeasured(input: string, done: Rewritten, comparison: ReturnType<typeof compareHtml>): void {
   const difference = comparison.difference
   if (difference === null) return
@@ -166,6 +181,14 @@ function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeRes
       'after the shorter inner div closer, 0.1 opens another anonymous div and 0.2 closes the outer div'))
     records.push({ entry: 'upgrade-difference', class: 'summary', line: colonLine,
       message: 'the HTML differs, as U-114 says' })
+    return 'explained'
+  }
+  const longerLine = longerColonClose(input)
+  if (longerLine > 0) {
+    records.push(recordOf('U-219', longerLine,
+      'C2-B-109 makes the longer bare colon run close the shorter div; no preserving 0.2 spelling was verified'))
+    records.push({ entry: 'upgrade-difference', class: 'summary', line: longerLine,
+      message: 'the HTML differs, as U-219 says' })
     return 'explained'
   }
   const { line, expected, actual } = compared.difference

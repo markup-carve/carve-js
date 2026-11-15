@@ -1321,6 +1321,12 @@
       "name": "empty footnote body sentinel",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-219",
+      "name": "longer colon run closes a shorter div",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

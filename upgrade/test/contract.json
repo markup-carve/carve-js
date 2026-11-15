@@ -2223,5 +2223,17 @@
       "See[^f]\n\n[^f]: {% %}\n",
       "See[^f]\n\n[^f]: {% %}\n\n"
     ]
+  },
+  {
+    "id": "U-219",
+    "title": "Longer colon run closes a shorter div",
+    "class": "report",
+    "inputs": [
+      ":::\n::::\n",
+      ":::\nOuter\n\n::::\nInner\n::::\n:::\n",
+      ":::\n:::e\n::::\nq\n:::\nafter\n",
+      "- :::\n  :::e\n  ::::\n  :::\nl\n"
+    ],
+    "outputs": []
   }
 ]
