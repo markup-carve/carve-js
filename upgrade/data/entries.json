@@ -1435,6 +1435,18 @@
       "name": "nested item follower at outer content column",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-238",
+      "name": "list hosted fence continuation closer",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-239",
+      "name": "following fence outside description",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

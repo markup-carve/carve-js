@@ -2514,5 +2514,27 @@
       "- x\n  - ::: d\n  y\n    :::\n",
       "- a\n  * w\n  1. v\n  - u\n"
     ]
+  },
+  {
+    "id": "U-238",
+    "title": "List hosted fence continuation closer",
+    "class": "rewrite",
+    "inputs": [
+      "- ```\n  x\n\n+\ntail\n"
+    ],
+    "outputs": [
+      "- ```\n  x\n\n  ```\n  tail\n"
+    ]
+  },
+  {
+    "id": "U-239",
+    "title": "Following fence outside description",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n: a\n\t```\n ```\n"
+    ],
+    "outputs": [
+      ":: t\n: a\n\t```\n```\n"
+    ]
   }
 ]

@@ -3351,5 +3351,38 @@
     "entries": [
       "U-219"
     ]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-057",
+    "path": "docs/validation.md",
+    "line": 318,
+    "input": "- ```\n  x\n\n+\ntail\n",
+    "check": "pass",
+    "entries": [
+      "U-238"
+    ]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-078",
+    "path": "resources/examples/edge-cases/0637-definition-body-note-and-fence-owner-boundaries.md",
+    "line": 36,
+    "input": ":: t\n: a\n\t```\n ```\n",
+    "check": "pass",
+    "entries": [
+      "U-239"
+    ]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-078",
+    "path": "tests/corpus/637-definition-body-note-and-fence-owner-boundaries-2.crv",
+    "line": 1,
+    "input": ":: t\n: a\n\t```\n ```\n",
+    "check": "pass",
+    "entries": [
+      "U-239"
+    ]
   }
 ]

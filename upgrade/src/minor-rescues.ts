@@ -451,6 +451,35 @@ function nestedItemFollower(output: string): Candidate[] {
   return found
 }
 
+function listFenceContinuation(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 4; at++) {
+    if (!(lines[at] ?? '').startsWith('- ```') || (lines[at + 2] ?? '') !== ''
+      || (lines[at + 3] ?? '') !== '+' || (lines[at + 4] ?? '').trim() === '') continue
+    const changed = [...lines]
+    changed[at + 3] = '  ```'
+    changed[at + 4] = '  ' + (lines[at + 4] ?? '').trimStart()
+    found.push(candidate('U-238', changed.join('\n'),
+      'the continuation became an explicit fence closer under the list item'))
+  }
+  return found
+}
+
+function descriptionFenceDedent(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 3; at++) {
+    if (!(lines[at] ?? '').startsWith(':: ') || !(lines[at + 1] ?? '').startsWith(': ')) continue
+    if (!(lines[at + 2] ?? '').startsWith('\t```') || !(lines[at + 3] ?? '').startsWith(' ```')) continue
+    const changed = [...lines]
+    changed[at + 3] = (lines[at + 3] ?? '').trimStart()
+    found.push(candidate('U-239', changed.join('\n'),
+      'the following fence was moved outside the description'))
+  }
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -481,7 +510,9 @@ export function rescueMinor(
     ...smartQuoteCandidates(output, expected),
     ...unresolvedReferenceBackslashes(output),
     ...nestedDefinitionBoundary(output),
-    ...nestedItemFollower(output)
+    ...nestedItemFollower(output),
+    ...listFenceContinuation(output),
+    ...descriptionFenceDedent(output)
   ]
   for (const item of candidates) {
     try {
