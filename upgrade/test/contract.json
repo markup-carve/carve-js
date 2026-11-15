@@ -1916,5 +1916,18 @@
       ":: term\n:  definition\n\n> quote\n",
       "- one\n\n:: term\n:  def\n"
     ]
+  },
+  {
+    "id": "U-200",
+    "title": "Literal attribute after a replacement",
+    "class": "rewrite",
+    "inputs": [
+      "{~a~>b~}{.k} c\n",
+      "{~a~>b~}{#i} c\n"
+    ],
+    "outputs": [
+      "{-a-}{+b+}\\{.k} c\n",
+      "{-a-}{+b+}\\{#i} c\n"
+    ]
   }
 ]

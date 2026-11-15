@@ -124,6 +124,19 @@ function quotedBraceCandidates(output: string): Candidate[] {
   return found
 }
 
+function substitutionAttributeCandidates(input: string, output: string): Candidate[] {
+  if (!input.includes('{~') || !input.includes('~>') || !output.includes('{+')) return []
+  const found: Candidate[] = []
+  for (const marker of ['}{.', '}{#']) {
+    let at = output.indexOf(marker)
+    while (at >= 0) {
+      found.push({ id: 'U-200', output: output.slice(0, at + 1) + '\\' + output.slice(at + 1) })
+      at = output.indexOf(marker, at + marker.length)
+    }
+  }
+  return found
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -154,7 +167,7 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   const expected = html01(input)
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
     ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
-    ...quotedBraceCandidates(output)]
+    ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
