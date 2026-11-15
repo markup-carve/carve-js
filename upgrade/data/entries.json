@@ -1333,6 +1333,12 @@
       "name": "block attributes before promoted image inline attributes",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-221",
+      "name": "wrapped link or image title",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

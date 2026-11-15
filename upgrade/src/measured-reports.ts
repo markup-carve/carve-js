@@ -118,6 +118,21 @@ function unresolvedEngineShape(input: string, expected: string, actual: string):
   return (expected.includes('<td') || actual.includes('<td')) && input.includes('\\|') && input.includes(']')
 }
 
+function wrappedLinkTitle(input: string, expected: string): boolean {
+  if (!expected.includes('title="') || !input.includes('](')) return false
+  let link = input.indexOf('](')
+  while (link >= 0) {
+    const tail = input.indexOf(')', link + 2)
+    for (const quote of ['"', "'"]) {
+      const open = input.indexOf(quote, link + 2)
+      const close = input.indexOf(quote, open + 1)
+      if (open >= 0 && close > open && (tail < 0 || open < tail) && input.slice(open, close).includes('\n')) return true
+    }
+    link = input.indexOf('](', link + 2)
+  }
+  return false
+}
+
 function lineCommentInContainer(input: string): boolean {
   if (input.includes('%%%')) return false
   return input.split('\n').some((line) => line.trimStart().startsWith('%% '))
@@ -135,6 +150,8 @@ function unresolvedContinuation(input: string): boolean {
 export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
   if (exact !== null) return exact
+  if (wrappedLinkTitle(input, expected)) return recordOf('U-221', line,
+    'C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified')
   const boundary = boundaryReport(input, expected, actual, line)
   if (boundary !== null) return boundary
   if (unresolvedEngineShape(input, expected, actual)) return null

@@ -198,5 +198,10 @@
     "id": "U-209",
     "input": "> quoted\n+\n- item\n> more\n",
     "message": "C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source"
+  },
+  {
+    "id": "U-221",
+    "input": "[a](/u \"t\nu\")\n",
+    "message": "C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified"
   }
 ]

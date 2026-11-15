@@ -2265,5 +2265,16 @@
       "![a](b){.outer k=one}{.inner k=two}\n",
       "![a](b){#outer .first}{#inner .second}\n"
     ]
+  },
+  {
+    "id": "U-221",
+    "title": "Wrapped link or image title",
+    "class": "report",
+    "inputs": [
+      "[a](/u \"t\nu\")\n",
+      "[a](/u 't\nu')\n",
+      "![a](/i \"t\nu\")\n"
+    ],
+    "outputs": []
   }
 ]
