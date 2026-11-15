@@ -15,10 +15,45 @@ function percentRun(text: string): number {
   return at - start
 }
 
+function percentCloser(lines: string[], open: number): number {
+  for (let at = open + 1; at < Math.min(lines.length, open + 12); at++) {
+    if ((lines[at] ?? '').trim() === '%%%') return at
+  }
+  return -1
+}
+
+function percentBoundaryCandidates(output: string): string[] {
+  const lines = output.split('\n')
+  const found: string[] = []
+  for (let open = 1; open < lines.length - 2; open++) {
+    if (!(lines[open] ?? '').trimStart().startsWith('%%%')) continue
+    const close = percentCloser(lines, open)
+    if (close < 0 || (lines[close + 1] ?? '').trim() === '') continue
+    const follower = [...lines]
+    follower[close + 1] = (follower[close + 1] ?? '').trimStart()
+    found.push(follower.join('\n'))
+    for (let indent = 2; indent <= 4; indent++) {
+      const moved = [...lines]
+      for (let at = open; at <= close; at++) {
+        if ((moved[at] ?? '').trim() !== '') moved[at] = ' '.repeat(indent) + (moved[at] ?? '').trimStart()
+      }
+      found.push(moved.join('\n'))
+    }
+  }
+  return found
+}
+
 /** C2-B-108, C2-B-110 and C2-B-114: outgrow a closer 0.1 kept inside the comment. */
 export function rescuePercent(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('%%%')) return null
   const expected = html01(input)
+  for (const candidate of percentBoundaryCandidates(output)) {
+    try {
+      if (!compareHtml(expected, html02(candidate, false)).equal) continue
+      return { output: candidate, record: recordOf('U-129', mismatch.line,
+        'the comment fence and follower were moved to their 0.2 ownership columns') }
+    } catch { /* A candidate can fail to parse under the new grammar. */ }
+  }
   const lines = readLines(output)
   const near = Math.max(1, mismatch.line)
   for (let line = Math.max(1, near - 4); line <= Math.min(lines.count, near + 4); line++) {

@@ -1206,12 +1206,26 @@
   },
   {
     "id": "U-129",
-    "title": "Percent comment fence with a longer closer",
+    "title": "Percent comment fence ownership",
     "inputs": [
-      "%%%\n%%%%\ny"
+      "%%%\n%%%%\ny",
+      "- a\n %%% n\n x\n %%%\n tail\n",
+      "- intro\n%%%\nc\n%%%\n  tail\n",
+      "- - a\n %%% c\n x\n %%%\n b\n",
+      ":: t\n:  x\n%%%\ny\n%%%\n   more\n",
+      ":: t\n:  x\n %%%\ny\n %%%\nz\n",
+      ":: t\n:  x\n  %%%\ny\n  %%%\nz\n",
+      "- intro\n  %% a\n%%%\nb\n%%%\n  tail\n"
     ],
     "outputs": [
-      "%%%%%\n%%%%\ny"
+      "%%%%%\n%%%%\ny",
+      "- a\n %%% n\n x\n %%%\ntail\n",
+      "- intro\n  %%%\n  c\n  %%%\n  tail\n",
+      "- - a\n %%% c\n x\n %%%\nb\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\n   more\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
+      ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
+      "- intro\n  %% a\n  %%%\n  b\n  %%%\n  tail\n"
     ],
     "class": "rewrite"
   },
