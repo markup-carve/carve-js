@@ -142,8 +142,20 @@ function adjacentBracedDelimiter(input: string): boolean {
   return ['/{', '{*', '{_', '{~', '{=', '{+', '{-'].some((prefix) => source.startsWith(prefix))
 }
 
+function mixedDelimiterShape(input: string, expected: string, actual: string): boolean {
+  if (!input.includes('/*')) return false
+  if (expected.startsWith('<p><strong><em>') && actual.startsWith('<p>*/')) return true
+  if (expected.startsWith('<p>_<strong>') && actual.startsWith('<p>_*<code>')) return true
+  return expected.startsWith('<p><strong>') && actual.startsWith('<p>*')
+}
+
+function bracedQuote(input: string): boolean {
+  return (input.includes('{+') || input.includes('{-')) && input.includes('"')
+}
+
 function inlineDelimiterMatch(input: string, expected: string, actual: string): string | null {
-  if ((input.includes('{+') || input.includes('{-')) && input.includes('"')) return 'U-144'
+  if (mixedDelimiterShape(input, expected, actual)) return 'U-145'
+  if (bracedQuote(input)) return 'U-144'
   if (!input.includes('`') && !input.includes('%%') && (input.includes('/*') || input.includes('*/'))) return 'U-145'
   if (input.includes('_{') || input.includes('~{')) return 'U-151'
   if (adjacentBracedDelimiter(input) && (expected.includes('<em>') || expected.includes('<strong>'))) return 'U-143'
