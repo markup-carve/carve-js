@@ -2889,5 +2889,38 @@
     "entries": [
       "U-227"
     ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "resources/examples/edge-cases/0683-a-definition-opens-a-sibling-block-after-a-list.md",
+    "line": 8,
+    "input": ":: term\n: - a\n\n   > c\n",
+    "check": "pass",
+    "entries": [
+      "U-228"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "resources/examples/edge-cases/0697-a-final-tab-does-not-change-list-ownership-in-a-description.md",
+    "line": 8,
+    "input": ":: term\n: - a\n\n   - c\t\n",
+    "check": "pass",
+    "entries": [
+      "U-228"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-076",
+    "path": "resources/examples/edge-cases/0958-a-below-item-marker-continues-the-list-in-a-description.md",
+    "line": 8,
+    "input": ":: term\n: - a\n\n   - c\n",
+    "check": "pass",
+    "entries": [
+      "U-228"
+    ]
   }
 ]

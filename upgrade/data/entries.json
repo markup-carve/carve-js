@@ -1375,6 +1375,12 @@
       "name": "percent run inside a multiline brace comment",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-228",
+      "name": "description sibling after a list item",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

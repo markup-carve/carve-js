@@ -160,6 +160,22 @@ function noteDescriptionVariants(input: string): string[] {
   return found
 }
 
+function descriptionSiblingVariants(input: string): string[] {
+  const lines = input.split('\n')
+  const found: string[] = []
+  for (let at = 3; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if ((lines[at - 1] ?? '').trim() !== '' || !value.startsWith('   ')) continue
+    if (!(lines[at - 3] ?? '').trimStart().startsWith(':: ')) continue
+    if (!(lines[at - 2] ?? '').trimStart().startsWith(': - ')) continue
+    if (!value.trimStart().startsWith('- ') && !value.trimStart().startsWith('> ')) continue
+    const changed = [...lines]
+    changed[at] = ' ' + value.trimStart()
+    found.push(changed.join('\n'))
+  }
+  return found
+}
+
 function firstPreserving(expected: string, candidates: string[]): string | null {
   for (const candidate of candidates) {
     try {
@@ -193,6 +209,9 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
   const note = firstPreserving(expected, noteDescriptionVariants(input))
   if (note !== null) return { output: note, record: recordOf('U-223', mismatch.line,
     'the note-hosted description body was moved to its content column') }
+  const sibling = firstPreserving(expected, descriptionSiblingVariants(input))
+  if (sibling !== null) return { output: sibling, record: recordOf('U-228', mismatch.line,
+    'the sibling block was moved to the description content column') }
   const plus = firstPreserving(expected, plusVariants(input))
   if (plus !== null)
     return {

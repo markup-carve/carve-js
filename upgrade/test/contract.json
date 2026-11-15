@@ -2370,5 +2370,20 @@
       "- {% a\n   \\%%%\n   z %}\nplain\n",
       "1. {% a\n    \\%%% x\n    z %}\nplain\n"
     ]
+  },
+  {
+    "id": "U-228",
+    "title": "Description sibling after a list item",
+    "class": "rewrite",
+    "inputs": [
+      ":: term\n: - a\n\n   > c\n",
+      ":: term\n: - a\n\n   - c\t\n",
+      ":: term\n: - a\n\n   - c\n"
+    ],
+    "outputs": [
+      ":: term\n: - a\n\n > c\n",
+      ":: term\n: - a\n\n - c\t\n",
+      ":: term\n: - a\n\n - c\n"
+    ]
   }
 ]

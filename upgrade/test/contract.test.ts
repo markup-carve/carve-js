@@ -35,7 +35,8 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
 
 /** U-014 and U-015 write the input of U-018, so a second run reads their output as a loose list. */
 const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-167#0',
-  'U-129#8', 'U-129#9', 'U-129#10', 'U-129#11'])
+  'U-129#8', 'U-129#9', 'U-129#10', 'U-129#11',
+  'U-228#0', 'U-228#1', 'U-228#2'])
 
 function entries(input: string): string[] {
   return upgrade(input).records.map((record) => record.entry)
@@ -88,7 +89,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 203 entries', () => {
-    expect(cases.length).toBe(203)
+  it('covers all 204 entries', () => {
+    expect(cases.length).toBe(204)
   })
 })
