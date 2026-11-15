@@ -106,6 +106,32 @@ function closingRun(text: string, pos: number, end: number, length: number): num
   return NONE
 }
 
+/** C2-I-015: a cell may retry an unmatched opener at every backtick in the same run. */
+function indexedClosingRun(state: InlineState, pos: number, length: number): number {
+  if (state.codeRuns === null) {
+    const runs = new Map<number, number[]>()
+    for (let at = pos; at < state.end;) {
+      if (state.text.charCodeAt(at) !== BACKTICK) {
+        at++
+        continue
+      }
+      const after = backtickRunEnd(state.text, at, state.end)
+      const size = after - at
+      const found = runs.get(size)
+      if (found === undefined) runs.set(size, [at])
+      else found.push(at)
+      at = after
+    }
+    state.codeRuns = runs
+  }
+  const matches = state.codeRuns.get(length)
+  if (matches === undefined) return NONE
+  let cursor = state.codeRunCursors.get(length) ?? 0
+  while (cursor < matches.length && matches[cursor]! < pos) cursor++
+  state.codeRunCursors.set(length, cursor)
+  return matches[cursor] ?? NONE
+}
+
 /** C2-I-016: the content starts and ends with a space and holds a character that is not a space. */
 function hasSpacePadding(text: string, start: number, end: number): boolean {
   if (end - start < 2 || text.charCodeAt(start) !== SPACE || text.charCodeAt(end - 1) !== SPACE) return false
@@ -125,7 +151,7 @@ function rawMarkerEnd(text: string, pos: number, end: number): number {
 function codeSpan(state: InlineState, start: number, run: number, kind: number, flags: number): number {
   const text = state.text
   const open = backtickRunEnd(text, run, state.end)
-  const close = closingRun(text, open, state.end, open - run)
+  const close = state.cell ? indexedClosingRun(state, open, open - run) : closingRun(text, open, state.end, open - run)
   if (close === NONE) {
     if (state.cell) return start + 1
     // C2-I-017: the span runs to the end of the content, and trailing whitespace is dropped.

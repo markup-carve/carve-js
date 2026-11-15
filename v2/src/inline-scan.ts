@@ -83,6 +83,8 @@ export function isPlainText(src: string, start: number, end: number): boolean {
 }
 
 function resetScan(state: InlineState): void {
+  state.codeRuns = null
+  state.codeRunCursors.clear()
   state.tokenLength = 0
   state.tokenEnd = 0
   state.bracketDepth = 0

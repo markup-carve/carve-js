@@ -63,6 +63,9 @@ export interface InlineState {
   /** C2-B-144: a line block reads `%%` as text. */
   lineComments: boolean
   cell: boolean
+  /** C2-I-015: backtick runs indexed by length for repeated cell scans. */
+  codeRuns: Map<number, number[]> | null
+  codeRunCursors: Map<number, number>
   /** C2-H-172: whether the text the scan has read so far holds a bidirectional control. */
   bidi: boolean
   /** Open containers of the block pass around this content (C2-I-118). */
@@ -140,6 +143,8 @@ function createState(): InlineState {
     lineCount: 0,
     lineComments: true,
     cell: false,
+    codeRuns: null,
+    codeRunCursors: new Map(),
     bidi: false,
     baseDepth: 0,
     definitions: null,
@@ -198,6 +203,8 @@ export function releaseInlineState(state: InlineState): void {
   state.src = ''
   state.text = ''
   state.definitions = null
+  state.codeRuns = null
+  state.codeRunCursors.clear()
   if (pool.length < POOL_SIZE) pool.push(state)
 }
 
