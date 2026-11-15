@@ -3,7 +3,7 @@
 // procedure, on every example input of the specification, every document of up to N lines over the
 // alphabet of line shapes and every content of up to M inline tokens (test/support/writer-checks.ts).
 // The random run checks the gates alone on seeded contents of 5 to 9 tokens and documents of 4 to 12 lines.
-// Every gate counts its inputs four ways: refused (C2-W-016); with a reported loss (C2-W-011), listed
+// Every gate counts its inputs four ways: refused (C2-W-016, C2-W-133); with a reported loss (C2-W-011), listed
 // apart; failures, a form with no reported loss that reads back as another tree, is not stable or
 // differs from the reference; and undecided, whose escapes the procedure does not decide.
 // Every input is a parse, which the writer writes faithfully or refuses, so a loss fails the run too.
@@ -39,7 +39,7 @@ interface Counts {
 /** The line of counts of one gate, and whether it passes. */
 function summary(what: string, counts: Counts): boolean {
   const reported = `${counts.losses} with a reported loss (C2-W-011), ${counts.failures} failures, ${counts.undecided} undecided (C2-W-088)`
-  console.log(`${what}: ${counts.inputs} inputs, ${counts.refused} refused (C2-W-016), ${reported}`)
+  console.log(`${what}: ${counts.inputs} inputs, ${counts.refused} refused (C2-W-016, C2-W-133), ${reported}`)
   return counts.failures === 0 && (silentOnly || counts.losses === 0)
 }
 

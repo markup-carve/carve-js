@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { type ExtensionDefinition, parse, parseWithDiagnostics, render, renderWithDiagnostics,
   tabExtension, tabsExtension, tabsRenderer, validateTree } from '../src/index.ts'
@@ -74,6 +76,17 @@ describe('generated parser findings', () => {
     const parsed = parseWithDiagnostics('::: failure\nBody\n:::', { extensions: [definition] })
     expect(parsed.document.children[0]?.type).toBe('div')
     expect(parsed.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
+  })
+
+  it('C2-X-050: a claim preparation failure retains the core tabs node', () => {
+    const body = readFileSync(join(import.meta.dirname, '../proptest/fixtures/writer-cycle.crv'), 'utf8')
+    const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
+    const options = { extensions: [tabExtension, tabsExtension] }
+    const parsed = parseWithDiagnostics(source, options)
+    expect(parsed.document.children[0]?.type).toBe('div')
+    expect(parsed.diagnostics.some((entry) => entry.code === 'extension-transform-failed' &&
+      entry.message.includes('carve.tabs'))).toBe(true)
+    expect(() => render(source, options)).not.toThrow()
   })
 
   it('C2-X-050: a renderer helper failure keeps earlier and later output', () => {

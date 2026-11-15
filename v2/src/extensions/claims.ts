@@ -94,10 +94,14 @@ function validTransform(node: BlockExtensionNode | InlineExtensionNode, input: E
 function replace(node: Node, definitions: readonly ExtensionDefinition[], sourceNames: ReadonlyMap<Node, string> | null,
   findings: Findings, parent?: ParentSlot): Node {
   for (const definition of definitions) {
-    const input = claim(node, definition, sourceNames)
-    if (input === null || definition.transform === undefined) continue
+    if (definition.transform === undefined) continue
+    let input: ExtensionClaim | null
     let transformed: BlockExtensionNode | InlineExtensionNode | null
-    try { transformed = definition.transform(input) } catch (error) {
+    try {
+      input = claim(node, definition, sourceNames)
+      if (input === null) continue
+      transformed = definition.transform(input)
+    } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       addFinding(findings, node, { code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
         message: `The extension ${definition.name} transform failed: ${detail}; the core source node was retained` })

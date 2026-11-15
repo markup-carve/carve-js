@@ -360,8 +360,6 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
  */
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
-  if (process.env['CARVE_DEBUG']) console.error('changes', check.escapes.length, check.forms.length, check.retracted.length,
-    check.losses.length, check.escapes.map(([node, at]) => `${node.value.slice(0, 8)}:${at}`).slice(0, 3))
   let dropped = false
   // Each test writes the group twice; a round with more trials places them all, as it does escapes.
   const trials = check.trials.length <= MAX_ORDERED_ESCAPES ? check.trials : []
@@ -397,14 +395,20 @@ function nodeId(ids: Map<Node, number>, node: Node): number {
   return id
 }
 
-/** C2-W-133: a complete repair state, including attempts that can change the next round. */
-function repairKey(w: Writer, ids: Map<Node, number>): string {
-  const escapes = [...w.escapes].map(([node, offsets]) => [nodeId(ids, node), offsets])
-  const forms = [...w.forms].map(([node, form]) => [nodeId(ids, node), form])
-  const attempts = [...w.attempts].map(([node, attempt]) => [nodeId(ids, node), attempt.step,
-    attempt.escapes.map(([text, at]) => [nodeId(ids, text), at])])
-  const lost = [...w.lost].map((node) => nodeId(ids, node))
-  return JSON.stringify([w.lines, w.blankFirst, w.losses.entries.length, escapes, forms, attempts, lost])
+/** C2-W-133: the repair state of this group, including attempts that can change its next round. */
+function repairKey(w: Writer, ids: Map<Node, number>, group: readonly Node[]): string {
+  const states: unknown[] = []
+  const pending = [...group]
+  for (;;) {
+    const node = pending.pop()
+    if (node === undefined) break
+    const attempt = w.attempts.get(node)
+    states.push([nodeId(ids, node), node.type === 'text' ? w.escapes.get(node) : undefined,
+      w.forms.get(node), attempt?.step,
+      attempt?.escapes.map(([text, at]) => [nodeId(ids, text), at]), w.lost.has(node)])
+    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
+  }
+  return JSON.stringify([w.lines, w.blankFirst, w.losses.entries.length, states])
 }
 
 /** C2-W-133: report a repair loop or exhausted search as a refusal, with the group's path. */
@@ -425,7 +429,7 @@ interface RepairHistory {
 /** C2-W-133: a repeated state cannot lead to a new spelling on the next deterministic round. */
 function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistory): boolean {
   history.rounds++
-  const key = repairKey(w, history.ids)
+  const key = repairKey(w, history.ids, group)
   if (history.seen.has(key) || history.rounds > 8192) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
@@ -566,13 +570,23 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
   }
 }
 
-/** C2-W-088: prune needless bracket and attribute-brace escapes without changing the order of C2-W-125. */
+/** C2-W-088, C2-W-125: only these opener shapes can lose a backslash without changing the ordered repair. */
+function prunableOpener(source: string, at: number): boolean {
+  const next = source[at + 1]
+  if (next === '[') return source[at + 2] === '^' && source[at + 3] === ']'
+  if (next !== '{') return false
+  if (source[at + 2] === '/') return true
+  if (source[at + 2] !== '#') return false
+  const close = source.indexOf('}', at + 3)
+  const escapedDash = source.indexOf('\\-', at + 3)
+  return close >= 0 && (escapedDash < 0 || escapedDash > close)
+}
+
+/** C2-W-088: remove candidate escapes only when the whole tree stays equal. */
 function necessaryBracketEscapes(source: string, document: DocumentNode, w: Writer): string {
   let at = source.indexOf('\\')
   while (at >= 0) {
-    const next = source[at + 1]
-    const brace = next === '{' && (source[at + 2] === '/' || source[at + 2] === '#')
-    if (next === '[' || brace) {
+    if (prunableOpener(source, at)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       if (treesEqual(parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys), document)) {
         source = candidate

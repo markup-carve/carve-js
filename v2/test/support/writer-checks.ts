@@ -24,12 +24,11 @@ function endsLineWithCr(value: string): boolean {
 }
 
 /**
- * C2-W-016: whether the writer refused the document for a verbatim span whose later line would
- * open a block, or for a lone CR at the end of a line. Such a document has no canonical spelling,
- * and the refusal is its result.
+ * C2-W-016 and C2-W-133: whether the writer refused an unspellable field or a repeated repair state.
  */
 export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
+    if (entry.code === 'writer-refused') return true
     const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
     const value = node !== undefined && 'value' in node && typeof node.value === 'string' ? node.value : ''
     const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && value.includes('\n')
@@ -511,16 +510,18 @@ function checkWritten(
   return again === written ? null : `${path}: the canonical form ${show(written)} is formatted to ${show(again)}`
 }
 
-/** The result of the checks on one source: null, a failure, or `refused` (C2-W-016). Inputs C2-W-088 does not decide go to `undecided`. */
+/** The result of the checks on one source: null, a failure, or `refused` (C2-W-016, C2-W-133). */
 export function checkWriter(src: string, undecided: string[] = []): string | null {
   const tree = parse(src)
   const formatted = formatWithDiagnostics(src)
   const plain = writeWithDiagnostics(tree)
   const losses = formatted.diagnostics.filter((entry) => entry.channel === 'render-loss')
-  if (isRefusal(tree, losses) && isRefusal(tree, plain.diagnostics)) return 'refused'
-  const failure = checkWritten(tree, formatted.source, losses, 'with the record', undecided)
-    ?? checkWritten(tree, plain.source, plain.diagnostics, 'without the record', undecided)
+  const recordedRefusal = isRefusal(tree, losses)
+  const plainRefusal = isRefusal(tree, plain.diagnostics)
+  const failure = (recordedRefusal ? null : checkWritten(tree, formatted.source, losses, 'with the record', undecided))
+    ?? (plainRefusal ? null : checkWritten(tree, plain.source, plain.diagnostics, 'without the record', undecided))
   if (failure !== null) return failure
+  if (recordedRefusal || plainRefusal) return 'refused'
   // C2-W-003 without the sidecar.
   const again = write(parse(plain.source))
   return again === plain.source ? null : `without the record: C2-W-003, ${show(plain.source)} is written again as ${show(again)}`

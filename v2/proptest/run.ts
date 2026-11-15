@@ -75,7 +75,8 @@ class Checker {
     if (worker === null) return Promise.resolve({ kind: 'harness-exception', detail: 'missing worker' })
     return new Promise((resolve) => {
       // C2-W-089: the writer may need several repair passes for one group.
-      const writerTarget = this.target === 'format' || this.target === 'diagnostics' || this.target === 'extensions'
+      const writerTarget = this.target === 'render' || this.target === 'format' || this.target === 'diagnostics' ||
+        this.target === 'extensions'
       const timeout = Math.max(writerTarget ? 30000 : 3000, Buffer.byteLength(source) / 10240 * 500)
       const timer = setTimeout(() => {
         worker.removeAllListeners('message')

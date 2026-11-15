@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { CarveWriteError, format, formatWithDiagnostics, parse, write } from '../src/index.ts'
+import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
 
@@ -33,6 +34,17 @@ void test('C2-W-088: needless bracket and brace escapes are removed', () => {
   }
 })
 
+void test('C2-W-125: ordered repairs keep required bracket and brace escapes', () => {
+  const cases: readonly (readonly [string, string])[] = [
+    ['x^[\\`a`]', 'x^\\[\\`a`]`\n'],
+    ['x{#a\\--}', 'x\\{#a-\\-}\n'],
+    ['x{#\\---}', 'x\\{#\\---}\n'],
+    ['x<a:b>{#\\--}', 'x<a:b>\\{#-\\-}\n'],
+    ['x`a`{#\\--}', 'x`a`\\{#-\\-}\n'],
+  ]
+  for (const [source, expected] of cases) assert.equal(format(source), expected)
+})
+
 void test('C2-W-133: a repeated writer repair state is reported', () => {
   const source = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8')
   const script = 'const r = require("./v2/src/index.ts").formatWithDiagnostics(process.env.CARVE_SOURCE);' +
@@ -48,6 +60,8 @@ void test('C2-W-133: a repeated writer repair state is reported', () => {
   assert.equal(diagnostic?.path, '/children/0')
   assert.throws(() => format(source), CarveWriteError)
   assert.throws(() => write(parse(source)), CarveWriteError)
+  assert.equal(checkWriter(source), 'refused')
+  assert.equal(checkGates(source).refused, true)
 })
 
 void test('C2-W-007: a space in an image alt value is content', () => {
