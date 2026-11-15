@@ -22,7 +22,7 @@ import {
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
-  attributeKeyValue, braceBlocksEnd, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
+  attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
@@ -795,7 +795,7 @@ function writeCell(state: BlockState, pipe: number, next: number): number {
     flags = FLAG_HEADER
     p++
   }
-  const blocksEnd = braceBlocksEnd(src, p, next)
+  const blocksEnd = attributeBlocksEnd(src, p, next, true)
   // C2-B-182: the alignment mark comes first in the brace block.
   const alignment = blocksEnd > p ? alignmentMark(src.charCodeAt(p + 1)) : 0
   if (blocksEnd > p) flags |= FLAG_CELL_ATTRIBUTES

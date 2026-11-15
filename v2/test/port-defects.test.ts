@@ -115,3 +115,46 @@ describe('C2-I-098: abbreviations in every inline flow', () => {
     expect(render('::: box "HT"\nq\n:::\n\n*[HT]: Hyper\n')).toContain(abbr)
   })
 })
+
+describe('C2-I-034/040: an invalid or empty brace block in a block prefix is text', () => {
+  const INVALID = ['{2}', '{ }', '{.}', '{0}', '{x<}', '{k<}', '{#/$x}', '{*}', '{##}', '{=/}', '{.a}{x<}', '{x<}{.a}', '{-i}', '{.i#}', '{+}']
+
+  it('C2-B-171: the braces stay cell text, after the pipe and after the header mark', () => {
+    for (const block of INVALID) {
+      expect(render(`|${block} 1 |\n`)).toContain(`<tr><td>${block.replaceAll('<', '&lt;')} 1</td></tr>`)
+      expect(render(`|=${block} 1 |\n`)).toContain(`<th scope="col">${block.replaceAll('<', '&lt;')} 1</th>`)
+    }
+    expect(render('|{ }| b |\n')).toContain('<tr><td>{ }</td><td>b</td></tr>')
+    expect(render('|{=/}{|\n')).toContain('<td>{=/}{</td>')
+    expect(render('|{##}\\-\\+ |\n')).toContain('<td>{##}-+</td>')
+  })
+
+  it('C2-B-182: a valid cell prefix and a prefix of the alignment mark alone still apply', () => {
+    expect(render('|{<} 1 |\n')).toContain('<td style="text-align: left;">1</td>')
+    expect(render('|={> .c} 1 |\n')).toContain('<th scope="col" class="c" style="text-align: right;">1</th>')
+    expect(render('|{.a}{#i} 1 |\n')).toContain('<td id="i" class="a">1</td>')
+  })
+
+  it('C2-B-034/101: a bullet or ordered marker with an invalid block is no marker', () => {
+    for (const block of INVALID) {
+      for (const marker of ['-', '*', '1.', '1)', 'a)', '.']) {
+        expect(types(`${marker}${block} b\n`)).toEqual(['paragraph'])
+      }
+    }
+    expect(render('-{blank.i} b\n')).toBe('<p>-{blank.i} b</p>')
+    expect(parse('-{.i} b\n').children[0]).toMatchObject({ type: 'list', children: [{ attrs: { classes: ['i'] } }] })
+    expect(parse('1.{#x} b\n').children[0]).toMatchObject({ type: 'list', children: [{ attrs: { id: 'x' } }] })
+  })
+
+  it('C2-B-167: an invalid block glued behind the row attribute ends no row', () => {
+    expect(types('| a |{.r}{x<}\n')).toEqual(['paragraph'])
+    expect(types('| a |{.r}{#i}\n')).toEqual(['table'])
+  })
+
+  it('C2-B-197/198: a block image or display math line takes only valid glued blocks', () => {
+    expect(types('![a](u){x<}\n^ c\n')).toEqual(['paragraph'])
+    expect(types('![a](u){.x}\n^ c\n')).toEqual(['figure'])
+    expect(types('$$`m`{x<}\n^ c\n')).toEqual(['paragraph'])
+    expect(types('$$`m`{.x}\n^ c\n')).toEqual(['figure'])
+  })
+})
