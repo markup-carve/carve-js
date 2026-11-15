@@ -2284,5 +2284,18 @@
       "![a](/i \"t\nu\")\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-222",
+    "title": "Div boundary at its owning column",
+    "class": "rewrite",
+    "inputs": [
+      "- one\n ::: note\n b\n :::\n",
+      ":: t\n: - :::\n    :::\n q\n"
+    ],
+    "outputs": [
+      "- one\n::: note\n b\n :::\n",
+      ":: t\n: - :::\n    :::\nq\n"
+    ]
   }
 ]

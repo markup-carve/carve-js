@@ -1339,6 +1339,12 @@
       "name": "wrapped link or image title",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-222",
+      "name": "div boundary at its owning column",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

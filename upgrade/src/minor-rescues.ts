@@ -208,6 +208,23 @@ function promotedImageAttributes(output: string): Candidate[] {
   return found
 }
 
+function divBoundary(output: string): Candidate[] {
+  const lines = readLines(output)
+  const found: Candidate[] = []
+  for (let line = 2; line <= lines.count; line++) {
+    const value = lineText(lines, line)
+    if (!value.startsWith(' ')) continue
+    const previous = lineText(lines, line - 1).trimStart()
+    const opener = previous.startsWith('- ') && value.trimStart().startsWith(':::')
+    const follower = previous === ':::' && value.trim() !== ''
+    if (!opener && !follower) continue
+    const start = lineStart(lines, line)
+    found.push(candidate('U-222', output.slice(0, start) + value.trimStart() + output.slice(start + value.length),
+      'the div boundary was moved to the 0.2 owning column'))
+  }
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -225,7 +242,8 @@ export function rescueMinor(
     ...emptyFootnote(output),
     ...emptyFootnoteBody(output),
     ...invisibleCommentCandidates(input),
-    ...promotedImageAttributes(output)
+    ...promotedImageAttributes(output),
+    ...divBoundary(output)
   ]
   for (const item of candidates) {
     try {

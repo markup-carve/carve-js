@@ -750,6 +750,39 @@
     ]
   },
   {
+    "cause": "C26",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0148-colon-fence-as-a-block-opener-in-a-list-item.md",
+    "line": 8,
+    "input": "- one\n ::: note\n b\n :::\n",
+    "check": "pass",
+    "entries": [
+      "U-222"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-056",
+    "path": "tests/corpus/148-colon-fence-as-a-block-opener-in-a-list-item.crv",
+    "line": 1,
+    "input": "- one\n ::: note\n b\n :::\n",
+    "check": "pass",
+    "entries": [
+      "U-222"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-076",
+    "path": "tests/corpus/868-a-line-below-a-description-after-a-div-in-an-item-leaves-the-description.crv",
+    "line": 1,
+    "input": ":: t\n: - :::\n    :::\n q\n",
+    "check": "pass",
+    "entries": [
+      "U-222"
+    ]
+  },
+  {
     "cause": "C27",
     "clause": "C2-B-076",
     "path": "tests/corpus/436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not.crv",
