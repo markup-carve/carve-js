@@ -154,7 +154,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
     case 42: return runEnd(leaf, at, 42) - at >= 3 ? anyLine(leaf, at, 42) : bullet(leaf, at)
     case 46: return bareDot(leaf, at)
     case 58: return colon(leaf, at, place)
-    default: return otherLine(leaf, at, value)
+    default: return otherLine(leaf, at, value, place, true)
   }
 }
 
@@ -178,10 +178,10 @@ function laterLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (place.inItem && value >= 48 && value <= 57) return value === 49 && code(leaf, at + 1) < 48 ? digits(leaf, at) : NO_ESCAPE
   if (place.inItem && (value === 45 || value === 42 || value === 46)) return firstLine(leaf, at, place)
   if (value === 42 && runEnd(leaf, at, 42) - at < 3) return NO_ESCAPE
-  return otherLine(leaf, at, value)
+  return otherLine(leaf, at, value, place, false)
 }
 
-type LineRule = (leaf: Leaf, at: number) => number
+type LineRule = (leaf: Leaf, at: number, place: LeafPlace, first: boolean) => number
 
 function decidedIf(condition: boolean): number {
   return condition ? UNDECIDED : NO_ESCAPE
@@ -197,21 +197,26 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [37, percent],
   [SPACE, () => UNDECIDED],
   [TAB, () => UNDECIDED],
-  [91, (leaf, at) => decidedIf(definitionShape(leaf, at) || code(leaf, at + 2) === 93)],
+  [91, (leaf, at, place, first) => decidedIf(definitionShape(leaf, at) || (first && taskBoxShape(leaf, at, place)))],
   [123, (leaf, at) => decidedIf(!isBracedOpener(code(leaf, at + 1)) && lineEndsWith(leaf, at, 125))],
   [94, (leaf, at) => decidedIf(isBlank(code(leaf, at + 1)) || isLineEnd(code(leaf, at + 1)))],
   [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
 ])
 
 /** The rules that hold on the first and on later lines, and the openers left to the repair. */
-function otherLine(leaf: Leaf, at: number, value: number): number {
+function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, first: boolean): number {
   const rule = OTHER_RULES.get(value)
-  if (rule !== undefined) return rule(leaf, at)
+  if (rule !== undefined) return rule(leaf, at, place, first)
   return decidedIf(letterMarker(leaf, at))
 }
 
 function isBracedOpener(value: number): boolean {
   return value >= 0 && '*+,-/^~='.includes(String.fromCharCode(value))
+}
+
+/** C2-B-046: a task box stands directly after the marker, so only the first line of the first block of an item has one. */
+function taskBoxShape(leaf: Leaf, at: number, place: LeafPlace): boolean {
+  return place.inItem && place.before === null && code(leaf, at + 2) === 93
 }
 
 function definitionShape(leaf: Leaf, at: number): boolean {
