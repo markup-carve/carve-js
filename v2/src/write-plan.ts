@@ -108,10 +108,16 @@ function dots(leaf: Leaf, at: number): void {
   undecidedIf(code(leaf, at + 1) === 46 && code(leaf, at + 2) === 46, leaf, 'dot run')
 }
 
+/** C2-I-026: a braced comment counts as nothing for the sigil boundary, so the character before it decides. */
+function behindBracedComment(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at - 1]
+  return leaf.kinds[at - 1] === ATOM && owner?.type === 'comment' && owner.form === 'braced'
+}
+
 /** C2-I-090: a name of a mention or a tag after a boundary. */
 function sigil(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = code(leaf, at - 1)
-  if (before >= 0xd800 && before < 0xe000) return undecide(leaf, 'sigil')
+  if ((before >= 0xd800 && before < 0xe000) || behindBracedComment(leaf, at)) return undecide(leaf, 'sigil')
   if (before >= 0 && isWordCharacter(before)) return
   if (nextIs(leaf, at, '}')) return undecide(leaf, 'sigil')
   // A sigil behind a brace may stand in an attribute block, where it reads as itself.
@@ -360,7 +366,7 @@ function checkAtom(leaf: Leaf, at: number, node: Node): void {
   const type = node.type
   if (type === 'mention' || type === 'tag' || type === 'symbol' || type === 'caption_number') {
     const before = code(leaf, at - 1)
-    if (before >= 0 && isWordCharacter(before)) return undecide(leaf, 'sigil boundary')
+    if ((before >= 0 && isWordCharacter(before)) || behindBracedComment(leaf, at)) return undecide(leaf, 'sigil boundary')
   }
   if (type === 'smart_punctuation') checkSmart(leaf, at, node)
   undecidedIf(type === 'abbreviation', leaf, type)

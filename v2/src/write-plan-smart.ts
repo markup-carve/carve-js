@@ -43,6 +43,12 @@ function lastCodePoint(text: string | undefined): number | null {
   return isSurrogate(code) ? text.codePointAt(text.length - 2) ?? null : code
 }
 
+/** C2-I-026: a braced comment counts as nothing for the neighbors of a quote. */
+function isBracedComment(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at]
+  return leaf.kinds[at] === ATOM && owner?.type === 'comment' && owner.form === 'braced'
+}
+
 /** What the reader sees before the unit behind a mark or an atom: the glyph of a quote, the start of a content, a break. */
 function previousOfNode(leaf: Leaf, at: number): number | null {
   const owner = leaf.owners[at]
@@ -54,7 +60,9 @@ function previousOfNode(leaf: Leaf, at: number): number | null {
 }
 
 /** The code point of text that ends at unit `at`, the edge of the leaf, what a node leaves before it, or null. */
-function previousOf(leaf: Leaf, at: number): number | null {
+function previousOf(leaf: Leaf, from: number): number | null {
+  let at = from
+  while (at >= 0 && isBracedComment(leaf, at)) at--
   if (at < 0) return NO_CHARACTER
   if (leaf.kinds[at] !== TEXT) return previousOfNode(leaf, at)
   const code = leaf.codes[at]!
@@ -65,7 +73,9 @@ function previousOf(leaf: Leaf, at: number): number | null {
 }
 
 /** The code point the reader sees at unit `at`, which is the source a mark or an atom is written as, or the edge. */
-function nextOf(leaf: Leaf, at: number): number | null {
+function nextOf(leaf: Leaf, from: number): number | null {
+  let at = from
+  while (at < leaf.codes.length && isBracedComment(leaf, at)) at++
   if (at >= leaf.codes.length) return NO_CHARACTER
   const code = leaf.codes[at]!
   if (!isSurrogate(code)) return code

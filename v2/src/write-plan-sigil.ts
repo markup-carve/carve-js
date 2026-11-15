@@ -29,7 +29,10 @@ export function sigilName(leaf: Leaf, at: number): number {
   let letters = false
   for (; end < leaf.codes.length; end++) {
     const value = leaf.codes[end]!
-    if (leaf.kinds[end] !== TEXT) return isNameCharacter(value) || value === DOT ? UNKNOWN : NO_NAME
+    if (leaf.kinds[end] !== TEXT) {
+      if (isNameCharacter(value) || value === DOT) return UNKNOWN
+      break
+    }
     if (isNameCharacter(value)) letters ||= isAsciiLetter(value)
     else if (!isInnerDot(leaf, end, start)) break
   }
