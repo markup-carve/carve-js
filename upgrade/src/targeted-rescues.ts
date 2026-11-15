@@ -173,6 +173,19 @@ function underlineBoundaryCandidates(output: string): Candidate[] {
   return found
 }
 
+function unresolvedFootnoteAttributeCandidates(output: string): Candidate[] {
+  if (!output.includes('[^')) return []
+  const found: Candidate[] = []
+  for (const [marker, offset] of [[']{.', 1], [']{#', 2]] as const) {
+    let at = output.indexOf(marker)
+    while (at >= 0) {
+      found.push({ id: 'U-207', output: output.slice(0, at + offset) + '\\' + output.slice(at + offset) })
+      at = output.indexOf(marker, at + marker.length)
+    }
+  }
+  return found
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -204,7 +217,8 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
     ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
     ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output),
-    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output), ...underlineBoundaryCandidates(output)]
+    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output), ...underlineBoundaryCandidates(output),
+    ...unresolvedFootnoteAttributeCandidates(output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue

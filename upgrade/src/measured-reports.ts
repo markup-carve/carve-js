@@ -100,6 +100,8 @@ function measuredTabOrDiv(input: string, expected: string, actual: string, line:
 function boundaryReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
   if (tabOrDiv !== null) return tabOrDiv
+  if (input.includes('</#') && expected.includes('<a href=') && actual.includes('<a href=')) return recordOf('U-206', line,
+    'C2-H-095 and C2-H-096 use plain heading text or the caption label and number for a resolved cross-reference')
   if (taskLabelBoundary(input, expected, actual)) return recordOf('U-133', line,
     'C2-H-032 derives the task item aria label from its 0.2 plain text boundary')
   if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,

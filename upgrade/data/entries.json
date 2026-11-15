@@ -1249,6 +1249,18 @@
       "name": "fence after a continuation marker",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-206",
+      "name": "cross-reference default display text",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-207",
+      "name": "literal attribute after an unresolved footnote",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [

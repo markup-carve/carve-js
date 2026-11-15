@@ -2008,5 +2008,30 @@
       ":: t\n:  d\n  ```\n  a\n\n  ```\nb\n```\n",
       "- x\n  ```\n  a\n\n  ```\nb\n```\n\nz\n"
     ]
+  },
+  {
+    "id": "U-206",
+    "title": "Cross-reference default display text",
+    "class": "report",
+    "inputs": [
+      "# *Setup*\n\nSee </#Setup>.\n",
+      "# A </#A>\n",
+      "# A </#B>\n\n# B </#A>\n",
+      "{#t}\n| b |\n^ #y#\n\n</#t>\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-207",
+    "title": "Literal attribute after an unresolved footnote",
+    "class": "escape",
+    "inputs": [
+      "Text[^a]{.ref}.\n",
+      "x[^n]{#i}\n\n## i\n"
+    ],
+    "outputs": [
+      "Text[^a]\\{.ref}.\n",
+      "x[^n]{\\#i}\n\n## i\n"
+    ]
   }
 ]
