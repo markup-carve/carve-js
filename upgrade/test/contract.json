@@ -2555,5 +2555,27 @@
       "::: \\\n[a\nb][missing]\n:::\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-242",
+    "title": "An indented fence run remains code content",
+    "class": "rewrite",
+    "inputs": [
+      "{.x\n.y}\n```\nwa\n> q\n  ```\n"
+    ],
+    "outputs": [
+      "{.x\n.y}\n````\nwa\n> q\n  ```\n"
+    ]
+  },
+  {
+    "id": "U-243",
+    "title": "Backtick fence run inside a multiline brace comment",
+    "class": "escape",
+    "inputs": [
+      "- {% a\n   ```\n   z %}\nplain\n"
+    ],
+    "outputs": [
+      "- {% a\n   \\```\n   z %}\nplain\n"
+    ]
   }
 ]

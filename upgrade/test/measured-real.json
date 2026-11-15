@@ -3472,5 +3472,49 @@
     "entries": [
       "U-221"
     ]
+  },
+  {
+    "cause": "C14",
+    "clause": "C2-B-108 C2-B-110",
+    "path": "resources/examples/edge-cases/1014-an-indented-closer-protects-a-refused-run-s-fence-follower.md",
+    "line": 12,
+    "input": "{.x\n.y}\n```\nwa\n> q\n  ```\n",
+    "check": "pass",
+    "entries": [
+      "U-242"
+    ]
+  },
+  {
+    "cause": "C14",
+    "clause": "C2-B-108 C2-B-110",
+    "path": "tests/corpus/1014-an-indented-closer-protects-a-refused-run-s-fence-follower.crv",
+    "line": 1,
+    "input": "{.x\n.y}\n```\nwa\n> q\n  ```\n",
+    "check": "pass",
+    "entries": [
+      "U-242"
+    ]
+  },
+  {
+    "cause": "C15",
+    "clause": "C2-I-036 C2-B-108",
+    "path": "resources/examples/edge-cases/1051-a-fence-shaped-line-continues-an-item-comment.md",
+    "line": 12,
+    "input": "- {% a\n   ```\n   z %}\nplain\n",
+    "check": "pass",
+    "entries": [
+      "U-243"
+    ]
+  },
+  {
+    "cause": "C15",
+    "clause": "C2-I-036 C2-B-108",
+    "path": "tests/corpus/1051-a-fence-shaped-line-continues-an-item-comment.crv",
+    "line": 1,
+    "input": "- {% a\n   ```\n   z %}\nplain\n",
+    "check": "pass",
+    "entries": [
+      "U-243"
+    ]
   }
 ]

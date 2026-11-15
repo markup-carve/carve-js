@@ -30,6 +30,19 @@ function trailingFence(output: string): Candidate[] {
   return found
 }
 
+function indentedFenceRunAsContent(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length; at++) {
+    if ((lines[at] ?? '').trim() !== '```' || (lines[at] ?? '') !== '```') continue
+    if (!lines.slice(at + 1).some((line) => line.startsWith('  ```'))) continue
+    const changed = [...lines]
+    changed[at] = '````'
+    found.push(candidate('U-242', changed.join('\n'), 'the opening fence was lengthened to keep the indented run as content'))
+  }
+  return found
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -311,6 +324,24 @@ function percentRunInsideBraceComment(output: string): Candidate[] {
   return found
 }
 
+function backtickRunInsideBraceComment(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  let open = false
+  for (let at = 0; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if (value.includes('{%')) open = true
+    const start = value.length - value.trimStart().length
+    if (open && value.slice(start).startsWith('```')) {
+      const changed = [...lines]
+      changed[at] = value.slice(0, start) + '\\' + value.slice(start)
+      found.push(candidate('U-243', changed.join('\n'), 'the backtick run inside the brace comment was escaped'))
+    }
+    if (value.includes('%}')) open = false
+  }
+  return found
+}
+
 function noteItemFollower(output: string): Candidate[] {
   const lines = output.split('\n')
   const found: Candidate[] = []
@@ -489,6 +520,7 @@ export function rescueMinor(
   const expected = html01(input)
   const candidates = [
     ...trailingFence(output),
+    ...indentedFenceRunAsContent(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),
@@ -504,6 +536,7 @@ export function rescueMinor(
     ...commentedCaptionCaret(output),
     ...displayMathCaption(output),
     ...percentRunInsideBraceComment(output),
+    ...backtickRunInsideBraceComment(output),
     ...noteItemFollower(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output),

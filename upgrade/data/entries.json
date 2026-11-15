@@ -1459,6 +1459,18 @@
       "name": "hardbreak div changes unresolved reference fallback",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-242",
+      "name": "indented fence run remains code content",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-243",
+      "name": "backtick fence run inside a multiline brace comment",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [
