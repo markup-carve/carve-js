@@ -56,7 +56,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && node v2/cli/build.mjs",
+    "build": "tsc && npm ci --prefix import --ignore-scripts && node v2/cli/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
     "drift": "node scripts/published-drift.mjs",
     "prepare": "npm run build",
