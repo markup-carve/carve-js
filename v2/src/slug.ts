@@ -13,8 +13,8 @@ const ASCII_END = 0x80
 const COMBINING_START = 0x300
 const COMBINING_END = 0x36f
 
-// C2-H-144: every code point of the list lies at or above this one.
-const FIRST_REMOVED = 0xad
+// C2-H-144, C2-H-145: every code point of both lists lies at or above this one; `«` of the reversed list is below the soft hyphen.
+const FIRST_CHANGED = Math.min(...SLUG_REMOVED, ...[...SLUG_REVERSED.keys()].map((glyph) => glyph.codePointAt(0)!))
 
 /** C2-H-146: each run of ASCII characters that are no letter and no digit becomes one hyphen; the ends are trimmed. */
 function slugRun(text: string, keepsOthers: boolean): string {
@@ -38,7 +38,7 @@ function withoutPresentation(text: string): string {
   let out = ''
   for (const char of text) {
     const code = char.codePointAt(0)!
-    if (code < FIRST_REMOVED) out += char
+    if (code < FIRST_CHANGED) out += char
     else if (!SLUG_REMOVED.includes(code)) out += SLUG_REVERSED.get(char) ?? char
   }
   return out

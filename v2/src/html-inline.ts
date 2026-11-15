@@ -26,26 +26,27 @@ function isBlank(value: string): boolean {
 
 /**
  * Whether the line that starts beside `from` and runs in the direction `step` holds only comments and spaces, with
- * at least one comment. `atEnd` asks in addition that the line ends the content and not at a break.
+ * at least one comment. `atEnd` asks in addition that the line ends the content and not at a break. In the
+ * children of an inline node (`nested`) the line runs on past the list, where it holds the markup of the node.
  */
-function isCommentOnlyLine(nodes: readonly Inline[], from: number, step: number, atEnd: boolean): boolean {
+function isCommentOnlyLine(nodes: readonly Inline[], from: number, step: number, atEnd: boolean, nested: boolean): boolean {
   let comment = false
   let at = from
   for (; at >= 0 && at < nodes.length; at += step) {
     const node = nodes[at]!
     if (node.type === 'comment') comment = true
-    else if (isBreak(node)) break
+    else if (isBreak(node)) return comment && !atEnd
     else if (node.type !== 'text' || !isBlank(node.value)) return false
   }
-  return comment && (!atEnd || at === nodes.length)
+  return comment && !nested
 }
 
 /**
  * C2-H-069: a comment-only line takes one line break around it with it: the one behind it, or the one before it
  * when the content ends with the comment. Each line is read at most twice, from the break on either side.
  */
-function isSkippedBreak(nodes: readonly Inline[], at: number): boolean {
-  return isCommentOnlyLine(nodes, at - 1, -1, false) || isCommentOnlyLine(nodes, at + 1, 1, true)
+function isSkippedBreak(nodes: readonly Inline[], at: number, nested: boolean): boolean {
+  return isCommentOnlyLine(nodes, at - 1, -1, false, nested) || isCommentOnlyLine(nodes, at + 1, 1, true, nested)
 }
 
 /** The HTML of `node` from the entry of WRITERS for its type, or undefined where it has none. */
@@ -53,19 +54,24 @@ function writeOwn<T extends keyof NodeOfType>(r: Render, type: T, node: NodeOfTy
   return WRITERS[type]?.(node, r)
 }
 
-export function inlineHtml(r: Render, nodes: readonly Inline[]): string {
+/** The HTML of `nodes`, the children of an inline node when `nested`, or else the inline content of a leaf. */
+function inlineList(r: Render, nodes: readonly Inline[], nested: boolean): string {
   let out = ''
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
     // Most nodes are text, which needs no writer.
     if (node.type === 'text') out += escapeTextNode(r, node.value)
-    else if (!isBreak(node) || !isSkippedBreak(nodes, at)) out += writeOwn(r, node.type, node) ?? ''
+    else if (!isBreak(node) || !isSkippedBreak(nodes, at, nested)) out += writeOwn(r, node.type, node) ?? ''
   }
   return out
 }
 
+export function inlineHtml(r: Render, nodes: readonly Inline[]): string {
+  return inlineList(r, nodes, false)
+}
+
 function children(r: Render, node: InlineParent): string {
-  return inlineHtml(r, node.children)
+  return inlineList(r, node.children, true)
 }
 
 function element(name: string, parts: TagParts = {}): InlineWriter {
@@ -311,7 +317,7 @@ function captionNumber(node: CaptionNumberNode, r: Render): string {
 function ruby(node: RubyNode, r: Render): string {
   let html = ''
   for (const pair of node.pairs) {
-    html += `${inlineHtml(r, pair.base)}<rp>(</rp><rt>${inlineHtml(r, pair.annotation)}</rt><rp>)</rp>`
+    html += `${inlineList(r, pair.base, true)}<rp>(</rp><rt>${inlineList(r, pair.annotation, true)}</rt><rp>)</rp>`
   }
   return `<ruby${attributes(r, node, {})}>${html}</ruby>`
 }
@@ -327,7 +333,7 @@ function inlineExtension(node: InlineExtensionNode, r: Render): string {
   const rendered = r.renderExtension(node)
   if (rendered !== null) return rendered
   loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
-  return inlineHtml(r, node.fallback ?? node.children)
+  return inlineList(r, node.fallback ?? node.children, true)
 }
 
 const WRITERS: NodeHandlers<string, Render> = {

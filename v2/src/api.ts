@@ -8,7 +8,7 @@ import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
 import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { utf8Length } from './positions.ts'
-import { applyProfile } from './profile.ts'
+import { applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
 import { applyExtensions } from './extensions/claims.ts'
@@ -84,25 +84,34 @@ function inputStage(input: string | DocumentNode, settings: Settings): ParsedTre
     return applyExtensions(buildSource(input, settings.sourceLines, null, null, settings.extensions.length > 0), settings.extensions)
   }
   validateTree(input, undefined, undefined, settings.extensions)
-  // A profile replaces nodes, and the tree of the caller keeps its own.
-  return { document: profileRule(settings) === NO_PROFILE ? input : structuredClone(input), facts: null }
+  return { document: input, facts: null }
 }
 
-/** The resolve stage: the profile of `settings` is applied, then the tree is resolved in place. */
+/** The resolve stage: the tree is resolved in place. C2-H-121: the profile waits for the render. */
 function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const rule = profileRule(settings)
   const losses: Findings = { entries: [], nodes: [] }
-  if (rule !== NO_PROFILE) applyProfile(parsed.document, settings.profile, rule, losses)
   const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols)
   // A degraded node turns source that the inline scan did not read into text.
   const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
   return { document: parsed.document, settings, resolution, losses, bidi }
 }
 
-/** The render stage. It writes the resolved tree and changes nothing in it, so it can run more than once. */
+/**
+ * The render stage. The profile degrades nodes for this render only, and every list it changed is put
+ * back, so the resolved tree is the same afterwards and the stage can run more than once.
+ */
 function renderStage(resolved: ResolvedTree): { html: string, losses: Findings } {
+  const { document, settings } = resolved
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
-  return renderDocument(resolved.document, resolved.settings, resolved.resolution, losses, resolved.bidi)
+  const rule = profileRule(settings)
+  if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi)
+  const run = applyProfile(document, settings.profile, rule, losses)
+  try {
+    return renderDocument(document, settings, liveResolution(resolved.resolution, run.gone), losses, resolved.bidi)
+  } finally {
+    run.restore()
+  }
 }
 
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */

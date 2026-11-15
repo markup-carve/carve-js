@@ -13,7 +13,7 @@ import {
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
-import { DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
+import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
 import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
@@ -22,16 +22,16 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { orderedDelimiter, trimEnd } from './lines.ts'
+import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
 import { lineFeedAt, trimSpaces } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
-import { addParseFindings, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
+import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
 import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
 import { type BlockNode, buildTree } from './tree.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
-import { isAsciiNameCharacter } from './unicode.ts'
+import { isAsciiNameCharacter, withoutUnpairedSurrogates } from './unicode.ts'
 
 /** A child of the document or of a block container: a block, or a definition or frontmatter, which the document alone takes. */
 type DocumentChild = DocumentNode['children'][number]
@@ -110,6 +110,19 @@ function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
   return { type: 'frontmatter', format, value: bodyValue(src, node.spans!) }
 }
 
+/**
+ * C2-B-122: further words on the opener do not stop the block from opening. C2-B-105: an attribute block
+ * behind a fence language or an admonition name is reported as such.
+ */
+function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named: boolean): void {
+  if (!info.extra) return
+  const src = ctx.src
+  const lineEnd = lineFeedAt(src, node.start)
+  const at = info.extraStart
+  const attribute = named && src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(src, at, lineEnd) > at
+  ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
+}
+
 function codeNode(ctx: TreeContext, node: BlockNode): Block {
   const src = ctx.src
   if ((node.flags & FLAG_DELIMITED) !== 0) return delimitedTableNode(ctx, node)
@@ -123,7 +136,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
     return raw
   }
   const out: CodeBlockNode = { type: 'code_block', value }
-  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  noteFurtherWords(ctx, node, out, info, word !== '')
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) {
     const value = openerTitle(src, info.titleStart, info.titleEnd)
@@ -242,7 +255,12 @@ interface DivHead {
 
 function divHead(ctx: TreeContext, info: OpenerInfo): DivHead {
   const head: DivHead = {}
-  if (info.titleStart >= 0) head.title = captionChildren(ctx, info.titleStart, info.titleEnd)
+  if (info.titleStart >= 0) {
+    const title = captionChildren(ctx, info.titleStart, info.titleEnd)
+    // C2-I-098: the title of a div is inline flow.
+    if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, title)
+    head.title = title
+  }
   if (info.labelStart >= 0) head.groupLabel = ctx.src.slice(info.labelStart, info.labelEnd)
   return head
 }
@@ -266,8 +284,7 @@ function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
     const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
     out = { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
   }
-  // C2-B-122: further words on the opener do not stop the div from opening.
-  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  noteFurtherWords(ctx, node, out, info, out.type === 'admonition')
   if (name !== '') ctx.sourceNames?.set(out, name)
   return out
 }
@@ -391,8 +408,11 @@ function dropPositions(nodes: readonly Node[]): void {
   }
 }
 
-/** The index of the caption number mark in the value of a top-level text node that starts at `start` in the source, or -1. */
-function numberMarkIndex(src: string, start: number, value: string): number {
+/**
+ * The source offset of the caption number mark in the value of a top-level text node that starts at
+ * `start` in the source, or -1. `found` takes its index in the value.
+ */
+function numberMarkOffset(src: string, start: number, value: string, found: { at: number }): number {
   let at = start
   for (let index = 0; index < value.length; index++, at++) {
     // C2-A-041: an escaped character is part of the text, and `\#` is no mark.
@@ -400,25 +420,32 @@ function numberMarkIndex(src: string, start: number, value: string): number {
     if (escaped) at++
     if (escaped || value[index] !== '#') continue
     // A character that starts no tag name follows it, or nothing does.
-    if (index + 1 === value.length || !isAsciiNameCharacter(value.charCodeAt(index + 1))) return index
+    if (index + 1 === value.length || !isAsciiNameCharacter(value.charCodeAt(index + 1))) {
+      found.at = index
+      return at
+    }
   }
   return -1
 }
 
-/** Splits the first top-level text node that holds the mark around a `caption_number` node. */
+/**
+ * Splits the first top-level text node that holds the mark around a `caption_number` node. The text
+ * on either side is one slice of the source, so it keeps a position (C2-A-138); the mark has none (C2-A-158).
+ */
 function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
     if (child.type !== 'text') continue
     const value = child.value
-    const start = child.pos?.startOffset ?? -1
+    const pos = child.pos
     // A text node with no position was merged from pieces, and its source is not at hand: it holds no mark.
-    const index = start < 0 ? -1 : numberMarkIndex(ctx.src, start, value)
-    if (index < 0) continue
+    const index = { at: -1 }
+    const mark = pos === undefined ? -1 : numberMarkOffset(ctx.src, pos.startOffset, value, index)
+    if (pos === undefined || mark < 0) continue
     const parts: Inline[] = []
-    if (index > 0) addText(ctx, parts, value.slice(0, index), -1, -1)
+    if (index.at > 0) addText(ctx, parts, value.slice(0, index.at), pos.startOffset, mark)
     parts.push({ type: 'caption_number' })
-    if (index + 1 < value.length) addText(ctx, parts, value.slice(index + 1), -1, -1)
+    if (index.at + 1 < value.length) addText(ctx, parts, value.slice(index.at + 1), mark + 1, pos.endOffset)
     children.splice(at, 1, ...parts)
     return
   }
@@ -580,8 +607,8 @@ export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
   collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null,
 ): ParsedTree {
-  // C2-B-218: U+0000 is read as U+FFFD. Both are one UTF-16 unit, so every string offset stays.
-  const text = src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src
+  // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
+  const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
   const blocks = acquireState()
   const inline = acquireInlineState()
   inline.bidi = false

@@ -926,7 +926,9 @@ describe('one-line constructs', () => {
     expect(blocks('$$`x`{.c}  ')).toBe('math"$$`x`{.c}  "')
     expect(blocks('$$`x` y')).toBe('p"$$`x` y"')
     expect(blocks('$$`x`', 'y')).toBe('p"$$`x`|y"')
-    expect(blocks('![a [b]](c (d))')).toBe('img"![a [b]](c (d))"')
+    expect(blocks('![a [b]](c(d))')).toBe('img"![a [b]](c(d))"')
+    // C2-I-067: a space ends the destination, so this tail is no tail.
+    expect(blocks('![a [b]](c (d))')).toBe('p"![a [b]](c (d))"')
     expect(blocks('[a](b)')).toBe('p"[a](b)"')
   })
 })

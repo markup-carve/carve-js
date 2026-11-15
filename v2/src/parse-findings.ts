@@ -5,19 +5,25 @@ import { type Node } from './ast.ts'
 import { CR, LF, SPACE, TAB } from './chars.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { CODE, COMMENT_BLOCK, DIV, FRONTMATTER, LINE_BLOCK } from './kinds.ts'
-import { lineFeedAt } from './source.ts'
+import { braceBlocksEnd } from './lines.ts'
+import { readOpenerInfo } from './opener.ts'
+import { isSpaceOrTab, lineFeedAt } from './source.ts'
 import type { BlockNode } from './tree.ts'
 
 export const UNCLOSED = 0
 export const TITLE_SYNTAX = 1
 export const DELIMITED_MALFORMED = 2
+export const ATTRIBUTE_FALLBACK = 3
 
 /** A finding noted while the tree is built: what it is, the public node it is about and the block it came from. */
 export interface ParseNote {
   what: number
   node: Node
   block: BlockNode
-  /** For TITLE_SYNTAX: where the opener text that is no word, title or label starts; -1 for a raw fence. */
+  /**
+   * For TITLE_SYNTAX: where the opener text that is no word, title or label starts; -1 for a raw fence.
+   * For ATTRIBUTE_FALLBACK: where the attribute block starts.
+   */
   from: number
 }
 
@@ -90,6 +96,12 @@ function splitLabel(text: string): [string, string] {
   return [text.slice(0, open).trim(), text.slice(open)]
 }
 
+/** C2-B-117: a tab or a second space behind the run of a fence leaves the fence with no language. */
+function misspaced(src: string, runEnd: number): boolean {
+  const code = src.charCodeAt(runEnd)
+  return code === TAB || (code === SPACE && isSpaceOrTab(src.charCodeAt(runEnd + 1)))
+}
+
 /** C2-B-122: the opener with its further words read as the quoted title the author meant. */
 function titleMessage(src: string, note: ParseNote): string {
   const block = note.block
@@ -97,16 +109,38 @@ function titleMessage(src: string, note: ParseNote): string {
   const lineEnd = lineFeedAt(src, block.start)
   const line = src.slice(block.start + run.length, lineEnd).trim()
   const space = line.search(/[ \t]/)
-  const type = space < 0 ? line : line.slice(0, space)
+  // C2-B-117, C2-B-119: the word ends where its characters end, so the further words may be glued to it.
+  const info = readOpenerInfo(src, block.start + run.length)
+  const word = info.wordStart < 0 ? '' : src.slice(info.wordStart, info.wordEnd)
+  const type = note.from >= 0 ? word : space < 0 ? line : line.slice(0, space)
   const rest = note.from < 0 ? (space < 0 ? '' : line.slice(space).trim()) : src.slice(note.from, lineEnd).trim()
   const [text, label] = note.from < 0 ? [rest, ''] : splitLabel(rest)
+  const opener = type === '' ? run : `${run} ${type}`
   if (CURLY_QUOTES.includes(text.charAt(0))) {
     const title = text.slice(1, CURLY_QUOTES.includes(text.charAt(text.length - 1)) ? -1 : undefined)
-    return `The title after "${type}" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before Carve `
-      + `parsed it. A fence title needs straight double quotes: ${run} ${type} "${title}"${label}.`
+    return `The title after "${type || run}" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before `
+      + `Carve parsed it. A fence title needs straight double quotes: ${opener} "${title}"${label}.`
   }
-  return `Text after the "${type}" fence type must be a quoted "title" or a [label]; unquoted it is not read as a title, and the `
-    + `block opens. Did you mean ${run} ${type} "${text}"${label}?`
+  if (type === '' && block.kind === CODE && misspaced(src, block.start + run.length)) {
+    return 'The whitespace in this fence opener is not valid: at most one space follows the fence, and the parts of the info string '
+      + `are separated by spaces, never tabs. The block opens with no language (use: "${run} ${line}").`
+  }
+  return `Text after the "${type || run}" fence type must be a quoted "title" or a [label]; unquoted it is not read as a title, and `
+    + `the block opens. Did you mean ${opener} "${text}"${label}?`
+}
+
+/** C2-B-105: an attribute block after a fence language or an admonition name, which the block does not take. */
+function attributeMessage(src: string, note: ParseNote): string {
+  const lineEnd = lineFeedAt(src, note.block.start)
+  const blockEnd = braceBlocksEnd(src, note.from, lineEnd)
+  const attributes = src.slice(note.from, blockEnd)
+  const opener = `${src.slice(note.block.start, note.from)}${src.slice(blockEnd, lineEnd)}`.trim()
+  if (note.block.kind === CODE) {
+    return `A code fence carries no inline attributes, so "${attributes}" after the info string is not valid. The block opens `
+      + `without them (use: "${attributes}" on its own line directly above the fence, then "${opener}").`
+  }
+  return `An admonition carries no inline attributes, so "${attributes}" after the name is not valid. The block opens without `
+    + `them (use: "${attributes}" on its own line directly above the opener, then "${opener}").`
 }
 
 /** Adds the findings of `notes`, in document order, to `findings`. */
@@ -117,6 +151,9 @@ export function addParseFindings(src: string, notes: readonly ParseNote[], findi
     if (note.what === UNCLOSED) {
       const [code, message] = unclosedMessage(src, note)
       addFinding(findings, note.node, { code, severity: 'error', channel: 'parse', message })
+    } else if (note.what === ATTRIBUTE_FALLBACK) {
+      const message = attributeMessage(src, note)
+      addFinding(findings, note.node, { code: 'fence-opener-fallback', severity: 'error', channel: 'parse', message })
     } else if (note.what === TITLE_SYNTAX) {
       const message = titleMessage(src, note)
       addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message })

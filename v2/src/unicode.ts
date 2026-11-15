@@ -109,3 +109,16 @@ export function holdsBidiControl(text: string, start: number, end: number): bool
   }
   return false
 }
+
+// ES2024 methods, in Node since 20 (the `engines` floor); the ES2022 lib of the build does not declare them.
+declare global {
+  interface String {
+    isWellFormed(): boolean
+    toWellFormed(): string
+  }
+}
+
+/** C2-B-218: `text` with each unpaired surrogate read as U+FFFD. Both are one code unit, so every offset stays. */
+export function withoutUnpairedSurrogates(text: string): string {
+  return text.isWellFormed() ? text : text.toWellFormed()
+}

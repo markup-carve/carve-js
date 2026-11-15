@@ -10,7 +10,7 @@ import {
   ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
 } from './inline-kinds.ts'
 import {
-  type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_CLOSE,
+  closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_CLOSE,
   TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
 import { DEPTH_CAP } from './inline-tables.ts'
@@ -45,7 +45,7 @@ function startsLineComment(state: InlineState, p: number): boolean {
  * C2-I-077: a line comment that starts inside the label takes its closer.
  */
 function labelEnd(state: InlineState, pos: number): number {
-  if (state.labelCloserMissing) return NONE
+  if (closerMissing(state.labelCloserMissingFrom, pos)) return NONE
   const text = state.text
   for (let p = pos; p < state.end; p++) {
     const code = text.charCodeAt(p)
@@ -54,7 +54,7 @@ function labelEnd(state: InlineState, pos: number): number {
     else if (code === PERCENT && startsLineComment(state, p)) return NONE
   }
   // No later label can find a closer either.
-  state.labelCloserMissing = true
+  state.labelCloserMissingFrom = pos
   return NONE
 }
 

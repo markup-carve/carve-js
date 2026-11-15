@@ -11,10 +11,10 @@ import {
 import type { NodeLayout } from './layout.ts'
 import { columnOf, lineEndOf, lineStartOf, readPrefix } from './layout-lines.ts'
 import {
-  bulletMarkerEnd, descriptionMarkEnd, footnoteMarkerEnd, isWord, orderedDelimiter, orderedMarkerEnd, skipSpaces,
+  bulletMarkerEnd, descriptionMarkEnd, footnoteMarkerEnd, orderedDelimiter, orderedMarkerEnd, skipSpaces,
   taskBoxEnd, trimEnd,
 } from './lines.ts'
-import { definitionLabel } from './opener.ts'
+import { definitionLabel, openerWord } from './opener.ts'
 import { isSpaceOrTab } from './source.ts'
 import { type BlockNode } from './tree.ts'
 import { HARD_BREAKS_CLASS } from './tree-tables.ts'
@@ -193,7 +193,7 @@ const divFacts: Measure = (src, node, origin, _quotes, facts) => {
 const codeFacts: Measure = (src, node, origin, _quotes, facts) => {
   if (node.type !== 'table') return setFence(src, origin, origin.aux, facts)
   // C2-L-023: a delimited table.
-  facts.sourceFormat = isWord(src, origin.start + origin.aux, lineEndOf(src, origin.start), 'tsv') ? 'tsv' : 'csv'
+  facts.sourceFormat = openerWord(src, origin.start + origin.aux) === 'tsv' ? 'tsv' : 'csv'
 }
 
 const MEASURES = new Map<number, Measure>([

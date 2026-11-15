@@ -321,13 +321,20 @@ function captionLine(r: Render, caption: CaptionNode, name: string, level: numbe
   line(r, level, `</${name}>`)
 }
 
+function tablePanel(r: Render, node: TableNode, level: number): void {
+  line(r, level, `<figure${tag(r, node, { base: PANEL_CLASSES, bare: true })}>`)
+  writeBlock(r, node.type, node, level + 1)
+  line(r, level, '</figure>')
+}
+
 function figureOf(r: Render, node: FigureNode | FigureGroupNode, level: number, base: readonly string[]): void {
   line(r, level, `<figure${tag(r, node, { base })}>`)
   const before = r.count
   const group = base === GROUP_CLASSES
   for (const child of node.children) {
-    // C2-H-064: each panel of a group.
+    // C2-H-064, C2-A-084: each panel of a group, a figure or a table; a table keeps its caption and attributes (C2-H-061).
     if (group && child.type === 'figure') figureOf(r, child, level + 1, PANEL_CLASSES)
+    else if (group && child.type === 'table') tablePanel(r, child, level + 1)
     else writeBlock(r, child.type, child, level + 1)
   }
   const caption = node.caption
@@ -406,7 +413,8 @@ function lineBlock(r: Render, node: LineBlockNode, level: number): void {
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: IncludeNode, level: number): void {
   loss(r, node, 'include-unresolved', `the include of ${node.path} was not expanded`)
-  line(r, level, `<p>${escapeText(includeSource(node))}</p>`)
+  // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
+  line(r, level, `<p${tag(r, node, { bare: true })}>${escapeText(includeSource(node))}</p>`)
 }
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */

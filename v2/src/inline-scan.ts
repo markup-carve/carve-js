@@ -2,7 +2,7 @@
 // then the delimiter stack, then the events with the attached attribute blocks.
 import {
   AT_SIGN, BACKSLASH, BACKTICK, BANG, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DOLLAR, HASH, LESS, LF,
-  PERCENT, SPACE,
+  PERCENT,
 } from './chars.ts'
 import {
   scanAtSign, scanBackslash, scanBacktick, scanBrace, scanColon, scanDollar, scanHash, scanLess, scanLineBreak,
@@ -91,28 +91,15 @@ function resetScan(state: InlineState): void {
   state.tokenLength = 0
   state.tokenEnd = 0
   state.bracketDepth = 0
-  state.commentCloserMissing = false
-  state.editorialCloserMissing = false
-  state.labelCloserMissing = false
+  state.commentCloserMissingFrom = NONE
+  state.editorialCloserMissingFrom = NONE
+  state.labelCloserMissingFrom = NONE
   state.xrefFailEnd = NONE
   state.doubleQuoteFailEnd = NONE
   state.singleQuoteFailEnd = NONE
   state.valueFailEnd = NONE
   state.tailStart = NONE
   state.tailEnd = NONE
-}
-
-/**
- * C2-I-002: spaces and tabs at the end of the content are not part of it, but a space that a
- * backslash escapes is (C2-I-011). A backslash escapes when an even number of backslashes stands before it.
- */
-function contentEnd(text: string): number {
-  let end = text.length
-  while (end > 0 && isSpaceOrTab(text.charCodeAt(end - 1))) end--
-  if (end === text.length || text.charCodeAt(end) !== SPACE) return end
-  let first = end
-  while (first > 0 && text.charCodeAt(first - 1) === BACKSLASH) first--
-  return (end - first) % 2 === 1 ? end + 1 : end
 }
 
 /**
@@ -126,7 +113,8 @@ export function scanInline(
 ): void {
   setContent(state, src, spans, from, to)
   const text = state.text
-  const end = contentEnd(text)
+  // C2-I-002: the content holds no spaces at the end of a line (setContent).
+  const end = text.length
   state.end = end
   state.baseDepth = baseDepth
   state.lineComments = lineComments

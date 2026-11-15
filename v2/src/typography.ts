@@ -101,14 +101,18 @@ function writeSmart(state: InlineState, start: number, end: number, kind: number
 
 /** C2-I-111: the dashes of a run of `length` hyphens at `pos`. */
 function writeDashes(state: InlineState, pos: number, length: number): void {
-  while (length > 0) {
-    const em = length % 3 === 0 || length % 2 !== 0
-    const size = em ? 3 : 2
-    state.smartKind = em ? SMART_EM_DASH : SMART_EN_DASH
-    writeSmart(state, pos, pos + size, state.smartKind)
-    pos += size
-    length -= size
+  // The rule decides the whole run, and once more for the rest behind a leading em dash: it is not asked per dash.
+  const mixed = length % 3 !== 0 && length % 2 !== 0
+  if (mixed) {
+    state.smartKind = SMART_EM_DASH
+    writeSmart(state, pos, pos + 3, SMART_EM_DASH)
+    pos += 3
+    length -= 3
   }
+  const em = length % 3 === 0
+  const size = em ? 3 : 2
+  state.smartKind = em ? SMART_EM_DASH : SMART_EN_DASH
+  for (; length > 0; pos += size, length -= size) writeSmart(state, pos, pos + size, state.smartKind)
 }
 
 /**

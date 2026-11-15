@@ -1,14 +1,14 @@
 // Line-shape tests. Each reads character codes of the source between `pos` and `end`
 // (the end of the line) and copies nothing.
-import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
+import { type AttributeMemo, type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
-  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
-  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
+  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
+  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
-import { isAsciiDigit } from './unicode.ts'
+import { isAsciiDigit, isWhitespace } from './unicode.ts'
 
 const MAX_HEADING_LEVEL = 6
 const MAX_ORDERED_DIGITS = 9
@@ -42,7 +42,10 @@ function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: n
   return skipSpaces(src, contentStart, end) < end ? contentStart : -1
 }
 
-/** Offset after the brace block at `pos`, or -1. A quoted value may hold a closing brace. */
+/**
+ * Offset after the brace block at `pos`, or -1. A quoted value may hold a closing brace, and an unquoted
+ * one an opening brace (C2-I-032); whether the block is valid is read by the attribute grammar.
+ */
 function braceBlockEnd(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACE_OPEN) return -1
   const first = src.charCodeAt(pos + 1)
@@ -50,7 +53,6 @@ function braceBlockEnd(src: string, pos: number, end: number): number {
   if (first === PERCENT || first === BRACE_OPEN || first === BRACE_CLOSE) return -1
   for (let p = pos + 1; p < end; p++) {
     const code = src.charCodeAt(p)
-    if (code === BRACE_OPEN) return -1
     if (code === BRACE_CLOSE) return p + 1
     if (code !== QUOTE_MARK) continue
     const after = quotedEnd(src, p, end)
@@ -69,14 +71,34 @@ export function braceBlocksEnd(src: string, pos: number, end: number): number {
   }
 }
 
-/** C2-B-090: one or more glued brace blocks, each a valid attribute block, alone on the line. */
-export function isAttributeLine(src: string, pos: number, end: number): boolean {
-  const blocksEnd = braceBlocksEnd(src, pos, end)
-  if (blocksEnd === pos || skipSpaces(src, blocksEnd, end) !== end) return false
+/** True when the brace block `[pos, blockEnd)` is a valid attribute block; in a cell prefix it may start with an alignment mark. */
+function isValidBlock(src: string, pos: number, blockEnd: number, memo: AttributeMemo, cell: boolean): boolean {
+  const first = src.charCodeAt(pos + 1)
+  // C2-B-182: the mark is read before the parts, and a block of the mark alone is valid.
+  const marked = cell && (first === LESS || first === GREATER || first === TILDE)
+  if (marked && skipSpaces(src, pos + 2, blockEnd) === blockEnd - 1) return true
+  return readAttributeBlock(src, marked ? pos + 1 : pos, blockEnd, memo, null) === blockEnd
+}
+
+/**
+ * Offset after the glued attribute blocks at `pos`, or `pos` when there are none. One block that is no
+ * valid attribute block makes the whole run none (C2-I-034), and so does an empty one (C2-I-040).
+ */
+export function attributeBlocksEnd(src: string, pos: number, end: number, cell = false): number {
   const memo = emptyMemo()
   let p = pos
-  while (p >= 0 && p < blocksEnd) p = readAttributeBlock(src, p, blocksEnd, memo, null)
-  return p === blocksEnd
+  for (;;) {
+    const blockEnd = braceBlockEnd(src, p, end)
+    if (blockEnd < 0) return p
+    if (!isValidBlock(src, p, blockEnd, memo, cell)) return pos
+    p = blockEnd
+  }
+}
+
+/** C2-B-090: one or more glued brace blocks, each a valid attribute block, alone on the line. */
+export function isAttributeLine(src: string, pos: number, end: number): boolean {
+  const blocksEnd = attributeBlocksEnd(src, pos, end)
+  return blocksEnd > pos && skipSpaces(src, blocksEnd, end) === end
 }
 
 /** C2-B-156, C2-B-201, C2-B-206: an include directive alone on its line. */
@@ -88,7 +110,7 @@ export function isIncludeLine(src: string, pos: number, end: number): boolean {
 export function bulletMarkerEnd(src: string, pos: number, end: number): number {
   const code = src.charCodeAt(pos)
   if (code !== HYPHEN && code !== STAR) return -1
-  return afterMarkerSpace(src, braceBlocksEnd(src, pos + 1, end), end, 1)
+  return afterMarkerSpace(src, attributeBlocksEnd(src, pos + 1, end), end, 1)
 }
 
 function isLower(code: number): boolean {
@@ -174,7 +196,7 @@ export function orderedDelimiter(src: string, pos: number, end: number): number 
 export function orderedMarkerEnd(src: string, pos: number, delimiter: number, end: number): number {
   // C2-B-040: an uppercase marker and a dot needs two spaces, so an initial or an abbreviation stays text.
   const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && isUpper(src.charCodeAt(pos)) ? 2 : 1
-  const content = afterMarkerSpace(src, braceBlocksEnd(src, delimiter + 1, end), end, spaces)
+  const content = afterMarkerSpace(src, attributeBlocksEnd(src, delimiter + 1, end), end, spaces)
   // C2-B-043: a bare dot before a dot and a space is an ellipsis written with spaces, no marker.
   const ellipsis = content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE
   if (delimiter === pos && ellipsis) return -1
@@ -417,15 +439,47 @@ function pairEnd(src: string, pos: number, end: number, open: number, close: num
 }
 
 /** C2-B-197: exactly one image form, `![alt](destination)` or `![alt][label]`, with optional glued brace blocks. */
+/** C2-I-068: the offset behind a link tail whose title opens at `pos`: a quoted title, spaces and `)`; or -1. */
+function titleTailEnd(src: string, pos: number, end: number): number {
+  const quote = src.charCodeAt(pos)
+  if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return -1
+  const after = quotedEnd(src, pos, end, quote)
+  if (after < 0) return -1
+  const p = skipSpaces(src, after, end)
+  return p < end && src.charCodeAt(p) === PAREN_CLOSE ? p + 1 : -1
+}
+
+/**
+ * C2-I-066 to C2-I-069: the offset behind the link tail whose `(` is at `pos`, or -1. The destination
+ * runs to whitespace with its parentheses balanced or escaped, and a title stands after exactly one space.
+ */
+function linkTailEnd(src: string, pos: number, end: number): number {
+  let depth = 0
+  let p = pos + 1
+  for (; p < end && !isWhitespace(src.charCodeAt(p)); p++) {
+    const code = src.charCodeAt(p)
+    if (code === PAREN_OPEN) depth++
+    else if (code === PAREN_CLOSE && depth-- === 0) return p + 1
+    else if (code === BACKSLASH && isDestinationEscape(src.charCodeAt(p + 1))) p++
+  }
+  return depth === 0 && p < end && src.charCodeAt(p) === SPACE ? titleTailEnd(src, p + 1, end) : -1
+}
+
+/** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
+function isDestinationEscape(code: number): boolean {
+  return code === PAREN_OPEN || code === PAREN_CLOSE || code === BACKSLASH
+}
+
 export function isImageOnly(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
   let p = pairEnd(src, pos + 1, end, BRACKET_OPEN, BRACKET_CLOSE)
   if (p < 0 || p >= end) return false
   const code = src.charCodeAt(p)
-  if (code === PAREN_OPEN) p = pairEnd(src, p, end, PAREN_OPEN, PAREN_CLOSE)
+  // C2-B-197: the shape is that of the inline form, so a tail the inline pass rejects makes no block image line.
+  if (code === PAREN_OPEN) p = linkTailEnd(src, p, end)
   else if (code === BRACKET_OPEN) p = pairEnd(src, p, end, BRACKET_OPEN, BRACKET_CLOSE)
   else return false
-  return p >= 0 && skipSpaces(src, braceBlocksEnd(src, p, end), end) === end
+  return p >= 0 && skipSpaces(src, attributeBlocksEnd(src, p, end), end) === end
 }
 
 /** C2-B-198: exactly one display math span, `$$` glued to a code span, with optional glued brace blocks. */
@@ -441,7 +495,7 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
     }
     const run = runLength(src, p, end, BACKTICK)
     p += run
-    if (run === open) return skipSpaces(src, braceBlocksEnd(src, p, end), end) === end
+    if (run === open) return skipSpaces(src, attributeBlocksEnd(src, p, end), end) === end
   }
   return false
 }
@@ -465,11 +519,6 @@ export function isFrontmatterOpener(src: string, pos: number, end: number): bool
 export function isFrontmatterCloser(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   return skipSpaces(src, pos + FRONTMATTER_RUN, end) === end
-}
-
-/** True when the info string of the fence whose run ends at `pos` is `=` and a format name (C2-B-116). */
-export function isRawInfo(src: string, pos: number, end: number): boolean {
-  return pos + 1 < end && src.charCodeAt(pos) === EQUALS && (isLower(src.charCodeAt(pos + 1)) || isUpper(src.charCodeAt(pos + 1)))
 }
 
 function startsWith(src: string, pos: number, end: number, word: string): boolean {
@@ -606,8 +655,14 @@ export function rowAttributeStart(src: string, pipe: number, end: number): numbe
 
 function rowTailValid(src: string, pipe: number, end: number): boolean {
   const attribute = rowAttributeStart(src, pipe, end)
-  const tail = skipSpaces(src, attribute < 0 ? pipe + 1 : braceBlocksEnd(src, attribute, end), end)
-  return tail === end || (isLineComment(src, tail, end) && src.indexOf('|', tail) < 0)
+  const behind = attribute < 0 ? pipe + 1 : attributeBlocksEnd(src, attribute, end)
+  const tail = skipSpaces(src, behind, end)
+  if (tail === end) return true
+  // C2-B-133: a line comment stands after whitespace; `%%` glued to the pipe or to the row attribute is text.
+  if (tail === behind) return false
+  // C2-B-166: the closing pipe is the last pipe of the line, so a pipe in the comment ends no row; the search stops at the line end.
+  const later = src.indexOf('|', tail)
+  return isLineComment(src, tail, end) && (later < 0 || later >= end)
 }
 
 /**

@@ -1,5 +1,6 @@
-// The profiles of C2-H-129 and C2-H-163: a node outside the profile is replaced by its degraded
-// form (C2-H-165) before the tree is resolved, so that a reference or a caption that is gone takes no number.
+// The profiles of C2-H-129 and C2-H-163: a node outside the profile is written in its degraded form
+// (C2-H-165). The profile is a render option and changes no tree (C2-H-121): the render applies it to the
+// resolved tree, writes it, and puts every list back, so resolution has seen the whole tree.
 import {
   type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, type ExtensionDeclaration,
   forEachSlot, type HeadingNode, type Inline,
@@ -11,12 +12,25 @@ import { NODE_TABLE } from './ast-validate.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { includeSource } from './include.ts'
 import { type ProfileRule } from './render-tables.ts'
+import { type Note, type Resolution } from './resolve.ts'
 
 interface Filter {
   declarations: readonly ExtensionDeclaration[]
   name: string
   rule: ProfileRule
   findings: Findings
+  /** Each list the filter changed, with what it held before. */
+  undo: [Node[], Node[]][]
+  /** The footnote references and inline footnotes inside degraded nodes: they write no reference. */
+  gone: Set<Node>
+}
+
+/** What a profile did to a tree for one render. */
+export interface ProfileRun {
+  /** The footnote references and inline footnotes that the degraded forms took out. */
+  readonly gone: ReadonlySet<Node>
+  /** Puts every list the profile changed back as it was. */
+  restore(): void
 }
 
 // A node of these types renders nothing, so it has no degraded form and stays as it is.
@@ -144,9 +158,52 @@ function degradedBlocks(node: Node): ParagraphNode[] {
   return out
 }
 
+/** The backtick run that fences `value`: one longer than the longest run in it (C2-I-015). */
+function fenceOf(value: string): string {
+  let longest = 0
+  let run = 0
+  for (let at = 0; at < value.length; at++) {
+    run = value.charCodeAt(at) === 96 ? run + 1 : 0
+    if (run > longest) longest = run
+  }
+  return '`'.repeat(longest + 1)
+}
+
+/** A verbatim value in its code span form behind `prefix`, padded where C2-I-016 would take a space or a backtick would join the run. */
+function fenced(prefix: string, value: string): string {
+  const fence = fenceOf(value)
+  const edge = value.startsWith('`') || value.endsWith('`') || (value.startsWith(' ') && value.endsWith(' ') && value.trim() !== '')
+  const pad = edge ? ' ' : ''
+  return `${prefix}${fence}${pad}${value}${pad}${fence}`
+}
+
+// C2-H-165: an inline node with no children, outside the profile itself, is written as its source text.
+const SOURCE_TEXT: NodeHandlers<string> = {
+  math: (node) => fenced(node.display ? '$$' : '$', node.value),
+  autolink: (node) => `<${node.text ?? node.href}>`,
+  raw_inline: (node) => `${fenced('', node.value)}{=${node.format}}`,
+  code: (node) => fenced('', node.value),
+  literal_inline: (node) => fenced('!', node.value),
+  tag: (node) => `#${node.name}`,
+  // C2-H-165 names "a comment"; an editorial comment is read as one, as C2-H-143 lists both as giving nothing.
+  critic_comment: () => '',
+}
+
+function sourceText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): string | undefined {
+  return SOURCE_TEXT[type]?.(node, undefined)
+}
+
 function degradedInline(node: Inline): TextNode[] {
-  const text = inlineText(node)
+  const text = sourceText(node.type, node) ?? inlineText(node)
   return text === '' ? [] : [{ type: 'text', value: text }]
+}
+
+/** Notes the footnote references and inline footnotes inside the degraded node `node`. */
+function noteGone(filter: Filter, node: Node): void {
+  if (node.type === 'footnote_ref' || node.type === 'inline_footnote') filter.gone.add(node)
+  forEachSlot(node, (nodes) => {
+    for (const child of nodes) noteGone(filter, child)
+  }, undefined, filter.declarations)
 }
 
 /** An item stays an item, as its list expects. */
@@ -179,11 +236,12 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
       // filtered where the profile has notes; elsewhere no reference is left to write it.
       if (node.type === 'footnote' && !isOutside(filter, node, block, depth)) filterNode(filter, node, depth + 1)
     } else if (isOutside(filter, node, block, depth)) {
-      // C2-H-165: one report for the degraded node; the nodes inside it are not reported again.
+      // C2-H-165: one report for the degraded node, which stays in the tree; the nodes inside it are not reported again.
       const out = degrade(node)
       const message = `Degraded a construct the profile "${filter.name}" does not allow: ${node.type}`
       const entry = { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message } as const
-      addFinding(filter.findings, out[0] ?? null, entry)
+      addFinding(filter.findings, node, entry)
+      noteGone(filter, node)
       for (const part of out) kept.push(part)
       changed = true
       continue
@@ -193,6 +251,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
     kept.push(node)
   }
   if (!changed) return
+  filter.undo.push([list, [...list]])
   list.length = 0
   for (const node of kept) list.push(node)
 }
@@ -239,8 +298,39 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
 
 /**
  * C2-H-129: replaces every node of `document` that is outside the profile by its degraded form,
- * in place, and reports each one. The children of the document stand at depth 0, as in 0.1.
+ * in place, and reports each one. The children of the document stand at depth 0, as in 0.1. The
+ * render calls `restore` when it has written the tree (C2-H-121).
  */
-export function applyProfile(document: DocumentNode, name: string, rule: ProfileRule, findings: Findings): void {
-  filterNode({ name, rule, findings, declarations: document.extensions ?? [] }, document, 0)
+export function applyProfile(document: DocumentNode, name: string, rule: ProfileRule, findings: Findings): ProfileRun {
+  const filter: Filter = { name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set() }
+  filterNode(filter, document, 0)
+  return {
+    gone: filter.gone,
+    restore: () => {
+      // The lists are put back from the last change on, so a list inside a degraded part comes back before its parent.
+      for (const [list, before] of [...filter.undo].reverse()) {
+        list.length = 0
+        for (const node of before) list.push(node)
+      }
+    },
+  }
+}
+
+/**
+ * The resolution as the render sees it under a profile: a note keeps its number, and only the
+ * references that the degraded forms left write a backlink. A note with none writes nothing.
+ */
+export function liveResolution(resolution: Resolution, gone: ReadonlySet<Node>): Resolution {
+  if (gone.size === 0) return resolution
+  const goneIds = new Set<string>()
+  for (const node of gone) {
+    const id = resolution.refIds.get(node)
+    if (id !== undefined) goneIds.add(id)
+  }
+  const notes: Note[] = []
+  for (const note of resolution.notes) {
+    const refIds = note.refIds.filter((id) => !goneIds.has(id))
+    if (refIds.length > 0) notes.push({ ...note, refIds })
+  }
+  return { ...resolution, notes }
 }
