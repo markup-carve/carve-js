@@ -2632,5 +2632,14 @@
       "# a\u007fb\n\n# a!\u007f?b\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-249",
+    "title": "The inline math class key uses the canonical lowercase name",
+    "class": "report",
+    "inputs": [
+      "$`a`{CLASS=c}\n"
+    ],
+    "outputs": []
   }
 ]

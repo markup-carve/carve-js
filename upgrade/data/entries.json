@@ -1501,6 +1501,12 @@
       "name": "rejected HTML control character is replaced",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-249",
+      "name": "inline math class key is canonicalized",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

@@ -234,8 +234,13 @@ function longLanguageTag(input: string, expected: string, actual: string): boole
   return false
 }
 
+function mathClassCase(input: string, expected: string, actual: string): boolean {
+  return input.includes('{CLASS=') && expected.includes('<span CLASS="math') && actual.includes('<span class="math')
+}
+
 function inlineMatch(input: string, expected: string, actual: string): string | null {
   if (longLanguageTag(input, expected, actual)) return 'U-240'
+  if (mathClassCase(input, expected, actual)) return 'U-249'
   return inlinePunctuationMatch(input, expected) ?? inlineDelimiterMatch(input, expected, actual)
 }
 

@@ -223,5 +223,10 @@
     "id": "U-248",
     "input": "c\u000bd\n",
     "message": "C2-H-176: the HTML renderer replaces a rejected control character with U+FFFD"
+  },
+  {
+    "id": "U-249",
+    "input": "$`a`{CLASS=c}\n",
+    "message": "C2-H-009 and C2-H-013: the structural class attribute is written with the canonical lowercase name"
   }
 ]
