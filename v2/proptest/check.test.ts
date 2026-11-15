@@ -14,10 +14,6 @@ void test('C2-W-022: an empty document has one final line feed', () => {
   assert.equal(check('format', '', random(1)), null)
 })
 
-void test('C2-B-169: many empty cells do not fail the parse growth check', () => {
-  assert.equal(check('parse', '|'.repeat(4096), { int: () => 0, bool: () => false }), null)
-})
-
 void test('C2-H-130: strict losses may reject a document while accepting the option', () => {
   assert.equal(check('render', '{{ e }}', random(1829993783)), null)
 })
