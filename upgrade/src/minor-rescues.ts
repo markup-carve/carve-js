@@ -393,6 +393,25 @@ function unresolvedReferenceBackslashes(output: string): Candidate[] {
   return found
 }
 
+function nestedDefinitionBoundary(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 2; at++) {
+    const head = lines[at] ?? ''
+    const marker = head.indexOf(' [')
+    if (!head.startsWith('* * ') || marker < 0 || !head.includes(']:', marker)) continue
+    const changed = [...lines]
+    changed[at] = head.slice(0, marker + 1) + '{% %}'
+    const next = lines[at + 1] ?? ''
+    if (next.trim() === ':') changed.splice(at + 1, 0, '')
+    else if (next === '%%' && (lines[at + 2] ?? '').trim() === ':') changed[at + 1] = ''
+    else continue
+    found.push(candidate('U-235', changed.join('\n'),
+      'the consumed definition became an empty comment and the colon kept its 0.1 boundary'))
+  }
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -420,7 +439,8 @@ export function rescueMinor(
     ...promotedImageAttributes(output),
     ...divBoundary(output),
     ...smartQuoteCandidates(output, expected),
-    ...unresolvedReferenceBackslashes(output)
+    ...unresolvedReferenceBackslashes(output),
+    ...nestedDefinitionBoundary(output)
   ]
   for (const item of candidates) {
     try {

@@ -1417,6 +1417,12 @@
       "name": "literal backslash run in unresolved reference",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-235",
+      "name": "nested item definition boundary",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

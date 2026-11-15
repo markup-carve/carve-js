@@ -2464,5 +2464,18 @@
       "a [t\\\\\\\\\\^[n]][nope] b\n",
       "[a\\\\\\\\\\\\\nb][missing]\n"
     ]
+  },
+  {
+    "id": "U-235",
+    "title": "Nested item definition boundary",
+    "class": "rewrite",
+    "inputs": [
+      "* * [d]: u\n  :\n",
+      "* * [d]: u\n%%\n:\n"
+    ],
+    "outputs": [
+      "* * {% %}\n\n  :\n",
+      "* * {% %}\n\n:\n"
+    ]
   }
 ]

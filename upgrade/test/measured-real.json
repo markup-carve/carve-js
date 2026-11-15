@@ -3087,5 +3087,49 @@
     "entries": [
       "U-234"
     ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item.md",
+    "line": 125,
+    "input": "* * [d]: u\n  :\n",
+    "check": "pass",
+    "entries": [
+      "U-235"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item.md",
+    "line": 166,
+    "input": "* * [d]: u\n%%\n:\n",
+    "check": "pass",
+    "entries": [
+      "U-235"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "tests/corpus/381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item-6.crv",
+    "line": 1,
+    "input": "* * [d]: u\n  :\n",
+    "check": "pass",
+    "entries": [
+      "U-235"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "tests/corpus/381-a-resumed-lazy-run-belongs-to-the-innermost-marker-line-item-8.crv",
+    "line": 1,
+    "input": "* * [d]: u\n%%\n:\n",
+    "check": "pass",
+    "entries": [
+      "U-235"
+    ]
   }
 ]
