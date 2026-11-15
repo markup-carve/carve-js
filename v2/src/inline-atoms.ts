@@ -154,7 +154,8 @@ function codeSpan(state: InlineState, start: number, run: number, kind: number, 
   if (state.cell) state.codeRunEnd = open
   const close = state.cell ? indexedClosingRun(state, open, open - run) : closingRun(text, open, state.end, open - run)
   if (close === NONE) {
-    if (state.cell) return start + 1
+    // C2-B-223: in a cell an unclosed span is text; C2-I-014, C2-I-119: the opener is the whole run, and the scan goes on behind it.
+    if (state.cell) return open
     // C2-I-017: the span runs to the end of the content, and trailing whitespace is dropped.
     let contentEnd = state.end
     while (contentEnd > open && isWhitespace(text.charCodeAt(contentEnd - 1))) contentEnd--

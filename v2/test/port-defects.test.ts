@@ -241,3 +241,20 @@ describe('C2-B-017/197: only a block image line takes a caption below a paragrap
     expect(types('![a][l]\n^ C\n\n[l]: u\n')).toEqual(['figure', 'link_reference_definition'])
   })
 })
+
+describe('C2-I-014/119: a failed opener in a cell is the whole run', () => {
+  const cell = (content: string): string => {
+    const html = render(`| ${content} | b |\n`)
+    return html.slice(html.indexOf('<td>') + 4, html.indexOf('</td>'))
+  }
+
+  it('C2-B-223: an unclosed run of two does not restart at its second backtick', () => {
+    expect(cell('a ``x`y')).toBe('a ``x`y')
+    expect(cell('a !``x`y')).toBe('a !``x`y')
+    expect(cell('a $``x`y')).toBe('a $``x`y')
+    expect(cell('a $$``x`y')).toBe('a $$``x`y')
+    expect(cell('a ```x``y`')).toBe('a ```x``y`')
+    expect(cell('``x`y`` z')).toBe('<code>x`y</code> z')
+    expect(cell('a `x')).toBe('a `x')
+  })
+})
