@@ -1405,6 +1405,12 @@
       "name": "table row after description body",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-233",
+      "name": "literal curly quote for old smart quote direction",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

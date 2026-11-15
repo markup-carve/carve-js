@@ -341,6 +341,44 @@ function divBoundary(output: string): Candidate[] {
   return found
 }
 
+function foldSmartQuotes(value: string): string {
+  return value.replaceAll('“', '"').replaceAll('”', '"').replaceAll('‘', "'").replaceAll('’', "'")
+}
+
+function unresolvedSymbolQuote(output: string): boolean {
+  return output.split('\n').some((line) => {
+    if (!line.startsWith(':')) return false
+    const end = line.indexOf(':', 1)
+    return end > 1 && (line[end + 1] === '"' || line[end + 1] === "'")
+  })
+}
+
+function bareQuotePositions(output: string): number[] {
+  const positions: number[] = []
+  for (let at = 0; at < output.length; at++) {
+    if ((output[at] === '"' || output[at] === "'") && output[at - 1] !== '\\') positions.push(at)
+  }
+  return positions
+}
+
+function smartQuoteCandidates(output: string, expected: string): Candidate[] {
+  if (!unresolvedSymbolQuote(output) || output.length > 200) return []
+  if (!compareHtml(foldSmartQuotes(expected), foldSmartQuotes(html02(output, false))).equal) return []
+  const positions = bareQuotePositions(output)
+  if (positions.length === 0 || positions.length > 6) return []
+  let forms = [output]
+  for (const at of positions) {
+    const next: string[] = []
+    for (const form of forms) {
+      const choices = form[at] === '"' ? ['"', '“', '”'] : ["'", '‘', '’']
+      for (const quote of choices) next.push(form.slice(0, at) + quote + form.slice(at + 1))
+    }
+    forms = next
+  }
+  return forms.filter((form) => form !== output).map((form) =>
+    candidate('U-233', form, 'the smart quote direction was written with a literal curly quote'))
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -366,7 +404,8 @@ export function rescueMinor(
     ...percentRunInsideBraceComment(output),
     ...noteItemFollower(output),
     ...promotedImageAttributes(output),
-    ...divBoundary(output)
+    ...divBoundary(output),
+    ...smartQuoteCandidates(output, expected)
   ]
   for (const item of candidates) {
     try {

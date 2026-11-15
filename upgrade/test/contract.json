@@ -2435,5 +2435,16 @@
     "outputs": [
       ":: t\n: para\n| a |\n"
     ]
+  },
+  {
+    "id": "U-233",
+    "title": "Literal curly quote for old smart quote direction",
+    "class": "rewrite",
+    "inputs": [
+      ":a:\"q\"\n:long-name:'q'\n"
+    ],
+    "outputs": [
+      ":a:“q\"\n:long-name:‘q'\n"
+    ]
   }
 ]
