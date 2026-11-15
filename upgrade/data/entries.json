@@ -1327,6 +1327,12 @@
       "name": "longer colon run closes a shorter div",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-220",
+      "name": "block attributes before promoted image inline attributes",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

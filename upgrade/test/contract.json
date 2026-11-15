@@ -2244,5 +2244,20 @@
       "- :::\n  :::e\n  ::::\n  :::\nl\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-220",
+    "title": "Block attributes before promoted image inline attributes",
+    "class": "rewrite",
+    "inputs": [
+      "{.outer}\n![a](b){.inner}\n",
+      "{.outer k=one}\n![a](b){.inner k=two}\n",
+      "{#outer .first}\n![a](b){#inner .second}\n"
+    ],
+    "outputs": [
+      "![a](b){.outer}{.inner}\n",
+      "![a](b){.outer k=one}{.inner k=two}\n",
+      "![a](b){#outer .first}{#inner .second}\n"
+    ]
   }
 ]
