@@ -94,6 +94,25 @@ function opaqueSpanCandidates(input: string): string[] {
   return found
 }
 
+function bareQuotedPercent(value: string): boolean {
+  let run = value.trimStart()
+  while (run.startsWith('>')) run = run.slice(1).trimStart()
+  return run.length >= 3 && [...run].every((character) => character === '%')
+}
+
+function duplicatedPercentCandidates(output: string): string[] {
+  const lines = output.split('\n')
+  const found: string[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    if (!bareQuotedPercent(lines[at] ?? '') || !bareQuotedPercent(lines[at + 1] ?? '')) continue
+    if (bareQuotedPercent(lines[at - 1] ?? '') || bareQuotedPercent(lines[at + 2] ?? '')) continue
+    const changed = [...lines]
+    changed.splice(at + 2, 0, lines[at + 1] ?? '')
+    found.push(changed.join('\n'))
+  }
+  return found
+}
+
 /** C2-B-108, C2-B-110 and C2-B-114: outgrow a closer 0.1 kept inside the comment. */
 export function rescuePercent(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('%%%')) return null
@@ -129,6 +148,9 @@ export function rescuePercent(input: string, output: string, mismatch: ReportRec
         record: recordOf('U-129', mismatch.line, 'the comment fence was lengthened to retain the 0.1 opaque body')
       }
   }
+  const duplicated = firstPreserving(expected, duplicatedPercentCandidates(output))
+  if (duplicated !== null) return { output: duplicated, record: recordOf('U-129', mismatch.line,
+    'a second comment fence boundary was written to retain the 0.1 hidden quote content') }
   const opaque = firstPreserving(expected, opaqueSpanCandidates(input))
   if (opaque !== null) return { output: opaque, record: recordOf('U-215', mismatch.line,
     'the invisible percent fence span was removed so the surrounding blocks keep their 0.1 ownership') }

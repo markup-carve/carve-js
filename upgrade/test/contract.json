@@ -1215,7 +1215,11 @@
       ":: t\n:  x\n%%%\ny\n%%%\n   more\n",
       ":: t\n:  x\n %%%\ny\n %%%\nz\n",
       ":: t\n:  x\n  %%%\ny\n  %%%\nz\n",
-      "- intro\n  %% a\n%%%\nb\n%%%\n  tail\n"
+      "- intro\n  %% a\n%%%\nb\n%%%\n  tail\n",
+      "> > - %%%\n> > %%%\n> > %%%\n> > x\nt\n",
+      "> - %%%\n> %%%\n> %%%\n> x\nt\n",
+      "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
+      "> :: d\n> : %%%\n> %%%\n> %%%\n> x\n: t\n"
     ],
     "outputs": [
       "%%%%%\n%%%%\ny",
@@ -1225,7 +1229,11 @@
       ":: t\n:  x\n  %%%\n  y\n  %%%\n   more\n",
       ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
       ":: t\n:  x\n  %%%\n  y\n  %%%\nz\n",
-      "- intro\n  %% a\n  %%%\n  b\n  %%%\n  tail\n"
+      "- intro\n  %% a\n  %%%\n  b\n  %%%\n  tail\n",
+      "> > - %%%\n> > %%%\n> > %%%\n> > %%%\n> > x\nt\n",
+      "> - %%%\n> %%%\n> %%%\n> %%%\n> x\nt\n",
+      "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
+      "> :: d\n> : %%%\n> %%%\n> %%%\n> %%%\n> x\n: t\n"
     ],
     "class": "rewrite"
   },
