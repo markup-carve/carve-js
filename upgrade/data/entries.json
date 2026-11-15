@@ -1495,6 +1495,12 @@
       "name": "table row outside preceding ordered item",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-248",
+      "name": "rejected HTML control character is replaced",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

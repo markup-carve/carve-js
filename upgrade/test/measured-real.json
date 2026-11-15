@@ -3593,5 +3593,77 @@
     "entries": [
       "U-247"
     ]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "resources/examples/edge-cases/0261-a-blank-line-holds-spaces-and-tabs-and-nothing-else.md",
+    "line": 88,
+    "input": "a\n\u000b\n\u000c\n\u0085\n\u2028\n\u2029\nb\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "resources/examples/edge-cases/0397-a-null-byte-is-replaced-before-the-document-is-read.md",
+    "line": 52,
+    "input": "c\u000bd\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "resources/examples/edge-cases/0498-a-comment-line-s-text-is-content-and-a-block-body-is-payload.md",
+    "line": 88,
+    "input": "%%\u000b\n\ntext\u000b\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "resources/examples/edge-cases/0985-del-is-ascii-nonalphanumeric-for-heading-slugs.md",
+    "line": 12,
+    "input": "# a\u007fb\n\n# a!\u007f?b\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "tests/corpus/261-a-blank-line-holds-spaces-and-tabs-and-nothing-else-3.crv",
+    "line": 1,
+    "input": "a\n\u000b\n\u000c\n\u0085\n\u2028\n\u2029\nb\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "tests/corpus/397-a-null-byte-is-replaced-before-the-document-is-read-3.crv",
+    "line": 1,
+    "input": "c\u000bd\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "tests/corpus/498-a-comment-line-s-text-is-content-and-a-block-body-is-payload-5.crv",
+    "line": 1,
+    "input": "%%\u000b\n\ntext\u000b\n",
+    "check": "explained",
+    "entries": ["U-248"]
+  },
+  {
+    "cause": "unassigned",
+    "clause": "C2-H-176",
+    "path": "tests/corpus/985-del-is-ascii-nonalphanumeric-for-heading-slugs.crv",
+    "line": 1,
+    "input": "# a\u007fb\n\n# a!\u007f?b\n",
+    "check": "explained",
+    "entries": ["U-248"]
   }
 ]

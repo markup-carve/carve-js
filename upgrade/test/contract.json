@@ -2621,5 +2621,16 @@
     "outputs": [
       "::: note\n10. para\n| t |\n```\ncode\n::::\n:::\nafter *b*\n"
     ]
+  },
+  {
+    "id": "U-248",
+    "title": "Rejected HTML control characters are replaced",
+    "class": "report",
+    "inputs": [
+      "c\u000bd\n",
+      "a\n\u0085\nb\n",
+      "# a\u007fb\n\n# a!\u007f?b\n"
+    ],
+    "outputs": []
   }
 ]

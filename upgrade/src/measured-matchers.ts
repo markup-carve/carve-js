@@ -34,6 +34,15 @@ function hasLongDash(input: string): boolean {
   return false
 }
 
+function rejectedHtmlControl(input: string, expected: string, actual: string): boolean {
+  if (!actual.includes('\ufffd')) return false
+  for (const value of input) {
+    const code = value.charCodeAt(0)
+    if ((code === 0x0b || code === 0x85 || code === 0x7f) && expected.includes(value)) return true
+  }
+  return false
+}
+
 function isNameCode(code: number): boolean {
   return code >= 0x61 && code <= 0x7a || code >= 0x41 && code <= 0x5a || code >= 0x30 && code <= 0x39
 }
@@ -232,6 +241,7 @@ function inlineMatch(input: string, expected: string, actual: string): string | 
 
 /** The narrow syntax shapes of measured report-only changes. */
 export function matchMeasured(input: string, expected: string, actual: string): string | null {
+  if (rejectedHtmlControl(input, expected, actual)) return 'U-248'
   if (changedTaskLabel(input, expected, actual)) return 'U-159'
   const table = tableMatch(input)
   if (table !== null) return table
