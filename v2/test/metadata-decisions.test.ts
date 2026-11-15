@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { forEachSlot, type Node } from '../src/ast.ts'
-import { CarveTreeError, decodeTree, render, resolveTree, validateTreeWithAnnotations,
+import { CarveTreeError, decodeTree, render, renderWithDiagnostics, resolveTree, validateTreeWithAnnotations,
   writeWithDiagnostics, type DocumentNode, type MetadataValue } from '../src/index.ts'
 
 function document(): DocumentNode {
@@ -88,19 +88,21 @@ describe('typed metadata and tree declarations', () => {
     expect(writeWithDiagnostics(root).diagnostics.map((entry) => entry.path)).not.toContain('/metadata/fields')
   })
 
-  it('C2-A-212: resolution and profiles visit inline nodes inside nested metadata values', () => {
+  it('C2-A-212, C2-H-121: resolution and profiles visit inline nodes inside nested metadata values', () => {
     const root: DocumentNode = { type: 'document', astVersion: '2.0',
       children: [{ type: 'link_reference_definition', key: 'r', namespace: 'link', href: '/u' }],
       metadata: { fields: { nested: { kind: 'list', value: [{ kind: 'inlines', value: [
         { type: 'link', key: 'r', namespace: 'link', refForm: 'full', children: [{ type: 'text', value: 'x' }] },
       ] }] } } } }
-    const full = resolveTree(structuredClone(root)).document.metadata?.fields?.nested
+    const { diagnostics } = renderWithDiagnostics(structuredClone(root), { profile: 'minimal' })
+    expect(diagnostics.map((entry) => [entry.code, entry.path])).toEqual([
+      ['profile-construct-degraded', '/metadata/fields/nested/value/0/value/0'],
+    ])
+    // The profile is a render option: the resolved tree keeps the link.
     const minimal = resolveTree(root, { profile: 'minimal' }).document.metadata?.fields?.nested
-    if (full?.kind !== 'list' || minimal?.kind !== 'list') throw new Error('list metadata absent')
-    const resolved = full.value[0]
-    const degraded = minimal.value[0]
-    if (resolved?.kind !== 'inlines' || degraded?.kind !== 'inlines') throw new Error('inline metadata absent')
+    if (minimal?.kind !== 'list') throw new Error('list metadata absent')
+    const resolved = minimal.value[0]
+    if (resolved?.kind !== 'inlines') throw new Error('inline metadata absent')
     expect(resolved.value[0]).toMatchObject({ type: 'link', href: '/u' })
-    expect(degraded.value[0]).toEqual({ type: 'text', value: 'x' })
   })
 })

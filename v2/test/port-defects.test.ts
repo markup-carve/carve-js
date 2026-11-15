@@ -426,3 +426,35 @@ describe('C2-I-118: an image and a link meet the depth cap alike', () => {
     expect(leaf(196, '- *![x](u)')).toEqual(['text', 'image'])
   })
 })
+
+describe('C2-H-121: the profile changes no tree', () => {
+  const SRC = 'See [docs](https://x.org) and *bold*.'
+
+  it('C2-H-121, C2-A-040: resolveTree under a profile keeps the link', () => {
+    const resolved = resolveTree(parseTree(SRC), { profile: 'minimal' }).document
+    const paragraph = resolved.children[0]
+    if (paragraph?.type !== 'paragraph') throw new Error('no paragraph')
+    expect(paragraph.children.map((node) => node.type)).toEqual(['text', 'link', 'text', 'strong', 'text'])
+    expect(renderTree(resolveTree(parseTree(SRC), { profile: 'minimal' }))).toBe('<p>See docs and <strong>bold</strong>.</p>')
+  })
+
+  it('C2-H-121: a render under a profile leaves the resolved tree as it was, and renders again alike', () => {
+    const resolved = resolveTree(parseTree(`# h\n\n${SRC}\n\n> q`), { profile: 'minimal' })
+    const before = JSON.stringify(resolved.document)
+    const html = renderTree(resolved)
+    expect(JSON.stringify(resolved.document)).toBe(before)
+    expect(renderTree(resolved)).toBe(html)
+  })
+
+  it('C2-H-121, C2-H-143: a degraded figure keeps the number of its caption', () => {
+    expect(render('![i](a.png)\n^ Figure #: cap', { profile: 'comment' })).toBe('<p>[img: i]</p>\n<p>Figure 1: cap</p>')
+    const table = render('| a |\n^ Table #: t\n\n![i](a.png)\n^ Figure #: cap', { profile: 'comment' })
+    expect(table).toContain('Figure 1: cap')
+  })
+
+  it('C2-H-165: a degraded footnote reference writes no note, and a live one keeps its number', () => {
+    expect(render('a[^n]\n\n[^n]: note', { profile: 'comment' })).toBe('<p>a[^n]</p>')
+    const both = render('a[^n] *b*[^m]\n\n[^n]: x\n\n[^m]: y', { profile: 'comment' })
+    expect(both).not.toContain('<section')
+  })
+})
