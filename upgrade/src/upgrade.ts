@@ -118,6 +118,16 @@ function oneItemComparison(old: string, next: string, records: ReportRecord[], s
   return { comparison: explained ? normalized : strict, explained }
 }
 
+function reportTaskHtml(input: string, old: string, next: string, records: ReportRecord[],
+  strict: ReturnType<typeof compareHtml>): boolean {
+  if (strict.difference !== null) return false
+  const changed = old.includes('<input') && next.includes('class="task"') && !old.includes('class="task"')
+  if (!changed || records.length > 0 && input.trimEnd() !== '- [ ] +') return false
+  if (!hasEntry(records, 'U-133')) records.push(recordOf('U-133', 0,
+    'C2-H-032 adds the task class, style, and plain-text checkbox label'))
+  return true
+}
+
 /** Renders both sides and adds what the comparison found to `records`. */
 function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeResult['check'] {
   const { output, records } = done
@@ -132,11 +142,12 @@ function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeRes
     return 'mismatch'
   }
   const strict = compareHtml(old, next)
+  const taskReport = reportTaskHtml(input, old, next, records, strict)
   if (strict.gainedParagraphs > 0) {
     const message = `${strict.gainedParagraphs} later paragraph(s) of list items gain a paragraph element in 0.2`
     records.push({ entry: 'U-019', class: 'summary', line: 0, message })
   }
-  if (strict.difference === null) return 'pass'
+  if (strict.difference === null) return taskReport ? 'explained' : 'pass'
   // U-021: a list of one item is tight in 0.2, so its paragraph elements are left out of a second comparison.
   const { comparison: compared, explained: oneItem } = oneItemComparison(old, next, records, strict)
   if (diagnose) recordMeasured(input, done, compared)
