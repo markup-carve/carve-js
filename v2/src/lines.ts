@@ -653,8 +653,11 @@ export function rowAttributeStart(src: string, pipe: number, end: number): numbe
 
 function rowTailValid(src: string, pipe: number, end: number): boolean {
   const attribute = rowAttributeStart(src, pipe, end)
-  const tail = skipSpaces(src, attribute < 0 ? pipe + 1 : attributeBlocksEnd(src, attribute, end), end)
+  const behind = attribute < 0 ? pipe + 1 : attributeBlocksEnd(src, attribute, end)
+  const tail = skipSpaces(src, behind, end)
   if (tail === end) return true
+  // C2-B-133: a line comment stands after whitespace; `%%` glued to the pipe or to the row attribute is text.
+  if (tail === behind) return false
   // C2-B-166: the closing pipe is the last pipe of the line, so a pipe in the comment ends no row; the search stops at the line end.
   const later = src.indexOf('|', tail)
   return isLineComment(src, tail, end) && (later < 0 || later >= end)

@@ -310,3 +310,14 @@ describe('C2-B-218: an unpaired surrogate is read as U+FFFD in every value', () 
     expect(parse('\ud800\n\nb').children[1]!.pos).toMatchObject({ startOffset: 5, startLine: 3 })
   })
 })
+
+describe('C2-B-133/167: a trailing line comment of a row stands after whitespace', () => {
+  it('C2-B-133: `%%` glued to the closing pipe or to the row attribute is text, so the line is no row', () => {
+    for (const line of ['||%%', '| a |%%', '| a |%% x', '| a |{.r}%% c', '| a | {.r}%% c']) {
+      expect(types(`${line}\n`), line).toEqual(['paragraph'])
+    }
+    for (const line of ['| a | %% c', '| a |\t%% c', '| a |{.r} %% c', '| a | {.r}  %% c', '|| %%']) {
+      expect(types(`${line}\n`), line).toEqual(['table'])
+    }
+  })
+})
