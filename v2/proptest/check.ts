@@ -246,7 +246,7 @@ function writerAccounting(diagnostics: readonly Diagnostic[]): Finding | null {
 }
 
 const VERBATIM: readonly Node['type'][] = Object.freeze(['code', 'code_block', 'raw_inline', 'raw_block', 'literal_inline',
-  'frontmatter', 'comment', 'critic_comment', 'math'])
+  'frontmatter', 'comment', 'critic_comment', 'math', 'image'])
 
 function isVerbatim(node: Node): boolean { return VERBATIM.includes(node.type) }
 
@@ -291,6 +291,7 @@ function checkFormatMode(source: string, normalize: boolean): Finding | null {
     if (accounting === null && !treesEqual(parse(source), formattedTree)) {
       return finding('format-tree-change', `normalize=${normalize}`)
     }
+    if (accounting !== null) return accounting
     if (formatWithDiagnostics(output.source, { normalize }).source !== output.source) {
       return finding('format-not-idempotent', `normalize=${normalize}`)
     }

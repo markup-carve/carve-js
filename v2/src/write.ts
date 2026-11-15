@@ -479,7 +479,7 @@ function writeDocument(w: Writer, document: DocumentNode): string {
     list = lastBlock(nodes, from, at, list)
   }
   // C2-W-022: the output ends with one line ending.
-  return out.length === 0 ? '' : `${out.join('\n')}\n`
+  return out.length === 0 ? '\n' : `${out.join('\n')}\n`
 }
 
 function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): void {
