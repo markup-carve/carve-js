@@ -144,6 +144,8 @@ describe('time linear in the output', () => {
       const small = formatBy(shape(50), 'both').stats
       expect(small.repaired).toBe(0)
       expect(small.differences).toEqual([])
+      // One run at the largest size first, so the heap has grown before anything is timed.
+      formatBy(shape(4000), 'plan')
       const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
       // The mean growth per doubling over three doublings, so one noisy step does not decide.
       const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
