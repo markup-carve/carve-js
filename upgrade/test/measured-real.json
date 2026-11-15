@@ -2955,5 +2955,38 @@
     "entries": [
       "U-229"
     ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0857-an-html-attribute-is-written-once-whatever-its-case.md",
+    "line": 27,
+    "input": "{start=9}\n3. x\n",
+    "check": "pass",
+    "entries": [
+      "U-230"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0860-an-id-key-is-a-spelling-of-the-id-slot.md",
+    "line": 77,
+    "input": "{id='a\"b&c'}\n# H\n\n</#a\"b&c>\n",
+    "check": "pass",
+    "entries": [
+      "U-231"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/1059-a-partially-prefixed-quoted-run-continuation-keeps-its-source-column.md",
+    "line": 46,
+    "input": "- > {.x\n  >  .y}\nplain\n",
+    "check": "pass",
+    "entries": [
+      "U-141"
+    ]
   }
 ]

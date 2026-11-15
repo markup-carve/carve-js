@@ -92,6 +92,47 @@ function quotedAttribute(output: string): Candidate[] {
   return found
 }
 
+function multilineQuotedAttribute(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    const head = lines[at] ?? ''
+    const tail = lines[at + 1] ?? ''
+    if (!head.startsWith('- > {') || !tail.startsWith('  > ') || !tail.trimEnd().endsWith('}')) continue
+    const changed = [...lines]
+    changed.splice(at, 2, '- >')
+    found.push(candidate('U-141', changed.join('\n'), 'the multiline attribute consumed by the quote was removed'))
+  }
+  return found
+}
+
+function conflictingListStart(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    const value = lines[at] ?? ''
+    const next = lines[at + 1] ?? ''
+    if (!value.startsWith('{start=') || !value.endsWith('}') || !next.includes('. ')) continue
+    const changed = [...lines]
+    changed.splice(at, 1)
+    found.push(candidate('U-230', changed.join('\n'), 'the conflicting list start attribute was removed'))
+  }
+  return found
+}
+
+function quotedIdValue(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if (!value.startsWith("{id='") || !value.endsWith("'}") || !value.includes('"')) continue
+    const changed = [...lines]
+    changed[at] = '{id="' + value.slice(5, -2).replaceAll('"', '\\"') + '"}'
+    found.push(candidate('U-231', changed.join('\n'), 'the quote inside the id value was escaped'))
+  }
+  return found
+}
+
 function consumedListAttribute(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -312,6 +353,9 @@ export function rescueMinor(
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...quotedAttribute(output),
+    ...multilineQuotedAttribute(output),
+    ...conflictingListStart(output),
+    ...quotedIdValue(output),
     ...consumedListAttribute(output),
     ...captionBoundary(output),
     ...emptyFootnote(output),

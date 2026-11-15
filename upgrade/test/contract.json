@@ -1376,13 +1376,15 @@
       "> {k}\nt",
       "> {k}\nt\n",
       "> {x}\nt\n",
-      "> {#x}\na\n"
+      "> {#x}\na\n",
+      "- > {.x\n  >  .y}\nplain\n"
     ],
     "outputs": [
       ">\nt",
       ">\nt\n",
       ">\nt\n",
-      ">\na\n"
+      ">\na\n",
+      "- >\nplain\n"
     ],
     "class": "rewrite"
   },
@@ -2397,6 +2399,28 @@
     "outputs": [
       "[^f]: - :::::\n      :::::\n\n[^f]\n",
       "[^f]: - | a |\n      ^ cap\n\n[^f]\n"
+    ]
+  },
+  {
+    "id": "U-230",
+    "title": "Conflicting ordered list start attribute",
+    "class": "rewrite",
+    "inputs": [
+      "{start=9}\n3. x\n"
+    ],
+    "outputs": [
+      "3. x\n"
+    ]
+  },
+  {
+    "id": "U-231",
+    "title": "Double quote inside a quoted id value",
+    "class": "rewrite",
+    "inputs": [
+      "{id='a\"b&c'}\n# H\n\n</#a\"b&c>\n"
+    ],
+    "outputs": [
+      "{id=\"a\\\"b&c\"}\n# H\n\n</#a\"b&c>\n"
     ]
   }
 ]

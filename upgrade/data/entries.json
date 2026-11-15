@@ -1387,6 +1387,18 @@
       "name": "note item follower at note content column",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-230",
+      "name": "conflicting ordered list start attribute",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-231",
+      "name": "double quote inside a quoted id value",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
