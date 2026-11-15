@@ -3,7 +3,7 @@
 // to the resolver of its context. A resolver returns bare, an escape, or no decision; a leaf with no
 // decision is left to the repair of write.ts.
 import { forEachSlot, type Node, type TextNode } from './ast.ts'
-import { isWordCharacter } from './unicode.ts'
+import { isAsciiPunctuation, isWordCharacter } from './unicode.ts'
 import { IN_CELL } from './write-inline.ts'
 import {
   ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
@@ -290,7 +290,12 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '>': mark('='),
   '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
   '[': bracket,
-  '\\': () => undefined,
+  // C2-W-097: a backslash the writer leaves single before punctuation stands in what it takes for a quoted brace
+  // value (C2-I-033); an escape of the plan may have undone that quote.
+  '\\': (leaf, at) => {
+    const next = code(leaf, at + 1)
+    undecidedIf(leaf.kinds[at - 1] !== ESCAPE && (next === 32 || isAsciiPunctuation(next)), leaf, 'backslash')
+  },
   ']': () => undefined,
   '^': (leaf, at, escaped) => {
     // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil.

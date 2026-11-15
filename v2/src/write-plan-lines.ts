@@ -23,6 +23,7 @@ export const UNDECIDED = -2
 
 const LF = 10
 const SPACE = 32
+const BRACE_OPEN = 123
 const TAB = 9
 
 function code(leaf: Leaf, at: number): number {
@@ -80,12 +81,16 @@ function digits(leaf: Leaf, at: number): number {
   while (code(leaf, end) >= 48 && code(leaf, end) <= 57) end++
   const mark = code(leaf, end)
   if (end - at > 9 || (mark !== 46 && mark !== 41)) return NO_ESCAPE
+  // C2-B-101: the attributes of an item abut its marker.
+  if (code(leaf, end + 1) === BRACE_OPEN) return UNDECIDED
   if (hasContentBehind(leaf, end + 1)) return end
   return restIsBlank(leaf, end + 1) ? UNDECIDED : NO_ESCAPE
 }
 
 /** C2-B-015: a bullet and content. */
 function bullet(leaf: Leaf, at: number): number {
+  // C2-B-101: the attributes of an item abut its marker.
+  if (code(leaf, at + 1) === BRACE_OPEN) return UNDECIDED
   if (hasContentBehind(leaf, at + 1)) return at
   return restIsBlank(leaf, at + 1) ? UNDECIDED : NO_ESCAPE
 }

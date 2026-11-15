@@ -98,6 +98,18 @@ describe('the planned writer', () => {
     expect(result.stats.planned).toBe(0)
   })
 
+  it('C2-B-101: a bullet before a brace leaves the group to the repair', () => {
+    const result = formatBy('\\-{[^*} {x=1}[^^]\n', 'both')
+    expect(result.output.source).toBe('\\-{[^*} {x=1}[^^]\n')
+    expect(result.stats.planned).toBe(0)
+  })
+
+  it('C2-W-097: a backslash of text left single before punctuation leaves the group to the repair', () => {
+    const result = formatBy('x{%\\\'-\\\\*^[\n', 'both')
+    expect(result.output.source).toBe('x{%\\\'-\\\\*^[\n')
+    expect(result.stats.planned).toBe(0)
+  })
+
   it('C2-W-099: a run of hyphens of text is planned with every second hyphen escaped', () => {
     const result = formatBy('a -\\-- b\n', 'both')
     expect(result.output.source).toBe('a -\\-- b\n')
