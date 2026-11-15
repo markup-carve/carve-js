@@ -105,6 +105,10 @@ void test('C2-W-134: source-only formatting refuses a loss in an extension claim
   assert.throws(() => format(source, { extensions: tabsExtensions }), CarveWriteError)
 })
 
+void test('C2-X-051: a lossy tabs claim keeps its core fallback', () => {
+  assert.equal(check('extensions', '\r\r', random(1902500671)), null)
+})
+
 void test('C2-W-007: a space in an image alt value is content', () => {
   assert.equal(check('format', '![ \n`a`]()', random(1)), null)
 })

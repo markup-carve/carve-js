@@ -399,12 +399,21 @@ function checkTabsFormat(source: string, document: DocumentNode): Finding | null
   return diagnosticsValid(source, document, formatted.diagnostics)
 }
 
+/** C2-X-051: a failed claim keeps the core div and names the extension. */
+function tabsClaimOrFallback(document: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
+  const node = document.children[0]
+  if (node?.type === 'block_extension' && node.name === 'carve.tabs') return true
+  return node?.type === 'div' && diagnostics.some((entry) =>
+    entry.code === 'extension-transform-failed' && entry.message.includes('carve.tabs'))
+}
+
 function checkTabs(body: string): Finding | null {
   const source = tabSource(body)
   const extensions = [tabExtension, tabsExtension]
   try {
-    const document = parse(source, { extensions })
-    if (document.children[0]?.type !== 'block_extension' || document.children[0].name !== 'carve.tabs') {
+    const parsed = parseWithDiagnostics(source, { extensions })
+    const document = parsed.document
+    if (!tabsClaimOrFallback(document, parsed.diagnostics)) {
       return finding('tabs-unclaimed', 'generated tabs source was not claimed')
     }
     validateTree(document, undefined, source, extensions)
@@ -420,7 +429,6 @@ function checkTabs(body: string): Finding | null {
     if (renderDiagnostic !== null) return renderDiagnostic
     const formatDiagnostic = checkTabsFormat(source, document)
     if (formatDiagnostic !== null) return formatDiagnostic
-    const parsed = parseWithDiagnostics(source, { extensions })
     return diagnosticsValid(source, parsed.document, parsed.diagnostics)
   } catch (error) { return finding('tabs-exception', description(error)) }
 }
