@@ -778,7 +778,8 @@ export function renderDocument(
   document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean,
 ): RenderResult {
   const r: Render = {
-    settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0, abbrDepth: 0,
+    settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0,
+    linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
     usedIds: Object.keys(settings.renderers).length === 0 ? new Set() : authoredIds(document),
     renderExtension: () => null,

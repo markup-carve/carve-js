@@ -168,7 +168,9 @@ function link(node: LinkNode, r: Render): string {
   r.linkDepth++
   const html = children(r, node)
   r.linkDepth--
-  return `<a${attributes(r, merged, { structural, origin: node })}>${html}</a>`
+  const notes = r.linkNotes.length === 0 ? '' : r.linkNotes.join('')
+  if (notes !== '') r.linkNotes.length = 0
+  return `<a${attributes(r, merged, { structural, origin: node })}>${html}</a>${notes}`
 }
 
 function image(node: ImageNode, r: Render): string {
@@ -214,7 +216,10 @@ function noteReference(node: FootnoteRefNode | InlineFootnoteNode, r: Render): s
   const structural: Pair[] = [['href', `#fn${note.number}`], ['role', 'doc-noteref']]
   if (r.settings.roundtrip && key !== undefined) structural.push(['data-carve-footnote-label', key])
   const tag = attributes(r, node, { structural, id: r.resolution.refIds.get(node)!, idFirst: true })
-  return `<a${tag}><sup>${note.number}</sup></a>`
+  const mark = `<a${tag}><sup>${note.number}</sup></a>`
+  if (r.linkDepth === 0) return mark
+  r.linkNotes.push(mark)
+  return ''
 }
 
 function math(node: MathNode, r: Render): string {

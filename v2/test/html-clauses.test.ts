@@ -34,6 +34,7 @@ describe('output form', () => {
     ['C2-H-007: an item with one paragraph is one line; with more blocks the first paragraph stands on the line of li', '- a\n- b\n\n  c\n\n- d', '<ul>\n  <li><p>a</p></li>\n  <li><p>b</p>\n    <p>c</p>\n  </li>\n  <li><p>d</p></li>\n</ul>'],
     ['C2-H-008: a container whose body renders nothing keeps one empty line between its tags', '::: note\n:::\n\n::: |\n:::\n\n::: \\\n:::\n\n::: figure\n:::', '<aside class="admonition note" aria-label="Note">\n\n</aside>\n<div class="line-block">\n\n</div>\n<div class="hardbreaks">\n\n</div>\n<figure class="carve-figure-group">\n\n</figure>'],
   ])
+
 })
 
 describe('attributes', () => {
@@ -237,6 +238,7 @@ describe('links, images and references', () => {
     ['C2-H-079: a link is a with its destination and its title; an email autolink leads to mailto', '[a](/u "T") <https://x.y/z> <a@b.cd>', '<p><a href="/u" title="T">a</a> <a href="https://x.y/z">https://x.y/z</a> <a href="mailto:a@b.cd">a@b.cd</a></p>'],
     ['C2-H-080: an image always writes alt, also when it is empty', '![](x) ![a "b"](y "T")', '<p><img src="x" alt=""> <img src="y" alt="a &quot;b&quot;" title="T"></p>'],
     ['C2-H-081: a link or an autolink inside link text is unwrapped', '[a [b](/in) <https://c.d> ![i](j)](/out)', '<p><a href="/out">a b https://c.d <img src="j" alt="i"></a></p>'],
+    ['C2-H-081: a cross-reference and social links inside link text write text and inert spans', '# H\n\n[go </#H> @ann #tag](/u)', '<h1 id="H">H</h1>\n<p><a href="/u">go H <span class="mention"><strong>@ann</strong></span> <span class="tag"><strong>#tag</strong></span></a></p>', { sections: false, social: { mentionUrl: '/m/{name}', tagUrl: '/t/{name}' } }],
     ['C2-H-082: a destination the policy denies is the empty string, and the element stays', '[a](javascript:alert(1)) ![b](DATA:x) <vbscript:y>', '<p><a href="">a</a> <img src="" alt="b"> <a href="">vbscript:y</a></p>'],
     ['C2-H-083: a reference a heading resolves leads to the id of the first matching heading', '# T\n\n# T\n\n[T][] [x][T]', '<h1 id="T">T</h1>\n<h1 id="T-2">T</h1>\n<p><a href="#T">T</a> <a href="#T">x</a></p>', { sections: false }],
     ['C2-H-084: an image reference never resolves against the headings', '# T\n\nx ![i][T]', '<h1 id="T">T</h1>\n<p>x ![i][T]</p>', { sections: false }],
@@ -265,6 +267,31 @@ describe('footnotes', () => {
   const section = (items: string): string => `<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n${items}\n  </ol>\n</section>`
   const back = (id: string): string => `<a href="#${id}" role="doc-backlink" aria-label="Back to reference">↩</a>`
   const ref = (n: number, id = `fnref${n}`): string => `<a id="${id}" href="#fn${n}" role="doc-noteref"><sup>${n}</sup></a>`
+  it('C2-H-088: note marks in link text follow the closing anchor in source order', () => {
+    const source = '[see *this[^a]* and ^[inline] page[^b]](/u)\n\n[^a]: A\n[^b]: B'
+    expect(parse(source).children[0]).toMatchObject({
+      type: 'paragraph', children: [{ type: 'link', children: [
+        { type: 'text', value: 'see ' },
+        { type: 'strong', children: [{ type: 'text', value: 'this' }, { type: 'footnote_ref', key: 'a' }] },
+        { type: 'text', value: ' and ' },
+        { type: 'inline_footnote' },
+        { type: 'text', value: ' page' },
+        { type: 'footnote_ref', key: 'b' },
+      ] }],
+    })
+    expect(render(source)).toBe(`<p><a href="/u">see <strong>this</strong> and  page</a>${ref(1)}${ref(2)}${ref(3)}</p>\n${section(`    <li id="fn1">\n      <p>A${back('fnref1')}</p>\n    </li>\n    <li id="fn2">\n      <p>inline${back('fnref2')}</p>\n    </li>\n    <li id="fn3">\n      <p>B${back('fnref3')}</p>\n    </li>`)}`)
+  })
+
+  it('C2-H-088: a reference link and nested link text move marks, and later links start a new sequence', () => {
+    const source = '[one[^a]][r] [outer [inner[^b]](/v) tail](/u)\n\n[r]: /r\n[^a]: A\n[^b]: B'
+    expect(render(source)).toBe(`<p><a href="/r">one</a>${ref(1)} <a href="/u">outer inner tail</a>${ref(2)}</p>\n${section(`    <li id="fn1">\n      <p>A${back('fnref1')}</p>\n    </li>\n    <li id="fn2">\n      <p>B${back('fnref2')}</p>\n    </li>`)}`)
+  })
+
+  it('C2-H-088: a linked heading moves its mark while image alternative text stays plain', () => {
+    expect(render('# [see[^a]](/u)\n\n![see[^a]](/i)\n\n[^a]: A', { sections: false })).toBe(
+      `<h1 id="see"><a href="/u">see</a>${ref(1)}</h1>\n<img src="/i" alt="see[^a]">\n${section(`    <li id="fn1">\n      <p>A${back('fnref1')}</p>\n    </li>`)}`,
+    )
+  })
   check([
     ['C2-H-087: footnotes are numbered in the order of their first reference, labeled and inline in one sequence', 'a[^b] ^[i] [^a] [^b]\n\n[^a]: A\n[^b]: B', `<p>a${ref(1)} ${ref(2)} ${ref(3)} ${ref(1, 'fnref1-2')}</p>\n${section(`    <li id="fn1">\n      <p>B<a href="#fnref1" role="doc-backlink" aria-label="Back to reference 1">↩<sup>1</sup></a> <a href="#fnref1-2" role="doc-backlink" aria-label="Back to reference 2">↩<sup>2</sup></a></p>\n    </li>\n    <li id="fn2">\n      <p>i${back('fnref2')}</p>\n    </li>\n    <li id="fn3">\n      <p>A${back('fnref3')}</p>\n    </li>`)}`],
     ['C2-H-088: an id the author wrote on the reference replaces the generated one, and the backlink points to it', 'a[^n]{#mine}\n\n[^n]: N', `<p>a<a id="mine" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n${section(`    <li id="fn1">\n      <p>N${back('mine')}</p>\n    </li>`)}`],

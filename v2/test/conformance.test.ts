@@ -9,10 +9,10 @@ import { conformance, exampleId, EXAMPLES, renderExample, VERDICTS } from './sup
 describe('the examples of the specification', () => {
   const report = conformance()
 
-  it('there are 373 examples: 232 of the block chapter, 109 of the inline chapter and 32 of the HTML document', () => {
-    expect(report.all.total).toBe(373)
+  it('there are 374 examples: 232 of the block chapter, 109 of the inline chapter and 33 of the HTML document', () => {
+    expect(report.all.total).toBe(374)
     expect([...report.byFile].map(([file, tally]) => [file, tally.total])).toEqual([
-      ['syntax-blocks.md', 232], ['syntax-inline.md', 109], ['html.md', 32],
+      ['syntax-blocks.md', 232], ['syntax-inline.md', 109], ['html.md', 33],
     ])
   })
 

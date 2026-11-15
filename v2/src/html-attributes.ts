@@ -23,6 +23,8 @@ export interface Render {
   linkRel: string
   /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
   linkDepth: number
+  /** C2-H-088: note marks awaiting the close of the enclosing link. */
+  linkNotes: string[]
   abbrDepth: number
   /** The paragraph that takes the backlinks of the note that is written, and their text (C2-H-091). */
   backlinkHost: ParagraphNode | null
