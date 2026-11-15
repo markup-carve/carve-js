@@ -15,6 +15,7 @@ import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
+import { AFTER_MARK, AS_CONTENT, AS_LINE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
 import { parseChunk } from './write-check.ts'
 import { longestBareRun } from './write-fences.ts'
 import { tableAttribute, writeTable } from './write-table.ts'
@@ -166,7 +167,8 @@ function textLeaf(
   attributeLine(w, node, prefix)
   if (node.type === 'paragraph') notePlace(w, node, prefix)
   w.lead = (w.lead ?? prefix) + mark
-  emitLines(w, prefix, indent, writeContent(w, node.children, flags))
+  const start = node.type === 'paragraph' ? LINE_START : AFTER_MARK
+  emitLines(w, prefix, indent, planLeaf(w, node.children, flags, writeContent(w, node.children, flags), AS_CONTENT, start))
 }
 
 /** C2-W-035: `=`, one per level, and one space; a continuation line stands at the content column. */
@@ -284,6 +286,7 @@ function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: numb
 
 function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, flags: number): string {
   const inlines = node.title
+  if (inlines !== undefined) unplanned(w, 'title')
   const title = inlines === undefined ? null : writeInlines(w, inlines, flags)
   return openerTail(w, node, title, title ?? '')
 }
@@ -332,7 +335,9 @@ function caption(w: Writer, node: CaptionNode | undefined, prefix: string, flags
   // C2-W-012: the content of two former blocks is kept apart by a space.
   if (blocks.length !== 1) lose(w, node, null)
   const parts: string[] = []
-  for (const block of blocks) parts.push(writeContent(w, childNodes(block), flags))
+  for (const block of blocks) {
+    parts.push(planLeaf(w, childNodes(block), flags, writeContent(w, childNodes(block), flags), AS_CONTENT, AFTER_MARK))
+  }
   w.lead = `${w.lead ?? prefix}^ `
   emitLines(w, prefix, '  ', parts.join(' '))
 }
@@ -374,8 +379,10 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
 
 /** A line of a line block. A hard break at its end is the backslash that ends its source line, behind the text as it is. */
 function lineContent(w: Writer, nodes: readonly Node[], flags: number): string {
-  if (nodes[nodes.length - 1]?.type !== 'hard_break') return writeContent(w, nodes, flags)
-  return `${writeInlines(w, nodes.slice(0, -1), flags)}\\`
+  if (nodes[nodes.length - 1]?.type !== 'hard_break') {
+    return planLeaf(w, nodes, flags, writeContent(w, nodes, flags), AS_CONTENT, LINE_START)
+  }
+  return planLeaf(w, nodes, flags, `${writeInlines(w, nodes.slice(0, -1), flags)}\\`, AS_LINE, LINE_START)
 }
 
 /** C2-A-175: a node with no spelling of its own is its children, or its fallback. */
@@ -409,7 +416,7 @@ function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, fla
     let same = w.extensions.length === 0
     if (!same) {
       try {
-        const parsed = parseChunk(spelling, w.abbreviations, w.extensions).children[0]
+        const parsed = parseChunk(w, spelling, null).children[0]
         same = parsed !== undefined && treesEqual(node, parsed)
       }
       catch { same = false }

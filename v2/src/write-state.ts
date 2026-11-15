@@ -3,6 +3,7 @@
 import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
+import { type Plan } from './write-plan.ts'
 
 /** The facts of the sidecar that the writer reads (C2-L-046), by node. */
 export interface WriterFacts {
@@ -60,6 +61,10 @@ export interface Writer {
   /** The parse of the group of blocks as it was last written (C2-W-089). */
   parsed: DocumentNode | null
   prewrittenAttributes: Node | null
+  /** The plan of the group being written, while the writer plans it (write-plan.ts). */
+  plan: Plan | null
+  /** The parses the writer made, for the test that the planned path makes none. */
+  parses: number
 }
 
 export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean,
@@ -70,6 +75,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null, prewrittenAttributes: null,
+    plan: null, parses: 0,
   }
 }
 

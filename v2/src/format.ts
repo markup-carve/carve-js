@@ -34,7 +34,9 @@ export function formatWithDiagnostics(source: string, options?: FormatOptions): 
   const { alignTables, normalize, extensions } = readFormatOptions(options)
   const parsed = parseWithLayout(source, { extensions })
   // C2-W-127: with `normalize` the writer gets no sidecar, so every spelling takes its default form.
-  const written = writeTree(parsed.document, normalize ? { alignTables, extensions } : { layout: parsed.layout, alignTables, extensions })
+  // C2-W-091: the tree is the parse of the source, so the writer does not parse its plan again.
+  const writeOptions = normalize ? { alignTables, extensions } : { layout: parsed.layout, alignTables, extensions }
+  const written = writeTree(parsed.document, writeOptions, false)
   return { source: written.source, diagnostics: [...parsed.diagnostics, ...written.diagnostics] }
 }
 

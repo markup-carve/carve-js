@@ -5,6 +5,7 @@ import {
 } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
+import { AFTER_MARK, AS_INLINES, planLeaf, unplanned } from './write-plan.ts'
 import { emit, lose, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
 import { longestBareRun } from './write-fences.ts'
@@ -81,7 +82,9 @@ function cellContent(w: Writer, cell: TableCellNode, flags: number): string {
   // C2-A-175: blocks in a cell have no spelling.
   if (blocks.length > 1 || (blocks.length === 1 && blocks[0]!.type !== 'cell_paragraph')) lose(w, cell, null)
   // C2-W-012: the content of two former blocks is kept apart by a space.
-  const content = blocks.map((block) => writeInlines(w, childNodes(block), flags | IN_CELL)).join(' ')
+  if (blocks.length > 1) unplanned(w, 'cell blocks')
+  const content = blocks.map((block) => planLeaf(w, childNodes(block), flags | IN_CELL,
+    writeInlines(w, childNodes(block), flags | IN_CELL), AS_INLINES, AFTER_MARK)).join(' ')
   // C2-W-063: a cell whose content is only a span mark and that is no span takes an escape.
   return content === '^' || content === '<' ? `\\${content}` : content
 }

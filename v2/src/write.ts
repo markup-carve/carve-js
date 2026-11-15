@@ -11,6 +11,7 @@ import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
+import { createPlan, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -24,6 +25,32 @@ export interface WriteOptions {
   layout?: { nodes: readonly LayoutEntry[] }
   /** C2-W-068: pads the cells of each column of a pipe table to one display width. */
   alignTables?: boolean
+  /**
+   * C2-W-002: parses each written group of blocks once more and compares it with the tree. A group
+   * that does not read back is written again by the repair of C2-W-089. On for `write` and
+   * `writeWithDiagnostics` unless it is `false`; `format` writes the tree of its own parse with it off.
+   */
+  check?: boolean
+}
+
+/** How the writer finds its escapes: by the plan (write-plan.ts), by the repair, or both, comparing them. */
+export type WriterPath = 'plan' | 'repair' | 'both'
+
+/** What a write reports about its own path, for the tests and the gates. */
+export interface WriterStats {
+  planned: number
+  repaired: number
+  /** Groups whose plan and repair wrote different lines, in `both`. */
+  differences: string[]
+  /** Why each group the plan did not decide was repaired, by reason. */
+  reasons: Map<string, number>
+  parses: number
+}
+
+interface WriterRun {
+  path: WriterPath
+  check: boolean
+  stats: WriterStats
 }
 
 export interface WriteOutput {
@@ -329,7 +356,7 @@ function groupTree(w: Writer, group: readonly Node[], first: boolean, escapes: M
   w.lead = null
   w.starts.clear()
   writeBlocks(w, group, '', 0, false)
-  return parseChunk(`${first ? '' : '\n'}${w.lines.join('\n')}\n`, w.abbreviations, w.extensions, w.linkKeys)
+  return parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`)
 }
 
 /**
@@ -465,23 +492,124 @@ function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistor
   return false
 }
 
+function resetLines(w: Writer): void {
+  w.lines = []
+  w.lead = null
+  w.bareDotLead = false
+  w.prewrittenAttributes = null
+  w.starts.clear()
+}
+
+function noteReason(run: WriterRun, why: string): void {
+  run.stats.reasons.set(why, (run.stats.reasons.get(why) ?? 0) + 1)
+}
+
+/** The escapes of `w` with the planned ones added. */
+function withPlanned(w: Writer, plan: Plan): Map<TextNode, number[]> {
+  const escapes = new Map(w.escapes)
+  for (const [node, offsets] of plan.escapes) {
+    const merged = [...new Set([...(escapes.get(node) ?? []), ...offsets])].sort((a, b) => a - b)
+    escapes.set(node, merged)
+  }
+  return escapes
+}
+
+/** The text nodes below `nodes` that no planned leaf held. */
+function uncovered(nodes: readonly Node[], plan: Plan): boolean {
+  const pending = [...nodes]
+  for (;;) {
+    const node = pending.pop()
+    if (node === undefined) return false
+    if (node.type === 'text' && !plan.covered.has(node)) return true
+    forEachSlot(node, (children) => { for (const child of children) pending.push(child) })
+  }
+}
+
+/** The reason the plan of a group has no decision, or null. */
+function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: number): string | null {
+  if (plan.undecided !== null) return plan.undecided
+  if (w.losses.entries.length !== reported) return 'loss'
+  return uncovered(group, plan) ? 'coverage' : null
+}
+
+/** C2-W-002: whether the written group reads back as its blocks. */
+function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
+  const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`).children
+  return parsed.length === group.length && parsed.every((node, at) => treesEqual(node, group[at]!))
+}
+
 /**
- * Writes the group of top-level blocks that starts at `from` into `w.lines` and returns its end.
+ * Writes the group by its plan (write-plan.ts): the blocks are written once with the planner on,
+ * and once more with the planned escapes. Returns false, with `w` as before but for what the
+ * first write of the repair would have done too, where the plan does not decide the group.
+ */
+function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boolean): boolean {
+  const reported = w.losses.entries.length
+  resetLines(w)
+  w.plan = createPlan()
+  writeBlocks(w, group, '', 0, false)
+  const plan = w.plan
+  w.plan = null
+  const why = planReason(w, group, plan, reported)
+  if (why !== null) {
+    noteReason(run, why)
+    return false
+  }
+  const kept = w.escapes
+  if (plan.escapes.size > 0) {
+    w.escapes = withPlanned(w, plan)
+    resetLines(w)
+    writeBlocks(w, group, '', 0, false)
+  }
+  if (run.check && w.lines.length > 0 && !readsBack(w, group, first)) {
+    w.escapes = kept
+    noteReason(run, 'check')
+    return false
+  }
+  return true
+}
+
+/** C2-W-089: the group as the repair writes it, compared with the plan in `both`. */
+function compareWithRepair(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
+  const planned = w.lines
+  const escapes = w.escapes
+  w.escapes = new Map(escapes)
+  const end = repairGroup(w, document, from, first, w.losses.entries.length)
+  if (w.lines.join('\n') !== planned.join('\n')) {
+    run.stats.differences.push(`${JSON.stringify(planned.join('\n'))} repair ${JSON.stringify(w.lines.join('\n'))}`)
+  }
+  return end
+}
+
+/**
+ * Writes the group of top-level blocks that starts at `from` into `w.lines` and returns its end:
+ * by its plan where the plan decides it, and by the repair otherwise.
+ */
+function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: number, first: boolean): number {
+  // C2-W-002: the losses that the first write reports count for the repair that follows a plan with no decision.
+  const reported = w.losses.entries.length
+  if (run.path !== 'repair') {
+    const end = groupEnd(w, document.children, from)
+    if (planGroup(w, run, document.children.slice(from, end), first)) {
+      run.stats.planned++
+      return run.path === 'both' ? compareWithRepair(w, run, document, from, first) : end
+    }
+  }
+  run.stats.repaired++
+  return repairGroup(w, document, from, first, reported)
+}
+
+/**
  * C2-W-089: the group is parsed again and written again until it reads back as its blocks.
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
-function writeGroup(w: Writer, document: DocumentNode, from: number, first: boolean): number {
+function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const nodes = document.children
-  const reported = w.losses.entries.length
   const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, remainingChars: MAX_REPAIR_CHARS }
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
-    w.lines = []
-    w.lead = null
-    w.bareDotLead = false
-    w.prewrittenAttributes = null
-    w.starts.clear()
+    resetLines(w)
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0) return end
     if (refuseDeepGroup(w, group)) return end
@@ -538,7 +666,7 @@ function compareGroup(w: Writer, document: DocumentNode, group: readonly Node[],
   const source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   const check = createCheck(w)
   check.source = source
-  const parsed = parseChunk(source, w.abbreviations, w.extensions, w.linkKeys)
+  const parsed = parseChunk(w, source)
   w.parsed = parsed
   compareBlocks(check, group, parsed.children, document)
   escapeOpeners(check, parsed, first ? 1 : 2)
@@ -556,14 +684,14 @@ function addLines(out: string[], lines: readonly string[], blanks: number): void
   for (const line of lines) out.push(line)
 }
 
-function writeDocument(w: Writer, document: DocumentNode): string {
+function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): string {
   const nodes = document.children
   const out: string[] = []
   let before: Node | null = null
   let list: Node | null = null
   for (let at = 0; at < nodes.length;) {
     const from = at
-    at = writeGroup(w, document, from, out.length === 0)
+    at = writeGroup(w, run, document, from, out.length === 0)
     if (w.lines.length === 0) continue
     if (out.length === 0 && w.blankFirst) out.push('')
     const blanks = before === null ? 0 : blankLinesBetween(w, before, list, nodes[from]!, false)
@@ -617,7 +745,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   while (at >= 0) {
     if (prunableOpener(source, at)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
-      const parsed = parseChunk(candidate, w.abbreviations, w.extensions, w.linkKeys).children
+      const parsed = parseChunk(w, candidate).children
       if (parsed.length === group.length && parsed.every((node, index) => {
         const expected = group[index]
         return expected !== undefined && treesEqual(node, expected)
@@ -632,19 +760,28 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   w.lines = source.slice(first ? 0 : 1, -1).split('\n')
 }
 
-/** Writes a tree that is known to be valid. */
-export function writeTree(document: DocumentNode, options: WriteOptions | undefined): WriteOutput {
+/** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
+export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
+  check = options?.check !== false): { output: WriteOutput, stats: WriterStats } {
+  const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), parses: 0 }
+  const run: WriterRun = { path, check, stats }
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()
   const w = createWriter(facts, options?.alignTables === true, options?.extensions)
   w.linkKeys = new Set(document.children.filter((node) => node.type === 'link_reference_definition').map((node) => node.key))
   if (layout !== undefined && facts !== null) readLayout(w, facts, document, layout.nodes)
   readAbbreviations(w, document)
-  const source = writeDocument(w, document)
+  const source = writeDocument(w, run, document)
   // C2-W-103: a finding of the writer has the path of its node.
   const diagnostics = locateFindings(document, w.losses)
   rootMetadataLosses(document, diagnostics)
-  return { source, diagnostics }
+  stats.parses = w.parses
+  return { output: { source, diagnostics }, stats }
+}
+
+/** Writes a tree that is known to be valid. */
+export function writeTree(document: DocumentNode, options: WriteOptions | undefined, check?: boolean): WriteOutput {
+  return writeTreeWithStats(document, options, 'plan', check ?? options?.check !== false).output
 }
 
 /** The canonical Carve source of a tree, with what could not be written (C2-W-011). The tree is validated first. */

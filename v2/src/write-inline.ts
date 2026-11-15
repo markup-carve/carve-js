@@ -67,6 +67,21 @@ function alwaysEscaped(value: string, at: number, flags: number, cursor: BraceQu
     ((flags & IN_BRACKET) !== 0 && (code === 91 || code === 93))
 }
 
+/** The offsets of `node` that take a backslash: those asked for and those of C2-W-097, C2-W-098. */
+export function escapeOffsets(w: Writer, node: TextNode, flags: number): number[] {
+  const value = node.value
+  const escapes = w.escapes.get(node) ?? []
+  const out: number[] = []
+  let next = 0
+  const cursor: BraceQuoteCursor = { at: 0, brace: false, quote: 0 }
+  for (let at = 0; at < value.length; at++) {
+    const asked = next < escapes.length && escapes[next] === at
+    if (asked) next++
+    if (asked || alwaysEscaped(value, at, flags, cursor)) out.push(at)
+  }
+  return out
+}
+
 /** The text `value[from, to)` with the backslashes it needs. */
 function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, flags: number): string {
   const escapes = w.escapes.get(node) ?? []
@@ -132,7 +147,7 @@ function textNode(w: Writer, node: TextNode, flags: number): string {
 }
 
 /** Whether emphasis (bit 1) and strong (bit 2) occur below `node` (C2-W-070). */
-function kindsBelow(w: Writer, node: Node): number {
+export function kindsBelow(w: Writer, node: Node): number {
   const known = w.kindsBelow.get(node)
   if (known !== undefined) return known
   let kinds = 0
@@ -239,7 +254,7 @@ function labelText(key: string): string {
 }
 
 /** C2-W-073, C2-W-074: the link tail, or the label of a reference. */
-function target(node: LinkNode | ImageNode, href: string | undefined): string {
+export function target(node: LinkNode | ImageNode, href: string | undefined): string {
   const key = node.key
   if (key !== undefined) return referenceLabel(node, key)
   const tooltip = node.tooltip
@@ -248,7 +263,7 @@ function target(node: LinkNode | ImageNode, href: string | undefined): string {
 }
 
 /** C2-W-075, C2-W-084: the verbatim text of a reference, where the sidecar holds it and the reparse did not refuse it. */
-function rawReference(w: Writer, node: LinkNode | ImageNode, flags: number): string | null {
+export function rawReference(w: Writer, node: LinkNode | ImageNode, flags: number): string | null {
   if (node.key === undefined || (w.forms.get(node) ?? 0) > 0) return null
   const raw = w.facts?.get(node)?.rawRef
   if (raw === undefined) return null
@@ -340,7 +355,7 @@ function inlineExtension(w: Writer, node: InlineExtensionNode, flags: number): s
     let same = w.extensions.length === 0
     if (!same) {
       try {
-        const parsed = parseChunk(`${form}${braceBlock(node)}\n`, w.abbreviations, w.extensions, w.linkKeys).children[0]
+        const parsed = parseChunk(w, `${form}${braceBlock(node)}\n`).children[0]
         same = parsed?.type === 'paragraph' && parsed.children.length === 1 && treesEqual(node, parsed.children[0]!)
       } catch { same = false }
     }
@@ -396,7 +411,7 @@ function writeOwn<T extends keyof NodeOfType>(w: Writer, type: T, node: NodeOfTy
   return writer === undefined ? null : writer(w, node, flags)
 }
 
-function writeInline(w: Writer, node: Node, flags: number): string {
+export function writeInline(w: Writer, node: Node, flags: number): string {
   const out = writeOwn(w, node.type, node, flags)
   if (out === null) return childrenOnly(w, node, flags)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
@@ -411,7 +426,7 @@ function partEnd(w: Writer, nodes: readonly Node[], at: number): number {
 }
 
 /** C2-W-112: the code span `nodes[at]` has the code span behind it glued to it, with no attribute block between. */
-function joinsNextCode(nodes: readonly Node[], at: number): boolean {
+export function joinsNextCode(nodes: readonly Node[], at: number): boolean {
   const node = nodes[at]!
   return node.type === 'code' && braceBlock(node) === '' && nodes[at + 1]?.type === 'code'
 }
