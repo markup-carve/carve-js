@@ -185,7 +185,7 @@ function scan(leaf: Leaf, escaped: Uint8Array): Token[] {
   for (let at = 0; at < leaf.codes.length;) {
     const kind = leaf.kinds[at]
     if (kind === ESCAPE) at += 2
-    else if (kind === ATOM || escaped[at] !== 0) at++
+    else if (kind === ATOM || escaped[at] !== 0 || leaf.opaque?.[at] === 1) at++
     else at = scanAt(tokens, leaf, at, escaped)
   }
   return tokens

@@ -8,6 +8,7 @@ import { IN_CELL } from './write-inline.ts'
 import {
   ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
 } from './write-plan-model.ts'
+import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { opensAngleAtom } from './write-plan-angle.ts'
 import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
@@ -99,8 +100,6 @@ function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
 /** C2-W-095: a straight quote of text would read as a smart quote. */
 function quote(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
-  // A quote behind a brace may stand in an attribute, where it reads as itself.
-  if (leaf.firstBrace >= 0 && leaf.firstBrace < at) return undecide(leaf, 'quote in braces')
   escaped[at] = 1
 }
 
@@ -115,13 +114,20 @@ function behindBracedComment(leaf: Leaf, at: number): boolean {
 }
 
 /** C2-I-090: a name of a mention or a tag after a boundary. */
+/** The code point that ends at unit `at`, or -1 for a broken surrogate pair. */
+function codePointBefore(leaf: Leaf, at: number): number {
+  const low = code(leaf, at)
+  if (low < 0xd800 || low >= 0xe000) return low
+  const high = code(leaf, at - 1)
+  if (low < 0xdc00 || high < 0xd800 || high >= 0xdc00) return -2
+  return (high - 0xd800) * 0x400 + low - 0xdc00 + 0x10000
+}
+
 function sigil(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  const before = code(leaf, at - 1)
-  if ((before >= 0xd800 && before < 0xe000) || behindBracedComment(leaf, at)) return undecide(leaf, 'sigil')
+  const before = codePointBefore(leaf, at - 1)
+  if (before === -2 || behindBracedComment(leaf, at)) return undecide(leaf, 'sigil')
   if (before >= 0 && isWordCharacter(before)) return
   if (nextIs(leaf, at, '}')) return undecide(leaf, 'sigil')
-  // A sigil behind a brace may stand in an attribute block, where it reads as itself.
-  if (leaf.firstBrace >= 0 && leaf.firstBrace < at) return undecide(leaf, 'sigil in braces')
   const name = sigilName(leaf, at)
   if (name === UNKNOWN) undecide(leaf, 'sigil')
   else if (name === NAME) escaped[at] = 1
@@ -407,13 +413,54 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
       checkAtomEnd(leaf, atomEnd(leaf, at), node)
       continue
     }
-    if (kind !== TEXT) continue
-    const value = codes[at]!
-    // A line feed of text is left to the reparse.
-    if (value === LF) return undecide(leaf, 'control')
-    if (value >= 128 || INLINE_TRIGGERS[value] === 0) continue
-    RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
+    if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
   }
+}
+
+/** Decides the unit of text at `at` by its resolver. Returns the unit behind what it decided. */
+function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  const value = leaf.codes[at]!
+  // A line feed of text is left to the reparse.
+  if (value === LF) undecide(leaf, 'control')
+  if (value >= 128 || INLINE_TRIGGERS[value] === 0) return at + 1
+  const block = value === 123 ? attributeBlockEnd(leaf, at, escaped) : -1
+  if (block >= 0) return opaqueBlock(leaf, at, block)
+  RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
+  return at + 1
+}
+
+// C2-I-028: a valid attribute block stands on one line; a longer stretch is left to the repair.
+const LONGEST_BLOCK = 256
+
+/** C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. */
+function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  if (isLiteral(leaf, at, escaped)) return -1
+  let end = at + 1
+  while (end < leaf.codes.length && end - at < LONGEST_BLOCK && leaf.codes[end] !== LF && leaf.codes[end] !== 125) end++
+  if (leaf.codes[end] !== 125) return -1
+  const text = String.fromCharCode(...leaf.codes.slice(at, end + 1))
+  const block = readAttributeBlock(text, 0, text.length, emptyMemo(), null)
+  return block < 0 ? -1 : at + block
+}
+
+/**
+ * C2-I-005, C2-I-036: a valid attribute block is an atom, so nothing in it is read; behind no host it is literal
+ * text. Its units become opaque for the pairs and the brackets. Returns the unit behind it.
+ */
+function opaqueBlock(leaf: Leaf, at: number, end: number): number {
+  if (behindHost(leaf, at)) {
+    undecide(leaf, 'attribute block')
+    return end
+  }
+  leaf.opaque ??= new Uint8Array(leaf.codes.length)
+  for (let unit = at; unit < end; unit++) {
+    if (leaf.kinds[unit] !== TEXT) {
+      undecide(leaf, 'attribute block')
+      return end
+    }
+    leaf.opaque[unit] = 1
+  }
+  return end
 }
 
 /** Records the depth bound of every list of nodes below `nodes`: twice the number of nodes around its owner. */

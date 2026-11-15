@@ -10,7 +10,7 @@ const FOLLOWERS = '([{:'
 
 function isBracket(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   const kind = leaf.kinds[at]
-  if (kind !== TEXT && kind !== OPEN && kind !== CLOSE) return false
+  if ((kind !== TEXT && kind !== OPEN && kind !== CLOSE) || leaf.opaque?.[at] === 1) return false
   return kind !== TEXT || (escaped[at] === 0 && leaf.kinds[at - 1] !== ESCAPE)
 }
 
@@ -45,7 +45,7 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   if (hasKeys || leaf.codes[opener + 1] === 94) return NO_DECISION
   if (leaf.codes[opener - 1] === 94 && isReadText(leaf, opener - 1, escaped)) return ESCAPE_OPENER
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
-  if (next === '[' && isReadText(leaf, closer + 1, escaped)) return labelEnd(leaf, closer + 2)
+  if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
   return next === '' || !FOLLOWERS.includes(next) ? LITERAL : NO_DECISION
 }
 

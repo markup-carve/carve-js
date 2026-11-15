@@ -33,8 +33,8 @@ export interface Leaf {
   /** The unit being decided, and the unit at which the leaf lost its decision, for the report of the gates. */
   cursor: number
   where: number
-  /** The first `{` of the leaf, or -1. */
-  firstBrace: number
+  /** C2-I-005: the units inside an attribute block of text, which the reader takes whole; null where there is none. */
+  opaque: Uint8Array | null
   /** C2-I-109: the reader's single quote state at the unit being decided; an inline footnote saves it. */
   singleQuoteOpen: boolean
   inlineFootnote: boolean
@@ -48,13 +48,12 @@ export interface Leaf {
 
 export function createLeaf(): Leaf {
   return {
-    codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, firstBrace: -1,
+    codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1,
   }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
-  if (code === 123 && leaf.firstBrace < 0) leaf.firstBrace = leaf.codes.length
   if (code === 96 && kind === ATOM) leaf.lastAtomTick = leaf.codes.length
   leaf.codes.push(code)
   leaf.kinds.push(kind)
