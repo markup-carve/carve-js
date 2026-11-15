@@ -163,6 +163,16 @@ function floatingAttributeCandidates(output: string): Candidate[] {
   return found
 }
 
+function underlineBoundaryCandidates(output: string): Candidate[] {
+  const found: Candidate[] = []
+  let at = output.indexOf('_}/')
+  while (at >= 0) {
+    found.push({ id: 'U-065', output: output.slice(0, at + 2) + '\\' + output.slice(at + 2) })
+    at = output.indexOf('_}/', at + 3)
+  }
+  return found
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -194,7 +204,7 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
     ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
     ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output),
-    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output)]
+    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output), ...underlineBoundaryCandidates(output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue

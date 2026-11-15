@@ -25,6 +25,11 @@ function taskDifference(expected: string, actual: string): boolean {
     && actual.includes('<input') && actual.includes('aria-label=')
 }
 
+function taskLabelBoundary(input: string, expected: string, actual: string): boolean {
+  const task = input.trimStart().startsWith('-{') && (input.includes('[x]') || input.includes('[X]') || input.includes('[ ]'))
+  return task && expected.includes('aria-label=') && actual.includes('aria-label=') && expected !== actual
+}
+
 function tableTab(input: string, expected: string, actual: string): boolean {
   if (expected === actual || !input.includes('\t')) return false
   for (const line of input.split('\n')) {
@@ -92,6 +97,16 @@ function measuredTabOrDiv(input: string, expected: string, actual: string, line:
   return null
 }
 
+function boundaryReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
+  const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
+  if (tabOrDiv !== null) return tabOrDiv
+  if (taskLabelBoundary(input, expected, actual)) return recordOf('U-133', line,
+    'C2-H-032 derives the task item aria label from its 0.2 plain text boundary')
+  if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,
+    'C2-I-060, C2-I-062, and C2-I-119 close the nested braced inline form at its own boundary')
+  return null
+}
+
 function unresolvedEngineShape(input: string, expected: string, actual: string): boolean {
   if (expected.includes('class="tag"') && actual.includes('#') && input.includes('{#')) return true
   if (input.includes('```') && expected.includes('<code>') && actual.includes('<code>')) return true
@@ -107,10 +122,8 @@ function lineCommentInContainer(input: string): boolean {
 export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
   if (exact !== null) return exact
-  const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
-  if (tabOrDiv !== null) return tabOrDiv
-  if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,
-    'C2-I-060, C2-I-062, and C2-I-119 close the nested braced inline form at its own boundary')
+  const boundary = boundaryReport(input, expected, actual, line)
+  if (boundary !== null) return boundary
   if (unresolvedEngineShape(input, expected, actual)) return null
   if (lineCommentInContainer(input)) return recordOf('U-146', line,
     'C2-B-133 and C2-I-044 end the percent line comment at its container boundary')

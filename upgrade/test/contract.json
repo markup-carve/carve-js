@@ -706,10 +706,12 @@
     "id": "U-065",
     "title": "Bare underline",
     "inputs": [
-      "an _underlined_ word and snake_case and _id\n"
+      "an _underlined_ word and snake_case and _id\n",
+      "_z_/y/\n"
     ],
     "outputs": [
-      "an {_underlined_} word and snake_case and _id\n"
+      "an {_underlined_} word and snake_case and _id\n",
+      "{_z_}\\/y/\n"
     ],
     "class": "rewrite"
   },
@@ -1244,9 +1246,17 @@
     "id": "U-133",
     "title": "Task item HTML",
     "inputs": [
-      "- [ ] +"
+      "- [ ] +",
+      "-{#k} [x] bare\n  # inside\n",
+      "-{#k} [x] old\n      # outside\n",
+      "-{title=\"😀\"} [x] a\n  # h\n"
     ],
-    "outputs": [],
+    "outputs": [
+      "- [ ] {% %}",
+      "-{#k} [x] bare\n\n  # inside\n",
+      "-{#k} [x] old\n\n      # outside\n",
+      "-{title=\"😀\"} [x] a\n\n  # h\n"
+    ],
     "class": "report"
   },
   {
@@ -1493,7 +1503,11 @@
     "id": "U-158",
     "title": "An unresolved reference writes its label and attached attributes from the folded key",
     "inputs": [
-      "[\\[][]"
+      "[\\[][]",
+      "[a][a]{.c}{#i}\n",
+      "[a][b]{.c}{.d}\n",
+      "x[a][a]{key=v}{#i}\n",
+      "[a][]{#i}{.c}\n"
     ],
     "outputs": [],
     "class": "report"

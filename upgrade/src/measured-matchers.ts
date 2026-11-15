@@ -113,6 +113,8 @@ function imageReferenceMatch(input: string, expected: string, actual: string): s
 function referenceMatch(input: string, expected: string, actual: string): string | null {
   if (input.includes('javascript:') || input.includes('\u202e')) return 'U-164'
   if (input.includes('][@')) return 'U-166'
+  if (input.includes('][') && input.includes(']{') && expected.includes('{') && actual.includes('{')
+    && !expected.includes('<a') && !actual.includes('<a')) return 'U-158'
   const footnote = footnoteReferenceMatch(input, expected, actual)
   if (footnote !== null) return footnote
   const image = imageReferenceMatch(input, expected, actual)
