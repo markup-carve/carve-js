@@ -4,7 +4,7 @@
 import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
-import { type Diagnostic, locateFindings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
@@ -30,6 +30,14 @@ export interface WriteOutput {
   source: string
   /** C2-W-011: what the writer could not write, in the render-loss channel. */
   diagnostics: Diagnostic[]
+}
+
+/** C2-W-133: the source-only writer cannot return a repair that it refused. */
+export class CarveWriteError extends Error {
+  constructor() {
+    super('the writer could not complete its repair')
+    this.name = 'CarveWriteError'
+  }
 }
 
 /** Whether `value`, read at a pointer into a valid tree, is a node. */
@@ -352,6 +360,8 @@ function isAsked(w: Writer, group: readonly Node[], first: boolean, node: TextNo
  */
 function settle(w: Writer, document: DocumentNode, group: readonly Node[], first: boolean): boolean {
   const check = compareGroup(w, document, group, first)
+  if (process.env['CARVE_DEBUG']) console.error('changes', check.escapes.length, check.forms.length, check.retracted.length,
+    check.losses.length, check.escapes.map(([node, at]) => `${node.value.slice(0, 8)}:${at}`).slice(0, 3))
   let dropped = false
   // Each test writes the group twice; a round with more trials places them all, as it does escapes.
   const trials = check.trials.length <= MAX_ORDERED_ESCAPES ? check.trials : []
@@ -379,6 +389,57 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
   return applyChanges(w, check)
 }
 
+function nodeId(ids: Map<Node, number>, node: Node): number {
+  const known = ids.get(node)
+  if (known !== undefined) return known
+  const id = ids.size
+  ids.set(node, id)
+  return id
+}
+
+/** C2-W-133: a complete repair state, including attempts that can change the next round. */
+function repairKey(w: Writer, ids: Map<Node, number>): string {
+  const escapes = [...w.escapes].map(([node, offsets]) => [nodeId(ids, node), offsets])
+  const forms = [...w.forms].map(([node, form]) => [nodeId(ids, node), form])
+  const attempts = [...w.attempts].map(([node, attempt]) => [nodeId(ids, node), attempt.step,
+    attempt.escapes.map(([text, at]) => [nodeId(ids, text), at])])
+  const lost = [...w.lost].map((node) => nodeId(ids, node))
+  return JSON.stringify([w.lines, w.blankFirst, w.losses.entries.length, escapes, forms, attempts, lost])
+}
+
+/** C2-W-133: report a repair loop or exhausted search as a refusal, with the group's path. */
+function refuseRepair(w: Writer, node: Node): void {
+  addFinding(w.losses, node, {
+    code: 'writer-refused', severity: 'warning', channel: 'render-loss',
+    message: 'the writer could not complete its repair for this block',
+  })
+}
+
+interface RepairHistory {
+  ids: Map<Node, number>
+  recent: string[]
+  seen: Set<string>
+  rounds: number
+}
+
+/** C2-W-133: a repeated state cannot lead to a new spelling on the next deterministic round. */
+function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistory): boolean {
+  history.rounds++
+  const key = repairKey(w, history.ids)
+  if (history.seen.has(key) || history.rounds > 8192) {
+    const host = group[0]
+    if (host !== undefined) refuseRepair(w, host)
+    return true
+  }
+  history.recent.push(key)
+  history.seen.add(key)
+  if (history.recent.length > 16) {
+    const old = history.recent.shift()
+    if (old !== undefined) history.seen.delete(old)
+  }
+  return false
+}
+
 /**
  * Writes the group of top-level blocks that starts at `from` into `w.lines` and returns its end.
  * C2-W-089: the group is parsed again and written again until it reads back as its blocks.
@@ -387,6 +448,7 @@ function settle(w: Writer, document: DocumentNode, group: readonly Node[], first
 function writeGroup(w: Writer, document: DocumentNode, from: number, first: boolean): number {
   const nodes = document.children
   const reported = w.losses.entries.length
+  const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0 }
   for (;;) {
     const end = groupEnd(w, nodes, from)
     const group = nodes.slice(from, end)
@@ -397,16 +459,21 @@ function writeGroup(w: Writer, document: DocumentNode, from: number, first: bool
     w.starts.clear()
     writeBlocks(w, group, '', 0, false)
     if (w.lines.length === 0) return end
-    if (beyondSourceDepth(group)) {
-      const host = group[0]
-      if (host !== undefined) lose(w, host, null)
-      return end
-    }
+    if (refuseDeepGroup(w, group)) return end
+    if (repeatedRepair(w, group, history)) return end
     if (!settle(w, document, group, first && !w.blankFirst)) {
       if (w.losses.entries.length === reported) reportUnread(w, group)
       return end
     }
   }
+}
+
+/** C2-W-011: a group beyond the parser's nesting limit has no spelling. */
+function refuseDeepGroup(w: Writer, group: readonly Node[]): boolean {
+  if (!beyondSourceDepth(group)) return false
+  const host = group[0]
+  if (host !== undefined) lose(w, host, null)
+  return true
 }
 
 /** C2-W-011: a tree beyond the parser's nesting limit has no source that reads back as that tree. */
@@ -542,5 +609,7 @@ export function writeWithDiagnostics(document: DocumentNode, options?: WriteOpti
 
 /** The canonical Carve source of a tree (C2-W-001). */
 export function write(document: DocumentNode, options?: WriteOptions): string {
-  return writeWithDiagnostics(document, options).source
+  const result = writeWithDiagnostics(document, options)
+  if (result.diagnostics.some((entry) => entry.code === 'writer-refused')) throw new CarveWriteError()
+  return result.source
 }

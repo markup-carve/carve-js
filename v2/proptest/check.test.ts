@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { format } from '../src/index.ts'
+import { CarveWriteError, format, formatWithDiagnostics, parse, write } from '../src/index.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
 
@@ -31,6 +31,23 @@ void test('C2-W-088: needless bracket and brace escapes are removed', () => {
   for (const source of [String.raw`x[[^](/u)`, String.raw`x:n[[^](/u)`, String.raw`x{#a\_}`, String.raw`x{#a\_-}`]) {
     assert.equal(format(source), `${source}\n`)
   }
+})
+
+void test('C2-W-133: a repeated writer repair state is reported', () => {
+  const source = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8')
+  const script = 'const r = require("./v2/src/index.ts").formatWithDiagnostics(process.env.CARVE_SOURCE);' +
+    'process.stdout.write(JSON.stringify(r.diagnostics.map((entry) => entry.code)))'
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: join(import.meta.dirname, '../..'), encoding: 'utf8', timeout: 2000,
+    env: { ...process.env, CARVE_SOURCE: source },
+  })
+  assert.equal(result.error, undefined)
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, /writer-refused/)
+  const diagnostic = formatWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'writer-refused')
+  assert.equal(diagnostic?.path, '/children/0')
+  assert.throws(() => format(source), CarveWriteError)
+  assert.throws(() => write(parse(source)), CarveWriteError)
 })
 
 void test('C2-W-007: a space in an image alt value is content', () => {
