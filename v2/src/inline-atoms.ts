@@ -12,7 +12,7 @@ import {
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
-  type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START, TOKEN_WIDTH,
+  closerMissing, type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START, TOKEN_WIDTH,
 } from './inline-state.ts'
 import {
   BRACED_MARKS, CHARACTER_CLASSES, CLASS_BRACED_MARK, CLASS_EMAIL_DOMAIN, CLASS_EMAIL_LAST, CLASS_EMAIL_LOCAL,
@@ -51,9 +51,10 @@ export function characterBefore(state: InlineState, pos: number): number {
 /** The character at `pos`, behind the braced comments that start there (C2-I-026). */
 export function characterAfter(state: InlineState, pos: number): number {
   const text = state.text
-  while (!state.commentCloserMissing && text.charCodeAt(pos) === BRACE_OPEN && text.charCodeAt(pos + 1) === PERCENT) {
+  while (text.charCodeAt(pos) === BRACE_OPEN && text.charCodeAt(pos + 1) === PERCENT) {
+    if (closerMissing(state.commentCloserMissingFrom, pos)) break
     const close = text.indexOf('%}', pos + 2)
-    if (close < 0 || close + 2 > state.end) state.commentCloserMissing = true
+    if (close < 0 || close + 2 > state.end) state.commentCloserMissingFrom = pos
     else pos = close + 2
   }
   // C2-I-011: an escaped no-break space is whitespace for the test, like U+00A0 itself.
@@ -267,11 +268,11 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
   const editorial = kind === EDITORIAL
   // C2-I-050: the mark of a comment opener before a combining mark is text.
   if (isJoining(codePointAt(text, pos + 2, state.end))) return pos + 2
-  if (editorial ? state.editorialCloserMissing : state.commentCloserMissing) return pos + 1
+  if (closerMissing(editorial ? state.editorialCloserMissingFrom : state.commentCloserMissingFrom, pos)) return pos + 1
   const close = text.indexOf(editorial ? '#}' : '%}', pos + 2)
   if (close < 0 || close + 2 > state.end) {
-    if (editorial) state.editorialCloserMissing = true
-    else state.commentCloserMissing = true
+    if (editorial) state.editorialCloserMissingFrom = pos
+    else state.commentCloserMissingFrom = pos
     return pos + 1
   }
   // C2-I-063: an editorial comment holds at least one character before the first closer.

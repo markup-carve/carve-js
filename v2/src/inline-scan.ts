@@ -91,9 +91,9 @@ function resetScan(state: InlineState): void {
   state.tokenLength = 0
   state.tokenEnd = 0
   state.bracketDepth = 0
-  state.commentCloserMissing = false
-  state.editorialCloserMissing = false
-  state.labelCloserMissing = false
+  state.commentCloserMissingFrom = NONE
+  state.editorialCloserMissingFrom = NONE
+  state.labelCloserMissingFrom = NONE
   state.xrefFailEnd = NONE
   state.doubleQuoteFailEnd = NONE
   state.singleQuoteFailEnd = NONE

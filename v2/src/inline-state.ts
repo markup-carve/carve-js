@@ -87,10 +87,11 @@ export interface InlineState {
   bracketDepth: number
 
   // Memos that let an opener fail in bounded work. Each holds the offset up to which a search
-  // has already found nothing, or NONE.
-  commentCloserMissing: boolean
-  editorialCloserMissing: boolean
-  labelCloserMissing: boolean
+  // has already found nothing, or NONE. The three closer memos hold the offset from which on no
+  // closer follows, or NONE: an opener before it has not failed (C2-I-025, C2-I-060, C2-I-076).
+  commentCloserMissingFrom: number
+  editorialCloserMissingFrom: number
+  labelCloserMissingFrom: number
   xrefFailEnd: number
   doubleQuoteFailEnd: number
   singleQuoteFailEnd: number
@@ -158,9 +159,9 @@ function createState(): InlineState {
     eventLength: 0,
     brackets: new Int32Array(INITIAL_STACK),
     bracketDepth: 0,
-    commentCloserMissing: false,
-    editorialCloserMissing: false,
-    labelCloserMissing: false,
+    commentCloserMissingFrom: NONE,
+    editorialCloserMissingFrom: NONE,
+    labelCloserMissingFrom: NONE,
     xrefFailEnd: NONE,
     doubleQuoteFailEnd: NONE,
     singleQuoteFailEnd: NONE,
@@ -272,6 +273,11 @@ function joinLines(src: string, spans: ArrayLike<number>, from: number, to: numb
   let text = src.slice(spans[from], lineEnd(src, spans[from]!, spans[from + 1]!))
   for (let at = from + 2; at < to; at += 2) text += `\n${src.slice(spans[at], lineEnd(src, spans[at]!, spans[at + 1]!))}`
   return text
+}
+
+/** True when a memo of a missing closer covers an opener whose search starts at `pos`. */
+export function closerMissing(from: number, pos: number): boolean {
+  return from !== NONE && pos >= from
 }
 
 /** Sets the content of a pass: the source spans `spans[from..to)`, as start and end pairs. */

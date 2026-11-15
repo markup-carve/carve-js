@@ -258,3 +258,27 @@ describe('C2-I-014/119: a failed opener in a cell is the whole run', () => {
     expect(cell('a `x')).toBe('a `x')
   })
 })
+
+describe('C2-I-025/060: a later unclosed braced opener does not reach back', () => {
+  const kinds = (src: string): string[] => (parse(src).children[0] as unknown as { children: { type: string }[] }).children
+    .map((node) => node.type)
+
+  it('C2-I-025: a closed braced comment before an unclosed one forms, after any delimiter', () => {
+    for (const before of ['Q*', '*', 'Qz /', 'Q`!`/', 'Q_', 'Q~', 'Q^', 'Q=', 'Q+', 'Q-']) {
+      expect(kinds(`${before}{%%}{%\n`), before).toContain('comment')
+    }
+    expect(kinds('Q*{#x#}{#\n')).toContain('critic_comment')
+    expect(kinds('Q*{%a%} b {%\n')).toContain('comment')
+  })
+
+  it('C2-I-106: the quote look-ahead skips a closed comment whatever follows', () => {
+    for (const tail of ['{%', '{', '{% %}', '']) {
+      expect(render(`-'{%%}:${tail}\n`), tail).toContain('’')
+      expect(render(`-"{%%}:${tail}\n`), tail).toContain('”')
+    }
+  })
+
+  it('C2-I-076: a later unclosed label does not stop an earlier footnote reference', () => {
+    expect(render('*[^a] [^\n\n[^a]: n\n')).toContain('role="doc-noteref"')
+  })
+})
