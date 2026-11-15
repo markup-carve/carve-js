@@ -8,6 +8,7 @@ import { IN_CELL } from './write-inline.ts'
 import {
   ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
 } from './write-plan-model.ts'
+import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
 import { checkSmart } from './write-plan-smart.ts'
 import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
@@ -50,6 +51,7 @@ export const AFTER_MARK = 0
 const LF = 10
 const SPACE = 32
 const TAB = 9
+const CR = 13
 const BACKSLASH = 92
 
 type Resolver = (leaf: Leaf, at: number, escaped: Uint8Array) => void
@@ -123,16 +125,9 @@ function nextIs(leaf: Leaf, at: number, chars: string): boolean {
   return next >= 0 && chars.includes(String.fromCharCode(next))
 }
 
-/** An opening bracket with a closing bracket behind it, or the reverse, may form a construct (C2-W-094). */
+/** C2-W-094: an opening bracket before `^` may open a footnote reference; pairs are checked in write-plan-brackets.ts. */
 function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  if (isLiteral(leaf, at, escaped)) return
-  const opening = code(leaf, at) === 91
-  const step = opening ? 1 : -1
-  const wanted = opening ? 93 : 91
-  for (let unit = at + step; unit >= 0 && unit < leaf.codes.length; unit += step) {
-    if (code(leaf, unit) === wanted && !isLiteral(leaf, unit, escaped)) return undecide(leaf, 'bracket pair')
-  }
-  undecidedIf(opening && nextIs(leaf, at, '^'), leaf, 'footnote bracket')
+  undecidedIf(!isLiteral(leaf, at, escaped) && nextIs(leaf, at, '^'), leaf, 'footnote bracket')
 }
 
 /** C2-W-096: a brace that opens a comment or an attribute block; a braced opener is paired in write-plan-pairs.ts. */
@@ -236,7 +231,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
   '[': bracket,
   '\\': () => undefined,
-  ']': bracket,
+  ']': () => undefined,
   '^': (leaf, at, escaped) => {
     if (code(leaf, at - 1) === 91) undecide(leaf, 'footnote bracket')
     else gluedSigil(leaf, at, escaped, opensLink, '[')
@@ -366,8 +361,10 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
     }
     if (kind !== TEXT) continue
     const value = codes[at]!
-    // C2-W-016: a control character of text, a CR or a line feed among them, is left to the reparse.
-    if (value < 32 && value !== TAB) return undecide(leaf, 'control')
+    // C2-W-016: a CR before a line end would join it; a line feed of text is left to the reparse.
+    if (value === LF || (value === CR && (at + 1 === codes.length || codes[at + 1] === LF || codes[at + 1] === CR))) {
+      return undecide(leaf, 'control')
+    }
     if (value >= 128 || INLINE_TRIGGERS[value] === 0) continue
     RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
   }
@@ -399,7 +396,8 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
   const type = node.type
   return {
     paragraph: type === 'paragraph',
-    inItem: place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote',
+    // C2-B-020: inside a quote, a list marker no longer interrupts the paragraph of the item around it.
+    inItem: type !== 'block_quote' && (place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote'),
     inQuote: place.inQuote || type === 'block_quote',
     inDescriptionList: place.inDescriptionList || type === 'definition_list',
     before,
@@ -411,6 +409,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: num
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
+  if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) checkPairs(leaf, escaped, bound)
   return escaped
 }

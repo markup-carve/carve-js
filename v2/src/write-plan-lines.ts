@@ -43,7 +43,7 @@ function runEnd(leaf: Leaf, at: number, value: number): number {
 
 /** Whether a blank and some content follow `at` on its line: the content a list marker needs. */
 function hasContentBehind(leaf: Leaf, at: number): boolean {
-  if (!isBlank(code(leaf, at))) return false
+  if (code(leaf, at) !== SPACE) return false
   let end = at
   while (isBlank(code(leaf, end))) end++
   return !isLineEnd(code(leaf, end))
@@ -67,7 +67,8 @@ function lineEndsWith(leaf: Leaf, at: number, value: number): boolean {
 function heading(leaf: Leaf, at: number, value: number): number {
   const end = runEnd(leaf, at, value)
   if (end - at > 6) return NO_ESCAPE
-  if (isBlank(code(leaf, end))) return at
+  if (code(leaf, end) === SPACE) return at
+  if (code(leaf, end) === TAB) return UNDECIDED
   return isLineEnd(code(leaf, end)) ? UNDECIDED : NO_ESCAPE
 }
 
@@ -97,9 +98,16 @@ function anyLine(leaf: Leaf, at: number, value: number): number {
   return NO_ESCAPE
 }
 
-/** C2-B-090, C2-B-140: a div or a raw fence opens where a blank or the end of the line follows its run. */
+/** C2-B-014, C2-B-006: a div or a comment fence opens where a blank or the end of the line follows its run. */
 function fence(leaf: Leaf, at: number, end: number): number {
-  return isBlank(code(leaf, end)) || isLineEnd(code(leaf, end)) ? at : UNDECIDED
+  return code(leaf, end) === SPACE || isLineEnd(code(leaf, end)) ? at : UNDECIDED
+}
+
+/** C2-B-031, C2-B-006: a quote mark before a space or the end of the line. */
+function quoteMark(leaf: Leaf, at: number): number {
+  const next = code(leaf, at + 1)
+  if (next === SPACE || isLineEnd(next)) return at
+  return decidedIf(next === TAB)
 }
 
 /** C2-B-043: a bare dot opens an item where its content does not start with a dot and a blank. */
@@ -130,7 +138,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (value === 35 || value === 61) return heading(leaf, at, value)
   if (value >= 48 && value <= 57) return digits(leaf, at)
   switch (value) {
-    case 62: return isBlank(code(leaf, at + 1)) || isLineEnd(code(leaf, at + 1)) ? at : NO_ESCAPE
+    case 62: return quoteMark(leaf, at)
     case 45: return hyphenLine(leaf, at)
     case 42: return runEnd(leaf, at, 42) - at >= 3 ? anyLine(leaf, at, 42) : bullet(leaf, at)
     case 46: return bareDot(leaf, at)
@@ -143,7 +151,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
 function colon(leaf: Leaf, at: number, place: LeafPlace): number {
   const end = runEnd(leaf, at, 58)
   if (end - at >= 3) return fence(leaf, at, end)
-  if (end - at === 2) return isBlank(code(leaf, end)) ? at : NO_ESCAPE
+  if (end - at === 2) return code(leaf, end) === SPACE ? at : decidedIf(code(leaf, end) === TAB)
   if (!isBlank(code(leaf, end)) && !isLineEnd(code(leaf, end))) return NO_ESCAPE
   return place.before === 'definition_list' || place.inDescriptionList ? UNDECIDED : NO_ESCAPE
 }
@@ -166,7 +174,7 @@ function decidedIf(condition: boolean): number {
   return condition ? UNDECIDED : NO_ESCAPE
 }
 
-// C2-B-081, C2-B-090, C2-B-156, C2-B-146, C2-B-175: a definition shape, an attribute line or an include, a
+// C2-B-081, C2-B-046, C2-B-090, C2-B-156, C2-B-146, C2-B-175: a definition shape, an attribute line or an include, a
 // caption, a continuation row. Each depends on more than its line, so it is left to the repair.
 const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [96, (leaf, at) => anyLine(leaf, at, 96)],
@@ -176,7 +184,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [37, percent],
   [SPACE, () => UNDECIDED],
   [TAB, () => UNDECIDED],
-  [91, (leaf, at) => decidedIf(definitionShape(leaf, at))],
+  [91, (leaf, at) => decidedIf(definitionShape(leaf, at) || code(leaf, at + 2) === 93)],
   [123, (leaf, at) => decidedIf(!isBracedOpener(code(leaf, at + 1)) && lineEndsWith(leaf, at, 125))],
   [94, (leaf, at) => decidedIf(isBlank(code(leaf, at + 1)) || isLineEnd(code(leaf, at + 1)))],
   [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
