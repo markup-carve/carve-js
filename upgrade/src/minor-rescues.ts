@@ -233,6 +233,23 @@ function displayMathCaption(output: string): Candidate[] {
   return found
 }
 
+function percentRunInsideBraceComment(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  let open = false
+  for (let at = 0; at < lines.length; at++) {
+    const value = lines[at] ?? ''
+    if (value.includes('{%')) open = true
+    if (open && value.trimStart().startsWith('%%%')) {
+      const changed = [...lines]
+      changed[at] = value.replace('%%%', '\\%%%')
+      found.push(candidate('U-227', changed.join('\n'), 'the percent run inside the brace comment was escaped'))
+    }
+    if (value.includes('%}')) open = false
+  }
+  return found
+}
+
 function promotedImageAttributes(output: string): Candidate[] {
   const lines = readLines(output)
   const found: Candidate[] = []
@@ -287,6 +304,7 @@ export function rescueMinor(
     ...invisibleCommentCandidates(input),
     ...commentedCaptionCaret(output),
     ...displayMathCaption(output),
+    ...percentRunInsideBraceComment(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output)
   ]

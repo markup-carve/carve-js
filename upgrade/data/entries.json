@@ -1369,6 +1369,12 @@
       "name": "display math line before a caption",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-227",
+      "name": "percent run inside a multiline brace comment",
+      "class": "escape",
+      "lint": []
     }
   ],
   "extensions": [

@@ -2357,5 +2357,18 @@
       "$$`x`\n^ p\n",
       "$$`a`\n^ cap\n"
     ]
+  },
+  {
+    "id": "U-227",
+    "title": "Percent run inside a multiline brace comment",
+    "class": "escape",
+    "inputs": [
+      "- {% a\n   %%%\n   z %}\nplain\n",
+      "1. {% a\n    %%% x\n    z %}\nplain\n"
+    ],
+    "outputs": [
+      "- {% a\n   \\%%%\n   z %}\nplain\n",
+      "1. {% a\n    \\%%% x\n    z %}\nplain\n"
+    ]
   }
 ]
