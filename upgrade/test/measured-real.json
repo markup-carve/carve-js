@@ -2823,5 +2823,38 @@
     "entries": [
       "U-226"
     ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
+    "line": 27,
+    "input": "> :: c\n>   %% note\n>   more\n",
+    "check": "explained",
+    "entries": [
+      "U-146"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0824-a-closerless-comment-fence-opens-no-span-in-a-body.md",
+    "line": 39,
+    "input": "[^n]: head\n\n  %%%\n%% below\n\n  tail\n\nr[^n]\n",
+    "check": "explained",
+    "entries": [
+      "U-224"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0940-a-comment-span-on-a-description-or-note-marker-line-closes-below-its-column.md",
+    "line": 105,
+    "input": "x[^n]\n\n[^n]: %%%\n    n\n\n%%%\nc\n",
+    "check": "explained",
+    "entries": [
+      "U-224"
+    ]
   }
 ]

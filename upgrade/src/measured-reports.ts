@@ -135,7 +135,11 @@ function wrappedLinkTitle(input: string, expected: string): boolean {
 
 function lineCommentInContainer(input: string): boolean {
   if (input.includes('%%%')) return false
-  return input.split('\n').some((line) => line.trimStart().startsWith('%% '))
+  return input.split('\n').some((line) => {
+    let value = line.trimStart()
+    while (value.startsWith('>')) value = value.slice(1).trimStart()
+    return value.startsWith('%% ')
+  })
 }
 
 function unresolvedContinuation(input: string): boolean {
@@ -151,6 +155,7 @@ function percentFenceInContainer(input: string): boolean {
   return input.split('\n').some((line) => {
     const value = line.trimStart()
     return value.startsWith('>') || value.startsWith(': ') || value.startsWith('- :::')
+      || value.startsWith('[^') && value.includes(']:')
   })
 }
 

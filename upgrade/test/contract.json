@@ -1438,7 +1438,8 @@
       "[ %%]",
       "[a %% c] d\n",
       "^[a %% c] d\n",
-      ":foo[a %% c] d\n"
+      ":foo[a %% c] d\n",
+      "> :: c\n>   %% note\n>   more\n"
     ],
     "outputs": [],
     "class": "report"
@@ -2327,7 +2328,9 @@
     "inputs": [
       "> %%%\n> secret\n  %%%\nafter\n",
       "- ::: box\n  %%%%\n%% j\n  x\n",
-      ":: t\n: d\n%%%\nc\n%%%\n : d2\n"
+      ":: t\n: d\n%%%\nc\n%%%\n : d2\n",
+      "[^n]: head\n\n  %%%\n%% below\n\n  tail\n\nr[^n]\n",
+      "x[^n]\n\n[^n]: %%%\n    n\n\n%%%\nc\n"
     ],
     "outputs": []
   },
