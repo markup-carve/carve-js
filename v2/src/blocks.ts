@@ -26,10 +26,11 @@ import {
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
-  isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isRawInfo, isThematicBreak, isWord, orderedDelimiter,
+  isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
+import { openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'
 
@@ -702,10 +703,10 @@ function openFence(state: BlockState, end: number): boolean {
   const src = state.src
   const length = fenceOpenerLength(src, cursor.pos, end)
   if (length === 0) return false
-  const info = cursor.pos + length
-  let flags = isRawInfo(src, info, end) ? FLAG_RAW : 0
+  const word = openerWord(src, cursor.pos + length)
+  let flags = word.charCodeAt(0) === EQUALS ? FLAG_RAW : 0
   // C2-B-180: a `csv` or `tsv` fence that the `table` attribute marks is a delimited table.
-  if (above.takeAttributes && (isWord(src, info, end, 'csv') || isWord(src, info, end, 'tsv'))) {
+  if (above.takeAttributes && (word === 'csv' || word === 'tsv')) {
     if (attributeKeyValue(src, above.attributesStart, above.attributesEnd, 'table') !== null) flags = FLAG_DELIMITED
   }
   writeEvent(state, enterTag(state, CODE, flags), cursor.pos, length)

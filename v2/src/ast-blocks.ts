@@ -13,7 +13,7 @@ import {
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
-import { DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
+import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
 import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
@@ -22,10 +22,10 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { orderedDelimiter, trimEnd } from './lines.ts'
+import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
 import { lineFeedAt, trimSpaces } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
-import { addParseFindings, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
+import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
 import { type Findings } from './diagnostics.ts'
 import { acquireState, releaseState } from './state.ts'
@@ -110,6 +110,19 @@ function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
   return { type: 'frontmatter', format, value: bodyValue(src, node.spans!) }
 }
 
+/**
+ * C2-B-122: further words on the opener do not stop the block from opening. C2-B-105: an attribute block
+ * behind a fence language or an admonition name is reported as such.
+ */
+function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named: boolean): void {
+  if (!info.extra) return
+  const src = ctx.src
+  const lineEnd = lineFeedAt(src, node.start)
+  const at = info.extraStart
+  const attribute = named && src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(src, at, lineEnd) > at
+  ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
+}
+
 function codeNode(ctx: TreeContext, node: BlockNode): Block {
   const src = ctx.src
   if ((node.flags & FLAG_DELIMITED) !== 0) return delimitedTableNode(ctx, node)
@@ -123,7 +136,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
     return raw
   }
   const out: CodeBlockNode = { type: 'code_block', value }
-  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  noteFurtherWords(ctx, node, out, info, word !== '')
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) {
     const value = openerTitle(src, info.titleStart, info.titleEnd)
@@ -266,8 +279,7 @@ function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
     const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
     out = { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
   }
-  // C2-B-122: further words on the opener do not stop the div from opening.
-  if (info.extra) ctx.notes.push({ what: TITLE_SYNTAX, node: out, block: node, from: info.extraStart })
+  noteFurtherWords(ctx, node, out, info, out.type === 'admonition')
   if (name !== '') ctx.sourceNames?.set(out, name)
   return out
 }

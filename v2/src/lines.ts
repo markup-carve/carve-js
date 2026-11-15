@@ -467,11 +467,6 @@ export function isFrontmatterCloser(src: string, pos: number, end: number): bool
   return skipSpaces(src, pos + FRONTMATTER_RUN, end) === end
 }
 
-/** True when the info string of the fence whose run ends at `pos` is `=` and a format name (C2-B-116). */
-export function isRawInfo(src: string, pos: number, end: number): boolean {
-  return pos + 1 < end && src.charCodeAt(pos) === EQUALS && (isLower(src.charCodeAt(pos + 1)) || isUpper(src.charCodeAt(pos + 1)))
-}
-
 function startsWith(src: string, pos: number, end: number, word: string): boolean {
   if (pos + word.length > end) return false
   for (let p = 0; p < word.length; p++) if (src.charCodeAt(pos + p) !== word.charCodeAt(p)) return false

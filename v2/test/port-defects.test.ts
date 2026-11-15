@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { parse, render } from '../src/index.ts'
+import { parse, parseWithDiagnostics, render } from '../src/index.ts'
+
+const FENCE = '```'
 
 const types = (src: string): string[] => parse(src).children.map((node) => node.type)
+const first = (src: string): Record<string, unknown> => {
+  const { pos: _pos, ...rest } = parse(src).children[0] as unknown as Record<string, unknown>
+  return rest
+}
+const findings = (src: string): string[] => parseWithDiagnostics(src).diagnostics.map((finding) => finding.code)
 
 describe('C2-B-166/167: a trailing line comment on a row', () => {
   it('C2-B-166: a commented row stays a row when a later line holds a pipe', () => {
@@ -11,5 +18,83 @@ describe('C2-B-166/167: a trailing line comment on a row', () => {
     expect(types('|a| %%\n|\n')).toEqual(['table', 'paragraph'])
     expect(types('> | a | %% n\n> | b |\n')).toEqual(['block_quote'])
     expect(render('> | a | %% n\n> | b |\n')).toContain('<tr><td>a</td></tr>\n      <tr><td>b</td></tr>')
+  })
+})
+
+describe('C2-B-117/119: an opener word is the longest run of its characters', () => {
+  it('C2-B-119: a div name ends at the first character outside `div_name`', () => {
+    for (const glued of ['>', '\\', '{', '|n', ')te', '"t"', '[l]', '.x', '#i', '�']) {
+      expect(first(`::: glossary${glued}\nq\n:::\n`)).toMatchObject({ type: 'directive', kind: 'glossary' })
+      expect(first(`::: box${glued}\nq\n:::\n`)).toMatchObject({ type: 'div', attrs: { classes: ['box'] } })
+      expect(findings(`::: box${glued}\nq\n:::\n`)).toContain('fence-title-syntax')
+    }
+    expect(first('::: a-b_C9\nq\n:::\n')).toMatchObject({ type: 'div', attrs: { classes: ['a-b_C9'] } })
+  })
+
+  it('C2-B-105: an attribute block glued to an admonition name does not stop the admonition', () => {
+    expect(first('::: note{start=9}\ntext\n:::\n')).toMatchObject({ type: 'admonition', kind: 'note' })
+    expect(first('::: note{start=9}\ntext\n:::\n')).not.toHaveProperty('attrs')
+    expect(first('::: note {start=9}\ntext\n:::\n')).toMatchObject({ type: 'admonition', kind: 'note' })
+    expect(findings('::: note{start=9}\ntext\n:::\n')).toEqual(['fence-opener-fallback'])
+    expect(findings('::: tip {.x}\ntext\n:::\n')).toEqual(['fence-opener-fallback'])
+    expect(first('::: toc{x}\n:::\n')).toMatchObject({ type: 'directive', kind: 'toc' })
+  })
+
+  it('C2-B-119/196: a character that is no name and no lone sigil gives no name', () => {
+    for (const word of ['>a', '|n', '\\x', '{', '{.x}', ')']) {
+      const div = first(`::: ${word}\nq\n:::\n`)
+      expect(div).toMatchObject({ type: 'div' })
+      expect(div).not.toHaveProperty('attrs')
+    }
+    expect(first('::: >\nq\n:::\n')).toMatchObject({ type: 'block_quote' })
+    expect(first('::: |\nq\n:::\n')).toMatchObject({ type: 'line_block' })
+  })
+
+  it('C2-B-117: a fence language ends at the first character outside `language_word`', () => {
+    const cases: [string, string | undefined][] = [
+      ['js}', 'js'], ['c}', 'c'], ['{}', undefined], ['py{.x}', 'py'], ['�', undefined], ['a:b', 'a'], ['c++', 'c++'],
+      ['objective-c', 'objective-c'], ['x/y.z#1_A', 'x/y.z#1_A'], ['js"t"', 'js'], ['js[l]', 'js'], ['r,s', 'r'],
+    ]
+    for (const [info, syntax] of cases) {
+      const code = first(`${FENCE}${info}\ncode\n${FENCE}\n`)
+      expect(code.type).toBe('code_block')
+      expect(code.syntax).toBe(syntax)
+      expect(code).not.toHaveProperty('title')
+    }
+    expect(findings(`${FENCE}py{.x}\ncode\n${FENCE}\n`)).toEqual(['fence-opener-fallback'])
+    expect(findings(`${FENCE}js}\ncode\n${FENCE}\n`)).toEqual(['fence-title-syntax'])
+  })
+
+  it('C2-B-116: a raw format ends where the name ends, after no space or one', () => {
+    expect(first(`${FENCE}=html\nx\n${FENCE}\n`)).toEqual({ type: 'raw_block', format: 'html', value: 'x\n' })
+    expect(first(`${FENCE} =html\nx\n${FENCE}\n`)).toEqual({ type: 'raw_block', format: 'html', value: 'x\n' })
+    expect(first(`${FENCE}=html}\nx\n${FENCE}\n`)).toEqual({ type: 'raw_block', format: 'html', value: 'x\n' })
+    expect(first(`${FENCE}=x-y_1\nx\n${FENCE}\n`)).toMatchObject({ type: 'raw_block', format: 'x-y_1' })
+    expect(first(`${FENCE}  =html\nx\n${FENCE}\n`)).toEqual({ type: 'code_block', value: 'x\n' })
+    expect(first(`${FENCE}=1\nx\n${FENCE}\n`)).toEqual({ type: 'code_block', value: 'x\n' })
+  })
+
+  it('C2-B-180: a delimited table reads the language as the fence does', () => {
+    expect(first(`{table}\n${FENCE} csv\na,b\n${FENCE}\n`)).toMatchObject({ type: 'table' })
+    expect(first(`{table}\n${FENCE}tsv}\na\tb\n${FENCE}\n`)).toMatchObject({ type: 'table', columns: [{}, {}] })
+    expect(first(`{table}\n${FENCE}  csv\na,b\n${FENCE}\n`)).toMatchObject({ type: 'code_block' })
+  })
+
+  it('C2-B-117: at most one space stands before the info string of a fence', () => {
+    for (const info of ['  b', '   b', '\tb', ' \tb', '  "t"', '  [l]', '  =html']) {
+      expect(first(`${FENCE}${info}\nx\n${FENCE}\n`)).toEqual({ type: 'code_block', value: 'x\n' })
+    }
+    expect(render(`${FENCE}  b\nx\n${FENCE}\n`)).toBe('<pre><code>x\n</code></pre>')
+    expect(first(`${FENCE} b\nx\n${FENCE}\n`)).toMatchObject({ syntax: 'b' })
+    expect(first(`${FENCE} "t"\nx\n${FENCE}\n`)).toMatchObject({ title: [{ type: 'text', value: 't' }] })
+    expect(first(`${FENCE} [l]\nx\n${FENCE}\n`)).toMatchObject({ groupLabel: 'l' })
+    expect(findings(`${FENCE}  b\nx\n${FENCE}\n`)).toEqual(['fence-title-syntax'])
+  })
+
+  it('C2-B-119: spaces separate the parts, so a part glued to the one before is further words', () => {
+    expect(first(`${FENCE} js "t"[l]\nx\n${FENCE}\n`)).toMatchObject({ syntax: 'js', title: [{ value: 't' }] })
+    expect(first(`${FENCE} js "t"[l]\nx\n${FENCE}\n`)).not.toHaveProperty('groupLabel')
+    expect(first('::: box"t"\nq\n:::\n')).not.toHaveProperty('title')
+    expect(first('::: box "t" [l]\nq\n:::\n')).toMatchObject({ title: [{ value: 't' }], groupLabel: 'l' })
   })
 })
