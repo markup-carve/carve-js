@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parse, parseWithDiagnostics, render } from '../src/index.ts'
+import { parse, parseTree, parseWithDiagnostics, render } from '../src/index.ts'
 
 const FENCE = '```'
 
@@ -363,5 +363,32 @@ describe('C2-H-064: every panel of a figure group has a panel figure', () => {
     expect(render(':::: figure\n| t |\n\n| u |\n::::\n')).toContain('<figure class="carve-figure-panel">\n    <table>')
     expect(render(':::: figure\n| t |\n::::\n', { sourceLines: true })).toContain('<figure class="carve-figure-panel" data-source-line="2">')
     expect(render('| t |\n^ Alone\n')).toMatch(/^<table>/)
+  })
+})
+
+describe('C2-A-138: the text beside a caption number keeps its position', () => {
+  type Caption = { caption: { children: { children: Record<string, unknown>[] }[] } }
+  const captionText = (src: string, options?: { positions: boolean }): Record<string, unknown>[] =>
+    (parseTree(src, options).document.children[0] as unknown as Caption).caption.children[0]!.children
+
+  it('C2-A-138/158: below a table, an image, code, a quote fence and a group', () => {
+    const sources = [
+      '| a |\n^ Table #: one\n', '![i](a.png)\n^ Figure #: one\n', '```\nx\n```\n^ Listing #: one\n', '::: >\nq\n:::\n^ Quote #: one\n',
+      ':::: figure\n![i](a.png)\n::::\n^ Group #: one\n',
+    ]
+    for (const src of sources) {
+      const [before, mark, after] = captionText(src)
+      const line = src.split('\n').findIndex((text) => text.startsWith('^ ')) + 1
+      expect(mark).toEqual({ type: 'caption_number' })
+      expect(before!.pos, src).toMatchObject({ startLine: line, startColumn: 3 })
+      expect(after!.pos, src).toMatchObject({ startLine: line, endColumn: (before!.value as string).length + 3 + 6 })
+    }
+  })
+
+  it('C2-A-138: an escape before the mark still gives the source slice', () => {
+    const [before, , after] = captionText('| a |\n^ Fig\\. #: c\n')
+    expect(before).toMatchObject({ value: 'Fig. ', pos: { startOffset: 8, endOffset: 14 } })
+    expect(after).toMatchObject({ value: ': c', pos: { startOffset: 15, endOffset: 18 } })
+    expect(captionText('| a |\n^ Table #: one\n', { positions: false }).every((node) => node.pos === undefined)).toBe(true)
   })
 })

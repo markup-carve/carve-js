@@ -408,8 +408,11 @@ function dropPositions(nodes: readonly Node[]): void {
   }
 }
 
-/** The index of the caption number mark in the value of a top-level text node that starts at `start` in the source, or -1. */
-function numberMarkIndex(src: string, start: number, value: string): number {
+/**
+ * The source offset of the caption number mark in the value of a top-level text node that starts at
+ * `start` in the source, or -1. `found` takes its index in the value.
+ */
+function numberMarkOffset(src: string, start: number, value: string, found: { at: number }): number {
   let at = start
   for (let index = 0; index < value.length; index++, at++) {
     // C2-A-041: an escaped character is part of the text, and `\#` is no mark.
@@ -417,25 +420,32 @@ function numberMarkIndex(src: string, start: number, value: string): number {
     if (escaped) at++
     if (escaped || value[index] !== '#') continue
     // A character that starts no tag name follows it, or nothing does.
-    if (index + 1 === value.length || !isAsciiNameCharacter(value.charCodeAt(index + 1))) return index
+    if (index + 1 === value.length || !isAsciiNameCharacter(value.charCodeAt(index + 1))) {
+      found.at = index
+      return at
+    }
   }
   return -1
 }
 
-/** Splits the first top-level text node that holds the mark around a `caption_number` node. */
+/**
+ * Splits the first top-level text node that holds the mark around a `caption_number` node. The text
+ * on either side is one slice of the source, so it keeps a position (C2-A-138); the mark has none (C2-A-158).
+ */
 function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
   for (let at = 0; at < children.length; at++) {
     const child = children[at]!
     if (child.type !== 'text') continue
     const value = child.value
-    const start = child.pos?.startOffset ?? -1
+    const pos = child.pos
     // A text node with no position was merged from pieces, and its source is not at hand: it holds no mark.
-    const index = start < 0 ? -1 : numberMarkIndex(ctx.src, start, value)
-    if (index < 0) continue
+    const index = { at: -1 }
+    const mark = pos === undefined ? -1 : numberMarkOffset(ctx.src, pos.startOffset, value, index)
+    if (pos === undefined || mark < 0) continue
     const parts: Inline[] = []
-    if (index > 0) addText(ctx, parts, value.slice(0, index), -1, -1)
+    if (index.at > 0) addText(ctx, parts, value.slice(0, index.at), pos.startOffset, mark)
     parts.push({ type: 'caption_number' })
-    if (index + 1 < value.length) addText(ctx, parts, value.slice(index + 1), -1, -1)
+    if (index.at + 1 < value.length) addText(ctx, parts, value.slice(index.at + 1), mark + 1, pos.endOffset)
     children.splice(at, 1, ...parts)
     return
   }
