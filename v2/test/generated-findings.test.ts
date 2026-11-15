@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { parse, render, tabExtension, tabsExtension, tabsRenderer, validateTree } from '../src/index.ts'
+import { type ExtensionDefinition, parse, parseWithDiagnostics, render, renderWithDiagnostics,
+  tabExtension, tabsExtension, tabsRenderer, validateTree } from '../src/index.ts'
+
+const failureExtension: ExtensionDefinition = {
+  name: 'test.failure', version: '1', matcher: { form: 'div', name: 'failure' }, props: {}, slots: {},
+  transform: (claim) => claim.form === 'div' ? {
+    type: 'block_extension', name: 'test.failure', version: '1', children: [], fallback: claim.body,
+  } : null,
+}
 
 describe('generated parser findings', () => {
   it('C2-A-143, C2-B-165: a leading byte order mark takes no column', () => {
@@ -24,5 +32,32 @@ describe('generated parser findings', () => {
     const source = ':::: tabs\n::: tab "One"\n\u001d\n:::\n::::\n'
     const html = render(source, { extensions: [tabExtension, tabsExtension], renderers: { 'carve.tabs': tabsRenderer } })
     expect(html).toContain('<p>\ufffd</p>')
+  })
+
+  it('C2-X-034: a throwing renderer writes the fallback and names the extension', () => {
+    const rendered = renderWithDiagnostics('::: failure\nBody\n:::', {
+      extensions: [failureExtension], renderers: { 'test.failure': { version: '1', render: () => {
+        throw new Error('test failure')
+      } } },
+    })
+    expect(rendered.html).toContain('<p>Body</p>')
+    expect(rendered.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
+  })
+
+  it('C2-X-034: a renderer result that is not a string writes the fallback', () => {
+    const renderer = { version: '1', render: () => '<b>ok</b>' }
+    Reflect.set(renderer, 'render', () => 42)
+    const rendered = renderWithDiagnostics('::: failure\nBody\n:::', {
+      extensions: [failureExtension], renderers: { 'test.failure': renderer },
+    })
+    expect(rendered.html).toContain('<p>Body</p>')
+    expect(rendered.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
+  })
+
+  it('C2-X-034: a throwing transform retains the core node and reports its name', () => {
+    const definition: ExtensionDefinition = { ...failureExtension, transform: () => { throw new Error('test failure') } }
+    const parsed = parseWithDiagnostics('::: failure\nBody\n:::', { extensions: [definition] })
+    expect(parsed.document.children[0]?.type).toBe('div')
+    expect(parsed.diagnostics.some((entry) => entry.message.includes('test.failure'))).toBe(true)
   })
 })

@@ -96,7 +96,13 @@ function replace(node: Node, definitions: readonly ExtensionDefinition[], source
   for (const definition of definitions) {
     const input = claim(node, definition, sourceNames)
     if (input === null || definition.transform === undefined) continue
-    const transformed = definition.transform(input)
+    let transformed: BlockExtensionNode | InlineExtensionNode | null
+    try { transformed = definition.transform(input) } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      addFinding(findings, node, { code: 'extension-transform-failed', severity: 'warning', channel: 'render-loss',
+        message: `The extension ${definition.name} transform failed: ${detail}; the core source node was retained` })
+      break
+    }
     if (transformed === null) continue
     if (!validTransform(transformed, input, definition, definitions, parent)) {
       addFinding(findings, node, { code: 'extension-fallback-rendered', severity: 'warning', channel: 'render-loss',

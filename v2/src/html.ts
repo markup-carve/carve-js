@@ -786,7 +786,16 @@ export function renderDocument(
   }
   r.renderExtension = (node) => {
     const renderer = settings.renderers[node.name]
-    return renderer !== undefined && renderer.version === node.version ? renderer.render(node, rendererHost(r)) : null
+    if (renderer === undefined || renderer.version !== node.version) return null
+    try {
+      const result: unknown = renderer.render(node, rendererHost(r))
+      if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
+      return result
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      loss(r, node, 'extension-renderer-failed', `the extension ${node.name} renderer failed: ${detail}`)
+      return null
+    }
   }
   writeDocument(r, document)
   return { html: r.out.slice(1), losses: r.losses }

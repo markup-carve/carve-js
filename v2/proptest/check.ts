@@ -352,10 +352,44 @@ function checkDiagnostics(source: string): Finding | null {
   } catch (error) { return finding('diagnostics-exception', description(error)) }
 }
 
-function checkTabs(source: string): Finding | null {
+function tabSource(body: string): string {
+  let longestColon = 0
+  let longestTick = 0
+  let colons = 0
+  let ticks = 0
+  for (const char of body) {
+    colons = char === ':' ? colons + 1 : 0
+    ticks = char === '`' ? ticks + 1 : 0
+    longestColon = Math.max(longestColon, colons)
+    longestTick = Math.max(longestTick, ticks)
+  }
+  const outer = ':'.repeat(Math.max(4, longestColon + 2))
+  const inner = outer.slice(1)
+  const code = '`'.repeat(Math.max(3, longestTick + 1))
+  return `${outer} tabs\n${inner} tab "Generated"\n${code}\n${body}\n${code}\n${inner}\n${outer}\n`
+}
+
+function checkTabsFormat(source: string, document: DocumentNode): Finding | null {
+  const extensions = [tabExtension, tabsExtension]
+  const formatted = formatWithDiagnostics(source, { extensions })
+  if (writerAccounting(formatted.diagnostics) === null && !treesEqual(document, parse(formatted.source, { extensions }))) {
+    return finding('tabs-format-tree-change', 'tab formatting changed tree')
+  }
+  if (writerAccounting(formatted.diagnostics) === null &&
+    formatted.source !== formatWithDiagnostics(formatted.source, { extensions }).source) {
+    return finding('tabs-format-not-idempotent', 'tab formatting changed on second pass')
+  }
+  return diagnosticsValid(source, document, formatted.diagnostics)
+}
+
+function checkTabs(body: string): Finding | null {
+  const source = tabSource(body)
   const extensions = [tabExtension, tabsExtension]
   try {
     const document = parse(source, { extensions })
+    if (document.children[0]?.type !== 'block_extension' || document.children[0].name !== 'carve.tabs') {
+      return finding('tabs-unclaimed', 'generated tabs source was not claimed')
+    }
     validateTree(document, undefined, source, extensions)
     if (!treesEqual(document, decodeTree(encodeTree(document), source, extensions))) {
       return finding('tabs-json-roundtrip', 'extension tree changed after JSON')
@@ -367,14 +401,7 @@ function checkTabs(source: string): Finding | null {
     if (htmlError !== null) return finding('tabs-invalid-html', htmlError)
     const renderDiagnostic = diagnosticsValid(source, document, rendered.diagnostics)
     if (renderDiagnostic !== null) return renderDiagnostic
-    const formatted = formatWithDiagnostics(source, { extensions })
-    if (writerAccounting(formatted.diagnostics) === null && !treesEqual(document, parse(formatted.source, { extensions }))) {
-      return finding('tabs-format-tree-change', 'tab formatting changed tree')
-    }
-    if (formatted.source !== formatWithDiagnostics(formatted.source, { extensions }).source) {
-      return finding('tabs-format-not-idempotent', 'tab formatting changed on second pass')
-    }
-    const formatDiagnostic = diagnosticsValid(source, document, formatted.diagnostics)
+    const formatDiagnostic = checkTabsFormat(source, document)
     if (formatDiagnostic !== null) return formatDiagnostic
     const parsed = parseWithDiagnostics(source, { extensions })
     return diagnosticsValid(source, parsed.document, parsed.diagnostics)
@@ -401,11 +428,8 @@ function checkExtensions(source: string, rng: Random): Finding | null {
     const result = renderWithDiagnostics(`::: random\n${source}\n:::`, {
       extensions: [random], renderers: { [name]: renderer },
     })
-    if (behavior === 1 && result.diagnostics.length === 0) {
-      return finding('extension-nonstring-unreported', 'renderer returned a number without a diagnostic')
-    }
-    if (behavior === 2 && result.diagnostics.length === 0) {
-      return finding('extension-huge-output-unreported', 'renderer returned 100,000 characters without a diagnostic')
+    if (behavior < 2 && !result.diagnostics.some((entry) => entry.message.includes(name))) {
+      return finding('extension-failure-unreported', `the ${name} renderer failure has no named diagnostic`)
     }
   } catch (error) { return finding('extension-renderer-exception', description(error)) }
   return null
