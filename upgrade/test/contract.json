@@ -1901,5 +1901,20 @@
       "{~~>b~}\n",
       "{~~>~}\n"
     ]
+  },
+  {
+    "id": "U-199",
+    "title": "Block boundary after a description body",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n:  d\n   {.k}\ntail\n",
+      ":: term\n:  definition\n > quote\n",
+      "- one\n :: term\n :  def\n"
+    ],
+    "outputs": [
+      ":: t\n:  d\n\ntail\n",
+      ":: term\n:  definition\n\n> quote\n",
+      "- one\n\n:: term\n:  def\n"
+    ]
   }
 ]

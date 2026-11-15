@@ -60,6 +60,36 @@ function plusVariants(input: string): string[] {
   return found
 }
 
+function isListMarker(value: string): boolean {
+  return value.startsWith('- ') || value.startsWith('* ') || value.startsWith('. ')
+}
+
+function boundaryVariants(output: string): string[] {
+  const lines = output.split('\n')
+  const found: string[] = []
+  for (let at = 1; at < lines.length - 1; at++) {
+    const previous = (lines[at - 1] ?? '').trimStart()
+    const current = (lines[at] ?? '').trimStart()
+    if (previous.startsWith(': ') && current.startsWith('>')) {
+      const changed = [...lines]
+      changed[at] = '\n' + current
+      found.push(changed.join('\n'))
+    }
+    if (previous.startsWith(': ') && current.startsWith('{') && current.endsWith('}')) {
+      const changed = [...lines]
+      changed[at] = ''
+      found.push(changed.join('\n'))
+    }
+    if (!isListMarker(previous)) continue
+    if (!current.startsWith(':: ') || !(lines[at + 1] ?? '').trimStart().startsWith(': ')) continue
+    const changed = [...lines]
+    changed[at] = '\n' + current
+    changed[at + 1] = (lines[at + 1] ?? '').trimStart()
+    found.push(changed.join('\n'))
+  }
+  return found
+}
+
 /** C2-B-069, C2-B-076 and C2-B-078: put the mark and body at an owning column. */
 export function rescueDescription(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('::')) return null
@@ -77,6 +107,13 @@ export function rescueDescription(input: string, output: string, mismatch: Repor
       if (!compareHtml(expected, html02(candidate, false)).equal) continue
       return { output: candidate, record: recordOf('U-123', mismatch.line,
         'the description continuation was written as an empty block and a separated follower') }
+    } catch { /* A candidate can fail to parse under the new grammar. */ }
+  }
+  for (const candidate of [...boundaryVariants(input), ...boundaryVariants(output)]) {
+    try {
+      if (!compareHtml(expected, html02(candidate, false)).equal) continue
+      return { output: candidate, record: recordOf('U-199', mismatch.line,
+        'the description boundary was written at its 0.2 owning column while preserving 0.1 HTML') }
     } catch { /* A candidate can fail to parse under the new grammar. */ }
   }
   return null

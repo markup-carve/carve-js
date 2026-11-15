@@ -1219,6 +1219,12 @@
       "name": "empty side of a replacement",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-199",
+      "name": "block boundary after a description body",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
