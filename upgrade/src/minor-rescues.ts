@@ -216,6 +216,23 @@ function commentedCaptionCaret(output: string): Candidate[] {
   return found
 }
 
+function displayMathCaption(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length - 1; at++) {
+    const value = lines[at] ?? ''
+    if (!value.startsWith('$$`') || value.startsWith('$$``') || !(lines[at + 1] ?? '').startsWith('^ ')) continue
+    const close = value.indexOf('`', 3)
+    const comment = value.indexOf(' %%', close + 1)
+    const changed = [...lines]
+    if (close < 0) changed[at] = value + '`'
+    else if (comment > close) changed[at] = value.slice(0, comment)
+    else continue
+    found.push(candidate('U-226', changed.join('\n'), 'the display math line was closed before its caption'))
+  }
+  return found
+}
+
 function promotedImageAttributes(output: string): Candidate[] {
   const lines = readLines(output)
   const found: Candidate[] = []
@@ -269,6 +286,7 @@ export function rescueMinor(
     ...emptyFootnoteBody(output),
     ...invisibleCommentCandidates(input),
     ...commentedCaptionCaret(output),
+    ...displayMathCaption(output),
     ...promotedImageAttributes(output),
     ...divBoundary(output)
   ]

@@ -2341,5 +2341,18 @@
     "outputs": [
       "![alt](u)\n\\^ %% hidden\n"
     ]
+  },
+  {
+    "id": "U-226",
+    "title": "Display math line before a caption",
+    "class": "rewrite",
+    "inputs": [
+      "$$`x\n^ p\n",
+      "$$`a` %% c\n^ cap\n"
+    ],
+    "outputs": [
+      "$$`x`\n^ p\n",
+      "$$`a`\n^ cap\n"
+    ]
   }
 ]

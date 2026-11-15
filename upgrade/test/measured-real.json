@@ -2790,5 +2790,38 @@
     "entries": [
       "U-216"
     ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-198",
+    "path": "resources/examples/edge-cases/0739-opaque-reference-and-inline-bounds.md",
+    "line": 114,
+    "input": "$$`x\n^ p\n",
+    "check": "pass",
+    "entries": [
+      "U-226"
+    ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-198",
+    "path": "resources/examples/edge-cases/0872-the-third-confirmation-round-s-model-findings.md",
+    "line": 314,
+    "input": "$$`a` %% c\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-226"
+    ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-198",
+    "path": "tests/corpus/739-opaque-reference-and-inline-bounds-9.crv",
+    "line": 1,
+    "input": "$$`x\n^ p\n",
+    "check": "pass",
+    "entries": [
+      "U-226"
+    ]
   }
 ]

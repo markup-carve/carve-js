@@ -1363,6 +1363,12 @@
       "name": "caption caret followed by an empty comment",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-226",
+      "name": "display math line before a caption",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
