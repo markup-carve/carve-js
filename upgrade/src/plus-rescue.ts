@@ -385,6 +385,39 @@ function detachedDescriptionPlus(source: string): string[] {
   return found
 }
 
+function fenceOwner(value: string): boolean {
+  const trimmed = value.trimStart()
+  return trimmed.startsWith(': ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')
+    || trimmed.startsWith('. ')
+}
+
+function fencePlusStart(lines: string[], at: number): boolean {
+  return (lines[at] ?? '').trim() === '+' && fenceOwner(lines[at - 1] ?? '')
+    && (lines[at + 1] ?? '').trim() === '```'
+}
+
+function splitFenceAfterPlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 1; at < lines.length - 4; at++) {
+    if (!fencePlusStart(lines, at)) continue
+    const blank = lines.findIndex((line, index) => index > at + 2 && index < at + 12 && line.trim() === '')
+    if (blank < 0 || blank + 1 >= lines.length || (lines[blank + 1] ?? '').trim() === '') continue
+    const close = lines.findIndex((line, index) => index > blank + 1 && index < blank + 12 && line.trim() === '```')
+    if (close < 0) continue
+    for (let indent = 2; indent <= 4; indent++) {
+      const moved = [...lines]
+      moved.splice(at, 1)
+      for (let line = at; line < blank; line++) {
+        if ((moved[line] ?? '').trim() !== '') moved[line] = ' '.repeat(indent) + (moved[line] ?? '').trimStart()
+      }
+      moved.splice(blank, 0, ' '.repeat(indent) + '```')
+      found.push(moved.join('\n'))
+    }
+  }
+  return found
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -410,6 +443,13 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
       return { output: candidate, record: recordOf(entry, mismatch.line,
         'the continuation marker was replaced with 0.2 block ownership while preserving 0.1 HTML') }
     } catch { /* Candidate is not a 0.2 document. */ }
+  }
+  for (const candidate of splitFenceAfterPlus(input)) {
+    try {
+      if (!compareHtml(expected, html02(candidate, false)).equal) continue
+      return { output: candidate, record: recordOf('U-204', mismatch.line,
+        'the continuation fence was closed at its 0.1 ownership boundary') }
+    } catch { /* A candidate can fail to parse under the new grammar. */ }
   }
   return null
 }

@@ -1243,6 +1243,12 @@
       "name": "literal nested inline footnote opener",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-204",
+      "name": "fence after a continuation marker",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

@@ -1981,5 +1981,18 @@
       "^[x \\^[a](u) b]\n",
       "^[x \\^[a]{.c} b]\n"
     ]
+  },
+  {
+    "id": "U-204",
+    "title": "Fence after a continuation marker",
+    "class": "rewrite",
+    "inputs": [
+      ":: t\n:  d\n+\n```\na\n\nb\n```\n",
+      "- x\n+\n```\na\n\nb\n```\n\nz\n"
+    ],
+    "outputs": [
+      ":: t\n:  d\n  ```\n  a\n\n  ```\nb\n```\n",
+      "- x\n  ```\n  a\n\n  ```\nb\n```\n\nz\n"
+    ]
   }
 ]
