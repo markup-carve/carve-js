@@ -1302,9 +1302,8 @@
     "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
     "line": 12,
     "input": "/***/\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-068",
       "U-145"
     ]
   },

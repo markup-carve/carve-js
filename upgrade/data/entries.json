@@ -1528,6 +1528,12 @@
       "name": "slash delimiter pairs across escaped HTML tags",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-256",
+      "name": "tag inside a failed heading brace attribute",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

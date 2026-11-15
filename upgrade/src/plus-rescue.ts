@@ -422,6 +422,21 @@ function detachedDescriptionPlus(source: string): string[] {
   return found
 }
 
+function detachedQuotePlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 1; at < lines.length - 1; at++) {
+    if (lines[at]?.trim() !== '+' || lines[at - 1]?.trim() !== '>') continue
+    const next = lines[at + 1]?.trimStart() ?? ''
+    if (next === '' || next.startsWith('>')) continue
+    const moved = [...lines]
+    moved[at + 1] = `> ${next}`
+    moved.splice(at, 1)
+    found.push(moved.join('\n'))
+  }
+  return found
+}
+
 function fenceOwner(value: string): boolean {
   const trimmed = value.trimStart()
   return trimmed.startsWith(': ') || trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('. ')
@@ -483,6 +498,7 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
     ...taskListBoundaryPlus(input),
     ...percentListPlus(input),
     ...repeatedQuotePluses(input),
+    ...detachedQuotePlus(input),
     ...detachedDescriptionPlus(input)
   ]
   for (const candidate of variants) {

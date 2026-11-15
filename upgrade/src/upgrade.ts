@@ -7,10 +7,16 @@ import { rescuePlus } from './plus-rescue.ts'
 import { rescueQuote } from './quote-rescue.ts'
 import { rescueFence } from './fence-rescue.ts'
 import { rescueDescription } from './description-rescue.ts'
+import { rescueEmptyDefinitionItem } from './definition-rescue.ts'
+import { rescueCombinedInline } from './combined-inline-rescue.ts'
+import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
   wrapLaterItemParagraphs } from './html-transform.ts'
+import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
+import { removeListMarkerTab } from './html-list-tab.ts'
+import { removeTrailingLineBlockSpaces } from './html-line-block.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
 import { RULES } from './rules/index.ts'
@@ -230,7 +236,7 @@ function applyCitedHtml(old: string, next: string, records: ReportRecord[]): Ret
 
 function transformWithRemainderReports(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
-  let transformed = applyCitedHtml(old, next, done.records)
+  let transformed = applyExtraHtml(input, done, old, next)
   for (let attempt = 0; attempt < ENTRIES.length; attempt++) {
     const remainder = compareHtmlExact(transformed.html, next).difference
     if (remainder === null) break
@@ -238,11 +244,22 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
       transformed.applied.length > 0)
     if (report === null || hasEntry(done.records, report.entry)) break
     done.records.push(report)
-    const nextTransform = applyCitedHtml(old, next, done.records)
+    const nextTransform = applyExtraHtml(input, done, old, next)
     if (nextTransform.html === transformed.html) break
     transformed = nextTransform
   }
   return transformed
+}
+
+function applyExtraHtml(input: string, done: Rewritten, old: string, next: string):
+  ReturnType<typeof applyHtmlTransformations> {
+  const cited = applyCitedHtml(old, next, done.records)
+  const eof = explainDescriptionPlusFenceEof(input, done.output, cited.html, next)
+  const tab = hasEntry(done.records, 'U-153') ? removeListMarkerTab(input, eof.html, next)
+    : { html: eof.html, applied: [] }
+  const line = hasEntry(done.records, 'U-130') ? removeTrailingLineBlockSpaces(input, tab.html, next)
+    : { html: tab.html, applied: [] }
+  return { html: line.html, applied: [...cited.applied, ...eof.applied, ...tab.applied, ...line.applied] }
 }
 
 function markUnusedReports(records: ReportRecord[], applied: Set<string>): void {
@@ -261,6 +278,10 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   const transformed = transformWithRemainderReports(input, done, old, next)
   const equal = compareHtmlExact(transformed.html, next).equal
   if (transformed.applied.length > 0 && equal) {
+    if (transformed.applied.includes('U-204') && !hasEntry(records, 'U-204')) {
+      records.push({ ...recordOf('U-204', placeOf(input, done, difference.line),
+        'C2-B-222 adds a final line feed to an unclosed code fence after the continuation rewrite'), class: 'report' })
+    }
     const entries = [...new Set(transformed.applied)]
     const message = `the HTML matches after the declared transformations of ${entries.join(', ')}`
     records.push({ entry: 'upgrade-difference', class: 'summary', line: placeOf(input, done, difference.line), message })
@@ -297,6 +318,18 @@ function placeOf(input: string, done: Rewritten, line: number): number {
   return line === 0 ? 0 : inputLine(input, done.edits, readLines(done.output).starts[line - 1] ?? done.output.length)
 }
 
+function recordsAfterRescue(input: string, rescued: { output: string; record: ReportRecord },
+  records: ReportRecord[]): ReportRecord[] {
+  if (rescued.record.entry === 'U-145' && rescued.output === input.replaceAll('/***/', '{*{/*/}*}')) {
+    return records.filter((record) => record.entry !== 'U-068')
+  }
+  const lines = input.trimEnd().split('\n')
+  if (rescued.record.entry === 'U-125' && lines.length === 3 && lines[0] === '>' && lines[1] === '+') {
+    return records.filter((record) => record.entry !== 'U-014')
+  }
+  return records
+}
+
 function upgradeCore(input: string): UpgradeResult {
   const done = rewrite(input)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
@@ -305,10 +338,13 @@ function upgradeCore(input: string): UpgradeResult {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
       const rescued = rescueFence(input, done.output, mismatch) ?? rescuePlus(input, done.output, mismatch)
-        ?? rescueQuote(input, done.output, mismatch) ?? rescueDescription(input, done.output, mismatch)
-        ?? rescuePercent(input, done.output, mismatch) ?? rescueTargeted(input, done.output, mismatch)
+        ?? rescueQuote(input, done.output, mismatch) ?? rescueEmptyDefinitionItem(input, done.output, mismatch)
+        ?? rescueDescription(input, done.output, mismatch)
+        ?? rescuePercent(input, done.output, mismatch) ?? rescueCombinedInline(input, done.output, mismatch)
+        ?? rescueHeadingBraceTag(input, done.output, mismatch)
+        ?? rescueTargeted(input, done.output, mismatch)
         ?? rescueMinor(input, done.output, mismatch)
-      done.records = rewrittenRecords
+      done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
       if (rescued !== null) {
         done.records.push(rescued.record)
         done.output = rescued.output

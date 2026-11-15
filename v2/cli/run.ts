@@ -140,7 +140,7 @@ function diagnosticLines(path: string, source: string, diagnostics: readonly Dia
 function upgradeOne(path: string, source: string, args: ParsedArgs): { status: number, record: object } {
   const result = upgrade(source)
   const blocked = !canWriteUpgrade(result)
-  if (blocked && args.values['force'] === true) {
+  if (blocked && args.values['force'] === true && args.values['check'] !== true) {
     process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
   }
   if (args.values['write'] === true && result.changed && !blocked) writeFile(path, result.output)

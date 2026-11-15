@@ -23,7 +23,7 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
     try {
       const file = join(dir, 'case.crv')
-      const bytes = Buffer.from('/***/\n')
+      const bytes = Buffer.from('/***/\n\n|= ^|\n')
       for (const integrated of [false, true]) {
         writeFileSync(file, bytes)
         const done = writeRun(file, integrated, true)
@@ -59,6 +59,23 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
         writeFileSync(file, bytes)
         const done = writeRun(file, integrated, true)
         expect(done.status).toBe(2)
+        expect(readFileSync(file)).toEqual(bytes)
+      }
+    } finally { rmSync(dir, { recursive: true }) }
+  })
+
+  it('C2-W-100: check and force have the same write-free behavior', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
+    try {
+      const file = join(dir, 'case.crv')
+      const bytes = Buffer.from('/***/\n\n|= ^|\n')
+      writeFileSync(file, bytes)
+      for (const integrated of [false, true]) {
+        const args = integrated ? [carve2, 'upgrade', '--check', '--force', file]
+          : [standalone, '--check', '--force', file]
+        const done = spawnSync(process.execPath, args)
+        expect(done.status).toBe(1)
+        expect(done.stderr.toString()).not.toContain('upgrade-force-ignored')
         expect(readFileSync(file)).toEqual(bytes)
       }
     } finally { rmSync(dir, { recursive: true }) }
