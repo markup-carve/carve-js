@@ -2652,5 +2652,23 @@
     "outputs": [
       "x[^1]\n\n- {% %}\n\n[^1]: ```\n      code\n\n      ```\nafter\n"
     ]
+  },
+  {
+    "id": "U-251",
+    "title": "A task item consumes a nested footnote definition",
+    "class": "report",
+    "inputs": [
+      "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n"
+    ],
+    "outputs": []
+  },
+  {
+    "id": "U-252",
+    "title": "A task item changes nested description ownership",
+    "class": "report",
+    "inputs": [
+      "- [x]   - :: term\n           : desc\n           :: next\n           : body\n"
+    ],
+    "outputs": []
   }
 ]

@@ -228,5 +228,15 @@
     "id": "U-249",
     "input": "$`a`{CLASS=c}\n",
     "message": "C2-H-009 and C2-H-013: the structural class attribute is written with the canonical lowercase name"
+  },
+  {
+    "id": "U-251",
+    "input": "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n",
+    "message": "C2-B-046, C2-B-082, and C2-H-032: the task item consumes the nested definition and changes task HTML; no preserving 0.2 spelling was verified"
+  },
+  {
+    "id": "U-252",
+    "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
+    "message": "C2-B-046, C2-B-067, and C2-H-032: task HTML and nested description ownership change; no preserving 0.2 spelling was verified"
   }
 ]

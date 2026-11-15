@@ -82,6 +82,14 @@ function changedTaskLabel(input: string, expected: string, actual: string): bool
   return task && expected.includes('aria-label=') && actual.includes('aria-label=')
 }
 
+function taskCompositeMatch(input: string, expected: string, actual: string): string | null {
+  if (input.includes('[^n]: - [ ]  [^f]:') && expected.includes('class="task-list"')
+    && actual.includes('class="task"')) return 'U-251'
+  if (input.includes('- [x]   - :: term') && expected.includes('<dl>')
+    && actual.includes('<dt>term\n: desc')) return 'U-252'
+  return null
+}
+
 function tableMetadataMatch(input: string): string | null {
   if (input.includes('{widths=') || input.includes('{body-rows=') || input.includes('{body-header-rows=')
     || input.includes('{header-rows=') || input.includes('{footer-rows=') || input.includes(' body-header-cols=')) return 'U-150'
@@ -247,6 +255,8 @@ function inlineMatch(input: string, expected: string, actual: string): string | 
 /** The narrow syntax shapes of measured report-only changes. */
 export function matchMeasured(input: string, expected: string, actual: string): string | null {
   if (rejectedHtmlControl(input, expected, actual)) return 'U-248'
+  const taskComposite = taskCompositeMatch(input, expected, actual)
+  if (taskComposite !== null) return taskComposite
   if (changedTaskLabel(input, expected, actual)) return 'U-159'
   const table = tableMatch(input)
   if (table !== null) return table

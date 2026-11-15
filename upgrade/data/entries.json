@@ -1513,6 +1513,18 @@
       "name": "note fence moved outside an empty list item",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-251",
+      "name": "task item consumes a nested footnote definition",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-252",
+      "name": "task item changes nested description ownership",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

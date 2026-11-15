@@ -3701,5 +3701,41 @@
     "input": "x[^1]\n\n- [^1]: ```\n    code\n\nafter\n",
     "check": "pass",
     "entries": ["U-250"]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-046 C2-B-082 C2-H-032",
+    "path": "resources/examples/edge-cases/0924-a-task-item-reads-a-definition-after-extra-box-padding.md",
+    "line": 39,
+    "input": "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n",
+    "check": "explained",
+    "entries": ["U-251"]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-046 C2-B-082 C2-H-032",
+    "path": "tests/corpus/924-a-task-item-reads-a-definition-after-extra-box-padding-2.crv",
+    "line": 1,
+    "input": "[^n]: - [ ]  [^f]: x\n\nr[^n] [^f]\n",
+    "check": "explained",
+    "entries": ["U-251"]
+  },
+  {
+    "cause": "C31",
+    "clause": "C2-B-046 C2-B-067 C2-H-032",
+    "path": "resources/examples/edge-cases/0949-a-task-box-gap-keeps-a-nested-description-at-its-content-column.md",
+    "line": 38,
+    "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
+    "check": "explained",
+    "entries": ["U-252"]
+  },
+  {
+    "cause": "C31",
+    "clause": "C2-B-046 C2-B-067 C2-H-032",
+    "path": "tests/corpus/949-a-task-box-gap-keeps-a-nested-description-at-its-content-column-4.crv",
+    "line": 1,
+    "input": "- [x]   - :: term\n           : desc\n           :: next\n           : body\n",
+    "check": "explained",
+    "entries": ["U-252"]
   }
 ]
