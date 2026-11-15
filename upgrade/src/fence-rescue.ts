@@ -105,39 +105,56 @@ function descriptionFenceBoundary(output: string): string[] {
   return found
 }
 
+function closerAfterBlank(lines: string[], blank: number, marker: number): string | null {
+  const follower = lines[blank + 1] ?? ''
+  if (follower.trim() === '') return null
+  const indent = follower.length - follower.trimStart().length
+  if (indent >= marker) return null
+  const candidate = [...lines]
+  candidate.splice(blank + 1, 0, ' '.repeat(marker) + '```')
+  return candidate.join('\n')
+}
+
+function trailingBlankFence(output: string): string[] {
+  const lines = output.split('\n')
+  const found: string[] = []
+  for (let open = 0; open < lines.length - 3; open++) {
+    const value = lines[open] ?? ''
+    const marker = value.indexOf('```')
+    if (marker < 0 || value.slice(marker).trim() !== '```') continue
+    for (let blank = open + 1; blank < Math.min(lines.length - 1, open + 12); blank++) {
+      if ((lines[blank] ?? '').trim() !== '') continue
+      const candidate = closerAfterBlank(lines, blank, marker)
+      if (candidate !== null) found.push(candidate)
+    }
+  }
+  return found
+}
+
+function firstPreserving(expected: string, candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    try {
+      if (compareHtml(expected, html02(candidate, false)).equal) return candidate
+    } catch {
+      /* A candidate can fail to parse under the new grammar. */
+    }
+  }
+  return null
+}
+
 /** C2-B-057, C2-B-109 and C2-B-111: close an item fence where 0.1 kept its body. */
 export function rescueFence(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('```')) return null
   const expected = html01(input)
-  for (const candidate of descriptionFenceBoundary(output)) {
-    try {
-      if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      return {
-        output: candidate,
-        record: recordOf(
-          'U-179',
-          mismatch.line,
-          'the description fence was closed before the following block at its 0.1 boundary'
-        )
-      }
-    } catch {
-      /* A candidate can fail to parse under the new grammar. */
-    }
-  }
-  for (const candidate of [
-    ...variants(output, Math.max(1, mismatch.line)),
-    ...longerFence(output),
-    ...secondFence(output)
-  ]) {
-    try {
-      if (!compareHtml(expected, html02(candidate, false)).equal) continue
-      return {
-        output: candidate,
-        record: recordOf('U-127', mismatch.line, 'the fence was closed at the item boundary while preserving 0.1 HTML')
-      }
-    } catch {
-      /* A candidate can fail to parse under the new grammar. */
-    }
-  }
+  const trailing = firstPreserving(expected, trailingBlankFence(output))
+  if (trailing !== null) return { output: trailing, record: recordOf('U-135', mismatch.line,
+    'the fence was closed after its retained trailing blank line under C2-B-113') }
+  const description = firstPreserving(expected, descriptionFenceBoundary(output))
+  if (description !== null) return { output: description, record: recordOf('U-179', mismatch.line,
+    'the description fence was closed before the following block at its 0.1 boundary') }
+  const item = firstPreserving(expected, [...variants(output, Math.max(1, mismatch.line)),
+    ...longerFence(output), ...secondFence(output)])
+  if (item !== null) return { output: item, record: recordOf('U-127', mismatch.line,
+    'the fence was closed at the item boundary while preserving 0.1 HTML') }
   return null
 }

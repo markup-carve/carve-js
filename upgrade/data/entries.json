@@ -1267,6 +1267,12 @@
       "name": "literal dash before a braced insertion",
       "class": "escape",
       "lint": []
+    },
+    {
+      "id": "U-209",
+      "name": "unresolved container continuation ownership",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

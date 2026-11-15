@@ -1286,10 +1286,16 @@
     "id": "U-135",
     "title": "Trailing blank line of an unclosed code fence",
     "inputs": [
-      "```\n\n"
+      "```\n\n",
+      "- q\n  ```\n\ntail\n",
+      "1. item\n    ```\n\n   See[^c]\n\n[^c]: para\n",
+      ":: t\n: ```\n  code\n\nafter\n"
     ],
     "outputs": [
-      "```\n\n```\n"
+      "```\n\n```\n",
+      "- q\n  ```\n\n  ```\ntail\n",
+      "1. item\n    ```\n\n   See[^c]\n\n    ```\n[^c]: para\n",
+      ":: t\n: ```\n  code\n\n  ```\nafter\n"
     ],
     "class": "rewrite"
   },
@@ -2073,6 +2079,23 @@
     ],
     "outputs": [
       "\\-{+a+} text\n"
+    ]
+  },
+  {
+    "id": "U-209",
+    "title": "Unresolved container continuation ownership",
+    "class": "report",
+    "inputs": [
+      "> quoted\n+\n- item\n> more\n",
+      "- +\n::: note\n\n  tail\n",
+      ":: t\n: +\n```\na\n\n  ```\n  c\n",
+      "- a\n  - +\n  > b\n"
+    ],
+    "outputs": [
+      "> quoted\n>\n> - item\n> more\n",
+      "- +\n::: note\n\n  tail\n",
+      ":: t\n: +\n```\na\n\n  ```\n  c\n",
+      "- a\n  - +\n  > b\n"
     ]
   }
 ]

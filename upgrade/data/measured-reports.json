@@ -193,5 +193,10 @@
     "id": "U-206",
     "input": "# *Setup*\n\nSee </#Setup>.\n",
     "message": "C2-H-095 and C2-H-096 use plain heading text or a caption label and number for a resolved cross-reference"
+  },
+  {
+    "id": "U-209",
+    "input": "> quoted\n+\n- item\n> more\n",
+    "message": "C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source"
   }
 ]

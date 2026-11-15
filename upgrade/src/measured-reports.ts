@@ -120,6 +120,14 @@ function lineCommentInContainer(input: string): boolean {
   return input.split('\n').some((line) => line.trimStart().startsWith('%% '))
 }
 
+function unresolvedContinuation(input: string): boolean {
+  for (const line of input.split('\n')) {
+    const value = line.trimStart()
+    if (value === '+' || value.endsWith(' +') || value.startsWith('- +') || value.startsWith('* +')) return true
+  }
+  return false
+}
+
 /** Reports the measured, clause-backed HTML changes that have no source rewrite. */
 export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
@@ -140,5 +148,9 @@ export function measuredReport(input: string, expected: string, actual: string, 
     const example = measuredExamples.find((item) => item.id === measuredId)
     if (example !== undefined) return recordOf(example.id, line, example.message)
   }
-  return legacyMeasured(input, expected, actual, line)
+  const legacy = legacyMeasured(input, expected, actual, line)
+  if (legacy !== null) return legacy
+  if (unresolvedContinuation(input)) return recordOf('U-209', line,
+    'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
+  return null
 }
