@@ -1734,6 +1734,39 @@
     ]
   },
   {
+    "cause": "C64",
+    "clause": "C2-I-044",
+    "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-2.crv",
+    "line": 1,
+    "input": "^[a %% c] d\n",
+    "check": "explained",
+    "entries": [
+      "U-146"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-I-044",
+    "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-4.crv",
+    "line": 1,
+    "input": ":foo[a %% c] d\n",
+    "check": "explained",
+    "entries": [
+      "U-146"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-I-044",
+    "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-5.crv",
+    "line": 1,
+    "input": "[a %% c] d\n",
+    "check": "explained",
+    "entries": [
+      "U-146"
+    ]
+  },
+  {
     "cause": "C65",
     "clause": "C2-B-046",
     "path": "resources/examples/edge-cases/0856-a-wide-gap-before-a-task-box-leaves-the-lazy-frame-out-of-a-term.md",

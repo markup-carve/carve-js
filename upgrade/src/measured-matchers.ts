@@ -130,9 +130,22 @@ function inlinePunctuationMatch(input: string, expected: string): string | null 
   if (hasTrailingSigil(input) && (expected.includes('class="mention"') || expected.includes('class="tag"')
     || expected.includes('<strong>#') || expected.includes('<strong>@'))) return 'U-170'
   if (input.includes(':') && input.includes('[%%')) return 'U-149'
-  if (input.includes('[ %%') || input.includes('[%%')) return 'U-146'
+  if (percentInsideBracket(input)) return 'U-146'
   if (input.includes('{^') || input.includes('\t%%')) return 'U-155'
   return null
+}
+
+function percentInsideBracket(input: string): boolean {
+  for (const line of input.split('\n')) {
+    let open = line.indexOf('[')
+    while (open >= 0) {
+      const close = line.indexOf(']', open + 1)
+      const percent = line.indexOf('%%', open + 1)
+      if (close > percent && percent > open) return true
+      open = line.indexOf('[', open + 1)
+    }
+  }
+  return false
 }
 
 function listMarkerTab(input: string, expected: string, actual: string): boolean {

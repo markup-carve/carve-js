@@ -1419,7 +1419,10 @@
     "id": "U-146",
     "title": "A percent line comment inside brackets or a container ends at its boundary",
     "inputs": [
-      "[ %%]"
+      "[ %%]",
+      "[a %% c] d\n",
+      "^[a %% c] d\n",
+      ":foo[a %% c] d\n"
     ],
     "outputs": [],
     "class": "report"
