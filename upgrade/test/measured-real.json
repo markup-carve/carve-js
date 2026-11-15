@@ -3384,5 +3384,49 @@
     "entries": [
       "U-239"
     ]
+  },
+  {
+    "cause": "C28",
+    "clause": "C2-I-087",
+    "path": "resources/examples/edge-cases/0559-a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker.md",
+    "line": 64,
+    "input": "see [^a\tb]\n\n[^a b]: note\n",
+    "check": "explained",
+    "entries": [
+      "U-160"
+    ]
+  },
+  {
+    "cause": "C28",
+    "clause": "C2-I-087",
+    "path": "tests/corpus/559-a-tab-inside-a-line-is-content-in-a-label-and-after-a-definition-marker-4.crv",
+    "line": 1,
+    "input": "see [^a\tb]\n\n[^a b]: note\n",
+    "check": "explained",
+    "entries": [
+      "U-160"
+    ]
+  },
+  {
+    "cause": "C37",
+    "clause": "C2-I-030",
+    "path": "resources/examples/edge-cases/0295-a-malformed-language-tag-leaves-the-whole-block-literal.md",
+    "line": 27,
+    "input": "[a]{:abcdefgh} [b]{:abcdefghi}\n",
+    "check": "explained",
+    "entries": [
+      "U-240"
+    ]
+  },
+  {
+    "cause": "C37",
+    "clause": "C2-I-030",
+    "path": "tests/corpus/295-a-malformed-language-tag-leaves-the-whole-block-literal-2.crv",
+    "line": 1,
+    "input": "[a]{:abcdefgh} [b]{:abcdefghi}\n",
+    "check": "explained",
+    "entries": [
+      "U-240"
+    ]
   }
 ]

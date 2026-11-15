@@ -1585,7 +1585,8 @@
     "id": "U-160",
     "title": "Whitespace within a footnote reference label normalizes before lookup",
     "inputs": [
-      "x[^f\ng]\n[^f g]: n"
+      "x[^f\ng]\n[^f g]: n",
+      "see [^a\tb]\n\n[^a b]: note\n"
     ],
     "outputs": [
       "x[^f\ng]\n\n[^f g]: n"
@@ -2536,5 +2537,14 @@
     "outputs": [
       ":: t\n: a\n\t```\n```\n"
     ]
+  },
+  {
+    "id": "U-240",
+    "title": "A language tag longer than eight characters is accepted",
+    "class": "report",
+    "inputs": [
+      "[a]{:abcdefgh} [b]{:abcdefghi}\n"
+    ],
+    "outputs": []
   }
 ]

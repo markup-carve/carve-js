@@ -95,7 +95,9 @@ function footnoteReferenceMatch(input: string, expected: string, actual: string)
   if (input.includes('^[') && input.includes('[^') && actual.includes('<a')) return 'U-154'
   const footnote = input.indexOf('[^')
   const footnoteEnd = input.indexOf(']', footnote + 2)
-  if (footnote >= 0 && footnoteEnd > footnote && input.slice(footnote, footnoteEnd).includes('\n')) return 'U-160'
+  if (footnote >= 0 && footnoteEnd > footnote
+    && (input.slice(footnote, footnoteEnd).includes('\n') || input.slice(footnote, footnoteEnd).includes('\t')))
+    return 'U-160'
   return null
 }
 
@@ -200,7 +202,20 @@ function inlineDelimiterMatch(input: string, expected: string, actual: string): 
   return adjacentDelimiterMatch(input, expected, actual)
 }
 
+function longLanguageTag(input: string, expected: string, actual: string): boolean {
+  let open = input.indexOf('{:')
+  while (open >= 0) {
+    const close = input.indexOf('}', open + 2)
+    if (close < 0) return false
+    const tag = input.slice(open + 2, close)
+    if (tag.length > 8 && expected.includes(`{:${tag}}`) && actual.includes(`lang="${tag}"`)) return true
+    open = input.indexOf('{:', close + 1)
+  }
+  return false
+}
+
 function inlineMatch(input: string, expected: string, actual: string): string | null {
+  if (longLanguageTag(input, expected, actual)) return 'U-240'
   return inlinePunctuationMatch(input, expected) ?? inlineDelimiterMatch(input, expected, actual)
 }
 

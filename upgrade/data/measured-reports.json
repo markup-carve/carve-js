@@ -208,5 +208,10 @@
     "id": "U-224",
     "input": "> %%%\n> secret\n  %%%\nafter\n",
     "message": "C2-B-108,C2-B-110,C2-B-114: the percent fence consumes a different container extent; no preserving spelling has been verified"
+  },
+  {
+    "id": "U-240",
+    "input": "[a]{:abcdefgh} [b]{:abcdefghi}\n",
+    "message": "C2-I-030: a language tag longer than eight characters is accepted in 0.2 and its span is rendered"
   }
 ]

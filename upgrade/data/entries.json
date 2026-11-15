@@ -1447,6 +1447,12 @@
       "name": "following fence outside description",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-240",
+      "name": "long language tag is accepted",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [
