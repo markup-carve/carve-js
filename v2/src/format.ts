@@ -41,6 +41,6 @@ export function formatWithDiagnostics(source: string, options?: FormatOptions): 
 /** The canonical form of `source` (spec/0.2/writer.md). C2-W-002: it parses to the tree of `source`. */
 export function format(source: string, options?: FormatOptions): string {
   const result = formatWithDiagnostics(source, options)
-  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError()
+  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
   return result.source
 }

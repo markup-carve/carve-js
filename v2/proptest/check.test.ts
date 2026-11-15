@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CarveWriteError, format, formatWithDiagnostics, parse, tabsExtensions, write } from '../src/index.ts'
+import { CarveWriteError, type DocumentNode, format, formatWithDiagnostics, parse, tabsExtensions, write } from '../src/index.ts'
 import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
@@ -72,8 +72,17 @@ void test('C2-W-133: a repeated writer repair state is reported', () => {
 void test('C2-W-134: source-only writer calls refuse an unspellable field', () => {
   const source = '\r'
   assert.equal(formatWithDiagnostics(source).diagnostics[0]?.code, 'field-unspellable')
-  assert.throws(() => format(source), CarveWriteError)
+  assert.throws(() => format(source), (error: unknown) => error instanceof CarveWriteError &&
+    error.diagnostics.some((entry) => entry.code === 'field-unspellable'))
   assert.throws(() => write(parse(source)), CarveWriteError)
+})
+
+void test('C2-W-134: a source-only write refuses an unspellable structure', () => {
+  const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [
+    { type: 'paragraph', children: [] }, { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
+  ] }
+  assert.throws(() => write(document), (error: unknown) => error instanceof CarveWriteError &&
+    error.diagnostics.some((entry) => entry.code === 'structure-unspellable'))
 })
 
 void test('C2-W-134: source-only formatting refuses a loss in an extension claim', () => {

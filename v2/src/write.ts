@@ -32,11 +32,14 @@ export interface WriteOutput {
   diagnostics: Diagnostic[]
 }
 
-/** C2-W-133: the source-only writer cannot return a repair that it refused. */
+/** C2-W-133, C2-W-134: a source-only writer cannot return a result that needs a loss report. */
 export class CarveWriteError extends Error {
-  constructor() {
+  readonly diagnostics: readonly Diagnostic[]
+
+  constructor(diagnostics: readonly Diagnostic[]) {
     super('the writer cannot return this source without a loss report')
     this.name = 'CarveWriteError'
+    this.diagnostics = diagnostics
   }
 }
 
@@ -581,6 +584,8 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
 function prunableOpener(source: string, at: number): boolean {
   const next = source[at + 1]
   if (next === '[') {
+    if (source.startsWith('^]', at + 2)) return true
+    if (!source.startsWith('----', at + 2)) return false
     const close = source.indexOf(']', at + 2)
     const lineEnd = source.indexOf('\n', at + 2)
     return source[at - 1] !== '^' || close < 0 || (lineEnd >= 0 && close > lineEnd)
@@ -639,6 +644,6 @@ export function writeWithDiagnostics(document: DocumentNode, options?: WriteOpti
 /** The canonical Carve source of a tree (C2-W-001). */
 export function write(document: DocumentNode, options?: WriteOptions): string {
   const result = writeWithDiagnostics(document, options)
-  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError()
+  if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
   return result.source
 }

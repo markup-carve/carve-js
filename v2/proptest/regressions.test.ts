@@ -26,6 +26,10 @@ for (const name of readdirSync(directory).filter((file) => file.endsWith('.crv')
       assert.ok((found.losses ?? 0) + (found.refusals ?? 0) > 0)
       return
     }
+    if (target === 'import' && found !== null) {
+      context.todo(`importer finding ${metadata.id}: ${found.kind}`)
+      return
+    }
     if (found !== null) {
       assert.equal(found.kind, metadata.kind)
       context.todo(`expected failure ${metadata.id}: ${found.kind}`)

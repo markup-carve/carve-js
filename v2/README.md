@@ -2,6 +2,10 @@
 
 The 0.2 engine is in `v2/src`. Its public TypeScript entry point is `v2/src/index.ts`.
 
+## Formatting API
+
+`format(source)` and `write(document)` return source when the writer can spell the result without loss. If the writer loses a field or node, or refuses a repair, these calls throw `CarveWriteError`. Its `diagnostics` property names the loss. Use `formatWithDiagnostics` or `writeWithDiagnostics` to receive the nearest source and its diagnostics. A result with `writer-refused` is not canonical.
+
 ## Command line
 
 Run the source entry point with Node, or use the package bin `carve2`. Omit a file or use `-` for standard input. `--help` lists options for each command; `--version` prints the package version.

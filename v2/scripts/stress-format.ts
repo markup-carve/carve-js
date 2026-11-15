@@ -35,6 +35,7 @@ const WRITER_SHAPES: readonly Shape[] = [
   ['escaped backticks in one text', (size) => `x${'\\`'.repeat(size)}z`],
   ['escaped brackets before one link tail', (size) => `x${'\\['.repeat(size)}a](u)`],
   ['escaped brackets before one reference', (size) => `x${'\\['.repeat(size)}a][]`],
+  ['escaped bracket links with their own closer', (size) => 'w \\[a](u) '.repeat(size)],
   ['escaped footnote openers before one closer', (size) => `x${'^\\['.repeat(size)}]`],
 ]
 
