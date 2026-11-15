@@ -1453,6 +1453,12 @@
       "name": "long language tag is accepted",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-241",
+      "name": "hardbreak div changes unresolved reference fallback",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

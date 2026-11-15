@@ -51,7 +51,13 @@ function hasTrailingSigil(input: string): boolean {
   return false
 }
 
-function blockMatch(input: string): string | null {
+function hardbreakFallback(input: string, expected: string, actual: string): boolean {
+  return input.startsWith('::: \\' + '\n') && input.includes('][missing]')
+    && !expected.includes('<br>') && actual.includes('<br>')
+}
+
+function blockMatch(input: string, expected: string, actual: string): string | null {
+  if (hardbreakFallback(input, expected, actual)) return 'U-241'
   if (input.includes('{loose}') && input.includes('::')) return 'U-172'
   if (input.includes('\r') && lineStarts(input, ['# '])) return 'U-176'
   if (lineStarts(input, ['# \t', '## \t', '### \t'])) return 'U-174'
@@ -226,7 +232,7 @@ export function matchMeasured(input: string, expected: string, actual: string): 
   if (table !== null) return table
   const reference = referenceMatch(input, expected, actual)
   if (reference !== null) return reference
-  const block = blockMatch(input)
+  const block = blockMatch(input, expected, actual)
   if (block !== null) return block
   if (lineStarts(input, ['# ']) && (input.includes('][') || input.includes('%%'))) return 'U-148'
   const inline = inlineMatch(input, expected, actual)

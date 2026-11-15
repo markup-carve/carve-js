@@ -213,5 +213,10 @@
     "id": "U-240",
     "input": "[a]{:abcdefgh} [b]{:abcdefghi}\n",
     "message": "C2-I-030: a language tag longer than eight characters is accepted in 0.2 and its span is rendered"
+  },
+  {
+    "id": "U-241",
+    "input": "::: \\\n[a\nb][missing]\n:::\n",
+    "message": "C2-B-129: the hardbreak div writes the line ending inside an unresolved reference fallback as a hard break"
   }
 ]

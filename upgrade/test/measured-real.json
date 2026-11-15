@@ -3428,5 +3428,27 @@
     "entries": [
       "U-240"
     ]
+  },
+  {
+    "cause": "C84",
+    "clause": "C2-B-129",
+    "path": "resources/examples/edge-cases/0965-unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi.md",
+    "line": 28,
+    "input": "::: \\\n[a\nb][missing]\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-241"
+    ]
+  },
+  {
+    "cause": "C84",
+    "clause": "C2-B-129",
+    "path": "tests/corpus/965-unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi-2.crv",
+    "line": 1,
+    "input": "::: \\\n[a\nb][missing]\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-241"
+    ]
   }
 ]

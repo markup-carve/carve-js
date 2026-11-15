@@ -2546,5 +2546,14 @@
       "[a]{:abcdefgh} [b]{:abcdefghi}\n"
     ],
     "outputs": []
+  },
+  {
+    "id": "U-241",
+    "title": "A hardbreak div changes an unresolved reference fallback",
+    "class": "report",
+    "inputs": [
+      "::: \\\n[a\nb][missing]\n:::\n"
+    ],
+    "outputs": []
   }
 ]
