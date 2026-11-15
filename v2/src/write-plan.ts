@@ -11,6 +11,7 @@ import {
 import { opensAngleAtom } from './write-plan-angle.ts'
 import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
+import { NAME, sigilName, UNKNOWN } from './write-plan-sigil.ts'
 import { checkSmart } from './write-plan-smart.ts'
 import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
@@ -108,11 +109,16 @@ function dots(leaf: Leaf, at: number): void {
 }
 
 /** C2-I-090: a name of a mention or a tag after a boundary. */
-function sigil(leaf: Leaf, at: number): void {
+function sigil(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = code(leaf, at - 1)
+  if (before >= 0xd800 && before < 0xe000) return undecide(leaf, 'sigil')
   if (before >= 0 && isWordCharacter(before)) return
-  const next = code(leaf, at + 1)
-  undecidedIf(isAsciiAlphanumeric(next) || next === 95 || next === 45 || next === 125, leaf, 'sigil')
+  if (nextIs(leaf, at, '}')) return undecide(leaf, 'sigil')
+  // A sigil behind a brace may stand in an attribute block, where it reads as itself.
+  if (leaf.firstBrace >= 0 && leaf.firstBrace < at) return undecide(leaf, 'sigil in braces')
+  const name = sigilName(leaf, at)
+  if (name === UNKNOWN) undecide(leaf, 'sigil')
+  else if (name === NAME) escaped[at] = 1
 }
 
 /** C2-I-093, C2-I-094: a symbol or an inline extension. */
@@ -239,7 +245,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
     else gluedSigil(leaf, at, escaped, (l, unit) => opensLink(l, unit) || opensCode(l, unit), '`=')
   },
   '"': quote,
-  '#': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
+  '#': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
   '$': (leaf, at, escaped) => gluedSigil(leaf, at, escaped, opensCode, '`$'),
   '%': percent,
   '\'': quote,
@@ -254,12 +260,13 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '<': angle,
   '=': mark('=>'),
   '>': mark('='),
-  '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
+  '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
   '[': bracket,
   '\\': () => undefined,
   ']': () => undefined,
   '^': (leaf, at, escaped) => {
-    if (code(leaf, at - 1) === 91) undecide(leaf, 'footnote bracket')
+    // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil.
+    if (code(leaf, at - 1) === 91 || code(leaf, at - 1) === 123) undecide(leaf, 'footnote bracket')
     else gluedSigil(leaf, at, escaped, treeBracket, '')
   },
   '_': () => undefined,

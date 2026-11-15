@@ -4,7 +4,7 @@
 import { type Node } from './ast.ts'
 import { APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER } from './inline-tables.ts'
 import { isBoundarySpace, isWordCharacter, NO_CHARACTER } from './unicode.ts'
-import { ATOM, type Leaf, TEXT, undecide } from './write-plan-model.ts'
+import { ATOM, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const EN_DASH = 0x2013
 const EM_DASH = 0x2014
@@ -12,6 +12,7 @@ const LEFT_SINGLE = 0x2018
 const LEFT_DOUBLE = 0x201c
 const HYPHEN = 45
 const SLASH = 47
+const LF = 10
 const LONGEST_WORD = 6
 // The characters that a run of smart punctuation can continue with (data/smart-punctuation.json).
 const RUN_CHARACTERS = '!+-.<=>()'
@@ -42,12 +43,20 @@ function lastCodePoint(text: string | undefined): number | null {
   return isSurrogate(code) ? text.codePointAt(text.length - 2) ?? null : code
 }
 
-/** The code point of text that ends at unit `at`, the edge of the leaf, the glyph of a smart atom, or null. */
+/** What the reader sees before the unit behind a mark or an atom: the glyph of a quote, the start of a content, a break. */
+function previousOfNode(leaf: Leaf, at: number): number | null {
+  const owner = leaf.owners[at]
+  const kind = leaf.kinds[at]
+  if (kind === ATOM && owner?.type === 'smart_punctuation') return lastCodePoint(owner.glyph)
+  // C2-I-104: the content of a node starts with no character before it.
+  if (kind === OPEN) return NO_CHARACTER
+  return kind === ATOM && (owner?.type === 'soft_break' || owner?.type === 'hard_break') ? LF : null
+}
+
+/** The code point of text that ends at unit `at`, the edge of the leaf, what a node leaves before it, or null. */
 function previousOf(leaf: Leaf, at: number): number | null {
   if (at < 0) return NO_CHARACTER
-  const owner = leaf.owners[at]
-  if (leaf.kinds[at] === ATOM && owner?.type === 'smart_punctuation') return lastCodePoint(owner.glyph)
-  if (leaf.kinds[at] !== TEXT) return null
+  if (leaf.kinds[at] !== TEXT) return previousOfNode(leaf, at)
   const code = leaf.codes[at]!
   if (!isSurrogate(code)) return code
   const high = leaf.codes[at - 1]
@@ -55,14 +64,13 @@ function previousOf(leaf: Leaf, at: number): number | null {
   return (high - 0xd800) * 0x400 + code - 0xdc00 + 0x10000
 }
 
-/** The code point of text that starts at unit `at`, the edge of the leaf, or null. */
+/** The code point the reader sees at unit `at`, which is the source a mark or an atom is written as, or the edge. */
 function nextOf(leaf: Leaf, at: number): number | null {
   if (at >= leaf.codes.length) return NO_CHARACTER
-  if (leaf.kinds[at] !== TEXT) return null
   const code = leaf.codes[at]!
   if (!isSurrogate(code)) return code
   const low = leaf.codes[at + 1]
-  if (code >= 0xdc00 || low === undefined || low < 0xdc00 || low >= 0xe000 || leaf.kinds[at + 1] !== TEXT) return null
+  if (code >= 0xdc00 || low === undefined || low < 0xdc00 || low >= 0xe000) return null
   return (code - 0xd800) * 0x400 + low - 0xdc00 + 0x10000
 }
 
