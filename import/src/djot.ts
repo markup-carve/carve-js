@@ -1,6 +1,6 @@
 import { parse, type Block as DjotBlock, type Inline as DjotInline, type Doc, type Row } from '@djot/djot'
 import type { Attrs, Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { assertNever, attrsOf, cell, coalesce, complete, finding, list, paragraph, row, safeUrl, text,
+import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
   type Context, type ImportResult } from './kit.ts'
 
 function djotAttrs(node: { attributes?: Record<string, string> }): { attrs: Attrs } | Record<string, never> {
@@ -99,7 +99,7 @@ function quoteInline(node: Extract<DjotInline, { tag: 'double_quoted' | 'single_
 }
 
 function linkInline(node: Extract<DjotInline, { tag: 'link' }>, context: Context): Inline[] {
-  const href = node.destination ? safeUrl(context, node.tag, node.destination,
+  const href = node.destination !== undefined ? safeUrl(context, node.tag, node.destination,
     node.pos?.start.offset, node.pos?.end.offset) : undefined
   return [{ type: 'link', children: inlines(node.children, context), ...(href !== undefined ? { href } : {}),
     ...(node.reference ? { key: node.reference, namespace: 'link' as const, refForm: 'full' as const } : {}),
@@ -107,7 +107,7 @@ function linkInline(node: Extract<DjotInline, { tag: 'link' }>, context: Context
 }
 
 function imageInline(node: Extract<DjotInline, { tag: 'image' }>, context: Context): Inline[] {
-  const src = node.destination ? safeUrl(context, node.tag, node.destination,
+  const src = node.destination !== undefined ? safeUrl(context, node.tag, node.destination,
     node.pos?.start.offset, node.pos?.end.offset) : undefined
   return [{ type: 'image', alt: textOf(node.children), ...(src !== undefined ? { src } : {}),
     ...(node.reference ? { key: node.reference, namespace: 'link' as const, refForm: 'full' as const } : {}),
@@ -158,7 +158,7 @@ function block(node: DjotBlock, context: Context): Block[] {
         ...djotAttrs(item) })), node.tight, node.start)
       const style = [...node.style].filter(char => char !== '(' && char !== ')' && char !== '.').join('')
       result.marker = { kind: 'ordered', style, delimiter: node.style.endsWith(')') ? ')' : '.',
-        ...(node.start && node.start !== 1 ? { start: node.start } : {}) }
+        ...(node.start !== undefined && node.start !== 1 ? { start: node.start } : {}) }
       if (node.style.startsWith('(')) djotLoss(context, node, 'Parenthesized marker became a plain marker')
       return [result]
     }
@@ -189,6 +189,7 @@ function djotTable(node: Extract<DjotBlock, { tag: 'table' }>, context: Context)
 export function importDjot(input: string): ImportResult {
   const context: Context = { format: 'djot', input, diagnostics: [] }
   const foreign: Doc = parse(input, { sourcePositions: true })
+  ensureForeignDepth(foreign, 'djot')
   const children: DocumentNode['children'] = blocks(foreign.children, context)
   for (const ref of Object.values(foreign.references)) {
     const href = safeUrl(context, 'reference', ref.destination, ref.pos?.start.offset, ref.pos?.end.offset)
@@ -199,7 +200,9 @@ export function importDjot(input: string): ImportResult {
     const href = safeUrl(context, 'autoReference', ref.destination, ref.pos?.start.offset, ref.pos?.end.offset)
     if (href !== undefined) children.push({ type: 'link_reference_definition', key: ref.label, namespace: 'link', href })
   }
-  for (const note of Object.values(foreign.footnotes)) children.push({ type: 'footnote',
-    key: note.label, namespace: 'footnote', children: blocks(note.children, context) })
+  for (const note of Object.values(foreign.footnotes)) {
+    ensureForeignDepth(note, 'djot')
+    children.push({ type: 'footnote', key: note.label, namespace: 'footnote', children: blocks(note.children, context) })
+  }
   return complete(context, children)
 }

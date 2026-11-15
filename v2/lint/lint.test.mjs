@@ -5,6 +5,38 @@ import { lint } from './lint.ts'
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 
+describe('C2-W-107 parsed leaf ranges', () => {
+  for (const [id, trigger] of [
+    ['bare-html-tag', '<b>'],
+    ['html-comment-renders-as-text', '<!-- x -->'],
+    ['empty-include-path', '{{ }}'],
+    ['link-gap-before-destination', '[x] (/u)'],
+  ]) {
+    it(`C2-W-107 ${id} ignores a code span`, () => {
+      expect(lint(`before \`${trigger}\` after\n`).map(entry => entry.code)).not.toContain(id)
+    })
+    it(`C2-W-107 ${id} ignores a code block`, () => {
+      expect(lint(`\`\`\`\n${trigger}\n\`\`\`\n`).map(entry => entry.code)).not.toContain(id)
+    })
+  }
+  it('C2-W-107 ignores HTML shaped text in a raw span and a math span', () => {
+    expect(lint('x `<b>`{=html} and $`<i>`\n').map((entry) => entry.code)).not.toContain('bare-html-tag')
+  })
+  it('C2-W-107 ignores HTML shaped text in raw and comment blocks', () => {
+    const source = '```=html\n<b>\n```\n\n%%%\n<i>\n%%%\n'
+    expect(lint(source).map((entry) => entry.code)).not.toContain('bare-html-tag')
+  })
+  it('C2-W-107 keeps neighboring text and indentation visible to spelling rules', () => {
+    const codes = (source) => lint(source).map((entry) => entry.code)
+    expect(codes('`<b>` <i>\n')).not.toContain('indented-code-block')
+    expect(codes('`a`\n---\n')).toContain('setext-heading-underline')
+    expect(codes('`x`\n- a\n')).toContain('list-marker-without-blank-line')
+    expect(codes('`x`\n> a\n')).toContain('block-opener-without-blank-line')
+    expect(codes('`a`\n: b\n')).toContain('markdown-definition-paragraph')
+    expect(codes('text\n\n[x]: /u\n^ cap\n')).not.toContain('unattached-caption')
+  })
+})
+
 const CASES = [
   { id: 'deprecated-continuation-marker', trigger: '- a\n+\nb', near: '- a\n\nb', fragment: '+' },
   { id: 'thematic-break-spelling', trigger: '___', near: '***', fragment: '___' },
@@ -103,6 +135,22 @@ const CASES = [
 ]
 
 const CORPUS_CASES = JSON.parse(fs.readFileSync(new URL('./corpus-cases.json', import.meta.url), 'utf8'))
+
+describe('C2-W-107 spelling rule leaf near misses', () => {
+  const lineRules = IMPLEMENTED_RULES.filter((rule) => rule.lines)
+  for (const rule of lineRules) {
+    const sample = [...CASES, ...CORPUS_CASES].find((entry) => entry.id === rule.id)
+    if (sample === undefined) throw new Error(`missing spelling sample for ${rule.id}`)
+    const line = sample.trigger.split('\n').find((part) => part.includes(sample.fragment)) ?? sample.fragment
+    const marker = '`'.repeat(Math.max(1, ...[...line.matchAll(/`+/g)].map((match) => match[0].length + 1)))
+    it(`C2-W-107 ${rule.id} ignores its trigger in a code span`, () => {
+      expect(lint(`before ${marker}${line}${marker} after\n`, sample.options).some((entry) => entry.code === rule.id)).toBe(false)
+    })
+    it(`C2-W-107 ${rule.id} ignores its trigger in a code block`, () => {
+      expect(lint(`\`\`\`\n${sample.trigger}\n\`\`\`\n`, sample.options).some((entry) => entry.code === rule.id)).toBe(false)
+    })
+  }
+})
 
 function catalogMessageMatches(id, message) {
   return CATALOG[id].messages.some((template) => {

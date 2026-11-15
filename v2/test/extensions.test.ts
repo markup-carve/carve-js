@@ -3,6 +3,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
 import {
   CarveOptionError, CarveTreeError, decodeTree, format, parse, parseTree, parseWithLayout, render,
+  parseWithDiagnostics,
   renderWithDiagnostics, tabsExtensions, tabsRenderer, treesEqual, validateLayout, validateTree,
   writeWithDiagnostics, type BlockExtensionNode, type DocumentNode, type ExtensionDefinition,
 } from '../src/index.ts'
@@ -37,6 +38,48 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('C2-X-038 validates a transformed child in its declared parent slot', () => {
+    const child: ExtensionDefinition = { name: 'test.child', version: '1',
+      matcher: { form: 'div', name: 'child' }, parent: { name: 'test.parent', slot: 'body' }, props: {}, slots: {},
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.child', version: '1',
+        children: [], fallback: structuredClone(claim.body) } : null }
+    const parent: ExtensionDefinition = { name: 'test.parent', version: '1',
+      matcher: { form: 'div', name: 'parent' }, props: {}, slots: { body: { kind: 'block' } }, children: 'none',
+      transform: (claim) => claim.form === 'div' ? { type: 'block_extension', name: 'test.parent', version: '1',
+        children: [], slots: { body: claim.body }, fallback: structuredClone(claim.body) } : null }
+    const input = '::: parent\n::: child\nHi\n:::\n:::\n'
+    const document = parseTree(input, { extensions: [child, parent] }).document
+    expect(document.children[0]?.type).toBe('block_extension')
+    if (document.children[0]?.type === 'block_extension') {
+      expect(document.children[0].slots?.body?.[0]?.type).toBe('block_extension')
+    }
+    expect(() => validateTree(document, undefined, undefined, [child, parent])).not.toThrow()
+    const orphan = parseWithDiagnostics('::: child\nHi\n:::\n', { extensions: [child, parent] })
+    expect(orphan.document.children[0]?.type).toBe('div')
+    expect(orphan.diagnostics.map((entry) => entry.code)).toContain('extension-fallback-rendered')
+  })
+  it.each(['wrong type', 'wrong value', 'wrong slot', 'undeclared name', 'cycle'] as const)(
+    'C2-X-022, C2-X-038: a transform with %s returns its core fallback and a diagnostic', flaw => {
+      const definition: ExtensionDefinition = {
+        name: 'test.bad', version: '1', matcher: { form: 'div', name: 'bad' }, props: {}, slots: {},
+        transform: () => {
+          const node: BlockExtensionNode = { type: 'block_extension', name: 'test.bad', version: '1',
+            children: [], fallback: [paragraph('safe')] }
+          if (flaw === 'wrong type') return { ...node, type: 'inline_extension' } as never
+          if (flaw === 'wrong value') return undefined as never
+          if (flaw === 'wrong slot') return { ...node, slots: { unknown: [paragraph('bad')] } }
+          if (flaw === 'undeclared name') return { ...node, name: 'test.other' }
+          node.children.push(node)
+          return node
+        },
+      }
+      const input = '::: bad\nHi\n:::\n'
+      const tree = parseTree(input, { extensions: [definition] }).document
+      expect(tree.children[0]?.type).toBe('div')
+      expect(() => validateTree(tree, undefined, undefined, [definition])).not.toThrow()
+      expect(parseWithDiagnostics(input, { extensions: [definition] }).diagnostics)
+        .toMatchObject([{ code: 'extension-fallback-rendered', path: '/children/0' }])
+    })
   it('C2-X-001, C2-X-002, C2-X-018: a claim declares its qualified name and exact version on the root', () => {
     expect(tabsTree().extensions).toEqual([
       { name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },

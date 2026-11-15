@@ -8,7 +8,7 @@ function listStart(node: Fields, marker: Fields): void {
   const startPair = pairs.find((pair) => pair[0] === 'start')
   if (startPair === undefined) return
   const start = Number(startPair[1])
-  if (Number.isInteger(start) && start > 0) marker['start'] = start
+  if (Number.isInteger(start) && start >= 0) marker['start'] = start
   const remaining = pairs.filter((pair) => pair !== startPair)
   if (remaining.length === 0) delete node['attrs']['keyValues']
   else node['attrs']['keyValues'] = remaining
@@ -57,7 +57,7 @@ function rawReference(node: Fields, old: Fields): string | undefined {
 
 function linkReference(node: Fields, old: Fields, state: MigrationState): void {
   const raw = rawReference(node, old)
-  const collapsed = raw?.includes('][]') ?? false
+  const collapsed = raw?.endsWith('][]') ?? false
   const closing = raw?.lastIndexOf('][]') ?? -1
   const key = collapsed && closing > 0 ? folded(raw?.slice(1, closing)) : folded(old['ref'] ?? old['key'])
   if (key !== undefined) {
@@ -241,14 +241,6 @@ function admonition(node: Fields): void {
   delete node['kind']
 }
 
-function heading(node: Fields, old: Fields, state: MigrationState): void {
-  if (state.draft || !object(node['attrs']) || string(node['attrs']['id']) === undefined) return
-  if (object(old['attrs']) && list(old['attrs']['order']).includes('#id')) return
-  node['generatedId'] = node['attrs']['id']
-  delete node['attrs']['id']
-  if (Object.keys(node['attrs']).length === 0) delete node['attrs']
-}
-
 function inlineTitle(node: Fields): void {
   const title = string(node['title'])
   if (title !== undefined) node['title'] = [{ type: 'text', value: title }]
@@ -326,7 +318,6 @@ function blockShape(node: Fields, old: Fields, state: MigrationState): void {
     case 'list_item': task(node, old); break
     case 'paragraph': paragraph(node, old); break
     case 'comment': comment(node, old); break
-    case 'heading': heading(node, old, state); break
     case 'line_block': lineBlock(node); break
     case 'admonition': if (node['label'] !== undefined) { node['groupLabel'] = node['label']; delete node['label'] }
       admonition(node); inlineTitle(node); break

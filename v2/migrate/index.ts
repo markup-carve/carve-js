@@ -1,5 +1,5 @@
 // C2-A-176 to C2-A-180: stored 1.x and retired draft trees are upgraded outside the reader.
-import { type DocumentNode } from '../src/ast.ts'
+import { type DocumentNode, type Envelope, type ExtensionDeclaration } from '../src/ast.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { validateTree } from '../src/ast-validate.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
@@ -15,8 +15,29 @@ export interface MigrateOptions {
 
 export interface MigrationResult {
   document: DocumentNode
+  envelope?: Envelope
   layout: SourceLayout
   diagnostics: Diagnostic[]
+}
+
+function envelopeExtensions(value: unknown): ExtensionDeclaration[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const result: ExtensionDeclaration[] = []
+  for (const entry of value) {
+    if (!object(entry) || typeof entry['name'] !== 'string' || typeof entry['version'] !== 'string' ||
+      typeof entry['required'] !== 'boolean' || !Array.isArray(entry['slots']) ||
+      !entry['slots'].every((slot) => typeof slot === 'string')) return undefined
+    result.push({ name: entry['name'], version: entry['version'], required: entry['required'], slots: entry['slots'] })
+  }
+  return result
+}
+
+function outputEnvelope(input: Fields, document: DocumentNode): Envelope {
+  const vocabulary = string(input['vocabulary'])
+  const extensions = document.extensions ?? envelopeExtensions(input['extensions'])
+  return { astVersion: '2.0', document,
+    ...(vocabulary === undefined ? {} : { vocabulary }),
+    ...(extensions === undefined ? {} : { extensions }) }
 }
 
 const SLOTS = ['children', 'items', 'rows', 'cells', 'old', 'new', 'prefix', 'suffix', 'inline', 'title', 'shortCaption',
@@ -94,7 +115,8 @@ function promoteImages(node: Fields): void {
   if (type === undefined || !['document', 'block_quote', 'div', 'admonition', 'directive', 'section', 'figure',
     'figure_group', 'list_item', 'definition_description', 'caption'].includes(type)) return
   node['children'] = nodeList(node['children']).map((child) => child['type'] === 'image' ?
-    { type: 'paragraph', role: 'image', children: [child], pos: child['pos'] } : child)
+    { type: 'paragraph', role: 'image', children: [child],
+      ...(child['pos'] === undefined ? {} : { pos: child['pos'] }) } : child)
 }
 
 function migrateNode(old: Fields, path: string, state: MigrationState): Fields[] {
@@ -135,10 +157,12 @@ export function migrateTree(json: unknown, options: MigrateOptions = {}): Migrat
   if (old['astVersion'] === '2.0') {
     try {
       validateTree(value)
-      return { document: value, layout: layout(value), diagnostics: [] }
+      return { document: value, ...(envelope === undefined ? {} : { envelope: outputEnvelope(envelope, value) }),
+        layout: layout(value), diagnostics: [] }
     } catch { /* C2-A-177: an earlier draft also claimed 2.0. */ }
   }
   const document = migrateNode(old, envelope === undefined ? '' : '/document', state)[0]
   validateTree(document)
-  return { document, layout: layout(document), diagnostics: state.diagnostics }
+  return { document, ...(envelope === undefined ? {} : { envelope: outputEnvelope(envelope, document) }),
+    layout: layout(document), diagnostics: state.diagnostics }
 }

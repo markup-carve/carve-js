@@ -23,6 +23,7 @@ export interface LintContext {
   bytes: Uint32Array
   chars: Uint32Array
   offsetLines: Uint32Array
+  leafMask: Uint8Array
   lines: Line[]
   layouts: Map<string, NodeLayout>
   nodeTypes: Map<string, Node['type']>

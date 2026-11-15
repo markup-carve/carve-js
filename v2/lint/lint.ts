@@ -5,7 +5,7 @@ import { CATALOG, type RuleId } from './catalog.ts'
 import { LINE_RULES } from './spelling.ts'
 import { finishStructure, NODE_RULES } from './structure.ts'
 import { markNodeLines, sourceLines } from './source.ts'
-import { type LintContext, type LintOptions, type Rule } from './types.ts'
+import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -97,24 +97,37 @@ function visit(node: Node, path: string, context: LintContext, controls: Control
   const pos = node.pos
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
-  if (pos !== undefined && (node.type === 'code' || node.type === 'raw_inline')) markOpaqueInline(node, context)
+  maskLeaf(node, path, context)
   const control = controlOf(node, context)
   if (control !== null && pos !== undefined) controls[pos.startLine]!.push(control)
   runNodeRules(node, path, context)
   visitChildren(node, path, context, controls)
 }
 
-function markOpaqueInline(node: Node, context: LintContext): void {
-  if (node.pos === undefined) return
-  const start = context.chars[node.pos.startOffset] ?? 0
-  const end = context.chars[node.pos.endOffset] ?? context.source.length
-  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
-    const line = context.lines[number - 1]
-    if (line === undefined || line.end > end) continue
-    let first = line.start
-    while (context.source[first] === ' ' || context.source[first] === '\t') first++
-    if (first >= start) line.opaque = true
+const OPAQUE_LEAF_TYPES: readonly Node['type'][] = ['code', 'raw_inline', 'literal_inline', 'math', 'comment',
+  'code_block', 'raw_block', 'frontmatter', 'include', 'link_reference_definition', 'abbreviation_def']
+
+function maskLeaf(node: Node, path: string, context: LintContext): void {
+  if (!OPAQUE_LEAF_TYPES.includes(node.type)) return
+  const layout = context.layouts.get(path)
+  const startByte = node.pos?.startOffset ?? layout?.startByte
+  const endByte = node.pos?.endOffset ?? layout?.endByte
+  if (startByte === undefined || endByte === undefined) return
+  const start = context.chars[startByte] ?? 0
+  const end = context.chars[endByte] ?? context.source.length
+  context.leafMask.fill(1, start, end)
+}
+
+function maskLine(line: Line, mask: Uint8Array): Line {
+  if (line.opaque) return line
+  const chars = line.text.split('')
+  let changed = false
+  for (let at = 0; at < chars.length; at++) {
+    if (mask[line.start + at] !== 1) continue
+    chars[at] = '\0'
+    changed = true
   }
+  return changed ? { ...line, text: chars.join('') } : line
 }
 
 function named(control: Control, id: string): boolean {
@@ -182,7 +195,8 @@ export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   const parsed = parseWithLayout(source)
   const position = sourceLines(source)
   const context: LintContext = {
-    source, ...position, options, layouts: new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])), nodeTypes: new Map(),
+    source, ...position, leafMask: new Uint8Array(source.length), options,
+    layouts: new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])), nodeTypes: new Map(),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       fragmentLinks: [], footnoteLabels: new Map(), attachedLines: new Set(),
@@ -200,7 +214,8 @@ export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   visit(parsed.document, '', context, controls)
   finishStructure(context)
-  for (const line of context.lines) {
+  const scanLines = context.lines.map((line) => maskLine(line, context.leafMask))
+  for (const line of scanLines) {
     if (line.opaque) continue
     for (const rule of LINE_RULES) {
       if (active(rule.id, options)) rule.checkLine?.(line, context)

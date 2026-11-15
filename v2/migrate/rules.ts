@@ -1,5 +1,5 @@
 // C2-A-178, C2-A-179: mechanical changes are indexed by the published upgrade map.
-import upgradeMap from './upgrade-map.json' with { type: 'json' }
+import upgradeMap from '../data/upgrade-map.json' with { type: 'json' }
 
 export interface FieldRule {
   id: string
@@ -14,7 +14,7 @@ const FIELDS: readonly FieldRule[] = [
   { id: 'T-012', types: ['definition_list'], from: 'spacing' },
   { id: 'T-012', types: ['definition_list'], from: 'loose' },
   { id: 'T-015', types: ['link', 'image'], from: 'form', to: 'refForm' },
-  { id: 'T-016', types: ['xref'], from: 'form', to: 'display' },
+  { id: 'T-016', types: ['xref', 'heading_ref'], from: 'form', to: 'display' },
   { id: 'T-017', types: ['link_reference_definition', 'link', 'image'], from: 'title', to: 'tooltip' },
   { id: 'T-021', types: ['citation_group'], from: 'mode' },
   { id: 'T-023', types: ['task'], from: 'status' },

@@ -9,7 +9,7 @@ import { directive } from 'micromark-extension-directive'
 import { directiveFromMarkdown } from 'mdast-util-directive'
 import type { RootContent, PhrasingContent, TableRow } from 'mdast'
 import type { Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { assertNever, attrsOf, cell, coalesce, complete, finding, list, paragraph, row, safeUrl, text,
+import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
   type Context, type ImportResult } from './kit.ts'
 
 function range(node: { position?: { start: { offset?: number | undefined }, end: { offset?: number | undefined } } | undefined }):
@@ -44,7 +44,7 @@ function plainInline(node: PlainInline, context: Context): Inline[] {
     case 'image': {
       const src = safeUrl(context, node.type, node.url, ...range(node))
       return [{ type: 'image', ...(src !== undefined ? { src } : {}), alt: node.alt ?? '',
-        ...(node.title !== null && node.title !== undefined ? { tooltip: node.title } : {}) }]
+        ...(node.title != null ? { tooltip: node.title } : {}) }]
     }
     case 'imageReference': return imageReference(node, context)
     default: return assertNever(node)
@@ -66,7 +66,7 @@ function inline(node: PhrasingContent, context: Context): Inline[] {
     case 'link': {
       const href = safeUrl(context, node.type, node.url, ...range(node))
       return [{ type: 'link', children: inlineList(node.children, context), ...(href !== undefined ? { href } : {}),
-        ...(node.title !== null && node.title !== undefined ? { tooltip: node.title } : {}) }]
+        ...(node.title != null ? { tooltip: node.title } : {}) }]
     }
     case 'linkReference':
       if (node.referenceType === 'shortcut') loss(context, node, 'Shortcut link reference became a full reference')
@@ -133,7 +133,7 @@ function plainBlock(node: PlainBlock, context: Context): DocumentNode['children'
       const href = safeUrl(context, node.type, node.url, ...range(node))
       if (href === undefined) return []
       return [{ type: 'link_reference_definition', key: node.identifier, namespace: 'link', href,
-        ...(node.title ? { tooltip: node.title } : {}) }]
+        ...(node.title != null ? { tooltip: node.title } : {}) }]
     }
     case 'footnoteDefinition': return [{ type: 'footnote', key: node.identifier, namespace: 'footnote',
       children: contentBlocks(node.children, context) }]
@@ -212,7 +212,8 @@ function directiveBlock(node: MarkdownDirective, context: Context): Block[] {
     ...(attrs ? { attrs } : {}) }]
   loss(context, node, `Directive ${node.name} mapped to a div`)
   return [{ type: 'div', children, attrs: { classes: [node.name, ...(attrs?.classes ?? [])],
-    ...(attrs?.id ? { id: attrs.id } : {}), ...(attrs?.keyValues ? { keyValues: attrs.keyValues } : {}) } }]
+    ...(attrs?.id !== undefined ? { id: attrs.id } : {}),
+    ...(attrs?.keyValues !== undefined ? { keyValues: attrs.keyValues } : {}) } }]
 }
 
 function isAdmonition(name: string): name is Extract<Block, { type: 'admonition' }>['kind'] {
@@ -245,6 +246,7 @@ export function importMarkdown(input: string, from: 'markdown' | 'gfm'): ImportR
   const mdastExtensions = [frontmatterFromMarkdown(['yaml', 'toml']), mathFromMarkdown(), directiveFromMarkdown(),
     ...(from === 'gfm' ? [gfmFromMarkdown()] : [])]
   const foreign = fromMarkdown(input, { extensions, mdastExtensions })
+  ensureForeignDepth(foreign, from)
   const children = blocks(foreign.children, context)
   return complete(context, [...children, ...(context.deferred ?? [])])
 }

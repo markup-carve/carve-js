@@ -1,5 +1,5 @@
 import {
-  format, isUrlAllowed, validateTree, writeWithDiagnostics, type Attrs, type Block, type Diagnostic, type DocumentNode,
+  format, isUrlAllowed, MAX_TREE_DEPTH, validateTree, writeWithDiagnostics, type Attrs, type Block, type Diagnostic, type DocumentNode,
   type Inline, type ListNode, type TableCellNode, type TableRowNode,
 } from '../../v2/src/index.ts'
 
@@ -11,6 +11,24 @@ export class ImportInputError extends Error {
   readonly code = 'import-input-error'
   readonly foreignType: string
   constructor(message: string, foreignType: string) { super(message); this.foreignType = foreignType }
+}
+
+/** C2-A-026: foreign parsers can produce deeper trees than the engine can accept. */
+export function ensureForeignDepth(root: unknown, format: Format): void {
+  const pending: { value: unknown, depth: number }[] = [{ value: root, depth: 0 }]
+  while (pending.length > 0) {
+    const entry = pending.pop()
+    if (entry === undefined) continue
+    if (entry.depth > MAX_TREE_DEPTH) {
+      throw new ImportInputError(`Foreign input exceeds the engine tree depth limit of ${MAX_TREE_DEPTH}`, format)
+    }
+    const value = entry.value
+    if (value === null || typeof value !== 'object') continue
+    const children: unknown = Reflect.get(value, 'children') ?? Reflect.get(value, 'childNodes')
+    if (Array.isArray(children)) for (const child of children) pending.push({ value: child, depth: entry.depth + 1 })
+    const content: unknown = Reflect.get(value, 'content')
+    if (content !== null && typeof content === 'object') pending.push({ value: content, depth: entry.depth + 1 })
+  }
 }
 
 export interface Context {
@@ -90,7 +108,8 @@ export function coalesce(children: Inline[]): Inline[] {
 }
 
 export function list(ordered: boolean, items: ListNode['children'], tight: boolean, start?: number): ListNode {
-  const marker = ordered ? { kind: 'ordered' as const, style: '1', delimiter: '.', ...(start && start !== 1 ? { start } : {}) }
+  const marker = ordered ? { kind: 'ordered' as const, style: '1', delimiter: '.',
+    ...(start !== undefined && start !== 1 ? { start } : {}) }
     : { kind: 'bullet' as const, char: '-' }
   return { type: 'list', children: items, marker, spacing: tight ? 'tight' : 'loose' }
 }

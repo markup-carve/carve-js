@@ -1,10 +1,28 @@
 import { defaultTreeAdapter, parse, parseFragment, serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type { Attrs, Block, Inline, RubyPairNode, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { attrsOf, cell, classNames, coalesce, complete, finding, list, paragraph, row, safeUrl, text,
+import { attrsOf, cell, classNames, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
   type Context, type ImportResult } from './kit.ts'
 
 function attr(node: Html.Element, name: string): string | undefined {
   return node.attrs.find(item => item.name === name)?.value
+}
+
+function htmlInteger(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined
+  let at = 0
+  while (value[at] === ' ' || value[at] === '\t' || value[at] === '\n' || value[at] === '\r') at++
+  const start = at
+  if (value[at] === '+' || value[at] === '-') at++
+  const digits = at
+  while (at < value.length && value.charCodeAt(at) >= 48 && value.charCodeAt(at) <= 57) at++
+  if (at === digits) return undefined
+  const result = Number(value.slice(start, at))
+  return Number.isSafeInteger(result) ? result : undefined
+}
+
+function htmlSpan(value: string | undefined): number | undefined {
+  const parsed = htmlInteger(value)
+  return parsed !== undefined && parsed > 1 ? parsed : undefined
 }
 
 function attrs(node: Html.Element, omit: readonly string[] = []): { attrs?: Attrs, lang?: string,
@@ -43,6 +61,12 @@ function location(node: Html.ChildNode): [number | undefined, number | undefined
 function degraded(context: Context, node: Html.ChildNode, message: string): void {
   const [start, end] = location(node)
   finding(context, 'import-degraded', node.nodeName, message, start, end)
+}
+
+function htmlRowspan(node: Html.Element, context: Context): number | undefined {
+  const raw = attr(node, 'rowspan')
+  if (htmlInteger(raw) === 0) degraded(context, node, 'HTML rowspan=0 extends to the end of its row group')
+  return htmlSpan(raw)
 }
 
 function unsupported(context: Context, node: Html.ChildNode, message: string): void {
@@ -166,7 +190,7 @@ function htmlImage(node: Html.Element, context: Context): Inline[] {
   const safe = src === undefined ? undefined : safeUrl(context, node.tagName, src, ...location(node))
   const long = attr(node, 'longdesc')
   const longSafe = long === undefined ? undefined : safeUrl(context, 'img.longdesc', long, ...location(node))
-  const longDescription = longSafe ? [paragraph([{ type: 'link' as const, href: longSafe,
+  const longDescription = longSafe !== undefined ? [paragraph([{ type: 'link' as const, href: longSafe,
     children: [text(longSafe)] }])] : undefined
   const tooltip = attr(node, 'title')
   return [{ type: 'image', ...(safe !== undefined ? { src: safe } : {}), alt: attr(node, 'alt') ?? '',
@@ -199,10 +223,10 @@ function tableCell(node: Html.Element, context: Context): TableCellNode {
     .includes(child.tagName))
   const result: TableCellNode = hasBlocks ? { type: 'table_cell', header: node.tagName === 'th',
     children: blockChildren(node, context) } : cell(inlineChildren(node, context), node.tagName === 'th')
-  const colspan = Number(attr(node, 'colspan'))
-  const rowspan = Number(attr(node, 'rowspan'))
-  if (colspan > 1) result.colspan = colspan
-  if (rowspan > 1) result.rowspan = rowspan
+  const colspan = htmlSpan(attr(node, 'colspan'))
+  const rowspan = htmlRowspan(node, context)
+  if (colspan !== undefined) result.colspan = colspan
+  if (rowspan !== undefined) result.rowspan = rowspan
   const scope = attr(node, 'scope')
   if (scope === 'col' || scope === 'row' || scope === 'colgroup' || scope === 'rowgroup') result.scope = scope
   const align = attr(node, 'align')
@@ -330,9 +354,9 @@ function htmlPre(node: Html.Element, context: Context): Block[] {
 function htmlList(node: Html.Element, context: Context): Block[] {
   const items = elements(node).filter(child => child.nodeName === 'li').map(child => listItem(child, context))
   for (const child of elements(node)) if (child.tagName !== 'li') unsupported(context, child, 'Non-item child in HTML list')
-  const start = Number(attr(node, 'start'))
+  const start = htmlInteger(attr(node, 'start'))
   const result = list(node.tagName === 'ol', items, !items.some(item => item.children.some(child =>
-    child.type === 'paragraph' && item.children.length > 1)), start > 1 ? start : undefined)
+    child.type === 'paragraph' && item.children.length > 1)), start)
   return [{ ...result, ...attrs(node, ['start', 'type']) }]
 }
 
@@ -403,6 +427,7 @@ export function importHtml(input: string): ImportResult {
   const full = lower.includes('<!doctype') || lower.includes('<html') || lower.includes('<head')
   const foreign = full ? parse(input, { sourceCodeLocationInfo: true }) :
     parseFragment(input, { sourceCodeLocationInfo: true })
+  ensureForeignDepth(foreign, 'html')
   rootLanguage(foreign.childNodes, context)
   for (const child of foreign.childNodes) auditElement(child, context)
   return complete(context, [...foreign.childNodes.flatMap(child => block(child, context)), ...(context.deferred ?? [])])
