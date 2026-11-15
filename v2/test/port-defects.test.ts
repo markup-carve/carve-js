@@ -158,3 +158,15 @@ describe('C2-I-034/040: an invalid or empty brace block in a block prefix is tex
     expect(types('$$`m`{.x}\n^ c\n')).toEqual(['figure'])
   })
 })
+
+describe('C2-H-145: every reversed glyph is written as its source in a slug', () => {
+  const id = (src: string): unknown => (parse(src).children[0] as unknown as Record<string, unknown>).generatedId
+
+  it('C2-H-145: both guillemets, in any position', () => {
+    expect(id('# x→y «q»\n')).toBe('x-y-q')
+    expect(id('# «q» a\n')).toBe('q-a')
+    expect(id('# a »q« b\n')).toBe('a-q-b')
+    expect(id('# a ± b\n')).toBe('a-b')
+    expect(id('# a­b\n')).toBe('ab')
+  })
+})
