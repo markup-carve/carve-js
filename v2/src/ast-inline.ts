@@ -125,13 +125,14 @@ function referenceForm(node: InlineFrame): 'collapsed' | 'full' | 'shortcut' {
 }
 
 /** C2-A-105, C2-A-107: an image, its target direct or by reference. */
-function imageNode(node: InlineFrame): ImageNode {
+function imageNode(node: InlineFrame, cell: boolean): ImageNode {
+  const alt = cell ? node.value.replaceAll('\\|', '|') : node.value
   if ((node.flags & FLAG_REFERENCE) !== 0) {
-    return { type: 'image', key: node.key ?? '', namespace: 'link', refForm: referenceForm(node), alt: node.value }
+    return { type: 'image', key: node.key ?? '', namespace: 'link', refForm: referenceForm(node), alt }
   }
   const out: ImageNode = { type: 'image', src: node.destination ?? '' }
   if (node.title !== null) out.tooltip = node.title
-  out.alt = node.value
+  out.alt = alt
   return out
 }
 
@@ -174,7 +175,7 @@ const LEAVES = new Map<number, LeafBuilder>([
     type: 'smart_punctuation', kind: SMART_KIND_NAMES[node.aux]!, glyph: SMART_GLYPHS[node.aux]!,
     source: ctx.src.slice(node.start, node.end),
   })],
-  [IMAGE, (_ctx, node) => imageNode(node)],
+  [IMAGE, (ctx, node) => imageNode(node, ctx.inline.cell)],
 ])
 
 type PlainParent =
@@ -268,8 +269,10 @@ export function contentSource(src: string, spans: number[], start: number, end: 
 }
 
 /** C2-I-067: a backslash before a parenthesis or a backslash is dropped; most destinations hold none. */
-function destinationValue(value: string): string {
-  return value.includes('\\') ? value.replaceAll(/\\([()\\])/g, '$1') : value
+function destinationValue(value: string, cell: boolean): string {
+  if (!value.includes('\\')) return value
+  const decoded = value.replaceAll(/\\([()\\])/g, '$1')
+  return cell ? decoded.replaceAll('\\|', '|') : decoded
 }
 
 /** Closes a part of `host`: it goes into a field of the host. */
@@ -280,14 +283,15 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
     host.attributes ??= emptyAttributes()
     readAttributeBlock(ctx.src, node.start, node.end, emptyMemo(), attributeSink(host.attributes))
   } else if (node.kind === DESTINATION) {
-    host.destination = destinationValue(value)
+    host.destination = destinationValue(value, ctx.inline.cell)
   } else if (node.kind === TITLE) {
     host.title = unescape(value, 0, value.length)
   } else if ((host.flags & (FLAG_COLLAPSED | FLAG_SHORTCUT)) !== 0) {
     // C2-I-072: the label of a collapsed reference is the source of its own text.
-    host.key = foldLabel(contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1))
+    const source = contentSource(ctx.src, spans, host.start + (host.kind === IMAGE ? 2 : 1), node.start - 1)
+    host.key = foldLabel(ctx.inline.cell ? source.replaceAll('\\|', '|') : source)
   } else {
-    host.key = foldLabel(value)
+    host.key = foldLabel(ctx.inline.cell ? value.replaceAll('\\|', '|') : value)
   }
 }
 
@@ -354,7 +358,7 @@ export function contentNodes(ctx: TreeContext, spans: number[], from: number, to
     addText(ctx, list, ctx.src.slice(spans[from], spans[from + 1]), runStart(flow, spans[from]!), spans[from + 1]!)
     return list
   }
-  scanInline(ctx.inline, ctx.src, spans, from, to, ctx.depth, lineComments)
+  scanInline(ctx.inline, ctx.src, spans, from, to, ctx.depth, lineComments, (flow & FLOW_KIND_MASK) === FLOW_CELL)
   return buildFromEvents(ctx, spans, flow)
 }
 

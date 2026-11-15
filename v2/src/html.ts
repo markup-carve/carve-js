@@ -222,7 +222,7 @@ function itemOpen(r: Render, node: ListItemNode, bullet: boolean): string {
   const label = escapeAttribute(blockText(node.children))
   const open = `<li${tag(r, node, { structural: state, base: ['task'],
     ...(bullet ? { style: 'list-style: none', styleFirst: true } : {}) })}>`
-  return `${open}<input type="checkbox"${checked} disabled aria-label="${label}"> `
+  return `${open}<input type="checkbox"${checked} disabled${label === '' ? '' : ` aria-label="${label}"`}> `
 }
 
 /** C2-H-007, C2-H-034, C2-H-035: the first paragraph stands on the line of `<li>`, bare in a tight list. */

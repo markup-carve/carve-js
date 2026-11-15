@@ -1,4 +1,4 @@
-export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade'
+export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import'
 export type ValueKind = 'boolean' | 'enum' | 'json'
 export interface Flag {
   name: string
@@ -41,6 +41,8 @@ export const FLAGS: readonly Flag[] = [
   { name: 'write', commands: ['fmt', 'upgrade'], kind: 'boolean', description: 'Write files in place (-w for fmt)' },
   { name: 'json', commands: ['diagnostics', 'upgrade'], kind: 'boolean', description: 'Print JSON' },
   { name: 'force', commands: upgrade, kind: 'boolean', description: 'Write even with an unexplained difference' },
+  { name: 'from', commands: ['import'], kind: 'enum', values: ['markdown', 'gfm', 'djot', 'html'],
+    description: 'Input format for import' },
 ]
 
 export interface ParsedArgs {
@@ -88,7 +90,8 @@ function option(args: readonly string[], index: number, parsed: ParsedArgs): num
 }
 
 function commandAt(arg: string | undefined): Command | undefined {
-  if (arg === 'render' || arg === 'ast' || arg === 'fmt' || arg === 'diagnostics' || arg === 'upgrade') return arg
+  if (arg === 'render' || arg === 'ast' || arg === 'fmt' || arg === 'diagnostics' || arg === 'upgrade' ||
+    arg === 'migrate-ast' || arg === 'import') return arg
   return undefined
 }
 
@@ -111,6 +114,9 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
     else parsed.files.push(arg)
   }
   checkCombinations(parsed)
+  if (command === 'import' && parsed.values['from'] === undefined && !parsed.help && !parsed.version) {
+    throw new Error('import requires --from=markdown|gfm|djot|html')
+  }
   return parsed
 }
 
@@ -120,6 +126,7 @@ export function help(command: Command): string {
     const suffix = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? ` <${flag.values?.join('|')}>` : ' <json>'
     lines.push(`  --${flag.name}${suffix}  ${flag.description}`)
   }
-  lines.push('  --help  Show this help', '  --version  Show version')
+  lines.push('  --help  Show this help', '  --version  Show version', '',
+    'Commands: render, ast, fmt, diagnostics, upgrade, migrate-ast, import')
   return `${lines.join('\n')}\n`
 }

@@ -62,6 +62,7 @@ export interface InlineState {
   lineCount: number
   /** C2-B-144: a line block reads `%%` as text. */
   lineComments: boolean
+  cell: boolean
   /** C2-H-172: whether the text the scan has read so far holds a bidirectional control. */
   bidi: boolean
   /** Open containers of the block pass around this content (C2-I-118). */
@@ -138,6 +139,7 @@ function createState(): InlineState {
     lineSource: new Int32Array(INITIAL_LINES),
     lineCount: 0,
     lineComments: true,
+    cell: false,
     bidi: false,
     baseDepth: 0,
     definitions: null,

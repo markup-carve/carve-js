@@ -600,7 +600,14 @@ function lastPipe(src: string, pos: number, end: number): number {
 export function rowAttributeStart(src: string, pipe: number, end: number): number {
   let p = pipe + 1
   if (p < end && src.charCodeAt(p) === SPACE) p++
-  return braceBlockEnd(src, p, end) < 0 ? -1 : p
+  const blockEnd = braceBlockEnd(src, p, end)
+  return blockEnd < 0 || readAttributeBlock(src, p, blockEnd, emptyMemo(), null) !== blockEnd ? -1 : p
+}
+
+function rowTailValid(src: string, pipe: number, end: number): boolean {
+  const attribute = rowAttributeStart(src, pipe, end)
+  const tail = skipSpaces(src, attribute < 0 ? pipe + 1 : braceBlocksEnd(src, attribute, end), end)
+  return tail === end || (isLineComment(src, tail, end) && src.indexOf('|', tail) < 0)
 }
 
 /**
@@ -611,9 +618,13 @@ export function rowClosingPipe(src: string, pos: number, end: number): number {
   if (src.charCodeAt(pos) !== PIPE) return -1
   const last = lastPipe(src, pos + 1, end)
   if (last < 0) return -1
-  const attribute = rowAttributeStart(src, last, end)
-  const tail = skipSpaces(src, attribute < 0 ? last + 1 : braceBlocksEnd(src, attribute, end), end)
-  return tail === end || isLineComment(src, tail, end) ? last : -1
+  if (rowTailValid(src, last, end)) return last
+  const pipes = separatorPipes(src, pos + 1, end)
+  for (let at = pipes.length - 1; at >= 0; at--) {
+    const pipe = pipes[at]!
+    if (rowTailValid(src, pipe, end)) return pipe
+  }
+  return -1
 }
 
 /** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-177). */

@@ -17,7 +17,7 @@ import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { parseChunk } from './write-check.ts'
 import { longestBareRun } from './write-fences.ts'
-import { writeTable } from './write-table.ts'
+import { tableAttribute, writeTable } from './write-table.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
 type BlockWriters = { [T in keyof NodeOfType]?: (w: Writer, node: NodeOfType[T], prefix: string, flags: number) => void }
@@ -122,6 +122,7 @@ function spellableInfo(w: Writer, node: CodeBlockNode, field: string, value: str
 /** C2-W-037, C2-W-038, C2-W-040: a code block, and a raw block as the fence with `=` and its format. */
 function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string): void {
   attributeLine(w, node, prefix)
+  const continuation = w.lead !== null && w.lead.startsWith('[^') && prefix.length > 2 ? ' '.repeat(w.lead.length) : prefix
   const lines = valueLines(w, node)
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
   let info = node.type === 'raw_block' ? `=${node.format}` : spellableInfo(w, node, 'syntax', node.syntax ?? '') ?? ''
@@ -131,8 +132,8 @@ function codeBlock(w: Writer, node: CodeBlockNode | RawBlockNode, prefix: string
     info += openerTail(w, node, title, title === null ? '' : quoted(title).slice(1, -1))
   }
   emit(w, prefix, run + info)
-  for (const line of lines) emit(w, prefix, line)
-  if (!isLeftOpen(w, node)) emit(w, prefix, run)
+  for (const line of lines) emit(w, continuation, line)
+  if (!isLeftOpen(w, node)) emit(w, continuation, run)
 }
 
 /** C2-W-059: a line comment, and a comment block with the shortest percent run its body allows. */
@@ -308,7 +309,9 @@ function div(w: Writer, node: DivNode, prefix: string, flags: number): void {
     return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, node.children, prefix, flags | BARE_BREAKS, false))
   }
   const write = (): void => writeBlocks(w, node.children, prefix, flags, false)
-  const name = divName(node)
+  const named = divName(node)
+  const name = w.prewrittenAttributes === node && named !== null && braceBlock(node, { skipClasses: [0] }) === ''
+    ? null : named
   attributeLine(w, node, prefix, name === null ? {} : { skipClasses: [0] })
   fenced(w, node, prefix, (name === null ? '' : ` ${name}`) + titleTail(w, node, flags), true, write)
 }
@@ -513,6 +516,12 @@ function isCommentLine(node: Node | undefined): boolean {
   return node !== undefined && node.type === 'comment' && node.form !== 'block'
 }
 
+export function afterComments(nodes: readonly Node[], at: number): Node | undefined {
+  let next = at + 1
+  while (isCommentLine(nodes[next])) next++
+  return nodes[next]
+}
+
 /** C2-W-059: the blank lines before the comment `node`, which follows `before`. */
 function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
   if (isCommentLine(node) && isOpenContainer(w, before)) {
@@ -526,8 +535,15 @@ function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
 
 export function followingAttributes(w: Writer, node: Node | undefined): string {
   if (node?.type === 'list') return listAttributes(node, listMarkers(w, node).start)
-  if (node?.type === 'definition_list' || node?.type === 'footnote') return braceBlock(node)
-  return ''
+  if (node?.type === 'div') {
+    const classes = node.attrs?.classes ?? NONE
+    if (usesHardBreakOpener(w, node)) return braceBlock(node, { skipClasses: [classes.length - 1] })
+    const name = divName(node)
+    const block = braceBlock(node, name === null ? {} : { skipClasses: [0] })
+    return block === '' && name !== null ? braceBlock(node) : block
+  }
+  if (node?.type === 'table') return tableAttribute(w, node) || '{footer-rows=0}'
+  return node === undefined ? '' : braceBlock(node)
 }
 
 /** The layout of a list of siblings: the blocks of a container, of a tight item, or the entries of a description list. */
@@ -561,17 +577,17 @@ function markFenceBeforeComment(w: Writer, node: Node, next: Node | undefined): 
 function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: Node | null,
   list: Node | null, prefix: string, layout: number): void {
   const node = nodes[at]!
-  const next = nodes[at + 1]
+  const following = afterComments(nodes, at)
   const attributes = isCommentLine(node) && before !== null && isOpenContainer(w, before)
-    ? followingAttributes(w, next) : ''
+    && w.prewrittenAttributes !== following ? followingAttributes(w, following) : ''
   if (before !== null) {
     const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
     const blanks = attributes !== '' || w.prewrittenAttributes === node ? 0 : blankLinesBetween(w, before, list, node, nested)
     for (let blank = blanks; blank > 0; blank--) emit(w, prefix, '')
   }
-  if (attributes !== '' && next !== undefined) {
+  if (attributes !== '' && following !== undefined) {
     emit(w, prefix, attributes)
-    w.prewrittenAttributes = next
+    w.prewrittenAttributes = following
   }
 }
 

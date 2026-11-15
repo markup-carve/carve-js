@@ -10,7 +10,7 @@
 //   node v2/scripts/writer-gates.ts examples
 //   node v2/scripts/writer-gates.ts lines 3
 //   node v2/scripts/writer-gates.ts tokens 4
-//   node v2/scripts/writer-gates.ts random [contents] [documents] [seed] [--silent]
+//   node v2/scripts/writer-gates.ts random [contents] [documents] [seed] [--silent] [--all-losses]
 // With --silent a run fails only on a failure with no reported loss.
 import { readFileSync } from 'node:fs'
 import { format, parse, tabsExtensions, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
@@ -151,7 +151,8 @@ function runRandom(contents: number, documents: number, seed: number): boolean {
   let started = Date.now()
   const inline = report('random contents', randomWriter(contents, seededRandom(seed), randomContent), started)
   started = Date.now()
-  const blocks = report('random documents', randomWriter(documents, seededRandom(seed + 1), randomDocument), started)
+  const blocks = report('random documents', randomWriter(documents, seededRandom(seed + 1), randomDocument,
+    process.argv.includes('--all-losses') ? documents : 20), started)
   return inline && blocks
 }
 

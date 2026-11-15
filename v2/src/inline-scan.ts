@@ -117,6 +117,7 @@ function contentEnd(text: string): number {
  */
 export function scanInline(
   state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number, baseDepth: number, lineComments: boolean,
+  cell = false,
 ): void {
   setContent(state, src, spans, from, to)
   const text = state.text
@@ -124,6 +125,7 @@ export function scanInline(
   state.end = end
   state.baseDepth = baseDepth
   state.lineComments = lineComments
+  state.cell = cell
   resetScan(state)
   for (let pos = 0; pos < end;) {
     const code = text.charCodeAt(pos)

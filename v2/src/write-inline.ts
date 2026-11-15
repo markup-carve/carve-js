@@ -17,6 +17,7 @@ export const IN_EMPHASIS = 2
 export const IN_STRONG = 4
 /** C2-W-080: a hard break is the bare line ending. */
 export const BARE_BREAKS = 8
+export const IN_BRACKET = 16
 
 const BACKSLASH = 92
 const PIPE = 124
@@ -32,17 +33,34 @@ type InlineWriter = (w: Writer, node: InlineParent, flags: number) => string
 function doubles(value: string, at: number): boolean {
   if (at + 1 >= value.length) return false
   const next = value.charCodeAt(at + 1)
-  return next === SPACE || isAsciiPunctuation(next)
+  return (next === SPACE || isAsciiPunctuation(next)) && !inQuotedBrace(value, at)
+}
+
+/** C2-I-033: a quoted brace value is opaque, including its backslashes. */
+function inQuotedBrace(value: string, at: number): boolean {
+  let brace = false
+  let quote = 0
+  for (let p = 0; p < at; p++) {
+    const code = value.charCodeAt(p)
+    if (quote !== 0) {
+      if (code === BACKSLASH) p++
+      else if (code === quote) quote = 0
+    } else if (code === 123) brace = true
+    else if (code === 125) brace = false
+    else if (brace && (code === 34 || code === 39)) quote = code
+  }
+  return quote !== 0
 }
 
 /** Whether the character `at` of a text takes a backslash whatever the reparse finds: C2-W-097, C2-W-098. */
-function alwaysEscaped(value: string, at: number, cell: boolean): boolean {
+function alwaysEscaped(value: string, at: number, flags: number): boolean {
   const code = value.charCodeAt(at)
-  return (code === BACKSLASH && doubles(value, at)) || (cell && code === PIPE)
+  return (code === BACKSLASH && doubles(value, at)) || ((flags & IN_CELL) !== 0 && code === PIPE) ||
+    ((flags & IN_BRACKET) !== 0 && (code === 91 || code === 93))
 }
 
 /** The text `value[from, to)` with the backslashes it needs. */
-function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, cell: boolean): string {
+function escaped(w: Writer, node: TextNode, value: string, from: number, to: number, flags: number): string {
   const escapes = w.escapes.get(node) ?? []
   let out = ''
   let next = firstFrom(escapes, from)
@@ -50,7 +68,7 @@ function escaped(w: Writer, node: TextNode, value: string, from: number, to: num
   for (let at = from; at < to; at++) {
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    if (!asked && !alwaysEscaped(value, at, cell)) continue
+    if (!asked && !alwaysEscaped(value, at, flags)) continue
     out += `${value.slice(start, at)}\\`
     start = at
   }
@@ -73,7 +91,7 @@ export function firstFrom(offsets: readonly number[], from: number): number {
  * The offset in the value of the text `node` behind the `bytes` UTF-8 bytes of its spelling that
  * start at the offset `from`, or -1 where no character of the value ends there.
  */
-export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: number, cell: boolean): number {
+export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: number, flags: number): number {
   const value = node.value
   const escapes = w.escapes.get(node) ?? []
   let next = firstFrom(escapes, from)
@@ -82,24 +100,25 @@ export function spelledEnd(w: Writer, node: TextNode, from: number, bytes: numbe
   for (; rest > 0 && at < value.length; at++) {
     const asked = next < escapes.length && escapes[next] === at
     if (asked) next++
-    rest -= unitBytes(value, at) + (asked || alwaysEscaped(value, at, cell) ? 1 : 0)
+    rest -= unitBytes(value, at) + (asked || alwaysEscaped(value, at, flags) ? 1 : 0)
   }
   return rest === 0 ? at : -1
 }
 
 function textNode(w: Writer, node: TextNode, flags: number): string {
   const value = node.value
-  const cell = (flags & IN_CELL) !== 0
-  const points = cell ? w.wrapPoints?.get(node) : undefined
-  if (points === undefined && !w.escapes.has(node) && !value.includes('\\') && !(cell && value.includes('|'))) return value
+  const points = (flags & IN_CELL) !== 0 ? w.wrapPoints?.get(node) : undefined
+  if (points === undefined && !w.escapes.has(node) && !value.includes('\\') &&
+    !((flags & IN_CELL) !== 0 && value.includes('|')) &&
+    !((flags & IN_BRACKET) !== 0 && (value.includes('[') || value.includes(']')))) return value
   let out = ''
   let from = 0
   for (const point of points ?? []) {
     // C2-L-021: the joining space before the fragment is the line break of the continuation row.
-    out += `${escaped(w, node, value, from, Math.max(from, point - 1), cell)}\n`
+    out += `${escaped(w, node, value, from, Math.max(from, point - 1), flags)}\n`
     from = point
   }
-  return out + escaped(w, node, value, from, value.length, cell)
+  return out + escaped(w, node, value, from, value.length, flags)
 }
 
 /** Whether emphasis (bit 1) and strong (bit 2) occur below `node` (C2-W-070). */
@@ -233,11 +252,18 @@ function rawReference(w: Writer, node: LinkNode | ImageNode, flags: number): str
 function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
-  return `[${writeInlines(w, node.children, flags)}]${target(node, node.href)}`
+  // C2-W-125: an unescaped leading caret reads as a footnote reference instead of this link.
+  const first = node.children[0]
+  if (first?.type === 'text' && first.value.startsWith('^')) {
+    const escapes = w.escapes.get(first) ?? []
+    if (escapes[0] !== 0) w.escapes.set(first, [0, ...escapes])
+  }
+  return `[${writeInlines(w, node.children, flags | IN_BRACKET)}]${target(node, node.href)}`
 }
 
 function imageNode(w: Writer, node: ImageNode, flags: number): string {
-  return rawReference(w, node, flags) ?? `![${node.alt ?? ''}]${target(node, node.src)}`
+  const raw = rawReference(w, node, flags)
+  return raw === null ? `![${node.alt ?? ''}]${target(node, node.src)}` : `!${raw}`
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */

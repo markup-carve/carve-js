@@ -123,9 +123,32 @@ describe('carve2 process', () => {
   })
 
   it('C2-W-101: version and command help exit 0', () => {
-    expect(cli(['--version']).stdout).toMatch(/^0\.1\.17\n$/)
-    for (const command of ['render', 'ast', 'fmt', 'diagnostics', 'upgrade']) {
+    expect(cli(['--version']).stdout).toMatch(/^0\.2\.0-dev\n$/)
+    for (const command of ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import']) {
       expect(cli([command, '--help']).status).toBe(0)
     }
+    expect(cli(['--help']).stdout).toContain('migrate-ast, import')
+  })
+
+  it('C2-A-176: migrate-ast upgrades stored JSON and reports invalid input with status 2', () => {
+    const old = JSON.stringify({ type: 'document', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'Hi' }] }] })
+    const result = cli(['migrate-ast'], old)
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout) as unknown).toMatchObject({ astVersion: '2.0', children: [{ type: 'paragraph' }] })
+    const invalid = cli(['migrate-ast'], '{')
+    expect(invalid.status).toBe(2)
+    expect(invalid.stderr).toMatch(/^carve\[ast-json-invalid\]:/)
+  })
+
+  it('C2-W-101: import accepts all four formats and rejects a missing or bad format', () => {
+    for (const format of ['markdown', 'gfm', 'djot', 'html']) {
+      const input = format === 'html' ? '<p>Hi</p>' : 'Hi\n'
+      const result = cli(['import', `--from=${format}`], input)
+      expect(result.status, `${format}: ${result.stderr}`).toBe(0)
+      expect(result.stdout).toContain('Hi')
+    }
+    expect(cli(['import'], 'Hi').status).toBe(2)
+    expect(cli(['import', '--from=other'], 'Hi').status).toBe(2)
+    expect(cli(['import', '--from=markdown', '/path/that/does/not/exist']).status).toBe(2)
   })
 })

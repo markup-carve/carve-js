@@ -11,7 +11,7 @@ import { applyExtensions } from './extensions/claims.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { AST_RESULTS } from './ast-tables.ts'
 import { stringOffsetOfByte, utf8Length } from './positions.ts'
-import { firstFrom, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
+import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
 import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 
@@ -378,7 +378,7 @@ function escapeLoneBracket(c: Check, es: readonly Node[], i: number): boolean {
 
 /** The flags the content of `e` is written with. */
 function contentFlags(c: Check, e: Node): number {
-  return c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : 0)
+  return c.flags | (e.type === 'emphasis' ? IN_EMPHASIS : e.type === 'strong' ? IN_STRONG : e.type === 'link' ? IN_BRACKET : 0)
 }
 
 // The rounds of one probe: past it, the step runs again in the next round of the writer.
@@ -836,7 +836,7 @@ function skipConstruct(c: Check, e: TextNode, es: readonly Node[], a: Node, at: 
   else escapeOpener(c, e, at.vi, a)
   const pos = a.pos
   if (pos === undefined) return false
-  const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, (c.flags & IN_CELL) !== 0)
+  const end = spelledEnd(c.w, e, at.vi, pos.endOffset - pos.startOffset, c.flags)
   if (end < 0) return false
   at.vi = end
   at.j++
@@ -1025,6 +1025,7 @@ function compareInline(c: Check, e: Node, a: Node): void {
   const outer = c.flags
   if (e.type === 'emphasis') c.flags |= IN_EMPHASIS
   else if (e.type === 'strong') c.flags |= IN_STRONG
+  else if (e.type === 'link') c.flags |= IN_BRACKET
   compareInlines(c, e.children, childNodes(a), e)
   c.flags = outer
 }

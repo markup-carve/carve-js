@@ -127,6 +127,7 @@ function codeSpan(state: InlineState, start: number, run: number, kind: number, 
   const open = backtickRunEnd(text, run, state.end)
   const close = closingRun(text, open, state.end, open - run)
   if (close === NONE) {
+    if (state.cell) return start + 1
     // C2-I-017: the span runs to the end of the content, and trailing whitespace is dropped.
     let contentEnd = state.end
     while (contentEnd > open && isWhitespace(text.charCodeAt(contentEnd - 1))) contentEnd--
@@ -238,15 +239,15 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
   const editorial = kind === EDITORIAL
   // C2-I-050: the mark of a comment opener before a combining mark is text.
   if (isJoining(codePointAt(text, pos + 2, state.end))) return pos + 2
-  if (editorial ? state.editorialCloserMissing : state.commentCloserMissing) return pos + 2
+  if (editorial ? state.editorialCloserMissing : state.commentCloserMissing) return pos + 1
   const close = text.indexOf(editorial ? '#}' : '%}', pos + 2)
   if (close < 0 || close + 2 > state.end) {
     if (editorial) state.editorialCloserMissing = true
     else state.commentCloserMissing = true
-    return pos + 2
+    return pos + 1
   }
   // C2-I-063: an editorial comment holds at least one character before the first closer.
-  if (editorial && close === pos + 2) return pos + 2
+  if (editorial && close === pos + 2) return pos + 1
   pushToken(state, kind, pos, close + 2, pos + 2, close, editorial ? 0 : FLAG_BRACED, NONE)
   return close + 2
 }

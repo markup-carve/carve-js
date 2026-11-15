@@ -189,7 +189,8 @@ function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow |
 
 function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): void {
   const block = braceBlock(table, tableKeys(table, []))
-  if (block !== '') emit(w, prefix, block)
+  if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
+  else if (block !== '') emit(w, prefix, block)
   const entries = tableEntries(w, table, flags)
   const rows = entries.filter((entry): entry is WrittenRow => 'lines' in entry)
   if (w.alignTables) alignColumns(rows)
@@ -298,7 +299,8 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
   const first: (readonly [string, string])[] = [['table', '']]
   const declared = declaredHeadRows(table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
-  emit(w, prefix, braceBlock(table, tableKeys(table, first)))
+  if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
+  else emit(w, prefix, braceBlock(table, tableKeys(table, first)))
   const body: string[] = []
   for (const group of table.children) {
     if (group.type === 'comment') continue
@@ -315,4 +317,14 @@ export function writeTable(w: Writer, table: TableNode, prefix: string, flags: n
   const format = tableFormat(w, table)
   if (format === 'pipe') pipeTable(w, table, prefix, flags)
   else delimitedTable(w, table, prefix, format)
+}
+
+/** C2-W-122: the same table attribute line before an intervening comment as before the table itself. */
+export function tableAttribute(w: Writer, table: TableNode): string {
+  const format = tableFormat(w, table)
+  if (format === 'pipe') return braceBlock(table, tableKeys(table, []))
+  const first: (readonly [string, string])[] = [['table', '']]
+  const declared = declaredHeadRows(table)
+  if (declared !== undefined) first.push(['header-rows', String(declared)])
+  return braceBlock(table, tableKeys(table, first))
 }

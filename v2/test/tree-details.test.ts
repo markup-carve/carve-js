@@ -362,7 +362,7 @@ describe('resolution and rendering in detail', () => {
 
   it('the label of a task box is the text of the paragraphs and headings of the item', () => {
     expect(render('- [x] a\n\n  # b\n  - c')).toContain('aria-label="a b"')
-    expect(render('- [ ] > q')).toContain('aria-label=""')
+    expect(render('- [ ] > q')).not.toContain('aria-label')
   })
 
   it('an align key is written as a style where no style key stands, and behind the style key where one does', () => {

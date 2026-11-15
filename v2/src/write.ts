@@ -5,7 +5,7 @@ import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointe
 import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { type Diagnostic, locateFindings } from './diagnostics.ts'
-import { blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
+import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
@@ -238,18 +238,24 @@ function joinsGroup(w: Writer, before: Node, node: Node): boolean {
  * The end of the group of blocks that starts at `from`: the blocks behind it that no blank line
  * separates from it, and what the block before reads differently.
  */
+function isBridged(w: Writer, nodes: readonly Node[], from: number, at: number): boolean {
+  let priorAt = at - 1
+  while (priorAt >= from && nodes[priorAt]?.type === 'comment') priorAt--
+  const prior = nodes[priorAt]
+  if (prior?.type !== 'list' && prior?.type !== 'definition_list' && prior?.type !== 'footnote') return false
+  const node = nodes[at]
+  const following = node?.type === 'comment' ? afterComments(nodes, at) : node
+  return followingAttributes(w, following) !== ''
+}
+
 function groupEnd(w: Writer, nodes: readonly Node[], from: number): number {
   let end = from + 1
   while (end < nodes.length) {
     const before = nodes[end - 1]!
     const node = nodes[end]!
-    const following = nodes[end + 1]
-    const hoisted = node.type === 'comment' && (before.type === 'list' || before.type === 'definition_list' ||
-      before.type === 'footnote') && followingAttributes(w, following) !== ''
-    const prior = nodes[end - 2]
-    const belongs = before.type === 'comment' && prior !== undefined &&
-      (prior.type === 'list' || prior.type === 'definition_list' || prior.type === 'footnote') &&
-      followingAttributes(w, node) !== ''
+    const bridged = isBridged(w, nodes, from, end)
+    const hoisted = node.type === 'comment' && bridged
+    const belongs = before.type === 'comment' && bridged
     if (!hoisted && !belongs && !joinsGroup(w, before, node)) break
     end++
   }

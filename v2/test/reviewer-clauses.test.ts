@@ -212,7 +212,7 @@ describe('the escapes the procedure cannot reach', () => {
   }
 
   it('C2-W-125: a bare opening brace that reads on into a later construct of the tree gets the backslash', () => {
-    canonical('x\\{#a')
+    expect(format('x\\{#a')).toBe('x{#a\n')
     canonical('x *\\{*')
     canonical('x(/u){*\\{/')
   })

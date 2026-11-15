@@ -235,7 +235,8 @@ describe('attribute blocks', () => {
   it('C2-I-030: the shapes of a name, a key and a language tag', () => {
     expect(inline('[s]{#a-1_B .-x :en-US _k=1 k-2_x=2}')).toBe('span["s"]{#a-1_B .-x :en-US _k=1 k-2_x=2}')
     expect(inline('[s]{:} [s]{:en-} [s]{:-en} [s]{:en--us} [s]{:e_n}')).toBe('span["s"]{:} " [s]{:en-} [s]{:-en} [s]{:en" ‹–› "us} [s]{:e_n}"')
-    expect(inline('[s]{1k=v} [s]{-k=v} [s]{k.x=v} [s]{#a.b} [s]{.é}')).toBe('"[s]{1k=v} [s]{-k=v} [s]{k.x=v} [s]{#a.b} [s]{.é}"')
+    expect(inline('[s]{1k=v} [s]{-k=v} [s]{k.x=v} [s]{#a.b} [s]{.é}'))
+      .toBe('"[s]{1k=v} [s]{-k=v} [s]{k.x=v} [s]{" #"a.b" "} [s]{.é}"')
   })
 
   it('C2-I-031: a bare key does not start with an underscore', () => {
@@ -442,7 +443,7 @@ describe('braced delimiters', () => {
   it('C2-I-063: an editorial comment is literal and holds at least one character', () => {
     expect(inline('{# a *b* `c #} d')).toBe('{#}" a *b* `c " " d"')
     expect(inline('{#a', 'b#}')).toBe('{#}"a|b"')
-    expect(inline('{##} {# #} {#a')).toBe('"{##} " {#}" " " {#a"')
+    expect(inline('{##} {# #} {#a')).toBe('"{##} " {#}" " " {" #"a"')
     expect(inline('{#a#}{.c}')).toBe('{#}"a" "{.c}"')
   })
 })
@@ -818,7 +819,7 @@ describe('the fallback rule', () => {
     expect(inline(':n[a @b')).toBe('":n[a " @"b"')
     expect(inline('{.a *b*')).toBe('"{.a " strong["b"]')
     expect(inline('{%a *b*')).toBe('"{%a " strong["b"]')
-    expect(inline('{#a #b')).toBe('"{#a " #"b"')
+    expect(inline('{#a #b')).toBe('"{" #"a" " " #"b"')
     expect(inline('<a:b *c*')).toBe('"<a:b " strong["c"]')
     expect(inline('</#a *b*')).toBe('"</" #"a" " " strong["b"]')
     expect(inline('[a](/u *b*')).toBe('"[a](/u " strong["b"]')

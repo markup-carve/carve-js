@@ -3,11 +3,13 @@ import { decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnos
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
 import { ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
+import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
+import { migrateTree } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
 
 export class CliError extends Error {
-  readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid'
-  constructor(category: 'usage' | 'input-unreadable' | 'ast-json-invalid', message: string) {
+  readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid'
+  constructor(category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid', message: string) {
     super(message)
     this.category = category
   }
@@ -37,6 +39,19 @@ function writeFile(path: string, source: string): void {
 function ast(text: string): DocumentNode {
   try { return decodeTree(text) }
   catch (error) { throw new CliError('ast-json-invalid', String(error)) }
+}
+
+function migrateAst(text: string): DocumentNode {
+  try { return migrateTree(JSON.parse(text) as unknown).document }
+  catch (error) { throw new CliError('ast-json-invalid', String(error)) }
+}
+
+function importSource(text: string, format: Format): string {
+  try { return importDocument(text, { from: format }).source }
+  catch (error) {
+    if (error instanceof ImportInputError) throw new CliError('import-input-invalid', error.message)
+    throw error
+  }
 }
 
 function hasRawHtml(document: DocumentNode): boolean {
@@ -144,6 +159,14 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
     case 'upgrade': {
       const result = upgradeOne(display, source, args)
       return { status: result.status, record: result.record }
+    }
+    case 'migrate-ast': {
+      process.stdout.write(`${encodeTree(migrateAst(source))}\n`)
+      return { status: 0 }
+    }
+    case 'import': {
+      process.stdout.write(importSource(source, args.values['from'] as Format))
+      return { status: 0 }
     }
   }
 }

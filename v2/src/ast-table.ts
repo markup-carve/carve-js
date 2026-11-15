@@ -6,7 +6,7 @@ import {
 } from './ast.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  FLOW_CELL, FLOW_PLAIN, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
+  FLOW_CELL, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
@@ -69,7 +69,7 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
 function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
-  const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_PLAIN
+  const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_CELL
   const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children: leafInlines(ctx, node.spans!, flow) })
   const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if (node.facts > 1) cell.colspan = node.facts

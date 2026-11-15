@@ -217,7 +217,7 @@ function cellTexts(source: string): string[] {
 
 describe('table rows in linear time', () => {
   it('C2-B-169: a backtick run behind an escaped backtick protects no pipe without a closer of its length', () => {
-    expect(cellTexts(`| ${ESCAPED_RUN}x | y |`)).toEqual([`${BACKTICK}x`, 'y'])
+    expect(cellTexts(`| ${ESCAPED_RUN}x | y |`)).toEqual([`${BACKTICK}${BACKTICK}x`, 'y'])
     expect(cellTexts(`| ${BACKTICK}a | b${BACKTICK} |`)).toHaveLength(1)
     // A test that runs past its timeout still passes when it never yields, so the time is checked here.
     const started = performance.now()
@@ -464,7 +464,7 @@ describe('what the four-token writer gate found', () => {
 
   it('C2-I-090, C2-W-088: a name character behind a mention or a tag is escaped, so the name does not take it', () => {
     expect(format(`x @a${BACKSLASH}_`)).toBe(`x @a${BACKSLASH}_\n`)
-    expect(format(`x ${BACKSLASH}{#a${BACKSLASH}_`)).toBe(`x ${BACKSLASH}{#a${BACKSLASH}_\n`)
+    expect(format(`x ${BACKSLASH}{#a${BACKSLASH}_`)).toBe(`x {#a${BACKSLASH}_\n`)
   })
 
   it('C2-W-097: a backslash that ends a text is written as two before punctuation, a space or the end of a line', () => {

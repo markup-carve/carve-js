@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-import manifest from '../../package.json' with { type: 'json' }
 import { parseArgs, help } from './flags.ts'
 import { CliError, run } from './run.ts'
+import { CARVE2_VERSION } from './version.ts'
 
 function main(): number {
   try {
     const args = parseArgs(process.argv.slice(2))
     if (args.help) { process.stdout.write(help(args.command)); return 0 }
     if (args.version) {
-      process.stdout.write(`${manifest.version}\n`)
+      process.stdout.write(`${CARVE2_VERSION}\n`)
       return 0
     }
     return run(args)
