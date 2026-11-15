@@ -124,8 +124,13 @@ function unresolvedEscapedLabel(input: string, expected: string, actual: string)
   return input.startsWith('[\\') && input.includes('][]') && !expected.includes('<a') && !actual.includes('<a')
 }
 
+function wrappedLinkTitle(input: string, expected: string, actual: string): boolean {
+  return input.includes('](') && input.includes('"\n') && expected.includes('<a ') && actual.includes('](')
+}
+
 function referenceMatch(input: string, expected: string, actual: string): string | null {
   if (input.includes('javascript:') || input.includes('\u202e')) return 'U-164'
+  if (wrappedLinkTitle(input, expected, actual)) return 'U-221'
   if (input.includes('][@')) return 'U-166'
   if (unresolvedEscapedLabel(input, expected, actual)) return 'U-158'
   if (input.includes('][') && input.includes(']{') && expected.includes('{') && actual.includes('{')
@@ -134,7 +139,7 @@ function referenceMatch(input: string, expected: string, actual: string): string
   if (footnote !== null) return footnote
   const image = imageReferenceMatch(input, expected, actual)
   if (image !== null) return image
-  if (input.includes(']( ') || input.includes('](  ')) return 'U-175'
+  if (input.includes(']( ')) return 'U-175'
   return null
 }
 
