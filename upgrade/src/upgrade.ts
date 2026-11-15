@@ -10,6 +10,7 @@ import { rescueDescription } from './description-rescue.ts'
 import { rescueEmptyDefinitionItem } from './definition-rescue.ts'
 import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
+import { rescueNestedNote } from './nested-note-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
@@ -342,6 +343,7 @@ function upgradeCore(input: string): UpgradeResult {
         ?? rescueDescription(input, done.output, mismatch)
         ?? rescuePercent(input, done.output, mismatch) ?? rescueCombinedInline(input, done.output, mismatch)
         ?? rescueHeadingBraceTag(input, done.output, mismatch)
+        ?? rescueNestedNote(input, done.output, mismatch)
         ?? rescueTargeted(input, done.output, mismatch)
         ?? rescueMinor(input, done.output, mismatch)
       done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)

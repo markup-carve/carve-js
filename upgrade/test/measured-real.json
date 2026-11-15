@@ -1915,7 +1915,7 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 10,
     "input": "* [d]: \n :::\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-131"
     ]
@@ -1926,7 +1926,7 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 30,
     "input": "* [d]: \n text\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-131"
     ]
@@ -1937,7 +1937,7 @@
     "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
     "line": 49,
     "input": "* [d]: /u\n :::\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-131"
     ]

@@ -2698,5 +2698,16 @@
     "outputs": [
       "# H {#id .cls\\}\n"
     ]
+  },
+  {
+    "id": "U-257",
+    "title": "Nested bracket text in an inline note",
+    "class": "rewrite",
+    "inputs": [
+      "^[/[^[g]/] b/]\n"
+    ],
+    "outputs": [
+      "^[{/\\[\\^[g]\\/\\] b/}]\n"
+    ]
   }
 ]

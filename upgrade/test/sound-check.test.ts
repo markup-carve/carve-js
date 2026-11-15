@@ -68,11 +68,12 @@ describe('C2-W-100: the upgrade self-check', () => {
     } finally { rmSync(dir, { recursive: true }) }
   })
 
-  it('C2-W-100: a rewrite with no HTML effect on either engine leaves the source alone', () => {
+  it('C2-B-081: a consumed definition and its sibling get a preserving rewrite', () => {
     const input = '* [d]: \n text\n'
     const result = upgrade(input)
-    expect(result.output).toBe(input)
-    expect(result.records.map((record) => record.entry)).not.toContain('U-109')
+    expect(result.output).toBe('* {% %}\n\ntext\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-131')
   })
 
   it('C2-B-105: a needless brace-tail edit is reported without rewriting', () => {

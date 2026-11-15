@@ -32,4 +32,32 @@ describe('C2-B-081 C2-B-083: empty definitions inside list items', () => {
     expect(result.output).toBe('* {% %}\n* {% %}\n')
     expect(result.check).toBe('pass')
   })
+
+  it.each([
+    ['* [d]: \n text\n', '* {% %}\n\ntext\n'],
+    ['* [d]: /u\n :::\n', '[d]: /u\n\n* {% %}\n\n:::\n'],
+    ['- [r]: /u\ntail\n\n[r][]\n', '[r]: /u\n\n- {% %}\n\ntail\n\n[r][]\n'],
+  ])('releases a sibling after a consumed definition: %s', (source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+  })
+
+  it('does not absorb a table defect while releasing a sibling', () => {
+    expect(upgrade('* [d]: \n text\n\n|= ^|').check).toBe('mismatch')
+  })
+
+  it('places a consumed definition beside its list after earlier content', () => {
+    const source = '# T\n\npara\n\n* [d]: /u\n :::\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('# T\n\npara\n\n[d]: /u\n\n* {% %}\n\n:::\n')
+    expect(result.check).toBe('pass')
+  })
+
+  it('leaves front matter at the start when a later definition moves', () => {
+    const source = '---\ntitle: T\n---\n\n* [d]: /u\n :::\n'
+    const result = upgrade(source)
+    expect(result.output).toBe('---\ntitle: T\n---\n\n[d]: /u\n\n* {% %}\n\n:::\n')
+    expect(result.check).toBe('pass')
+  })
 })

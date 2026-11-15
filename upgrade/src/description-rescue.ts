@@ -65,6 +65,12 @@ function plusVariants(input: string): string[] {
     direct[line] = (lines[line] ?? '').slice(0, markerColumn) + ': ' + follower
     direct.splice(line + 1, 1)
     found.push(direct.join('\n'))
+    const sibling = direct[line + 1] ?? ''
+    if (sibling.trimStart().startsWith(': ') && sibling !== sibling.trimStart()) {
+      const atColumn = [...direct]
+      atColumn[line + 1] = sibling.trimStart()
+      found.push(atColumn.join('\n'))
+    }
   }
   return found
 }

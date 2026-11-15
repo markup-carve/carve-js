@@ -1534,6 +1534,12 @@
       "name": "tag inside a failed heading brace attribute",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-257",
+      "name": "nested bracket text in an inline note",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [
