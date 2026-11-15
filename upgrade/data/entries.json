@@ -1483,6 +1483,12 @@
       "name": "quoted list fence retains its blank code line",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-246",
+      "name": "unresolved footnote attribute and heading id",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

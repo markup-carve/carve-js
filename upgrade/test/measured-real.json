@@ -3549,5 +3549,27 @@
     "entries": [
       "U-245"
     ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-087 C2-I-044 C2-B-091",
+    "path": "resources/examples/edge-cases/0822-an-id-dropped-with-an-unresolved-reference-reserves-nothing.md",
+    "line": 12,
+    "input": "x[^n]{#i}\n\n## {#i}\n",
+    "check": "pass",
+    "entries": [
+      "U-246"
+    ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-087 C2-I-044 C2-B-091",
+    "path": "tests/corpus/822-an-id-dropped-with-an-unresolved-reference-reserves-nothing.crv",
+    "line": 1,
+    "input": "x[^n]{#i}\n\n## {#i}\n",
+    "check": "pass",
+    "entries": [
+      "U-246"
+    ]
   }
 ]

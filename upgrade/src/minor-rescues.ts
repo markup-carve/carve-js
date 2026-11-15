@@ -72,6 +72,22 @@ function quotedItemFenceBlank(output: string): Candidate[] {
   return found
 }
 
+function unresolvedFootnoteHeadingId(output: string): Candidate[] {
+  const open = output.indexOf(']{#')
+  if (open < 0 || !output.slice(0, open).includes('[^')) return []
+  const close = output.indexOf('}', open + 3)
+  if (close < 0) return []
+  const id = output.slice(open + 3, close)
+  if (id === '' || id.includes('\n')) return []
+  const heading = `\n## {#${id}}`
+  const at = output.indexOf(heading, close + 1)
+  if (at < 0) return []
+  const first = output.slice(0, open + 1) + '{\\#' + id + '}' + output.slice(close + 1)
+  const second = first.indexOf(heading)
+  const rewritten = first.slice(0, second) + `\n{#${id}}\n## \\{#${id}}` + first.slice(second + heading.length)
+  return [candidate('U-246', rewritten, 'the unresolved attribute was escaped and the heading id moved above its text')]
+}
+
 function inlineComment(output: string): Candidate[] {
   const found: Candidate[] = []
   let at = output.indexOf('{%')
@@ -552,6 +568,7 @@ export function rescueMinor(
     ...indentedFenceRunAsContent(output),
     ...blockAttributeAcrossFootnote(output),
     ...quotedItemFenceBlank(output),
+    ...unresolvedFootnoteHeadingId(output),
     ...inlineComment(output),
     ...emptyItemAttribute(output),
     ...emptyDescriptionSentinels(output),
