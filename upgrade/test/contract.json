@@ -2498,5 +2498,18 @@
       ":: t\n:: u\n: d\n: e\n",
       "[^n]: intro\n\n   :: term\n   :  definition\n\n   > quote\n\nsee[^n]\n"
     ]
+  },
+  {
+    "id": "U-237",
+    "title": "Nested item follower at outer content column",
+    "class": "rewrite",
+    "inputs": [
+      "- x\n  - ::: d\n   y\n    :::\n",
+      "- a\n  * w\n  1. v\n    - u\n"
+    ],
+    "outputs": [
+      "- x\n  - ::: d\n  y\n    :::\n",
+      "- a\n  * w\n  1. v\n  - u\n"
+    ]
   }
 ]

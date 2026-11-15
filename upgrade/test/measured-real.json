@@ -3263,5 +3263,49 @@
     "entries": [
       "U-137"
     ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in.md",
+    "line": 142,
+    "input": "- x\n  - ::: d\n   y\n    :::\n",
+    "check": "pass",
+    "entries": [
+      "U-237"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0872-every-list-item-measures-its-content-against-its-own-content-column.md",
+    "line": 133,
+    "input": "- a\n  * w\n  1. v\n    - u\n",
+    "check": "pass",
+    "entries": [
+      "U-237"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "tests/corpus/482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in-6.crv",
+    "line": 1,
+    "input": "- x\n  - ::: d\n   y\n    :::\n",
+    "check": "pass",
+    "entries": [
+      "U-237"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "tests/corpus/872-every-list-item-measures-its-content-against-its-own-content-column-6.crv",
+    "line": 1,
+    "input": "- a\n  * w\n  1. v\n    - u\n",
+    "check": "pass",
+    "entries": [
+      "U-237"
+    ]
   }
 ]

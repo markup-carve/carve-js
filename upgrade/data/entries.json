@@ -1429,6 +1429,12 @@
       "name": "compound description sibling columns",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-237",
+      "name": "nested item follower at outer content column",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

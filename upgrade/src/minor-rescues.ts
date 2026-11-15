@@ -423,6 +423,25 @@ function nestedDefinitionBoundary(output: string): Candidate[] {
   return found
 }
 
+function nestedItemFollower(output: string): Candidate[] {
+  const lines = output.split('\n')
+  const found: Candidate[] = []
+  for (let at = 1; at < lines.length; at++) {
+    const previous = lines[at - 1] ?? ''
+    if (!previous.startsWith('  - ') && !previous.startsWith('  * ')
+      && !previous.startsWith('  1. ')) continue
+    const current = lines[at] ?? ''
+    if (!current.startsWith('   ') || current.trim() === '') continue
+    for (const indent of [2, 1]) {
+      const changed = [...lines]
+      changed[at] = ' '.repeat(indent) + current.trimStart()
+      found.push(candidate('U-237', changed.join('\n'),
+        'the follower was moved to its outer item content column'))
+    }
+  }
+  return found
+}
+
 /** Clause-backed spellings found by a bounded full HTML check. */
 export function rescueMinor(
   input: string,
@@ -452,7 +471,8 @@ export function rescueMinor(
     ...divBoundary(output),
     ...smartQuoteCandidates(output, expected),
     ...unresolvedReferenceBackslashes(output),
-    ...nestedDefinitionBoundary(output)
+    ...nestedDefinitionBoundary(output),
+    ...nestedItemFollower(output)
   ]
   for (const item of candidates) {
     try {
