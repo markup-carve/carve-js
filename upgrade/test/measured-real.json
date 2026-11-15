@@ -3131,5 +3131,49 @@
     "entries": [
       "U-235"
     ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-050",
+    "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
+    "line": 32,
+    "input": "[{*a]*}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-050",
+    "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
+    "line": 44,
+    "input": "[{/a]/}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-050",
+    "path": "tests/corpus/533-a-braced-span-cannot-close-beyond-its-bracket-run-3.crv",
+    "line": 1,
+    "input": "[{*a]*}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-050",
+    "path": "tests/corpus/533-a-braced-span-cannot-close-beyond-its-bracket-run-4.crv",
+    "line": 1,
+    "input": "[{/a]/}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
   }
 ]

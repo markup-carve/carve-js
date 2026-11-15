@@ -50,6 +50,9 @@ function bracketCandidates(output: string): Candidate[] {
   while (at >= 0) {
     if (openers.includes(output[at + 2] ?? '\0')) {
       found.push({ id: 'U-182', output: output.slice(0, at + 1) + '\\' + output.slice(at + 1) })
+      if (output[at + 2] === '*' || output[at + 2] === '/') {
+        found.push({ id: 'U-182', output: output.slice(0, at + 2) + '\\' + output.slice(at + 2) })
+      }
     }
     at = output.indexOf('[{', at + 2)
   }

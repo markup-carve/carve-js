@@ -1801,10 +1801,14 @@
     "id": "U-182",
     "title": "Braced inline opener in a bracket",
     "inputs": [
-      "[{^]^}"
+      "[{^]^}",
+      "[{*a]*}\n",
+      "[{/a]/}\n"
     ],
     "outputs": [
-      "[\\{^]^}"
+      "[\\{^]^}",
+      "[{\\*a]*}\n",
+      "[{\\/a]/}\n"
     ],
     "class": "escape"
   },
