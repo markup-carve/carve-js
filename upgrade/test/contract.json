@@ -1138,10 +1138,12 @@
     "id": "U-123",
     "title": "Plus continuation in a description body",
     "inputs": [
-      ":: t\n: +"
+      ":: t\n: +",
+      ":: term\n:  intro\n+\n  more\n"
     ],
     "outputs": [
-      ":: t\n: {% %}"
+      ":: t\n: {% %}",
+      ":: term\n:  intro\n\nmore\n"
     ],
     "class": "rewrite"
   },
@@ -1324,10 +1326,16 @@
     "id": "U-141",
     "title": "Attribute line consumed by a quote",
     "inputs": [
-      "> {k}\nt"
+      "> {k}\nt",
+      "> {k}\nt\n",
+      "> {x}\nt\n",
+      "> {#x}\na\n"
     ],
     "outputs": [
-      ">\nt"
+      ">\nt",
+      ">\nt\n",
+      ">\nt\n",
+      ">\na\n"
     ],
     "class": "rewrite"
   },
@@ -1825,10 +1833,12 @@
     "id": "U-192",
     "title": "Language Shorthand Before An Explicit Lang Key",
     "inputs": [
-      "[]{:r lang}\n"
+      "[]{:r lang}\n",
+      "{:fr}\n{lang=de}\nText\n"
     ],
     "outputs": [
-      "[]{lang}\n"
+      "[]{lang}\n",
+      "{lang=de}\nText\n"
     ],
     "class": "rewrite"
   },
@@ -1881,10 +1891,14 @@
     "title": "Attribute consumed at a list boundary",
     "class": "rewrite",
     "inputs": [
-      "- a\n  {.k}\n# H\n"
+      "- a\n  {.k}\n# H\n",
+      "- a\n  {.x}\ntail\n",
+      "- a\n\n  {.x}\n- b\n"
     ],
     "outputs": [
-      "- a\n\n# H\n"
+      "- a\n\n# H\n",
+      "- a\n\ntail\n",
+      "- a\n\n\n- b\n"
     ]
   },
   {

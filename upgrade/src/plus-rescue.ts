@@ -368,6 +368,23 @@ function repeatedQuotePluses(source: string): string[] {
   return removed > 1 ? [moved.join('\n')] : []
 }
 
+function detachedDescriptionPlus(source: string): string[] {
+  const lines = source.split('\n')
+  const found: string[] = []
+  for (let at = 1; at < lines.length - 1; at++) {
+    if ((lines[at] ?? '').trim() !== '+' || !(lines[at - 1] ?? '').trimStart().startsWith(': ')) continue
+    const follower = (lines[at + 1] ?? '').trimStart()
+    if (follower === '') continue
+    for (let indent = 0; indent <= 3; indent++) {
+      const moved = [...lines]
+      moved[at] = ''
+      moved[at + 1] = ' '.repeat(indent) + follower
+      found.push(moved.join('\n'))
+    }
+  }
+  return found
+}
+
 function candidates(source: string, mismatchLine: number): string[] {
   const lines = readLines(source)
   const found = new Set<string>()
@@ -386,7 +403,7 @@ export function rescuePlus(input: string, output: string, mismatch: ReportRecord
     ...nestedMarkedQuoteCandidates(input), ...listDivCandidates(input), ...indentListPlus(output),
     ...footnoteFencePlus(input), ...listQuotePlus(input), ...listFirstBlock(input), ...listOutsideFence(input),
     ...listCommentHeading(input), ...taskListBoundaryPlus(input), ...percentListPlus(input),
-    ...repeatedQuotePluses(input)]
+    ...repeatedQuotePluses(input), ...detachedDescriptionPlus(input)]
   for (const candidate of variants) {
     try {
       if (!compareHtml(expected, html02(candidate, false)).equal) continue

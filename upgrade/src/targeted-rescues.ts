@@ -144,6 +144,25 @@ function nestedFootnoteCandidates(output: string): Candidate[] {
   return [{ id: 'U-202', output: prefix + output.slice(first + 2).replaceAll('^[', '\\^[') }]
 }
 
+function floatingAttributeCandidates(output: string): Candidate[] {
+  const found: Candidate[] = []
+  const lines = readLines(output)
+  for (let line = 1; line <= lines.count; line++) {
+    const value = lineText(lines, line)
+    const trimmed = value.trimStart()
+    const start = lineStart(lines, line)
+    const end = lineEnd(lines, line)
+    if (trimmed.startsWith('> {') && trimmed.endsWith('}')) {
+      found.push({ id: 'U-141', output: output.slice(0, start) + value.slice(0, value.indexOf('>') + 1) + output.slice(end) })
+    }
+    if (!['{.', '{#', '{:', '{lang='].some((prefix) => trimmed.startsWith(prefix)) || !trimmed.endsWith('}')) continue
+    const id = trimmed.startsWith('{:') && lineText(lines, line + 1).trimStart().startsWith('{lang=') ? 'U-192' : 'U-197'
+    found.push({ id, output: output.slice(0, start) + output.slice(lineStart(lines, line + 1)) })
+    found.push({ id, output: output.slice(0, start) + output.slice(end) })
+  }
+  return found
+}
+
 function lineCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -175,7 +194,7 @@ export function rescueTargeted(input: string, output: string, mismatch: ReportRe
   const candidates = [...simpleCandidates(output), ...bracketCandidates(output), ...lineCandidates(output),
     ...smartQuoteCandidates(output, expected), ...metadataCandidates(output), ...languageCandidates(output),
     ...quotedBraceCandidates(output), ...substitutionAttributeCandidates(input, output),
-    ...nestedFootnoteCandidates(output)]
+    ...nestedFootnoteCandidates(output), ...floatingAttributeCandidates(output)]
   for (const candidate of candidates) {
     try {
       if (!compareHtml(expected, html02(candidate.output, false)).equal) continue
