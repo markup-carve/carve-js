@@ -1,113 +1,1220 @@
 {
   "engine01": "the 0.1 engine built from src/ of this repository",
   "entries": [
-    {"id": "U-001", "name": "heading under text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-002", "name": "quote under text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-003", "name": "attribute line under text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-004", "name": "description list under text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-005", "name": "definition under text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-006", "name": "heading or quote under item text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-007", "name": "list marker without quote mark under quoted list", "class": "rewrite", "lint": []},
-    {"id": "U-008", "name": "list marker after description text", "class": "rewrite", "lint": ["list-marker-without-blank-line"]},
-    {"id": "U-009", "name": "term mark under item text", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-010", "name": "block under a caption line", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-011", "name": "include directive", "class": "report", "lint": []},
-    {"id": "U-012", "name": "list marker under text at top level", "class": "none", "lint": []},
-    {"id": "U-013", "name": "table row, fence, `***` under text", "class": "none", "lint": []},
-    {"id": "U-014", "name": "`+` before a block", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-015", "name": "`+` before a paragraph", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-016", "name": "`+` in a quote", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-017", "name": "`- +` first block", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-018", "name": "blank line inside item makes list loose", "class": "rewrite", "lint": ["tight-list-item-with-blank-line"]},
-    {"id": "U-019", "name": "later paragraph of a tight item", "class": "report", "lint": []},
-    {"id": "U-020", "name": "`{loose}` on several items", "class": "rewrite", "lint": ["deprecated-loose-attribute"]},
-    {"id": "U-021", "name": "loose list with one item", "class": "report", "lint": ["deprecated-loose-attribute"]},
-    {"id": "U-022", "name": "right-aligned ordered markers", "class": "rewrite", "lint": ["ordered-marker-right-aligned"]},
-    {"id": "U-023", "name": "marker short of the content column", "class": "rewrite", "lint": ["list-marker-below-content-column"]},
-    {"id": "U-024", "name": "alphabetic list from `i`", "class": "rewrite", "lint": ["ordered-list-kind-split"]},
-    {"id": "U-025", "name": "marker of ten or more digits", "class": "rewrite", "lint": []},
-    {"id": "U-026", "name": "`%%%` block between items", "class": "rewrite", "lint": []},
-    {"id": "U-027", "name": "three blank lines between lists", "class": "none", "lint": []},
-    {"id": "U-028", "name": "`-` and `*` items", "class": "none", "lint": []},
-    {"id": "U-029", "name": "comment line, uneven columns, empty box, `- -`", "class": "none", "lint": ["uneven-list-indent"]},
-    {"id": "U-030", "name": "uppercase letter marker", "class": "none", "lint": []},
-    {"id": "U-031", "name": "attribute line above a blank line", "class": "rewrite", "lint": ["unattached-block-attribute"]},
-    {"id": "U-032", "name": "attribute block over several lines", "class": "rewrite", "lint": ["block-marker-as-text"]},
-    {"id": "U-033", "name": "attribute line between items", "class": "rewrite", "lint": ["block-opener-without-blank-line"]},
-    {"id": "U-034", "name": "attribute line that reaches no block", "class": "rewrite", "lint": ["unattached-block-attribute"]},
-    {"id": "U-035", "name": "glued, stacked, empty attribute blocks", "class": "none", "lint": []},
-    {"id": "U-036", "name": "attribute order in HTML", "class": "report", "lint": []},
-    {"id": "U-037", "name": "attribute block after fence language or name", "class": "rewrite", "lint": ["fence-opener-fallback"]},
-    {"id": "U-038", "name": "definition inside a container", "class": "rewrite", "lint": ["definition-in-container"]},
-    {"id": "U-039", "name": "indented definition at top level", "class": "rewrite", "lint": ["definition-in-container"]},
-    {"id": "U-040", "name": "duplicate link definition", "class": "rewrite", "lint": ["duplicate-link-reference-definition"]},
-    {"id": "U-041", "name": "duplicate abbreviation definition", "class": "rewrite", "lint": ["duplicate-abbreviation-definition"]},
-    {"id": "U-042", "name": "definitions that read the same", "class": "none", "lint": ["duplicate-footnote-definition"]},
-    {"id": "U-043", "name": "`#` headings and heading text", "class": "none", "lint": ["heading-marker-mixed"]},
-    {"id": "U-044", "name": "hyphen or underscore run", "class": "rewrite", "lint": ["thematic-break-spelling", "setext-heading-underline"]},
-    {"id": "U-045", "name": "spaced breaks", "class": "rewrite", "lint": ["deprecated-spaced-thematic-break"]},
-    {"id": "U-046", "name": "spaced underscores, stars under item", "class": "none", "lint": []},
-    {"id": "U-047", "name": "frontmatter format names, unclosed", "class": "none", "lint": ["unclosed-frontmatter"]},
-    {"id": "U-048", "name": "unknown frontmatter format name", "class": "none", "lint": []},
-    {"id": "U-049", "name": "fence closer at another indent", "class": "rewrite", "lint": ["fence-closer-indented"]},
-    {"id": "U-050", "name": "`%%%` closer with text", "class": "rewrite", "lint": ["comment-fence-closer-with-text"]},
-    {"id": "U-051", "name": "unquoted words after fence language or div name", "class": "rewrite", "lint": ["fence-title-syntax"]},
-    {"id": "U-052", "name": "`%%` line in a line block", "class": "rewrite", "lint": ["comment-line-in-line-block"]},
-    {"id": "U-053", "name": "tab in code under a container", "class": "rewrite", "lint": []},
-    {"id": "U-054", "name": "fence and div spellings that read the same", "class": "none", "lint": []},
-    {"id": "U-055", "name": "GFM separator row", "class": "rewrite", "lint": ["deprecated-separator-row"]},
-    {"id": "U-056", "name": "glued alignment marks", "class": "rewrite", "lint": ["deprecated-cell-alignment"]},
-    {"id": "U-057", "name": "escaped last pipe", "class": "rewrite", "lint": ["table-shaped-paragraph"]},
-    {"id": "U-058", "name": "`header-rows` on a pipe table", "class": "rewrite", "lint": ["deprecated-table-attribute"]},
-    {"id": "U-059", "name": "`footer-rows` with only a header row", "class": "report", "lint": []},
-    {"id": "U-060", "name": "row span into the head", "class": "report", "lint": ["table-span-marker-blocked"]},
-    {"id": "U-061", "name": "delimited table with bad quoting", "class": "report", "lint": ["delimited-table-malformed"]},
-    {"id": "U-062", "name": "table forms that read the same", "class": "none", "lint": ["table-shaped-paragraph"]},
-    {"id": "U-063", "name": "caption after a blank line", "class": "rewrite", "lint": ["unattached-caption"]},
-    {"id": "U-064", "name": "captions that read the same", "class": "none", "lint": []},
-    {"id": "U-065", "name": "bare underline", "class": "rewrite", "lint": ["deprecated-bare-underline"]},
-    {"id": "U-066", "name": "bare strike", "class": "rewrite", "lint": ["deprecated-bare-strike"]},
-    {"id": "U-067", "name": "bare highlight", "class": "rewrite", "lint": ["deprecated-bare-highlight"]},
-    {"id": "U-068", "name": "emphasis outside strong", "class": "rewrite", "lint": []},
-    {"id": "U-069", "name": "substitution arrow", "class": "rewrite", "lint": ["deprecated-substitution-arrow"]},
-    {"id": "U-070", "name": "delimiter in braced span closes outer span", "class": "rewrite", "lint": ["braced-span-opener-as-text"]},
-    {"id": "U-071", "name": "single opening quote with no closer", "class": "rewrite", "lint": []},
-    {"id": "U-072", "name": "editorial comment that starts like an id", "class": "report", "lint": ["unattached-inline-attribute"]},
-    {"id": "U-073", "name": "sigil after a letter or number", "class": "report", "lint": ["sigil-after-letter"]},
-    {"id": "U-074", "name": "inline spellings that read the same", "class": "none", "lint": ["markdown-strong-double-star"]},
-    {"id": "U-075", "name": "references that read the same", "class": "none", "lint": ["unresolved-reference-link"]},
-    {"id": "U-076", "name": "raw HTML block", "class": "report", "lint": []},
-    {"id": "U-077", "name": "raw HTML span", "class": "report", "lint": []},
-    {"id": "U-078", "name": "bare HTML tag", "class": "none", "lint": ["bare-html-tag"]},
-    {"id": "U-079", "name": "render options of the host", "class": "report", "lint": []},
-    {"id": "U-101", "name": "`=` at the start of a paragraph, item or quote", "class": "escape", "lint": ["heading-marker-mixed"]},
-    {"id": "U-102", "name": "indented line under a heading", "class": "escape", "lint": ["deprecated-indented-line-under-heading"]},
-    {"id": "U-103", "name": "letter marker with one space", "class": "escape", "lint": []},
-    {"id": "U-104", "name": "quote fence or line block with a title", "class": "escape", "lint": ["fence-title-syntax"]},
-    {"id": "U-105", "name": "raw fence with a title", "class": "escape", "lint": ["fence-title-syntax"]},
-    {"id": "U-106", "name": "text line under a term", "class": "escape", "lint": ["description-term-multi-line"]},
-    {"id": "U-107", "name": "second caret line under a caption", "class": "escape", "lint": []},
-    {"id": "U-108", "name": "row attribute after one space", "class": "escape", "lint": []},
-    {"id": "U-109", "name": "line short of the content column after blank line", "class": "escape", "lint": ["list-item-body-below-content-column"]},
-    {"id": "U-110", "name": "full reference to a heading", "class": "escape", "lint": []},
-    {"id": "U-111", "name": "wrapped reference label", "class": "escape", "lint": []},
-    {"id": "U-112", "name": "label that starts with a caret", "class": "escape", "lint": []},
-    {"id": "U-113", "name": "markup inside an unresolved reference", "class": "escape", "lint": ["unresolved-reference-link"]},
-    {"id": "U-114", "name": "new spellings that 0.1 already had", "class": "report", "lint": []},
-    {"id": "U-115", "name": "hyphen run that 0.1 kept as typed, and the braced en dash", "class": "escape", "lint": []},
-    {"id": "U-116", "name": "tilde fence", "class": "rewrite", "lint": []},
-    {"id": "U-117", "name": "list of task items next to a list of plain items", "class": "rewrite", "lint": []},
-    {"id": "U-118", "name": "uppercase marker with a dot and one space", "class": "none", "lint": []},
-    {"id": "U-119", "name": "list marker left of every open list under item text", "class": "none", "lint": ["uneven-list-indent"]},
-    {"id": "U-120", "name": "ordered task box that 0.1 kept as text", "class": "escape", "lint": []},
-    {"id": "U-121", "name": "defined shortcut that 0.1 kept as text", "class": "escape", "lint": []},
-    {"id": "U-122", "name": "plus continuation in a list item", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-123", "name": "plus continuation in a description body", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-124", "name": "plus continuation in a footnote body", "class": "rewrite", "lint": ["deprecated-continuation-marker"]},
-    {"id": "U-125", "name": "plus continuation in a quote", "class": "rewrite", "lint": ["deprecated-continuation-marker"]}
+    {
+      "id": "U-001",
+      "name": "heading under text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-002",
+      "name": "quote under text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-003",
+      "name": "attribute line under text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-004",
+      "name": "description list under text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-005",
+      "name": "definition under text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-006",
+      "name": "heading or quote under item text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-007",
+      "name": "list marker without quote mark under quoted list",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-008",
+      "name": "list marker after description text",
+      "class": "rewrite",
+      "lint": [
+        "list-marker-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-009",
+      "name": "term mark under item text",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-010",
+      "name": "block under a caption line",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-011",
+      "name": "include directive",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-012",
+      "name": "list marker under text at top level",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-013",
+      "name": "table row, fence, `***` under text",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-014",
+      "name": "`+` before a block",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-015",
+      "name": "`+` before a paragraph",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-016",
+      "name": "`+` in a quote",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-017",
+      "name": "`- +` first block",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-018",
+      "name": "blank line inside item makes list loose",
+      "class": "rewrite",
+      "lint": [
+        "tight-list-item-with-blank-line"
+      ]
+    },
+    {
+      "id": "U-019",
+      "name": "later paragraph of a tight item",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-020",
+      "name": "`{loose}` on several items",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-loose-attribute"
+      ]
+    },
+    {
+      "id": "U-021",
+      "name": "loose list with one item",
+      "class": "report",
+      "lint": [
+        "deprecated-loose-attribute"
+      ]
+    },
+    {
+      "id": "U-022",
+      "name": "right-aligned ordered markers",
+      "class": "rewrite",
+      "lint": [
+        "ordered-marker-right-aligned"
+      ]
+    },
+    {
+      "id": "U-023",
+      "name": "marker short of the content column",
+      "class": "rewrite",
+      "lint": [
+        "list-marker-below-content-column"
+      ]
+    },
+    {
+      "id": "U-024",
+      "name": "alphabetic list from `i`",
+      "class": "rewrite",
+      "lint": [
+        "ordered-list-kind-split"
+      ]
+    },
+    {
+      "id": "U-025",
+      "name": "marker of ten or more digits",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-026",
+      "name": "`%%%` block between items",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-027",
+      "name": "three blank lines between lists",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-028",
+      "name": "`-` and `*` items",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-029",
+      "name": "comment line, uneven columns, empty box, `- -`",
+      "class": "none",
+      "lint": [
+        "uneven-list-indent"
+      ]
+    },
+    {
+      "id": "U-030",
+      "name": "uppercase letter marker",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-031",
+      "name": "attribute line above a blank line",
+      "class": "rewrite",
+      "lint": [
+        "unattached-block-attribute"
+      ]
+    },
+    {
+      "id": "U-032",
+      "name": "attribute block over several lines",
+      "class": "rewrite",
+      "lint": [
+        "block-marker-as-text"
+      ]
+    },
+    {
+      "id": "U-033",
+      "name": "attribute line between items",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-034",
+      "name": "attribute line that reaches no block",
+      "class": "rewrite",
+      "lint": [
+        "unattached-block-attribute"
+      ]
+    },
+    {
+      "id": "U-035",
+      "name": "glued, stacked, empty attribute blocks",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-036",
+      "name": "attribute order in HTML",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-037",
+      "name": "attribute block after fence language or name",
+      "class": "rewrite",
+      "lint": [
+        "fence-opener-fallback"
+      ]
+    },
+    {
+      "id": "U-038",
+      "name": "definition inside a container",
+      "class": "rewrite",
+      "lint": [
+        "definition-in-container"
+      ]
+    },
+    {
+      "id": "U-039",
+      "name": "indented definition at top level",
+      "class": "rewrite",
+      "lint": [
+        "definition-in-container"
+      ]
+    },
+    {
+      "id": "U-040",
+      "name": "duplicate link definition",
+      "class": "rewrite",
+      "lint": [
+        "duplicate-link-reference-definition"
+      ]
+    },
+    {
+      "id": "U-041",
+      "name": "duplicate abbreviation definition",
+      "class": "rewrite",
+      "lint": [
+        "duplicate-abbreviation-definition"
+      ]
+    },
+    {
+      "id": "U-042",
+      "name": "definitions that read the same",
+      "class": "none",
+      "lint": [
+        "duplicate-footnote-definition"
+      ]
+    },
+    {
+      "id": "U-043",
+      "name": "`#` headings and heading text",
+      "class": "none",
+      "lint": [
+        "heading-marker-mixed"
+      ]
+    },
+    {
+      "id": "U-044",
+      "name": "hyphen or underscore run",
+      "class": "rewrite",
+      "lint": [
+        "thematic-break-spelling",
+        "setext-heading-underline"
+      ]
+    },
+    {
+      "id": "U-045",
+      "name": "spaced breaks",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-spaced-thematic-break"
+      ]
+    },
+    {
+      "id": "U-046",
+      "name": "spaced underscores, stars under item",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-047",
+      "name": "frontmatter format names, unclosed",
+      "class": "none",
+      "lint": [
+        "unclosed-frontmatter"
+      ]
+    },
+    {
+      "id": "U-048",
+      "name": "unknown frontmatter format name",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-049",
+      "name": "fence closer at another indent",
+      "class": "rewrite",
+      "lint": [
+        "fence-closer-indented"
+      ]
+    },
+    {
+      "id": "U-050",
+      "name": "`%%%` closer with text",
+      "class": "rewrite",
+      "lint": [
+        "comment-fence-closer-with-text"
+      ]
+    },
+    {
+      "id": "U-051",
+      "name": "unquoted words after fence language or div name",
+      "class": "rewrite",
+      "lint": [
+        "fence-title-syntax"
+      ]
+    },
+    {
+      "id": "U-052",
+      "name": "`%%` line in a line block",
+      "class": "rewrite",
+      "lint": [
+        "comment-line-in-line-block"
+      ]
+    },
+    {
+      "id": "U-053",
+      "name": "tab in code under a container",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-054",
+      "name": "fence and div spellings that read the same",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-055",
+      "name": "GFM separator row",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-separator-row"
+      ]
+    },
+    {
+      "id": "U-056",
+      "name": "glued alignment marks",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-cell-alignment"
+      ]
+    },
+    {
+      "id": "U-057",
+      "name": "escaped last pipe",
+      "class": "rewrite",
+      "lint": [
+        "table-shaped-paragraph"
+      ]
+    },
+    {
+      "id": "U-058",
+      "name": "`header-rows` on a pipe table",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-table-attribute"
+      ]
+    },
+    {
+      "id": "U-059",
+      "name": "`footer-rows` with only a header row",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-060",
+      "name": "row span into the head",
+      "class": "report",
+      "lint": [
+        "table-span-marker-blocked"
+      ]
+    },
+    {
+      "id": "U-061",
+      "name": "delimited table with bad quoting",
+      "class": "report",
+      "lint": [
+        "delimited-table-malformed"
+      ]
+    },
+    {
+      "id": "U-062",
+      "name": "table forms that read the same",
+      "class": "none",
+      "lint": [
+        "table-shaped-paragraph"
+      ]
+    },
+    {
+      "id": "U-063",
+      "name": "caption after a blank line",
+      "class": "rewrite",
+      "lint": [
+        "unattached-caption"
+      ]
+    },
+    {
+      "id": "U-064",
+      "name": "captions that read the same",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-065",
+      "name": "bare underline",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-bare-underline"
+      ]
+    },
+    {
+      "id": "U-066",
+      "name": "bare strike",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-bare-strike"
+      ]
+    },
+    {
+      "id": "U-067",
+      "name": "bare highlight",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-bare-highlight"
+      ]
+    },
+    {
+      "id": "U-068",
+      "name": "emphasis outside strong",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-069",
+      "name": "substitution arrow",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-substitution-arrow"
+      ]
+    },
+    {
+      "id": "U-070",
+      "name": "delimiter in braced span closes outer span",
+      "class": "rewrite",
+      "lint": [
+        "braced-span-opener-as-text"
+      ]
+    },
+    {
+      "id": "U-071",
+      "name": "single opening quote with no closer",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-072",
+      "name": "editorial comment that starts like an id",
+      "class": "report",
+      "lint": [
+        "unattached-inline-attribute"
+      ]
+    },
+    {
+      "id": "U-073",
+      "name": "sigil after a letter or number",
+      "class": "report",
+      "lint": [
+        "sigil-after-letter"
+      ]
+    },
+    {
+      "id": "U-074",
+      "name": "inline spellings that read the same",
+      "class": "none",
+      "lint": [
+        "markdown-strong-double-star"
+      ]
+    },
+    {
+      "id": "U-075",
+      "name": "references that read the same",
+      "class": "none",
+      "lint": [
+        "unresolved-reference-link"
+      ]
+    },
+    {
+      "id": "U-076",
+      "name": "raw HTML block",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-077",
+      "name": "raw HTML span",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-078",
+      "name": "bare HTML tag",
+      "class": "none",
+      "lint": [
+        "bare-html-tag"
+      ]
+    },
+    {
+      "id": "U-079",
+      "name": "render options of the host",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-101",
+      "name": "`=` at the start of a paragraph, item or quote",
+      "class": "escape",
+      "lint": [
+        "heading-marker-mixed"
+      ]
+    },
+    {
+      "id": "U-102",
+      "name": "indented line under a heading",
+      "class": "escape",
+      "lint": [
+        "deprecated-indented-line-under-heading"
+      ]
+    },
+    {
+      "id": "U-103",
+      "name": "letter marker with one space",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-104",
+      "name": "quote fence or line block with a title",
+      "class": "escape",
+      "lint": [
+        "fence-title-syntax"
+      ]
+    },
+    {
+      "id": "U-105",
+      "name": "raw fence with a title",
+      "class": "escape",
+      "lint": [
+        "fence-title-syntax"
+      ]
+    },
+    {
+      "id": "U-106",
+      "name": "text line under a term",
+      "class": "escape",
+      "lint": [
+        "description-term-multi-line"
+      ]
+    },
+    {
+      "id": "U-107",
+      "name": "second caret line under a caption",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-108",
+      "name": "row attribute after one space",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-109",
+      "name": "line short of the content column after blank line",
+      "class": "escape",
+      "lint": [
+        "list-item-body-below-content-column"
+      ]
+    },
+    {
+      "id": "U-110",
+      "name": "full reference to a heading",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-111",
+      "name": "wrapped reference label",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-112",
+      "name": "label that starts with a caret",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-113",
+      "name": "markup inside an unresolved reference",
+      "class": "escape",
+      "lint": [
+        "unresolved-reference-link"
+      ]
+    },
+    {
+      "id": "U-114",
+      "name": "new spellings that 0.1 already had",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-115",
+      "name": "hyphen run that 0.1 kept as typed, and the braced en dash",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-116",
+      "name": "tilde fence",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-117",
+      "name": "list of task items next to a list of plain items",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-118",
+      "name": "uppercase marker with a dot and one space",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-119",
+      "name": "list marker left of every open list under item text",
+      "class": "none",
+      "lint": [
+        "uneven-list-indent"
+      ]
+    },
+    {
+      "id": "U-120",
+      "name": "ordered task box that 0.1 kept as text",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-121",
+      "name": "defined shortcut that 0.1 kept as text",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-122",
+      "name": "plus continuation in a list item",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-123",
+      "name": "plus continuation in a description body",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-124",
+      "name": "plus continuation in a footnote body",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-125",
+      "name": "plus continuation in a quote",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-126",
+      "name": "quote directly under paragraph text with an empty body",
+      "class": "rewrite",
+      "lint": [
+        "block-opener-without-blank-line"
+      ]
+    },
+    {
+      "id": "U-127",
+      "name": "code fence ending at a list item boundary",
+      "class": "rewrite",
+      "lint": [
+        "unclosed-code-fence"
+      ]
+    },
+    {
+      "id": "U-128",
+      "name": "description mark at its owning column",
+      "class": "rewrite",
+      "lint": [
+        "description-term-multi-line"
+      ]
+    },
+    {
+      "id": "U-129",
+      "name": "percent comment fence with a longer closer",
+      "class": "rewrite",
+      "lint": [
+        "unclosed-comment-fence"
+      ]
+    },
+    {
+      "id": "U-130",
+      "name": "line block body text and whitespace",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-131",
+      "name": "definition-shaped text in a list item",
+      "class": "report",
+      "lint": [
+        "definition-in-container"
+      ]
+    },
+    {
+      "id": "U-132",
+      "name": "empty or container-local link definition",
+      "class": "report",
+      "lint": [
+        "definition-in-container"
+      ]
+    },
+    {
+      "id": "U-133",
+      "name": "task item HTML",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-134",
+      "name": "definition-shaped text in a quote",
+      "class": "report",
+      "lint": [
+        "definition-in-container"
+      ]
+    },
+    {
+      "id": "U-135",
+      "name": "trailing blank line of an unclosed code fence",
+      "class": "rewrite",
+      "lint": [
+        "unclosed-code-fence"
+      ]
+    },
+    {
+      "id": "U-136",
+      "name": "literal inline brace comment opener",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-137",
+      "name": "attribute text in an otherwise empty list item",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-138",
+      "name": "caret line after an eligible block",
+      "class": "rewrite",
+      "lint": [
+        "unattached-caption"
+      ]
+    },
+    {
+      "id": "U-139",
+      "name": "empty inline footnote label",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-140",
+      "name": "tab as table cell padding",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-141",
+      "name": "attribute line consumed by a quote",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-142",
+      "name": "attribute text in an otherwise empty description",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-143",
+      "name": "adjacent inline delimiters use the 0.2 flanking and nesting rules",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-144",
+      "name": "smart quote direction changes inside adjacent braced inline forms",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-145",
+      "name": "adjacent mixed strong and emphasis delimiters change nesting",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-146",
+      "name": "a percent line comment inside brackets or a container ends at its boundary",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-147",
+      "name": "a plus row continues the current table rather than ending its row",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-148",
+      "name": "a reference to a heading uses the heading's folded source or rendered plain text",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-149",
+      "name": "inline sigils inside unmatched bracket text are still scanned",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-150",
+      "name": "table width or row-section metadata changes generated columns",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-151",
+      "name": "bare underline and strike markers have 0.2 brace boundaries",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-152",
+      "name": "a table span marker after padded cell content is reinterpreted",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-153",
+      "name": "a tab after a list marker is stripped as marker padding",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-154",
+      "name": "a footnote reference inside a link renders its own anchor",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-155",
+      "name": "a percent comment or braced subscript changes inline scanning",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-156",
+      "name": "an opening bracket can be part of a div name before metadata parsing",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-157",
+      "name": "a code fence info string and closer have 0.2 boundary rules",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-158",
+      "name": "an unresolved reference writes its label and attached attributes from the folded key",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-159",
+      "name": "a task marker changes item html and state metadata",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-160",
+      "name": "whitespace within a footnote reference label normalizes before lookup",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-161",
+      "name": "a multiline reference label is normalized or remains literal",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-162",
+      "name": "deprecated cell alignment prefixes are read as ordinary cell content or attributes",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-163",
+      "name": "a task box after extra marker padding is ordinary item text",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-164",
+      "name": "a link destination containing a dangerous script scheme is emptied",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-165",
+      "name": "a brace attribute immediately after a table cell marker attaches to that cell",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-166",
+      "name": "a reference label beginning with an at-sign is reserved for citation syntax",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-167",
+      "name": "a head-row alignment marker applies its alignment to a physical column",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-168",
+      "name": "an equals marker at a table edge creates header cells or rows",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-169",
+      "name": "a brace block after an item marker is not a free-standing attribute line",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-170",
+      "name": "a tag or mention name stops before a trailing hyphen",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-171",
+      "name": "a multiline image label changes block-image eligibility",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-172",
+      "name": "a loose key on a description list remains an ordinary html attribute",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-173",
+      "name": "a long dash run is folded by the new smart punctuation rule",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-174",
+      "name": "a heading strips marker-adjacent tab padding before inline parsing",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-175",
+      "name": "a blank inline-link destination is text rather than an empty link",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-176",
+      "name": "a carriage return in a heading boundary is normalized as a line ending",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-177",
+      "name": "footnote body after a continuation marker",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-continuation-marker"
+      ]
+    },
+    {
+      "id": "U-178",
+      "name": "div label in its metadata slot",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-179",
+      "name": "fence at a description boundary",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-180",
+      "name": "description mark at the term column",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-181",
+      "name": "tag sigil in escaped angle text",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-182",
+      "name": "braced inline opener in a bracket",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-183",
+      "name": "unresolved block image before a caption",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-184",
+      "name": "nested list include-looking brace",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-185",
+      "name": "bare equals marker in a table row",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-186",
+      "name": "empty div label",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-187",
+      "name": "at-sign bracket definition",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-188",
+      "name": "plus-minus shorthand inside a colon pair",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-189",
+      "name": "empty footnote label followed by braces",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-190",
+      "name": "smart quote in a punctuation boundary",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-191",
+      "name": "quoted empty title on a code fence",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-192",
+      "name": "language shorthand before an explicit lang key",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-193",
+      "name": "tab stripped after a description mark",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-194",
+      "name": "tab stripped at a table cell edge",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-195",
+      "name": "inline markup in a div label metadata slot",
+      "class": "report",
+      "lint": []
+    }
   ],
   "extensions": [
-    {"id": "X-001", "name": "bidirectional control in the source", "class": "none", "lint": []},
-    {"id": "X-002", "name": "U+0000 in the source", "class": "none", "lint": []}
+    {
+      "id": "X-001",
+      "name": "bidirectional control in the source",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "X-002",
+      "name": "U+0000 in the source",
+      "class": "none",
+      "lint": []
+    }
   ]
 }

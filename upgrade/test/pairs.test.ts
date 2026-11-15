@@ -52,8 +52,7 @@ const INLINES: [string, string][] = [
 
 /**
  * A reference with a caret label in a heading: 0.1 makes the heading id from the text of the
- * reference alone (`See-x-here`), 0.2 from the whole text (`See-x-zz-here`). No entry of the
- * contract covers a heading id, so the self-check reports it.
+ * reference alone (`See-x-here`), 0.2 from the whole text (`See-x-zz-here`). U-148 reports it.
  */
 const HEADING_ID = new Set(['U-001 U-112', 'U-006 U-112'])
 
@@ -67,7 +66,8 @@ describe('every block entry with every inline entry', () => {
         expect(hit).toContain(block)
         expect(hit).toContain(inline)
         expect(hit).not.toContain('upgrade-conflict')
-        expect(result.check).toBe(HEADING_ID.has(name) ? 'mismatch' : 'pass')
+        expect(result.check).toBe(HEADING_ID.has(name) ? 'explained' : 'pass')
+        if (HEADING_ID.has(name)) expect(hit).toContain('U-148')
       })
     }
   }

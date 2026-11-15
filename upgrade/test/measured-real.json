@@ -1,0 +1,2274 @@
+[
+  {
+    "cause": "C01",
+    "clause": "C2-B-062",
+    "path": "resources/examples/edge-cases/0088-list-continuation-marker.md",
+    "line": 137,
+    "input": "- a\n\n  c\n",
+    "check": "explained",
+    "entries": [
+      "U-021"
+    ]
+  },
+  {
+    "cause": "C01",
+    "clause": "C2-B-062",
+    "path": "resources/examples/edge-cases/0144-nested-item-looseness-does-not-propagate-to-the-outer-item.md",
+    "line": 82,
+    "input": "- a\n\n  b\n",
+    "check": "explained",
+    "entries": [
+      "U-021"
+    ]
+  },
+  {
+    "cause": "C01",
+    "clause": "C2-B-062",
+    "path": "resources/examples/edge-cases/0853-a-whitespace-run-after-a-tab-sets-the-content-column-where-the-content-starts.md",
+    "line": 12,
+    "input": "- \t e\n\n\tf\n",
+    "check": "explained",
+    "entries": [
+      "U-021",
+      "U-153"
+    ]
+  },
+  {
+    "cause": "C02",
+    "clause": "C2-B-201",
+    "path": "resources/examples/edge-cases/0725-a-quoted-include-with-no-resolver-parses-inline-content.md",
+    "line": 6,
+    "input": "{{ \"a}}b\" @code }}\n",
+    "check": "explained",
+    "entries": [
+      "U-011"
+    ]
+  },
+  {
+    "cause": "C02",
+    "clause": "C2-B-201",
+    "path": "resources/examples/edge-cases/0737-model-inline-frames-and-html-attributes.md",
+    "line": 71,
+    "input": "{{ d @lines:0 }}*a*\n",
+    "check": "explained",
+    "entries": [
+      "U-011"
+    ]
+  },
+  {
+    "cause": "C02",
+    "clause": "C2-B-201",
+    "path": "resources/examples/edge-cases/0854-a-standalone-code-include-with-no-resolver-is-literal-in-every-host.md",
+    "line": 24,
+    "input": "> {{ a @code:a,b }}\n",
+    "check": "explained",
+    "entries": [
+      "U-011"
+    ]
+  },
+  {
+    "cause": "C03",
+    "clause": "C2-B-098",
+    "path": "resources/examples/edge-cases/0114-adjacent-attribute-blocks-on-one-line-merge.md",
+    "line": 9,
+    "input": "{.c}{#i}\n# H\n",
+    "check": "pass",
+    "entries": [
+      "U-036"
+    ]
+  },
+  {
+    "cause": "C03",
+    "clause": "C2-B-098",
+    "path": "resources/examples/edge-cases/0292-a-boolean-and-a-key-value-of-the-same-name-are-one-attribute.md",
+    "line": 41,
+    "input": "[x]{a .c a=2}\n",
+    "check": "pass",
+    "entries": [
+      "U-036"
+    ]
+  },
+  {
+    "cause": "C03",
+    "clause": "C2-B-098",
+    "path": "resources/examples/edge-cases/0791-the-empty-block-is-a-member-of-a-bracketed-span-s-attribute-run.md",
+    "line": 56,
+    "input": "[a]{.b}{}{#i}\n",
+    "check": "pass",
+    "entries": [
+      "U-036"
+    ]
+  },
+  {
+    "cause": "C04",
+    "clause": "C2-B-116",
+    "path": "resources/examples/edge-cases/0879-a-line-comment-hides-a-substitution-arrow.md",
+    "line": 96,
+    "input": "`(`{=html}\"q\"\n",
+    "check": "pass",
+    "entries": [
+      "U-077"
+    ]
+  },
+  {
+    "cause": "C04",
+    "clause": "C2-B-116",
+    "path": "resources/examples/edge-cases/0720-raw-inline-image-bytes-stay-inside-a-paragraph.md",
+    "line": 6,
+    "input": "`<img a>`{=html}\n",
+    "check": "pass",
+    "entries": [
+      "U-077"
+    ]
+  },
+  {
+    "cause": "C04",
+    "clause": "C2-B-116",
+    "path": "resources/examples/edge-cases/0366-a-raw-block-keeps-the-blank-line-at-the-end-of-its-payload-too.md",
+    "line": 41,
+    "input": "- ```=html\n  b\n\n- s\n",
+    "check": "pass",
+    "entries": [
+      "U-076"
+    ]
+  },
+  {
+    "cause": "C05",
+    "clause": "C2-I-037",
+    "path": "resources/examples/edge-cases/0879-a-line-comment-hides-a-substitution-arrow.md",
+    "line": 72,
+    "input": "x:foo[\"q\"]\n",
+    "check": "explained",
+    "entries": [
+      "U-073"
+    ]
+  },
+  {
+    "cause": "C05",
+    "clause": "C2-I-037",
+    "path": "resources/examples/edge-cases/0605-an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter.md",
+    "line": 64,
+    "input": "{+a {#x+}#} b+}\n",
+    "check": "pass",
+    "entries": [
+      "U-072"
+    ]
+  },
+  {
+    "cause": "C05",
+    "clause": "C2-I-037",
+    "path": "resources/examples/edge-cases/0605-an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter.md",
+    "line": 76,
+    "input": "{-a {#x-}#} b-}\n",
+    "check": "explained",
+    "entries": [
+      "U-072"
+    ]
+  },
+  {
+    "cause": "C06",
+    "clause": "C2-B-182",
+    "path": "resources/examples/edge-cases/0873-a-delimited-body-s-overlapping-header-and-footer-make-no-header-cells.md",
+    "line": 33,
+    "input": "|= a |\n| ^  |\n+ | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-060"
+    ]
+  },
+  {
+    "cause": "C06",
+    "clause": "C2-B-182",
+    "path": "resources/examples/edge-cases/0101-table-header-cell-rowspan.md",
+    "line": 10,
+    "input": "|= H |= G |\n| ^ | b |\n| ^ | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-060"
+    ]
+  },
+  {
+    "cause": "C10",
+    "clause": "C2-B-127",
+    "path": "resources/examples/edge-cases/0318-composite-figures.md",
+    "line": 279,
+    "input": "::: figure\n:::: figure\n![one](a.png)\n^ (a) One\n::::\n:::\n^ Figure #: Outer only\n",
+    "check": "explained",
+    "entries": [
+      "U-114"
+    ]
+  },
+  {
+    "cause": "C101",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0659-table-spans-keep-alignment-defaults-in-physical-columns.md",
+    "line": 139,
+    "input": "|a|{?^} \\<|\n",
+    "check": "explained",
+    "entries": [
+      "U-162"
+    ]
+  },
+  {
+    "cause": "C101",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
+    "line": 16,
+    "input": "|=> Price |= Item |= Size |= Mood |\n| 12 |< pen |>^ big |~~ ok |\n|?v 3 | ink |>{.num} 9 | fine |\n",
+    "check": "explained",
+    "entries": [
+      "U-056",
+      "U-162"
+    ]
+  },
+  {
+    "cause": "C101",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
+    "line": 40,
+    "input": "|={>} Price |= Item |= Size |= Mood |\n| 12 |{<} pen |{>^} big |{~~} ok |\n|{?v} 3 | ink |{> .num} 9 | fine |\n",
+    "check": "explained",
+    "entries": [
+      "U-162"
+    ]
+  },
+  {
+    "cause": "C102",
+    "clause": "C2-B-182",
+    "path": "resources/examples/edge-cases/0574-a-head-row-alignment-marker-sets-the-whole-column.md",
+    "line": 10,
+    "input": "|={>} a |= b |\n|:-- |:-- |\n| 1 | 2 |\n",
+    "check": "explained",
+    "entries": [
+      "U-055",
+      "U-167"
+    ]
+  },
+  {
+    "cause": "C102",
+    "clause": "C2-B-182",
+    "path": "resources/examples/edge-cases/0574-a-head-row-alignment-marker-sets-the-whole-column.md",
+    "line": 31,
+    "input": "|={~} a |= b |\n|--: |:-- |\n| 1 |{>} 2 |\n| 3 | 4 |\n",
+    "check": "explained",
+    "entries": [
+      "U-055",
+      "U-167"
+    ]
+  },
+  {
+    "cause": "C103",
+    "clause": "C2-I-040",
+    "path": "resources/examples/core.md",
+    "line": 2950,
+    "input": "a------- b-------- c---------- d----------- e-------------\n",
+    "check": "explained",
+    "entries": [
+      "U-173"
+    ]
+  },
+  {
+    "cause": "C11",
+    "clause": "C2-B-066",
+    "path": "docs/blocks-and-attributes.md",
+    "line": 478,
+    "input": "{loose}\n:: Term\n: Definition.\n",
+    "check": "explained",
+    "entries": [
+      "U-172"
+    ]
+  },
+  {
+    "cause": "C11",
+    "clause": "C2-B-066",
+    "path": "resources/examples/edge-cases/0407-one-consumed-boolean-spells-the-looseness-no-blank-line-can.md",
+    "line": 45,
+    "input": "{loose}\n:: Term\n:  Definition.\n",
+    "check": "explained",
+    "entries": [
+      "U-172"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "docs/ast-json-contract.md",
+    "line": 556,
+    "input": "![a][r]\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-183"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0209-an-unresolved-reference-image-takes-no-caption.md",
+    "line": 8,
+    "input": "![a][nope]\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-183"
+    ]
+  },
+  {
+    "cause": "C12",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0434-an-unresolved-image-gives-its-whole-caption-slot-back-at-any-depth.md",
+    "line": 21,
+    "input": "![a][r]\n^ cap one\ncontinued\n",
+    "check": "pass",
+    "entries": [
+      "U-183"
+    ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0554-a-caption-scope-resets-at-a-structural-only-line.md",
+    "line": 39,
+    "input": ">\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-138"
+    ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds.md",
+    "line": 104,
+    "input": "> >\n^ cap\n",
+    "check": "pass",
+    "entries": [
+      "U-138"
+    ]
+  },
+  {
+    "cause": "C13",
+    "clause": "C2-B-147",
+    "path": "resources/examples/edge-cases/0871-a-caption-line-holding-only-a-comment-makes-no-caption.md",
+    "line": 12,
+    "input": "| a |\n^ %% x\n",
+    "check": "pass",
+    "entries": [
+      "U-138"
+    ]
+  },
+  {
+    "cause": "C14",
+    "clause": "C2-B-113",
+    "path": "resources/examples/edge-cases/0291-a-fence-keeps-the-blank-line-at-the-end-of-its-content.md",
+    "line": 35,
+    "input": "```\nx\n\n",
+    "check": "pass",
+    "entries": [
+      "U-135"
+    ]
+  },
+  {
+    "cause": "C14",
+    "clause": "C2-B-113",
+    "path": "resources/examples/edge-cases/0291-a-fence-keeps-the-blank-line-at-the-end-of-its-content.md",
+    "line": 77,
+    "input": "- ```\n  x\n\n",
+    "check": "pass",
+    "entries": [
+      "U-127"
+    ]
+  },
+  {
+    "cause": "C14",
+    "clause": "C2-B-113",
+    "path": "resources/examples/edge-cases/0627-a-refused-marker-leaves-an-open-fence-s-blank-payload.md",
+    "line": 112,
+    "input": "- ```\n\ntail\n",
+    "check": "pass",
+    "entries": [
+      "U-127"
+    ]
+  },
+  {
+    "cause": "C16",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0436-a-refused-description-plus-folds-a-line-below-column-0-and-a-comment-does-not.md",
+    "line": 97,
+    "input": ":: t\n:  +\nflush\n",
+    "check": "pass",
+    "entries": [
+      "U-123"
+    ]
+  },
+  {
+    "cause": "C16",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0967-a-block-at-a-pulled-description-column-opens-in-the-description.md",
+    "line": 12,
+    "input": ":: t\n: +\nh\n  # H\n",
+    "check": "pass",
+    "entries": [
+      "U-001",
+      "U-123"
+    ]
+  },
+  {
+    "cause": "C16",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0973-open-state-lifetime-boundaries.md",
+    "line": 474,
+    "input": ":: t\n: +\np\n  # H\n",
+    "check": "pass",
+    "entries": [
+      "U-001",
+      "U-123"
+    ]
+  },
+  {
+    "cause": "C17",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0588-a-block-quote-and-a-footnote-body-take-the-first-block-form.md",
+    "line": 137,
+    "input": "see[^a]\n\n[^a]: +\n",
+    "check": "pass",
+    "entries": [
+      "U-124"
+    ]
+  },
+  {
+    "cause": "C17",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0588-a-block-quote-and-a-footnote-body-take-the-first-block-form.md",
+    "line": 161,
+    "input": "[^a]: +\n\nsee[^a]\n",
+    "check": "pass",
+    "entries": [
+      "U-124"
+    ]
+  },
+  {
+    "cause": "C17",
+    "clause": "C2-B-059",
+    "path": "resources/examples/edge-cases/0855-a-marker-after-a-note-plus-paragraph-is-text.md",
+    "line": 15,
+    "input": "[^a]: +\nz\n  - y\n\n[^a]\n",
+    "check": "pass",
+    "entries": [
+      "U-008",
+      "U-124"
+    ]
+  },
+  {
+    "cause": "C18",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0851-an-accepted-plus-needs-a-follower-that-reaches-its-host.md",
+    "line": 30,
+    "input": "> +\n>\n",
+    "check": "pass",
+    "entries": [
+      "U-017",
+      "U-125"
+    ]
+  },
+  {
+    "cause": "C18",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0728-a-refused-first-block-plus-folds-its-content-column-line-and-the-next-root-block-ends-the-item.md",
+    "line": 63,
+    "input": "- +\n\tx\n>\n",
+    "check": "pass",
+    "entries": [
+      "U-017",
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C18",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0728-a-refused-first-block-plus-folds-its-content-column-line-and-the-next-root-block-ends-the-item.md",
+    "line": 9,
+    "input": "- +\n  x\n>\n",
+    "check": "pass",
+    "entries": [
+      "U-017",
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C19",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0649-a-first-block-plus-refuses-a-follower-at-an-intervening-column.md",
+    "line": 10,
+    "input": "- > +\n b\n",
+    "check": "pass",
+    "entries": [
+      "U-109",
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C19",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0632-a-continuation-marker-uses-its-container-column.md",
+    "line": 680,
+    "input": "- > +\n> q\n",
+    "check": "pass",
+    "entries": [
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C19",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
+    "line": 707,
+    "input": "- > +\n# h\n",
+    "check": "pass",
+    "entries": [
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C20",
+    "clause": "C2-B-175",
+    "path": "resources/examples/edge-cases/0856-a-continuation-cell-past-the-last-column-is-a-new-cell.md",
+    "line": 51,
+    "input": "| a |\n+ b | |\n",
+    "check": "explained",
+    "entries": [
+      "U-147"
+    ]
+  },
+  {
+    "cause": "C20",
+    "clause": "C2-B-175",
+    "path": "resources/examples/edge-cases/1026-an-escaped-row-closer-stays-in-an-open-code-span.md",
+    "line": 48,
+    "input": "| a `b |\n+ c\\|\n",
+    "check": "explained",
+    "entries": [
+      "U-057",
+      "U-147"
+    ]
+  },
+  {
+    "cause": "C20",
+    "clause": "C2-B-175",
+    "path": "resources/examples/edge-cases/0333-a-continuation-row-s-open-run-and-an-escaped-closing-pipe.md",
+    "line": 14,
+    "input": "| a `b |\n+ c` |\n",
+    "check": "explained",
+    "entries": [
+      "U-147"
+    ]
+  },
+  {
+    "cause": "C22",
+    "clause": "C2-B-169",
+    "path": "resources/examples/edge-cases/0589-an-explicitly-delimited-row-of-blank-cells-is-a-table.md",
+    "line": 655,
+    "input": "| | < |\n| ^ | ^ |\n",
+    "check": "explained",
+    "entries": [
+      "U-152"
+    ]
+  },
+  {
+    "cause": "C22",
+    "clause": "C2-B-169",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 261,
+    "input": "| a | b |\n|\t^ | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-140"
+    ]
+  },
+  {
+    "cause": "C22",
+    "clause": "C2-B-169",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 279,
+    "input": "| a | b |\n| c |\t< |\n",
+    "check": "explained",
+    "entries": [
+      "U-140"
+    ]
+  },
+  {
+    "cause": "C23",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0589-an-explicitly-delimited-row-of-blank-cells-is-a-table.md",
+    "line": 365,
+    "input": "|\t|\n",
+    "check": "explained",
+    "entries": [
+      "U-140"
+    ]
+  },
+  {
+    "cause": "C23",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 24,
+    "input": "|\ta |\tb |\n",
+    "check": "explained",
+    "entries": [
+      "U-140"
+    ]
+  },
+  {
+    "cause": "C23",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 80,
+    "input": "| a\t| b\t|\n",
+    "check": "explained",
+    "entries": [
+      "U-140"
+    ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0445-a-degraded-comment-fence-at-a-container-s-column-0-keeps-the-follower-in-the-item.md",
+    "line": 170,
+    "input": "- x\n%%%\n%%%%\ny\n",
+    "check": "pass",
+    "entries": [
+      "U-129"
+    ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0939-a-line-after-a-comment-block-in-a-line-block-reads-the-stanza-without-it.md",
+    "line": 66,
+    "input": "- ::: |\n  x\n  %%%\nb\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0939-a-line-after-a-comment-block-in-a-line-block-reads-the-stanza-without-it.md",
+    "line": 129,
+    "input": ":: t\n: ::: |\n  x\n  %%%\nb\n  :::\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 62,
+    "input": ":::[`x`]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-195"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 194,
+    "input": ":::[a `]` b]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-195"
+    ]
+  },
+  {
+    "cause": "C26",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0532-a-container-label-preserves-closed-inline-constructs-before-cutting-a-comment.md",
+    "line": 76,
+    "input": ":::[`a %% secret`]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-195"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-069",
+    "path": "resources/examples/edge-cases/0658-a-definition-marker-line-keeps-a-straddling-tab-s-residual-columns.md",
+    "line": 8,
+    "input": ":: a\n: b\n\t:: t\n  : zq\n",
+    "check": "pass",
+    "entries": [
+      "U-004",
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-069",
+    "path": "resources/examples/edge-cases/0813-a-description-line-between-two-lists-columns-is-an-outer-sibling.md",
+    "line": 38,
+    "input": ":: t\n: d\n  :: u\n  : v\n\n : e\n",
+    "check": "pass",
+    "entries": [
+      "U-004",
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C27",
+    "clause": "C2-B-069",
+    "path": "resources/examples/edge-cases/0686-nested-term-after-a-list-in-a-description.md",
+    "line": 8,
+    "input": ":: term\n: - a\n   :: sub\n: def\n",
+    "check": "pass",
+    "entries": [
+      "U-009",
+      "U-106",
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C28",
+    "clause": "C2-I-087",
+    "path": "resources/examples/edge-cases/0352-a-bracketed-construct-s-identifiers-stay-on-one-line.md",
+    "line": 28,
+    "input": "x[^f\ng]\n\n[^f g]: n\n",
+    "check": "explained",
+    "entries": [
+      "U-160"
+    ]
+  },
+  {
+    "cause": "C28",
+    "clause": "C2-I-087",
+    "path": "resources/examples/core.md",
+    "line": 3594,
+    "input": "Wrapped[^two\nwords].\n\n[^two words]: This definition is not referenced.\n\n[^broken\nlabel]: This is not a definition.\n",
+    "check": "explained",
+    "entries": [
+      "U-160"
+    ]
+  },
+  {
+    "cause": "C29",
+    "clause": "C2-B-081",
+    "path": "resources/examples/core.md",
+    "line": 2738,
+    "input": "[r]:\n\n[x][r]\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C29",
+    "clause": "C2-B-081",
+    "path": "resources/examples/core.md",
+    "line": 2752,
+    "input": "[r]:   \n\n[x][r]\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C29",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0265-a-reference-definition-s-metadata-slots-take-exactly-one-space.md",
+    "line": 72,
+    "input": "[a]: /u {.c}\n\n[a][]\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-031",
+    "path": "resources/examples/edge-cases/0629-a-dangling-plus-is-a-letter-and-a-nested-quote-reads-it-like-an-unnested-one.md",
+    "line": 113,
+    "input": "> > q\n> +\n",
+    "check": "pass",
+    "entries": [
+      "U-125"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-031",
+    "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
+    "line": 268,
+    "input": "> - a\n> +\n",
+    "check": "pass",
+    "entries": [
+      "U-125"
+    ]
+  },
+  {
+    "cause": "C30",
+    "clause": "C2-B-031",
+    "path": "resources/examples/edge-cases/0647-a-quote-opened-on-its-own-line-in-an-item-takes-the-first-block-form.md",
+    "line": 10,
+    "input": "- a\n  > +\n  q\n",
+    "check": "pass",
+    "entries": [
+      "U-017",
+      "U-125"
+    ]
+  },
+  {
+    "cause": "C31",
+    "clause": "C2-H-032",
+    "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
+    "line": 550,
+    "input": "- [ ] +\n",
+    "check": "explained",
+    "entries": [
+      "U-133"
+    ]
+  },
+  {
+    "cause": "C31",
+    "clause": "C2-H-032",
+    "path": "resources/examples/edge-cases/0632-a-continuation-marker-uses-its-container-column.md",
+    "line": 660,
+    "input": "- - [ ] +\n> q\n",
+    "check": "explained",
+    "entries": [
+      "U-133"
+    ]
+  },
+  {
+    "cause": "C31",
+    "clause": "C2-H-032",
+    "path": "resources/examples/edge-cases/0695-a-promoted-image-leaves-the-task-checkbox-unnamed.md",
+    "line": 8,
+    "input": "- [ ] ![x](x)\n",
+    "check": "explained",
+    "entries": [
+      "U-133"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0438-an-empty-description-body-is-written-with-the-empty-sentinel.md",
+    "line": 38,
+    "input": ":: t\n: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-142"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-090",
+    "path": "tests/html-import/empty-definition-description/expected.crv",
+    "line": 1,
+    "input": ":: term\n: {empty}\n",
+    "check": "pass",
+    "entries": [
+      "U-142"
+    ]
+  },
+  {
+    "cause": "C32",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/1056-an-outer-quote-prefix-width-does-not-move-a-comment-continuation.md",
+    "line": 12,
+    "input": "> - {% a\n  >  b %}\n",
+    "check": "pass",
+    "entries": [
+      "U-136"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0656-the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth.md",
+    "line": 10,
+    "input": "- - > +\n    b\n",
+    "check": "pass",
+    "entries": [
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
+    "line": 87,
+    "input": "- {{ c@code }}\n",
+    "check": "pass",
+    "entries": [
+      "U-184"
+    ]
+  },
+  {
+    "cause": "C33",
+    "clause": "C2-B-056",
+    "path": "resources/examples/edge-cases/0656-the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth.md",
+    "line": 33,
+    "input": "- - - > +\n      b\n",
+    "check": "pass",
+    "entries": [
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C34",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0406-a-heading-s-marker-separator-is-a-run-and-none-of-it-is-content.md",
+    "line": 74,
+    "input": "## \tx\n",
+    "check": "explained",
+    "entries": [
+      "U-174"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0329-a-floating-attribute-is-scoped-to-the-container-that-holds-it.md",
+    "line": 41,
+    "input": "> q\n> {.k}\ntail\n",
+    "check": "pass",
+    "entries": [
+      "U-003",
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0329-a-floating-attribute-is-scoped-to-the-container-that-holds-it.md",
+    "line": 21,
+    "input": "> q\n> {.k}\n\ntail\n",
+    "check": "pass",
+    "entries": [
+      "U-003",
+      "U-031",
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C35",
+    "clause": "C2-B-090",
+    "path": "resources/examples/edge-cases/0458-a-wrapped-attribute-block-ends-at-its-quote-and-reaches-no-line-below-it.md",
+    "line": 30,
+    "input": "> > q\n> > {.k #x}\ntail\n",
+    "check": "pass",
+    "entries": [
+      "U-003",
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C36",
+    "clause": "C2-I-089",
+    "path": "resources/examples/edge-cases/0307-an-empty-inline-note-is-literal.md",
+    "line": 20,
+    "input": "x ^[]\n",
+    "check": "pass",
+    "entries": [
+      "U-139"
+    ]
+  },
+  {
+    "cause": "C36",
+    "clause": "C2-I-089",
+    "path": "resources/examples/edge-cases/0307-an-empty-inline-note-is-literal.md",
+    "line": 34,
+    "input": "x ^[ ]\n",
+    "check": "pass",
+    "entries": [
+      "U-139"
+    ]
+  },
+  {
+    "cause": "C36",
+    "clause": "C2-I-089",
+    "path": "resources/examples/edge-cases/0307-an-empty-inline-note-is-literal.md",
+    "line": 48,
+    "input": "x ^[]{.c}\n",
+    "check": "pass",
+    "entries": [
+      "U-139"
+    ]
+  },
+  {
+    "cause": "C37",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
+    "line": 54,
+    "input": ":foo[%% c] d\n",
+    "check": "explained",
+    "entries": [
+      "U-149"
+    ]
+  },
+  {
+    "cause": "C37",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
+    "line": 123,
+    "input": "-{#k} [x] {#h}\n # h\n",
+    "check": "explained",
+    "entries": [
+      "U-109",
+      "U-133"
+    ]
+  },
+  {
+    "cause": "C37",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
+    "line": 45,
+    "input": "-{#k} [x] {#h}\n  # h\n",
+    "check": "explained",
+    "entries": [
+      "U-133"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
+    "line": 12,
+    "input": "/***/\n",
+    "check": "explained",
+    "entries": [
+      "U-068",
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0473-a-run-of-asterisks-inside-a-combined-token-is-content.md",
+    "line": 24,
+    "input": "*/**/*\n",
+    "check": "explained",
+    "entries": [
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C38",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0602-the-combined-bold-italic-token-does-not-open-after-an-underscore-or-a-slash.md",
+    "line": 10,
+    "input": "a_/*y*/ x\n",
+    "check": "explained",
+    "entries": [
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-034",
+    "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
+    "line": 8,
+    "input": "a\t%% hidden\n",
+    "check": "explained",
+    "entries": [
+      "U-155"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-034",
+    "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
+    "line": 32,
+    "input": "/{^a/{k=b^}\n",
+    "check": "explained",
+    "entries": [
+      "U-155"
+    ]
+  },
+  {
+    "cause": "C40",
+    "clause": "C2-I-034",
+    "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
+    "line": 44,
+    "input": "~{,a~{k=b,}\n",
+    "check": "explained",
+    "entries": [
+      "U-151"
+    ]
+  },
+  {
+    "cause": "C41",
+    "clause": "C2-B-100",
+    "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
+    "line": 68,
+    "input": "-{#k} {#h}\n # h\n",
+    "check": "explained",
+    "entries": [
+      "U-109",
+      "U-169"
+    ]
+  },
+  {
+    "cause": "C43",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0677-an-unresolved-symbol-leaves-a-colon-before-a-quote.md",
+    "line": 8,
+    "input": ":a:\"\n",
+    "check": "pass",
+    "entries": [
+      "U-190"
+    ]
+  },
+  {
+    "cause": "C43",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0856-a-hard-break-is-whitespace-to-a-typography-flank.md",
+    "line": 12,
+    "input": "\"a-\"\\\nb\n",
+    "check": "pass",
+    "entries": [
+      "U-190"
+    ]
+  },
+  {
+    "cause": "C43",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0856-a-hard-break-is-whitespace-to-a-typography-flank.md",
+    "line": 70,
+    "input": "'a/'\\\nb\n",
+    "check": "pass",
+    "entries": [
+      "U-190"
+    ]
+  },
+  {
+    "cause": "C46",
+    "clause": "C2-I-050",
+    "path": "resources/examples/edge-cases/0780-a-braced-opener-forms-before-an-enclosing-closer-takes-its-block.md",
+    "line": 80,
+    "input": "_{~a_{k=b~}\n",
+    "check": "explained",
+    "entries": [
+      "U-151"
+    ]
+  },
+  {
+    "cause": "C46",
+    "clause": "C2-I-050",
+    "path": "resources/examples/edge-cases/0779-a-block-glued-to-a-split-combined-token-or-a-forced-span-s-own-delimiter.md",
+    "line": 56,
+    "input": "{_x _b_{t=a_}\n",
+    "check": "explained",
+    "entries": [
+      "U-151"
+    ]
+  },
+  {
+    "cause": "C46",
+    "clause": "C2-I-050",
+    "path": "resources/examples/edge-cases/0776-an-attribute-block-that-attaches-to-nothing-is-text-from-the-first-pass.md",
+    "line": 56,
+    "input": "_x /*a*/{.q} b/{c_} c_\n",
+    "check": "explained",
+    "entries": [
+      "U-065",
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C47",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0848-a-quote-before-a-span-closer-closes.md",
+    "line": 36,
+    "input": "{+\"Wait-\"+}\n",
+    "check": "explained",
+    "entries": [
+      "U-144"
+    ]
+  },
+  {
+    "cause": "C47",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0490-a-comment-inside-a-forced-span-or-the-combined-token-ends-at-its-closer.md",
+    "line": 12,
+    "input": "{*a %% b*} y\n",
+    "check": "explained",
+    "entries": [
+      "U-143"
+    ]
+  },
+  {
+    "cause": "C47",
+    "clause": "C2-I-035",
+    "path": "resources/examples/edge-cases/0779-a-block-glued-to-a-split-combined-token-or-a-forced-span-s-own-delimiter.md",
+    "line": 44,
+    "input": "{*x *b*{t=a*}\n",
+    "check": "explained",
+    "entries": [
+      "U-143"
+    ]
+  },
+  {
+    "cause": "C48",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0788-whitespace-after-a-leading-content-tab-is-not-content.md",
+    "line": 8,
+    "input": "- \t e\n",
+    "check": "explained",
+    "entries": [
+      "U-153"
+    ]
+  },
+  {
+    "cause": "C48",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0684-a-post-marker-tab-keeps-a-quote-literal.md",
+    "line": 8,
+    "input": "- \t> a\n",
+    "check": "explained",
+    "entries": [
+      "U-153"
+    ]
+  },
+  {
+    "cause": "C48",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
+    "line": 59,
+    "input": "- \t- B\n",
+    "check": "explained",
+    "entries": [
+      "U-153"
+    ]
+  },
+  {
+    "cause": "C49",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 79,
+    "input": ":::[plain]\nbody\n:::\n",
+    "check": "pass",
+    "entries": [
+      "U-186"
+    ]
+  },
+  {
+    "cause": "C49",
+    "clause": "C2-B-119",
+    "path": "resources/examples/extensions.md",
+    "line": 178,
+    "input": ":::[First]\nFirst panel.\n:::\n",
+    "check": "pass",
+    "entries": [
+      "U-186"
+    ]
+  },
+  {
+    "cause": "C49",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 28,
+    "input": ":::[/i/]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-195"
+    ]
+  },
+  {
+    "cause": "C51",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0222-a-tab-as-the-first-character-of-a-definition-term.md",
+    "line": 14,
+    "input": ":: \tx\n",
+    "check": "explained",
+    "entries": [
+      "U-193"
+    ]
+  },
+  {
+    "cause": "C51",
+    "clause": "C2-B-027",
+    "path": "resources/examples/edge-cases/0439-a-colon-followed-by-only-whitespace-is-not-a-description.md",
+    "line": 176,
+    "input": ":: t\n: \ttext\n\nflush\n",
+    "check": "explained",
+    "entries": [
+      "U-193"
+    ]
+  },
+  {
+    "cause": "C52",
+    "clause": "C2-B-179",
+    "path": "resources/examples/edge-cases/0589-an-explicitly-delimited-row-of-blank-cells-is-a-table.md",
+    "line": 117,
+    "input": "|=|\n",
+    "check": "pass",
+    "entries": [
+      "U-185"
+    ]
+  },
+  {
+    "cause": "C52",
+    "clause": "C2-B-179",
+    "path": "resources/examples/edge-cases/0759-invalid-body-row-metadata-leaves-one-table-body.md",
+    "line": 6,
+    "input": "{body-rows=x}\n|= A |\n",
+    "check": "explained",
+    "entries": [
+      "U-150"
+    ]
+  },
+  {
+    "cause": "C52",
+    "clause": "C2-B-179",
+    "path": "resources/examples/edge-cases/0870-a-caption-host-and-a-continuation-cell-read-what-the-block-holds.md",
+    "line": 33,
+    "input": "| < |= a |\n+ | | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-147"
+    ]
+  },
+  {
+    "cause": "C53",
+    "clause": "C2-B-083",
+    "path": "resources/examples/edge-cases/0717-citation-shaped-lines-remain-core-text.md",
+    "line": 18,
+    "input": "[@key]: entry\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C53",
+    "clause": "C2-B-083",
+    "path": "tests/corpus-optional/99-citations-definition-space-run.crv",
+    "line": 1,
+    "input": "[@a] and [@b].\n\n[@a]:  Alpha.\n[@b]:   Beta.\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C53",
+    "clause": "C2-B-083",
+    "path": "tests/corpus-optional/51-references-placement-inside-a-quote.crv",
+    "line": 1,
+    "input": "See [@x].\n\n> ::: references\n> :::\n\n[@x]: Source\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C54",
+    "clause": "C2-H-088",
+    "path": "resources/examples/edge-cases/0309-a-note-s-content-recognizes-no-note.md",
+    "line": 43,
+    "input": "x ^[a [^1] c]\n\n[^1]: n\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
+    "cause": "C54",
+    "clause": "C2-H-088",
+    "path": "resources/examples/edge-cases/0310-a-footnote-in-link-text-nests-the-anchors.md",
+    "line": 10,
+    "input": "a [t[^1]](/u) b\n\n[^1]: n\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
+    "cause": "C54",
+    "clause": "C2-H-088",
+    "path": "resources/examples/edge-cases/0309-a-note-s-content-recognizes-no-note.md",
+    "line": 88,
+    "input": "x ^[a [^1]{.k} c]\n\n[^1]: n\n",
+    "check": "explained",
+    "entries": [
+      "U-154"
+    ]
+  },
+  {
+    "cause": "C55",
+    "clause": "C2-I-067",
+    "path": "resources/examples/edge-cases/0660-an-empty-link-destination-takes-spaces.md",
+    "line": 6,
+    "input": "[t](  )\n",
+    "check": "explained",
+    "entries": [
+      "U-175"
+    ]
+  },
+  {
+    "cause": "C57",
+    "clause": "C2-I-036",
+    "path": "resources/examples/edge-cases/0959-a-braced-comment-that-starts-a-continuation-line-is-at-block-position.md",
+    "line": 12,
+    "input": "pre\n{% a\nb %}\n",
+    "check": "pass",
+    "entries": [
+      "U-136"
+    ]
+  },
+  {
+    "cause": "C57",
+    "clause": "C2-I-036",
+    "path": "resources/examples/edge-cases/0960-a-lazy-braced-comment-uses-source-columns-in-every-host.md",
+    "line": 14,
+    "input": "- pre\n{% b\nb %}\n",
+    "check": "pass",
+    "entries": [
+      "U-136"
+    ]
+  },
+  {
+    "cause": "C57",
+    "clause": "C2-I-036",
+    "path": "resources/examples/edge-cases/0960-a-lazy-braced-comment-uses-source-columns-in-every-host.md",
+    "line": 54,
+    "input": "> pre\n{% b\nb %}\n",
+    "check": "pass",
+    "entries": [
+      "U-136"
+    ]
+  },
+  {
+    "cause": "C60",
+    "clause": "C2-B-103",
+    "path": "resources/examples/edge-cases/0298-a-boolean-lang-is-the-third-spelling-of-the-same-key.md",
+    "line": 12,
+    "input": "[a]{:fr lang} [b]{lang :fr}\n",
+    "check": "pass",
+    "entries": [
+      "U-192"
+    ]
+  },
+  {
+    "cause": "C60",
+    "clause": "C2-B-103",
+    "path": "resources/examples/edge-cases/0296-a-language-attribute-and-lang-are-one-key.md",
+    "line": 26,
+    "input": "[x]{k=1 :fr lang=de title=t}\n",
+    "check": "pass",
+    "entries": [
+      "U-192"
+    ]
+  },
+  {
+    "cause": "C60",
+    "clause": "C2-B-103",
+    "path": "resources/examples/edge-cases/0296-a-language-attribute-and-lang-are-one-key.md",
+    "line": 11,
+    "input": "[a]{:fr lang=de} [b]{lang=de :fr}\n",
+    "check": "pass",
+    "entries": [
+      "U-192"
+    ]
+  },
+  {
+    "cause": "C63",
+    "clause": "C2-B-180",
+    "path": "resources/examples/edge-cases/0871-a-widths-list-writes-one-col-per-entry.md",
+    "line": 35,
+    "input": "{widths=,50}\n| a | b | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-150"
+    ]
+  },
+  {
+    "cause": "C63",
+    "clause": "C2-B-180",
+    "path": "resources/examples/edge-cases/0871-a-widths-list-writes-one-col-per-entry.md",
+    "line": 12,
+    "input": "{widths=25,50}\n| a | b | c |\n",
+    "check": "explained",
+    "entries": [
+      "U-150"
+    ]
+  },
+  {
+    "cause": "C63",
+    "clause": "C2-B-180",
+    "path": "resources/examples/edge-cases/0544-explicit-body-counts-include-native-header-cells.md",
+    "line": 6,
+    "input": "{body-rows=2}\n|= A |= B |\n| c | d |\n",
+    "check": "explained",
+    "entries": [
+      "U-150"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
+    "line": 192,
+    "input": "[%% hidden](/u)\n",
+    "check": "explained",
+    "entries": [
+      "U-146"
+    ]
+  },
+  {
+    "cause": "C64",
+    "clause": "C2-B-133",
+    "path": "resources/examples/edge-cases/0518-a-trailing-comment-takes-a-tab-a-run-start-and-its-whole-separator.md",
+    "line": 180,
+    "input": "[a\t%% hidden](/u)\n",
+    "check": "explained",
+    "entries": [
+      "U-155"
+    ]
+  },
+  {
+    "cause": "C65",
+    "clause": "C2-B-046",
+    "path": "resources/examples/edge-cases/0856-a-wide-gap-before-a-task-box-leaves-the-lazy-frame-out-of-a-term.md",
+    "line": 12,
+    "input": "-  [ ] - [^f]: :: t\n          c\n\n[^f]\n",
+    "check": "explained",
+    "entries": [
+      "U-106",
+      "U-163"
+    ]
+  },
+  {
+    "cause": "C66",
+    "clause": "C2-B-046",
+    "path": "resources/examples/edge-cases/0413-an-item-s-attribute-block-moves-its-content-column-its-checkbox-does-not.md",
+    "line": 70,
+    "input": "- [x] a\n  # h\n",
+    "check": "explained",
+    "entries": [
+      "U-001",
+      "U-159"
+    ]
+  },
+  {
+    "cause": "C66",
+    "clause": "C2-B-046",
+    "path": "resources/examples/edge-cases/1055-an-item-marker-line-brace-run-measures-from-its-written-brace.md",
+    "line": 64,
+    "input": "- [ ] {.x\n       }\n       z\n",
+    "check": "explained",
+    "entries": [
+      "U-159"
+    ]
+  },
+  {
+    "cause": "C66",
+    "clause": "C2-B-046",
+    "path": "resources/examples/edge-cases/0766-an-editorial-comment-contributes-nothing-to-a-heading-id.md",
+    "line": 25,
+    "input": "- [ ] x {#c#} y\n- [x] {# note #}done\n",
+    "check": "explained",
+    "entries": [
+      "U-159"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
+    "line": 10,
+    "input": "* [d]: \n :::\n",
+    "check": "explained",
+    "entries": [
+      "U-131"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
+    "line": 30,
+    "input": "* [d]: \n text\n",
+    "check": "explained",
+    "entries": [
+      "U-109",
+      "U-131"
+    ]
+  },
+  {
+    "cause": "C68",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0379-a-reference-definition-cannot-take-its-destination-from-the-next-line.md",
+    "line": 49,
+    "input": "* [d]: /u\n :::\n",
+    "check": "explained",
+    "entries": [
+      "U-131"
+    ]
+  },
+  {
+    "cause": "C69",
+    "clause": "C2-I-067",
+    "path": "resources/examples/edge-cases/0887-a-reference-label-across-a-line-stays-verbatim-in-every-form.md",
+    "line": 40,
+    "input": "![*x*][a\nb]\n",
+    "check": "explained",
+    "entries": [
+      "U-161"
+    ]
+  },
+  {
+    "cause": "C69",
+    "clause": "C2-I-067",
+    "path": "resources/examples/edge-cases/0887-a-reference-label-across-a-line-stays-verbatim-in-every-form.md",
+    "line": 70,
+    "input": "*[y]: z\n\n[x][y\nq]\n",
+    "check": "explained",
+    "entries": [
+      "U-111",
+      "U-161"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "resources/examples/edge-cases/1077-a-column-after-an-astral-character-is-one-code-point.md",
+    "line": 56,
+    "input": "::: |\n😀\tx\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "resources/examples/edge-cases/0346-a-line-block-s-last-body-line-keeps-its-backslash.md",
+    "line": 42,
+    "input": "::: |\na  \\\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C70",
+    "clause": "C2-B-123",
+    "path": "resources/examples/edge-cases/0380-a-terminal-comment-line-still-leaves-an-empty-verse-line.md",
+    "line": 10,
+    "input": "::: |\n`\n%%\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C72",
+    "clause": "C2-B-166",
+    "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
+    "line": 193,
+    "input": "{table}\n```csv\na\n\n```\n",
+    "check": "explained",
+    "entries": [
+      "U-061"
+    ]
+  },
+  {
+    "cause": "C72",
+    "clause": "C2-B-166",
+    "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
+    "line": 148,
+    "input": "{table}\n```csv\n\"bad\n```\n",
+    "check": "explained",
+    "entries": [
+      "U-061"
+    ]
+  },
+  {
+    "cause": "C72",
+    "clause": "C2-B-166",
+    "path": "resources/examples/edge-cases/0617-csv-and-tsv-table-bodies.md",
+    "line": 239,
+    "input": "{table}\n```csv\na\"b,c\n```\n",
+    "check": "explained",
+    "entries": [
+      "U-061"
+    ]
+  },
+  {
+    "cause": "C73",
+    "clause": "C2-B-157",
+    "path": "resources/examples/edge-cases/0351-a-bracketed-construct-spanning-a-line-boundary.md",
+    "line": 71,
+    "input": "![a\nb](/i)\n",
+    "check": "explained",
+    "entries": [
+      "U-171"
+    ]
+  },
+  {
+    "cause": "C73",
+    "clause": "C2-B-157",
+    "path": "resources/examples/edge-cases/0351-a-bracketed-construct-spanning-a-line-boundary.md",
+    "line": 87,
+    "input": "![a\nb](/i)\n^ A caption.\n",
+    "check": "explained",
+    "entries": [
+      "U-171"
+    ]
+  },
+  {
+    "cause": "C74",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 198,
+    "input": "| a | b |\n|\t--- |\t--- |\n| 1 | 2 |\n",
+    "check": "explained",
+    "entries": [
+      "U-194"
+    ]
+  },
+  {
+    "cause": "C74",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
+    "line": 218,
+    "input": "| a | b |\n| \t--- | \t--- |\n| 1 | 2 |\n",
+    "check": "explained",
+    "entries": [
+      "U-194"
+    ]
+  },
+  {
+    "cause": "C75",
+    "clause": "C2-I-041",
+    "path": "resources/examples/extensions.md",
+    "line": 533,
+    "input": "Vote :+1: or :-1:. Tolerance :+-: is a symbol, but a +- b and word:+-: are not.\n",
+    "check": "pass",
+    "entries": [
+      "U-188"
+    ]
+  },
+  {
+    "cause": "C76",
+    "clause": "C2-I-090",
+    "path": "resources/examples/edge-cases/0609-an-escaped-cross-reference-spelling-stays-literal.md",
+    "line": 9,
+    "input": "\\</#id>\n\nx \\</#x~>y> y\n",
+    "check": "pass",
+    "entries": [
+      "U-181"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
+    "line": 8,
+    "input": "[{^a]^}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
+    "line": 20,
+    "input": "[{,a],}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C77",
+    "clause": "C2-I-044",
+    "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
+    "line": 56,
+    "input": "[{+a]+}\n",
+    "check": "pass",
+    "entries": [
+      "U-182"
+    ]
+  },
+  {
+    "cause": "C78",
+    "clause": "C2-I-087",
+    "path": "tests/html-import/note-reference-in-a-span/expected.crv",
+    "line": 1,
+    "input": "[\\^1]{abbr=y} and [^]{abbr=y}\n",
+    "check": "pass",
+    "entries": [
+      "U-189"
+    ]
+  },
+  {
+    "cause": "C81",
+    "clause": "C2-B-117",
+    "path": "resources/examples/edge-cases/0258-code-fence-metadata-slots-must-be-a-space-too.md",
+    "line": 82,
+    "input": "```js\t\"T\"\nx\n```\n",
+    "check": "pass",
+    "entries": [
+      "U-191"
+    ]
+  },
+  {
+    "cause": "C81",
+    "clause": "C2-B-117",
+    "path": "resources/examples/edge-cases/0258-code-fence-metadata-slots-must-be-a-space-too.md",
+    "line": 97,
+    "input": "```js \t\"T\"\nx\n```\n",
+    "check": "pass",
+    "entries": [
+      "U-191"
+    ]
+  },
+  {
+    "cause": "C81",
+    "clause": "C2-B-117",
+    "path": "resources/examples/edge-cases/0258-code-fence-metadata-slots-must-be-a-space-too.md",
+    "line": 112,
+    "input": "```js\t \"T\"\nx\n```\n",
+    "check": "pass",
+    "entries": [
+      "U-191"
+    ]
+  },
+  {
+    "cause": "C84",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
+    "line": 6,
+    "input": "::: e[]\n",
+    "check": "explained",
+    "entries": [
+      "U-156"
+    ]
+  },
+  {
+    "cause": "C84",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 96,
+    "input": "::: note [/i/]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-156"
+    ]
+  },
+  {
+    "cause": "C84",
+    "clause": "C2-B-119",
+    "path": "resources/examples/edge-cases/0529-a-container-label-publishes-its-inline-run.md",
+    "line": 113,
+    "input": "::: note [`x`]\nbody\n:::\n",
+    "check": "explained",
+    "entries": [
+      "U-156"
+    ]
+  },
+  {
+    "cause": "C85",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0781-an-opener-is-open-where-it-stands-so-a-combined-token-after-a-guarded-star-stays-split.md",
+    "line": 32,
+    "input": "_*/*a**/\n",
+    "check": "explained",
+    "entries": [
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C85",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0739-opaque-reference-and-inline-bounds.md",
+    "line": 76,
+    "input": "_*x\n/*b*/\n",
+    "check": "explained",
+    "entries": [
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C85",
+    "clause": "C2-I-047",
+    "path": "resources/examples/edge-cases/0576-an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text.md",
+    "line": 21,
+    "input": "*/a // b/*\n",
+    "check": "explained",
+    "entries": [
+      "U-145"
+    ]
+  },
+  {
+    "cause": "C86",
+    "clause": "C2-H-101",
+    "path": "resources/examples/edge-cases/0855-attribute-hardening-probes-the-value-as-emitted.md",
+    "line": 32,
+    "input": "*x*{k=\"‮javascript:x\"}\n",
+    "check": "explained",
+    "entries": [
+      "U-164"
+    ]
+  },
+  {
+    "cause": "C86",
+    "clause": "C2-H-101",
+    "path": "resources/examples/edge-cases/0716-url-sinks-reject-schemes-after-emitted-value-normalization.md",
+    "line": 6,
+    "input": "[x](‮javascript:alert(1))\n",
+    "check": "explained",
+    "entries": [
+      "U-164"
+    ]
+  },
+  {
+    "cause": "C86",
+    "clause": "C2-H-101",
+    "path": "resources/examples/edge-cases/0855-attribute-hardening-probes-the-value-as-emitted.md",
+    "line": 19,
+    "input": "{srcset=\"a 1x,java‮script:x 2x\"}\np\n",
+    "check": "explained",
+    "entries": [
+      "U-164"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0856-a-line-below-the-column-after-a-note-hosted-description-leaves-the-note.md",
+    "line": 47,
+    "input": "[^f]: :: t\n  : # h\nb\n\n[^f]\n",
+    "check": "pass",
+    "entries": [
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0435-the-continuation-marker-s-column-gate-reaches-every-container.md",
+    "line": 41,
+    "input": "[^a]: intro\n+\n more\n\nsee[^a]\n",
+    "check": "pass",
+    "entries": [
+      "U-014",
+      "U-177"
+    ]
+  },
+  {
+    "cause": "C87",
+    "clause": "C2-B-081",
+    "path": "resources/examples/edge-cases/0980-a-losing-duplicate-footnote-definition-s-plus-takes-nothing.md",
+    "line": 14,
+    "input": "[^a]: x\n[^a]: +\n flush\n\nsee[^a]\n",
+    "check": "pass",
+    "entries": [
+      "U-124"
+    ]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-057",
+    "path": "resources/examples/edge-cases/0627-a-refused-marker-leaves-an-open-fence-s-blank-payload.md",
+    "line": 8,
+    "input": "- ```\n+\n  x\n",
+    "check": "pass",
+    "entries": [
+      "U-015",
+      "U-127",
+      "U-019"
+    ]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-057",
+    "path": "resources/examples/edge-cases/0627-a-refused-marker-leaves-an-open-fence-s-blank-payload.md",
+    "line": 27,
+    "input": "- ```\n+\n\n  x\n",
+    "check": "pass",
+    "entries": [
+      "U-021",
+      "U-015",
+      "U-127"
+    ]
+  },
+  {
+    "cause": "C88",
+    "clause": "C2-B-057",
+    "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
+    "line": 729,
+    "input": "- > +\n```\nx\n```\n",
+    "check": "pass",
+    "entries": [
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C89",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0606-an-unclosed-fence-after-an-attribute-line-in-a-container-ends-at-its-closer.md",
+    "line": 69,
+    "input": "::: note\n> {#x}\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C89",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0607-a-quoted-comment-or-attribute-line-closes-the-quote-s-paragraph.md",
+    "line": 36,
+    "input": "::: note\n> para\n> {#x}\n```\ncode\n::::\n:::\nafter *b*\n",
+    "check": "pass",
+    "entries": [
+      "U-003",
+      "U-141"
+    ]
+  },
+  {
+    "cause": "C89",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0908-a-line-block-in-a-note-or-description-takes-a-lazy-line-whatever-its-last-payload-line.md",
+    "line": 10,
+    "input": ":: t\n: > :::: |\n  > ~~~\nb\n",
+    "check": "explained",
+    "entries": [
+      "U-130"
+    ]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-072",
+    "path": "resources/examples/edge-cases/0478-a-definition-body-s-open-code-fence-ends-at-a-line-below-its-column.md",
+    "line": 34,
+    "input": ":: t\n: ```\n  b\n y\n",
+    "check": "pass",
+    "entries": [
+      "U-179"
+    ]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-072",
+    "path": "resources/examples/edge-cases/0478-a-definition-body-s-open-code-fence-ends-at-a-line-below-its-column.md",
+    "line": 12,
+    "input": ":: t\n: ```\n y\n  ```\n",
+    "check": "pass",
+    "entries": [
+      "U-179"
+    ]
+  },
+  {
+    "cause": "C90",
+    "clause": "C2-B-072",
+    "path": "resources/examples/edge-cases/0325-an-attribute-line-after-a-continuation-marker-attributes-the-attached-block.md",
+    "line": 141,
+    "input": ":: t\n: d\n+\n{.x}\n```\n: x\n```\n",
+    "check": "pass",
+    "entries": [
+      "U-014",
+      "U-122"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-067",
+    "path": "resources/examples/edge-cases/0799-a-description-sibling-is-recognized-at-any-column.md",
+    "line": 32,
+    "input": ":: t\n: a\n : b\n",
+    "check": "pass",
+    "entries": [
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-067",
+    "path": "resources/examples/edge-cases/0799-a-description-sibling-is-recognized-at-any-column.md",
+    "line": 68,
+    "input": ":: t\n:  a\n  : b\n",
+    "check": "pass",
+    "entries": [
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C91",
+    "clause": "C2-B-067",
+    "path": "resources/examples/edge-cases/0799-a-description-sibling-is-recognized-at-any-column.md",
+    "line": 86,
+    "input": "  :: t\n  : a\n : b\n",
+    "check": "pass",
+    "entries": [
+      "U-128"
+    ]
+  },
+  {
+    "cause": "C92",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0082-blockquote-lazy-continuation.md",
+    "line": 107,
+    "input": "> [f]: ~\n/\n",
+    "check": "explained",
+    "entries": [
+      "U-038",
+      "U-134"
+    ]
+  },
+  {
+    "cause": "C92",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0802-an-unprefixed-line-does-not-reach-a-quoted-note-s-first-block.md",
+    "line": 12,
+    "input": "> [^b]: +\n# H\n\nr[^b]\n",
+    "check": "explained",
+    "entries": [
+      "U-038",
+      "U-134"
+    ]
+  },
+  {
+    "cause": "C92",
+    "clause": "C2-B-032",
+    "path": "resources/examples/edge-cases/0840-a-refused-plus-reads-like-a-letter.md",
+    "line": 41,
+    "input": "> [^a]: +\n- b\n\nr[^a]\n",
+    "check": "explained",
+    "entries": [
+      "U-038",
+      "U-134"
+    ]
+  },
+  {
+    "cause": "C95",
+    "clause": "C2-B-171",
+    "path": "resources/examples/edge-cases/0589-an-explicitly-delimited-row-of-blank-cells-is-a-table.md",
+    "line": 204,
+    "input": "|{#x}|\n",
+    "check": "explained",
+    "entries": [
+      "U-165"
+    ]
+  },
+  {
+    "cause": "C96",
+    "clause": "C2-I-081",
+    "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
+    "line": 14,
+    "input": "# [g][]\\\n",
+    "check": "explained",
+    "entries": [
+      "U-148"
+    ]
+  },
+  {
+    "cause": "C96",
+    "clause": "C2-I-081",
+    "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
+    "line": 31,
+    "input": "# g\\\n\n[g][]\n",
+    "check": "explained",
+    "entries": [
+      "U-148"
+    ]
+  },
+  {
+    "cause": "C96",
+    "clause": "C2-I-081",
+    "path": "resources/examples/edge-cases/1026-nested-reference-labels-contribute-to-heading-text.md",
+    "line": 28,
+    "input": "# [[x][]][]\n",
+    "check": "explained",
+    "entries": [
+      "U-148"
+    ]
+  },
+  {
+    "cause": "C97",
+    "clause": "C2-B-001",
+    "path": "tests/corpus/250-line-endings-and-a-byte-order-mark-2.crv",
+    "line": 1,
+    "input": "# Title\r\ra\rb\r",
+    "check": "explained",
+    "entries": [
+      "U-176"
+    ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-079",
+    "path": "resources/examples/edge-cases/1026-nested-reference-labels-contribute-to-heading-text.md",
+    "line": 12,
+    "input": "# a [\\[x][]][]\n",
+    "check": "explained",
+    "entries": [
+      "U-148"
+    ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-079",
+    "path": "resources/examples/edge-cases/0193-a-collapsed-reference-is-matched-by-the-label-the-author-wrote.md",
+    "line": 26,
+    "input": "[bold]: /x\n\nsee [\\*bold\\*][]\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C98",
+    "clause": "C2-I-079",
+    "path": "resources/examples/edge-cases/0884-a-failed-cross-line-reference-label-stays-verbatim.md",
+    "line": 12,
+    "input": "\\[\\*x\\*\ny][]\n\n[*x* y]: /u\n\n[\\*z\\*\nw][missing]\n",
+    "check": "explained",
+    "entries": [
+      "U-132"
+    ]
+  },
+  {
+    "cause": "C99",
+    "clause": "C2-I-078",
+    "path": "resources/examples/edge-cases/0334-a-label-beginning-with-an-at-sign-is-not-a-reference-label.md",
+    "line": 8,
+    "input": "[t][@a]\n",
+    "check": "explained",
+    "entries": [
+      "U-166"
+    ]
+  },
+  {
+    "cause": "C99",
+    "clause": "C2-I-078",
+    "path": "resources/examples/edge-cases/0334-a-label-beginning-with-an-at-sign-is-not-a-reference-label.md",
+    "line": 22,
+    "input": "![t][@a]\n",
+    "check": "explained",
+    "entries": [
+      "U-166"
+    ]
+  },
+  {
+    "cause": "C99",
+    "clause": "C2-I-078",
+    "path": "tests/corpus-optional/43-citations-at-label-in-reference-position.crv",
+    "line": 1,
+    "input": "[t][@a] and ![t][@a] and [@a] alone.\n\n[@a]: {author=\"A\" year=\"2020\"} A. (2020). Work.\n",
+    "check": "explained",
+    "entries": [
+      "U-166"
+    ]
+  }
+]

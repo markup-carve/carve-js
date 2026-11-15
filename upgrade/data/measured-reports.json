@@ -1,0 +1,187 @@
+[
+  {
+    "id": "U-143",
+    "input": "/{/",
+    "message": "C2-I-047,C2-I-051: adjacent inline delimiters use the 0.2 flanking and nesting rules"
+  },
+  {
+    "id": "U-144",
+    "input": "{+-\"+}",
+    "message": "C2-I-035,C2-I-048: smart quote direction changes inside adjacent braced inline forms"
+  },
+  {
+    "id": "U-145",
+    "input": "/*//",
+    "message": "C2-I-047,C2-I-048,C2-I-051: adjacent mixed strong and emphasis delimiters change nesting"
+  },
+  {
+    "id": "U-146",
+    "input": "[ %%]",
+    "message": "C2-B-133,C2-I-044: a percent line comment inside brackets or a container ends at its boundary"
+  },
+  {
+    "id": "U-147",
+    "input": "||\n+||",
+    "message": "C2-B-175,C2-B-184: a plus row continues the current table rather than ending its row"
+  },
+  {
+    "id": "U-148",
+    "input": "# \t%%h",
+    "message": "C2-I-081,C2-I-084: a reference to a heading uses the heading's folded source or rendered plain text"
+  },
+  {
+    "id": "U-149",
+    "input": ":f[%%]",
+    "message": "C2-I-044,C2-I-090: inline sigils inside unmatched bracket text are still scanned"
+  },
+  {
+    "id": "U-150",
+    "input": "{widths=5}\n|||",
+    "message": "C2-B-180,C2-B-185: table width or row-section metadata changes generated columns"
+  },
+  {
+    "id": "U-151",
+    "input": "_{_",
+    "message": "C2-I-050,C2-I-052: bare underline and strike markers have 0.2 brace boundaries"
+  },
+  {
+    "id": "U-152",
+    "input": "||\t<|",
+    "message": "C2-B-169,C2-B-177: a table span marker after padded cell content is reinterpreted"
+  },
+  {
+    "id": "U-153",
+    "input": "- \te",
+    "message": "C2-B-027,C2-B-033: a tab after a list marker is stripped as marker padding"
+  },
+  {
+    "id": "U-154",
+    "input": "^[ [^1]]\n[^1]: n",
+    "message": "C2-H-088: a footnote reference inside a link renders its own anchor"
+  },
+  {
+    "id": "U-155",
+    "input": "a\t%%",
+    "message": "C2-I-034,C2-I-039: a percent comment or braced subscript changes inline scanning"
+  },
+  {
+    "id": "U-156",
+    "input": "::: e[",
+    "message": "C2-B-119: an opening bracket can be part of a div name before metadata parsing"
+  },
+  {
+    "id": "U-157",
+    "input": "```s \"\"u",
+    "message": "C2-B-108,C2-B-110,C2-B-122: a code fence info string and closer have 0.2 boundary rules"
+  },
+  {
+    "id": "U-158",
+    "input": "[\\[][]",
+    "message": "C2-I-079,C2-I-085: an unresolved reference writes its label and attached attributes from the folded key"
+  },
+  {
+    "id": "U-159",
+    "input": "- [x] a  h",
+    "message": "C2-B-046,C2-H-032: a task marker changes item html and state metadata"
+  },
+  {
+    "id": "U-160",
+    "input": "x[^f\ng]\n[^f g]: n",
+    "message": "C2-I-087,C2-B-082: whitespace within a footnote reference label normalizes before lookup"
+  },
+  {
+    "id": "U-161",
+    "input": "![][a\nb]",
+    "message": "C2-I-067,C2-B-083: a multiline reference label is normalized or remains literal"
+  },
+  {
+    "id": "U-162",
+    "input": "|?v |",
+    "message": "C2-B-171,C2-B-180: deprecated cell alignment prefixes are read as ordinary cell content or attributes"
+  },
+  {
+    "id": "U-163",
+    "input": "-  [ ] q",
+    "message": "C2-B-046,C2-B-047: a task box after extra marker padding is ordinary item text"
+  },
+  {
+    "id": "U-164",
+    "input": "[](‮javascript:)",
+    "message": "C2-H-101: a link destination containing a dangerous script scheme is emptied"
+  },
+  {
+    "id": "U-165",
+    "input": "|{#x}|",
+    "message": "C2-B-171,C2-B-167: a brace attribute immediately after a table cell marker attaches to that cell"
+  },
+  {
+    "id": "U-166",
+    "input": "[][@a]",
+    "message": "C2-I-078: a reference label beginning with an at-sign is reserved for citation syntax"
+  },
+  {
+    "id": "U-167",
+    "input": "|=|\n|:-|",
+    "message": "C2-B-182,C2-B-185: a head-row alignment marker applies its alignment to a physical column"
+  },
+  {
+    "id": "U-168",
+    "input": "|=||",
+    "message": "C2-B-179,C2-B-182: an equals marker at a table edge creates header cells or rows"
+  },
+  {
+    "id": "U-169",
+    "input": "-{k} {#h}",
+    "message": "C2-B-100,C2-B-101: a brace block after an item marker is not a free-standing attribute line"
+  },
+  {
+    "id": "U-170",
+    "input": "@a-",
+    "message": "C2-I-092: a tag or mention name stops before a trailing hyphen"
+  },
+  {
+    "id": "U-171",
+    "input": "![\n]()",
+    "message": "C2-B-157,C2-B-197: a multiline image label changes block-image eligibility"
+  },
+  {
+    "id": "U-172",
+    "input": "{loose}\n:: T",
+    "message": "C2-B-066,C2-H-040: a loose key on a description list remains an ordinary html attribute"
+  },
+  {
+    "id": "U-173",
+    "input": "c--------",
+    "message": "C2-I-040: a long dash run is folded by the new smart punctuation rule"
+  },
+  {
+    "id": "U-174",
+    "input": "# \tx",
+    "message": "C2-B-027,C2-B-014: a heading strips marker-adjacent tab padding before inline parsing"
+  },
+  {
+    "id": "U-175",
+    "input": "[]( )",
+    "message": "C2-I-067,C2-I-068: a blank inline-link destination is text rather than an empty link"
+  },
+  {
+    "id": "U-176",
+    "input": "# T\rb",
+    "message": "C2-B-001,C2-I-084: a carriage return in a heading boundary is normalized as a line ending"
+  },
+  {
+    "id": "U-193",
+    "input": ":: \tx\n",
+    "message": "C2-B-027 and C2-B-067 trim the marker tab, so its HTML text changes."
+  },
+  {
+    "id": "U-194",
+    "input": "|\t---|\n",
+    "message": "C2-B-171 trims the cell tab, so its HTML text changes."
+  },
+  {
+    "id": "U-195",
+    "input": ":::[`x`]\nbody\n:::\n",
+    "message": "C2-B-119 and C2-B-121 read the label in the metadata slot without the 0.1 inline rendering."
+  }
+]

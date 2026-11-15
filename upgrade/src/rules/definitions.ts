@@ -112,6 +112,8 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const text = lineText(ctx.lines, span.first)
   const cut = prefixLength(text)
   const depth = quoteDepth(text)
+  const shape = insideQuotes(text).trimStart()
+  if (shape.startsWith('[') && !shape.startsWith('[^') && shape.endsWith(']:')) return
   const message = 'definition moved to column 0 outside its container'
   const block = ctx.blocks.within[span.first]!
   if (block > span.last) {

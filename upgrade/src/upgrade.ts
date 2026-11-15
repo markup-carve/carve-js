@@ -4,11 +4,19 @@ import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
 import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
 import { needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { rescuePlus } from './plus-rescue.ts'
+import { rescueQuote } from './quote-rescue.ts'
+import { rescueFence } from './fence-rescue.ts'
+import { rescueDescription } from './description-rescue.ts'
+import { rescuePercent } from './percent-rescue.ts'
+import { MEASURED_REPORT_IDS, measuredReport } from './measured-reports.ts'
+import { rescueMinor } from './minor-rescues.ts'
+import { rescueTargeted } from './targeted-rescues.ts'
 import { RULES } from './rules/index.ts'
 import { lineOf, lineText, readLines } from './source.ts'
 
 /** Report entries after which the HTML of 0.2 differs from the HTML of 0.1 by the contract. */
-const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077'])
+const HTML_CHANGING = new Set(['U-011', 'U-059', 'U-060', 'U-061', 'U-072', 'U-073', 'U-076', 'U-077',
+  'U-130', 'U-131', 'U-132', 'U-133', 'U-134', 'U-140'])
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -91,8 +99,27 @@ function innerColonClose(input: string): number {
   return 0
 }
 
+function recordMeasured(input: string, done: Rewritten, comparison: ReturnType<typeof compareHtml>): void {
+  const difference = comparison.difference
+  if (difference === null) return
+  const { expected, actual, line } = difference
+  const place = placeOf(input, done, line)
+  const measured = measuredReport(input, expected, actual, place)
+  if (measured !== null && !hasEntry(done.records, measured.entry)) done.records.push(measured)
+}
+
+function oneItemComparison(old: string, next: string, records: ReportRecord[], strict: ReturnType<typeof compareHtml>):
+  { comparison: ReturnType<typeof compareHtml>, explained: boolean } {
+  const normalized = compareHtml(old, next, true)
+  const wrapperLost = normalized.difference === null && strict.difference?.expected.includes('<p>') === true
+  const explained = hasEntry(records, 'U-021') || wrapperLost
+  if (explained && !hasEntry(records, 'U-021')) records.push(recordOf('U-021', 0,
+    'the one-item list loses the loose paragraph wrapper under C2-B-062 and C2-H-036'))
+  return { comparison: explained ? normalized : strict, explained }
+}
+
 /** Renders both sides and adds what the comparison found to `records`. */
-function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
+function selfCheck(input: string, done: Rewritten, diagnose = false): UpgradeResult['check'] {
   const { output, records } = done
   let old: string
   let next: string
@@ -111,9 +138,10 @@ function selfCheck(input: string, done: Rewritten): UpgradeResult['check'] {
   }
   if (strict.difference === null) return 'pass'
   // U-021: a list of one item is tight in 0.2, so its paragraph elements are left out of a second comparison.
-  const oneItem = hasEntry(records, 'U-021')
-  const compared = oneItem ? compareHtml(old, next, true) : strict
-  const explained = records.filter((record) => HTML_CHANGING.has(record.entry)).map((record) => record.entry)
+  const { comparison: compared, explained: oneItem } = oneItemComparison(old, next, records, strict)
+  if (diagnose) recordMeasured(input, done, compared)
+  const explained = records.filter((record) => HTML_CHANGING.has(record.entry)
+    || MEASURED_REPORT_IDS.includes(record.entry)).map((record) => record.entry)
   if (oneItem) explained.unshift('U-021')
   if (compared.difference === null || explained.length > (oneItem ? 1 : 0)) {
     const line = compared.difference === null ? strict.difference.line : compared.difference.line
@@ -147,13 +175,16 @@ export function upgrade(input: string): UpgradeResult {
   if (check === 'mismatch') {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
-      const rescued = rescuePlus(input, done.output, mismatch)
+      const rescued = rescueFence(input, done.output, mismatch) ?? rescuePlus(input, done.output, mismatch)
+        ?? rescueQuote(input, done.output, mismatch) ?? rescueDescription(input, done.output, mismatch)
+        ?? rescuePercent(input, done.output, mismatch) ?? rescueTargeted(input, done.output, mismatch)
+        ?? rescueMinor(input, done.output, mismatch)
+      done.records = done.records.filter((record) => record.entry !== 'upgrade-mismatch' && record.entry !== 'U-019')
       if (rescued !== null) {
-        done.records.splice(done.records.indexOf(mismatch), 1)
         done.records.push(rescued.record)
         done.output = rescued.output
-        check = selfCheck(input, done)
       }
+      check = selfCheck(input, done, true)
     }
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }

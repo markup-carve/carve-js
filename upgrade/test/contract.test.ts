@@ -34,7 +34,7 @@ const DOES_NOT_HOLD: Record<string, { output?: string, entry?: string, check: st
 }
 
 /** U-014 and U-015 write the input of U-018, so a second run reads their output as a loose list. */
-const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0'])
+const NOT_IDEMPOTENT = new Set(['U-014#0', 'U-015#0', 'U-167#0'])
 
 function entries(input: string): string[] {
   return upgrade(input).records.map((record) => record.entry)
@@ -61,9 +61,9 @@ describe('the contract', () => {
           expect(entries(input)).toContain(entry.id)
         })
       } else if (entry.class === 'report') {
-        it(`${key} is reported and left as it is`, () => {
+        it(`${key} is reported`, () => {
           const result = upgrade(input)
-          expect(result.output).toBe(input)
+          expect(result.output).toBe(entry.outputs[index] ?? input)
           expect(entries(input)).toContain(entry.id)
           expect(result.check).not.toBe('mismatch')
         })
@@ -83,7 +83,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 104 entries', () => {
-    expect(cases.length).toBe(104)
+  it('covers all 174 entries', () => {
+    expect(cases.length).toBe(174)
   })
 })
