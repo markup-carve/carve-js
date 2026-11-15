@@ -338,3 +338,19 @@ describe('C2-I-032: an unquoted value may hold an opening brace in every block b
     expect(types('{a{=b}\nx\n')).toEqual(['paragraph'])
   })
 })
+
+describe('C2-H-069: a comment-only line is a line of the leaf, not of an inline node', () => {
+  it('C2-H-069: the opener or the closer of a span on the line keeps its line break', () => {
+    expect(render('{* %%\n*}\n')).toBe('<p><strong>\n</strong></p>')
+    expect(render('{={%%}\n=}\n')).toBe('<p><mark>\n</mark></p>')
+    expect(render('{* a\n{%%}*}\n')).toBe('<p><strong> a\n</strong></p>')
+    expect(render('[ %%\nx](u)\n')).toContain('<a href="u">\nx</a>')
+  })
+
+  it('C2-H-069: a comment-only line inside a span still takes one break', () => {
+    expect(render('{* a\n%%\n*}\n')).toBe('<p><strong> a\n</strong></p>')
+    expect(render('*a\n%% c\nb*\n')).toBe('<p><strong>a\nb</strong></p>')
+    expect(render('a\n%% c\nb\n')).toBe('<p>a\nb</p>')
+    expect(render('a\n%% c\n')).toBe('<p>a</p>')
+  })
+})
