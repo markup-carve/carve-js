@@ -2144,5 +2144,37 @@
       "> ^ x\n \\^ cap\n",
       "> q\n\\^ %% x\n"
     ]
+  },
+  {
+    "id": "U-213",
+    "title": "Definition consumed inside a list item",
+    "class": "rewrite",
+    "inputs": [
+      "See [^a].\n\n- [^a]: note body\n",
+      "- lead\n1. [t]: /t\n\nSee [t][].\n",
+      "r[^n]\n\n- [^n]: :: t\n  - x\n"
+    ],
+    "outputs": [
+      "[^a]: note body\n\nSee [^a].\n\n- {% %}\n",
+      "[t]: /t\n\n- lead\n1. {% %}\n\nSee [t][].\n",
+      "[^n]: :: t\n\nr[^n]\n\n- {% %}\n  - x\n"
+    ]
+  },
+  {
+    "id": "U-214",
+    "title": "Unclosed table cell code span",
+    "class": "rewrite",
+    "inputs": [
+      "| a `b | c d |\n",
+      "| a ``b | c |\n",
+      "| a !`b | c d |\n",
+      "| a `b | c d |\n| e | f |\n"
+    ],
+    "outputs": [
+      "| a `b | c d` |\n",
+      "| a ``b | c`` |\n",
+      "| a !`b | c d` |\n",
+      "| a `b | c d` |\n| e | f |\n"
+    ]
   }
 ]

@@ -285,6 +285,40 @@ function quotedCaretCandidates(input: string): Candidate[] {
   return found
 }
 
+function itemDefinitionCandidates(input: string): Candidate[] {
+  const lines = input.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length; at++) {
+    const match = /^(\s*(?:(?:[-*.]|\d+[.)])\s+)+)(\[[^\]\n]+\]:[^\n]*)$/.exec(lines[at] ?? '')
+    if (match === null || match[1] === undefined || match[2] === undefined) continue
+    const changed = [...lines]
+    changed[at] = match[1] + '{% %}'
+    found.push({ id: 'U-213', output: match[2] + '\n\n' + changed.join('\n') })
+  }
+  return found
+}
+
+function tableCodeSpanCandidates(input: string): Candidate[] {
+  const lines = input.split('\n')
+  const found: Candidate[] = []
+  for (let at = 0; at < lines.length; at++) {
+    const line = lines[at] ?? ''
+    if (!line.trimStart().startsWith('|') || !line.trimEnd().endsWith('|')) continue
+    const open = line.indexOf('`')
+    if (open < 0) continue
+    let end = open
+    while (line[end] === '`') end++
+    const mark = '`'.repeat(end - open)
+    if (line.indexOf(mark, end) >= 0) continue
+    let close = line.lastIndexOf('|')
+    if (line[close - 1] === ' ') close--
+    const changed = [...lines]
+    changed[at] = line.slice(0, close) + mark + line.slice(close)
+    found.push({ id: 'U-214', output: changed.join('\n') })
+  }
+  return found
+}
+
 /** Exact HTML decides whether a candidate spelling preserves 0.1 rendering. */
 export function rescueTargeted(
   input: string,
@@ -298,6 +332,8 @@ export function rescueTargeted(
     ...lineCandidates(output),
     ...multilineAttributeCandidates(input),
     ...quotedCaretCandidates(input),
+    ...itemDefinitionCandidates(input),
+    ...tableCodeSpanCandidates(input),
     ...smartQuoteCandidates(output, expected),
     ...metadataCandidates(output),
     ...languageCandidates(output),
