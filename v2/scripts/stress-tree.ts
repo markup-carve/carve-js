@@ -49,6 +49,8 @@ export const BLOCK_SHAPES: readonly Shape[] = [
   ['task items', (size) => '- [x] a b\n'.repeat(size)],
   ['lists that end each other', (size) => '- a\n* b\n'.repeat(size)],
   ['nested quotes', (size) => `${'> '.repeat(size)}a`],
+  ['nested quote lines with inline punctuation', (size) =>
+    `${'> '.repeat(STACK)}a\`(/u)<a:b>\\/{/\n`.repeat(Math.ceil(size / STACK))],
   ['nested lists', (size) => each(STACK, (index) => `${'  '.repeat(index)}- a\n`).repeat(Math.ceil(size / STACK))],
   ['quote lines', (size) => '> a\n'.repeat(size)],
   ['headings with one text', (size) => '# Same text\n\n'.repeat(size)],

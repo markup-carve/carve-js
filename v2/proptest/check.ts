@@ -32,11 +32,16 @@ function timed<T>(work: () => T): { value: T, ms: number } {
   return { value: work(), ms: performance.now() - start }
 }
 
+function cpuMicros(): number {
+  const usage = process.cpuUsage()
+  return usage.user + usage.system
+}
+
 function averageParse(source: string): number {
-  const start = performance.now()
+  const start = cpuMicros()
   let runs = 0
-  do { parse(source); runs++ } while (runs < 50 && performance.now() - start < 10)
-  return (performance.now() - start) / runs
+  do { parse(source); runs++ } while (runs < 50 && cpuMicros() - start < 10_000)
+  return (cpuMicros() - start) / (runs * 1000)
 }
 
 function median(values: number[]): number { return values.sort((left, right) => left - right)[1] ?? 0 }
@@ -476,10 +481,10 @@ function checkLint(source: string, rng: Random): Finding | null {
 }
 
 function averageLint(source: string): number {
-  const start = performance.now()
+  const start = cpuMicros()
   let runs = 0
-  do { lint(source); runs++ } while (runs < 50 && performance.now() - start < 10)
-  return (performance.now() - start) / runs
+  do { lint(source); runs++ } while (runs < 50 && cpuMicros() - start < 10_000)
+  return (cpuMicros() - start) / (runs * 1000)
 }
 
 function checkMigrate(source: string): Finding | null {
