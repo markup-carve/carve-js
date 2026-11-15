@@ -168,9 +168,24 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
   if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
-  undecidedIf(nextIs(leaf, at, '%#_='), leaf, 'brace')
+  // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content.
+  const next = code(leaf, at + 1)
+  undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')
   // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
   undecidedIf(leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS), leaf, 'brace')
+}
+
+/** The last `%}` or `#}` of the leaf, for the mark `value`, or -1; found once per leaf. */
+function lastClose(leaf: Leaf, value: number): number {
+  if (leaf.closes === null) {
+    leaf.closes = [-1, -1]
+    for (let at = leaf.codes.length - 1; at > 0; at--) {
+      const mark = leaf.codes[at] === 125 ? leaf.codes[at - 1] : -1
+      if (mark === 37 && leaf.closes[0] < 0) leaf.closes[0] = at
+      if (mark === 35 && leaf.closes[1] < 0) leaf.closes[1] = at
+    }
+  }
+  return leaf.closes[value === 37 ? 0 : 1]!
 }
 
 /** A closing brace behind an atom whose source ends in a braced mark. */

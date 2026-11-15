@@ -44,12 +44,14 @@ export interface Leaf {
   inCell: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number
+  /** The last `%}` and the last `#}`, once a brace asked for them. */
+  closes: [number, number] | null
 }
 
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1,
+    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null,
   }
 }
 
