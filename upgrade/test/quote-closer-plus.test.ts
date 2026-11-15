@@ -11,7 +11,7 @@ describe('C2-B-059 C2-B-109: a continuation after an empty quote line', () => {
   })
 
   it('leaves an unrelated table difference as a mismatch', () => {
-    const result = upgrade('|= ^|\n\n>\n+\ne')
+    const result = upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n>\n+\ne')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })

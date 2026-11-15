@@ -14,6 +14,6 @@ describe('C2-B-032 C2-B-059 C2-I-015: quote continuation beside a code span', ()
   })
 
   it('leaves an unrelated table defect as a mismatch', () => {
-    expect(upgrade('> +\n: ```\n> q\n\n|= ^|').check).toBe('mismatch')
+    expect(upgrade('> +\n: ```\n> q\n\n{valigns=top,bottom widths=40}\n| a | b | c |').check).toBe('mismatch')
   })
 })

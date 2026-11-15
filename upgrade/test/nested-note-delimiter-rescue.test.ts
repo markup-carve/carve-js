@@ -12,7 +12,7 @@ describe('C2-I-044 C2-I-047: nested bracket text in an inline note', () => {
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade(`${source}\n|= ^|`)
+    const result = upgrade(`${source}\n{valigns=top,bottom widths=40}\n| a | b | c |`)
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })

@@ -11,7 +11,7 @@ describe('C2-I-047 C2-I-048 C2-I-049: combined inline delimiters', () => {
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade('/***/\n\n|= ^|')
+    const result = upgrade('/***/\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })

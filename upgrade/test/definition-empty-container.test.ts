@@ -10,7 +10,7 @@ describe('C2-B-081 C2-B-083: empty definitions inside list items', () => {
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade('|= ^|\n\n* [d]:\n')
+    const result = upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n* [d]:\n')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
@@ -22,7 +22,7 @@ describe('C2-B-081 C2-B-083: empty definitions inside list items', () => {
   })
 
   it('does not hide an unrelated table difference beside the nested item', () => {
-    const result = upgrade('* * [d]: u\n :\n\n|= ^|')
+    const result = upgrade('* * [d]: u\n :\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
@@ -44,7 +44,7 @@ describe('C2-B-081 C2-B-083: empty definitions inside list items', () => {
   })
 
   it('does not absorb a table defect while releasing a sibling', () => {
-    expect(upgrade('* [d]: \n text\n\n|= ^|').check).toBe('mismatch')
+    expect(upgrade('* [d]: \n text\n\n{valigns=top,bottom widths=40}\n| a | b | c |').check).toBe('mismatch')
   })
 
   it('places a consumed definition beside its list after earlier content', () => {

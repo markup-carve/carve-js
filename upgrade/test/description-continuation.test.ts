@@ -25,7 +25,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an unrelated table difference beside a plus follower', () => {
-    expect(upgrade(':: t\n: +\nl\n : b\n\n|= ^|').check).toBe('mismatch')
+    expect(upgrade(':: t\n: +\nl\n : b\n\n{valigns=top,bottom widths=40}\n| a | b | c |').check).toBe('mismatch')
   })
 
   it('aligns a detached plus body with its term', () => {
@@ -35,7 +35,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps a separate table defect beside the detached plus body', () => {
-    expect(upgrade('  :: t\n: +\n  h\n\n|= ^|').check).toBe('mismatch')
+    expect(upgrade('  :: t\n: +\n  h\n\n{valigns=top,bottom widths=40}\n| a | b | c |').check).toBe('mismatch')
   })
 
   it('writes a quote-hosted empty description body without a plus', () => {
@@ -45,7 +45,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an earlier table defect beside a quote-hosted description', () => {
-    expect(upgrade('|= ^|\n\n> :: t\n> : +\npara\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n> :: t\n> : +\npara\n').check).toBe('mismatch')
   })
 
   it('keeps the host indentation of a quote-hosted description', () => {
@@ -61,7 +61,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an earlier table defect beside that inner quote', () => {
-    expect(upgrade('|= ^|\n\n> :: t\n> : +\n> > q\n> : b\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n> :: t\n> : +\n> > q\n> : b\n').check).toBe('mismatch')
   })
 
   it('returns a quote-hosted sibling to the description column', () => {
@@ -71,7 +71,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an earlier table defect beside that sibling', () => {
-    expect(upgrade('|= ^|\n\n> :: t\n> : +\n> # H\n>  : b\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n> :: t\n> : +\n> # H\n>  : b\n').check).toBe('mismatch')
   })
 
   it('aligns an indented sibling with its quote-hosted description', () => {
@@ -87,7 +87,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an earlier table defect beside the unclosed fence', () => {
-    expect(upgrade('|= ^|\n\n:: t\n: +\n```\na\n: dd\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n:: t\n: +\n```\na\n: dd\n').check).toBe('mismatch')
   })
 
   it('keeps the indentation of an unclosed fence payload', () => {
@@ -127,7 +127,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an earlier table defect beside that empty list', () => {
-    expect(upgrade('|= ^|\n\n:: t\n: - +\n   # H\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n:: t\n: - +\n   # H\n').check).toBe('mismatch')
   })
 
   it('rewrites two quote-hosted continuations in one document', () => {
@@ -138,7 +138,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('leaves an unrelated defect visible with two continuations', () => {
-    const source = '|= ^|\n\n> :: a\n> : +\npara\n\n> :: b\n> : +\npara2\n'
+    const source = '{valigns=top,bottom widths=40}\n| a | b | c |\n\n> :: a\n> : +\npara\n\n> :: b\n> : +\npara2\n'
     expect(upgrade(source).check).toBe('mismatch')
   })
 
@@ -150,7 +150,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an unrelated table defect beside two plain continuations', () => {
-    expect(upgrade('|= ^|\n\n:: a\n: +\npara\n\n:: b\n: +\npara2\n').check).toBe('mismatch')
+    expect(upgrade('{valigns=top,bottom widths=40}\n| a | b | c |\n\n:: a\n: +\npara\n\n:: b\n: +\npara2\n').check).toBe('mismatch')
   })
 
   it('rewrites two separate description fences in one document', () => {
@@ -204,7 +204,7 @@ describe('C2-B-069 C2-B-076 C2-B-078 description continuation', () => {
   })
 
   it('keeps an unrelated table defect after the attached fence', () => {
-    const source = ':: t\n: n\n+\n```\na\n  b\n\nsee\n\n|= ^|'
+    const source = ':: t\n: n\n+\n```\na\n  b\n\nsee\n\n{valigns=top,bottom widths=40}\n| a | b | c |'
     expect(upgrade(source).check).toBe('mismatch')
   })
 })

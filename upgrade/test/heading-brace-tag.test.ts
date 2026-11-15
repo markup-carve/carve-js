@@ -10,7 +10,7 @@ describe('C2-I-044 C2-I-090: tag inside a failed brace attribute', () => {
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade('# H {#id .cls}\n\n|= ^|')
+    const result = upgrade('# H {#id .cls}\n\n{valigns=top,bottom widths=40}\n| a | b | c |')
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
@@ -35,7 +35,7 @@ describe('C2-I-044 C2-I-090: tag inside a failed brace attribute', () => {
   })
 
   it('keeps an unrelated table defect beside that inline opener', () => {
-    expect(upgrade('{%~{#i}\n\n|= ^|').check).toBe('mismatch')
+    expect(upgrade('{%~{#i}\n\n{valigns=top,bottom widths=40}\n| a | b | c |').check).toBe('mismatch')
   })
 
   it('leaves an identical code span alone while escaping prose', () => {

@@ -16,7 +16,7 @@ describe('C2-B-123 C2-H-043: trailing spaces in one line block line', () => {
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade(`|= ^|\n\n${source}`)
+    const result = upgrade(`{valigns=top,bottom widths=40}\n| a | b | c |\n\n${source}`)
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
