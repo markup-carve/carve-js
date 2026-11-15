@@ -35,10 +35,18 @@ export interface Leaf {
   where: number
   /** The first `{` of the leaf, or -1. */
   firstBrace: number
+  /** C2-I-109: the reader's single quote state at the unit being decided; an inline footnote saves it. */
+  singleQuoteOpen: boolean
+  inlineFootnote: boolean
+  /** The end of the last cross-reference scan that found no `>`. */
+  angleFailEnd: number
 }
 
 export function createLeaf(): Leaf {
-  return { codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, firstBrace: -1 }
+  return {
+    codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, firstBrace: -1,
+    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1,
+  }
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
@@ -145,6 +153,7 @@ const CONTAINERS: { [T in keyof NodeOfType]?: ContainerModel<T> } = {
     return true
   },
   inline_footnote: (w, leaf, node, flags) => {
+    leaf.inlineFootnote = true
     around(w, leaf, node, node.children, '^[', ']', flags)
     return true
   },

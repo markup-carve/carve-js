@@ -14,9 +14,16 @@ function isBracket(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   return kind !== TEXT || (escaped[at] === 0 && leaf.kinds[at - 1] !== ESCAPE)
 }
 
+/** Whether the text unit `at` is read by the reader, not escaped. */
+function isReadText(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  return leaf.kinds[at] === TEXT && escaped[at] === 0 && leaf.kinds[at - 1] !== ESCAPE
+}
+
 /** Whether the text pair at `[opener, closer]` reads as literal text. */
-function literalPair(leaf: Leaf, opener: number, closer: number, hasKeys: boolean): boolean {
+function literalPair(leaf: Leaf, opener: number, closer: number, hasKeys: boolean, escaped: Uint8Array): boolean {
   if (hasKeys || leaf.codes[opener + 1] === 94) return false
+  // C2-I-089: `^[` opens an inline footnote whatever follows its closing bracket.
+  if (leaf.codes[opener - 1] === 94 && isReadText(leaf, opener - 1, escaped)) return false
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
   return next === '' || !FOLLOWERS.includes(next)
 }
@@ -36,6 +43,6 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean)
     if (opener === undefined) continue
     const textOpener = leaf.kinds[opener] === TEXT
     if (textOpener !== (leaf.kinds[at] === TEXT)) return undecide(leaf, 'bracket pair')
-    if (textOpener && !literalPair(leaf, opener, at, hasKeys)) return undecide(leaf, 'bracket pair')
+    if (textOpener && !literalPair(leaf, opener, at, hasKeys, escaped)) return undecide(leaf, 'bracket pair')
   }
 }

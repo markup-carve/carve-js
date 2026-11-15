@@ -8,6 +8,7 @@ import { IN_CELL } from './write-inline.ts'
 import {
   ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
 } from './write-plan-model.ts'
+import { opensAngleAtom } from './write-plan-angle.ts'
 import { checkBrackets } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
 import { checkSmart } from './write-plan-smart.ts'
@@ -156,9 +157,14 @@ function continuesAtom(leaf: Leaf, at: number): boolean {
   return leaf.kinds[at - 1] === ATOM && leaf.owners[at - 1] === leaf.owners[at]
 }
 
-/** Whether the unit `at` is the opening bracket of a link of the tree. */
+/** Whether the unit `at` is an opening bracket of the tree: a mark, or the start of an atom. */
+function treeBracket(leaf: Leaf, at: number): boolean {
+  const kind = leaf.kinds[at]
+  return leaf.codes[at] === 91 && (kind === OPEN || (kind === ATOM && !continuesAtom(leaf, at)))
+}
+
 function opensLink(leaf: Leaf, at: number): boolean {
-  return leaf.kinds[at] === OPEN && leaf.codes[at] === 91 && leaf.owners[at]?.type === 'link'
+  return treeBracket(leaf, at) && leaf.owners[at]?.type === 'link'
 }
 
 /** Whether the unit `at` starts a code span of the tree. */
@@ -168,8 +174,8 @@ function opensCode(leaf: Leaf, at: number): boolean {
 
 /**
  * C2-W-090: a sigil glued to a bracket or a backtick of a construct of the tree takes the backslash, as the image
- * sigil before a link and the math sigil before a code span. Where the sigil stands before text, the bracket or
- * backtick decides, and the leaf is left to the repair.
+ * sigil before a link and the math sigil before a code span. Before a text bracket, the pair decides
+ * (write-plan-brackets.ts); before the other characters of `rest`, the leaf is left to the repair.
  */
 function gluedSigil(leaf: Leaf, at: number, escaped: Uint8Array, opens: (leaf: Leaf, at: number) => boolean, rest: string): void {
   if (isLiteral(leaf, at, escaped)) return
@@ -188,12 +194,9 @@ function angle(leaf: Leaf, at: number, escaped: Uint8Array): void {
     escaped[at] = 1
     return
   }
-  if (next === 45 || next === 47 || next === 61) return undecide(leaf, 'angle')
-  for (let unit = at + 1; unit < leaf.codes.length; unit++) {
-    const value = leaf.codes[unit]!
-    if (value === 62) return undecide(leaf, 'angle')
-    if (isSpace(value) || value === 60) return
-  }
+  if (next === 61) return undecide(leaf, 'angle')
+  // C2-I-115: `<--` is left to the hyphen run; `<-` alone stays as typed.
+  if (opensAngleAtom(leaf, at)) escaped[at] = 1
 }
 
 /** C2-B-133: `%%` at the start of a line or after whitespace opens a line comment; its first `%` takes the backslash. */
@@ -210,7 +213,8 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '!': (leaf, at, escaped) => {
     if (nextIs(leaf, at, '=') && leaf.kinds[at - 1] !== TEXT && at > 0) undecide(leaf, 'sigil !')
     else if (nextIs(leaf, at, '=') && leaf.kinds[at + 1] === TEXT && !isLiteral(leaf, at, escaped)) escaped[at] = 1
-    else gluedSigil(leaf, at, escaped, (l, unit) => opensLink(l, unit) || opensCode(l, unit), '[`=')
+    else if (treeBracket(leaf, at + 1) && !opensLink(leaf, at + 1)) undecide(leaf, 'sigil !')
+    else gluedSigil(leaf, at, escaped, (l, unit) => opensLink(l, unit) || opensCode(l, unit), '`=')
   },
   '"': quote,
   '#': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at) },
@@ -234,7 +238,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   ']': () => undefined,
   '^': (leaf, at, escaped) => {
     if (code(leaf, at - 1) === 91) undecide(leaf, 'footnote bracket')
-    else gluedSigil(leaf, at, escaped, opensLink, '[')
+    else gluedSigil(leaf, at, escaped, treeBracket, '')
   },
   '_': () => undefined,
   '`': always('backtick'),
@@ -450,7 +454,9 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
   plan.leaves++
   if (leaf.undecided !== null) {
     plan.undecided = leaf.undecided
-    plan.detail = JSON.stringify(leafText(leaf).slice(Math.max(0, leaf.where - 24), leaf.where + 24))
+    const text = leafText(leaf)
+    const before = JSON.stringify(text.slice(Math.max(0, leaf.where - 16), leaf.where))
+    plan.detail = `${before} | ${JSON.stringify(text.slice(leaf.where, leaf.where + 16))}`
   } else record(plan, leaf, escaped)
   plan.respell.push(...leaf.respell)
   return content
