@@ -146,6 +146,24 @@ function unresolvedContinuation(input: string): boolean {
   return false
 }
 
+function percentFenceInContainer(input: string): boolean {
+  if (!input.includes('%%%')) return false
+  return input.split('\n').some((line) => {
+    const value = line.trimStart()
+    return value.startsWith('>') || value.startsWith(': ') || value.startsWith('- :::')
+  })
+}
+
+function lateMeasuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
+  const legacy = legacyMeasured(input, expected, actual, line)
+  if (legacy !== null) return legacy
+  if (percentFenceInContainer(input)) return recordOf('U-224', line,
+    'C2-B-108, C2-B-110, and C2-B-114 change the percent fence container extent; no preserving spelling was verified')
+  if (unresolvedContinuation(input)) return recordOf('U-209', line,
+    'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
+  return null
+}
+
 /** Reports the measured, clause-backed HTML changes that have no source rewrite. */
 export function measuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const exact = exactMeasuredReport(input, line)
@@ -168,9 +186,5 @@ export function measuredReport(input: string, expected: string, actual: string, 
     const example = measuredExamples.find((item) => item.id === measuredId)
     if (example !== undefined) return recordOf(example.id, line, example.message)
   }
-  const legacy = legacyMeasured(input, expected, actual, line)
-  if (legacy !== null) return legacy
-  if (unresolvedContinuation(input)) return recordOf('U-209', line,
-    'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
-  return null
+  return lateMeasuredReport(input, expected, actual, line)
 }

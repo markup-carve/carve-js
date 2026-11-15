@@ -203,5 +203,10 @@
     "id": "U-221",
     "input": "[a](/u \"t\nu\")\n",
     "message": "C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified"
+  },
+  {
+    "id": "U-224",
+    "input": "> %%%\n> secret\n  %%%\nafter\n",
+    "message": "C2-B-108,C2-B-110,C2-B-114: the percent fence consumes a different container extent; no preserving spelling has been verified"
   }
 ]

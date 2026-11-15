@@ -2702,5 +2702,38 @@
     "entries": [
       "U-143"
     ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0556-a-closed-block-leaves-no-frame-for-the-line-below.md",
+    "line": 420,
+    "input": "- ::: box\n  %%%%\n%% j\n  x\n",
+    "check": "explained",
+    "entries": [
+      "U-224"
+    ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0888-a-comment-span-in-a-quote-closes-at-an-unmarked-closer.md",
+    "line": 46,
+    "input": "> %%%\n> secret\n  %%%\nafter\n",
+    "check": "explained",
+    "entries": [
+      "U-224"
+    ]
+  },
+  {
+    "cause": "C25",
+    "clause": "C2-B-108",
+    "path": "resources/examples/edge-cases/0936-an-invisible-line-keeps-a-description-entry-open.md",
+    "line": 79,
+    "input": ":: t\n: d\n%%%\nc\n%%%\n : d2\n",
+    "check": "explained",
+    "entries": [
+      "U-224"
+    ]
   }
 ]

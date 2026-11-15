@@ -2315,5 +2315,16 @@
       "[^f]: :: t\n      : | a |\n^ cap\n\n[^f]\n",
       "[^n]: :: t\n      : # H\n        # I\nz\n\n[^n]\n"
     ]
+  },
+  {
+    "id": "U-224",
+    "title": "Percent fence at a container boundary",
+    "class": "report",
+    "inputs": [
+      "> %%%\n> secret\n  %%%\nafter\n",
+      "- ::: box\n  %%%%\n%% j\n  x\n",
+      ":: t\n: d\n%%%\nc\n%%%\n : d2\n"
+    ],
+    "outputs": []
   }
 ]
