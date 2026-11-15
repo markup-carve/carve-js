@@ -96,7 +96,8 @@ function isClean(text: string): boolean {
   if (text.indexOf('&') >= 0 || text.indexOf('<') >= 0 || text.indexOf('>') >= 0 || text.indexOf('\u00a0') >= 0) return false
   for (let at = 0; at < text.length; at++) {
     const code = text.charCodeAt(at)
-    if ((code < 32 || code >= 127) && invalidHtmlWidth(text, at) > 0) return false
+    if (code >= 32 && code < 127) continue
+    if (invalidHtmlWidth(text, at) > 0) return false
   }
   return true
 }
@@ -131,6 +132,7 @@ export function escapeCarrierText(text: string): string {
   let from = 0
   for (let at = 0; at < text.length; at++) {
     const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
     const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
     if (invalid > 0) {
       out += text.slice(from, at) + '\ufffd'
@@ -138,8 +140,6 @@ export function escapeCarrierText(text: string): string {
       from = at + 1
       continue
     }
-    // Every character that is escaped is one of four; the test keeps the common case to one comparison.
-    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE) continue
     const entity = textEntity(code)
     if (entity === '') continue
     out += text.slice(from, at) + entity
@@ -173,6 +173,7 @@ export function escapeText(text: string): string {
   let from = 0
   for (let at = 0; at < text.length; at++) {
     const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
     const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
     if (invalid > 0) {
       out += text.slice(from, at) + '\ufffd'
@@ -180,9 +181,8 @@ export function escapeText(text: string): string {
       from = at + 1
       continue
     }
-    if (code > GREATER_CODE && code !== NO_BREAK_SPACE_CODE && code < BIDI_FIRST) continue
     const entity = textEntity(code)
-    if (entity === '' && !isBidiControl(code)) continue
+    if (entity === '' && (code < BIDI_FIRST || !isBidiControl(code))) continue
     out += text.slice(from, at) + entity
     from = at + 1
   }
@@ -190,10 +190,11 @@ export function escapeText(text: string): string {
 }
 
 function textEntity(code: number): string {
+  if (code > GREATER_CODE) return code === NO_BREAK_SPACE_CODE ? '&nbsp;' : ''
   if (code === 38) return '&amp;'
   if (code === 60) return '&lt;'
   if (code === 62) return '&gt;'
-  return code === 0xa0 ? '&nbsp;' : ''
+  return ''
 }
 
 function attributeEntity(code: number): string {
@@ -208,6 +209,7 @@ export function escapeAttribute(text: string): string {
   let from = 0
   for (let at = 0; at < text.length; at++) {
     const code = text.charCodeAt(at)
+    if (code > GREATER_CODE && code < 127) continue
     const invalid = code < 32 || code >= 127 ? invalidHtmlWidth(text, at) : 0
     if (invalid > 0) {
       out += text.slice(from, at) + '\ufffd'
