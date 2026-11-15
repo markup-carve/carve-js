@@ -237,9 +237,8 @@ function angle(leaf: Leaf, at: number, escaped: Uint8Array): void {
 
 /** C2-B-133: `%%` at the start of a line or after whitespace opens a line comment; its first `%` takes the backslash. */
 function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  if (isLiteral(leaf, at, escaped)) return
-  if (nextIs(leaf, at, '}')) return undecide(leaf, 'mark %')
-  if (!nextIs(leaf, at, '%')) return
+  // C2-I-025: `%}` closes only a braced comment of text, whose `{%` the brace resolver leaves to the repair.
+  if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
   const before = code(leaf, at - 1)
   if (before === 37 || before === 123) return undecide(leaf, 'mark %')
   if (isSpace(before)) escaped[at] = 1
