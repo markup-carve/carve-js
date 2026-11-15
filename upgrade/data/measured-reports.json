@@ -183,5 +183,10 @@
     "id": "U-195",
     "input": ":::[`x`]\nbody\n:::\n",
     "message": "C2-B-119 and C2-B-121 read the label in the metadata slot without the 0.1 inline rendering."
+  },
+  {
+    "id": "U-201",
+    "input": "{_a %% b_} y\n",
+    "message": "C2-I-060, C2-I-062, and C2-I-119 close braced inline forms at their own nested or comment boundary"
   }
 ]

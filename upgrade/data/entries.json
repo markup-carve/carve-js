@@ -1231,6 +1231,12 @@
       "name": "literal attribute after a replacement",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-201",
+      "name": "nested braced inline closer boundary",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

@@ -109,6 +109,8 @@ export function measuredReport(input: string, expected: string, actual: string, 
   if (exact !== null) return exact
   const tabOrDiv = measuredTabOrDiv(input, expected, actual, line)
   if (tabOrDiv !== null) return tabOrDiv
+  if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,
+    'C2-I-060, C2-I-062, and C2-I-119 close the nested braced inline form at its own boundary')
   if (unresolvedEngineShape(input, expected, actual)) return null
   if (lineCommentInContainer(input)) return recordOf('U-146', line,
     'C2-B-133 and C2-I-044 end the percent line comment at its container boundary')

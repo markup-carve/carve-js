@@ -153,9 +153,17 @@ function bracedQuote(input: string): boolean {
   return (input.includes('{+') || input.includes('{-')) && input.includes('"')
 }
 
+function bracedBoundary(input: string): boolean {
+  const nested = ['{-{', '{+{', '{_{', '{~{', '{={', '{-a-}{+{', '{-a-}{-{']
+  if (nested.some((shape) => input.includes(shape))) return true
+  return input.split('\n').some((line) =>
+    ['{_', '{-', '{+', '{~', '{='].some((shape) => line.trimStart().startsWith(shape)) && line.includes('%%'))
+}
+
 function inlineDelimiterMatch(input: string, expected: string, actual: string): string | null {
   if (mixedDelimiterShape(input, expected, actual)) return 'U-145'
   if (bracedQuote(input)) return 'U-144'
+  if (bracedBoundary(input)) return 'U-201'
   if (!input.includes('`') && !input.includes('%%') && (input.includes('/*') || input.includes('*/'))) return 'U-145'
   if (input.includes('_{') || input.includes('~{')) return 'U-151'
   if (adjacentBracedDelimiter(input) && (expected.includes('<em>') || expected.includes('<strong>'))) return 'U-143'

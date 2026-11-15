@@ -1929,5 +1929,22 @@
       "{-a-}{+b+}\\{.k} c\n",
       "{-a-}{+b+}\\{#i} c\n"
     ]
+  },
+  {
+    "id": "U-201",
+    "title": "Braced inline closer boundary",
+    "class": "report",
+    "inputs": [
+      "{_a %% b_} y\n",
+      "{-{_a-}_} b-}\n",
+      "{-a-}{+{+b~}+}+}\n",
+      "{=a\\ %% c=} t and b \\ %% d\n"
+    ],
+    "outputs": [
+      "{_a %% b_} y\n",
+      "{-{_a-}_} b-}\n",
+      "{-a-}{+{+b~}+}+}\n",
+      "{=a\\ %% c=} t and b \\ %% d\n"
+    ]
   }
 ]
