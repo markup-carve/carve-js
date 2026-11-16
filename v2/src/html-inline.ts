@@ -274,7 +274,8 @@ function social(node: MentionNode | TagNode, r: Render): string {
   const name = mention ? node.target : node.name
   const label = mention ? node.label : undefined
   const text = `<strong>${escapeText(label ?? `${mention ? '@' : '#'}${name}`)}</strong>`
-  const url = r.linkDepth > 0 ? null : socialUrl(r, node.type, name)
+  // C2-H-167: a linked mention or tag is a link for the profile, an inert span where the profile has no links.
+  const url = r.linkDepth > 0 || !r.linksAllowed ? null : socialUrl(r, node.type, name)
   const parts: TagParts = { base: [node.type], classFirst: true }
   if (url === null) return `<span${attributes(r, node, parts)}>${text}</span>`
   const structural: Pair[] = [['href', destination(r, url, node)]]

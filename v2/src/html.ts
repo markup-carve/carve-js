@@ -822,8 +822,10 @@ interface RenderResult {
 export function renderDocument(
   document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean,
 ): RenderResult {
+  const rule = PROFILES.get(settings.profile)
+  const linksAllowed = rule === undefined || ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
   const r: Render = {
-    settings, resolution, out: '', count: 0, losses, linkRel: PROFILES.get(settings.profile)?.linkRel ?? '', linkDepth: 0,
+    settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
     usedIds: Object.keys(settings.renderers).length === 0 ? new Set() : authoredIds(document),

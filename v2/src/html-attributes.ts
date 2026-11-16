@@ -21,6 +21,8 @@ export interface Render {
   losses: Findings
   /** C2-H-163: the `rel` value the profile writes on every link, or the empty string. */
   linkRel: string
+  /** C2-H-167: whether the profile admits a link, which a linked mention or tag is. */
+  linksAllowed: boolean
   /** Open links around the node that is written (C2-H-081), and open `abbr` spans (C2-H-099). */
   linkDepth: number
   /** C2-H-088: note marks awaiting the close of the enclosing link. */
