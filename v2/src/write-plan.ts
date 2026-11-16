@@ -169,11 +169,21 @@ function behindHost(leaf: Leaf, at: number): boolean {
   return kind === ATOM && !NO_HOSTS.has(leaf.owners[at - 1]!.type)
 }
 
+/** C2-I-028: whether a `}` follows the brace at `at` on its line; a CR is read past, so a `}` behind it counts. */
+function closesOnLine(leaf: Leaf, at: number): boolean {
+  if (at < leaf.braceFailEnd) return false
+  let end = at + 1
+  while (end < leaf.codes.length && leaf.codes[end] !== 10 && leaf.codes[end] !== 125) end++
+  if (leaf.codes[end] === 125) return true
+  leaf.braceFailEnd = end
+  return false
+}
+
 /** C2-W-096: a brace that opens a comment or an attribute block; a braced opener is paired in write-plan-pairs.ts. */
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
-  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~')) return undecide(leaf, 'attribute block')
+  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~') && closesOnLine(leaf, at)) return undecide(leaf, 'attribute block')
   // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content.
   const next = code(leaf, at + 1)
   undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')

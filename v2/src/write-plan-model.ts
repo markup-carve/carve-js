@@ -40,6 +40,8 @@ export interface Leaf {
   inlineFootnote: boolean
   /** The end of the last cross-reference scan that found no `>`. */
   angleFailEnd: number
+  /** The end of the last attribute block scan that found no `}` on its line. */
+  braceFailEnd: number
   /** The leaf is the content of a table cell. */
   inCell: boolean
   /** The last backtick written by an atom, or -1. */
@@ -60,7 +62,7 @@ export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null, extensions: new Map(),
-    textMark: false, openDepth: 0, lastBracket: -1,
+    textMark: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 

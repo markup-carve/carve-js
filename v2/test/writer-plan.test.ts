@@ -165,6 +165,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-028: a brace behind a host with no `}` on its line opens no attribute block, and the plan writes it bare', () => {
+    for (const source of ['`a`\\{b\n', '`a`\\{b\nc}\n', '*a*\\{b c\n', '[a](/u)\\{\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source.replace('\\{', '{'))
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('`a`\\{b}\n', 'both').stats.planned).toBe(0)
+  })
+
   it('C2-B-119, C2-B-196: a colon run glued to a name is text, and the plan writes it bare', () => {
     for (const source of ['a\n\\:::x\n', '\\:::x\n', 'a\n\\::::x\n', '- a\n  \\:::x\n', 'a\n\\:::>\n']) {
       const result = formatBy(source, 'both')
