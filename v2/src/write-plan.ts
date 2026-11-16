@@ -465,9 +465,10 @@ const TICK_UNDECIDED = 3
 
 /**
  * C2-I-015, C2-I-017: a run opens only where a run of its length stands later in the content, and that search is
- * lexical, so an escaped backtick closes too. From the end, a run of text stays bare when no later run has its
- * length; otherwise each of its backticks takes a backslash and leaves runs of one. A run glued to an atom or to
- * an escape of the writer is left to the repair.
+ * lexical, so an escaped backtick closes too. From the end, a run of text that a later run would close takes a
+ * backslash before its first backtick, then before the next while the rest is closed too (C2-W-088), and leaves
+ * lone backticks and one run of the rest behind it. A run glued to an atom or to an escape of the writer is left
+ * to the repair.
  */
 function tickPlan(leaf: Leaf): Uint8Array {
   const codes = leaf.codes
@@ -481,22 +482,27 @@ function tickPlan(leaf: Leaf): Uint8Array {
     }
     let start = end - 1
     while (start > 0 && codes[start - 1] === 96) start--
-    const length = end - start
-    const decision = tickRun(leaf, start, end, later.has(length))
-    if (decision === TICK_ESCAPED) later.add(1)
-    else later.add(length)
-    ticks.fill(decision, start, end)
+    tickRun(leaf, ticks, start, end, later)
     end = start
   }
   return ticks
 }
 
-function tickRun(leaf: Leaf, start: number, end: number, closes: boolean): number {
+function tickRun(leaf: Leaf, ticks: Uint8Array, start: number, end: number, later: Set<number>): void {
+  const length = end - start
   let text = 0
   for (let at = start; at < end; at++) if (leaf.kinds[at] === TEXT) text++
-  if (text === 0) return 0
-  if (text < end - start || leaf.kinds[start - 1] === ESCAPE) return TICK_UNDECIDED
-  return closes ? TICK_ESCAPED : TICK_BARE
+  if (text === 0 || text < length || leaf.kinds[start - 1] === ESCAPE) {
+    if (text > 0) ticks.fill(TICK_UNDECIDED, start, end)
+    later.add(length)
+    return
+  }
+  let escapes = 0
+  while (escapes < length && later.has(length - escapes)) escapes++
+  ticks.fill(TICK_ESCAPED, start, start + escapes)
+  ticks.fill(TICK_BARE, start + escapes, end)
+  if (escapes > 1) later.add(1)
+  later.add(escapes === 0 ? length : length - escapes + 1)
 }
 
 function backtick(leaf: Leaf, at: number, escaped: Uint8Array): void {
