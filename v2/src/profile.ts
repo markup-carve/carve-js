@@ -149,7 +149,8 @@ function tableParagraph(node: TableNode): ParagraphNode[] {
  * paragraph of their text; any other block that holds blocks gives those blocks in their degraded forms, in order.
  */
 function degradedBlocks(node: Node): ParagraphNode[] {
-  if (node.type === 'table') return tableParagraph(node)
+  // C2-H-165: a table keeps its caption, with its number, as a paragraph below its rows.
+  if (node.type === 'table') return [...tableParagraph(node), ...(node.caption === undefined ? [] : degradedBlocks(node.caption))]
   if (node.type in MARKED_TEXT || isInlineParent(node) || !('children' in node)) return textParagraph(blockText(node))
   const out: ParagraphNode[] = []
   for (const child of node.children) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))

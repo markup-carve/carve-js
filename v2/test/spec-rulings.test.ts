@@ -129,3 +129,10 @@ describe('the social option', () => {
     expect(() => render('@a', JSON.parse('{"social":{"mentionUrl":"/u","other":1}}'))).toThrow(CarveOptionError)
   })
 })
+
+describe('degraded captions', () => {
+  it('C2-H-165: the caption of a degraded figure, table or figure group keeps its number', () => {
+    expect(render('![i](a.png)\n^ Figure #: cap\n\n| t |\n^ Table #: tc\n\n:::: figure\n::::\n^ Empty #\n', { profile: 'comment' }))
+      .toBe('<p>[img: i]</p>\n<p>Figure 1: cap</p>\n<p>t</p>\n<p>Table 1: tc</p>\n<p>Empty 1</p>')
+  })
+})
