@@ -3,13 +3,14 @@
 // are settled (C2-I-007).
 import { BRACE_CLOSE } from './chars.ts'
 import { characterAfter, characterBefore } from './inline-atoms.ts'
-import { IMAGE, LABEL } from './inline-kinds.ts'
+import { countBare, countBracedClose } from './inline-depth.ts'
+import { IMAGE } from './inline-kinds.ts'
 import {
   BETWEEN_WORDS, CAN_CLOSE, CAN_OPEN, type InlineState, NONE, pushToken, TOKEN_A, TOKEN_B, TOKEN_BRACED_CLOSE,
-  TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_CLOSE, TOKEN_DELIMITER, TOKEN_END, TOKEN_LITERAL, TOKEN_OPEN, TOKEN_START,
-  TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
+  TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_CLOSE, TOKEN_DELIMITER, TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TEXT,
+  TOKEN_WIDTH,
 } from './inline-state.ts'
-import { BARE_MARKS, BRACED_MARKS, DEPTH_CAP } from './inline-tables.ts'
+import { BARE_MARKS, BRACED_MARKS } from './inline-tables.ts'
 import { codePointAt, isBoundarySpace, isJoining, isWordCharacter } from './unicode.ts'
 
 const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
@@ -45,21 +46,21 @@ export function scanBareMark(state: InlineState, pos: number): number {
   const mark = markIndex(text, pos)
   if (last > pos) {
     // C2-I-049: each character of a run is text. The last one may still close a braced span.
-    if (closer) pushToken(state, TOKEN_BRACED_CLOSE, last, last + 2, mark, NONE, 0, NONE)
+    if (closer) countBracedClose(state, pushToken(state, TOKEN_BRACED_CLOSE, last, last + 2, mark, NONE, 0, NONE))
     return closer ? last + 2 : last + 1
   }
   // C2-I-050: a delimiter before a combining mark is text.
   if (isJoining(codePointAt(text, pos + 1, state.end))) return pos + 1
   const flags = flanking(state, pos)
-  if (closer) pushToken(state, TOKEN_BRACED_CLOSE, pos, pos + 2, mark, NONE, flags, NONE)
-  else if (flags !== 0) pushToken(state, TOKEN_DELIMITER, pos, pos + 1, mark, NONE, flags, NONE)
+  if (closer) countBracedClose(state, pushToken(state, TOKEN_BRACED_CLOSE, pos, pos + 2, mark, NONE, flags, NONE))
+  else if (flags !== 0) countBare(state, pushToken(state, TOKEN_DELIMITER, pos, pos + 1, mark, NONE, flags, NONE))
   return closer ? pos + 2 : pos + 1
 }
 
 /** A mark that is no bare delimiter: before `}` it may be a braced closer, and otherwise it is text. */
 export function scanBracedMark(state: InlineState, pos: number): number {
   if (pos + 1 >= state.end || state.text.charCodeAt(pos + 1) !== BRACE_CLOSE) return pos + 1
-  pushToken(state, TOKEN_BRACED_CLOSE, pos, pos + 2, markIndex(state.text, pos), NONE, 0, NONE)
+  countBracedClose(state, pushToken(state, TOKEN_BRACED_CLOSE, pos, pos + 2, markIndex(state.text, pos), NONE, 0, NONE))
   return pos + 2
 }
 
@@ -119,10 +120,6 @@ function pop(state: InlineState): void {
   while (state.stackLength > 0 && state.stackClass[state.stackLength - 1] === DEAD) state.stackLength--
 }
 
-function depth(state: InlineState): number {
-  return state.baseDepth + state.stackLive
-}
-
 /** Closes the entry `at` with the closer `token`: the pair forms a node. */
 function closeEntry(state: InlineState, at: number, token: number): void {
   const tokens = state.tokens
@@ -147,7 +144,7 @@ function bareDelimiter(state: InlineState, token: number): void {
   } else if ((flags & CAN_CLOSE) !== 0 && top > state.stackFloor) {
     closeBare(state, top, token, slash ? state.lastSlash : state.lastStar)
     return
-  } else if ((flags & CAN_OPEN) !== 0 && depth(state) < DEPTH_CAP) {
+  } else if ((flags & CAN_OPEN) !== 0) {
     pushDelimiter(state, token, entryClass)
     return
   }
@@ -201,23 +198,8 @@ function bracedCloser(state: InlineState, token: number): void {
   tokens[token] = TOKEN_TEXT
 }
 
-/** C2-I-118: a construct past the cap is text, with its brackets and what is glued to them. */
-function demote(state: InlineState, open: number): void {
-  const tokens = state.tokens
-  const close = tokens[open + TOKEN_B]!
-  tokens[open] = TOKEN_TEXT
-  tokens[close] = TOKEN_TEXT
-  const part = close + TOKEN_WIDTH
-  if (part < state.tokenLength && (tokens[part] === TOKEN_TAIL || tokens[part] === LABEL)) tokens[part] = TOKEN_LITERAL
-}
-
 /** C2-I-007: a bracket construct bounds the delimiters inside it. */
 function enterConstruct(state: InlineState, open: number): void {
-  // C2-I-118: an image is a bracket construct like a link and is held to the same cap; it bounds no delimiter.
-  if (depth(state) >= DEPTH_CAP) {
-    demote(state, open)
-    return
-  }
   if (state.tokens[open + TOKEN_C] === IMAGE) return
   state.stackFloor = push(state, open, BARRIER, state.stackFloor)
   state.lastSlash = NONE
@@ -237,9 +219,8 @@ function leaveConstruct(state: InlineState, close: number): void {
 }
 
 function braceOpener(state: InlineState, token: number): void {
-  // C2-I-055: a braced opener has no condition. C2-I-118: past the cap it is text.
-  if (depth(state) < DEPTH_CAP) pushDelimiter(state, token, state.tokens[token + TOKEN_A]!)
-  else state.tokens[token] = TOKEN_TEXT
+  // C2-I-055: a braced opener has no condition. C2-I-118: the scan pushed no opener past the cap.
+  pushDelimiter(state, token, state.tokens[token + TOKEN_A]!)
 }
 
 /** Pairs the delimiters of the content. Tokens that form no node become text. */

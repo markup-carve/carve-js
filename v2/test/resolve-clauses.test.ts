@@ -179,8 +179,9 @@ describe('heading ids', () => {
     expect(ids('{#a}\n# T\n\n{#a}\n# U')).toEqual(['a', 'a'])
   })
 
-  it('C2-H-024: the id of an unresolved reference is text and reserves nothing', () => {
-    expect(ids('[x][nope]{#One}\n\n# One')).toEqual(['One'])
+  it('C2-H-024, C2-A-039: the authored id of an unresolved reference is reserved, whatever the node type', () => {
+    expect(ids('[x][nope]{#One}\n\n# One')).toEqual(['One-2'])
+    expect(ids('![x][nope]{#One}\n\n# One')).toEqual(['One-2'])
   })
 
   it('C2-H-025: the headings of a footnote body take their ids after those of the document body, in the order of the numbers', () => {

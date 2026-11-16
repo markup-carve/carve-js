@@ -91,46 +91,12 @@ function textWraps(walk: CellWalk, value: string, path: string, breaks: number[]
   }
 }
 
-/** A node with a value that crosses lines, a code span for one, holds each break as a line feed. */
-function valueWraps(walk: CellWalk, value: string, path: string, start: number, end: number): void {
-  const spans = walk.spans
-  while (walk.spanAt < spans.length && spans[walk.spanAt]! <= start) walk.spanAt += 2
-  let feed = -1
-  let bytes = 0
-  for (; walk.spanAt < spans.length && spans[walk.spanAt]! < end; walk.spanAt += 2) {
-    const next = value.indexOf('\n', feed + 1)
-    if (next < 0) return
-    bytes += utf8Length(value.slice(feed + 1, next + 1))
-    feed = next
-    addWrap(walk, spans[walk.spanAt]!, path, bytes)
-  }
-}
-
-/** True when a piece of the cell starts at the source offset `offset`. */
-function startsPiece(walk: CellWalk, offset: number): boolean {
-  const spans = walk.spans
-  while (walk.spanAt < spans.length && spans[walk.spanAt]! < offset) walk.spanAt += 2
-  return walk.spanAt < spans.length && spans[walk.spanAt] === offset
-}
-
+/** C2-L-020: a wrap names a text node among the children of the cell's paragraph (C2-L-048). */
 function walkList(walk: CellWalk, nodes: readonly Inline[], base: string): void {
   for (let at = 0; at < nodes.length; at++) {
     const node = nodes[at]!
-    const path = `${base}/${at}`
     const breaks = walk.trace.breaks.get(node)
-    const origin = walk.trace.inlines.get(node)
-    if (breaks !== undefined && node.type === 'text') {
-      textWraps(walk, node.value, path, breaks)
-    } else if (origin === undefined) {
-      continue
-    } else if (node.type === 'hard_break') {
-      // A hard break leaves no joining space: the fragment starts at offset 0 of the node behind it.
-      if (at + 1 < nodes.length && startsPiece(walk, origin.end)) addWrap(walk, origin.end, `${base}/${at + 1}`, 0)
-    } else if (isInlineParent(node)) {
-      walkList(walk, node.children, `${path}/children`)
-    } else if ('value' in node) {
-      valueWraps(walk, node.value, path, origin.start, origin.end)
-    }
+    if (breaks !== undefined && node.type === 'text') textWraps(walk, node.value, `${base}/${at}`, breaks)
   }
 }
 

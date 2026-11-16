@@ -40,7 +40,11 @@ export function exampleOptions(example: SpecExample): RenderOptions {
 }
 
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
-export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([])
+export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
+  // _TODO_B_r8_p2_lint.md entry 2: the example follows the letter of C2-H-032 (`aria-label=""` on an empty task label);
+  // omitting it is proposed in _OPEN.md, and the engines keep it out until that is ruled.
+  ['syntax-blocks.md:246', 'held: an empty task label writes no aria-label until the proposal of _OPEN.md is ruled'],
+])
 
 export function exampleId(example: SpecExample): string {
   return `${example.file}:${example.number}`

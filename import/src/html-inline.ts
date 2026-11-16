@@ -42,9 +42,9 @@ function appendSoft(result: Inline[], child: Extract<Inline, { type: 'soft_break
   return changed
 }
 
-/** C2-H-045: a render writes a hard break as `<br>` and a line ending; a line ending before it is a soft break of its own. */
-function appendHard(result: Inline[], child: Extract<Inline, { type: 'hard_break' }>, roundtrip: boolean): boolean {
-  const dropped = !roundtrip && result.at(-1)?.type === 'soft_break'
+/** C2-H-045, C2-H-195 row 5: a render writes a hard break as `<br>` and a line ending, so a line ending before it is layout. */
+function appendHard(result: Inline[], child: Extract<Inline, { type: 'hard_break' }>): boolean {
+  const dropped = result.at(-1)?.type === 'soft_break'
   if (dropped) result.pop()
   result.push(child)
   return dropped
@@ -64,7 +64,7 @@ export function normalizeBreaks(children: Inline[], node: Html.ChildNode, contex
   let changed = false
   for (const child of children) {
     if (child.type === 'soft_break') changed = appendSoft(result, child) || changed
-    else if (child.type === 'hard_break') changed = appendHard(result, child, context.roundtrip) || changed
+    else if (child.type === 'hard_break') changed = appendHard(result, child) || changed
     else if (child.type === 'text') changed = appendText(result, child) || changed
     else result.push(child)
   }
@@ -109,19 +109,13 @@ export function trimInlineEdges(children: Inline[], node: Html.ChildNode, contex
   return children
 }
 
-/** C2-H-002: in a `roundtrip` render a no-break space reads back as the node that writes it; elsewhere it stays text. */
-function textNodes(value: string, context: HtmlContext): Inline[] {
-  if (!context.roundtrip || !value.includes('\u00a0')) return softText(value)
-  const result: Inline[] = []
-  for (const [index, part] of value.split('\u00a0').entries()) {
-    if (index > 0) result.push({ type: 'non_breaking_space' })
-    if (part !== '') result.push(...softText(part))
-  }
-  return result
+/** C2-H-002, C2-H-195 row 3: a no-break space is the character in text, in every document. */
+function textNodes(value: string): Inline[] {
+  return softText(value)
 }
 
 export function inline(node: Html.ChildNode, context: HtmlContext): Inline[] {
-  if (isText(node)) return textNodes(node.value, context)
+  if (isText(node)) return textNodes(node.value)
   if (isComment(node)) return [{ type: 'raw_inline', format: 'html', value: serializeOuter(node) }]
   if (isElement(node)) return inlineElement(node, context)
   unsupported(context, node, 'Doctype has no inline representation')
@@ -357,9 +351,8 @@ function htmlMath(node: Html.Element, context: HtmlContext): Inline[] {
 function rubyBase(node: Html.ChildNode, context: HtmlContext): Inline[] {
   if (!isElement(node)) return inline(node, context)
   if (node.tagName === 'rb') return inlineChildren(node, context)
-  if (node.tagName !== 'rp') return inline(node, context)
-  if (!context.roundtrip) degraded(context, node, 'Ruby parentheses omitted')
-  return []
+  // The parentheses are fallback text that every render writes again (C2-H-197: one reading in every document).
+  return node.tagName === 'rp' ? [] : inline(node, context)
 }
 
 function htmlRuby(node: Html.Element, context: HtmlContext): Inline[] {
@@ -372,7 +365,7 @@ function htmlRuby(node: Html.Element, context: HtmlContext): Inline[] {
     } else base.push(...rubyBase(child, context))
   }
   if (base.length) degraded(context, node, 'Ruby base without annotation became text')
-  const ruby: Inline = { type: 'ruby', pairs, ...(context.roundtrip ? attrs(context, node) : {}) }
+  const ruby: Inline = { type: 'ruby', pairs, ...attrs(context, node) }
   return pairs.length ? [ruby, ...base] : base
 }
 
@@ -407,12 +400,12 @@ function reference(node: Html.Element, context: HtmlContext): { key: string, ref
 }
 
 /**
- * C2-H-019: a definition renders nothing, so the references that resolved through it give it back. A reference that
- * links to a heading of the document resolved to the heading (C2-I-084) and needs none (_SPEC_GAPS.md G5).
+ * C2-H-019, C2-H-191: a definition renders nothing, so the first reference of each key gives it back. Whether a key
+ * that links `#ID` needs one is decided on the imported tree (C2-H-198, `rebuiltDefinitions`).
  */
 function define(context: HtmlContext, key: string, href: string | undefined, node: Html.Element): void {
   if (href === undefined || context.definitions.has(key)) return
-  if (href.startsWith('#') && context.headingIds.has(href.slice(1))) return
+  if (node.tagName === 'a' && href.startsWith('#')) context.anchorKeys.add(key)
   const tooltip = attr(node, 'title')
   context.definitions.set(key, { type: 'link_reference_definition', key, namespace: 'link', href,
     ...(tooltip !== undefined ? { tooltip } : {}) })

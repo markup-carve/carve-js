@@ -251,7 +251,8 @@ function rawInline(node: RawInlineNode, r: Render): string {
     loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format} is not written to HTML`)
     return ''
   }
-  if (r.settings.rawHtml) return r.settings.roundtrip ? `<span data-carve-raw="html">${node.value}</span>` : node.value
+  // C2-H-051: with `rawHtml` on the payload is verbatim, with no carrier also under `roundtrip`.
+  if (r.settings.rawHtml) return node.value
   // C2-H-172: the text of a roundtrip carrier keeps its bidirectional controls.
   if (r.settings.roundtrip) return `<span data-carve-raw="html">${escapeCarrierText(node.value)}</span>`
   return escapeText(node.value)

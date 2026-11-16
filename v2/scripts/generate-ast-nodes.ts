@@ -37,6 +37,7 @@ const SPECIAL = new Map<string, (type: string) => string>([
   ['marker', () => 'Marker'],
   ['task', () => 'Task'],
   ['options', () => 'IncludeOptions'],
+  ['invalid', () => 'string[]'],
   ['title', (type) => (type === 'link_reference_definition' ? 'string' : 'Inline[]')],
   ['caption', () => 'CaptionNode'],
   ['fallback', (type) => (type === 'block_extension' ? 'Block[]' : 'Inline[]')],

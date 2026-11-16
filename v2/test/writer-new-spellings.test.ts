@@ -17,14 +17,14 @@ describe('new writer and parser spellings', () => {
     expect(treesEqual(parse(written.source), root)).toBe(true)
   })
 
-  it('C2-B-173: a failed span mark in an otherwise header row leaves a header cell', () => {
+  it('C2-B-173, C2-B-174: a mark in the first row joins nothing and counts as the cell it is, so `|=|^|` is a body row', () => {
     const table = parse('|=|^|\n').children[0]
     if (table?.type !== 'table') throw new Error('table absent')
-    const head = table.children[0]
-    if (head?.type !== 'table_head') throw new Error('head absent')
-    const row = head.children[0]
+    const body = table.children[0]
+    if (body?.type !== 'table_body') throw new Error('body absent')
+    const row = body.children[0]
     if (row?.type !== 'table_row') throw new Error('row absent')
-    expect(row.children.map((cell) => cell.header)).toEqual([true, true])
+    expect(row.children.map((cell) => cell.header)).toEqual([true, false])
   })
 
   it('C2-W-044: a nested bare-dot list on its parent marker line takes digits', () => {

@@ -13,7 +13,7 @@ import { isPlainText } from '../src/inline-scan.ts'
 function fullPass(text: string): InlineNode[] {
   const state = acquireInlineState()
   try {
-    scanInline(state, text, [0, text.length], 0, 2, 0, true)
+    scanInline(state, text, [0, text.length], 0, 2, true)
     return buildInlineTree(text, state.events, state.eventLength, (from, to) => text.slice(from, to))
   } finally {
     releaseInlineState(state)

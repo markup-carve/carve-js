@@ -8,7 +8,7 @@ import {
   BACKSLASH, PERCENT, SLASH, SPACE,
 } from './chars.ts'
 import {
-  ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END,
+  ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL,
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
@@ -19,9 +19,10 @@ import {
   CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_RAW_FIRST, CLASS_RAW_REST, CLASS_SCHEME_FIRST,
   CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY,
 } from './inline-tables.ts'
+import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
-  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace, NO_BREAK_SPACE,
+  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, NO_BREAK_SPACE,
   isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
@@ -107,7 +108,7 @@ function closingRun(text: string, pos: number, end: number, length: number): num
   return NONE
 }
 
-/** C2-I-015: a cell may retry an unmatched opener at every backtick in the same run. */
+/** C2-I-015, C2-I-017: after a run found no closer, the runs of the content are indexed, so no later opener scans to the end again. */
 function indexedClosingRun(state: InlineState, pos: number, length: number): number {
   if (state.codeRuns === null) {
     const runs = new Map<number, number[]>()
@@ -151,18 +152,13 @@ function rawMarkerEnd(text: string, pos: number, end: number): number {
 /** A code span whose token starts at `start` and whose opening run starts at `run` (C2-I-014 to C2-I-022). */
 function codeSpan(state: InlineState, start: number, run: number, kind: number, flags: number): number {
   const text = state.text
-  const open = state.cell && run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
-  if (state.cell) state.codeRunEnd = open
-  const close = state.cell ? indexedClosingRun(state, open, open - run) : closingRun(text, open, state.end, open - run)
-  if (close === NONE) {
-    // C2-B-223: in a cell an unclosed span is text; C2-I-014, C2-I-119: the opener is the whole run, and the scan goes on behind it.
-    if (state.cell) return open
-    // C2-I-017: the span runs to the end of the content, and trailing whitespace is dropped.
-    let contentEnd = state.end
-    while (contentEnd > open && isWhitespace(text.charCodeAt(contentEnd - 1))) contentEnd--
-    pushToken(state, kind, start, state.end, open, contentEnd, flags | FLAG_OPEN_END, NONE)
-    return state.end
-  }
+  const open = run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
+  state.codeRunEnd = open
+  const length = open - run
+  let close = state.codeRuns === null ? closingRun(text, open, state.end, length) : indexedClosingRun(state, open, length)
+  if (close === NONE && state.codeRuns === null) close = indexedClosingRun(state, open, length)
+  // C2-I-017, C2-I-119: with no closing run the opener is text, the prefix with it, and the scan goes on behind the run.
+  if (close === NONE) return open
   const padded = hasSpacePadding(text, open, close)
   const contentStart = padded ? open + 1 : open
   const contentEnd = padded ? close - 1 : close
@@ -210,7 +206,7 @@ function crossReference(state: InlineState, pos: number): number {
 }
 
 /** C2-I-073: the offset of the `>` that closes the URL whose scheme starts at `pos`, or NONE. */
-function urlEnd(text: string, pos: number, end: number): number {
+export function urlEnd(text: string, pos: number, end: number): number {
   if (!inClass(text.charCodeAt(pos), CLASS_SCHEME_FIRST)) return NONE
   let p = classRunEnd(text, pos + 1, end, CLASS_SCHEME_REST)
   if (p >= end || text.charCodeAt(p) !== COLON) return NONE
@@ -224,7 +220,7 @@ function urlEnd(text: string, pos: number, end: number): number {
 }
 
 /** C2-I-073: the offset of the `>` that closes the email address that starts at `pos`, or NONE. */
-function emailEnd(text: string, pos: number, end: number): number {
+export function emailEnd(text: string, pos: number, end: number): number {
   const at = classRunEnd(text, pos, end, CLASS_EMAIL_LOCAL)
   if (at === pos || at >= end || text.charCodeAt(at) !== AT_SIGN) return NONE
   const close = classRunEnd(text, at + 1, end, CLASS_EMAIL_DOMAIN)
@@ -294,7 +290,9 @@ export function scanBrace(state: InlineState, pos: number): number {
   if (next === HASH) return bracedComment(state, pos, EDITORIAL)
   // C2-I-050: a mark before a combining mark is text, and so the brace is (C2-I-044).
   if (!inClass(next, CLASS_BRACED_MARK) || isJoining(codePointAt(text, pos + 2, state.end))) return pos + 1
-  pushToken(state, TOKEN_BRACED_OPEN, pos, pos + 2, BRACED_MARKS.indexOf(String.fromCharCode(next)), NONE, 0, NONE)
+  // C2-I-118: an opener read at the cap is text and is not pushed.
+  if (atDepthCap(state)) return pos + 2
+  countBracedOpen(state, pushToken(state, TOKEN_BRACED_OPEN, pos, pos + 2, BRACED_MARKS.indexOf(String.fromCharCode(next)), NONE, 0, NONE))
   return pos + 2
 }
 

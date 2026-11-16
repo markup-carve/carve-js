@@ -19,6 +19,8 @@ export interface Containers {
   // description list and the run length of a div. `style` holds the enter flags that are the kind of a list or of a div.
   kind: Uint8Array
   column: Int32Array
+  // The content column of an item, a description or a footnote body, or -1 until a block opens in it (C2-B-027).
+  content: Int32Array
   style: Uint8Array
   loose: Uint8Array
   depth: number
@@ -40,9 +42,11 @@ export interface OpenLeaf {
   fenceChar: number
   fenceLength: number
   fenceColumn: number
-  // The open table: its head rows and whether the head is still open.
+  // The open table: its head rows, whether the head is still open, and per column the width of the cell
+  // that covers it in the row above (C2-B-174).
   tableHeadRows: number
   tableHeadOpen: boolean
+  tableWidths: number[]
 }
 
 /**
@@ -104,13 +108,14 @@ function createState(): BlockState {
     containers: {
       kind: new Uint8Array(MAX_DEPTH + 1),
       column: new Int32Array(MAX_DEPTH + 1),
+      content: new Int32Array(MAX_DEPTH + 1),
       style: new Uint8Array(MAX_DEPTH + 1),
       loose: new Uint8Array(MAX_DEPTH + 1),
       depth: 0,
     },
     leaf: {
       kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0,
-      tableHeadRows: 0, tableHeadOpen: false,
+      tableHeadRows: 0, tableHeadOpen: false, tableWidths: [],
     },
     above: {
       blankCount: 0, captionDepth: NO_DEPTH, attributesDepth: NO_DEPTH, attributesStart: 0, attributesEnd: 0, takeAttributes: false,

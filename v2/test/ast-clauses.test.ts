@@ -444,10 +444,10 @@ describe('tables', () => {
     expect(refusal(documentOf({ type: 'table', columns: [], children: [{ type: 'table_body', children: [row(blocksInCell)] }] }))).toBeNull()
   })
 
-  it('C2-A-092: a span mark leaves a cell with the mark, and the covering cell holds the count; a failed mark is an ordinary cell', () => {
+  it('C2-A-092: a span mark leaves a cell with the mark, and the covering cell holds the count; a mark that joins nothing is an ordinary cell that holds it', () => {
     const rows = childrenOf(childrenOf(block('| a | < |\n| ^ | b |'))[0])
     expect(rows[0]).toEqual(row({ ...cell('a'), colspan: 2 }, { type: 'table_cell', header: false, span: 'colspan', children: [] }))
-    expect(rows[1]).toEqual(row(cell(''), cell('b')))
+    expect(rows[1]).toEqual(row(cell('^'), cell('b')))
     const down = childrenOf(childrenOf(block('| a |\n| ^ |'))[0])
     expect(down).toEqual([row({ ...cell('a'), rowspan: 2 }), row({ type: 'table_cell', header: false, span: 'rowspan', children: [] })])
   })

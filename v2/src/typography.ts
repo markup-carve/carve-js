@@ -1,25 +1,19 @@
 // Smart typography (C2-I-104 to C2-I-117). It reads the text that the scan left as text and
 // writes a text span for each plain stretch and a SMART node for each match.
-import { APOSTROPHE, GREATER, HYPHEN, PLUS, QUOTE_MARK, SLASH } from './chars.ts'
+import { APOSTROPHE, GREATER, HYPHEN, PLUS, QUOTE_MARK } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
-import { characterAfter } from './inline-atoms.ts'
 import { INLINE_COMMENT, SMART } from './inline-kinds.ts'
 import { type InlineState, TOKEN_END, TOKEN_START, TOKEN_TEXT, TOKEN_WIDTH, writeInlineEvent } from './inline-state.ts'
 import {
-  APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER, CLASS_SMART_TRIGGER,
+  CHARACTER_CLASSES, CLASS_QUOTE_OPENS_AFTER, CLASS_SMART_TRIGGER,
   SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_PLUS_MINUS, SMART_LEFT_SINGLE_QUOTE,
   SMART_RIGHT_DOUBLE_QUOTE, SMART_RIGHT_SINGLE_QUOTE, SMART_RIGHTWARDS_ARROW, SMART_RUNS,
 } from './inline-tables.ts'
-import {
-  codePointAt, codePointBefore, isAsciiDigit, isAsciiLetter, isBoundarySpace, isLetter, isWordCharacter, NO_CHARACTER,
-} from './unicode.ts'
+import { codePointAt, codePointBefore, isAsciiDigit, isBoundarySpace, NO_CHARACTER } from './unicode.ts'
 
 const ASCII = 128
-const EN_DASH = 0x2013
-const EM_DASH = 0x2014
 const LEFT_SINGLE = 0x2018
 const LEFT_DOUBLE = 0x201c
-const LONGEST_WORD = 6
 const NO_MATCH = -1
 // Whether a character can start a match, as bytes: the text is asked this once per character.
 const TRIGGERS = Uint8Array.from(CHARACTER_CLASSES, (classes) => ((classes & CLASS_SMART_TRIGGER) === 0 ? 0 : 1))
@@ -41,18 +35,9 @@ function isPlusOrHyphen(code: number): boolean {
   return code === PLUS || code === HYPHEN
 }
 
-function isDash(code: number): boolean {
-  return code === HYPHEN || code === EN_DASH || code === EM_DASH
-}
-
 /** The character before `pos` in the text stretch that starts at `from`; before `from` it is the state's. */
 function before(state: InlineState, pos: number, from: number): number {
   return pos > from ? codePointBefore(state.text, pos) : state.previous
-}
-
-/** The character at `pos`, or behind the text stretch when it ends at `to`. */
-function after(state: InlineState, pos: number, to: number): number {
-  return pos < to ? codePointAt(state.text, pos, to) : characterAfter(state, to)
 }
 
 /**
@@ -71,43 +56,12 @@ function runNeighborAfter(state: InlineState, to: number): number {
   return codePointAt(state.text, pos, state.end)
 }
 
-/** C2-I-104, C2-I-106: whether a straight quote after `previous` and before `next` opens. */
-function quoteOpens(previous: number, next: number): boolean {
-  if (isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE) return true
-  if (!isDash(previous) && !inClass(previous, CLASS_QUOTE_OPENS_AFTER)) return false
-  if (!isDash(previous) && previous !== SLASH) return true
-  return !isBoundarySpace(next) && !inClass(next, CLASS_QUOTE_CLOSES_BEFORE)
-}
-
-/** C2-I-107: the length of the apostrophe word that starts at `pos`, or 0. The word ends where its letters end. */
-function apostropheWord(text: string, pos: number, end: number): number {
-  let p = pos
-  while (p < end && p - pos <= LONGEST_WORD && isAsciiLetter(text.charCodeAt(p))) p++
-  if (p === pos || isLetter(codePointAt(text, p, end))) return 0
-  return APOSTROPHE_WORDS.includes(text.slice(pos, p).toLowerCase()) ? p - pos : 0
-}
-
-/** C2-I-105 to C2-I-109: the kind of the single quote at `pos`. */
-function singleQuote(state: InlineState, pos: number, previous: number, next: number): number {
-  const text = state.text
-  if (isAsciiDigit(next)) return SMART_RIGHT_SINGLE_QUOTE
-  if (!quoteOpens(previous, next)) {
-    // C2-I-109: a closing quote that is not inside a word ends the run.
-    if (!isWordCharacter(previous) || !isWordCharacter(next)) state.singleQuoteOpen = false
-    return SMART_RIGHT_SINGLE_QUOTE
-  }
-  const word = apostropheWord(text, pos + 1, state.end)
-  if (word > 0) {
-    // C2-I-108: the word is quoted when a single quote and then no letter and no number follow it. `n` never is.
-    // The word list holds one word of one letter, `n`.
-    const closer = pos + 1 + word
-    const quoted = word > 1 && text.charCodeAt(closer) === APOSTROPHE && !isWordCharacter(codePointAt(text, closer + 1, state.end))
-    if (!quoted) return SMART_RIGHT_SINGLE_QUOTE
-  } else if (state.singleQuoteOpen && isWordCharacter(next)) {
-    return SMART_RIGHT_SINGLE_QUOTE
-  }
-  state.singleQuoteOpen = true
-  return SMART_LEFT_SINGLE_QUOTE
+/**
+ * C2-I-104: a straight quote opens behind whitespace, at the start of a content or of a node, and behind
+ * opening punctuation, an opening straight quote included: its glyph is the neighbor then.
+ */
+function quoteOpens(previous: number): boolean {
+  return isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE || inClass(previous, CLASS_QUOTE_OPENS_AFTER)
 }
 
 function writeSmart(state: InlineState, start: number, end: number, kind: number): void {
@@ -172,10 +126,13 @@ function flushSpan(state: InlineState, end: number): void {
 }
 
 function quote(state: InlineState, pos: number, from: number, to: number, code: number): number {
-  const previous = before(state, pos, from)
-  const next = after(state, pos + 1, to)
-  let kind = quoteOpens(previous, next) ? SMART_LEFT_DOUBLE_QUOTE : SMART_RIGHT_DOUBLE_QUOTE
-  if (code === APOSTROPHE) kind = singleQuote(state, pos, previous, next)
+  const opens = quoteOpens(before(state, pos, from))
+  let kind = opens ? SMART_LEFT_DOUBLE_QUOTE : SMART_RIGHT_DOUBLE_QUOTE
+  if (code === APOSTROPHE) {
+    // C2-I-105: before an ASCII digit a single quote is the apostrophe.
+    const next = pos + 1 < to ? codePointAt(state.text, pos + 1, to) : runNeighborAfter(state, to)
+    kind = opens && !isAsciiDigit(next) ? SMART_LEFT_SINGLE_QUOTE : SMART_RIGHT_SINGLE_QUOTE
+  }
   flushSpan(state, pos)
   writeSmart(state, pos, pos + 1, kind)
   state.smartKind = kind

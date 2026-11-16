@@ -161,10 +161,10 @@ describe('more edges', () => {
     expect(render('a *b* [c]{.d}', { sourceLines: true })).toBe('<p data-source-line="1">a <strong>b</strong> <span class="d">c</span></p>')
   })
 
-  it('an object with more fields than another is not equal to it, and an empty quoted option value is empty', () => {
+  it('an object with more fields than another is not equal to it, and an empty quoted value is no value (C2-B-206)', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1 } }), documentOf({ ...paragraph(), data: { a: 1, b: 2 } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1 } }))).toBe(false)
-    expect(ofType(block('{{ a.crv @rows:"" @region:"x" }}'), 'include').options).toEqual({ region: 'x', rows: '' })
+    expect(block('{{ a.crv @rows:"" @region:"x" }}')).toEqual({ type: 'include', path: 'a.crv', options: { region: 'x' }, invalid: ['@rows:""'] })
   })
 })
 
@@ -175,10 +175,15 @@ describe('the reader at its bounds', () => {
     return documentOf(node)
   }
 
-  it('accepts a tree at the depth bound and refuses the next level', () => {
+  it('C2-A-171: accepts a tree at the depth bound and refuses the next level', () => {
     expect(refusal(nest(MAX_TREE_DEPTH - 2))).toBeNull()
     expect(refusal(nest(MAX_TREE_DEPTH - 1))).not.toBeNull()
-    expect(MAX_TREE_DEPTH).toBe(416)
+    expect(MAX_TREE_DEPTH).toBe(616)
+  })
+
+  it('C2-A-171: accepts 200 quotes around a content nested 200 levels deep, as the parser makes them', () => {
+    const src = `${'> '.repeat(200)}${'{^'.repeat(200)}x${'^}'.repeat(200)}`
+    expect(refusal(parse(src))).toBeNull()
   })
 
   it('accepts typed metadata, 4096 resource references and 32 nested fallbacks, and refuses one more', () => {
@@ -301,7 +306,7 @@ describe('one-line blocks in detail', () => {
     expect(block('{{ a.crv plain @code }}').type).toBe('paragraph')
     expect(block('{{ a.crv @:v }}').type).toBe('paragraph')
     expect(block('{{ a.crv @rows: }}').type).toBe('paragraph')
-    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').options).toEqual({ rows: 'a " @b' })
+    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').invalid).toEqual(['@rows:"a \\" @b"'])
     expect(block('{{ a.crv @rows:"x }}').type).toBe('paragraph')
     expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: { code: 'v' } })
     expect(block('{{ "a \\" b.crv" #s }}')).toEqual({ type: 'include', path: 'a " b.crv', section: 's' })
@@ -345,10 +350,10 @@ describe('one-line blocks in detail', () => {
 })
 
 describe('resolution and rendering in detail', () => {
-  it('the id of a footnote reference is an id of the document, and that of an unresolved image is not', () => {
+  it('C2-H-024: the id of a footnote reference and that of an unresolved image are ids of the document', () => {
     const ids = (src: string): unknown[] => resolved(src).document.children!.filter((node) => node.type === 'heading').map((node) => node.generatedId)
     expect(ids('a[^n]{#T}\n\n# T\n\n[^n]: x')).toEqual(['T-2'])
-    expect(ids('x ![i][nope]{#T}\n\n# T')).toEqual(['T'])
+    expect(ids('x ![i][nope]{#T}\n\n# T')).toEqual(['T-2'])
     expect(ids('x [i](u){#T}\n\n# T')).toEqual(['T-2'])
   })
 

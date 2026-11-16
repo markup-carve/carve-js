@@ -40,8 +40,8 @@ describe('C2-B-117/119: an opener word is the longest run of its characters', ()
     expect(first('::: toc{x}\n:::\n')).toMatchObject({ type: 'directive', kind: 'toc' })
   })
 
-  it('C2-B-119/196: a character that is no name and no lone sigil gives no name', () => {
-    for (const word of ['>a', '|n', '\\x', '{', '{.x}', ')']) {
+  it('C2-B-119/196: a character that is no name and no sigil gives no name', () => {
+    for (const word of ['{', '{.x}', ')', '*', '%% c']) {
       const div = first(`::: ${word}\nq\n:::\n`)
       expect(div).toMatchObject({ type: 'div' })
       expect(div).not.toHaveProperty('attrs')
@@ -120,7 +120,9 @@ describe('C2-I-034/040: an invalid or empty brace block in a block prefix is tex
   const INVALID = ['{2}', '{ }', '{.}', '{0}', '{x<}', '{k<}', '{#/$x}', '{*}', '{##}', '{=/}', '{.a}{x<}', '{x<}{.a}', '{-i}', '{.i#}', '{+}']
 
   it('C2-B-171: the braces stay cell text, after the pipe and after the header mark', () => {
-    for (const block of INVALID) {
+    // C2-I-034: an invalid block glued behind a valid one leaves the valid one the prefix.
+    expect(render('|{.a}{x<} 1 |\n')).toContain('<tr><td class="a">{x&lt;} 1</td></tr>')
+    for (const block of INVALID.filter((block) => block !== '{.a}{x<}')) {
       expect(render(`|${block} 1 |\n`)).toContain(`<tr><td>${block.replaceAll('<', '&lt;')} 1</td></tr>`)
       expect(render(`|=${block} 1 |\n`)).toContain(`<th scope="col">${block.replaceAll('<', '&lt;')} 1</th>`)
     }
@@ -409,21 +411,27 @@ describe('C2-A-213: a supplied shortcut reference with no definition stays unres
 })
 
 describe('C2-I-118: an image and a link meet the depth cap alike', () => {
-  const leaf = (depth: number, content: string): unknown[] => {
-    let node = parse(`${'> '.repeat(depth)}${content}`) as unknown as { children: { type: string }[] }
-    while (node.children[0]!.type !== 'paragraph') node = node.children[0] as unknown as typeof node
-    return (node.children[0] as unknown as { children: { type: string }[] }).children.map((child) => child.type)
+  // The types of the children of the first paragraph, behind `open` unpaired openers `*a ` of a star.
+  const leaf = (open: number, content: string): unknown[] => {
+    const node = parse(`${'*a '.repeat(open)}${content}`).children[0] as unknown as { children: { type: string }[] }
+    return node.children.map((child) => child.type)
   }
 
   it('C2-I-118: an open delimiter entry counts for both bracket constructs', () => {
-    expect(leaf(197, '- *![x](u)')).toEqual(leaf(197, '- *[x](u)'))
-    expect(leaf(197, '- *![x](u)')).toEqual(['text'])
-    expect(leaf(197, '- *a* ![x](u)')).toEqual(['strong', 'text', 'image'])
-    expect(leaf(197, '- *a* [x](u)')).toEqual(['strong', 'text', 'link'])
-    expect(leaf(197, '- ![x](u)')).toEqual(['image'])
-    expect(leaf(197, '- [x](u)')).toEqual(['link'])
-    expect(leaf(198, '- ![x](u)')).toEqual(['text'])
-    expect(leaf(196, '- *![x](u)')).toEqual(['text', 'image'])
+    expect(leaf(199, '![x](u)')).toEqual(leaf(199, '[x](u)').map((type) => type === 'link' ? 'image' : type))
+    expect(leaf(199, '*![x](u)')).toEqual(['text'])
+    expect(leaf(199, '*[x](u)')).toEqual(['text'])
+    expect(leaf(198, '*a* ![x](u)')).toEqual(['text', 'strong', 'text', 'image'])
+    expect(leaf(198, '*a* [x](u)')).toEqual(['text', 'strong', 'text', 'link'])
+    expect(leaf(199, '![x](u)')).toEqual(['text', 'image'])
+    expect(leaf(200, '![x](u)')).toEqual(['text'])
+    expect(leaf(198, '*![x](u)')).toEqual(['text', 'image'])
+  })
+
+  it('C2-I-118: no block counts, so behind 197 quote marks a list item forms its link', () => {
+    let node = parse(`${'> '.repeat(197)}- *[x](u) *![y](v)`).children[0] as unknown as { type: string, children: unknown[] }
+    while (node.type !== 'paragraph') node = node.children[0] as typeof node
+    expect(node.children.map((child) => (child as { type: string }).type)).toEqual(['text', 'link', 'text', 'image'])
   })
 })
 

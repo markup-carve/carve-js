@@ -1,8 +1,8 @@
-// The include directive (C2-B-201 to C2-B-206): its shape on one line, and what its options make of the line.
+// The include directive (C2-B-201 to C2-B-206): its shape on one line, and its valid and invalid options.
 import { type IncludeNode, type IncludeOptions } from './ast.ts'
 import { unescape } from './attributes.ts'
 import {
-  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
+  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DIGIT_0, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
   SLASH, SPACE, UNDERSCORE,
 } from './chars.ts'
 import { INCLUDE_OPTIONS } from './render-tables.ts'
@@ -22,12 +22,19 @@ interface Shape {
   /** The section name, or NONE. */
   sectionStart: number
   sectionEnd: number
-  /** Per option: the key, and the value as written with its quotes. A value that is absent starts at NONE. */
+  /** Per option: its `@`, the end of its key, and the value as written with its quotes. A value that is absent starts at NONE. */
   options: number[]
   /** C2-B-206: a second section. */
   twoSections: boolean
   /** The offset behind the closing braces. */
   end: number
+}
+
+/** An invalid option of a directive (C2-B-206). */
+export interface IncludeProblem {
+  start: number
+  end: number
+  reason: string
 }
 
 /** The parts of an include node (C2-A-181). */
@@ -36,6 +43,10 @@ interface IncludeParts {
   section: string | null
   options: IncludeOptions
   optionSpelling: Record<string, string>
+  /** C2-A-181: the invalid options as written, in source order. */
+  invalid: string[]
+  /** C2-B-206: per invalid option, its source range and why it is invalid. */
+  problems: IncludeProblem[]
   /** The offset behind the closing braces, where the node ends (C2-A-182). */
   end: number
 }
@@ -120,11 +131,11 @@ function readOption(src: string, pos: number, end: number, shape: Shape): number
   const keyEnd = nameEnd(src, pos + 1, end, startsKey)
   if (keyEnd === NONE) return NONE
   if (keyEnd >= end || src.charCodeAt(keyEnd) !== COLON) {
-    shape.options.push(pos + 1, keyEnd, NONE, NONE)
+    shape.options.push(pos, keyEnd, NONE, NONE)
     return keyEnd
   }
   const after = valueEnd(src, keyEnd + 1, end)
-  if (after !== NONE) shape.options.push(pos + 1, keyEnd, keyEnd + 1, after)
+  if (after !== NONE) shape.options.push(pos, keyEnd, keyEnd + 1, after)
   return after
 }
 
@@ -213,11 +224,22 @@ function nameList(written: string): string[] | null {
   return names
 }
 
-// The shapes a parse tells apart. A range is not among them: outside its shape, an option that takes
-// one leaves the include node a valid one leaves (C2-B-206), and telling the two apart is the expansion's job.
-const SHAPES = new Map<string, (value: string) => boolean>([
-  ['identifier', isIdentifier], ['signed_integer_or_auto', isShift], ['language', isLanguage],
-])
+/** The offset behind the decimal number at `pos` that has no leading zero, or NONE. */
+function numberEnd(value: string, pos: number): number {
+  if (pos >= value.length || !isAsciiDigit(value.charCodeAt(pos)) || value.charCodeAt(pos) === DIGIT_0) return NONE
+  let p = pos + 1
+  while (p < value.length && isAsciiDigit(value.charCodeAt(p))) p++
+  return p
+}
+
+/** C2-B-205: `N-M`, two decimal numbers without a leading zero, the first at least 1 and not greater than the second. */
+function isRange(value: string): boolean {
+  const dash = numberEnd(value, 0)
+  if (dash === NONE || value.charCodeAt(dash) !== HYPHEN || numberEnd(value, dash + 1) !== value.length) return false
+  const first = value.slice(0, dash)
+  const last = value.slice(dash + 1)
+  return first.length < last.length || (first.length === last.length && first <= last)
+}
 
 function isQuote(code: number): boolean {
   return code === QUOTE_MARK || code === APOSTROPHE
@@ -228,14 +250,37 @@ function valueText(written: string): string {
   return written.length >= 2 && isQuote(written.charCodeAt(0)) ? unescape(written, 1, written.length - 1) : written
 }
 
-/** C2-B-205: what the table makes of one option: `valid`, `include_node` or `paragraph`. `written` is null for no value. */
-function optionVerdict(key: string, written: string | null): string {
+/** C2-B-205: `cols` takes a range or a double-quoted list of names, so for it alone the quotes are part of the shape. */
+function isColumns(written: string): boolean {
+  return written.charCodeAt(0) === QUOTE_MARK ? nameList(written) !== null : isRange(written)
+}
+
+/** C2-B-205: whether the value as written has the shape of the option. */
+function hasShape(shape: string, written: string): boolean {
+  switch (shape) {
+    case 'range': return isRange(valueText(written))
+    case 'range_or_names': return isColumns(written)
+    case 'identifier': return isIdentifier(valueText(written))
+    case 'signed_integer_or_auto': return isShift(valueText(written))
+    default: return isLanguage(valueText(written))
+  }
+}
+
+/** Why an include option is invalid (C2-B-206), as the message of `include-option-invalid` says it. */
+export const INCLUDE_KEY_UNKNOWN = 'has a key that is not an include option'
+export const INCLUDE_VALUE_MISSING = 'needs a value'
+export const INCLUDE_VALUE_SHAPE = 'has a value outside the shape of its key'
+export const INCLUDE_KEY_REPEATED = 'repeats a key that stands earlier in the directive'
+
+/** C2-B-206: why the option `key` with the value `written` (null for none) is invalid, or null when it is valid. */
+export function optionProblem(key: string, written: string | null, repeated: boolean): string | null {
   const rule = INCLUDE_OPTIONS.get(key)
-  // C2-B-206: a key that is not one of the six.
-  if (rule === undefined) return 'paragraph'
-  if (written === null) return rule.withoutValue
-  const shape = SHAPES.get(rule.value)
-  return shape === undefined || shape(valueText(written)) ? 'valid' : rule.outsideShape
+  if (rule === undefined) return INCLUDE_KEY_UNKNOWN
+  if (repeated) return INCLUDE_KEY_REPEATED
+  if (written === null) return rule.needsValue ? INCLUDE_VALUE_MISSING : null
+  // An empty quoted value counts as none where a value is needed, and is outside every shape.
+  if (valueText(written) === '' && rule.needsValue) return INCLUDE_VALUE_MISSING
+  return hasShape(rule.value, written) ? null : INCLUDE_VALUE_SHAPE
 }
 
 /** C2-A-181: one decoded option value. */
@@ -259,17 +304,25 @@ function optionValue(options: IncludeOptions | undefined, key: string): string |
   }
 }
 
-function optionValues(src: string, shape: Shape): { options: IncludeOptions, spelling: Record<string, string> } | null {
+interface OptionValues {
+  options: IncludeOptions
+  spelling: Record<string, string>
+  problems: IncludeProblem[]
+}
+
+function optionValues(src: string, shape: Shape): OptionValues {
   const first = new Map<string, string | null>()
+  const seen = new Set<string>()
+  const problems: IncludeProblem[] = []
   const options = shape.options
   for (let at = 0; at < options.length; at += 4) {
-    const key = src.slice(options[at], options[at + 1])
+    const key = src.slice(options[at]! + 1, options[at + 1])
     const written = options[at + 2] === NONE ? null : src.slice(options[at + 2], options[at + 3])
-    const repeated = first.has(key)
-    const verdict = repeated ? INCLUDE_OPTIONS.get(key)?.repeated : optionVerdict(key, written)
-    if (verdict === 'paragraph' || verdict === undefined) return null
-    // C2-A-181: a repeated option keeps the first one.
-    if (!repeated) first.set(key, written)
+    // C2-B-206: a key that stood earlier makes the option invalid, whether or not the earlier one was valid.
+    const reason = optionProblem(key, written, seen.has(key))
+    if (reason === null) first.set(key, written)
+    else problems.push({ start: options[at]!, end: written === null ? options[at + 1]! : options[at + 3]!, reason })
+    seen.add(key)
   }
   const values: IncludeOptions = {}
   const spelling: Record<string, string> = {}
@@ -279,22 +332,19 @@ function optionValues(src: string, shape: Shape): { options: IncludeOptions, spe
     Object.assign(values, { [key]: decodedOption(key, written) })
     if (written !== null) spelling[key] = written
   }
-  return { options: values, spelling }
+  return { options: values, spelling, problems }
 }
 
-/**
- * The include directive on the line `[pos, end)`, or null when the line is none: it has another
- * shape (C2-B-201), or it holds what C2-B-206 reads as a paragraph.
- */
+/** The include directive on the line `[pos, end)`, or null when the line has another shape (C2-B-201, C2-B-203, C2-B-206). */
 export function readInclude(src: string, pos: number, end: number): IncludeParts | null {
   const shape = readShape(src, pos, end)
   if (shape === null || shape.twoSections) return null
   const values = optionValues(src, shape)
-  if (values === null) return null
   // C2-B-202: a double-quoted path has its escapes read, and a path in curly quotes is read as written.
   const path = shape.pathQuote === QUOTE_MARK ? unescape(src, shape.pathStart, shape.pathEnd) : src.slice(shape.pathStart, shape.pathEnd)
   const section = shape.sectionStart === NONE ? null : src.slice(shape.sectionStart, shape.sectionEnd)
-  return { path, section, options: values.options, optionSpelling: values.spelling, end: shape.end }
+  const invalid = values.problems.map((problem) => src.slice(problem.start, problem.end))
+  return { path, section, options: values.options, optionSpelling: values.spelling, invalid, problems: values.problems, end: shape.end }
 }
 
 /** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */
@@ -345,5 +395,7 @@ export function includeSource(node: IncludeNode, spelling?: Record<string, strin
     const value = optionValue(node.options, name)
     if (value !== undefined) parts.push(includeOption(name, value, spelling?.[name]))
   }
+  // C2-H-133, C2-W-058: the invalid options as the tree holds them, after the valid ones.
+  for (const entry of node.invalid ?? []) parts.push(entry)
   return `{{ ${parts.join(' ')} }}`
 }

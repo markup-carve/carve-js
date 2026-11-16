@@ -66,8 +66,6 @@ export const FLAG_COLLAPSED = 2
 export const FLAG_SHORTCUT = 4
 export const FLAG_DISPLAY = 1
 export const FLAG_EMAIL = 1
-// A code, literal-text or math span with no closing run (C2-I-017).
-export const FLAG_OPEN_END = 2
 
 const HOSTS = [
   EMPHASIS, STRONG, UNDERLINE, STRIKE, HIGHLIGHT, SUPERSCRIPT, SUBSCRIPT, INSERT, DELETE, BRACKET_SPAN, LINK,

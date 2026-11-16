@@ -15,8 +15,6 @@ export const CARRIERS: ReadonlySet<string> = new Set([
 export interface NoteEntry { item: Html.Element, label?: string, inline: boolean }
 
 export interface HtmlContext extends Context {
-  /** True when the input holds a carrier of C2-H-115 outside raw content: it is then read as a `roundtrip` render. */
-  roundtrip: boolean
   notes: Map<string, NoteEntry>
   /** The footnotes the references named, in the order of the section. */
   footnotes: FootnoteNode[]
@@ -24,8 +22,8 @@ export interface HtmlContext extends Context {
   abbreviations: Map<string, AbbreviationDefNode>
   /** C2-H-114: a definition for each reference key, from the destination and title of its first resolved reference. */
   definitions: Map<string, LinkReferenceDefinitionNode>
-  /** The ids of the headings and of the sections a render opened at them (C2-H-026). */
-  headingIds: Set<string>
+  /** C2-H-198: the keys whose first element is an `<a>` with an `href` of the form `#ID`. */
+  anchorKeys: Set<string>
   /** The templates that stand where a render writes them, and the definitions each holds. */
   templates: Map<Html.Element, AbbreviationDefNode[]>
 }
@@ -94,18 +92,18 @@ const ALIGN_STYLES: Readonly<Record<string, string>> = {
   'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
 }
 
-/** The authored attributes of `node`: without `omit`, event handlers, and, in a `roundtrip` render, the carriers. */
-function isAuthored(context: HtmlContext, name: string, omit: readonly string[]): boolean {
+/** The authored attributes of `node`: without `omit`, event handlers and, in every document, the reserved names (C2-H-186). */
+function isAuthored(name: string, omit: readonly string[]): boolean {
   if (omit.includes(name) || name.startsWith('on') || name === 'lang' || name === 'dir') return false
-  return !(context.roundtrip && CARRIERS.has(name))
+  return !CARRIERS.has(name)
 }
 
-/** The authored attributes of `node`: without `omit`, event handlers, and, in a `roundtrip` render, the carriers. */
-export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
+/** The authored attributes of `node`: without `omit`, event handlers and the reserved names. */
+export function attrs(_context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
   const entries: [string, string][] = []
   let alignment: 'start' | 'center' | 'end' | 'justify' | undefined
   for (const item of node.attrs) {
-    if (!isAuthored(context, item.name, omit)) continue
+    if (!isAuthored(item.name, omit)) continue
     const align = item.name === 'style' ? ALIGN_STYLES[item.value] : undefined
     // C2-H-015: the declaration a render writes for an `align` key reads back as the key.
     if (align !== undefined && alignStyle) entries.push(['align', align])

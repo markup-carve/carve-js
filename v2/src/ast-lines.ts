@@ -14,7 +14,6 @@ export function openerTitle(src: string, start: number, end: number): string {
 
 /** The inline content of `[start, end)`, one line of the source: the title of a div, an admonition or a directive. */
 export function captionChildren(ctx: TreeContext, start: number, end: number): Inline[] {
-  // C2-B-190, C2-I-118: the title counts the blocks around it and the div itself.
   return contentNodes(ctx, [start, end], 0, 2, false, FLOW_PLAIN)
 }
 
@@ -36,5 +35,6 @@ export function includeNode(src: string, start: number, end: number): IncludeNod
   const out: IncludeNode = { type: 'include', path: parts.path }
   if (parts.section !== null) out.section = parts.section
   if (Object.keys(parts.options).length > 0) out.options = parts.options
+  if (parts.invalid.length > 0) out.invalid = parts.invalid
   return out
 }

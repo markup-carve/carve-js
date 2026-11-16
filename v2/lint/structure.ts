@@ -1,4 +1,5 @@
 import { type Node } from '../src/ast.ts'
+import { readInclude } from '../src/include.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
@@ -88,6 +89,76 @@ function invalidTableAttribute(node: Node, path: string, context: LintContext): 
     // C2-B-186: a valid count of `header-rows` on a pipe table is deprecated, not invalid.
     if (pipe && key === 'header-rows' && /^\d*$/.test(value)) continue
     reportNode('table-attribute-invalid', node, path, context, { key })
+  }
+}
+
+/** The offset of a line comment behind the closing pipe of a row line, or -1. */
+function trailingComment(text: string): number {
+  const at = text.indexOf('%%', text.lastIndexOf('|') + 1)
+  return at > 0 && (text[at - 1] === ' ' || text[at - 1] === '\t') ? at : -1
+}
+
+/** The comments read since the last row line of a table, and whether a row line stands above them. */
+interface RowWalk {
+  pending: [number, number][]
+  afterRow: boolean
+}
+
+/** One line of a table for `comment-splits-table-row`: `start` is its offset, `text` its text behind the container prefixes. */
+function walkRowLine(walk: RowWalk, start: number, text: string, path: string, context: LintContext): void {
+  const end = start + text.trimEnd().length
+  if (text.startsWith('%%')) {
+    if (walk.afterRow) walk.pending.push([start, end])
+    return
+  }
+  const row = text.startsWith('|') || text.startsWith('+')
+  if (text.startsWith('+') && walk.afterRow) {
+    for (const [from, to] of walk.pending) context.report('comment-splits-table-row', from, to, path)
+  }
+  walk.pending = []
+  walk.afterRow = row
+  const comment = row ? trailingComment(text) : -1
+  if (comment >= 0) walk.pending.push([start + comment, end])
+}
+
+/**
+ * C2-W-137: a comment between a table row and its continuation row (C2-B-175), as a comment-only line or as the
+ * trailing comment of the row, belongs after the whole row.
+ */
+function commentSplitsRow(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'table' || node.pos === undefined) return
+  const walk: RowWalk = { pending: [], afterRow: false }
+  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) continue
+    const offset = line.text.length - line.text.replace(/^[\t >]*/u, '').length
+    walkRowLine(walk, line.start + offset, line.text.slice(offset), path, context)
+  }
+}
+
+function groupRows(node: Node, type: string): number {
+  if (node.type !== 'table') return 0
+  let rows = 0
+  for (const group of node.children) {
+    if (group.type !== 'comment' && group.type === type) rows += group.children.filter((row) => row.type === 'table_row').length
+  }
+  return rows
+}
+
+/** C2-B-187, C2-B-209: a valid count larger than the rows it can take is clamped, and the hint names the count to write. */
+function rowCountClamped(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'table' || node.pos === undefined) return
+  const head = groupRows(node, 'table_head')
+  const below = groupRows(node, 'table_body') + groupRows(node, 'table_foot')
+  const limits: [string, number][] = [['footer-rows', below]]
+  if (context.layouts.get(path)?.sourceFormat !== 'pipe') limits.unshift(['header-rows', head + below])
+  const line = context.lines[node.pos.startLine - 1]
+  for (const [key, limit] of limits) {
+    const value = attributeValue(node, context, key)
+    if (line === undefined || value === undefined || !/^\d+$/.test(value) || Number(value) <= limit) continue
+    const at = line.text.indexOf(`${key}=`)
+    context.report('table-row-count-clamped', line.start + at, line.start + at + key.length + 1 + value.length, path,
+      { key, count: value, effective: String(limit) })
   }
 }
 
@@ -255,7 +326,10 @@ function multilineTerm(node: Node, path: string, context: LintContext): void {
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
-  const second = context.lines[node.pos.startLine]
+  // C2-B-137: the line that continues the heading may stand below comment-only lines.
+  let next = node.pos.startLine
+  while (next < node.pos.endLine && context.lines[next]?.text.trimStart().startsWith('%%') === true) next++
+  const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
   const marker = first.text.trimStart()
   let width = 0
@@ -263,6 +337,17 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   let indent = 0
   while (second.text[indent] === ' ') indent++
   if (indent > width) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
+}
+
+/** C2-B-206: every option the include node keeps in `invalid`, at its place in the directive. */
+function includeOptionInvalid(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'include' || node.invalid === undefined) return
+  const range = bounds(node, context)
+  const parts = range === null ? null : readInclude(context.source, range[0], range[1])
+  for (const problem of parts?.problems ?? []) {
+    const option = context.source.slice(problem.start, problem.end)
+    context.report('include-option-invalid', problem.start, problem.end, path, { option, reason: problem.reason })
+  }
 }
 
 function figureNested(node: Node, path: string, context: LintContext): void {
@@ -796,11 +881,18 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
   }
 }
 
+/** C2-B-173: a span mark that joins nothing is the text of its cell, whatever prefix the cell has. */
 function spanMarkerBlocked(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell' || node.span !== undefined) return
-  const marker = raw(node, context).trim()
+  const content = node.children[0]
+  const only = content?.type === 'cell_paragraph' && content.children.length === 1 ? content.children[0] : undefined
+  const marker = only?.type === 'text' ? only.value : ''
   if (marker !== '<' && marker !== '^') return
-  const reason = marker === '<' ? 'There is no cell to the left.' : 'There is no cell above, or the head boundary blocks it.'
+  // An escaped mark is text by the author's choice.
+  if (raw(node, context).trimEnd().endsWith(`\\${marker}`)) return
+  const reason = marker === '<'
+    ? 'There is no cell to its left in its row.'
+    : 'There is no cell of one column above it in its group: head, body or foot.'
   reportNode('table-span-marker-blocked', node, path, context, { marker, reason })
 }
 
@@ -930,6 +1022,8 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
   nodeRule('table-column-arity', ['table'], tableColumnArity),
   nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
+  nodeRule('table-row-count-clamped', ['table'], rowCountClamped),
+  nodeRule('comment-splits-table-row', ['table'], commentSplitsRow),
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
   nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),
@@ -970,6 +1064,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('consumed-key-near-miss', ['table'], consumedNearMiss),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
+  nodeRule('include-option-invalid', ['include'], includeOptionInvalid),
   nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
   nodeRule('unresolved-reference-link', ['link', 'image'], unresolvedReference),

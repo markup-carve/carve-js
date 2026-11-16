@@ -187,7 +187,8 @@ describe('Carve 0.2 importers', () => {
   })
 
   it('C2-A-050 keeps numeric spans and heading levels without truthiness conversion', () => {
-    const table = importDocument('<table><tr><td colspan="2" rowspan="2">A</td><td>B</td></tr></table>', { from: 'html' })
+    const html = '<table><tr><td colspan="2" rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr></table>'
+    const table = importDocument(html, { from: 'html' })
     const first = table.document.children[0]
     expect(first?.type).toBe('table')
     if (first?.type === 'table') {

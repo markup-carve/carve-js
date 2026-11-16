@@ -57,7 +57,7 @@ describe('reused state', () => {
     const src = '*a* b'
     const outer = acquireInlineState()
     try {
-      scanInline(outer, src, [0, src.length], 0, 2, 0, true)
+      scanInline(outer, src, [0, src.length], 0, 2, true)
       expect(treeShape('/nested/')).toBe('p[em["nested"]]')
       expect(inlineShapeOf(src, buildInlineTree(src, outer.events, outer.eventLength, () => ''))).toBe('strong["a"] " b"')
     } finally {

@@ -1,7 +1,7 @@
 // Properties that hold for the inline pass over every content of a document.
 // `checkInlines` returns the first violation as text, or null.
 import {
-  acquireInlineState, type BlockNode, CAPTION, CELL, DIV, DOCUMENT, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT,
+  acquireInlineState, type BlockNode, CAPTION, CELL, ENTER, EVENT_WIDTH, eventKind, eventType, EXIT,
   HEADING, type InlineState, LINE_BLOCK, PARAGRAPH, parseBlockTree, releaseInlineState, scanInline, SPAN, TERM,
 } from '../../src/index.ts'
 
@@ -52,35 +52,34 @@ function checkCoverage(state: InlineState, src: string, start: number, end: numb
 }
 
 function checkContent(
-  state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean,
+  state: InlineState, src: string, spans: number[], from: number, to: number, lineComments: boolean,
 ): string | null {
   if (to === from) return null
-  scanInline(state, src, spans, from, to, depth, lineComments)
+  scanInline(state, src, spans, from, to, lineComments)
   const failure = checkEvents(state, spans[from]!, spans[to - 1]!) ?? checkCoverage(state, src, spans[from]!, spans[to - 1]!)
   if (failure !== null) return failure
   const first = state.events.slice(0, state.eventLength)
   // The same state again, after another content: nothing may leak from one pass into the next.
-  scanInline(state, LEFTOVER_SOURCE, LEFTOVER, 0, 2, 0, true)
-  scanInline(state, src, spans, from, to, depth, lineComments)
+  scanInline(state, LEFTOVER_SOURCE, LEFTOVER, 0, 2, true)
+  scanInline(state, src, spans, from, to, lineComments)
   if (state.eventLength !== first.length) return 'a second pass differs'
   for (let at = 0; at < first.length; at++) if (state.events[at] !== first[at]) return 'a second pass differs'
   return null
 }
 
-function checkNode(state: InlineState, src: string, node: BlockNode, depth: number): string | null {
+function checkNode(state: InlineState, src: string, node: BlockNode): string | null {
   if (node.children !== null) {
-    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
     for (const child of node.children) {
-      const failure = checkNode(state, src, child, inner)
+      const failure = checkNode(state, src, child)
       if (failure !== null) return failure
     }
     return null
   }
   const spans = node.spans!
-  if (hasInlineContent(node.kind)) return checkContent(state, src, spans, 0, spans.length, depth, true)
+  if (hasInlineContent(node.kind)) return checkContent(state, src, spans, 0, spans.length, true)
   if (node.kind !== LINE_BLOCK) return null
   for (let at = 0; at < spans.length; at += 2) {
-    const failure = checkContent(state, src, spans, at, at + 2, depth, false)
+    const failure = checkContent(state, src, spans, at, at + 2, false)
     if (failure !== null) return failure
   }
   return null
@@ -89,7 +88,7 @@ function checkNode(state: InlineState, src: string, node: BlockNode, depth: numb
 export function checkInlines(src: string): string | null {
   const state = acquireInlineState()
   try {
-    return checkNode(state, src, parseBlockTree(src), 0)
+    return checkNode(state, src, parseBlockTree(src))
   } finally {
     releaseInlineState(state)
   }

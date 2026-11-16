@@ -25,12 +25,13 @@ import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
-  isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
+  isFrontmatterCloser, isFrontmatterOpener, isIncludeLine, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
-import { openerWord } from './opener.ts'
+import { isImageOnly } from './image-line.ts'
+import { isFigureOpener, openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'
 
@@ -121,9 +122,18 @@ function lazyLine(state: BlockState, matched: number, lineStart: number, end: nu
   if (interruptsLeaf(state, matched, lineStart, end)) return false
   writeEvent(state, SPAN_TAG, cursor.pos, end)
   state.contentEnd = end
-  // C2-B-157: a comment-only line below a block image or a math block does not count.
-  if (!isLineComment(state.src, cursor.pos, end)) state.leaf.lines++
+  state.leaf.lines++
   return true
+}
+
+/**
+ * C2-B-137, C2-B-138: a comment-only line is no line for block structure. It closes, continues and opens
+ * nothing; its comment goes into the open leaf, or else into the innermost open container.
+ */
+function commentLine(state: BlockState, end: number): void {
+  if (!isTextLeaf(state.leaf.kind)) return writeComment(state, end)
+  writeEvent(state, SPAN_TAG, state.cursor.pos, end)
+  state.contentEnd = end
 }
 
 function scanLine(state: BlockState, lineStart: number, end: number): void {
@@ -131,6 +141,7 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
   const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
   const blank = cursor.pos >= end
+  if (!isOpaqueLeaf(leaf.kind) && isLineComment(state.src, cursor.pos, end)) return commentLine(state, end)
   if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
@@ -144,8 +155,6 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
     closeLeaf(state)
     return openLine(state, matched, lineStart, end, captions)
   }
-  // C2-B-137, C2-B-138: a comment-only line closes nothing and counts neither as blank nor as content.
-  if (isLineComment(state.src, cursor.pos, end)) return writeComment(state, end)
   openLine(state, matched, lineStart, end, captionsAfterBlock(state, matched, end))
 }
 
@@ -156,13 +165,7 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
     if (owned) opaqueLine(state, lineStart, end, blank)
     return owned
   }
-  if (blank) return false
-  if (isLineComment(state.src, state.cursor.pos, end)) {
-    // C2-B-137: a comment-only line does not end a table.
-    writeComment(state, end)
-    return true
-  }
-  return owned && tableLine(state, end)
+  return !blank && owned && tableLine(state, end)
 }
 
 /** A line that is not blank, not a lazy line and not a comment-only line: it closes and opens blocks. */
@@ -256,7 +259,8 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
   const leaf = state.leaf
   const above = state.above
   const line = state.lineCount - 1
-  if (blank) {
+  // C2-B-113 names the code fence, the comment block and the line block; frontmatter keeps its blank lines (C2-A-049).
+  if (blank && leaf.kind !== FRONTMATTER) {
     // Held back: blank lines before the end of an unclosed leaf are not its content (C2-B-009).
     if (above.heldBlankLine === NO_LINE) above.heldBlankLine = line
     return
@@ -422,8 +426,18 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
     // C2-B-055: between two open lists it joins the deeper one. C2-B-054: left of every open list it continues the outermost.
     return column <= containers.column[matched]! || isIndentContainer(containers.kind[matched - 2]!)
   }
+  // C2-B-015, C2-B-228: a footnote or description body the line is not indented past closes with the lists in it,
+  // so a marker below one of them opens a new list in the container that owns the line, whatever its value.
+  if ((kind === FOOTNOTE || kind === DESCRIPTION) && holdsList(state, matched)) return true
   // C2-B-022: at the column of a description list a list marker is a lazy line.
   return opens && kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
+}
+
+/** Whether a list is open inside the container at `index`. */
+function holdsList(state: BlockState, index: number): boolean {
+  const containers = state.containers
+  for (let at = index + 1; at < containers.depth; at++) if (isList(containers.kind[at]!)) return true
+  return false
 }
 
 /** C2-B-026: closes the containers that do not own the line. */
@@ -449,10 +463,34 @@ function closeUnowned(state: BlockState, matched: number, end: number): void {
 
 /** Opens the blocks that start at the cursor. Containers may stack on one line (C2-B-057, C2-B-058, C2-B-072). */
 function openBlocks(state: BlockState, lineStart: number, end: number): void {
+  noteContentColumn(state, end)
   while (openContainer(state, lineStart, end)) {
     if (state.cursor.pos >= end) return
+    noteContentColumn(state, end)
   }
   openLeaf(state, lineStart, end)
+}
+
+/** The content column of the innermost container: the column of its first content character (C2-B-027). */
+function noteContentColumn(state: BlockState, end: number): void {
+  const containers = state.containers
+  const top = containers.depth - 1
+  const cursor = state.cursor
+  if (containers.content[top]! < 0 && cursor.pos < end) containers.content[top] = cursor.column - cursor.origin
+}
+
+/**
+ * C2-B-130: a line block is stripped by the content column of the innermost item, description or footnote
+ * body inside the innermost quote, or by the one space behind that quote mark (C2-B-003), not by its opener's indent.
+ */
+function lineBlockStrip(state: BlockState): number {
+  const containers = state.containers
+  for (let index = containers.depth - 1; index > 0; index--) {
+    const kind = containers.kind[index]!
+    if (kind === QUOTE) return 1
+    if (isIndentContainer(kind)) return Math.max(containers.content[index]!, 0)
+  }
+  return 0
 }
 
 /** Tries the container shapes the first character allows, in the order of their bits. */
@@ -732,6 +770,7 @@ function openTable(state: BlockState, end: number): boolean {
   leaf.kind = TABLE
   leaf.tableHeadRows = 0
   leaf.tableHeadOpen = true
+  leaf.tableWidths = []
   writeRow(state, closing, end)
   return true
 }
@@ -769,20 +808,60 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   const src = state.src
   const attribute = rowAttributeStart(src, closing, end)
   writeEvent(state, eventTag(ENTER, ROW, 0), cursor.pos, attribute < 0 ? 0 : attribute)
-  let headers = 0
-  let others = 0
+  const head: HeadTest = {
+    headers: 0, others: 0, starts: [], widths: [], owner: -1, above: leaf.tableWidths, first: leaf.tableHeadRows === 0,
+  }
   let pipe = cursor.pos
   for (const next of separatorPipes(src, pipe + 1, closing + 1)) {
     const flags = writeCell(state, pipe, next)
-    if ((flags & FLAG_HEADER) !== 0) headers++
-    else if ((flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) === 0) others++
+    if (leaf.tableHeadOpen) testHeadCell(head, flags)
     pipe = next
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
-  // C2-B-178: the head is the leading rows made only of header cells. A span mark joins another cell and is none itself.
-  leaf.tableHeadOpen = leaf.tableHeadOpen && headers > 0 && others === 0
+  // C2-B-178: the head is the leading rows made only of header cells.
+  leaf.tableHeadOpen = leaf.tableHeadOpen && head.headers > 0 && head.others === 0
   if (leaf.tableHeadOpen) leaf.tableHeadRows++
+  leaf.tableWidths = head.starts.map((start) => head.widths[start]!)
+}
+
+/** The head test of one row (C2-B-178): its cells counted, and for each column the start of the cell that covers it. */
+interface HeadTest {
+  headers: number
+  others: number
+  starts: number[]
+  /** The width of each cell, by the column where it starts. */
+  widths: number[]
+  /** The column where the cell to the left starts, or -1 when no cell of this row is there to extend. */
+  owner: number
+  above: number[]
+  first: boolean
+}
+
+/**
+ * C2-B-174: a mark that joins a cell, a `<` with a cell to its left or a `^` below a cell of one column, is
+ * part of that cell, and only its header mark counts; a mark that joins nothing counts as the cell it is.
+ */
+function testHeadCell(head: HeadTest, flags: number): void {
+  const column = head.starts.length
+  const header = (flags & FLAG_HEADER) !== 0
+  if ((flags & FLAG_SPAN_LEFT) !== 0 && head.owner >= 0) {
+    head.starts.push(head.owner)
+    head.widths[head.owner]!++
+    if (header) head.headers++
+    return
+  }
+  head.starts.push(column)
+  head.widths[column] = 1
+  if ((flags & FLAG_SPAN_UP) !== 0 && !head.first && head.above[column] === 1) {
+    // C2-B-172: a cell joined upward leaves no cell of this row to its left.
+    head.owner = -1
+    if (header) head.headers++
+    return
+  }
+  if (header) head.headers++
+  else head.others++
+  head.owner = column
 }
 
 /** Writes the cell between the pipes at `pipe` and `next` and returns its flags. */
@@ -928,12 +1007,13 @@ function openDiv(state: BlockState, end: number): boolean {
     // C2-B-123: the body of a line block is one leaf.
     writeEvent(state, enterTag(state, LINE_BLOCK, 0), pos, length)
     openOpaqueLeaf(state, LINE_BLOCK, COLON, length)
+    state.leaf.fenceColumn = lineBlockStrip(state)
     return true
   }
   let style = 0
   if (sigil === BACKSLASH) style = FLAG_HARD_BREAKS
   else if (sigil === GREATER) style = FLAG_QUOTE_FENCE
-  else if (isFigureName(src, runEnd, end)) style = FLAG_FIGURE
+  else if (isFigureOpener(src, runEnd)) style = FLAG_FIGURE
   return pushDiv(state, style, length)
 }
 
@@ -961,6 +1041,7 @@ function push(state: BlockState, kind: number, flags: number, pos: number, aux: 
   const depth = containers.depth
   containers.kind[depth] = kind
   containers.column[depth] = column
+  containers.content[depth] = isIndentContainer(kind) ? -1 : 0
   containers.style[depth] = 0
   containers.loose[depth] = 0
   containers.depth = depth + 1

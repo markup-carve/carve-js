@@ -10,7 +10,7 @@
    "C2-B-085"
   ],
   "input": "[^n]: +\nc\n[^n]: +\n  - m\n- g\n",
-  "html": ""
+  "html": "<ul>\n  <li>g</li>\n</ul>"
  },
  {
   "ticket": "carve#6030",
@@ -341,7 +341,7 @@
    "C2-H-040"
   ],
   "input": ":: t\n: +\n  - b\n+\n- c\n",
-  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>+</p>\n    <ul>\n      <li>b\n+\n- c</li>\n    </ul>\n  </dd>\n</dl>"
+  "html": "<dl>\n  <dt>t</dt>\n  <dd>\n    <p>+</p>\n    <ul>\n      <li>b\n+</li>\n    </ul>\n  </dd>\n</dl>\n<ul>\n  <li>c</li>\n</ul>"
  },
  {
   "ticket": "carve#5972",
@@ -733,7 +733,7 @@
    "C2-I-017"
   ],
   "input": "- > `a\n  > {.x\n  >  .y}\ntail\n",
-  "html": "<ul>\n  <li>\n    <blockquote><p><code>a\n{.x\n.y}\ntail</code></p></blockquote>\n  </li>\n</ul>"
+  "html": "<ul>\n  <li>\n    <blockquote><p>`a\n{.x\n.y}\ntail</p></blockquote>\n  </li>\n</ul>"
  },
  {
   "ticket": "carve#5899",

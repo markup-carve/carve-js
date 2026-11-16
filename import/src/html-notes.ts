@@ -1,24 +1,12 @@
-// The footnote section of a render (C2-H-089 to C2-H-093), and the carriers that say whether a document is a `roundtrip` render.
+// The footnote section of a render (C2-H-089 to C2-H-093).
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { foldLabel } from '../../v2/src/index.ts'
 import {
-  attr, CARRIERS, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
+  attr, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
 
 export function isFootnoteSection(node: Html.Element): boolean {
   return attr(node, 'role') === 'doc-endnotes' || attr(node, 'class')?.split(' ').includes('footnotes') === true
-}
-
-/** True when an element outside raw content carries a reserved name (C2-H-115); a template counts by its own carrier. */
-export function holdsCarrier(nodes: Html.ChildNode[]): boolean {
-  const pending = [...nodes]
-  while (pending.length > 0) {
-    const node = pending.pop()
-    if (node === undefined || !isElement(node)) continue
-    if (node.attrs.some(item => CARRIERS.has(item.name))) return true
-    if (!isRawSpan(node)) pending.push(...content(node))
-  }
-  return false
 }
 
 function isBacklink(node: Html.ChildNode): boolean {
@@ -71,7 +59,7 @@ function noteEntry(item: Html.Element, references: Set<string | undefined> | und
   return { item, ...(label !== undefined ? { label } : {}), inline: inline && fault === undefined }
 }
 
-/** Records the notes of every footnote section, and the ids of the headings, before the references to them are read. */
+/** Records the notes of every footnote section before the references to them are read. */
 export function collectNotes(nodes: Html.ChildNode[], context: HtmlContext): void {
   const pending = [...nodes]
   const sections: Html.Element[] = []
@@ -80,16 +68,14 @@ export function collectNotes(nodes: Html.ChildNode[], context: HtmlContext): voi
     const node = pending.pop()
     if (node === undefined || !isElement(node) || isRawSpan(node)) continue
     if (node.tagName === 'section' && isFootnoteSection(node)) sections.push(node)
-    else recordIds(node, context, referenced)
+    else recordReference(node, referenced)
     // A note can hold the reference to another note.
     pending.push(...content(node))
   }
   for (const section of sections) collectSection(section, referenced, context)
 }
 
-function recordIds(node: Html.Element, context: HtmlContext, referenced: Map<string, Set<string | undefined>>): void {
-  const id = attr(node, 'id')
-  if (id !== undefined && isHeadingElement(node)) context.headingIds.add(id)
+function recordReference(node: Html.Element, referenced: Map<string, Set<string | undefined>>): void {
   const href = attr(node, 'href')
   if (node.tagName !== 'a' || href?.startsWith('#') !== true || attr(node, 'role') !== 'doc-noteref') return
   const keys = referenced.get(href.slice(1)) ?? new Set<string | undefined>()
@@ -97,17 +83,11 @@ function recordIds(node: Html.Element, context: HtmlContext, referenced: Map<str
   referenced.set(href.slice(1), keys)
 }
 
-const HEADING_TAGS = ['section', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
-
-function isHeadingElement(node: Html.Element): boolean {
-  return HEADING_TAGS.includes(node.tagName) || attr(node, 'role') === 'heading'
-}
-
 function collectSection(node: Html.Element, referenced: Map<string, Set<string | undefined>>, context: HtmlContext): void {
   const list = elements(node).find(child => child.tagName === 'ol')
   for (const item of list === undefined ? [] : elements(list).filter(child => child.tagName === 'li')) {
     const id = attr(item, 'id')
-    if (context.roundtrip) dropBacklinks(item)
+    dropBacklinks(item)
     if (id !== undefined && id !== '') context.notes.set(id, noteEntry(item, referenced.get(id), context))
   }
 }

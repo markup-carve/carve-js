@@ -91,6 +91,11 @@ function resetScan(state: InlineState): void {
   state.tokenLength = 0
   state.tokenEnd = 0
   state.bracketDepth = 0
+  state.depthLength = 0
+  state.depthLive = 0
+  state.depthFloor = NONE
+  state.depthLastSlash = NONE
+  state.depthLastStar = NONE
   state.commentCloserMissingFrom = NONE
   state.editorialCloserMissingFrom = NONE
   state.labelCloserMissingFrom = NONE
@@ -104,11 +109,10 @@ function resetScan(state: InlineState): void {
 
 /**
  * Reads the inline content of the source spans `spans[from..to)` (start and end pairs) and
- * leaves its events in the state. `baseDepth` is the number of open containers around the
- * content (C2-I-118). A line block reads no line comment (C2-B-144).
+ * leaves its events in the state. A line block reads no line comment (C2-B-144).
  */
 export function scanInline(
-  state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number, baseDepth: number, lineComments: boolean,
+  state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number, lineComments: boolean,
   cell = false,
 ): void {
   setContent(state, src, spans, from, to)
@@ -116,7 +120,6 @@ export function scanInline(
   // C2-I-002: the content holds no spaces at the end of a line (setContent).
   const end = text.length
   state.end = end
-  state.baseDepth = baseDepth
   state.lineComments = lineComments
   state.cell = cell
   resetScan(state)

@@ -24,8 +24,8 @@ function inline(...lines: string[]): string {
 describe('preliminaries', () => {
   it('C2-I-001: the block pass settles every line before a content is read', () => {
     expect(tree('*a', '', 'b*')).toBe('p["*a"] p["b*"]')
-    expect(tree('a `b', '```', 'c`', '```')).toBe('p["a " code!"b"] code"c`"')
-    expect(tree('a `b', '', '- c`')).toBe('p["a " code!"b"] ul(-)[li[p["c" code!""]]]')
+    expect(tree('a `b', '```', 'c`', '```')).toBe('p["a `b"] code"c`"')
+    expect(tree('a `b', '', '- c`')).toBe('p["a `b"] ul(-)[li[p["c`"]]]')
   })
 
   it('C2-I-002: spaces and tabs at the end of a line are no content, but an escaped space is', () => {
@@ -55,9 +55,9 @@ describe('preliminaries', () => {
 
   it('C2-I-005: an atom is taken whole, and the one that starts first wins', () => {
     expect(inline('`a <b:c` d>')).toBe('code"a <b:c" " d>"')
-    expect(inline('<a:b`c> `d`')).toBe('"<a:b" code"c> " "d" code!""')
+    expect(inline('<a:b`c> `d`')).toBe('"<a:b" code"c> " "d`"')
     expect(inline('{% ` %} `x`')).toBe('{%}" ` " " " code"x"')
-    expect(inline('\\`a*`*')).toBe('"`a*" code!"*"')
+    expect(inline('\\`a*`*')).toBe('"`a*`*"')
   })
 
   it('C2-I-006: a closing bracket pairs with the nearest open one, and a pair with no construct is text', () => {
@@ -136,19 +136,20 @@ describe('code spans', () => {
     expect(inline('`` ` ``')).toBe('code"`"')
   })
 
-  it('C2-I-017: a code span never fails', () => {
-    expect(inline('a `b *c*  ')).toBe('"a " code!"b *c*"')
-    expect(inline('a ``b` c')).toBe('"a " code!"b` c"')
-    expect(inline('a `', 'b', '')).toBe('"a " code!"|b"')
-    expect(inline('a `')).toBe('"a " code!""')
-    expect(inline('` a ')).toBe('code!" a"')
+  it('C2-I-017: a backtick run with no closing run of its length is text, and the scan goes on behind it', () => {
+    expect(inline('a `b *c*  ')).toBe('"a `b " strong["c"]')
+    expect(inline('a ``b` c')).toBe('"a ``b` c"')
+    expect(inline('a ``b` c`')).toBe('"a ``b" code" c"')
+    expect(inline('a `', 'b', '')).toBe('"a `" sb "b"')
+    expect(inline('a `')).toBe('"a `"')
+    expect(inline('` a ')).toBe('"` a"')
   })
 
   it('C2-I-018: a `!` before the run makes a literal-text span', () => {
     expect(inline('!`a<b`')).toBe('lit"a<b"')
     expect(inline('!``a`b``{.c}')).toBe('lit"a`b"{.c}')
     expect(inline('\\!`x`')).toBe('"!" code"x"')
-    expect(inline('a!`b')).toBe('"a" lit!"b"')
+    expect(inline('a!`b')).toBe('"a!`b"')
     expect(inline('a! `b`')).toBe('"a! " code"b"')
   })
 })
@@ -160,9 +161,9 @@ describe('math spans', () => {
     expect(inline('$`*x*`')).toBe('math"*x*"')
   })
 
-  it('C2-I-020: an unclosed math span runs to the end of its content', () => {
-    expect(inline('$`a + b ')).toBe('math!"a + b"')
-    expect(inline('$$`a', 'b')).toBe('dmath!"a|b"')
+  it('C2-I-017: an unclosed math span is text, its dollar signs with it', () => {
+    expect(inline('$`a + b ')).toBe('"$`a + b"')
+    expect(inline('$$`a', 'b')).toBe('"$$`a" sb "b"')
   })
 })
 
@@ -177,7 +178,7 @@ describe('raw inline', () => {
     expect(inline('!`a`{=html} $`a`{=html}')).toBe('lit"a" "{=html} " math"a" "{=html}"')
     expect(inline('a{=html} b=}')).toBe('"a" mark["html} b"]')
     expect(inline('`a`{.c}{=html}')).toBe('code"a"{.c} "{=html}"')
-    expect(inline('`a{=html}')).toBe('code!"a{=html}"')
+    expect(inline('`a{=html}')).toBe('"`a{=html}"')
   })
 })
 
@@ -192,7 +193,7 @@ describe('comments', () => {
 
   it('C2-I-024: a line comment takes the rest of its line with every closer on it', () => {
     expect(inline('*a %% b*', 'c* d')).toBe('strong["a" %%" b*" sb "c"] " d"')
-    expect(inline('`a` %% `b', 'c`')).toBe('code"a" %%" `b" sb "c" code!""')
+    expect(inline('`a` %% `b', 'c`')).toBe('code"a" %%" `b" sb "c`"')
     expect(inline('x {*a %% *}', '*}')).toBe('"x " strong["a" %%" *}" sb]')
   })
 
@@ -521,7 +522,7 @@ describe('links and images', () => {
     expect(inline('![a *b* [c](/x)](/u "T") ![a][b] ![a][]')).toBe('img(/u "T")"a *b* [c](/x)" " " imgref(b)"a" " " imgref(=a)"a"')
     expect(inline('![a] ![a]{.c} \\![a](/u) ! [a](/u)')).toBe('"![a] !" span["a"]{.c} " !" a(/u)["a"] " ! " a(/u)["a"]')
     expect(inline('![a', 'b](/u)')).toBe('img(/u)"a|b"')
-    expect(inline('![a `]` b](/u)')).toBe('img(/u)"a `]` b"')
+    expect(inline('x ![a `]` b](/u)')).toBe('"x " img(/u)"a `]` b"')
     expect(inline('*a ![b* c](/u)*')).toBe('strong["a " img(/u)"b* c"]')
   })
 })
@@ -533,7 +534,7 @@ describe('reference resolution', () => {
   })
 
   it('C2-I-076: a label is taken whole', () => {
-    expect(inline('[a][b `c] d` e]')).toBe('ref(b `c)["a"] " d" code!" e]"')
+    expect(inline('[a][b `c] d` e]')).toBe('ref(b `c)["a"] " d` e]"')
     expect(inline('[a][*b*] [a][b [c] [a][<x:y>]')).toBe('ref(*b*)["a"] " " ref(b [c)["a"] " " ref(<x:y>)["a"]')
     expect(inline('[a][b\\]c] [a][b\\\\]c]')).toBe('ref(b\\]c)["a"] " " ref(b\\\\)["a"] "c]"')
   })
@@ -593,7 +594,7 @@ describe('footnotes', () => {
     expect(inline('a[^n] [^n](/u) [^n][b] [^a b]')).toBe('"a" fnref"n" " " fnref"n" "(/u) " fnref"n" "[b] " fnref"a b"')
     expect(inline('a[^my', 'note] b')).toBe('"a" fnref"my note" " b"')
     expect(inline('[^] [^ ] [^ ](/u) [^a')).toBe('"[^] [^ ] [^ ](/u) [^a"')
-    expect(inline('[^a `]` b]')).toBe('fnref"a `" code!" b]"')
+    expect(inline('[^a `]` b]')).toBe('fnref"a `" "` b]"')
     expect(inline('[[^a]](/u) *[^a*]*')).toBe('a(/u)[fnref"a"] " " strong[fnref"a*"]')
   })
 
@@ -699,7 +700,7 @@ describe('hard break and soft break', () => {
 describe('smart typography', () => {
   it('C2-I-104: where a straight quote opens', () => {
     expect(inline('"a" ("b") ["c"] {"d"} ="e" :"f" -"g" a"h"')).toBe(
-      '‹“› "a" ‹”› " (" ‹“› "b" ‹”› ") [" ‹“› "c" ‹”› "] {" ‹“› "d" ‹”› "} =" ‹“› "e" ‹”› " :" ‹“› "f" ‹”› " -" ‹“› "g" ‹”› " a" ‹”› "h" ‹”›',
+      '‹“› "a" ‹”› " (" ‹“› "b" ‹”› ") [" ‹“› "c" ‹”› "] {" ‹“› "d" ‹”› "} =" ‹“› "e" ‹”› " :" ‹“› "f" ‹”› " -" ‹”› "g" ‹”› " a" ‹”› "h" ‹”›',
     )
     expect(inline('a\\ "b" “"c" *"d"* [e]{.c}"f" `g`"h" ["i"](/u)')).toBe(
       '"a" nbsp ‹“› "b" ‹”› " “" ‹“› "c" ‹”› " " strong[‹“› "d" ‹”›] " " span["e"]{.c} ‹”› "f" ‹”› " " code"g" ‹”› "h" ‹”› " " a(/u)[‹“› "i" ‹”›]',
@@ -712,34 +713,34 @@ describe('smart typography', () => {
     expect(inline("'90s a '5 ('6)")).toBe('‹’› "90s a " ‹’› "5 (" ‹’› "6)"')
   })
 
-  it('C2-I-106: after a hyphen, a dash or a slash a quote closes before the end, whitespace or closing punctuation', () => {
-    expect(inline('"a---" b a/" c -"d" e/"f" g-"')).toBe('‹“› "a" ‹—› ‹”› " b a/" ‹”› " c -" ‹“› "d" ‹”› " e/" ‹“› "f" ‹”› " g-" ‹”›')
-    expect(inline('a/". a/", a/"; a/": a/"! a/"? a/") a/"] a/"\' a/""')).toBe(
-      '"a/" ‹”› ". a/" ‹”› ", a/" ‹”› "; a/" ‹”› ": a/" ‹”› "! a/" ‹”› "? a/" ‹”› ") a/" ‹”› "] a/" ‹”› ‹’› " a/" ‹”› ‹”›',
-    )
-    expect(inline("a-'b a-' c")).toBe('"a-" ‹‘› "b a-" ‹’› " c"')
+  it('C2-I-104: behind a hyphen, a dash or a slash a quote closes, whatever follows it', () => {
+    expect(inline('"a---" b a/" c -"d" e/"f" g-"')).toBe('‹“› "a" ‹—› ‹”› " b a/" ‹”› " c -" ‹”› "d" ‹”› " e/" ‹”› "f" ‹”› " g-" ‹”›')
+    expect(inline("a-'b a-' c")).toBe('"a-" ‹’› "b a-" ‹’› " c"')
   })
 
-  it('C2-I-107: a single quote that would open before one of the listed words is an apostrophe', () => {
+  it('C2-I-104: no word list, so a single quote at the start of a word opens and one between letters closes', () => {
     expect(inline("'tis 'Tis 'TWAS 'em 'cause 'til 'n 'bout 'twere 'twill 'twould 'tisn't 'twasn't")).toBe(
-      '‹’› "tis " ‹’› "Tis " ‹’› "TWAS " ‹’› "em " ‹’› "cause " ‹’› "til " ‹’› "n " ‹’› "bout " ‹’› "twere " ‹’› "twill " ‹’› "twould " ‹’› "tisn" ‹’› "t " ‹’› "twasn" ‹’› "t"',
+      '‹‘› "tis " ‹‘› "Tis " ‹‘› "TWAS " ‹‘› "em " ‹‘› "cause " ‹‘› "til " ‹‘› "n " ‹‘› "bout " ‹‘› "twere " ‹‘› "twill " ‹‘› "twould " ‹‘› "tisn" ‹’› "t " ‹‘› "twasn" ‹’› "t"',
     )
-    expect(inline("'emily")).toBe('‹‘› "emily"')
+    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹‘› "n" ‹’› ". " ‹‘› "em" ‹’› "s " ‹‘› "til" ‹’›')
   })
 
-  it('C2-I-108: the word is quoted when a single quote and no letter or number follow it', () => {
-    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹’› "n" ‹’› ". " ‹’› "em" ‹’› "s " ‹‘› "til" ‹’›')
-  })
-
-  it('C2-I-109: single quotes do not nest', () => {
-    expect(inline("'a 'b' c' 'd'")).toBe('‹‘› "a " ‹’› "b" ‹’› " c" ‹’› " " ‹‘› "d" ‹’›')
-    expect(inline("'a b's 'c' d'")).toBe('‹‘› "a b" ‹’› "s " ‹’› "c" ‹’› " d" ‹’›')
-    expect(inline("'a ^['b' 'c'] 'd'")).toBe('‹‘› "a " fn[‹‘› "b" ‹’› " " ‹‘› "c" ‹’›] " " ‹’› "d" ‹’›')
+  it('C2-I-104: quotes do not pair, so each reads only the neighbor before it', () => {
+    expect(inline("'a 'b' c' 'd'")).toBe('‹‘› "a " ‹‘› "b" ‹’› " c" ‹’› " " ‹‘› "d" ‹’›')
+    expect(inline("'a b's 'c' d'")).toBe('‹‘› "a b" ‹’› "s " ‹‘› "c" ‹’› " d" ‹’›')
+    expect(inline("'a ^['b' 'c'] 'd'")).toBe('‹‘› "a " fn[‹‘› "b" ‹’› " " ‹‘› "c" ‹’›] " " ‹‘› "d" ‹’›')
     expect(inline("'a '(b)'")).toBe('‹‘› "a " ‹‘› "(b)" ‹’›')
     expect(tree("'a", '', "'b'")).toBe('p[‹‘› "a"] p[‹‘› "b" ‹’›]')
   })
 
-  it('C2-I-110: a quote that was emitted is never changed', () => {
+  it('C2-I-104: a straight quote that opens is opening punctuation for the quote behind it', () => {
+    expect(inline('"\'a\'" \'"b"\' ""c"" \'\'d\'\'')).toBe(
+      '‹“› ‹‘› "a" ‹’› ‹”› " " ‹‘› ‹“› "b" ‹”› ‹’› " " ‹“› ‹“› "c" ‹”› ‹”› " " ‹‘› ‹‘› "d" ‹’› ‹’›',
+    )
+    expect(inline("a'b' 'c'd x''")).toBe('"a" ‹’› "b" ‹’› " " ‹‘› "c" ‹’› "d x" ‹’› ‹’›')
+  })
+
+  it('C2-I-104: an opening quote without a closing quote stays an opening quote', () => {
     expect(inline("say 'word and \"more")).toBe('"say " ‹‘› "word and " ‹“› "more"')
   })
 
@@ -801,9 +802,9 @@ describe('the depth cap', () => {
     expect(depth(inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`), 'span[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${'^['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'fn[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${':n['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'ext(n)[')).toBe(MAX_DEPTH)
-    // Blocks and inlines count together: two quotes leave room for 198 inline nodes.
-    expect(depth(tree(`> > ${'{^'.repeat(MAX_DEPTH)}x${'^}'.repeat(MAX_DEPTH)}`), 'sup[')).toBe(MAX_DEPTH - 2)
-    expect(depth(tree(`> - ${'['.repeat(MAX_DEPTH)}x${']{.c}'.repeat(MAX_DEPTH)}`), 'span[')).toBe(MAX_DEPTH - 3)
+    // No block counts: behind a quote and a list item each content nests to the cap by itself.
+    expect(depth(tree(`> > ${'{^'.repeat(MAX_DEPTH)}x${'^}'.repeat(MAX_DEPTH)}`), 'sup[')).toBe(MAX_DEPTH)
+    expect(depth(tree(`> - ${'['.repeat(MAX_DEPTH)}x${']{.c}'.repeat(MAX_DEPTH)}`), 'span[')).toBe(MAX_DEPTH)
     // Brackets and delimiters count together.
     const mixed = inline(`${'['.repeat(150)}${'{^'.repeat(60)}x${'^}'.repeat(60)}${']{.c}'.repeat(150)}`)
     expect(depth(mixed, 'span[') + depth(mixed, 'sup[')).toBe(MAX_DEPTH)
@@ -829,7 +830,7 @@ describe('the fallback rule', () => {
   it('C2-I-120: no inline form crosses the end of its content', () => {
     expect(tree('| *a | b* |')).toBe('table[tr[td["*a"] td["b*"]]]')
     expect(tree('| `a | b` |')).toBe('table[tr[td[code"a | b"]]]')
-    expect(tree('| `a | b |')).toBe('table[tr[td[code!"a"] td["b"]]]')
+    expect(tree('| `a | b |')).toBe('table[tr[td["`a"] td["b"]]]')
     expect(tree('= *a', '', 'b*')).toBe('h1["*a"] p["b*"]')
     expect(tree(':: [a', ': b](/u)')).toBe('dl[dt["[a"] dd[p["b](/u)"]]]')
     expect(tree('![a](b)', '^ {*c', 'd*}')).toBe('img[img(b)"a"] cap[strong["c" sb "d"]]')
@@ -857,7 +858,7 @@ describe('more cases per clause', () => {
   })
 
   it('C2-I-018: a literal-text span at the very end of the content', () => {
-    expect(inline('a!`')).toBe('"a" lit!""')
+    expect(inline('a!`')).toBe('"a!`"')
   })
 
   it('C2-I-021: the format name and a later node keep their source offsets in a container', () => {
@@ -961,19 +962,14 @@ describe('more cases per clause', () => {
     expect(inline('a "{%c%}"b')).toBe('"a " ‹“› {%}"c" ‹“› "b"')
   })
 
-  it('C2-I-106: a backslash that follows the quote is a character like any other', () => {
-    expect(inline('a/"\\', 'b')).toBe('"a/" ‹“› br "b"')
+  it('C2-I-104: a backslash behind the quote is no neighbor of it', () => {
+    expect(inline('a/"\\', 'b')).toBe('"a/" ‹”› br "b"')
   })
 
-  it('C2-I-107: the word ends where its letters end', () => {
-    expect(inline("'em2 x 'em_x 'em-x")).toBe('‹’› "em2 x " ‹’› "em_x " ‹’› "em-x"')
-    expect(inline("'tisx y")).toBe('‹‘› "tisx y"')
-    expect(inline("'emé y")).toBe('‹‘› "emé y"')
-  })
-
-  it('C2-I-109: a link keeps the run of single quotes, and a footnote gives it back', () => {
-    expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›')
-    expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›]')
+  it('C2-I-104: a link and a footnote are no neighbors of the quotes inside and after them', () => {
+    expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹‘› "c d" ‹’›')
+    expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹‘› "c d" ‹’›]')
+    expect(inline("'em2 x 'em_x 'em-x")).toBe('‹‘› "em2 x " ‹‘› "em_x " ‹‘› "em-x"')
   })
 
   it('C2-I-116: a hyphen that belongs to a braced closer is no part of the run', () => {
@@ -992,7 +988,10 @@ describe('more cases per clause', () => {
     const spans = inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`)
     expect(spans.slice('span['.repeat(MAX_DEPTH).length, 'span['.repeat(MAX_DEPTH).length + 9)).toBe('"[x"]{.c}')
     expect(spans.endsWith(']{.c} "]{.c}"')).toBe(true)
-    expect(inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)).toContain('span["[[" strong["a"] "]"]{.c}')
+    // The open brackets count for the delimiter openers inside them too.
+    const brackets = inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)
+    expect(brackets).toContain('span["[[*a*]"]{.c}')
+    expect(brackets.endsWith(']{.c} "]{.c}"')).toBe(true)
   })
 })
 
@@ -1002,8 +1001,8 @@ describe('what the events hold', () => {
   function eventsAfter(before: string, src: string): number[] {
     const state = acquireInlineState()
     try {
-      scanInline(state, before, [0, before.length], 0, 2, 0, true)
-      scanInline(state, src, [0, src.length], 0, 2, 0, true)
+      scanInline(state, before, [0, before.length], 0, 2, true)
+      scanInline(state, src, [0, src.length], 0, 2, true)
       return Array.from(state.events.subarray(0, state.eventLength))
     } finally {
       releaseInlineState(state)
@@ -1022,7 +1021,6 @@ describe('what the events hold', () => {
   })
 
   it('a node with no payload has no span', () => {
-    expect(eventsAfter('', 'x`').length).toBe(3 * 3)
     expect(eventsAfter('', '{%%}').length).toBe(2 * 3)
   })
 
@@ -1036,9 +1034,9 @@ describe('what the events hold', () => {
     const src = '%% c\nd'
     const state = acquireInlineState()
     try {
-      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, true)
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, true)
       expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('%%" c" sb "d"')
-      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, false)
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, false)
       expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('"%% c" sb "d"')
     } finally {
       releaseInlineState(state)

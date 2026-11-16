@@ -131,6 +131,13 @@ export const CATALOG = {
       "u meant a comment.",
     ].join(''),
   ] },
+  "comment-splits-table-row": { severity: "hint", default: "on", messages: [
+    [
+      "This comment stands between a table row and its continuation, so it ",
+      "belongs after the whole row. Move it above the row or below the cont",
+      "inuation.",
+    ].join(''),
+  ] },
   "consumed-key-near-miss": { severity: "warning", default: "on", messages: [
     "\"${word}\" is not a consumed key here; did you mean {${key}}?",
   ] },
@@ -418,6 +425,12 @@ export const CATALOG = {
       "% for a comment block.",
     ].join(''),
   ] },
+  "include-option-invalid": { severity: "warning", default: "on", messages: [
+    [
+      "The include option ${option} ${reason}, so it has no effect. Correct",
+      " it or remove it.",
+    ].join(''),
+  ] },
   "indented-code-block": { severity: "warning", default: "on", messages: [
     [
       "Four-space indentation does not make a code block in Carve; this ren",
@@ -600,6 +613,12 @@ export const CATALOG = {
       "emove a cell to match the table.",
     ].join(''),
   ] },
+  "table-row-count-clamped": { severity: "hint", default: "on", messages: [
+    [
+      "${key}=${count} asks for more rows than the table has, so it takes $",
+      "{effective}. Write ${key}=${effective}.",
+    ].join(''),
+  ] },
   "table-row-without-closing-pipe": { severity: "hint", default: undefined, messages: [
     [
       "This row has no closing pipe. carve fmt adds it; escape the first pi",
@@ -614,9 +633,9 @@ export const CATALOG = {
   ] },
   "table-span-marker-blocked": { severity: "warning", default: "on", messages: [
     [
-      "The \"${marker}\" span marker cannot extend a cell. ${reason} It rende",
-      "rs as a cell of its own; escape it as \"\\${marker}\" to keep the chara",
-      "cter as text, or remove it.",
+      "The \"${marker}\" span marker cannot extend a cell. ${reason} It is a ",
+      "cell that holds \"${marker}\" as text; escape it as \"\\${marker}\" to sa",
+      "y so, or remove it.",
     ].join(''),
   ] },
   "table-width-total": { severity: "warning", default: "on", messages: [

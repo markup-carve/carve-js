@@ -9,7 +9,7 @@
 //   A host with attributes has them behind it in the fixed order: span["s"]{#a .b :en k=v open=""}
 import {
   type Attributes, AUTOLINK, CODE_SPAN, EDITORIAL, FIRST_INLINE_KIND, FLAG_BRACED, FLAG_COLLAPSED, FLAG_DISPLAY,
-  FLAG_EMAIL, FLAG_OPEN_END, FLAG_REFERENCE, FOOTNOTE_REF, foldLabel, HARD_BREAK, IMAGE, INLINE_COMMENT,
+  FLAG_EMAIL, FLAG_REFERENCE, FOOTNOTE_REF, foldLabel, HARD_BREAK, IMAGE, INLINE_COMMENT,
   INLINE_EXTENSION, INLINE_FOOTNOTE, LINK, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SMART, SMART_GLYPHS, SOFT_BREAK,
   SYMBOL, TAG, XREF,
 } from '../../src/index.ts'
@@ -42,10 +42,9 @@ function target(node: InlineNode): string {
 }
 
 function leafName(node: InlineNode): string {
-  const open = (node.flags & FLAG_OPEN_END) !== 0 ? '!' : ''
   switch (node.kind) {
-    case MATH: return `${(node.flags & FLAG_DISPLAY) !== 0 ? 'dmath' : 'math'}${open}`
-    case CODE_SPAN: case LITERAL: return `${LEAF_NAMES.get(node.kind)!}${open}`
+    case MATH: return (node.flags & FLAG_DISPLAY) !== 0 ? 'dmath' : 'math'
+    case CODE_SPAN: case LITERAL: return LEAF_NAMES.get(node.kind)!
     case AUTOLINK: return (node.flags & FLAG_EMAIL) !== 0 ? 'mail' : 'auto'
     case INLINE_COMMENT: return (node.flags & FLAG_BRACED) !== 0 ? '{%}' : '%%'
     default: return LEAF_NAMES.get(node.kind) ?? `?${node.kind}`

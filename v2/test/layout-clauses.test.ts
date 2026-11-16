@@ -275,9 +275,10 @@ describe('facts moved out of the tree', () => {
     expect(entry('| a |\n+ b |\n+ c |\n', CELL)!.wraps).toEqual([{ line: 1, path: text, offset: 2 }, { line: 2, path: text, offset: 4 }])
     // The row with an empty fragment is counted, and has no wrap.
     expect(entry('| a |\n+ |\n+ c |\n', CELL)!.wraps).toEqual([{ line: 2, path: text, offset: 2 }])
-    // The break stands in the text of the strong span and in the value of the code span.
-    expect(entry('| *a |\n+ b* |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${text}/children/0`, offset: 2 }])
-    expect(entry('| `a |\n+ b` |\n', CELL)!.wraps).toEqual([{ line: 1, path: text, offset: 2 }])
+    // No form crosses the row, so the joining space is always in a text node of the paragraph.
+    expect(entry('| *a |\n+ b* |\n', CELL)!.wraps).toEqual([{ line: 1, path: text, offset: 3 }])
+    expect(entry('| `a |\n+ b` |\n', CELL)!.wraps).toEqual([{ line: 1, path: text, offset: 3 }])
+    expect(entry('| *a* |\n+ *b* |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/1`, offset: 1 }])
     // A cell that spans rows says how many rows below its own the continuation row stands.
     expect(entry('| a | b |\n| ^ | c |\n+ z | y |\n', CELL)!.wraps).toEqual([{ line: 1, path: text, offset: 2, row: 1 }])
     expect(entry('| a | b |\n+ q | |\n| ^ | c |\n+ z | y |\n', CELL)!.wraps).toEqual([
@@ -298,8 +299,10 @@ describe('facts moved out of the tree', () => {
     expect(value).toBe('ab cd')
     expect(value[wrap.offset - 1]).toBe(' ')
     expect(value.slice(wrap.offset)).toBe('cd')
-    // The cell a failed span mark leaves is empty, and so is the place of a cell that a fragment forms (C2-B-173, C2-B-176).
-    expect(entry('| ^ |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 0 }])
+    // A mark that joins nothing is the text of its cell, so the fragment joins it behind a space (C2-B-173); the place of a
+    // cell that a fragment forms is empty (C2-B-176).
+    expect(entry('| ^ |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 2 }])
+    expect(entry('| |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 0 }])
     const formed = '/children/0/children/0/children/0/children/1'
     expect(entry('| a |\n+ b | new |\n', formed)!.wraps).toEqual([{ line: 1, path: `${formed}/children/0/children/0`, offset: 0 }])
   })

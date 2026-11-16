@@ -5,8 +5,6 @@ import { parse, render, treesEqual, type DocumentNode } from '../../v2/src/index
 import { generate, loadCorpus, random } from '../../v2/proptest/generate.ts'
 import { importDocument } from '../src/index.ts'
 import { project } from './roundtrip-losses.ts'
-import { holdsCarrier } from '../src/html-notes.ts'
-import { parseFragment } from 'parse5'
 
 type Value = unknown
 type Fields = Record<string, unknown>
@@ -141,15 +139,11 @@ function withoutProvenance(document: DocumentNode): DocumentNode {
   return copy
 }
 
-function htmlHoldsCarrier(html: string): boolean {
-  return holdsCarrier(parseFragment(html).childNodes)
-}
-
 /** One round trip of `source`. */
 export function roundTrip(source: string): Outcome {
   const expected = parse(source)
   const html = render(source, { roundtrip: true })
-  const projected = project(expected, htmlHoldsCarrier(html))
+  const projected = project(expected)
   try {
     const actual = withoutProvenance(importDocument(html, { from: 'html' }).document)
     const raw = treesEqual(expected, actual)

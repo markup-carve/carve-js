@@ -134,18 +134,21 @@ function textParagraph(text: string): ParagraphNode[] {
   return text === '' ? [] : [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
 }
 
-/** A table keeps one line per row, with a hard break between the rows. */
+/** A table keeps one line per row, with a hard break between the rows. C2-H-165: a table that leaves no text is dropped. */
 function tableParagraph(node: TableNode): ParagraphNode[] {
   const out: Inline[] = []
+  let text = false
   for (const group of node.children) {
     if (group.type === 'comment') continue
     for (const row of group.children) {
       if (row.type !== 'table_row') continue
       if (out.length > 0) out.push({ type: 'hard_break' })
-      out.push({ type: 'text', value: rowText(row) })
+      const value = rowText(row)
+      if (value !== '') text = true
+      out.push({ type: 'text', value })
     }
   }
-  return out.length === 0 ? [] : [{ type: 'paragraph', children: out }]
+  return text ? [{ type: 'paragraph', children: out }] : []
 }
 
 /**
@@ -215,11 +218,14 @@ function noteGone(filter: Filter, node: Node): void {
   }, undefined, filter.declarations)
 }
 
-/** An item stays an item, as its list expects. */
+/** An item stays an item, as its list expects. C2-H-166: it keeps its `<li>`, so its source line stays (C2-H-016). */
 function degradedItem(node: ListItemNode): ListItemNode[] {
   const children: Block[] = []
   for (const child of node.children) if (!UNWRITTEN.includes(child.type)) children.push(...degradedBlocks(child))
-  return children.length === 0 ? [] : [{ type: 'list_item', children }]
+  if (children.length === 0) return []
+  const item: ListItemNode = { type: 'list_item', children }
+  if (node.pos !== undefined) item.pos = node.pos
+  return [item]
 }
 
 /** C2-H-163: the deny list of the axis, then its allow list, then the nesting bound. */

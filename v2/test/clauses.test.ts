@@ -371,16 +371,17 @@ describe('comments', () => {
     expect(blocks('= %% c')).toBe('h1"%% c"')
   })
 
-  it('C2-B-137: a comment-only line is skipped by ownership and by the count of blank lines', () => {
+  it('C2-B-137: a comment-only line is no line for ownership, for the count of blank lines and for a heading', () => {
     expect(blocks('- a', '', '%% c', '  b')).toBe('ul(-)[li[p"a" %"%% c" p"b"]]')
     expect(blocks('- a', '', '', '%% c', '', '- b')).toBe('ul(-)[li[p"a" %"%% c"]] ul(-)[li[p"b"]]')
     expect(blocks('- a', '', '%% c', '- b')).toBe('ul(-,loose)[li[p"a" %"%% c"] li[p"b"]]')
-    expect(blocks('- > = a', '%% c', '  > b')).toBe('ul(-)[li[quote[h1"a" %"%% c" p"b"]]]')
+    expect(blocks('- > = a', '%% c', '  > b')).toBe('ul(-)[li[quote[h1"a|%% c" p"b"]]]')
   })
 
-  it('C2-B-138: the comment is a child of the innermost open container, whatever its indent', () => {
+  it('C2-B-138: the comment is a child of the open leaf, or of the innermost open container, whatever its indent', () => {
     expect(blocks('%% c')).toBe('%"%% c"')
-    expect(blocks('- - = a', '%% c')).toBe('ul(-)[li[ul(-)[li[h1"a" %"%% c"]]]]')
+    expect(blocks('- - = a', '%% c')).toBe('ul(-)[li[ul(-)[li[h1"a|%% c"]]]]')
+    expect(blocks('- - ***', '%% c')).toBe('ul(-)[li[ul(-)[li[hr %"%% c"]]]]')
     expect(blocks('= a', '        %% c')).toBe('h1"a|%% c"')
   })
 
@@ -458,7 +459,8 @@ describe('readings the chapter leaves open', () => {
   })
 
   it('C2-B-138: with no leaf open in a quote, a comment line is a comment node', () => {
-    expect(blocks('> = a', '> %% c')).toBe('quote[h1"a" %"%% c"]')
+    expect(blocks('> = a', '> %% c')).toBe('quote[h1"a|%% c"]')
+    expect(blocks('> ***', '> %% c')).toBe('quote[hr %"%% c"]')
   })
 
   it('C2-B-010: a lone carriage return is not a line ending', () => {
@@ -634,8 +636,8 @@ describe('definitions', () => {
     expect(blocks('[^a]: x', 'lazy')).toBe('fn[p"x|lazy"]')
   })
 
-  it('C2-B-015: a list marker indented past a footnote marker opens a list in the body', () => {
-    expect(blocks('[^a]: x', ' - i', '- j')).toBe('fn[p"x" ul(-)[li[p"i|- j"]]]')
+  it('C2-B-015, C2-B-228: a list marker indented past a footnote marker opens a list in the body, and one left of it ends the body', () => {
+    expect(blocks('[^a]: x', ' - i', '- j')).toBe('fn[p"x" ul(-)[li[p"i"]]] ul(-)[li[p"j"]]')
   })
 })
 
@@ -1034,10 +1036,10 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('- ax] b')).toBe('ul(-)[li[p"ax] b"]]')
   })
 
-  it('C2-B-123, C2-B-124: a sigil stands alone, one space or more after the run', () => {
-    expect(blocks('::: |x', 'a', ':::')).toBe('div[p"a"]')
-    expect(blocks('::: |x y', 'a', ':::')).toBe('div[p"a"]')
-    expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div[p"a"] p"^ c"')
+  it('C2-B-119, C2-B-196: a sigil stands one space or more after the run, and words glued to it are further words', () => {
+    expect(blocks('::: |x', 'a', ':::')).toBe('lines"a"')
+    expect(blocks('::: |x y', 'a', ':::')).toBe('lines"a"')
+    expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div(>)[p"a"] cap"c"')
   })
 
   it('C2-B-082, C2-B-083, C2-B-084: the colon stands directly behind the label', () => {
@@ -1139,21 +1141,22 @@ describe('tables', () => {
   it('C2-B-172, C2-B-183: a cell that holds only a span mark joins the cell to its left or above', () => {
     expect(blocks('| a | < | < |')).toBe('table[tr[td(c3)"a"]]')
     expect(blocks('| a | b |', '| ^ | c |', '| ^ | d |')).toBe('table[tr[td(r3)"a" td"b"] tr[td"c"] tr[td"d"]]')
-    expect(blocks('| a | ^ |', '| b | c |')).toBe('table[tr[td"a" td""] tr[td"b" td"c"]]')
+    expect(blocks('| a | ^ |', '| b | c |')).toBe('table[tr[td"a" td"^"] tr[td"b" td"c"]]')
     expect(blocks('| << | a |')).toBe('table[tr[td"<<" td"a"]]')
-    // C2-B-171: the header mark is the prefix, so the cell holds only the mark, which fails and leaves a body cell (C2-B-173).
-    expect(blocks('|= < | a |')).toBe('table[tr[td"" td"a"]]')
+    // C2-B-171, C2-B-173: the header mark is the prefix, so the cell holds only the mark, which joins nothing and stays a header cell.
+    expect(blocks('|= < | a |')).toBe('table[tr[th"<" td"a"]]')
   })
 
-  it('C2-B-173: a failed span is an empty cell', () => {
-    expect(blocks('| < | a |')).toBe('table[tr[td"" td"a"]]')
-    expect(blocks('| ^ | a |')).toBe('table[tr[td"" td"a"]]')
-    expect(blocks('| a |', '| b | ^ |')).toBe('table[tr[td"a"] tr[td"b" td""]]')
-    expect(blocks('| a | < |', '| b | ^ |')).toBe('table[tr[td(c2)"a"] tr[td"b" td""]]')
+  it('C2-B-173: a span mark that joins nothing is an ordinary cell that holds the mark as text', () => {
+    expect(blocks('| < | a |')).toBe('table[tr[td"<" td"a"]]')
+    expect(blocks('| ^ | a |')).toBe('table[tr[td"^" td"a"]]')
+    expect(blocks('| a |', '| b | ^ |')).toBe('table[tr[td"a"] tr[td"b" td"^"]]')
+    expect(blocks('| a | < |', '| b | ^ |')).toBe('table[tr[td(c2)"a"] tr[td"b" td"^"]]')
   })
 
-  it('C2-B-174: a row span does not cross the head boundary', () => {
-    expect(blocks('|= H |', '| ^ |', '| a |')).toBe('table(h1)[tr[th"H"] tr[td""] tr[td"a"]]')
+  it('C2-B-174: no span crosses from the head into the body or from the body into the foot', () => {
+    expect(blocks('|= H |', '| ^ |', '| a |')).toBe('table(h1)[tr[th"H"] tr[td"^"] tr[td"a"]]')
+    expect(blocks('{footer-rows=1}', '| a |', '| ^ |')).toBe('{footer-rows=1}table(f1)[tr[td"a"] tr[td"^"]]')
     // Both rows are head rows, so the span stays inside the head.
     expect(blocks('|= H |', '|= ^ |')).toBe('table(h2)[tr[th(r2)"H"] tr[]]')
     expect(blocks('|= H |', '| a |', '| ^ |')).toBe('table(h1)[tr[th"H"] tr[td(r2)"a"] tr[]]')
@@ -1170,7 +1173,7 @@ describe('tables', () => {
   })
 
   it('C2-B-184: a fragment joins the cell that covers its column after the span marks are resolved', () => {
-    expect(blocks('| a | b |', '| < | c |', '+ x | y |')).toBe('table[tr[td"a" td"b"] tr[td"x" td"c|y"]]')
+    expect(blocks('| a | b |', '| < | c |', '+ x | y |')).toBe('table[tr[td"a" td"b"] tr[td"<|x" td"c|y"]]')
     expect(blocks('| a | < |', '+ x | y |')).toBe('table[tr[td(c2)"a|x|y"]]')
     expect(blocks('| a | b |', '| ^ | c |', '+ x | y |')).toBe('table[tr[td(r2)"a|x" td"b"] tr[td"c|y"]]')
     expect(blocks('| a | < |', '+ x | y | z |')).toBe('table[tr[td(c2)"a|x|y" td"z"]]')
@@ -1191,7 +1194,9 @@ describe('tables', () => {
     expect(blocks('|= A | b |', '| 1 | 2 |')).toBe('table[tr[th"A" td"b"] tr[td"1" td"2"]]')
     expect(blocks('| 1 |', '|= A |')).toBe('table[tr[td"1"] tr[th"A"]]')
     expect(blocks('|= A | < |', '| 1 | 2 |')).toBe('table(h1)[tr[th(c2)"A"] tr[td"1" td"2"]]')
-    expect(blocks('|= A |', '| ^ |')).toBe('table(h1)[tr[th"A"] tr[td""]]')
+    expect(blocks('|= A |', '| ^ |')).toBe('table(h1)[tr[th"A"] tr[td"^"]]')
+    // C2-B-174: a mark in the first row joins nothing and counts as the cell it is.
+    expect(blocks('|=|^|', '| 1 | 2 |')).toBe('table[tr[th"" td"^"] tr[td"1" td"2"]]')
   })
 
   it('C2-B-187, C2-B-191: the footer rows are set when the table closes', () => {

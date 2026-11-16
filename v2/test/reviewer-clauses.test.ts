@@ -83,9 +83,9 @@ describe('smart typography', () => {
     expect(format('C++-style')).toBe('C++-style\n')
   })
 
-  it('C2-I-108: the word n is exempt, so it keeps both apostrophes', () => {
-    expect(render("Rock 'n' roll")).toBe('<p>Rock ’n’ roll</p>')
-    expect(render("Rock 'N' roll")).toBe('<p>Rock ’N’ roll</p>')
+  it('C2-I-104: the word n has no exemption: its first quote opens behind the space', () => {
+    expect(render("Rock 'n' roll")).toBe('<p>Rock ‘n’ roll</p>')
+    expect(render("Rock 'N' roll")).toBe('<p>Rock ‘N’ roll</p>')
     expect(render("say 'em' now")).toBe('<p>say ‘em’ now</p>')
   })
 })

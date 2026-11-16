@@ -26,6 +26,17 @@ function hasCloserWithoutOpener(src: string): boolean {
   return false
 }
 
+/** C2-I-017: a backtick run with no closing run of its length later in the content. */
+function hasUnclosedRun(src: string): boolean {
+  const runs = [...src.matchAll(/`+/g)].map((match) => match[0].length)
+  for (let at = 0; at < runs.length; at++) {
+    const close = runs.indexOf(runs[at]!, at + 1)
+    if (close < 0) return true
+    at = close
+  }
+  return false
+}
+
 // [clause, what Carve does there and Djot does not, whether the clause applies to a content]
 const EXPLANATIONS: readonly (readonly [string, string, (src: string) => boolean])[] = [
   ['C2-I-061', 'a braced opener glued to its own closer forms nothing', (src) => src.includes('{**}')],
@@ -34,7 +45,7 @@ const EXPLANATIONS: readonly (readonly [string, string, (src: string) => boolean
   ['C2-I-048', 'a star before a word character does not close', (src) => /(?<![ {]|^)\*[a-z]/.test(src.replaceAll('*}', ' }'))],
   ['C2-I-064', 'a bracket pair takes only a valid attribute block', (src) => src.includes(']{')],
   ['C2-I-016', 'one space is removed from each end of a closed code span', (src) => /` [^`]* `/.test(src)],
-  ['C2-I-017', 'an unclosed code span keeps the space behind its opener', (src) => /` `|`` /.test(src)],
+  ['C2-I-017', 'a backtick run with no closing run is text, where Djot runs the span to the end', hasUnclosedRun],
   ['C2-I-079', 'a label with no key is no label', (src) => /\[ *\]\[\]|\]\[ +\]/.test(src)],
   ['C2-I-076', 'a label is taken whole, a backtick and a bracket included', (src) => /\]\[[^\]]*[`[][^\]]*\]/.test(src)],
   ['C2-I-119', 'behind a label that does not close the scan goes on as usual', (src) => /\]\[[^\]]*$/.test(src)],
@@ -75,7 +86,7 @@ describe('djot.js and the inline pass', () => {
 
   it('the shared rules on written examples', () => {
     for (const src of [
-      'x *a* b', 'x *a *b* c*', 'x {*a*}b', 'x *a {*b*} c*', 'x *a', 'x {*a', 'x `a *b*` c', 'x ``a`b`` c', 'x `a',
+      'x *a* b', 'x *a *b* c*', 'x {*a*}b', 'x *a {*b*} c*', 'x *a', 'x {*a', 'x `a *b*` c', 'x ``a`b`` c',
       'x [a](u) b', 'x [a *b*](u)', 'x *[a](u)*', 'x [a] b', 'x [a [b](u) c](u)', 'x [a][b]', 'x * a *', 'x {*a*} {*b',
     ]) expect(carveInline(src), src).toBe(djotInline(src))
   })

@@ -1,10 +1,11 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
 import { AST_VERSION, type DocumentNode, isRecord, pointerKey } from './ast.ts'
+import { isFenceWord } from './opener.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
-import { SMART_KIND_NAMES } from './inline-tables.ts'
+import { DEPTH_CAP, SMART_KIND_NAMES } from './inline-tables.ts'
 import { type ExtensionDefinition, type ExtensionSlot } from './extensions/types.ts'
 
 /** A tree that a reader refuses. `path` is an RFC 6901 pointer to the node or the field. */
@@ -21,8 +22,9 @@ export class CarveTreeError extends Error {
 }
 
 // C2-A-171: the deepest tree the parser makes. A list and its item are two nodes per level of the
-// cap, and a table, a figure and a caption add their member nodes above a leaf.
-export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + 16
+// block cap, a table, a figure and a caption add their member nodes above a leaf, and each inline
+// content nests to its own cap below it.
+export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + DEPTH_CAP + 16
 
 const BLOCKS = [
   'admonition', 'block_extension', 'block_quote', 'code_block', 'comment', 'definition_list', 'directive', 'div', 'figure',
@@ -87,7 +89,7 @@ const RULES = new Map<string, Rule>([
   ['image', ['none', [], [
     'src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm', 'longDescription',
   ]]],
-  ['include', ['none', ['path'], ['section', 'options']]],
+  ['include', ['none', ['path'], ['section', 'options', 'invalid']]],
   ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'version', 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
@@ -221,8 +223,18 @@ function checkOption(name: string, item: Value, path: string): void {
     const shift = typeof item === 'number' && Number.isInteger(item) && Math.abs(item) <= MAX_SHIFT
     if (item !== 'auto' && !shift) fail(path, 'not an integer of nine digits or auto')
   } else if (name === 'code') {
-    if (item !== true) requireString(item, path)
+    // C2-A-181: `code` is a syntax string, a language word (C2-B-117), or `true`.
+    if (item !== true && (typeof item !== 'string' || !isFenceWord(item, false))) fail(path, 'not a syntax string or true')
   } else fail(path, 'not an include option')
+}
+
+/** C2-A-181: a non-empty list of options as written, each starting with `@`. */
+function checkInvalid(value: Value, path: string): void {
+  const entries = requireArray(value, path)
+  if (entries.length === 0) fail(path, 'an empty list of invalid options')
+  entries.forEach((entry, index) => {
+    if (typeof entry !== 'string' || !entry.startsWith('@')) fail(`${path}/${index}`, 'not an option as written')
+  })
 }
 
 function checkOptions(value: Value, path: string): void {
@@ -768,6 +780,7 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['marker', checkMarker],
   ['task', checkTask],
   ['options', checkOptions],
+  ['invalid', checkInvalid],
   ['locator', checkLocator],
   ['longDescription', nodeList('blocks')],
   ['headerIds', checkHeaderIds],
@@ -891,19 +904,23 @@ function markRun(cells: unknown[], index: number, kind: string): number {
   return count
 }
 
-/** C2-A-093: a count authored alongside a mark agrees with the mark cells it covers. */
+/**
+ * C2-A-093: a count authored alongside a mark agrees with the mark cells it covers, and a row span stays
+ * inside the group of its cell (C2-B-174).
+ */
 function checkSpanCounts(table: Fields, path: string): void {
   const groups = members(table, 'children')
   groups.forEach((group, groupIndex) => {
     const rows = tableRows(group)
-    const next = groups[groupIndex + 1]
-    const following = isRecord(group) && group['type'] === 'table_body' && isRecord(next) && next['type'] === 'table_foot'
-      ? [...rows, ...tableRows(next)] : rows
+    const following = rows
     rows.forEach(([row, rowIndex], rowOffset) => {
       const cells = members(row, 'children')
       cells.forEach((cell, cellIndex) => {
         if (!isRecord(cell) || cell['span'] !== undefined) return
         const cellPath = `${path}/children/${groupIndex}/children/${rowIndex}/children/${cellIndex}`
+        if (typeof cell['rowspan'] === 'number' && rowOffset + cell['rowspan'] > rows.length) {
+          fail(`${cellPath}/rowspan`, 'a row span reaches past the last row of its group')
+        }
         const cols = markRun(cells, cellIndex, 'colspan')
         if (cols > 0 && cell['colspan'] !== undefined && cell['colspan'] !== cols + 1) {
           fail(`${cellPath}/colspan`, 'a count contradicts its authored span mark')

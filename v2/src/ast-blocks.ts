@@ -20,10 +20,10 @@ import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { braceBlocksEnd, orderedDelimiter } from './lines.ts'
-import { lineFeedAt, trimSpaces } from './source.ts'
+import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
+import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
@@ -124,15 +124,18 @@ function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: Op
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
-/** C2-B-122: a raw fence takes no title and no label, so each is further words; C2-B-225: so is what is glued to the format. */
-function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo): void {
+/**
+ * C2-B-122: a raw fence and a sigil div take no title and no label, so each is further words; C2-B-225:
+ * so is what is glued to the format, where a brace block is an attribute block. A sigil is no name.
+ */
+function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named = true): void {
   const title = info.titleStart >= 0 ? info.titleStart - 1 : -1
   const label = info.labelStart >= 0 ? info.labelStart - 1 : -1
   const from = [info.extra ? info.extraStart : -1, title, label].filter((at) => at >= 0)
   if (from.length === 0) return
   const at = Math.min(...from)
   const lineEnd = lineFeedAt(ctx.src, node.start)
-  const attribute = at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
+  const attribute = named && at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
@@ -172,7 +175,14 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
     const line: LineNode = noteLeaf(ctx, { type: 'line', children })
     lines.push(place(ctx, line, spans[at]!, spans[at + 1]!))
   }
-  return { type: 'line_block', children: lines }
+  const out: LineBlockNode = { type: 'line_block', children: lines }
+  noteSigilWords(ctx, node, out)
+  return out
+}
+
+/** C2-B-122: what follows the sigil of a sigil div is further words and reported. */
+function noteSigilWords(ctx: TreeContext, node: BlockNode, out: Node): void {
+  noteRawWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux), false)
 }
 
 function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
@@ -180,10 +190,14 @@ function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
   return { type: 'abbreviation_def', expansion, key, namespace: 'abbr' }
 }
 
-/** C2-B-084: the label and the expansion of an abbreviation definition. */
+/**
+ * C2-B-084: the label and the expansion of an abbreviation definition. Exactly one space follows the
+ * colon; the expansion keeps a leading space or tab and drops the spaces and tabs that end the line.
+ */
 function abbreviationParts(src: string, node: BlockNode): [string, string] {
   const [start, end] = definitionLabel(src, node.start)
-  return [src.slice(start, end), trimSpaces(src.slice(end + 2, node.spans![1]))]
+  const from = end + 3
+  return [src.slice(start, end), src.slice(from, trimEnd(src, from, node.spans![1]!))]
 }
 
 function linkDefinitionNode(ctx: TreeContext, node: BlockNode): LinkReferenceDefinitionNode {
@@ -308,12 +322,15 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
   let out: Block
   if ((node.flags & FLAG_QUOTE_FENCE) !== 0) {
     out = { type: 'block_quote', children: blockChildren(ctx, node.children!, flow) }
+    noteSigilWords(ctx, node, out)
   } else if ((node.flags & FLAG_FIGURE) !== 0) {
     out = { type: 'figure_group', children: blockChildren(ctx, node.children!, flow) }
+    noteFurtherWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux), false)
   } else if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
     // C2-A-068: the opener form adds the class after the classes the author wrote.
     attributes.classes.push(HARD_BREAKS_CLASS)
     out = { type: 'div', children: blockChildren(ctx, node.children!, FLOW_HARD_BREAKS) }
+    noteSigilWords(ctx, node, out)
   } else {
     out = namedDiv(ctx, node, flow, attributes)
   }
@@ -362,17 +379,6 @@ function readsOwnAttributes(node: BlockNode): boolean {
   return node.kind === TABLE || node.kind === DIV || (node.kind === CODE && (node.flags & FLAG_DELIMITED) !== 0)
 }
 
-/** Builds the node of `node` with `build`. C2-I-118: the depth of a content counts the containers around it. */
-function buildBlock<N extends Node>(
-  ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null, build: BlockBuilder<N>,
-): N {
-  const container = node.kind > DOCUMENT && node.kind <= DIV
-  if (container) ctx.depth++
-  const out = build(ctx, node, flow, attributes)
-  if (container) ctx.depth--
-  return out
-}
-
 /**
  * C2-A-154: a div with no closer ends after its last child that has a position, or after its opener line,
  * also where the closer of an outer div ended it.
@@ -401,7 +407,7 @@ function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): 
 function blockNode<N extends Node>(ctx: TreeContext, node: BlockNode, flow: number, build: BlockBuilder<N>): N {
   const own = readsOwnAttributes(node)
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
-  const out = buildBlock(ctx, node, flow, attributes, build)
+  const out = build(ctx, node, flow, attributes)
   if (!own) setAttributes(out, attributes)
   // C2-B-111, C2-B-163: a fence, a comment block, a div, a line block or frontmatter that ends without its closer.
   if ((node.exitFlags & FLAG_UNCLOSED) !== 0 && (node.kind === DIV || isOpaqueLeaf(node.kind))) {
@@ -600,7 +606,7 @@ export function inlineContent(text: string): Inline[] {
   inline.definitions = new Set()
   try {
     const ctx: TreeContext = {
-      src: text, positions: false, inline, depth: 0, abbreviations: new Map(), markup: new Map(), resolvable: false,
+      src: text, positions: false, inline, abbreviations: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null,
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
@@ -650,7 +656,7 @@ export function buildSource(
     const root = buildTree(blocks.events, blocks.eventLength)
     inline.definitions = linkKeys ?? collectLinkKeys(text, root)
     const ctx: TreeContext = {
-      src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
+      src: text, positions, inline, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null,
     }

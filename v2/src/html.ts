@@ -591,16 +591,6 @@ function isRow(row: Node): row is TableRowNode {
   return row.type === 'table_row'
 }
 
-/** C2-H-060: true when a row span crosses the end of its group. */
-function spanCrossesGroup(groups: readonly TableGroup[]): boolean {
-  for (const group of groups) {
-    const rows = group.children.filter(isRow)
-    const crosses = rows.some((row, index) => row.children.some((cell) => index + (cell.rowspan ?? 1) > rows.length))
-    if (crosses) return true
-  }
-  return false
-}
-
 const GROUP_ELEMENTS: Readonly<Record<TableGroup['type'], string>> = { table_head: 'thead', table_body: 'tbody', table_foot: 'tfoot' }
 
 function isGroup(node: TableNode['children'][number]): node is TableGroup {
@@ -608,13 +598,6 @@ function isGroup(node: TableNode['children'][number]): node is TableGroup {
 }
 
 function writeGroups(r: Render, layout: TableLayout, groups: readonly TableGroup[], level: number): void {
-  if (spanCrossesGroup(groups)) {
-    const covered: number[] = []
-    line(r, level, '<tbody>')
-    for (const group of groups) writeRows(r, layout, group, level + 1, covered)
-    line(r, level, '</tbody>')
-    return
-  }
   for (const group of groups) {
     // C2-H-055: an empty group is not written.
     if (!group.children.some(isRow)) continue
