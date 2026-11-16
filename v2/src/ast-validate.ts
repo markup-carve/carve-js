@@ -1,6 +1,7 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
 import { AST_VERSION, type DocumentNode, isRecord, pointerKey } from './ast.ts'
+import { isFenceWord } from './opener.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
@@ -221,7 +222,8 @@ function checkOption(name: string, item: Value, path: string): void {
     const shift = typeof item === 'number' && Number.isInteger(item) && Math.abs(item) <= MAX_SHIFT
     if (item !== 'auto' && !shift) fail(path, 'not an integer of nine digits or auto')
   } else if (name === 'code') {
-    if (item !== true) requireString(item, path)
+    // C2-A-181: `code` is a syntax string, a language word (C2-B-117), or `true`.
+    if (item !== true && (typeof item !== 'string' || !isFenceWord(item, false))) fail(path, 'not a syntax string or true')
   } else fail(path, 'not an include option')
 }
 

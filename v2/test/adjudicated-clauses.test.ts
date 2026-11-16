@@ -1,6 +1,6 @@
 // The cases of the three-way check of the 0.2 engines where the clause decides against this engine.
 import { describe, expect, it } from 'vitest'
-import { parse, parseWithDiagnostics, render, renderWithDiagnostics } from '../src/index.ts'
+import { AST_VERSION, CarveTreeError, parse, parseWithDiagnostics, render, renderWithDiagnostics, validateTree } from '../src/index.ts'
 
 const first = (src: string): Record<string, unknown> => {
   const { pos: _pos, ...rest } = parse(src).children[0] as unknown as Record<string, unknown>
@@ -341,5 +341,16 @@ describe('C2-I-118: what counts against the depth cap where a delimiter is open 
     expect(leaf(`${'> '.repeat(197)}- *![x](u)`)).toBe('"*![x](u)"')
     expect(leaf(`${'> '.repeat(197)}- *[x](u)`)).toBe('"*[x](u)"')
     expect(leaf(`${'> '.repeat(196)}- *[x](u)`)).toBe('"*" link("x")')
+  })
+})
+
+describe('C2-A-181: the `code` option of an include is a syntax string or true', () => {
+  const tree = (code: unknown): unknown => ({
+    type: 'document', astVersion: AST_VERSION, children: [{ type: 'include', path: 'data.csv', options: { code } }],
+  })
+
+  it('C2-A-181: an empty string and one with characters outside a language word are rejected', () => {
+    for (const code of ['', 'a b', 'js}', 1]) expect(() => validateTree(tree(code))).toThrow(CarveTreeError)
+    for (const code of [true, 'js', 'c++', 'x/y.z#1_A']) expect(() => validateTree(tree(code))).not.toThrow()
   })
 })
