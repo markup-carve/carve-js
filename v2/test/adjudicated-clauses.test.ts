@@ -108,3 +108,14 @@ describe('C2-B-130: a line block keeps the spaces that lead a line after the con
     expect(lines('> \t::: |\n> \t x\n> \t:::\n')).toEqual(['\t x'])
   })
 })
+
+describe('C2-H-165: a degraded node that leaves no text is dropped', () => {
+  it('C2-H-165: a degraded table of empty cells writes nothing, and its caption alone stays', () => {
+    for (const table of ['|  |\n', '| |\n| |\n', '|= |\n']) {
+      expect(render(table, { profile: 'minimal' })).toBe('')
+    }
+    expect(render('| |\n^ cap\n', { profile: 'minimal' })).toBe('<p>cap</p>')
+    expect(render('| | |\n', { profile: 'minimal' })).toBe('<p> | </p>')
+    expect(render('| a |\n|  |\n', { profile: 'minimal' })).toBe('<p>a<br>\n</p>')
+  })
+})

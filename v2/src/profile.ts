@@ -134,18 +134,21 @@ function textParagraph(text: string): ParagraphNode[] {
   return text === '' ? [] : [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
 }
 
-/** A table keeps one line per row, with a hard break between the rows. */
+/** A table keeps one line per row, with a hard break between the rows. C2-H-165: a table that leaves no text is dropped. */
 function tableParagraph(node: TableNode): ParagraphNode[] {
   const out: Inline[] = []
+  let text = false
   for (const group of node.children) {
     if (group.type === 'comment') continue
     for (const row of group.children) {
       if (row.type !== 'table_row') continue
       if (out.length > 0) out.push({ type: 'hard_break' })
-      out.push({ type: 'text', value: rowText(row) })
+      const value = rowText(row)
+      if (value !== '') text = true
+      out.push({ type: 'text', value })
     }
   }
-  return out.length === 0 ? [] : [{ type: 'paragraph', children: out }]
+  return text ? [{ type: 'paragraph', children: out }] : []
 }
 
 /**
