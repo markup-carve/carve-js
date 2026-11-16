@@ -252,19 +252,20 @@ function fitsDelimited(table: TableNode): boolean {
   return fitsPartition(groups, head[0]?.children.length ?? 0, body[0])
 }
 
-/** Whether a delimited table gives the head of `headRows` rows and the body `body` (C2-B-209, C2-A-088). */
+/**
+ * Whether a delimited table gives the head of `headRows` rows and the body `body` (C2-B-209, C2-A-088). Without
+ * `header-rows` it has one head row; with it the body says so, and a table with no body takes the count of its
+ * head (C2-B-221).
+ */
 function fitsPartition(groups: readonly TableEntry[], headRows: number, body: TableBodyNode | undefined): boolean {
-  const declared = body?.headRows
-  // Without `header-rows` a delimited table has one head row; with it the body says so.
-  if (body === undefined || declared === undefined) return (headRows === 1 || groups.length === 0) && hasPlainGroups(groups, false)
-  // A count larger than the number of rows gives no head, and every cell is a header cell.
-  const beyond = declared > body.children.length + headRows
-  return (beyond ? headRows === 0 : declared === headRows) && hasPlainGroups(groups, beyond)
+  if (body === undefined) return hasPlainGroups(groups)
+  const declared = body.headRows
+  return (declared === undefined ? headRows === 1 : declared === headRows) && hasPlainGroups(groups)
 }
 
-/** Whether every cell of `groups` is plain, a header cell in the head and, with `headerBody`, in the body. */
-function hasPlainGroups(groups: readonly TableEntry[], headerBody: boolean): boolean {
-  return groups.every((group) => isPlainGroup(group, headerBody || group.type === 'table_head'))
+/** Whether every cell of `groups` is plain, a header cell in the head. */
+function hasPlainGroups(groups: readonly TableEntry[]): boolean {
+  return groups.every((group) => isPlainGroup(group, group.type === 'table_head'))
 }
 
 /** The value of the first node of the first block of `cell`, where that node has one. */
@@ -300,6 +301,14 @@ function declaredHeadRows(table: TableNode): number | undefined {
   return undefined
 }
 
+/** C2-W-066, C2-B-221: the `header-rows` of a delimited table: what its body declares, or the head rows of a table with no body. */
+function headerRows(table: TableNode): number | undefined {
+  const declared = declaredHeadRows(table)
+  if (declared !== undefined || table.children.some((group) => group.type === 'table_body')) return declared
+  const head = rowsOf(table, 'table_head').length
+  return head <= 1 ? undefined : head
+}
+
 /** C2-W-066: the form of the table, `pipe`, `csv` or `tsv`. */
 function tableFormat(w: Writer, table: TableNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
@@ -328,7 +337,7 @@ function delimitedRow(row: TableRowNode, separator: string): string {
 function delimitedTable(w: Writer, table: TableNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = declaredHeadRows(table)
+  const declared = headerRows(table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   const block = braceBlock(table, tableKeys(w, table, first))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
@@ -356,7 +365,7 @@ export function tableAttribute(w: Writer, table: TableNode): string {
   const format = tableFormat(w, table)
   if (format === 'pipe') return braceBlock(table, tableKeys(null, table, []))
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = declaredHeadRows(table)
+  const declared = headerRows(table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   return braceBlock(table, tableKeys(null, table, first))
 }

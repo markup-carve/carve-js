@@ -158,7 +158,8 @@ describe('tables', () => {
   it('C2-W-066: a delimited table whose rows all stand in its head is written with the count of its head rows', () => {
     const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
     expect(format(src)).toBe(`{table header-rows=2}\n${FENCE}csv\na,b\nc,d\n${FENCE}\n`)
-    expect(write(parse(src, { positions: false }))).toContain('header-rows=2')
+    // With no record it is a pipe table, whose rows of header cells form the same head (C2-L-036, C2-B-178).
+    expect(write(parse(src, { positions: false }))).toBe('|= a |= b |\n|= c |= d |\n')
   })
 })
 
