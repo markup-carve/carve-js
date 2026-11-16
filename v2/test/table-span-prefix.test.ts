@@ -24,20 +24,22 @@ function rows(src: string): Cell[][] {
 }
 
 describe('a span mark behind a cell prefix', () => {
-  it('C2-B-172, C2-B-173: a failed mark behind a header mark is an empty header cell', () => {
+  it('C2-B-172, C2-B-173: a mark behind a header mark that joins nothing is a header cell that holds the mark', () => {
     for (const src of ['|= ^|', '|= <|', '|=^|', '|= ^ |', '|={.x} ^|', '|={<} ^|']) {
       const [cell] = rows(src)[0]!
+      const mark = src.includes('<|') ? '<' : '^'
       expect(cell, src).toMatchObject({ header: true })
-      expect(cell!.children[0]!.children, src).toEqual([])
-      expect(render(src), src).not.toMatch(/[>]\^<|&lt;</u)
+      expect(cell!.children[0]!.children, src).toEqual([expect.objectContaining({ type: 'text', value: mark })])
+      expect(render(src), src).toMatch(mark === '<' ? />&lt;</u : />\^</u)
     }
   })
 
-  it('C2-B-173: a failed mark behind a header mark in a row with a body cell is a body cell', () => {
+  it('C2-B-173: such a cell keeps its header mark in a row with a body cell, and the row is no head row', () => {
     const [cell, other] = rows('|= <| a |')[0]!
-    expect(cell).toMatchObject({ header: false })
-    expect(cell!.children[0]!.children).toEqual([])
+    expect(cell).toMatchObject({ header: true })
+    expect(cell!.children[0]!.children).toEqual([expect.objectContaining({ type: 'text', value: '<' })])
     expect(other).toMatchObject({ header: false })
+    expect(render('|= <| a |')).not.toContain('<thead>')
   })
 
   it('C2-B-172: a mark behind a header mark joins the cell to its left or the cell above', () => {

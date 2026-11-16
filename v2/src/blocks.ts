@@ -760,6 +760,7 @@ function openTable(state: BlockState, end: number): boolean {
   leaf.kind = TABLE
   leaf.tableHeadRows = 0
   leaf.tableHeadOpen = true
+  leaf.tableWidths = []
   writeRow(state, closing, end)
   return true
 }
@@ -797,20 +798,56 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   const src = state.src
   const attribute = rowAttributeStart(src, closing, end)
   writeEvent(state, eventTag(ENTER, ROW, 0), cursor.pos, attribute < 0 ? 0 : attribute)
-  let headers = 0
-  let others = 0
+  const head: HeadTest = { headers: 0, others: 0, widths: [], owner: -1, above: leaf.tableWidths, first: leaf.tableHeadRows === 0 }
   let pipe = cursor.pos
   for (const next of separatorPipes(src, pipe + 1, closing + 1)) {
     const flags = writeCell(state, pipe, next)
-    if ((flags & FLAG_HEADER) !== 0) headers++
-    else if ((flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) === 0) others++
+    if (leaf.tableHeadOpen) testHeadCell(head, flags)
     pipe = next
   }
   writeEvent(state, eventTag(EXIT, ROW, 0), end, 0)
   state.contentEnd = end
-  // C2-B-178: the head is the leading rows made only of header cells. A span mark joins another cell and is none itself.
-  leaf.tableHeadOpen = leaf.tableHeadOpen && headers > 0 && others === 0
+  // C2-B-178: the head is the leading rows made only of header cells.
+  leaf.tableHeadOpen = leaf.tableHeadOpen && head.headers > 0 && head.others === 0
   if (leaf.tableHeadOpen) leaf.tableHeadRows++
+  leaf.tableWidths = head.widths
+}
+
+/** The head test of one row (C2-B-178): its cells counted, and the width of the cell that covers each column. */
+interface HeadTest {
+  headers: number
+  others: number
+  widths: number[]
+  /** The column where the cell to the left starts, or -1 when no cell of this row is there to extend. */
+  owner: number
+  above: number[]
+  first: boolean
+}
+
+/**
+ * C2-B-174: a mark that joins a cell, a `<` with a cell to its left or a `^` below a cell of one column, is
+ * part of that cell, and only its header mark counts; a mark that joins nothing counts as the cell it is.
+ */
+function testHeadCell(head: HeadTest, flags: number): void {
+  const column = head.widths.length
+  const header = (flags & FLAG_HEADER) !== 0
+  if ((flags & FLAG_SPAN_LEFT) !== 0 && head.owner >= 0) {
+    const width = column - head.owner + 1
+    for (let at = head.owner; at <= column; at++) head.widths[at] = width
+    if (header) head.headers++
+    return
+  }
+  if ((flags & FLAG_SPAN_UP) !== 0 && !head.first && head.above[column] === 1) {
+    head.widths.push(1)
+    // C2-B-172: a cell joined upward leaves no cell of this row to its left.
+    head.owner = -1
+    if (header) head.headers++
+    return
+  }
+  if (header) head.headers++
+  else head.others++
+  head.owner = column
+  head.widths.push(1)
 }
 
 /** Writes the cell between the pipes at `pipe` and `next` and returns its flags. */

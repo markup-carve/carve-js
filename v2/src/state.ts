@@ -42,9 +42,11 @@ export interface OpenLeaf {
   fenceChar: number
   fenceLength: number
   fenceColumn: number
-  // The open table: its head rows and whether the head is still open.
+  // The open table: its head rows, whether the head is still open, and per column the width of the cell
+  // that covers it in the row above (C2-B-174).
   tableHeadRows: number
   tableHeadOpen: boolean
+  tableWidths: number[]
 }
 
 /**
@@ -113,7 +115,7 @@ function createState(): BlockState {
     },
     leaf: {
       kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0,
-      tableHeadRows: 0, tableHeadOpen: false,
+      tableHeadRows: 0, tableHeadOpen: false, tableWidths: [],
     },
     above: {
       blankCount: 0, captionDepth: NO_DEPTH, attributesDepth: NO_DEPTH, attributesStart: 0, attributesEnd: 0, takeAttributes: false,

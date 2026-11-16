@@ -904,19 +904,23 @@ function markRun(cells: unknown[], index: number, kind: string): number {
   return count
 }
 
-/** C2-A-093: a count authored alongside a mark agrees with the mark cells it covers. */
+/**
+ * C2-A-093: a count authored alongside a mark agrees with the mark cells it covers, and a row span stays
+ * inside the group of its cell (C2-B-174).
+ */
 function checkSpanCounts(table: Fields, path: string): void {
   const groups = members(table, 'children')
   groups.forEach((group, groupIndex) => {
     const rows = tableRows(group)
-    const next = groups[groupIndex + 1]
-    const following = isRecord(group) && group['type'] === 'table_body' && isRecord(next) && next['type'] === 'table_foot'
-      ? [...rows, ...tableRows(next)] : rows
+    const following = rows
     rows.forEach(([row, rowIndex], rowOffset) => {
       const cells = members(row, 'children')
       cells.forEach((cell, cellIndex) => {
         if (!isRecord(cell) || cell['span'] !== undefined) return
         const cellPath = `${path}/children/${groupIndex}/children/${rowIndex}/children/${cellIndex}`
+        if (typeof cell['rowspan'] === 'number' && rowOffset + cell['rowspan'] > rows.length) {
+          fail(`${cellPath}/rowspan`, 'a row span reaches past the last row of its group')
+        }
         const cols = markRun(cells, cellIndex, 'colspan')
         if (cols > 0 && cell['colspan'] !== undefined && cell['colspan'] !== cols + 1) {
           fail(`${cellPath}/colspan`, 'a count contradicts its authored span mark')

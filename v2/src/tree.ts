@@ -1,6 +1,6 @@
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
-  ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_HEADER, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
+  ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
   isLeaf, PARAGRAPH, ROW,
   TABLE,
 } from './kinds.ts'
@@ -118,10 +118,14 @@ function orphanAttributes(children: BlockNode[]): void {
 
 /**
  * Resolves the span marks of a closed table (C2-B-172, C2-B-183) and joins its continuation rows.
- * A cell that joins another is removed from its row; a mark that fails is an empty cell (C2-B-173).
+ * A cell that joins another is removed from its row; a mark that joins nothing is the text of its cell (C2-B-173).
  */
 function resolveTable(table: BlockNode): number {
   const headRows = table.facts
+  let rows = 0
+  for (const row of table.children!) if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) === 0) rows++
+  // C2-B-187: the footer rows are the last rows below the head.
+  const footStart = rows - Math.min(table.aux, rows - headRows)
   const kept: BlockNode[] = []
   let owners: (BlockNode | null)[] = []
   let last: BlockNode | null = null
@@ -133,8 +137,8 @@ function resolveTable(table: BlockNode): number {
     }
     kept.push(row)
     if (row.kind !== ROW) continue
-    // C2-B-174: a row span does not cross the head boundary.
-    owners = resolveRow(row, rowIndex === headRows ? [] : owners)
+    // C2-B-174: no span crosses from the head into the body or from the body into the foot.
+    owners = resolveRow(row, rowIndex === headRows || rowIndex === footStart ? [] : owners)
     last = row
     rowIndex++
   }
@@ -173,7 +177,6 @@ function markSpan(row: BlockNode, cell: BlockNode): void {
 function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | null)[] {
   const owners: (BlockNode | null)[] = []
   const kept: BlockNode[] = []
-  const failed: BlockNode[] = []
   let left: BlockNode | null = null
   for (const cell of row.children!) {
     const column = owners.length
@@ -189,16 +192,13 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
       owners.push(up)
       left = null
     } else {
-      if ((cell.flags & (FLAG_SPAN_LEFT | FLAG_SPAN_UP)) !== 0) { cell.spans = []; failed.push(cell) }
+      // C2-B-173: a mark that joins nothing is an ordinary cell, its prefix applied, that holds the mark as text.
+      cell.flags &= ~(FLAG_SPAN_LEFT | FLAG_SPAN_UP)
       kept.push(cell)
       owners.push(cell)
       left = cell
     }
   }
-  // C2-B-173: a failed mark is a header cell in an otherwise all-header row, and a body cell in any other row.
-  const headers = kept.some((cell) => (cell.flags & FLAG_HEADER) !== 0) &&
-    kept.every((cell) => (cell.flags & FLAG_HEADER) !== 0 || failed.includes(cell))
-  for (const cell of failed) cell.flags = headers ? cell.flags | FLAG_HEADER : cell.flags & ~FLAG_HEADER
   row.children = kept
   return owners
 }

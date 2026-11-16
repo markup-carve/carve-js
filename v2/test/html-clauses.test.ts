@@ -146,7 +146,7 @@ describe('tables', () => {
     ['C2-H-057: a resolved alignment is a style that follows an authored style', '|={>} a |={~ style="color: red"} b |\n| c |{<} d |', '<table>\n  <thead>\n    <tr><th scope="col" style="text-align: right;">a</th><th scope="col" style="color: red; text-align: center;">b</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style="text-align: right;">c</td><td style="text-align: left;">d</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-058: rowspan and colspan are written for a count above 1, and a covered cell is not written', '| a | < | b |\n| c | d | ^ |', '<table>\n  <tbody>\n    <tr><td colspan="2">a</td><td rowspan="2">b</td></tr>\n    <tr><td>c</td><td>d</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-059: widths gives a colgroup', '{widths="30,70"}\n| a | b |', '<table>\n  <colgroup>\n    <col style="width: 30%;">\n    <col style="width: 70%;">\n  </colgroup>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>'],
-    ['C2-H-060: a row span that crosses into the foot gives one tbody that holds every row', '{footer-rows=1}\n| a |\n| ^ |', '<table>\n  <tbody>\n    <tr><td rowspan="2">a</td></tr>\n    <tr></tr>\n  </tbody>\n</table>'],
+    ['C2-B-174: no row span crosses into the foot, so the mark in its first row is text', '{footer-rows=1}\n| a |\n| ^ |', '<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td>^</td></tr>\n  </tfoot>\n</table>'],
     ['C2-H-061: the caption is the first child of the table, and the attributes stay on the table', '{#t .c}\n| a |{.r}\n^ *C*', '<table id="t" class="c">\n  <caption><strong>C</strong></caption>\n  <tbody>\n    <tr class="r"><td>a</td></tr>\n  </tbody>\n</table>'],
   ])
 

@@ -163,3 +163,49 @@ describe('C2-B-206, C2-A-181: a malformed include is still an include', () => {
       .toEqual([{ startOffset: 9, endOffset: 17 }, { startOffset: 18, endOffset: 25 }])
   })
 })
+
+describe('C2-B-172 to C2-B-174: a span mark that cannot join is literal, and no span crosses a group', () => {
+  it('C2-B-173: Examples 209 and 210, the mark is the text of its cell', () => {
+    expect(render('| a | b |\n| < | c |')).toContain('<tr><td>&lt;</td><td>c</td></tr>')
+    expect(render('|= H |\n| ^ |\n| a |')).toContain('<tbody>\n    <tr><td>^</td></tr>\n    <tr><td>a</td></tr>')
+  })
+
+  it('C2-B-174: `|=|^|` is no head row: the first-row mark counts as the body cell it is', () => {
+    expect(render('|=|^|\n| 1 | 2 |')).toBe(
+      '<table>\n  <tbody>\n    <tr><th scope="row"></th><td>^</td></tr>\n    <tr><td>1</td><td>2</td></tr>\n  </tbody>\n</table>',
+    )
+  })
+
+  it('C2-B-173, C2-B-174: Example 250, a header mark on a literal mark, and a mark in the first foot row', () => {
+    expect(render('{footer-rows=1}\n|= ^ |= A |\n| 1 | 2 |\n| ^ | 3 |')).toContain('<tfoot>\n    <tr><td>^</td><td>3</td></tr>\n  </tfoot>')
+  })
+
+  it('C2-B-172: unchanged, a colspan in the head, a row span inside the head and spans inside one body', () => {
+    expect(render('|= A | < |\n| 1 | 2 |')).toContain('<th colspan="2" scope="col">A</th>')
+    expect(render('|= A |\n|= ^ |')).toContain('<th rowspan="2" scope="col">A</th>')
+    expect(render('| a | < |\n| ^ | d |')).toContain('<td colspan="2">a</td>')
+  })
+
+  it('C2-B-184: a continuation fragment under a mark that joins nothing joins that cell', () => {
+    expect(render('| ^ |\n+ more |')).toContain('<td>^ more</td>')
+  })
+
+  it('C2-A-093: a reader refuses a supplied rowspan that reaches past the last row of its group', async () => {
+    const { validateTree } = await import('../src/index.ts')
+    const cell = (value: string, rowspan?: number): unknown => ({
+      type: 'table_cell', header: false, ...(rowspan === undefined ? {} : { rowspan }), children: [{ type: 'cell_paragraph', children: [{ type: 'text', value }] }],
+    })
+    const table = (rowspan: number): unknown => ({ type: 'document', astVersion: '2.0', children: [{ type: 'table', columns: [{ type: 'table_column' }], children: [
+      { type: 'table_body', children: [{ type: 'table_row', children: [cell('a', rowspan)] }, { type: 'table_row', children: [] }] },
+      { type: 'table_foot', children: [{ type: 'table_row', children: [cell('b')] }] },
+    ] }] })
+    expect(() => validateTree(table(2))).not.toThrow()
+    expect(() => validateTree(table(3))).toThrow(/past the last row of its group/)
+  })
+
+  it('C2-B-173: lint reports every mark that joins nothing, also behind a header mark', async () => {
+    const { lint } = await import('../lint/lint.ts')
+    const codes = (src: string): number => lint(src).filter((item) => item.code === 'table-span-marker-blocked').length
+    expect([codes('|= ^ |= A |\n| 1 | 2 |'), codes('| a |\n| ^ |'), codes('| \\^ |'), codes('|=|^|')]).toEqual([1, 0, 0, 1])
+  })
+})

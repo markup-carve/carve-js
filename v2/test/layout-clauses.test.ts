@@ -299,8 +299,10 @@ describe('facts moved out of the tree', () => {
     expect(value).toBe('ab cd')
     expect(value[wrap.offset - 1]).toBe(' ')
     expect(value.slice(wrap.offset)).toBe('cd')
-    // The cell a failed span mark leaves is empty, and so is the place of a cell that a fragment forms (C2-B-173, C2-B-176).
-    expect(entry('| ^ |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 0 }])
+    // A mark that joins nothing is the text of its cell, so the fragment joins it behind a space (C2-B-173); the place of a
+    // cell that a fragment forms is empty (C2-B-176).
+    expect(entry('| ^ |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 2 }])
+    expect(entry('| |\n+ b |\n', CELL)!.wraps).toEqual([{ line: 1, path: `${CELL}/children/0/children/0`, offset: 0 }])
     const formed = '/children/0/children/0/children/0/children/1'
     expect(entry('| a |\n+ b | new |\n', formed)!.wraps).toEqual([{ line: 1, path: `${formed}/children/0/children/0`, offset: 0 }])
   })

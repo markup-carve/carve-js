@@ -811,11 +811,18 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
   }
 }
 
+/** C2-B-173: a span mark that joins nothing is the text of its cell, whatever prefix the cell has. */
 function spanMarkerBlocked(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell' || node.span !== undefined) return
-  const marker = raw(node, context).trim()
+  const content = node.children[0]
+  const only = content?.type === 'cell_paragraph' && content.children.length === 1 ? content.children[0] : undefined
+  const marker = only?.type === 'text' ? only.value : ''
   if (marker !== '<' && marker !== '^') return
-  const reason = marker === '<' ? 'There is no cell to the left.' : 'There is no cell above, or the head boundary blocks it.'
+  // An escaped mark is text by the author's choice.
+  if (raw(node, context).trimEnd().endsWith(`\\${marker}`)) return
+  const reason = marker === '<'
+    ? 'There is no cell to its left in its row.'
+    : 'There is no cell of one column above it in its group: head, body or foot.'
   reportNode('table-span-marker-blocked', node, path, context, { marker, reason })
 }
 
