@@ -1,5 +1,5 @@
 // The include directive (C2-B-201 to C2-B-206): its shape on one line, and its valid and invalid options.
-import { type IncludeNode, type IncludeOptions } from './ast.ts'
+import { type IncludeNode, type IncludeOptions, type Node } from './ast.ts'
 import { unescape } from './attributes.ts'
 import {
   APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_CLOSE, BRACE_OPEN, COLON, COMMA, DIGIT_0, DOT, HASH, HYPHEN, PLUS, QUOTE_MARK,
@@ -345,6 +345,14 @@ export function readInclude(src: string, pos: number, end: number): IncludeParts
   const section = shape.sectionStart === NONE ? null : src.slice(shape.sectionStart, shape.sectionEnd)
   const invalid = values.problems.map((problem) => src.slice(problem.start, problem.end))
   return { path, section, options: values.options, optionSpelling: values.spelling, invalid, problems: values.problems, end: shape.end }
+}
+
+/**
+ * C2-N-072 (open point 3 of the Includes document): whether the own attributes of `node` act. Those of an include are
+ * inert: no anchor, no duplicate, no reservation. Only the copy in the child of a code include acts.
+ */
+export function attributesAct(node: Node): boolean {
+  return node.type !== 'include'
 }
 
 /** C2-W-058: a value in double quotes, with a backslash before a quote and a backslash. */

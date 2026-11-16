@@ -2173,9 +2173,7 @@
     "line": 82,
     "input": "```js\t\"T\"\nx\n```\n",
     "check": "pass",
-    "entries": [
-      "U-191"
-    ]
+    "entries": []
   },
   {
     "cause": "C81",
@@ -2184,9 +2182,7 @@
     "line": 97,
     "input": "```js \t\"T\"\nx\n```\n",
     "check": "pass",
-    "entries": [
-      "U-191"
-    ]
+    "entries": []
   },
   {
     "cause": "C81",
@@ -2195,9 +2191,7 @@
     "line": 112,
     "input": "```js\t \"T\"\nx\n```\n",
     "check": "pass",
-    "entries": [
-      "U-191"
-    ]
+    "entries": []
   },
   {
     "cause": "C84",

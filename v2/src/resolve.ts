@@ -17,6 +17,7 @@ import { foldLabel } from './ast-attributes.ts'
 import { captionLabelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
+import { attributesAct } from './include.ts'
 import { slugify } from './slug.ts'
 import { trimEndWhitespace } from './source.ts'
 
@@ -127,8 +128,12 @@ function lookUp<T>(scope: Scope, key: string, table: (scope: Scope) => Map<strin
   return undefined
 }
 
+const FOOTNOTES = (scope: Scope): Map<string, FootnoteNode> => scope.footnotes
+const DEFINITIONS = (scope: Scope): Map<string, LinkReferenceDefinitionNode> => scope.definitions
+
 function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
-  const definition = lookUp(walk.scope, node.key, (scope) => scope.footnotes)
+  const scope = walk.scope
+  const definition = scope.outer === null ? scope.footnotes.get(node.key) : lookUp(scope, node.key, FOOTNOTES)
   if (definition === undefined) {
     delete node.number
     return
@@ -316,7 +321,7 @@ function mayResolve(walk: Walk, node: Node): boolean {
  * resolution reads.
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
-  if (node.attrs?.id !== undefined && node.type !== 'include') walk.identified.push(node)
+  if (node.attrs?.id !== undefined && attributesAct(node)) walk.identified.push(node)
   if (isCaptionedBlock(node)) {
     walk.parent = parent
     return visitHost(node, walk)
@@ -442,8 +447,8 @@ function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
   for (const reference of walk.references) {
     const key = reference.key
     if (key === undefined) continue
-    const scope = walk.scopes.get(reference)
-    let target: Target | undefined = scope === undefined ? walk.resolution.definitions.get(key) : lookUp(scope, key, (at) => at.definitions)
+    const scope = walk.scopes.size === 0 ? undefined : walk.scopes.get(reference)
+    let target: Target | undefined = scope === undefined ? walk.resolution.definitions.get(key) : lookUp(scope, key, DEFINITIONS)
     if (scope !== undefined && target !== undefined) walk.resolution.definitionOf.set(reference, target)
     // C2-I-081, C2-A-213: a heading alone never forms a shortcut reference, so a supplied one stays unresolved.
     if (target === undefined && reference.type === 'link' && reference.refForm !== 'shortcut') {
@@ -570,8 +575,7 @@ function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
     const label = captionKey(walk, children, mark)
     const n = nextNumber(sequences, label)
     number.n = n
-    // C2-N-072: the id of an include is no anchor.
-    const id = use.host.type === 'include' ? undefined : use.host.attrs?.id
+    const id = attributesAct(use.host) ? use.host.attrs?.id : undefined
     if (id !== undefined && !anchors.has(id)) anchors.set(id, label === '' ? String(n) : `${label} ${n}`)
   }
 }

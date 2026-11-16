@@ -509,6 +509,11 @@ describe('14. shift', () => {
     expect(levels('{{ a }}\n\n{{ c @shift:auto }}', { a: '=== A\n', c: '= C\n' })).toEqual([3, 4])
   })
 
+  it('C2-N-048: an include inside a footnote body is shifted too', () => {
+    const html = render('a[^n]\n\n[^n]: {{ c @shift:2 }}', { includes: includes({ c: '= Deep\n' }) })
+    expect(html).toContain('<h3 id="Deep">Deep</h3>')
+  })
+
   it('C2-N-051: shift on a code include has no effect and reports nothing', () => {
     expect(codes('{{ a @shift:3 @code }}', { a: '= x\n' })).toEqual([])
   })

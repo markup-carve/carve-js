@@ -15,7 +15,7 @@ import {
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
-import { includeSource } from './include.ts'
+import { attributesAct, includeSource } from './include.ts'
 import { includeMessage } from './expand.ts'
 import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
@@ -84,11 +84,14 @@ function expandedNode(node: Node): readonly Node[] {
   return node.type === 'include' && node.children !== undefined ? expandedBlocks(node.children) : [node]
 }
 
-/** The blocks of `nodes` that write something: the list itself where all of them do. */
+/** The blocks of `list` that write something, an expanded include read as its children: `list` itself where all of them do. */
 function visibleBlocks(list: readonly Node[]): readonly Node[] {
-  const nodes = expandedBlocks(list)
-  for (const node of nodes) if (!isVisible(node)) return nodes.filter(isVisible)
-  return nodes
+  let all = true
+  for (const node of list) {
+    if (node.type === 'include' && node.children !== undefined) return expandedBlocks(list).filter(isVisible)
+    all &&= isVisible(node)
+  }
+  return all ? list : list.filter(isVisible)
 }
 
 /** A block that writes something. C2-H-019: a paragraph that holds only comments writes nothing. */
@@ -537,8 +540,7 @@ function nextExtensionId(r: Render, prefix: string): string {
 function authoredIds(document: DocumentNode): Set<string> {
   const ids = new Set<string>()
   const visit = (node: Node): void => {
-    // C2-N-072: the attributes of an include are inert.
-    if (node.attrs?.id !== undefined && node.type !== 'include') ids.add(node.attrs.id)
+    if (node.attrs?.id !== undefined && attributesAct(node)) ids.add(node.attrs.id)
     if (node.type === 'heading' && node.generatedId !== undefined) ids.add(node.generatedId)
     forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) }, undefined, document.extensions)
   }

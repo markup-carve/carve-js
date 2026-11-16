@@ -168,7 +168,8 @@ function shiftNode(walk: ShiftWalk, node: Node): void {
     shiftList(walk, node.children ?? [])
     return
   }
-  for (const list of innerLists(node)) {
+  // A footnote body is a container of its own; no section is selected from one (C2-N-029), but it is shifted.
+  for (const list of node.type === 'footnote' ? [node.children] : innerLists(node)) {
     walk.levels.push(0)
     shiftList(walk, list)
     walk.levels.pop()

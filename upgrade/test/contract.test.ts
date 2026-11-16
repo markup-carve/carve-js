@@ -51,6 +51,10 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-183#0': { check: 'pass' },
   'U-196#0': { check: 'pass' },
   'U-231#0': { check: 'pass' },
+  // C2-B-117: spaces separate the parts of an opener, so a tab before `""` leaves no title, in 0.2 as in 0.1.
+  'U-191#0': { check: 'pass' },
+  // C2-H-019: a paragraph that holds only comments and line breaks writes nothing, in 0.2 as in 0.1.
+  'U-216#2': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
