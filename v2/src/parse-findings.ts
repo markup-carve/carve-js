@@ -102,6 +102,10 @@ function misspaced(src: string, runEnd: number): boolean {
   return code === TAB || (code === SPACE && isSpaceOrTab(src.charCodeAt(runEnd + 1)))
 }
 
+function isCurlyTitle(text: string): boolean {
+  return text !== '' && CURLY_QUOTES.includes(text.charAt(0))
+}
+
 /** C2-B-122: the opener with its further words read as the quoted title the author meant. */
 function titleMessage(src: string, note: ParseNote): string {
   const block = note.block
@@ -116,7 +120,7 @@ function titleMessage(src: string, note: ParseNote): string {
   const rest = note.from < 0 ? (space < 0 ? '' : line.slice(space).trim()) : src.slice(note.from, lineEnd).trim()
   const [text, label] = note.from < 0 ? [rest, ''] : splitLabel(rest)
   const opener = type === '' ? run : `${run} ${type}`
-  if (text !== '' && CURLY_QUOTES.includes(text.charAt(0))) {
+  if (isCurlyTitle(text)) {
     const title = text.slice(1, CURLY_QUOTES.includes(text.charAt(text.length - 1)) ? -1 : undefined)
     return `The title after "${type || run}" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before `
       + `Carve parsed it. A fence title needs straight double quotes: ${opener} "${title}"${label}.`

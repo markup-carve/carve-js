@@ -73,6 +73,24 @@ function tableAttribute(node: Node, path: string, context: LintContext): void {
   }
 }
 
+const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+
+/** C2-B-227: a table keeps a key it reads in `attrs` only when the value is invalid, or `header-rows` on a pipe table. */
+function keptTableKeys(node: Node): string[] {
+  if (node.type !== 'table') return []
+  return (node.attrs?.keyValues ?? []).map(([key]) => key).filter((key) => TABLE_KEYS.includes(key))
+}
+
+function invalidTableAttribute(node: Node, path: string, context: LintContext): void {
+  const pipe = context.layouts.get(path)?.sourceFormat === 'pipe'
+  for (const [key, value] of node.attrs?.keyValues ?? []) {
+    if (!keptTableKeys(node).includes(key)) continue
+    // C2-B-186: a valid count of `header-rows` on a pipe table is deprecated, not invalid.
+    if (pipe && key === 'header-rows' && /^\d*$/.test(value)) continue
+    reportNode('table-attribute-invalid', node, path, context, { key })
+  }
+}
+
 function attributeValue(node: Node, context: LintContext, key: string): string | undefined {
   if (node.pos === undefined) return undefined
   const line = context.lines[node.pos.startLine - 1]?.text.trim()
@@ -298,7 +316,8 @@ function tableColumnArity(node: Node, path: string, context: LintContext): void 
   if (node.type !== 'table') return
   for (const key of ['aligns', 'widths']) {
     const value = attributeValue(node, context, key)
-    if (value === undefined) continue
+    // C2-B-211: an invalid list sets no column, and table-attribute-invalid reports it.
+    if (value === undefined || keptTableKeys(node).includes(key)) continue
     const count = value.split(',').length
     if (count < node.columns.length) reportNode('table-column-arity', node, path, context,
       { key, count: String(count), widest: String(node.columns.length) })
@@ -910,6 +929,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('semantic-attribute-outside-span', ['paragraph', 'heading', 'link', 'image', 'strong'], semanticOutside),
   nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
   nodeRule('table-column-arity', ['table'], tableColumnArity),
+  nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
   nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),

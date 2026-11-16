@@ -60,5 +60,6 @@ export function generateUnicodeTables(json: string): string {
 
 if (process.argv[1] === import.meta.filename) {
   const root = join(import.meta.dirname, '..')
-  writeFileSync(join(root, 'src/unicode-tables.ts'), generateUnicodeTables(readFileSync(join(root, 'data/unicode-categories.json'), 'utf8')))
+  const json = readFileSync(join(root, 'data/unicode-categories.json'), 'utf8')
+  writeFileSync(join(root, 'src/unicode-tables.ts'), generateUnicodeTables(json))
 }

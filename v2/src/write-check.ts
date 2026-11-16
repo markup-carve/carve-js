@@ -99,12 +99,23 @@ function isCompared(c: Check, node: Node, name: string): boolean {
   return !isRecord(node) || !skipped(node, name, c.spanMarks)
 }
 
+/** C2-W-136: the `attrs` of `e` without the keys the writer reported and did not write, as the parse holds them. */
+function writtenAttrs(c: Check, e: Node): unknown {
+  const keys = c.w.lostKeys.get(e)
+  const attrs = e.attrs
+  if (keys === undefined || attrs === undefined) return attrs
+  const keyValues = (attrs.keyValues ?? []).filter(([key]) => !keys.includes(key))
+  const rest: Fields = { ...attrs, keyValues: keyValues.length === 0 ? undefined : keyValues }
+  return rest['id'] === undefined && (attrs.classes ?? []).length === 0 && keyValues.length === 0 ? undefined : rest
+}
+
 /** The name of the first field in which `e` and `a` differ, or null. */
 function differingField(c: Check, e: Node, a: Node): string | null {
   // Every node is a record; the guard gives the fields of both by name.
   if (!isRecord(e) || !isRecord(a)) return null
   for (const name in e) {
-    if (e[name] !== undefined && isCompared(c, e, name) && !sameValue(e[name], a[name])) return name
+    const value = name === 'attrs' ? writtenAttrs(c, e) : e[name]
+    if (value !== undefined && isCompared(c, e, name) && !sameValue(value, a[name])) return name
   }
   for (const name in a) {
     if (a[name] !== undefined && e[name] === undefined && isCompared(c, a, name)) return name
@@ -395,7 +406,8 @@ function probeWriter(c: Check, expected: readonly Node[]): Writer {
     const own = c.w.escapes.get(text)
     if (own !== undefined) escapes.set(text, [...own])
   }
-  return { ...c.w, escapes, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost) }
+  return { ...c.w, escapes, attempts: new Map(), losses: { entries: [], nodes: [] }, lost: new Set(c.w.lost),
+    lostKeys: new Map(c.w.lostKeys) }
 }
 
 /**

@@ -1,7 +1,7 @@
 // What one run of the writer holds (spec/0.2/writer.md): the lines written so far, the escapes
 // and spellings the reparse asked for (C2-W-089), the facts of the sidecar and the losses.
 import { type DocumentNode, type Node, type ParagraphNode, type TextNode } from './ast.ts'
-import { addFinding, type Findings } from './diagnostics.ts'
+import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { type Plan } from './write-plan.ts'
 
@@ -50,6 +50,8 @@ export interface Writer {
   /** C2-W-011: what could not be written, one entry per node. */
   losses: Findings
   lost: Set<Node>
+  /** C2-W-136: the keys of `attrs` of a node that were reported and not written; the reparse check does not ask for them. */
+  lostKeys: Map<Node, string[]>
   /** The longest colon run among the fenced containers below a node (C2-W-039). */
   colonRuns: Map<Node, number>
   /** Whether emphasis (1) and strong (2) occur below a node (C2-W-070). */
@@ -74,8 +76,8 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     lines: [], lead: null, bareDotLead: false, escapes: new Map(), forms: new Map(), starts: new Map(),
     attempts: new Map(), facts, wrapPoints: null,
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
-    colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null, prewrittenAttributes: null,
-    plan: null, parses: 0,
+    lostKeys: new Map(), colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null,
+    prewrittenAttributes: null, plan: null, parses: 0,
   }
 }
 
@@ -127,6 +129,18 @@ export function emitLines(w: Writer, prefix: string, indent: string, text: strin
 }
 
 /** C2-W-011, C2-W-117: records that `node`, or its field `field`, could not be written. One entry per node. */
+/** C2-W-136: the key at `index` of the `attrs` of `node` has no spelling beside the field that writes the same key. */
+export function loseKey(w: Writer, node: Node, index: number, key: string): void {
+  const keys = w.lostKeys.get(node) ?? []
+  if (keys.includes(key)) return
+  w.lostKeys.set(node, [...keys, key])
+  const message = `the key ${key} in the attrs of a ${node.type} node has no spelling beside the table fields that write it`
+  const entry: Diagnostic = { code: 'field-unspellable', severity: 'warning', channel: 'render-loss', message }
+  addFinding(w.losses, node, entry)
+  w.losses.steps ??= new Map()
+  w.losses.steps.set(entry, `/attrs/keyValues/${index}`)
+}
+
 export function lose(w: Writer, node: Node, field: string | null): void {
   if (w.lost.has(node)) return
   w.lost.add(node)

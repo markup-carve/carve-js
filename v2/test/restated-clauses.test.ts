@@ -278,11 +278,15 @@ describe('the table attributes', () => {
     expect(body('{table header-rows=5}').headRows).toBe(5)
   })
 
-  it('C2-B-211: an entry of `aligns` that is left, right or center sets the column, and any other leaves it unset', () => {
-    expect(ofType(block('{aligns=" left ,x,,RIGHT,center,right,left"}\n| a | b | c | d | e | f |'), 'table').columns).toEqual([
-      { type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }, { type: 'table_column' }, { type: 'table_column' },
+  it('C2-B-211: an entry of `aligns` that is left, right or center sets the column, and any other leaves every column unset', () => {
+    expect(ofType(block('{aligns=" left ,right,center,right,left"}\n| a | b | c | d |'), 'table').columns).toEqual([
+      { type: 'table_column', align: 'left', authored: true }, { type: 'table_column', align: 'right', authored: true },
       { type: 'table_column', align: 'center', authored: true }, { type: 'table_column', align: 'right', authored: true },
     ])
+    const unset = [{ type: 'table_column' }, { type: 'table_column' }]
+    for (const value of ['left,x', 'left,,right', 'RIGHT,left', 'left,right,']) {
+      expect(ofType(block(`{aligns="${value}"}\n| a | b |`), 'table').columns, value).toEqual(unset)
+    }
     expect(ofType(block('{aligns="l,r,c"}\n| a | b | c |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }, { type: 'table_column' }])
   })
 
@@ -291,7 +295,8 @@ describe('the table attributes', () => {
     expect(widths('25, 30.5 ,100,0.5')).toEqual([0.25, 0.305, 1, 0.005])
     expect(widths('0,101,-5,x')).toEqual([undefined, undefined, undefined, undefined])
     expect(widths('.5,5.,1e1,+5')).toEqual([undefined, undefined, undefined, undefined])
-    expect(widths('50,,50,10,10')).toEqual([0.5, undefined, 0.5, 0.1])
+    expect(widths('50,,50,10,10')).toEqual([undefined, undefined, undefined, undefined])
+    expect(widths('50,10,50,10,10')).toEqual([0.5, 0.1, 0.5, 0.1])
     expect(widths('60,60')).toEqual([0.6, 0.6, undefined, undefined])
   })
 
@@ -333,7 +338,7 @@ describe('the table attributes', () => {
 
   check([
     ['C2-H-152: a colgroup with one col per column when a column has a width, written as a percentage without trailing zeros',
-      '{widths="30.5,,7"}\n| a | b | c |', '<table>\n  <colgroup>\n    <col style="width: 30.5%;">\n    <col>\n    <col style="width: 7%;">\n  </colgroup>\n  <tbody>\n    <tr><td>a</td><td>b</td><td>c</td></tr>\n  </tbody>\n</table>'],
+      '{widths="30.5,7"}\n| a | b | c |', '<table>\n  <colgroup>\n    <col style="width: 30.5%;">\n    <col style="width: 7%;">\n    <col>\n  </colgroup>\n  <tbody>\n    <tr><td>a</td><td>b</td><td>c</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-152: a table where no column has a width has no colgroup', '{widths="x,0"}\n| a | b |', '<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-153, C2-B-214: the four keys are read and not written, also where a value is invalid, and header-cols is an ordinary key',
       '{aligns=x widths=y header-rows=z footer-rows=w header-cols=1 k=v}\n| a |', '<table header-cols="1" k="v">\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>'],

@@ -6,7 +6,7 @@ import {
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
 import { AFTER_MARK, AS_INLINES, planLeaf, unplanned } from './write-plan.ts'
-import { emit, lose, type Writer } from './write-state.ts'
+import { emit, lose, loseKey, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
 import { longestBareRun } from './write-fences.ts'
 import { displayWidth } from './width.ts'
@@ -64,8 +64,11 @@ function columnList(table: TableNode, field: 'align' | 'width'): string | null {
   return columns.slice(0, last + 1).map((column) => columnEntry(column, field)).join(',')
 }
 
-/** The keys of the attribute line that the tree holds in the columns and the groups of the table. */
-function tableKeys(table: TableNode, first: readonly (readonly [string, string])[]): BlockParts {
+/**
+ * The keys of the attribute line that the tree holds in the columns and the groups of the table. C2-W-136: a key
+ * that `attrs` holds too is written from the fields, and the key in `attrs` is reported where `w` is given.
+ */
+function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly [string, string])[]): BlockParts {
   const keys: (readonly [string, string])[] = [...first]
   const aligns = columnList(table, 'align')
   const widths = columnList(table, 'width')
@@ -73,7 +76,13 @@ function tableKeys(table: TableNode, first: readonly (readonly [string, string])
   if (aligns !== null) keys.push(['aligns', aligns])
   if (widths !== null) keys.push(['widths', widths])
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
-  return { keys }
+  const skipKeys: string[] = []
+  table.attrs?.keyValues?.forEach(([key], index) => {
+    if (!keys.some((pair) => pair[0] === key)) return
+    skipKeys.push(key)
+    if (w !== null) loseKey(w, table, index, key)
+  })
+  return { keys, skipKeys }
 }
 
 /** The content of a cell on its lines: a line feed stands where a continuation row breaks it (C2-W-067). */
@@ -191,7 +200,7 @@ function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow |
 }
 
 function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): void {
-  const block = braceBlock(table, tableKeys(table, []))
+  const block = braceBlock(table, tableKeys(w, table, []))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else if (block !== '') emit(w, prefix, block)
   const entries = tableEntries(w, table, flags)
@@ -302,8 +311,9 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
   const first: (readonly [string, string])[] = [['table', '']]
   const declared = declaredHeadRows(table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
+  const block = braceBlock(table, tableKeys(w, table, first))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
-  else emit(w, prefix, braceBlock(table, tableKeys(table, first)))
+  else emit(w, prefix, block)
   const body: string[] = []
   for (const group of table.children) {
     if (group.type === 'comment') continue
@@ -325,9 +335,9 @@ export function writeTable(w: Writer, table: TableNode, prefix: string, flags: n
 /** C2-W-122: the same table attribute line before an intervening comment as before the table itself. */
 export function tableAttribute(w: Writer, table: TableNode): string {
   const format = tableFormat(w, table)
-  if (format === 'pipe') return braceBlock(table, tableKeys(table, []))
+  if (format === 'pipe') return braceBlock(table, tableKeys(null, table, []))
   const first: (readonly [string, string])[] = [['table', '']]
   const declared = declaredHeadRows(table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
-  return braceBlock(table, tableKeys(table, first))
+  return braceBlock(table, tableKeys(null, table, first))
 }

@@ -1,7 +1,8 @@
 // The rulings of the 0.2 specification that the engine follows: one describe per ruling, each test named by its clause.
 import { describe, expect, it } from 'vitest'
 import {
-  CarveOptionError, CarveTreeError, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree, validateTree,
+  CarveOptionError, CarveTreeError, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree,
+  type RenderOptions, validateTree,
 } from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
 import { UNICODE_VERSION } from '../src/unicode-tables.ts'
@@ -128,7 +129,7 @@ describe('the social option', () => {
   })
 
   it('C2-H-126: social has four optional fields and no other', () => {
-    expect(() => render('@a', JSON.parse('{"social":{"mentionUrl":"/u","other":1}}'))).toThrow(CarveOptionError)
+    expect(() => render('@a', JSON.parse('{"social":{"mentionUrl":"/u","other":1}}') as RenderOptions)).toThrow(CarveOptionError)
   })
 })
 

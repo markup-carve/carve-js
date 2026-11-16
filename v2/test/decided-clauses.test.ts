@@ -190,8 +190,10 @@ describe('the other clauses of the two commits', () => {
     parseWithLayout(src).layout.nodes.find((node) => node.path === path) as Record<string, unknown> | undefined
 
   it('C2-B-220: a widths entry is digits with an optional dot and digits; .5, 5., 1e1 and +5 set no width', () => {
-    const table = ofType(parse(`{table widths="30.5,5,.5,5.,1e1,+5"}\n${FENCE}csv\na,b,c,d,e,f\n${FENCE}`, { positions: false }).children[0], 'table')
-    expect(table.columns.map((column) => column.width)).toEqual([0.305, 0.05, undefined, undefined, undefined, undefined])
+    const widths = (value: string): (number | undefined)[] => ofType(parse(`{table widths="${value}"}\n${FENCE}csv\na,b\n${FENCE}`,
+      { positions: false }).children[0], 'table').columns.map((column) => column.width)
+    expect(widths('30.5,5')).toEqual([0.305, 0.05])
+    for (const entry of ['.5', '5.', '1e1', '+5']) expect(widths(`30.5,${entry}`), entry).toEqual([undefined, undefined])
   })
 
   it('C2-A-089: resolvedAlign is the mark of the last head cell before the aligns entry', () => {

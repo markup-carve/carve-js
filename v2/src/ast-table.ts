@@ -201,22 +201,50 @@ function columnWidth(entry: string): number | undefined {
   return percent > 0 && percent <= MAX_WIDTH ? percent / MAX_WIDTH : undefined
 }
 
+function alignEntry(entry: string): string | undefined {
+  return isFieldValue('table_column.align', entry) ? entry : undefined
+}
+
+/** C2-B-211, C2-B-212: the entries of a column list, or null when the list is absent or any entry is not valid. */
+function columnEntries<T>(value: string | null, read: (entry: string) => T | undefined): T[] | null {
+  if (value === null) return null
+  const out: T[] = []
+  for (const entry of value.split(',')) {
+    const read1 = read(trimSpaces(entry))
+    if (read1 === undefined) return null
+    out.push(read1)
+  }
+  return out
+}
+
 /** C2-A-089: one column per position up to the widest row, with what `aligns` and `widths` spell (C2-B-211, C2-B-212). */
-function columnNodes(width: number, aligns: string | null, widths: string | null): TableColumnNode[] {
-  const alignList = aligns === null ? [] : aligns.split(',')
-  const widthList = widths === null ? [] : widths.split(',')
+function columnNodes(width: number, aligns: string[] | null, widths: number[] | null): TableColumnNode[] {
   const columns: TableColumnNode[] = []
   for (let at = 0; at < width; at++) {
     const column: TableColumnNode = { type: 'table_column' }
-    const align = trimSpaces(alignList[at] ?? '')
-    const fraction = columnWidth(trimSpaces(widthList[at] ?? ''))
-    // C2-B-211: the entries of `aligns` that set an alignment.
-    if (isFieldValue('table_column.align', align)) column.align = align
+    const align = aligns?.[at]
+    const fraction = widths?.[at]
+    if (align !== undefined && isFieldValue('table_column.align', align)) column.align = align
     if (fraction !== undefined) column.width = fraction
     if (column.align !== undefined || fraction !== undefined) column.authored = true
     columns.push(column)
   }
   return columns
+}
+
+function keyOf(attributes: Attributes | null, name: string): string | null {
+  return attributes?.keyValues.find((pair) => pair[0] === name)?.[1] ?? null
+}
+
+/** C2-B-227: a key whose value is valid is consumed; an invalid one has no effect and stays in `attrs`. */
+function consumed<T>(attributes: Attributes | null, name: string, valid: T | null): T | null {
+  if (valid !== null) takeKey(attributes, name)
+  return valid
+}
+
+function count(value: string | null): number | null {
+  const parsed = countValue(value)
+  return parsed < 0 ? null : parsed
 }
 
 function groupNode(
@@ -227,11 +255,16 @@ function groupNode(
   return range === undefined ? group : place(ctx, group, range[0], range[1])
 }
 
-/** C2-H-153: `aligns`, `widths`, `header-rows` and `footer-rows` are read here and are no attributes of the table. */
-function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null): TableNode {
-  takeKey(attributes, 'footer-rows')
-  takeKey(attributes, 'header-rows')
-  const columns = columnNodes(groups.width, takeKey(attributes, 'aligns'), takeKey(attributes, 'widths'))
+/**
+ * C2-B-227: `aligns`, `widths`, `header-rows` and `footer-rows` are read here. A valid key that applies to the
+ * table form is consumed; an invalid one, and `header-rows` on a pipe table (C2-B-186), stays in `attrs`.
+ */
+function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null, delimited: boolean): TableNode {
+  consumed(attributes, 'footer-rows', count(keyOf(attributes, 'footer-rows')))
+  if (delimited) consumed(attributes, 'header-rows', count(keyOf(attributes, 'header-rows')))
+  const aligns = consumed(attributes, 'aligns', columnEntries(keyOf(attributes, 'aligns'), alignEntry))
+  const widths = consumed(attributes, 'widths', columnEntries(keyOf(attributes, 'widths'), columnWidth))
+  const columns = columnNodes(groups.width, aligns, widths)
   const table: TableNode = { type: 'table', columns, children: [] }
   if (groups.head.length > 0) table.children.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.body.length > 0) table.children.push(groupNode(ctx, groups, 'table_body', groups.body))
@@ -243,7 +276,7 @@ function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null
 
 /** A pipe table. `comment` builds the node of a comment-only line between two rows. */
 export function tableNode(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): TableNode {
-  return tableOf(ctx, sortRows(ctx, node, comment), readAttributeLines(ctx.src, node.attributes))
+  return tableOf(ctx, sortRows(ctx, node, comment), readAttributeLines(ctx.src, node.attributes), false)
 }
 
 function delimitedRow(cells: string[], header: boolean): TableRowNode {
@@ -268,14 +301,14 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
   const allHeaders = source.headRows > rows.length
   const head = allHeaders ? 0 : source.headRows
   // C2-B-187: the footer rows are counted among the rows below the head.
-  const footer = Math.min(Math.max(0, countValue(takeKey(attributes, 'footer-rows'))), Math.max(0, rows.length - head))
+  const footer = Math.min(Math.max(0, countValue(keyOf(attributes, 'footer-rows'))), Math.max(0, rows.length - head))
   const groups = emptyGroups()
   rows.forEach((cells, index) => {
     groups.width = Math.max(groups.width, cells.length)
     const group = index < head ? groups.head : index < rows.length - footer ? groups.body : groups.foot
     group.push(delimitedRow(cells, allHeaders || index < head))
   })
-  const table = tableOf(ctx, groups, attributes)
+  const table = tableOf(ctx, groups, attributes, true)
   // C2-A-088: a body whose partition the source declared carries `headRows`.
   if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = source.headRows
   // C2-B-181: a quote that never closes is reported, and the block stays a table.

@@ -216,7 +216,7 @@ describe('the reader at its bounds', () => {
     const include = (options: unknown): DocumentNode => documentOf({ type: 'include', path: 'a', options } as unknown as Block)
     expect(refusal(include({ lines: '1-2', code: true }))).toBeNull()
     expect(refusal(include([['a', 'b']]))).toBe('/children/0/options: options is not an object')
-    expect(refusal(include({ shift: 'x' }))).toBe('/children/0/options/shift: not an integer or auto')
+    expect(refusal(include({ shift: 'x' }))).toBe('/children/0/options/shift: not an integer of nine digits or auto')
     expect(refusal(include({ cols: [1] }))).toBe('/children/0/options/cols/0: not a string')
     const ruby = (pair: unknown): DocumentNode => documentOf(paragraph({ type: 'ruby', pairs: [pair] } as unknown as Inline))
     expect(refusal(ruby({ type: 'ruby_pair', base: [text('a')], annotation: [] }))).toBeNull()
@@ -333,7 +333,7 @@ describe('one-line blocks in detail', () => {
 
   it('a column is authored when the source spells its alignment or its width', () => {
     expect(ofType(block('{aligns="left"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }])
-    expect(ofType(block('{widths=",40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column', width: 0.4, authored: true }])
+    expect(ofType(block('{widths="40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', width: 0.4, authored: true }, { type: 'table_column' }])
   })
 
   it('an inline footnote in a joined cell keeps its content, and text joined from two lines has no position', () => {

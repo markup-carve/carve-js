@@ -311,7 +311,9 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
  * render calls `restore` when it has written the tree (C2-H-121).
  */
 export function applyProfile(document: DocumentNode, name: string, rule: ProfileRule, findings: Findings): ProfileRun {
-  const filter: Filter = { name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set(), goneTargets: new Set() }
+  const filter: Filter = {
+    name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set(), goneTargets: new Set(),
+  }
   filterNode(filter, document, 0)
   return {
     gone: filter.gone,

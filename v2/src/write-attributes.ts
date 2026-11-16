@@ -52,6 +52,8 @@ export interface BlockParts {
   keys?: readonly (readonly [string, string])[]
   /** Classes that the opener of the block stands for and that are not written (C2-W-039, C2-W-081). */
   skipClasses?: readonly number[]
+  /** Keys of `attrs` that `keys` writes from other fields instead (C2-W-136). */
+  skipKeys?: readonly string[]
 }
 
 const NONE: readonly never[] = []
@@ -65,9 +67,10 @@ function classParts(classes: readonly string[], parts: string[], skip: readonly 
   }
 }
 
-function keyParts(keyValues: readonly [string, string][], parts: string[], first: readonly (readonly [string, string])[]): void {
-  for (const [key, value] of first) parts.push(keyPart(key, value))
-  for (const [key, value] of keyValues) if (isKey(key)) parts.push(keyPart(key, value))
+function keyParts(keyValues: readonly [string, string][], parts: string[], extra: BlockParts | undefined): void {
+  for (const [key, value] of extra?.keys ?? NONE) parts.push(keyPart(key, value))
+  const skip = extra?.skipKeys ?? NONE
+  for (const [key, value] of keyValues) if (isKey(key) && !skip.includes(key)) parts.push(keyPart(key, value))
 }
 
 function idPart(id: string | undefined, parts: string[]): void {
@@ -82,7 +85,7 @@ export function braceBlock(node: Node, extra?: BlockParts): string {
   classParts(attrs?.classes ?? NONE, parts, extra?.skipClasses ?? [])
   const lang = node.lang
   if (lang !== undefined) parts.push(`:${lang}`)
-  keyParts(attrs?.keyValues ?? NONE, parts, extra?.keys ?? [])
+  keyParts(attrs?.keyValues ?? NONE, parts, extra)
   const mark = extra?.mark ?? ''
   if (mark !== '') parts.unshift(mark)
   return parts.length === 0 ? '' : `{${parts.join(' ')}}`

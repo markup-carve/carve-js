@@ -646,8 +646,17 @@ function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level:
   line(r, level, '</colgroup>')
 }
 
+const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+
+/** C2-H-153: the four keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
+function withoutTableKeys(node: TableNode): TableNode {
+  const keyValues = node.attrs?.keyValues
+  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key))) return node
+  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key)) } }
+}
+
 function table(r: Render, node: TableNode, level: number): void {
-  line(r, level, `<table${tag(r, node)}>`)
+  line(r, level, `<table${tag(r, withoutTableKeys(node))}>`)
   const caption = node.caption
   if (caption !== undefined) captionLine(r, caption, 'caption', level + 1)
   const layout: TableLayout = { columns: node.columns, headValign: headMarks(node, 'valign') }
@@ -823,7 +832,8 @@ export function renderDocument(
   document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean,
 ): RenderResult {
   const rule = PROFILES.get(settings.profile)
-  const linksAllowed = rule === undefined || ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
+  const linksAllowed = rule === undefined ||
+    ((rule.allowedInline?.includes('link') ?? true) && !(rule.deniedInline?.includes('link') ?? false))
   const r: Render = {
     settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,

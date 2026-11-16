@@ -17,6 +17,8 @@ export interface Diagnostic {
 export interface Findings {
   entries: Diagnostic[]
   nodes: (Node | null)[]
+  /** The pointer below its node of an entry about a part of the node, such as one key of its `attrs`. */
+  steps?: Map<Diagnostic, string>
 }
 
 export function addFinding(findings: Findings, node: Node | null, entry: Diagnostic): void {
@@ -78,7 +80,7 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
   entries.forEach((entry, at) => {
     const node = nodes[at] ?? null
     const path = node === null ? undefined : found.get(node)
-    entry.path = path ?? ''
+    entry.path = (path ?? '') + (findings.steps?.get(entry) ?? '')
     const pos = path === undefined || node === null ? undefined : node.pos
     if (pos !== undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
   })
