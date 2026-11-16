@@ -520,7 +520,10 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
       last = 10
     }
     const end = partEnd(w, nodes, at)
-    if (node.type === 'text') doubleLastBackslash(w, node, nodes, end, flags)
+    if (node.type === 'text') {
+      doubleLastBackslash(w, node, nodes, end, flags)
+      escapeGluedBacktick(w, node, nodes[at - 1])
+    }
     const part = gluedPart(w, nodes, at, end, flags, last)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
@@ -549,6 +552,17 @@ function doubleLastBackslash(w: Writer, node: TextNode, nodes: readonly Node[], 
     if (spelled !== '' && code !== SPACE && !isAsciiPunctuation(code)) return
   }
   w.escapes.set(node, [...(escapes ?? []), last])
+}
+
+/**
+ * C2-I-015, C2-W-125 case six: a backtick of text glued behind a code, literal-text or math span makes its closing run
+ * longer, so the span would not form; the procedure takes that backslash in every case, and it is placed first.
+ */
+function escapeGluedBacktick(w: Writer, node: TextNode, before: Node | undefined): void {
+  if (node.value.charCodeAt(0) !== BACKTICK || before === undefined || before.attrs !== undefined) return
+  if (before.type !== 'code' && before.type !== 'literal_inline' && before.type !== 'math') return
+  const escapes = w.escapes.get(node) ?? []
+  if (escapes[0] !== 0) w.escapes.set(node, [0, ...escapes])
 }
 
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */

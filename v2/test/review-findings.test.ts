@@ -8,6 +8,7 @@ import {
 import { CarveOptionError } from '../src/options.ts'
 import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 import { documentOf } from './support/tree.ts'
+import { referenceForm } from './support/writer-checks.ts'
 
 /** The path and the reason of the refusal of `json`, or null when it is accepted. */
 function refusal(json: unknown): string | null {
@@ -318,6 +319,14 @@ describe('writer output that read back as another tree', () => {
     expect(format(source)).toBe(`${source}\n`)
     expect(format(`${source}b`)).toBe(`${source}b\n`)
     expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  })
+
+  it('C2-W-125, case six: the backtick glued behind a code span takes its backslash before the runs before the span are read', () => {
+    for (const source of [`x${BACKTICK}${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}`,
+      `x{*${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}*`, `x(/u)${BACKTICK}a${BACKTICK}${BACKSLASH}${BACKTICK}/`]) {
+      expect(format(source), source).toBe(`${source}\n`)
+      expect(referenceForm(`${source}\n`, parse(source)), source).toEqual({ form: `${source}\n` })
+    }
   })
 
   it('C2-W-112: a code span with an attribute block is not joined to the code span behind it', () => {
