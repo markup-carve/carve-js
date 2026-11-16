@@ -145,4 +145,15 @@ describe('stored tree migration', () => {
     const result = migrateTree(old)
     assert.equal(treesEqual(result.document, parse('{footer-rows=1}\n| a |\n| ^ |')), true)
   })
+
+  it('T-051, C2-B-138: the comments of a stored figure of an image or a quote are lines of its open paragraph, as a parse gives', () => {
+    const cap = { type: 'caption', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'c' }] }] }
+    const comment = { type: 'comment', form: 'line', value: 'x' }
+    const image = { type: 'paragraph', role: 'image', children: [{ type: 'image', src: 'u', alt: 'a' }] }
+    const quote = { type: 'block_quote', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'q' }] }] }
+    for (const [inner, source] of [[image, '![a](u)\n%% x\n^ c'], [quote, '> q\n%% x\n^ c']] as const) {
+      const old = { type: 'document', astVersion: '2.0', children: [{ type: 'figure', children: [inner, comment], caption: cap }] }
+      assert.equal(treesEqual(migrateTree(old).document, parse(source)), true, source)
+    }
+  })
 })

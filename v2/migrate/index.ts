@@ -155,7 +155,15 @@ function unwrapFigure(figure: Fields): Fields[] {
   const block: Fields = { ...first }
   for (const field of ['caption', 'attrs', 'lang', 'dir', 'pos']) if (figure[field] !== undefined) block[field] = figure[field]
   if (block['type'] === 'code_block') return [block, ...rest]
-  block['children'] = [...nodeList(block['children']), ...rest]
+  // C2-B-138: the comment line is a line of the open paragraph, the last one of a quote, or else a child of the quote.
+  const inner = nodeList(block['children'])
+  const last = inner[inner.length - 1]
+  const leaf = block['type'] === 'paragraph' ? block : last?.['type'] === 'paragraph' ? { ...last } : null
+  if (leaf === null) block['children'] = [...inner, ...rest]
+  else {
+    leaf['children'] = [...nodeList(leaf['children']), ...rest.flatMap((comment) => [{ type: 'soft_break' }, comment])]
+    if (leaf !== block) block['children'] = [...inner.slice(0, -1), leaf]
+  }
   return [block]
 }
 

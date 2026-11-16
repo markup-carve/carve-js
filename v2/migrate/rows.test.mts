@@ -142,7 +142,7 @@ const cases: Record<string, Case> = {
     children: [{ type: 'paragraph', role: 'image', children: [{ type: 'image', src: 'x', alt: 'a' }] }, { type: 'comment', form: 'line', value: 'c' }],
     caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
     path: 'document.children.0.type', expected: 'paragraph',
-    also: { 'document.children.0.attrs.id': 'f', 'document.children.0.caption.type': 'caption', 'document.children.0.children.1.type': 'comment',
+    also: { 'document.children.0.attrs.id': 'f', 'document.children.0.caption.type': 'caption', 'document.children.0.children.1.type': 'soft_break', 'document.children.0.children.2.type': 'comment',
       'document.children.0.kind': undefined } },
   'T-052': { children: [{ type: 'figure', children: [paragraph(text('a')), paragraph(text('b'))],
     caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
