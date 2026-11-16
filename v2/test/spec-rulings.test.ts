@@ -367,3 +367,35 @@ describe('spec data rulings', () => {
     }
   })
 })
+
+describe('the defects the PHP port found', () => {
+  it('C2-I-079, C2-B-082: a definition label that folds to nothing is no label, so the line is text', () => {
+    for (const src of ['[^ ]: A', '[ ]: /u', '*[ ]: x', '[^\t]: A']) {
+      expect(parse(src).children.map((node) => node.type), src).toEqual(['paragraph'])
+    }
+    expect(parse('[^ a ]: A').children[0]).toMatchObject({ type: 'footnote', key: 'a' })
+  })
+
+  it('C2-A-154: a div that an outer closer ends stops after its last child', () => {
+    const outer = parse('::: note "Title"\ntext\n:::::: spoiler\nx\n:::').children[0]
+    const inner = outer?.type === 'admonition' ? outer.children[1] : undefined
+    expect(inner).toMatchObject({ type: 'div', pos: { startOffset: 22, endOffset: 38 } })
+    expect(outer).toMatchObject({ pos: { startOffset: 0, endOffset: 42 } })
+  })
+
+  it('C2-B-006, C2-B-119: a tab after the colon run of a div opener makes the line text', () => {
+    for (const src of [':::\tx\ny', '::: \tx\ny']) expect(parse(src).children.map((node) => node.type), src).toEqual(['paragraph'])
+    expect(parse(':::\t\ny\n:::').children[0]).toMatchObject({ type: 'div' })
+    expect(format(':::\tx\ny')).toBe(':::\tx\ny\n')
+  })
+
+  it('C2-B-190: a line block past the depth cap is text', () => {
+    let node = parse(`${'> '.repeat(200)}::: | \nx\n`).children[0]
+    let depth = 0
+    while (node?.type === 'block_quote') {
+      node = node.children[0]
+      depth++
+    }
+    expect([depth, node?.type]).toEqual([200, 'paragraph'])
+  })
+})

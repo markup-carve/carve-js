@@ -207,8 +207,15 @@ function include(w: Writer, node: IncludeNode, prefix: string): void {
 }
 
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */
+/** C2-I-079: a key of only spaces, tabs and line feeds folds to nothing, and its brackets are text. */
+function loseBlankKey(w: Writer, node: LinkReferenceDefinitionNode | FootnoteNode): void {
+  for (const char of node.key) if (char !== ' ' && char !== '\t' && char !== '\n') return
+  lose(w, node, 'key')
+}
+
 function linkDefinition(w: Writer, node: LinkReferenceDefinitionNode, prefix: string): void {
   attributeLine(w, node, prefix)
+  loseBlankKey(w, node)
   const href = node.href
   if (href === '') lose(w, node, 'href')
   const authored = node.tooltip
@@ -232,6 +239,7 @@ function body(
 
 function footnote(w: Writer, node: FootnoteNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
+  loseBlankKey(w, node)
   body(w, node, prefix, flags, `[^${node.key}]: `, 2, false)
 }
 

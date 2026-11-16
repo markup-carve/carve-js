@@ -373,10 +373,24 @@ function buildBlock<N extends Node>(
   return out
 }
 
+/**
+ * C2-A-154: a div with no closer ends after its last child that has a position, or after its opener line,
+ * also where the closer of an outer div ended it.
+ */
+function unclosedEnd(src: string, out: Node, node: BlockNode): number {
+  const children = 'children' in out && Array.isArray(out.children) ? out.children : []
+  for (let at = children.length - 1; at >= 0; at--) {
+    const pos = children[at]?.pos
+    if (pos !== undefined) return pos.endOffset
+  }
+  const lineEnd = src.indexOf('\n', node.start)
+  return lineEnd < 0 || lineEnd > node.end ? node.end : lineEnd
+}
+
 /** Places the block `out`, built from `node`, unless its builder placed it already. */
 function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): N {
   if (out.pos !== undefined) return out
-  const end = node.end
+  const end = node.kind === DIV && (node.exitFlags & FLAG_UNCLOSED) !== 0 ? unclosedEnd(ctx.src, out, node) : node.end
   // C2-A-148: a block that took attribute lines starts at the first of them.
   const first = node.attributes?.[0]
   if (first === undefined || !ctx.positions) return place(ctx, out, node.start, end)

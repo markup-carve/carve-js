@@ -176,14 +176,15 @@ describe('the planned writer', () => {
   })
 
   it('C2-B-119, C2-B-196: a colon run glued to a name is text, and the plan writes it bare', () => {
-    for (const source of ['a\n\\:::x\n', '\\:::x\n', 'a\n\\::::x\n', '- a\n  \\:::x\n', 'a\n\\:::>\n']) {
+    // C2-B-006: a tab before further text leaves the line text too.
+    for (const source of ['a\n\\:::x\n', '\\:::x\n', 'a\n\\::::x\n', '- a\n  \\:::x\n', 'a\n\\:::>\n', 'a\n\\:::\tx\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source.replace('\\:', ':'))
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    // A space, a tab or the line end behind the run makes a div line, so the colon keeps its backslash.
-    for (const source of ['a\n\\::: x\n', 'a\n\\:::\tx\n', 'a\n\\:::\n']) {
+    // A space or the line end behind the run makes a div line, so the colon keeps its backslash.
+    for (const source of ['a\n\\::: x\n', 'a\n\\:::\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)

@@ -106,9 +106,15 @@ function anyLine(leaf: Leaf, at: number, value: number): number {
   return NO_ESCAPE
 }
 
-/** C2-B-119, C2-B-196: a colon run is a div line where a space, a tab or the line end follows it; glued to a name, it is text. */
+/** C2-B-119, C2-B-196: a colon run is a div line where spaces or the line end follow it, or only blanks; glued to a name, it is text. */
 function divLine(leaf: Leaf, at: number, end: number): number {
-  return isBlank(code(leaf, end)) || isLineEnd(code(leaf, end)) ? at : NO_ESCAPE
+  let after = end
+  while (code(leaf, after) === SPACE) after++
+  if (isLineEnd(code(leaf, after))) return at
+  // C2-B-006: a tab before further text leaves the line text.
+  if (code(leaf, after) !== TAB) return after > end ? at : NO_ESCAPE
+  while (isBlank(code(leaf, after))) after++
+  return isLineEnd(code(leaf, after)) ? at : NO_ESCAPE
 }
 
 /** C2-B-014, C2-B-006: a div or a comment fence opens where a blank or the end of the line follows its run. */

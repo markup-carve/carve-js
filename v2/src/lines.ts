@@ -4,7 +4,7 @@ import { type AttributeMemo, type AttributeSink, emptyMemo, readAttributeBlock }
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
   DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
-  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
+  PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TAB, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
@@ -305,8 +305,12 @@ export function isFenceLine(src: string, pos: number, end: number): boolean {
  */
 export function divRunLength(src: string, pos: number, end: number): number {
   const length = fenceRunLength(src, pos, end, COLON)
-  const after = pos + length
-  return after === end || isSpaceOrTab(src.charCodeAt(after)) ? length : 0
+  let after = pos + length
+  while (after < end && src.charCodeAt(after) === SPACE) after++
+  if (after === end) return length
+  // C2-B-006, C2-B-119: only spaces stand before a name, a sigil, a title or a label; a tab leaves the run bare or text.
+  if (src.charCodeAt(after) !== TAB) return after > pos + length ? length : 0
+  return skipSpaces(src, after, end) === end ? length : 0
 }
 
 function isSigil(src: string, pos: number, end: number): boolean {
@@ -357,15 +361,17 @@ export function captionContentStart(src: string, pos: number, end: number): numb
 /** Offset after `[label]:` at `pos`, or -1. `skip` is the length of what stands before the label. */
 function labelEnd(src: string, pos: number, end: number, skip: number, spaces: boolean): number {
   let p = pos + skip
-  const start = p
+  let solid = false
   while (p < end) {
     const code = src.charCodeAt(p)
     if (code === BRACKET_CLOSE) break
     if (code === BRACKET_OPEN || (!spaces && isSpaceOrTab(code))) return -1
+    if (!isSpaceOrTab(code)) solid = true
     if (code === BACKSLASH) p++
     p++
   }
-  if (p === start || p + 1 >= end || src.charCodeAt(p + 1) !== COLON) return -1
+  // C2-I-079: a label whose key folds to nothing is no label.
+  if (!solid || p + 1 >= end || src.charCodeAt(p + 1) !== COLON) return -1
   return p + 2
 }
 

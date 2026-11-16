@@ -923,6 +923,8 @@ function openDiv(state: BlockState, end: number): boolean {
   if (length === 0 || skipSpaces(src, runEnd, end) === end) return false
   const sigil = divSigil(src, runEnd, end)
   if (sigil === PIPE) {
+    // C2-B-190: a line block is a div and counts toward the cap.
+    if (state.containers.depth > MAX_DEPTH) return false
     // C2-B-123: the body of a line block is one leaf.
     writeEvent(state, enterTag(state, LINE_BLOCK, 0), pos, length)
     openOpaqueLeaf(state, LINE_BLOCK, COLON, length)
