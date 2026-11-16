@@ -17,9 +17,9 @@ import { DEPTH_CAP } from './inline-tables.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
-/** Pushes a bracket opener that spans `[start, end)`. C2-I-118: past the cap it is text. */
+/** Pushes a bracket opener that spans `[start, end)`. C2-I-118: past the cap it is text, and the scan goes on behind it. */
 export function openBracket(state: InlineState, start: number, end: number, form: number): number {
-  if (state.baseDepth + state.bracketDepth >= DEPTH_CAP) return start + 1
+  if (state.baseDepth + state.bracketDepth >= DEPTH_CAP) return end
   if (state.bracketDepth === state.brackets.length) {
     const larger = new Int32Array(state.brackets.length * 2)
     larger.set(state.brackets)

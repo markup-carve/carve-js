@@ -47,3 +47,31 @@ describe('C2-B-119/122/196: a sigil starts a sigil div also when further words a
     expect(render('::: x\n::: |a\n:::\nb\n:::\n')).toBe('<div class="x">\n  <div class="line-block">\n\n  </div>\n  <p>b</p>\n</div>')
   })
 })
+
+describe('C2-I-118/126: the scan goes on behind an opener that failed at the cap', () => {
+  const innermost = (src: string): unknown => {
+    let node = parse(src).children[0] as unknown as { type: string, children: unknown[] }
+    while (node.type === 'block_quote') node = node.children[0] as typeof node
+    return JSON.parse(JSON.stringify(node.children, (key, value: unknown) => key === 'pos' ? undefined : value))
+  }
+
+  it('C2-I-118: behind `^[`, `![` and `:name[` the next bracket is no footnote reference', () => {
+    for (const opener of ['^[', '![', ':n[', ':ab-c[']) {
+      const children = innermost(`${'> '.repeat(200)}${opener}^x]`)
+      expect(children).toEqual([{ type: 'text', value: `${opener}^x]` }])
+    }
+    expect(innermost(`${'> '.repeat(200)}^[^"]`)).toEqual([
+      { type: 'text', value: '^[^' },
+      { type: 'smart_punctuation', kind: 'right_double_quote', glyph: '”', source: '"' },
+      { type: 'text', value: ']' },
+    ])
+  })
+
+  it('C2-I-126: an opener that failed at the cap pairs with no closing bracket', () => {
+    const children = innermost(`${'> '.repeat(199)}[a ^[^x] b](u)`)
+    expect(JSON.stringify(children)).not.toContain('footnote_ref')
+    expect(innermost(`${'> '.repeat(199)}^[a ^[^x] b]`)).toEqual([
+      { type: 'inline_footnote', children: [{ type: 'text', value: 'a ^[^x' }], number: 1 }, { type: 'text', value: ' b]' },
+    ])
+  })
+})
