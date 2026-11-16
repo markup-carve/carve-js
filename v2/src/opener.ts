@@ -149,3 +149,12 @@ export function openerWord(src: string, pos: number): string {
   const info = readOpenerInfo(src, pos)
   return info.wordStart < 0 ? '' : src.slice(info.wordStart, info.wordEnd)
 }
+
+/**
+ * C2-B-127: the div opener whose run ends at `pos` names `figure` with no title and no label, so it
+ * gives a figure group. Further words and an attribute block are neither (C2-B-105, C2-B-122).
+ */
+export function isFigureOpener(src: string, pos: number): boolean {
+  const info = readOpenerInfo(src, pos)
+  return info.titleStart < 0 && info.labelStart < 0 && src.slice(info.wordStart, info.wordEnd) === 'figure'
+}

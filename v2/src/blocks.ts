@@ -25,13 +25,13 @@ import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
-  isFigureName, isFrontmatterCloser, isFrontmatterOpener, isIncludeLine, isLineComment,
+  isFrontmatterCloser, isFrontmatterOpener, isIncludeLine, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
 import { isImageOnly } from './image-line.ts'
-import { openerWord } from './opener.ts'
+import { isFigureOpener, openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'
 
@@ -959,7 +959,7 @@ function openDiv(state: BlockState, end: number): boolean {
   let style = 0
   if (sigil === BACKSLASH) style = FLAG_HARD_BREAKS
   else if (sigil === GREATER) style = FLAG_QUOTE_FENCE
-  else if (isFigureName(src, runEnd, end)) style = FLAG_FIGURE
+  else if (isFigureOpener(src, runEnd)) style = FLAG_FIGURE
   return pushDiv(state, style, length)
 }
 

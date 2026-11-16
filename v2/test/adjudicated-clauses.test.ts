@@ -171,3 +171,29 @@ describe('C2-B-197: a block image line has the shape of the inline image form', 
     for (const line of ['![a](x) b', '![a](x', '![a [b](x)', '![a](x)(y)', '![a]', '![a] (x)']) expect(kind(line)).toBe('paragraph')
   })
 })
+
+describe('C2-B-127: `figure` with no title and no label gives a figure group', () => {
+  it('C2-B-122, C2-B-225: further words, glued or after a space, leave it a figure group and are reported', () => {
+    for (const rest of ['/*x*/', ' x', '>', ' x y', '|', '\t', ' %% c']) {
+      const src = `::: figure${rest}\n![a](a.png)\n:::\n`
+      expect(first(src)).toMatchObject({ type: 'figure_group' })
+      expect(findings(src)).toEqual(rest === '\t' ? [] : ['fence-title-syntax'])
+    }
+    expect(render('::: figure/*x*/\n![a](a.png)\n:::\n')).toBe('<figure class="carve-figure-group">\n  <img src="a.png" alt="a">\n</figure>')
+  })
+
+  it('C2-B-105: an attribute block on the opener is neither a title nor a label, and is not applied', () => {
+    for (const rest of [' {#f}', '{#f}', '{.c} x']) {
+      const src = `::: figure${rest}\n| x |\n:::\n`
+      expect(first(src)).toMatchObject({ type: 'figure_group' })
+      expect(first(src)).not.toHaveProperty('attrs')
+    }
+    expect(findings('::: figure{#f}\n| x |\n:::\n')).toEqual(['fence-opener-fallback'])
+  })
+
+  it('C2-B-127: with a title or a label it is a plain div with the class `figure`', () => {
+    for (const rest of [' "T"', ' [l]', ' "T" [l]', '  "T"']) {
+      expect(first(`::: figure${rest}\nq\n:::\n`)).toMatchObject({ type: 'div', attrs: { classes: ['figure'] } })
+    }
+  })
+})

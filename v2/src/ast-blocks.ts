@@ -321,6 +321,7 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
     noteSigilWords(ctx, node, out)
   } else if ((node.flags & FLAG_FIGURE) !== 0) {
     out = { type: 'figure_group', children: blockChildren(ctx, node.children!, flow) }
+    noteFurtherWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux), false)
   } else if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
     // C2-A-068: the opener form adds the class after the classes the author wrote.
     attributes.classes.push(HARD_BREAKS_CLASS)
