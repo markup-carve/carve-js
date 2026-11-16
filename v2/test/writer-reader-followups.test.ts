@@ -1,7 +1,9 @@
 // The writer after the reader fixes: opener words end at their character set (C2-B-117, C2-B-119), and the spaces
 // at the end of every content line are no content (C2-I-002).
 import { describe, expect, it } from 'vitest'
-import { format, formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
+import {
+  decodeTree, format, formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics, type DocumentNode,
+} from '../src/index.ts'
 
 const FENCE = '```'
 
@@ -91,5 +93,30 @@ describe('the spaces at the end of a line of a reference label', () => {
       expect(out.source, input).toBe(written)
       expect(treesEqual(parse(out.source), parse(input!)), input).toBe(true)
     }
+  })
+})
+
+describe('the writer follow-ups of the reader fixes', () => {
+  /** A supplied tree of one paragraph whose lines are text nodes joined by soft breaks. */
+  const lines = (...values: string[]): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', children: [{
+      type: 'paragraph',
+      children: values.flatMap((value, at) => at === 0 ? [{ type: 'text', value }] : [{ type: 'soft_break' }, { type: 'text', value }]),
+    }],
+  }))
+  const roundTrip = (tree: DocumentNode): string => {
+    const out = writeWithDiagnostics(tree)
+    expect(out.diagnostics).toEqual([])
+    expect(treesEqual(parse(out.source, { positions: false }), tree)).toBe(true)
+    return out.source
+  }
+
+  it('C2-B-119, C2-B-122: a paragraph of a sigil div opener as text keeps its escape', () => {
+    for (const value of ['::: >a', '::: |#', '::: \\x']) expect(roundTrip(lines(value)), value).toBe(`\\${value}\n`)
+  })
+
+  it('C2-B-197: a text line of the shape of a block image line takes escapes, so the caret line below stays text', () => {
+    expect(roundTrip(lines('![a][b[c]', '^ d'))).toBe('\\!\\[a][b[c]\n^ d\n')
+    expect(roundTrip(lines('![a][ ]', '^ c'))).toBe('![a][ ]\n^ c\n')
   })
 })

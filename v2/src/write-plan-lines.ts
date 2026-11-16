@@ -2,6 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
+import { isImageOnly } from './image-line.ts'
 import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
 import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
 
@@ -256,8 +257,9 @@ function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, firs
 /**
  * C2-B-146, C2-B-149: a caption line attaches only directly below an image, a table, a code block, a quote, a math
  * block or a figure group of its container. Below a line of text of the paragraph, or as the first line of the first
- * block of its container, it is text. Below a line that holds a node of the tree, or below another block, it is left
- * to the repair.
+ * block of its container, it is text. Below a line that holds a node of the tree, below a line of text that has the
+ * shape of a block image line (C2-B-197, decided by shape and not by inline parsing), or below another block, it is
+ * left to the repair.
  */
 function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
   if (!isBlank(code(leaf, at + 1)) && !isLineEnd(code(leaf, at + 1))) return NO_ESCAPE
@@ -266,7 +268,10 @@ function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): numb
   for (; unit >= 0 && leaf.codes[unit] !== LF; unit--) {
     if (leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) return UNDECIDED
   }
-  return NO_ESCAPE
+  if (code(leaf, unit + 1) !== 33) return NO_ESCAPE
+  let above = ''
+  for (let char = unit + 1; char < at - 1; char++) above += String.fromCharCode(leaf.codes[char]!)
+  return isImageOnly(above, 0, above.length) ? UNDECIDED : NO_ESCAPE
 }
 
 /**
