@@ -90,6 +90,13 @@ describe('blocks', () => {
   it('C2-W-081: a hard-break block with a title is written in the class form, since the opener takes none', () => {
     expect(format('{.hardbreaks}\n::: "T"\na\n:::')).toBe('::: hardbreaks "T"\na\n:::\n')
   })
+
+  it('C2-I-102, C2-W-022: a hard break at the end of the content of a hard-break block keeps its backslash', () => {
+    for (const source of ['::: \\\na\\\n:::\n', '::: \\\na\nb\\\n:::\n', '::: \\\n\\\n:::\n']) {
+      expect(format(source), source).toBe(source)
+      expect(treesEqual(parse(format(source)), parse(source)), source).toBe(true)
+    }
+  })
 })
 
 describe('continuation rows', () => {
