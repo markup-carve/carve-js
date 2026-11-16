@@ -298,6 +298,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-115: a run of `=` holds no replaced run unless `==>` or `<==` reaches into it', () => {
+    for (const source of ['a ====== b\n', 'a =\\==> b\n', 'x ===\\==> y\n', 'a \\<\\==> b\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('a \\<=== b\n', 'both').stats.repaired).toBe(1)
+  })
+
   it('C2-I-063: a sigil of text before a closing brace is planned bare behind a node', () => {
     for (const source of ['x `a`#} y\n', 'x `a`@} y\n', 'x /a/#} y\n', 'x `a`\\#a y\n']) {
       const result = formatBy(source, 'both')

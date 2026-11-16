@@ -262,6 +262,12 @@ function runBefore(leaf: Leaf, at: number, escaped: Uint8Array, chars: string): 
   return before >= 0 && leaf.kinds[at - 1] === TEXT && !isLiteral(leaf, at - 1, escaped) && chars.includes(String.fromCharCode(before))
 }
 
+/** C2-I-115: a `=` behind a bare `=` is taken in only by `==>` from that `=` or by `<==` from the character before it. */
+function takenFromEquals(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  if (code(leaf, at) !== 61 || !runBefore(leaf, at, escaped, '=')) return false
+  return code(leaf, at + 1) === 62 || code(leaf, at - 2) === 60
+}
+
 /**
  * C2-I-115, C2-I-117: a replaced run that starts at the text sign `at` (the sign and one of `seconds`, and `==>`)
  * takes the backslash on the sign; `=>` is no replaced run. A sign that a run from the character before may take in,
@@ -272,7 +278,8 @@ function signRun(seconds: string, inside: string): Resolver {
   return (leaf, at, escaped) => {
     if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, seconds)) return
     const why = `mark ${String.fromCharCode(code(leaf, at))}`
-    if (runBefore(leaf, at, escaped, inside) || leaf.kinds[at + 1] !== TEXT) return undecide(leaf, why)
+    const taken = runBefore(leaf, at, escaped, inside) || takenFromEquals(leaf, at, escaped)
+    if (taken || leaf.kinds[at + 1] !== TEXT) return undecide(leaf, why)
     if (code(leaf, at) !== 61) {
       escaped[at] = 1
       return
@@ -364,7 +371,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '/': () => undefined,
   ':': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) colon(leaf, at, escaped) },
   '<': angle,
-  '=': signRun('=>', '!<=>'),
+  '=': signRun('=>', '!<>'),
   '>': signRun('=', '-=<'),
   '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
   '[': bracket,
