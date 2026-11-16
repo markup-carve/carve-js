@@ -9,7 +9,7 @@ import {
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
 import { plainText } from './ast-text.ts'
-import { includeSource } from './include.ts'
+import { includeSource, unreadField } from './include.ts'
 import { isFenceWord } from './opener.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
@@ -203,7 +203,10 @@ function include(w: Writer, node: IncludeNode, prefix: string): void {
   attributeLine(w, node, prefix)
   // C2-B-202, C2-W-117: an empty path and a path with a line break have no spelling.
   if (node.path === '' || node.path.includes('\n')) lose(w, node, 'path')
-  emit(w, prefix, includeSource(node, w.facts?.get(node)?.optionSpelling))
+  const source = includeSource(node, w.facts?.get(node)?.optionSpelling)
+  const unread = unreadField(node, source)
+  if (unread !== null) lose(w, node, unread)
+  emit(w, prefix, source)
 }
 
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */

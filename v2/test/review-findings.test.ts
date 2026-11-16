@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length, write,
+  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length,
   writeWithDiagnostics,
 } from '../src/index.ts'
 import { CarveOptionError } from '../src/options.ts'
@@ -194,10 +194,23 @@ describe('the spelling of an include directive', () => {
     expect(format('{{ a.crv @lines:1"2 }}')).toBe('{{ a.crv @lines:1"2 }}\n')
   })
 
-  it('C2-B-204: a value that starts with a quote is written in quotes, so it reads back as the same value', () => {
-    const tree = JSON.stringify({ type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', options: { lines: "'1" } }] })
-    expect(write(decodeTree(tree))).toBe('{{ a.crv @lines:"\'1" }}\n')
-    expect(parse(write(decodeTree(tree))).children[0]).toMatchObject({ options: { lines: "'1" } })
+  /** A supplied tree of one include of `a.crv` with the fields `fields`. */
+  const include = (fields: object): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', ...fields }],
+  }))
+
+  it('C2-B-204, C2-W-058: a typed value outside its shape is written in quotes and reported, since it reads back as invalid', () => {
+    const out = writeWithDiagnostics(include({ options: { lines: "'1" } }))
+    expect(out.source).toBe('{{ a.crv @lines:"\'1" }}\n')
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+    expect(parse(out.source).children[0]).toMatchObject({ invalid: ['@lines:"\'1"'] })
+  })
+
+  it('C2-W-058, C2-A-181: an invalid entry is written as it is, and reported where it does not read back as itself', () => {
+    expect(writeWithDiagnostics(include({ invalid: ['@shift:x', '@size:2'] })).diagnostics).toEqual([])
+    for (const invalid of [['@lines:1-2'], ['@x }}']]) {
+      expect(writeWithDiagnostics(include({ invalid })).diagnostics.map((entry) => entry.code), invalid[0]).toEqual(['field-unspellable'])
+    }
   })
 })
 

@@ -386,6 +386,20 @@ function includeOption(name: string, value: string | string[] | number | true, s
 
 const OPTION_ORDER: readonly string[] = [...INCLUDE_OPTIONS.keys()]
 
+/**
+ * C2-W-058, C2-A-181: the field of `node` that its spelling `source` does not read back: a typed option outside its
+ * shape reads as invalid, and an invalid entry can read as valid or as another entry. Null where both read back.
+ */
+export function unreadField(node: IncludeNode, source: string): 'options' | 'invalid' | null {
+  const parts = readInclude(source, 0, source.length)
+  if (parts === null) return 'invalid'
+  for (const name of OPTION_ORDER) {
+    if (JSON.stringify(optionValue(parts.options, name)) !== JSON.stringify(optionValue(node.options, name))) return 'options'
+  }
+  const invalid = node.invalid ?? []
+  return parts.invalid.length === invalid.length && parts.invalid.every((entry, at) => entry === invalid[at]) ? null : 'invalid'
+}
+
 /** C2-W-058, C2-H-133, C2-H-171: the one spelling of an include directive, which the writer writes and the renderer shows. */
 export function includeSource(node: IncludeNode, spelling?: Record<string, string>): string {
   const path = node.path
