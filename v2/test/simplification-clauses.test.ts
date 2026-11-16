@@ -93,3 +93,26 @@ describe('C2-B-184, C2-I-120: each fragment of a continuation row is an inline c
     expect(cell('| |\n+ b |')).toEqual([{ type: 'text', value: 'b' }])
   })
 })
+
+describe('C2-I-017, C2-I-119: a backtick run with no closing run is text', () => {
+  it('C2-I-017: the run is text and the scan goes on behind it, so later forms are read', () => {
+    expect(render('see `unclosed *x* and [y](/u)')).toBe('<p>see `unclosed <strong>x</strong> and <a href="/u">y</a></p>')
+    expect(render('b* and `c\n\nd`')).toBe('<p>b* and `c</p>\n<p>d`</p>')
+    expect(render('a `` b `c` d')).toBe('<p>a `` b <code>c</code> d</p>')
+  })
+
+  it('C2-I-017: a `!`, `$` or `$$` glued before an unclosed run is text with it', () => {
+    expect(render('the sum $`a + b')).toBe('<p>the sum $`a + b</p>')
+    expect(render('x $$`a and !``b')).toBe('<p>x $$`a and !``b</p>')
+    expect(parse('x !`b').children[0]).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: 'x !`b' }] })
+  })
+
+  it('C2-I-017, C2-B-118: a fence-like line whose info holds a backtick is a paragraph, and its run is text', () => {
+    expect(render('```a`b\nx')).toBe('<p>```a`b\nx</p>')
+  })
+
+  it('C2-I-017: many unclosed runs of different lengths each find no closer', () => {
+    const src = Array.from({ length: 300 }, (_, at) => '`'.repeat(at + 1)).join(' a ')
+    expect(render(src)).toBe(`<p>${src}</p>`)
+  })
+})

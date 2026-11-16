@@ -8,7 +8,7 @@ import {
   BACKSLASH, PERCENT, SLASH, SPACE,
 } from './chars.ts'
 import {
-  ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL, FLAG_OPEN_END,
+  ATTRIBUTE_BLOCK, AUTOLINK, CODE_SPAN, EDITORIAL, ESCAPE, FLAG_BRACED, FLAG_DISPLAY, FLAG_EMAIL,
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
@@ -22,7 +22,7 @@ import {
 import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
-  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace, NO_BREAK_SPACE,
+  codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, NO_BREAK_SPACE,
   isWordCharacter, NO_CHARACTER,
 } from './unicode.ts'
 
@@ -108,7 +108,7 @@ function closingRun(text: string, pos: number, end: number, length: number): num
   return NONE
 }
 
-/** C2-I-015: a cell may retry an unmatched opener at every backtick in the same run. */
+/** C2-I-015, C2-I-017: after a run found no closer, the runs of the content are indexed, so no later opener scans to the end again. */
 function indexedClosingRun(state: InlineState, pos: number, length: number): number {
   if (state.codeRuns === null) {
     const runs = new Map<number, number[]>()
@@ -152,18 +152,13 @@ function rawMarkerEnd(text: string, pos: number, end: number): number {
 /** A code span whose token starts at `start` and whose opening run starts at `run` (C2-I-014 to C2-I-022). */
 function codeSpan(state: InlineState, start: number, run: number, kind: number, flags: number): number {
   const text = state.text
-  const open = state.cell && run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
-  if (state.cell) state.codeRunEnd = open
-  const close = state.cell ? indexedClosingRun(state, open, open - run) : closingRun(text, open, state.end, open - run)
-  if (close === NONE) {
-    // C2-B-223: in a cell an unclosed span is text; C2-I-014, C2-I-119: the opener is the whole run, and the scan goes on behind it.
-    if (state.cell) return open
-    // C2-I-017: the span runs to the end of the content, and trailing whitespace is dropped.
-    let contentEnd = state.end
-    while (contentEnd > open && isWhitespace(text.charCodeAt(contentEnd - 1))) contentEnd--
-    pushToken(state, kind, start, state.end, open, contentEnd, flags | FLAG_OPEN_END, NONE)
-    return state.end
-  }
+  const open = run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
+  state.codeRunEnd = open
+  const length = open - run
+  let close = state.codeRuns === null ? closingRun(text, open, state.end, length) : indexedClosingRun(state, open, length)
+  if (close === NONE && state.codeRuns === null) close = indexedClosingRun(state, open, length)
+  // C2-I-017, C2-I-119: with no closing run the opener is text, the prefix with it, and the scan goes on behind the run.
+  if (close === NONE) return open
   const padded = hasSpacePadding(text, open, close)
   const contentStart = padded ? open + 1 : open
   const contentEnd = padded ? close - 1 : close

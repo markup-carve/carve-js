@@ -14,19 +14,19 @@ import { treeShape } from './support/shape.ts'
 
 // [example number, input lines, tree shape]
 const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
-  [1, ['*a', '', 'b* and `c', '', 'd`'], 'p["*a"] p["b* and " code!"c"] p["d" code!""]'],
+  [1, ['*a', '', 'b* and `c', '', 'd`'], 'p["*a"] p["b* and `c"] p["d`"]'],
   [2, ['> *a', '> b* c'], 'quote[p[strong["a" sb "b"] " c"]]'],
-  [3, ['*a `b* c'], 'p["*a " code!"b* c"]'],
+  [3, ['*a `b* c'], 'p[strong["a `b"] " c"]'],
   [4, ['*a [b* c](/u)'], 'p["*a " a(/u)["b* c"]]'],
   [5, ['*a [b* c] d'], 'p[strong["a [b"] " c] d"]'],
   [6, ['\\*not strong\\* and \\# and a\\ b and \\a and C:\\dir'], 'p["*not strong* and # and a" nbsp "b and \\a and C:\\dir"]'],
   [7, ['`a\\*b` and [x](/a\\(b) and \\[not a span]{.c}'], 'p[code"a\\*b" " and " a(/a(b)["x"] " and [not a span]{.c}"]'],
   [8, ['`code` and `` a ` b `` and ` x ` and `*a*`'], 'p[code"code" " and " code"a ` b" " and " code"x" " and " code"*a*"]'],
   [9, ['a `b', 'c` d'], 'p["a " code"b|c" " d"]'],
-  [10, ['see `unclosed *x* and [y](/u)'], 'p["see " code!"unclosed *x* and [y](/u)"]'],
+  [10, ['see `unclosed *x* and [y](/u)'], 'p["see `unclosed " strong["x"] " and " a(/u)["y"]]'],
   [11, ['!`/kaet/` and !`a<b>`{.ipa} and \\!`x`'], 'p[lit"/kaet/" " and " lit"a<b>"{.ipa} " and !" code"x"]'],
   [12, ['$`x^2` and $$`E = mc^2` and $5 and $`x`{.c}'], 'p[math"x^2" " and " dmath"E = mc^2" " and $5 and " math"x"{.c}]'],
-  [13, ['the sum $`a + b'], 'p["the sum " math!"a + b"]'],
+  [13, ['the sum $`a + b'], 'p["the sum $`a + b"]'],
   [14, ['a `<br>`{=html} b'], 'p["a " raw(html)"<br>" " b"]'],
   [15, ['`<br>`{=html .c} and [s]{=html} and $`x`{=html}'], 'p[code"<br>" "{=html .c} and [s]{=html} and " math"x" "{=html}"]'],
   [16, ['a %% comment', 'b and 50%% and a%%b'], 'p["a" %%" comment" sb "b and 50%% and a%%b"]'],

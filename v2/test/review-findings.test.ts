@@ -337,9 +337,9 @@ describe('what the random writer gates found', () => {
     expect(writeWithDiagnostics(title).source).toBe('```js\nx\n```\n')
   })
 
-  it('C2-B-108, C2-B-118: a tilde run with a backtick in its info string is text, and the backtick opens a code span', () => {
+  it('C2-B-108, C2-B-118, C2-I-017: a tilde run with a backtick in its info string is text, and so is the unclosed backtick', () => {
     const source = `~~~${BACKTICK}\nx\n~~~`
-    expect(render(source)).toBe(`<p>~~~<code>\nx\n~~~</code></p>`)
+    expect(render(source)).toBe(`<p>~~~${BACKTICK}\nx\n~~~</p>`)
     const output = writeWithDiagnostics(parse(source))
     expect(output.diagnostics).toEqual([])
     expect(treesEqual(parse(output.source), parse(source))).toBe(true)

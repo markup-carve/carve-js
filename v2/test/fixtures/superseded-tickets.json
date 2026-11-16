@@ -733,7 +733,7 @@
    "C2-I-017"
   ],
   "input": "- > `a\n  > {.x\n  >  .y}\ntail\n",
-  "html": "<ul>\n  <li>\n    <blockquote><p><code>a\n{.x\n.y}\ntail</code></p></blockquote>\n  </li>\n</ul>"
+  "html": "<ul>\n  <li>\n    <blockquote><p>`a\n{.x\n.y}\ntail</p></blockquote>\n  </li>\n</ul>"
  },
  {
   "ticket": "carve#5899",
