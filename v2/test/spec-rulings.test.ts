@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CarveOptionError, CarveTreeError, type DocumentNode, format, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree,
-  type RenderOptions, validateTree,
+  type RenderOptions, treesEqual, validateTree,
 } from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
 import { UNICODE_VERSION } from '../src/unicode-tables.ts'
@@ -294,5 +294,76 @@ describe('the trailing line comment of a table row', () => {
 
   it('C2-W-135: the writer writes the comment as a comment-only line below the row', () => {
     expect(format('| 1 | 2 | %% note\n| 3 | 4 |')).toBe('| 1 | 2 |\n%% note\n| 3 | 4 |\n')
+  })
+})
+
+describe('the cap of a bracket construct', () => {
+  it('C2-I-118: below the cap a link and an image form among open delimiter entries', () => {
+    const html = render(`${'{^'.repeat(198)}*[x](u) ![y](v)${'^}'.repeat(198)}`)
+    expect(html).toContain('*<a href="u">x</a> <img src="v" alt="y"')
+  })
+
+  it('C2-I-118: the block depth and an open delimiter entry count toward the cap of an image and of a link alike', () => {
+    for (const tail of ['- *![x](u)', '- *[x](u)']) {
+      const html = render(`${'> '.repeat(197)}${tail}`)
+      expect(html, tail).not.toContain('<img')
+      expect(html, tail).not.toContain('<a ')
+    }
+  })
+
+  it('C2-I-126: a bracket opener that is text at the cap pairs with nothing', () => {
+    let node = parse(`${'> '.repeat(199)}:n[[]`).children[0]
+    while (node?.type === 'block_quote') node = node.children[0]
+    expect(node?.type === 'paragraph' ? node.children : null).toMatchObject([{ type: 'inline_extension', name: 'n', children: [{ type: 'text', value: '[' }] }])
+  })
+})
+
+describe('fence opener whitespace', () => {
+  it('C2-B-122: two spaces before a fence word open a block with no language, and fence-title-syntax names the respaced opener', () => {
+    const result = parseWithDiagnostics('```  b\ntext\n```\n')
+    expect(result.document.children[0]).toMatchObject({ type: 'code_block' })
+    expect(result.document.children[0]).not.toHaveProperty('syntax')
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['fence-title-syntax'])
+    expect(result.diagnostics[0]?.message).toContain('The block opens with no language (use: "``` b")')
+  })
+})
+
+describe('spec data rulings', () => {
+  it('D3, C2-H-148: resolution reads headingIds', () => {
+    const heading = (headingIds: 'off' | 'lower' | undefined): unknown => {
+      const options: { headingIds?: 'off' | 'lower' } = headingIds === undefined ? {} : { headingIds }
+      return resolveTree(parseTree('# Hello World\n'), options).document.children[0]
+    }
+    expect(heading('off')).not.toHaveProperty('generatedId')
+    expect(heading('lower')).toMatchObject({ generatedId: 'hello-world' })
+    expect(heading(undefined)).toMatchObject({ generatedId: 'Hello-World' })
+  })
+
+  it('D2, C2-B-040: an uppercase roman marker before a dot needs two spaces', () => {
+    expect(parse('II. Background').children[0]).toMatchObject({ type: 'paragraph' })
+    expect(parse('II.  Background').children[0]).toMatchObject({ type: 'list', marker: { style: 'I', delimiter: '.', start: 2 } })
+  })
+
+  it('D4, C2-A-161: tree equality compares numberPrefix, which is input and no resolution result', () => {
+    const tree = (fields: { number?: number, numberPrefix?: string }): DocumentNode => {
+      const document = parse('$$`x`')
+      const paragraph = document.children[0]
+      const math = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
+      if (math?.type === 'math') Object.assign(math, fields)
+      return document
+    }
+    expect(treesEqual(tree({ numberPrefix: 'A' }), tree({ numberPrefix: 'B' }))).toBe(false)
+    expect(treesEqual(tree({ number: 1 }), tree({ number: 2 }))).toBe(true)
+  })
+
+  it('D5, C2-A-181: out-of-shape rows and cols values on an include node validate', () => {
+    const cases: [string, Record<string, string>][] = [
+      ['{{ a.crv @rows }}', { rows: '' }], ['{{ a.crv @rows:x }}', { rows: 'x' }], ['{{ a.crv @cols:"a,,b" }}', { cols: 'a,,b' }],
+    ]
+    for (const [src, options] of cases) {
+      const tree = parse(src)
+      expect(tree.children[0], src).toMatchObject({ type: 'include', options })
+      expect(() => validateTree(tree), src).not.toThrow()
+    }
   })
 })
