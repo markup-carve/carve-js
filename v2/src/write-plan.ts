@@ -514,11 +514,10 @@ function backtick(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const decision = leaf.ticks[at]
   if (decision === TICK_BARE) return
   // C2-W-091: bare, the run would pair with a later code span of the tree and shift it, and the procedure escapes
-  // what that shift uncovers first. Inside a mark of the tree, behind a delimiter of text, the procedure escapes that
-  // delimiter first.
+  // what that shift uncovers first. Behind a delimiter of text, the construct that delimiter opens bare may come first.
   if (decision === TICK_UNDECIDED) undecide(leaf, 'backtick glued')
   else if (leaf.lastAtomTick > at && !opensFirst(leaf, at)) undecide(leaf, 'backtick before a code span')
-  else if (leaf.textMark && leaf.openDepth > 0) undecide(leaf, 'backtick in a mark')
+  else if (leaf.textMark) undecide(leaf, 'backtick in a mark')
   else escaped[at] = 1
 }
 
@@ -681,13 +680,17 @@ const DELIMITER_CHARACTERS = '*+,-/=^_~{'
 // The characters of text that can open a construct whose end lies further on.
 const TEXT_OPENERS = '*+,-/=^_~{[<!$:@#%&`"\''
 
-/** C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. */
+/**
+ * C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. A quoted value may hold a
+ * closing brace (C2-I-033), so the reader's grammar reads the line, not the text up to the first `}`.
+ */
 function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (isLiteral(leaf, at, escaped)) return -1
   let end = at + 1
-  while (end < leaf.codes.length && end - at < LONGEST_BLOCK && leaf.codes[end] !== LF && leaf.codes[end] !== 125) end++
-  if (leaf.codes[end] !== 125) return -1
-  const text = String.fromCharCode(...leaf.codes.slice(at, end + 1))
+  let closes = false
+  for (; end < leaf.codes.length && end - at < LONGEST_BLOCK && leaf.codes[end] !== LF; end++) closes ||= leaf.codes[end] === 125
+  if (!closes) return -1
+  const text = String.fromCharCode(...leaf.codes.slice(at, end))
   const block = readAttributeBlock(text, 0, text.length, emptyMemo(), null)
   return block < 0 ? -1 : at + block
 }

@@ -352,6 +352,20 @@ describe('the planned writer', () => {
     expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(201)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
   })
 
+  it('C2-W-091: a backtick behind a delimiter of text is left to the repair, which escapes the delimiter first', () => {
+    const result = formatBy('*\\`*𫐍`*\n', 'both')
+    expect(result.output.source).toBe('\\*\\`*𫐍`*\n')
+    expect(result.stats.differences).toEqual([])
+  })
+
+  it('C2-I-033, C2-I-005: a text brace block whose quoted value holds a closing brace is opaque as a whole', () => {
+    for (const source of ["{k='}'}\n", '{k="}"}\n', "x {k='}'} y\n"]) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-033: a bare list marker at a line start is text, so it is planned bare', () => {
     for (const source of ['-\n', 'a\n-\n', '1.\n', '> -\n']) {
       const result = formatBy(source, 'both')
