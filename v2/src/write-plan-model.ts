@@ -235,7 +235,10 @@ export function modelContent(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
   modelInlines(w, leaf, nodes, flags)
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') trimText(leaf, 0)
-  else if (last?.type === 'hard_break' && leaf.codes[leaf.codes.length - 1] === LF) trimLast(leaf)
+  else if (last?.type === 'hard_break' && leaf.codes[leaf.codes.length - 1] === LF) {
+    trimLast(leaf)
+    if ((flags & BARE_BREAKS) !== 0) push(leaf, BACKSLASH, ATOM, last, -1)
+  }
 }
 
 export function trimLast(leaf: Leaf): void {

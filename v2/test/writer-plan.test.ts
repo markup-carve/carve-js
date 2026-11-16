@@ -221,6 +221,13 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-169, C2-I-017: a backtick of a cell is left to the repair, since a later cell of its row can close it', () => {
+    const result = formatBy('| \\` | ` |\n', 'both')
+    expect(result.output.source).toBe('| \\` | ` |\n')
+    expect(result.stats.planned).toBe(0)
+    expect(result.stats.reasons.get('check') ?? 0).toBe(0)
+  })
+
   it('C2-B-024, C2-B-046, C2-B-081: a bracket at a line start is planned by the definition and task box shapes', () => {
     const sources = ['\\[a]: /u\n', 'x\n[a]: /u\n', '- \\[x] a\n', '- [x]\ta\n', '::: d\n[a]: /u\n:::\n', '> [a]: /u\n', '[a]: /u extra\n']
     for (const source of sources) {

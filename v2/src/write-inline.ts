@@ -556,8 +556,10 @@ export function writeContent(w: Writer, nodes: readonly Node[], flags: number): 
   const out = writeInlines(w, nodes, flags)
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') return trimEnd(out)
-  // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022).
-  return last?.type === 'hard_break' && out.endsWith('\n') ? out.slice(0, -1) : out
+  // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022). In a hard-break
+  // block that line ending alone is no break at the end of the content, so the backslash stays (C2-I-102).
+  if (last?.type !== 'hard_break' || !out.endsWith('\n')) return out
+  return (flags & BARE_BREAKS) !== 0 ? `${out.slice(0, -1)}\\` : out.slice(0, -1)
 }
 
 /** C2-W-112: the end of the run of code spans that starts at `from`. Each span behind the first is reported. */

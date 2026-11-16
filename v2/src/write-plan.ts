@@ -507,14 +507,15 @@ function tickRun(leaf: Leaf, ticks: Uint8Array, start: number, end: number, late
 
 function backtick(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
+  // C2-B-169: in a cell the run is read against the pipes of its row, so a later cell can close it.
+  if (leaf.inCell) return undecide(leaf, 'backtick in a cell')
   leaf.ticks ??= tickPlan(leaf)
   const decision = leaf.ticks[at]
   if (decision === TICK_BARE) return
-  // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
-  // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
-  // Inside a mark of the tree, behind a delimiter of text, the procedure escapes that delimiter first.
+  // C2-W-091: bare, the run would pair with a later code span of the tree and shift it, and the procedure escapes
+  // what that shift uncovers first. Inside a mark of the tree, behind a delimiter of text, the procedure escapes that
+  // delimiter first.
   if (decision === TICK_UNDECIDED) undecide(leaf, 'backtick glued')
-  else if (leaf.inCell) undecide(leaf, 'backtick in a cell')
   else if (leaf.lastAtomTick > at && !opensFirst(leaf, at)) undecide(leaf, 'backtick before a code span')
   else if (leaf.textMark && leaf.openDepth > 0) undecide(leaf, 'backtick in a mark')
   else escaped[at] = 1
