@@ -135,6 +135,10 @@ function hasAttrs(node: Fields): boolean {
 
 /** Nodes a render writes as text: C2-H-078, C2-H-049, C2-H-101, C2-A-119, C2-H-098. */
 const asText: Loss = (node, _list, _at, found) => {
+  if (node['type'] === 'raw_inline' && node['format'] !== 'html') {
+    found.add('C2-H-054 raw format dropped')
+    return []
+  }
   switch (node['type']) {
     case 'smart_punctuation': found.add('C2-H-078 smart punctuation'); return [text(str(node['glyph'] ?? node['source']))]
     case 'literal_inline': found.add('C2-H-049 literal text')
@@ -425,7 +429,11 @@ const blockForms: Loss = (node, _list, _at, found) => {
     // The harness reads a parsed tree, so the node has the fields of an include.
     return [{ type: 'paragraph', children: [text(includeSource(node as unknown as IncludeNode))] }]
   }
-  if (node['type'] === 'raw_block' && node['format'] === 'html') {
+  if (node['type'] === 'raw_block' && node['format'] !== 'html') {
+    found.add('C2-H-054 raw format dropped')
+    return []
+  }
+  if (node['type'] === 'raw_block') {
     found.add('G3 raw block')
     return [{ type: 'code_block', value: node['value'], syntax: 'html', ...attrsOf(node) }]
   }
