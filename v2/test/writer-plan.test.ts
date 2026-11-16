@@ -170,7 +170,7 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    expect(formatBy('`a`\\{b}\n', 'both').stats.planned).toBe(0)
+    expect(formatBy('`a`\\{b}\n', 'both').stats.differences).toEqual([])
   })
 
   it('C2-B-119, C2-B-196: a colon run glued to a name is text, and the plan writes it bare', () => {
@@ -399,6 +399,19 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
+  })
+
+  it('C2-I-028, C2-W-090: a brace of text behind a host takes the backslash where it would open an attribute block', () => {
+    for (const source of ['*a*\\{.c} x\n', '`a`\\{k=v}\n', '*a*\\{.c}{.d}\n', '*a*{} b\n', '*a*{.c U-210#i} and\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    // C2-I-037: a node that is no host, such as a non-breaking space, takes no block, and the brace stays bare.
+    expect(formatBy('x\\ {a}\n', 'both').stats.differences).toEqual([])
+    // C2-I-045: behind a code span `{=` may be a raw marker, which the attribute grammar does not read.
+    expect(formatBy('x`a`{=\\_}\n', 'both').stats.differences).toEqual([])
   })
 
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {

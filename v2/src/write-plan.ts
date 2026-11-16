@@ -208,6 +208,17 @@ const NO_HOSTS: ReadonlySet<string> = new Set([
   'mention', 'tag', 'xref', 'comment', 'critic_comment', 'raw_inline', 'smart_punctuation', 'soft_break', 'hard_break',
 ])
 
+// C2-I-036: the hosts of an attribute block; a node of any other type behind a block is left to the repair.
+const HOSTS: ReadonlySet<string> = new Set([
+  'span', 'link', 'image', 'autolink', 'code', 'literal_inline', 'math', 'footnote_ref', 'inline_footnote', 'symbol',
+  'inline_extension', 'emphasis', 'strong', 'delete', 'insert', 'highlight', 'superscript', 'subscript',
+])
+
+function isHost(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at - 1]
+  return owner !== undefined && HOSTS.has(owner.type)
+}
+
 function behindHost(leaf: Leaf, at: number): boolean {
   const kind = leaf.kinds[at - 1]
   if (kind === CLOSE) return true
@@ -224,11 +235,34 @@ function closesOnLine(leaf: Leaf, at: number): boolean {
   return false
 }
 
+const ESCAPED = 1
+
+/**
+ * C2-I-028, C2-I-043: how a text brace behind a host reads, by the reader's grammar on the read text up to the line
+ * end. A block that forms takes the backslash on its brace (C2-W-090); a brace that forms none is text. A node, an
+ * escape or a comment brace inside the text leaves it to the repair, and so does `{=`, which behind a code span may
+ * be a raw marker (C2-I-045).
+ */
+function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  if (nextIs(leaf, at, '%#=')) return UNDECIDED
+  let end = at
+  const codes = leaf.codes
+  while (end < codes.length && end - at < LONGEST_BLOCK && codes[end] !== LF && leaf.kinds[end] === TEXT && escaped[end] === 0) end++
+  if (end - at >= LONGEST_BLOCK) return UNDECIDED
+  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  if (readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0) return isHost(leaf, at) ? ESCAPED : UNDECIDED
+  return end === leaf.codes.length || leaf.codes[end] === LF ? 0 : UNDECIDED
+}
+
 /** C2-W-096: a brace that opens a comment or an attribute block; a braced opener is paired in write-plan-pairs.ts. */
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
-  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~') && closesOnLine(leaf, at)) return undecide(leaf, 'attribute block')
+  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~') && closesOnLine(leaf, at)) {
+    const reading = hostBlock(leaf, at, escaped)
+    if (reading === UNDECIDED) return undecide(leaf, 'attribute block')
+    if (reading === ESCAPED) return void (escaped[at] = 1)
+  }
   // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content.
   const next = code(leaf, at + 1)
   undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')
@@ -599,7 +633,8 @@ function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (value === LF) undecide(leaf, 'control')
   if (value >= 128 || INLINE_TRIGGERS[value] === 0) return at + 1
   const block = value === 123 ? attributeBlockEnd(leaf, at, escaped) : -1
-  if (block >= 0) return opaqueBlock(leaf, at, block)
+  if (block >= 0 && behindHost(leaf, at)) hostBlockEscape(leaf, at, block, escaped)
+  else if (block >= 0) return opaqueBlock(leaf, at, block)
   RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
   if (DELIMITER_CHARACTERS.includes(String.fromCharCode(value))) leaf.textMark = true
   // Escaped or not: the procedure reaches a later unit with this one still bare.
@@ -624,15 +659,18 @@ function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number 
   return block < 0 ? -1 : at + block
 }
 
+/** C2-I-028, C2-W-090: a valid block of text behind a host would attach to it, so its brace takes the backslash. */
+function hostBlockEscape(leaf: Leaf, at: number, end: number, escaped: Uint8Array): void {
+  if (!isHost(leaf, at)) return undecide(leaf, 'attribute block')
+  for (let unit = at; unit < end; unit++) if (leaf.kinds[unit] !== TEXT || escaped[unit] !== 0) return undecide(leaf, 'attribute block')
+  escaped[at] = 1
+}
+
 /**
  * C2-I-005, C2-I-036: a valid attribute block is an atom, so nothing in it is read; behind no host it is literal
  * text. Its units become opaque for the pairs and the brackets. Returns the unit behind it.
  */
 function opaqueBlock(leaf: Leaf, at: number, end: number): number {
-  if (behindHost(leaf, at)) {
-    undecide(leaf, 'attribute block')
-    return end
-  }
   leaf.opaque ??= new Uint8Array(leaf.codes.length)
   for (let unit = at; unit < end; unit++) {
     if (leaf.kinds[unit] !== TEXT) {
