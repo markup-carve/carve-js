@@ -267,6 +267,9 @@ function deniedDestinations(tree: Fields, found: Set<string>): void {
   })
 }
 
+/** C2-H-153: the table keys a table kept in `attrs` (C2-B-227) are never written. */
+const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+
 /** C2-H-161, C2-H-162: a key the policy drops is not written, and a value that fails its test is written empty. */
 function filteredStyle(node: Fields, found: Set<string>): void {
   const attrs = node['attrs']
@@ -277,6 +280,10 @@ function filteredStyle(node: Fields, found: Set<string>): void {
     const name = str(pair[0]).toLowerCase()
     if (DROPPED_NAMES.includes(name) || DROPPED_PREFIXES.some(prefix => name.startsWith(prefix))) {
       found.add('C2-H-161 dropped attribute')
+      continue
+    }
+    if (node['type'] === 'table' && TABLE_KEYS.includes(name)) {
+      found.add('C2-H-153 table key')
       continue
     }
     const value = keyValue(name, str(pair[1]))
