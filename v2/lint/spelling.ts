@@ -169,12 +169,19 @@ function indentedCode(line: Line, context: LintContext): void {
   }
 }
 
+/** A line outside paragraph text that starts with a bracket is a link, abbreviation or citation definition. */
+function isDefinitionLine(text: string): boolean {
+  const start = text.trimStart()
+  return start.startsWith('[') || start.startsWith('*[')
+}
+
 function unattachedCaption(line: Line, context: LintContext): void {
   const { text, start } = trimmed(line)
   if (!text.startsWith('^ ') || !line.paragraph) return
   if (hasAncestor(line.path, context, 'caption')) return
   const previous = prior(line, context)
-  if (previous !== undefined && previous.text.trim() !== '' && !previous.paragraph) return
+  // C2-B-149: below any other block the line is text; below a definition, which is no block, it is left alone.
+  if (previous !== undefined && !previous.paragraph && isDefinitionLine(previous.text)) return
   context.report('unattached-caption', start, start + text.length, line.path)
 }
 

@@ -43,6 +43,7 @@ function sectionLines(node: IncludeNode): LineRange | null {
 interface Visit {
   texts: ReadonlyMap<string, string>
   lintFile: (source: string) => Diagnostic[]
+  lintPayload: (text: string, node: Node, path: string) => Diagnostic[]
   seen: Set<string>
   out: Diagnostic[]
 }
@@ -95,12 +96,27 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
 /** C2-N-086, C2-N-087: lints the source of one expanded Carve include and keeps each distinct finding once. */
 function lintInclude(visit: Visit, node: IncludeNode, path: string): void {
   const text = node.file === undefined ? undefined : visit.texts.get(node.file)
-  if (text === undefined || node.options?.code !== undefined) return
+  if (text === undefined) return
+  if (node.options?.code !== undefined) {
+    lintCodeChild(visit, node, text, path)
+    return
+  }
   const part = lintedPart(node, text)
   for (const entry of visit.lintFile(part.source)) {
     const found = located(visit, node, text, part, entry, path)
     if (found !== null) visit.out.push(found)
   }
+}
+
+/** C2-N-086: a rule that reads the payload of a block also runs on the child of a code include, in its file. */
+function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: string): void {
+  const whole: Linted = { source: text, shift: 0, kept: null }
+  ;(node.children ?? []).forEach((child, index) => {
+    for (const entry of visit.lintPayload(text, child, `/children/${index}`)) {
+      const found = located(visit, node, text, whole, entry, path)
+      if (found !== null) visit.out.push(found)
+    }
+  })
 }
 
 function walk(visit: Visit, node: Node, path: string): void {
@@ -112,12 +128,13 @@ function walk(visit: Visit, node: Node, path: string): void {
 }
 
 /** C2-N-085: the findings in the included files of `source`, after an expansion with the caller's resolver. */
-export function lintIncludes(source: string, value: unknown, lintFile: (source: string) => Diagnostic[]): Diagnostic[] {
+export function lintIncludes(source: string, value: unknown, lintFile: (source: string) => Diagnostic[],
+  lintPayload: Visit['lintPayload']): Diagnostic[] {
   const config = includeSettings(value, (reason) => new CarveOptionError('includes', reason))
   if (config === null) return []
   const texts = new Map<string, string>()
   const document: DocumentNode = parse(source, { includes: recording(config, texts) })
-  const visit: Visit = { texts, lintFile, seen: new Set(), out: [] }
+  const visit: Visit = { texts, lintFile, lintPayload, seen: new Set(), out: [] }
   walk(visit, document, '')
   return visit.out
 }

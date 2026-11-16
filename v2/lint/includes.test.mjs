@@ -41,3 +41,17 @@ describe('lint and includes', () => {
     expect(lint('{.wide}\n{{ a.js @code }}').map((entry) => entry.code)).not.toContain('include-attributes-unused')
   })
 })
+
+describe('the payload of a code include', () => {
+  const files = { 'a.js': 'let ‮a = 1\nlet ‮b = 2\nlet c = 3\n' }
+
+  it('C2-N-086, C2-N-087: a rule that reads the payload of a block runs on the child of a code include, in its file', () => {
+    const found = lint('x\n\n{{ a.js @code @lines:2-3 }}', { includes: resolver(files) }).filter((entry) => entry.code === 'bidi-control-in-source')
+    expect(found.map((entry) => [entry.file, entry.range, entry.path])).toEqual([['a.js', { startOffset: 17, endOffset: 20 }, '/children/1/children/0']])
+  })
+
+  it('C2-N-086: without a code option the file is linted as Carve, once', () => {
+    const found = lint('{{ a.js }}', { includes: resolver(files) }).filter((entry) => entry.code === 'bidi-control-in-source')
+    expect(found).toHaveLength(2)
+  })
+})

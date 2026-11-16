@@ -887,13 +887,25 @@ function spanMarkerBlocked(node: Node, path: string, context: LintContext): void
   reportNode('table-span-marker-blocked', node, path, context, { marker, reason })
 }
 
-/** C2-B-174: the brace block in the prefix of a span mark that joins a cell applies to no cell, and fmt drops it. */
+/**
+ * C2-B-174: the brace block in the prefix of a span mark that joins a cell applies to no cell, and fmt drops it; so does
+ * a header mark on it whose row is no head row.
+ */
 function spanMarkerAttribute(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell' || node.span === undefined) return
   const prefix = raw(node, context)
-  if (!(prefix.startsWith('=') ? prefix.slice(1) : prefix).startsWith('{')) return
+  const header = prefix.startsWith('=')
+  const braced = (header ? prefix.slice(1) : prefix).startsWith('{')
+  if (!braced && (!header || context.nodeTypes.get(groupPath(path)) === 'table_head')) return
   const marker = node.span === 'rowspan' ? '^' : '<'
-  reportNode('table-span-marker-attribute', node, path, context, { marker, direction: marker === '^' ? 'above it' : 'to its left' })
+  const values = { marker, direction: marker === '^' ? 'above it' : 'to its left' }
+  reportNode('table-span-marker-attribute', node, path, context, values, braced ? 0 : 1)
+}
+
+/** The path of the group of the cell at `path`: head, body or foot. */
+function groupPath(path: string): string {
+  const row = path.slice(0, path.lastIndexOf('/children/'))
+  return row.slice(0, row.lastIndexOf('/children/'))
 }
 
 function unevenListIndent(node: Node, path: string, context: LintContext): void {

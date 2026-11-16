@@ -279,3 +279,25 @@ describe('C2-W-108 formatter stability', () => {
     expect(violations).toEqual([])
   })
 })
+
+describe('the corpus session', () => {
+  const found = (source, code) => lint(source).filter((entry) => entry.code === code)
+
+  it('C2-B-174: a header mark on a joining span mark whose row is no head row is reported with the second message', () => {
+    for (const source of ['| a |\n|= ^ |', '| a |= < |']) {
+      const entries = found(source, 'table-span-marker-attribute')
+      expect(entries, source).toHaveLength(1)
+      expect(entries[0].message, source).toContain('header mark makes no head row')
+    }
+    expect(found('|= H |\n|= ^ |', 'table-span-marker-attribute')).toEqual([])
+    expect(found('|= H | < |', 'table-span-marker-attribute')).toEqual([])
+    expect(found('| a |\n|={.c} ^ |', 'table-span-marker-attribute')[0].message).toContain('attribute block')
+  })
+
+  it('C2-B-147, C2-B-149: a caption line below a raw block is text and is reported', () => {
+    const entries = found('```=html\n<b>x</b>\n```\n^ cap', 'unattached-caption')
+    expect(entries.map((entry) => entry.range)).toEqual([{ startOffset: 22, endOffset: 27 }])
+    expect(found('```js\nx\n```\n^ cap', 'unattached-caption')).toEqual([])
+    expect(found('***\n^ cap', 'unattached-caption')).toHaveLength(1)
+  })
+})

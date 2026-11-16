@@ -1,6 +1,7 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
 import { AST_VERSION, type DocumentNode, INLINE_PARENTS, isRecord, pointerKey } from './ast.ts'
+import { annotationText, isCharacterBoundary, nodeAtPointer } from './annotation-text.ts'
 import { isFenceWord } from './opener.ts'
 import { isIncludeIdentifier, isRange } from './include.ts'
 import { utf8Length } from './positions.ts'
@@ -1116,7 +1117,7 @@ function checkReferences(document: Fields, tree: TreeFacts): void {
   }
 }
 
-/** C2-A-203: ranges for an unchanged tree, addressed by node pointer and code point offset. */
+/** C2-A-203, C2-A-214: ranges for an unchanged tree, addressed by node pointer and UTF-8 byte offset of annotation text. */
 export interface AnnotationRangeSidecar {
   ranges: { id: string, start: { path: string, offset: number }, end: { path: string, offset: number } }[]
 }
@@ -1217,9 +1218,27 @@ export function validateTree(
   if (annotations !== undefined) checkAnnotations(annotations, tree)
 }
 
+/** C2-A-207, C2-A-214: each endpoint names a node and a byte offset of its annotation text between two characters. */
+function checkRangeOffsets(document: DocumentNode, sidecar: AnnotationRangeSidecar): void {
+  sidecar.ranges.forEach((range, index) => {
+    for (const side of ['start', 'end'] as const) {
+      const endpoint = range[side]
+      const at = `/ranges/${index}/${side}`
+      const node = nodeAtPointer(document, endpoint.path)
+      if (node === null) fail(`${at}/path`, 'names no node of the tree')
+      const text = annotationText(node)
+      const offset = endpoint.offset
+      const past = !Number.isInteger(offset) || offset < 0 || offset > utf8Length(text)
+      if (past) fail(`${at}/offset`, 'is past the annotation text of its node')
+      if (!isCharacterBoundary(text, offset)) fail(`${at}/offset`, 'falls inside the bytes of one character')
+    }
+  })
+}
+
 /** C2-A-203: validates a tree together with its annotation-range sidecar. */
 export function validateTreeWithAnnotations(document: unknown, annotations: AnnotationRangeSidecar,
   envelope?: Readonly<Record<string, unknown>>, source?: string,
   extensions: readonly ExtensionDefinition[] = []): asserts document is DocumentNode {
   validateTree(document, envelope, source, extensions, annotations)
+  checkRangeOffsets(document, annotations)
 }

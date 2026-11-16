@@ -1,7 +1,7 @@
 // Engine defects the conformance corpus of the specification found, each fixed at its clause.
 import { describe, expect, it } from 'vitest'
 import { checkWriter } from './support/writer-checks.ts'
-import { CarveLayoutError, decodeTree, encodeTree, format, parse, render, validateLayout, write } from '../src/index.ts'
+import { CarveLayoutError, CarveTreeError, decodeTree, validateTreeWithAnnotations, encodeTree, format, parse, render, validateLayout, write } from '../src/index.ts'
 
 const children = (src: string): unknown => (JSON.parse(encodeTree(parse(src, { positions: false }))) as { children: unknown }).children
 
@@ -89,5 +89,24 @@ describe('collapsed references', () => {
         expect(children(format(source, { normalize })), `${source} ${normalize}`).toEqual(children(source))
       }
     }
+  })
+})
+
+describe('annotation ranges', () => {
+  const tree = parse('\u00e9!\n\n- a\n  b', { positions: false })
+  const range = (path: string, start: number, end: number) => ({ ranges: [{ id: 'r', start: { path, offset: start }, end: { path, offset: end } }] })
+
+  it('C2-A-207, C2-A-214: an offset counts the UTF-8 bytes of the annotation text and falls between two characters', () => {
+    expect(() => validateTreeWithAnnotations(tree, range('/children/0', 2, 3))).not.toThrow()
+    expect(() => validateTreeWithAnnotations(tree, range('/children/0', 0, 2))).not.toThrow()
+    expect(() => validateTreeWithAnnotations(tree, range('/children/0', 1, 2))).toThrow('/ranges/0/start/offset: falls inside the bytes')
+    expect(() => validateTreeWithAnnotations(tree, range('/children/0', 0, 4))).toThrow('/ranges/0/end/offset')
+    expect(() => validateTreeWithAnnotations(tree, range('/children/9', 0, 0))).toThrow(CarveTreeError)
+  })
+
+  it('C2-A-207: a soft break gives one line feed of the annotation text, and a block projects its children', () => {
+    expect(() => validateTreeWithAnnotations(tree, range('/children/1', 0, 3))).not.toThrow()
+    expect(() => validateTreeWithAnnotations(tree, range('/children/1', 0, 4))).toThrow('/ranges/0/end/offset')
+    expect(() => validateTreeWithAnnotations(tree, range('', 0, 6))).not.toThrow()
   })
 })

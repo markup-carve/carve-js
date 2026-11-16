@@ -228,15 +228,14 @@ export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   if (options.includes === undefined) return own
   const rest: LintOptions = { ...options }
   delete rest.includes
-  return [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest))]
+  return [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest),
+    (text, node, path) => lintPayload(text, node, path, rest))]
 }
 
-function lintSource(source: string, options: LintOptions): Diagnostic[] {
-  const parsed = parseWithLayout(source)
+function createContext(source: string, options: LintOptions, layouts: LintContext['layouts']): LintContext {
   const position = sourceLines(source)
   const context: LintContext = {
-    source, ...position, leafMask: new Uint8Array(source.length), options,
-    layouts: new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])), nodeTypes: new Map(),
+    source, ...position, leafMask: new Uint8Array(source.length), options, layouts, nodeTypes: new Map(),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       fragmentLinks: [], footnoteLabels: new Map(), attachedLines: new Set(),
@@ -251,6 +250,24 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
       context.findingLines.push(position.offsetLines[boundedStart] ?? 1)
     },
   }
+  return context
+}
+
+// C2-N-086: the rules that read the payload of a block, which also run on the child of a code include.
+const PAYLOAD_RULES: ReadonlySet<string> = new Set(['bidi-control-in-source'])
+
+/** C2-N-086: the findings of the payload rules on `node`, a block whose positions count in `text`, the file it came from. */
+export function lintPayload(text: string, node: Node, path: string, options: LintOptions): Diagnostic[] {
+  const context = createContext(text, options, new Map())
+  for (const rule of NODE_RULES) {
+    if (PAYLOAD_RULES.has(rule.id) && rule.nodes?.includes(node.type) && active(rule.id, options)) rule.checkNode?.(node, path, context)
+  }
+  return context.diagnostics
+}
+
+function lintSource(source: string, options: LintOptions): Diagnostic[] {
+  const parsed = parseWithLayout(source)
+  const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   visit(parsed.document, '', context, controls)
   finishStructure(context)
