@@ -3,8 +3,8 @@
 import { APOSTROPHE, GREATER, HYPHEN, PLUS, QUOTE_MARK, SLASH } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import { characterAfter } from './inline-atoms.ts'
-import { SMART } from './inline-kinds.ts'
-import { type InlineState, writeInlineEvent } from './inline-state.ts'
+import { INLINE_COMMENT, SMART } from './inline-kinds.ts'
+import { type InlineState, TOKEN_END, TOKEN_START, TOKEN_TEXT, TOKEN_WIDTH, writeInlineEvent } from './inline-state.ts'
 import {
   APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER, CLASS_SMART_TRIGGER,
   SMART_EM_DASH, SMART_EN_DASH, SMART_GLYPHS, SMART_LEFT_DOUBLE_QUOTE, SMART_PLUS_MINUS, SMART_LEFT_SINGLE_QUOTE,
@@ -53,6 +53,22 @@ function before(state: InlineState, pos: number, from: number): number {
 /** The character at `pos`, or behind the text stretch when it ends at `to`. */
 function after(state: InlineState, pos: number, to: number): number {
   return pos < to ? codePointAt(state.text, pos, to) : characterAfter(state, to)
+}
+
+/**
+ * C2-I-117: the neighbor behind a run that ends its text stretch at `to`. Only a character of the same text
+ * counts: a braced comment is transparent (C2-I-026), and a delimiter mark or any other node is no neighbor.
+ */
+function runNeighborAfter(state: InlineState, to: number): number {
+  const tokens = state.tokens
+  let at = state.nextToken
+  let pos = to
+  while (at < state.tokenLength && tokens[at] === INLINE_COMMENT && tokens[at + TOKEN_START] === pos) {
+    pos = tokens[at + TOKEN_END]!
+    at += TOKEN_WIDTH
+  }
+  if (pos >= state.end || (at < state.tokenLength && tokens[at + TOKEN_START] === pos && tokens[at] !== TOKEN_TEXT)) return NO_CHARACTER
+  return codePointAt(state.text, pos, state.end)
 }
 
 /** C2-I-104, C2-I-106: whether a straight quote after `previous` and before `next` opens. */
@@ -179,7 +195,8 @@ function smartAt(state: InlineState, pos: number, from: number, to: number): num
   if (run === NO_MATCH) return pos
   const [source, kind] = SMART_RUNS[run]!
   // C2-I-117: the plus-minus sign needs its exact run.
-  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(after(state, pos + 2, to)))) {
+  const next = pos + 2 < to ? codePointAt(state.text, pos + 2, to) : runNeighborAfter(state, to)
+  if (kind === SMART_PLUS_MINUS && (isPlusOrHyphen(before(state, pos, from)) || isPlusOrHyphen(next))) {
     return pos
   }
   flushSpan(state, pos)

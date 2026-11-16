@@ -79,3 +79,15 @@ describe('the include shift in a supplied tree', () => {
     expect(() => validateTree(include(1_234_567_890))).toThrow(CarveTreeError)
   })
 })
+
+describe('the neighbors of plus-minus and arrows', () => {
+  it('C2-I-117, C2-I-116: only characters of the same text are neighbors; a delimiter mark is none', () => {
+    expect(render('{--->-} and {-<---} and {++-1+} and {++-+} and C++-style and a{%x%}+-b'))
+      .toBe('<p><del>→</del> and <del>←</del> and <ins>±1</ins> and <ins>±</ins> and C++-style and a±b</p>')
+    expect(render('{-a+--} and {++-{%c%}+}')).toBe('<p><del>a±</del> and <ins>±</ins></p>')
+  })
+
+  it('C2-I-117, C2-I-026: a braced comment between two characters is transparent', () => {
+    expect(render('+{%x%}+-b and a+-{%x%}+ and a+-{%x%}c')).toBe('<p>++-b and a+-+ and a±c</p>')
+  })
+})

@@ -131,6 +131,8 @@ export interface InlineState {
   // The state of single quotes around each open inline footnote (C2-I-109).
   footnoteQuotes: Uint8Array
   footnoteDepth: number
+  /** The token behind the text stretch being written (C2-I-117). */
+  nextToken: number
   /** Start of the text that is not written yet, and the kind of the last smart node. */
   textRun: number
   smartKind: number
@@ -191,6 +193,7 @@ function createState(): InlineState {
     singleQuoteOpen: false,
     footnoteQuotes: new Uint8Array(256),
     footnoteDepth: 0,
+    nextToken: 0,
     textRun: 0,
     smartKind: 0,
   }

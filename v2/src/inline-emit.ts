@@ -219,9 +219,11 @@ export function writeEvents(state: InlineState): void {
       at += TOKEN_WIDTH
       continue
     }
+    state.nextToken = at
     writeText(state, textStart, tokens[at + TOKEN_START]!)
     at = writeToken(state, at)
     textStart = state.textRun
   }
+  state.nextToken = state.tokenLength
   writeText(state, textStart, state.end)
 }
