@@ -62,8 +62,9 @@ function braceReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
  * attribute block, a definition, a footnote reference or a shortcut is left to the repair.
  */
 function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolean, escaped: Uint8Array): number {
-  if (hasKeys || leaf.codes[opener + 1] === 94) return NO_DECISION
+  if (hasKeys) return NO_DECISION
   if (leaf.codes[opener - 1] === 94 && isReadText(leaf, opener - 1, escaped)) return ESCAPE_OPENER
+  if (leaf.codes[opener + 1] === 94) return NO_DECISION
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
   if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
   if (next === '{' && isReadText(leaf, closer + 1, escaped)) return braceReading(leaf, closer + 1, escaped)

@@ -153,7 +153,6 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    expect(formatBy('a \\[^b] c\n', 'both').stats.planned).toBe(0)
   })
 
   it('C2-I-078, C2-I-079: a label that starts with an at-sign or holds only blanks names no reference, and no bracket is escaped', () => {
@@ -257,6 +256,25 @@ describe('the planned writer', () => {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
+  it('C2-I-087, C2-I-079: a text `[^` before a label that is not blank opens a footnote reference and is planned escaped', () => {
+    for (const source of ['a \\[^b] c\n', 'x \\[^a] y\n', 'x \\[^a b] y\n', 'x [^a\n', 'x [\\[^a] y\n', 'x \\[^a [b] c] y\n', 'x ^\\[^a] y\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    // Before the `^[` of an inline footnote of the tree, and where the writer escaped the bracket, the repair decides.
+    expect(formatBy('x\\[^[a] y\n', 'both').stats.planned).toBe(0)
+    expect(formatBy('x[[^](/u)\n', 'both').output.source).toBe('x[[^](/u)\n')
+    // C2-I-094, C2-I-074, C2-I-089: behind a text `:name`, `!` or `^` the bracket opens an extension, an image or an
+    // inline footnote, not a reference.
+    for (const source of ['x :B8[^ab] c\n', 'x![^a]\n', 'x![^[[]\n', 'x^[^[[]\n', 'x^[^![]\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
       expect(result.stats.differences, source).toEqual([])
     }
   })

@@ -151,12 +151,57 @@ function nextIs(leaf: Leaf, at: number, chars: string): boolean {
   return next >= 0 && chars.includes(String.fromCharCode(next))
 }
 
+const NO_REFERENCE = 0
+const REFERENCE = 1
+const UNREAD = 2
+
 /**
- * C2-W-094: an opening bracket before `^` opens a footnote reference where a `]` follows (C2-I-087); pairs are checked
- * in write-plan-brackets.ts.
+ * C2-I-094, C2-I-074, C2-I-089: a `[` behind a text `:name` opens an inline extension and behind a text `!` an image,
+ * which the repair decides; behind a bare `^` it opens an inline footnote, which write-plan-brackets.ts pairs. -1 where
+ * none of them opens.
+ */
+function openedBefore(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  if (leaf.extensions.has(at)) return UNREAD
+  if (leaf.kinds[at - 1] !== TEXT) return -1
+  const before = code(leaf, at - 1)
+  if (before === 33) return UNREAD
+  return before === 94 && !isLiteral(leaf, at - 1, escaped) ? NO_REFERENCE : -1
+}
+
+/**
+ * C2-I-087, C2-I-079: whether the text `[^` at `at` opens a footnote reference: its label runs to the next `]` that no
+ * backslash escapes and holds more than blanks. A label that holds a node or a `%` is left to the repair (C2-I-077).
+ */
+function footnoteReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  const opened = openedBefore(leaf, at, escaped)
+  if (opened >= 0) return opened
+  if (leaf.lastBracket <= at + 2) return NO_REFERENCE
+  let blank = true
+  for (let unit = at + 2; unit < leaf.codes.length; unit++) {
+    const value = leaf.codes[unit]!
+    if ((leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) || value === 37) return UNREAD
+    if (value === 93 && leaf.kinds[unit - 1] !== ESCAPE) return blank ? NO_REFERENCE : REFERENCE
+    if (value !== 32 && value !== 9 && value !== LF) blank = false
+  }
+  return NO_REFERENCE
+}
+
+/** Whether the plan decided the text `[` at `at` before a caret: escaped as a footnote reference, or bare as none. */
+function footnotePlanned(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  // A backslash the writer placed may be needless; the repair removes it (C2-W-088).
+  if (leaf.kinds[at] !== TEXT || leaf.kinds[at - 1] === ESCAPE) return false
+  return escaped[at] !== 0 || footnoteReading(leaf, at, escaped) === NO_REFERENCE
+}
+
+/**
+ * C2-W-094: an opening bracket before `^` opens a footnote reference (C2-I-087), whose `[` takes the backslash; pairs
+ * are checked in write-plan-brackets.ts.
  */
 function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  undecidedIf(!isLiteral(leaf, at, escaped) && nextIs(leaf, at, '^') && leaf.lastBracket > at + 1, leaf, 'footnote bracket')
+  if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '^')) return
+  const reading = leaf.kinds[at + 1] === TEXT ? footnoteReading(leaf, at, escaped) : UNREAD
+  if (reading === UNREAD) undecide(leaf, 'footnote bracket')
+  else if (reading === REFERENCE) escaped[at] = 1
 }
 
 // C2-I-037: the atoms that are no host of an attribute block.
@@ -334,7 +379,9 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '^': (leaf, at, escaped) => {
     // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil; behind `[` a footnote reference
     // where a `]` follows (C2-I-087).
-    if (code(leaf, at - 1) === 123 || (code(leaf, at - 1) === 91 && leaf.lastBracket > at)) undecide(leaf, 'footnote bracket')
+    if (code(leaf, at - 1) === 123 || (code(leaf, at - 1) === 91 && leaf.lastBracket > at && !footnotePlanned(leaf, at - 1, escaped))) {
+      undecide(leaf, 'footnote bracket')
+    }
     else gluedSigil(leaf, at, escaped, treeBracket, '')
   },
   '_': () => undefined,
