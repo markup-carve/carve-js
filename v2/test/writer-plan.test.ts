@@ -131,7 +131,9 @@ describe('the planned writer', () => {
       expect(result.stats.differences, source).toEqual([])
     }
     // A brace block or a line comment behind a pipe may make it the closing pipe, so the repair decides.
-    for (const source of ['\\| a | {.x}\n', '\\| a |{.x}\n', '\\| a | %% c\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+    for (const source of ['\\| a | {.x}\n', '\\| a |{.x}\n', '\\| a | %% c\n']) {
+      expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+    }
   })
 
   it('C2-I-090, C2-I-063: a sigil before a closing brace behind text forms nothing, and the plan writes it bare', () => {
