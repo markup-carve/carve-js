@@ -46,6 +46,9 @@ jobs:
         run: npm ci --allow-git=all
         working-directory: carve
 
+      - name: Example inputs for the cross-check
+        run: node v2/scripts/write-example-inputs.ts
+
       - name: Schema and reader cross-check
         run: AST_FUZZ_COUNT=100000 node --stack-size=8192 scripts/spec2-ast-crosscheck.mjs ..
         working-directory: carve

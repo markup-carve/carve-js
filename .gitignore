@@ -13,3 +13,6 @@ docs/superpowers/
 # Scratch files (`_`-prefixed) are never part of the repository.
 _*
 !_*/
+
+# Written in CI for the cross-check of the specification (v2/scripts/write-example-inputs.ts).
+/v2/data/examples.json
