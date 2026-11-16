@@ -49,6 +49,10 @@ function isDisplayImage(node: Html.Element): boolean {
   return node.tagName === 'img'
 }
 
+function isImage(node: Html.ChildNode): boolean {
+  return isElement(node) && isDisplayImage(node)
+}
+
 /** C2-H-020: a bare image is a block image; C2-H-102: a paragraph of one display formula has the role `math`. */
 function runParagraph(children: Inline[]): Block {
   const only = children.length === 1 ? children[0] : undefined
@@ -65,7 +69,10 @@ function flow<T extends DocumentChild = Block>(nodes: Html.ChildNode[], host: Ht
   const result: (T | Block)[] = []
   let run: Html.ChildNode[] = []
   const flush = (): void => {
-    if (run.some(node => !isBlank(node))) {
+    // C2-H-020: a run of bare images is a block image paragraph each; beside other text an image is inline.
+    if (run.some(isImage) && run.every(node => isBlank(node) || isImage(node) || isComment(node))) {
+      for (const node of run) if (!isBlank(node)) result.push(...reader(node, context))
+    } else if (run.some(node => !isBlank(node))) {
       const children = trimInlineEdges(normalizeBreaks(coalesce(run.flatMap(node => inline(node, context))), host, context),
         host, context)
       if (children.length > 0) result.push(runParagraph(children))
@@ -73,7 +80,7 @@ function flow<T extends DocumentChild = Block>(nodes: Html.ChildNode[], host: Ht
     run = []
   }
   for (const node of nodes) {
-    if (isPhrasing(node) || (isComment(node) && run.length > 0)) run.push(node)
+    if (isPhrasing(node) || isImage(node) || (isComment(node) && run.length > 0)) run.push(node)
     else {
       flush()
       result.push(...reader(node, context))

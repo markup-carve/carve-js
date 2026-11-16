@@ -34,3 +34,19 @@ describe('destinations the importer cannot keep', () => {
     expect(result.document.children[0]).toMatchObject({ type: 'paragraph', children: [{ type: 'span', attrs: { id: 'k' } }] })
   })
 })
+
+describe('images in a bare tight-item paragraph', () => {
+  it('C2-H-020: an image beside text of the same bare paragraph stays inline; bare images alone are block image paragraphs', () => {
+    const inline = importDocument('<ul data-carve-tight>\n  <li><img src="a.png" alt="a">\n-\n&gt; ^ cap</li>\n</ul>\n', { from: 'html' })
+    const list = inline.document.children[0]
+    const item = list?.type === 'list' ? list.children[0] : undefined
+    const types = item?.children[0]?.type === 'paragraph' ? item.children[0].children.map((node) => node.type) : []
+    expect(types).toEqual(['image', 'soft_break', 'text', 'soft_break', 'text'])
+    expect(item?.children[0]).not.toHaveProperty('role')
+    const html = '<ul>\n  <li>\n    <img src="c.png" alt="c">\n    <img src="d.png" alt="d">\n  </li>\n</ul>\n'
+    const bare = importDocument(html, { from: 'html' })
+    const second = bare.document.children[0]
+    const blocks = second?.type === 'list' ? second.children[0]?.children : undefined
+    expect(blocks).toMatchObject([{ type: 'paragraph', role: 'image' }, { type: 'paragraph', role: 'image' }])
+  })
+})
