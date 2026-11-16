@@ -1,22 +1,31 @@
-import { defaultTreeAdapter, parse, parseFragment, serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
-import type { Attrs, Block, Inline, RubyPairNode, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
-import { attrsOf, cell, classNames, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, softText, text,
-  type Context, type ImportResult } from './kit.ts'
+import { parse, parseFragment, serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import type {
+  Block, CaptionNode, DocumentNode, Inline, ListItemNode, ListNode, TableCellNode, TableColumnNode, TableNode, TableRowNode,
+} from '../../v2/src/index.ts'
+import {
+  attr, attrs, CARRIERS, classList, content, degraded, elements, has, ignoredCarrier, isBlank, isComment, isElement, isText, plain,
+  unsupported, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
+} from './html-dom.ts'
+import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } from './html-inline.ts'
+import { collectNotes, holdsCarrier, isFootnoteSection } from './html-notes.ts'
+import { abbreviationTemplate, collectTemplates } from './html-template.ts'
+import { resolveAlignments } from './html-table-align.ts'
+import { cell, coalesce, complete, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
 
-function attr(node: Html.Element, name: string): string | undefined {
-  return node.attrs.find(item => item.name === name)?.value
-}
+const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'blockquote', 'section', 'div', 'ul', 'ol', 'dl', 'pre',
+  'table', 'figure', 'figcaption', 'aside', 'details', 'summary', 'template', 'script', 'style', 'html', 'body', 'head', 'main',
+  'article', 'meta', 'link', 'header', 'footer', 'nav', 'title'])
 
 function htmlInteger(value: string | undefined): number | undefined {
   if (value === undefined) return undefined
-  let at = 0
-  while (value[at] === ' ' || value[at] === '\t' || value[at] === '\n' || value[at] === '\r') at++
-  const start = at
-  if (value[at] === '+' || value[at] === '-') at++
-  const digits = at
-  while (at < value.length && value.charCodeAt(at) >= 48 && value.charCodeAt(at) <= 57) at++
-  if (at === digits) return undefined
-  const result = Number(value.slice(start, at))
+  let index = 0
+  while (value[index] === ' ' || value[index] === '\t' || value[index] === '\n' || value[index] === '\r') index++
+  const start = index
+  if (value[index] === '+' || value[index] === '-') index++
+  const digits = index
+  while (index < value.length && value.charCodeAt(index) >= 48 && value.charCodeAt(index) <= 57) index++
+  if (index === digits) return undefined
+  const result = Number(value.slice(start, index))
   return Number.isSafeInteger(result) ? result : undefined
 }
 
@@ -25,404 +34,81 @@ function htmlSpan(value: string | undefined): number | undefined {
   return parsed !== undefined && parsed > 1 ? parsed : undefined
 }
 
-function attrs(node: Html.Element, omit: readonly string[] = []): { attrs?: Attrs, lang?: string,
-  dir?: 'ltr' | 'rtl' | 'auto', data?: Record<string, unknown> } {
-  const mapped = attrsOf(node.attrs.filter(item => !omit.includes(item.name) && !item.name.startsWith('on') &&
-    item.name !== 'lang' && item.name !== 'dir')
-    .map(item => [item.name, item.value]))
-  const result: { attrs?: Attrs, lang?: string, dir?: 'ltr' | 'rtl' | 'auto', data?: Record<string, unknown> } = {}
-  if (mapped) result.attrs = mapped
-  const lang = attr(node, 'lang')
-  const dir = attr(node, 'dir')
-  if (lang) result.lang = lang
-  if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') result.dir = dir
-  const alignment = styleAlignment(attr(node, 'style'))
-  if (alignment !== undefined) result.data = { 'carve.style': { alignment } }
-  return result
-}
-
-function styleAlignment(style: string | undefined): 'start' | 'center' | 'end' | 'justify' | undefined {
-  if (style === undefined) return undefined
-  for (const declaration of style.split(';')) {
-    const colon = declaration.indexOf(':')
-    if (colon < 0 || declaration.slice(0, colon).trim().toLowerCase() !== 'text-align') continue
-    const value = declaration.slice(colon + 1).trim().toLowerCase()
-    if (value === 'left') return 'start'
-    if (value === 'right') return 'end'
-    if (value === 'center' || value === 'justify') return value
-  }
-  return undefined
-}
-
-function location(node: Html.ChildNode): [number | undefined, number | undefined] {
-  return [node.sourceCodeLocation?.startOffset, node.sourceCodeLocation?.endOffset]
-}
-
-function degraded(context: Context, node: Html.ChildNode, message: string): void {
-  const [start, end] = location(node)
-  finding(context, 'import-degraded', node.nodeName, message, start, end)
-}
-
-function htmlRowspan(node: Html.Element, context: Context): number | undefined {
+function htmlRowspan(node: Html.Element, context: HtmlContext): number | undefined {
   const raw = attr(node, 'rowspan')
   if (htmlInteger(raw) === 0) degraded(context, node, 'HTML rowspan=0 extends to the end of its row group')
   return htmlSpan(raw)
 }
 
-function unsupported(context: Context, node: Html.ChildNode, message: string): void {
-  const [start, end] = location(node)
-  finding(context, 'import-unsupported', node.nodeName, message, start, end)
+function isPhrasing(node: Html.ChildNode): boolean {
+  if (isText(node)) return true
+  return isElement(node) && !BLOCK_TAGS.has(node.tagName) && !isDisplayImage(node)
 }
 
-function isElement(node: Html.ChildNode): node is Html.Element { return defaultTreeAdapter.isElementNode(node) }
-function isText(node: Html.ChildNode): node is Html.TextNode { return defaultTreeAdapter.isTextNode(node) }
-function isComment(node: Html.ChildNode): node is Html.CommentNode { return defaultTreeAdapter.isCommentNode(node) }
-function elements(node: Html.Element): Html.Element[] { return content(node).filter(isElement) }
-function content(node: Html.Element): Html.ChildNode[] { return node.childNodes }
-
-function footnoteKey(fragment: string): string {
-  const hash = fragment.startsWith('#') ? fragment.slice(1) : fragment
-  for (const prefix of ['user-content-fn-', 'fn-', 'fn']) if (hash.startsWith(prefix)) return hash.slice(prefix.length)
-  return hash
+function isDisplayImage(node: Html.Element): boolean {
+  return node.tagName === 'img'
 }
 
-function isFootnoteSection(node: Html.Element): boolean {
-  return attr(node, 'role') === 'doc-endnotes' || classNames(attr(node, 'class') ?? '').includes('footnotes')
+/** C2-H-020: a bare image is a block image; C2-H-102: a paragraph of one display formula has the role `math`. */
+function runParagraph(children: Inline[]): Block {
+  const only = children.length === 1 ? children[0] : undefined
+  if (only?.type === 'math' && only.display) return { type: 'paragraph', role: 'math', children }
+  return paragraph(children)
 }
 
-function plain(node: Html.ChildNode): string {
-  if (isText(node)) return node.value
-  if (!isElement(node)) return ''
-  return content(node).map(plain).join('')
-}
+type DocumentChild = DocumentNode['children'][number]
+type Reader<T> = (node: Html.ChildNode, context: HtmlContext) => T[]
 
-function inlineChildren(node: Html.Element, context: Context): Inline[] {
-  const children = normalizeBreaks(coalesce(content(node).flatMap(child => inline(child, context))), node, context)
-  const edges = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption']
-  return edges.includes(node.tagName) ? trimInlineEdges(children, node, context) : children
-}
-
-function horizontal(code: number): boolean { return code === 32 || code === 9 }
-
-function trimStart(value: string): string {
-  let at = 0
-  while (at < value.length && horizontal(value.charCodeAt(at))) at++
-  return value.slice(at)
-}
-
-function trimEnd(value: string): string {
-  let at = value.length
-  while (at > 0 && horizontal(value.charCodeAt(at - 1))) at--
-  return value.slice(0, at)
-}
-
-function appendSoft(result: Inline[], child: Extract<Inline, { type: 'soft_break' }>): boolean {
-  let changed = false
-  const previous = result.at(-1)
-  if (previous?.type === 'text') {
-    const value = trimEnd(previous.value)
-    if (value !== previous.value) { previous.value = value; changed = true }
-    if (value === '') result.pop()
+/** The blocks of a flow: a run of text and inline elements is one paragraph, as a render writes a bare paragraph. */
+function flow<T extends DocumentChild = Block>(nodes: Html.ChildNode[], host: Html.ChildNode, context: HtmlContext,
+  reader: Reader<T | Block> = block): (T | Block)[] {
+  const result: (T | Block)[] = []
+  let run: Html.ChildNode[] = []
+  const flush = (): void => {
+    if (run.some(node => !isBlank(node))) {
+      const children = trimInlineEdges(normalizeBreaks(coalesce(run.flatMap(node => inline(node, context))), host, context),
+        host, context)
+      if (children.length > 0) result.push(runParagraph(children))
+    }
+    run = []
   }
-  const before = result.at(-1)
-  if (before?.type === 'soft_break' || before?.type === 'hard_break') return true
-  result.push(child)
-  return changed
-}
-
-function appendHard(result: Inline[], child: Extract<Inline, { type: 'hard_break' }>): boolean {
-  const previous = result.at(-1)
-  if (previous?.type === 'soft_break') result.pop()
-  result.push(child)
-  return previous?.type === 'soft_break'
-}
-
-function appendText(result: Inline[], child: Extract<Inline, { type: 'text' }>): boolean {
-  const previous = result.at(-1)
-  if (previous?.type !== 'soft_break' && previous?.type !== 'hard_break') { result.push(child); return false }
-  const value = trimStart(child.value)
-  const changed = value !== child.value
-  if (value !== '') { child.value = value; result.push(child) }
-  return changed || value === ''
-}
-
-function normalizeBreaks(children: Inline[], node: Html.ChildNode, context: Context): Inline[] {
-  const result: Inline[] = []
-  let changed = false
-  for (const child of children) {
-    if (child.type === 'soft_break') changed = appendSoft(result, child) || changed
-    else if (child.type === 'hard_break') changed = appendHard(result, child) || changed
-    else if (child.type === 'text') changed = appendText(result, child) || changed
-    else result.push(child)
+  for (const node of nodes) {
+    if (isPhrasing(node) || (isComment(node) && run.length > 0)) run.push(node)
+    else {
+      flush()
+      result.push(...reader(node, context))
+    }
   }
-  if (changed) degraded(context, node, 'HTML whitespace around line ending normalized')
+  flush()
   return result
 }
 
-function trimLeading(children: Inline[]): boolean {
-  let trimmed = false
-  while (true) {
-    const first = children[0]
-    if (first?.type === 'soft_break' || (trimmed && first?.type === 'text' && trimStart(first.value) === '')) {
-      children.shift()
-      trimmed = true
-    } else break
-  }
-  const first = children[0]
-  if (trimmed && first?.type === 'text') first.value = trimStart(first.value)
-  return trimmed
-}
-
-function trimTrailing(children: Inline[]): boolean {
-  let trimmed = false
-  while (true) {
-    const last = children.at(-1)
-    const before = children.at(-2)
-    if (last?.type === 'soft_break' || (last?.type === 'text' && trimEnd(last.value) === ''
-      && before?.type === 'soft_break')) {
-      children.pop()
-      trimmed = true
-    } else break
-  }
-  const last = children.at(-1)
-  if (trimmed && last?.type === 'text') last.value = trimEnd(last.value)
-  return trimmed
-}
-
-function trimInlineEdges(children: Inline[], node: Html.ChildNode, context: Context): Inline[] {
-  const leading = trimLeading(children)
-  const trailing = trimTrailing(children)
-  if (leading || trailing) degraded(context, node, 'HTML line ending at block edge omitted')
-  return children
-}
-
-function inline(node: Html.ChildNode, context: Context): Inline[] {
-  if (isText(node)) return softText(node.value)
-  if (isComment(node)) return [{ type: 'raw_inline', format: 'html', value: serializeOuter(node) }]
-  if (isElement(node)) return inlineElement(node, context)
-  unsupported(context, node, 'Doctype has no inline representation')
-  return []
-}
-
-function inlineElement(node: Html.Element, context: Context): Inline[] {
-  const footnote = footnoteInline(node, context)
-  if (footnote !== undefined) return footnote
-  const children = inlineChildren(node, context)
-  const formatted = formatInline(node, children)
-  if (formatted !== undefined) return formatted
-  switch (node.tagName) {
-    case 'br': return [{ type: 'hard_break' }]
-    case 'wbr': degraded(context, node, 'Word break became a soft break'); return [{ type: 'soft_break' }]
-    case 'span': return [{ type: 'span', children, ...attrs(node) }]
-    case 'a': return htmlLink(node, children, context)
-    case 'img': return htmlImage(node, context)
-    case 'math': return htmlMath(node, context)
-    case 'ruby': return htmlRuby(node, context)
-    case 'abbr': {
-      const expansion = attr(node, 'title')
-      return [{ type: 'abbreviation', key: plain(node), namespace: 'abbr',
-        ...(expansion !== undefined ? { expansion } : {}) }]
-    }
-    case 'input': unsupported(context, node, 'Standalone input has no Carve inline node'); return []
-    default:
-      degraded(context, node, `HTML ${node.tagName} mapped to a span`)
-      return [{ type: 'span', children, ...attrs(node) }]
-  }
-}
-
-function htmlMath(node: Html.Element, context: Context): Inline[] {
-  const annotation = elements(node).flatMap(child => elements(child)).find(child => child.tagName === 'annotation' &&
-    ['application/x-tex', 'text/x-tex', 'LaTeX'].includes(attr(child, 'encoding') ?? ''))
-  const source = annotation ? plain(annotation) : attr(node, 'alttext')
-  if (source !== undefined) return [{ type: 'math', display: attr(node, 'display') === 'block', value: source }]
-  unsupported(context, node, 'MathML has no TeX annotation or alttext')
-  return [text(plain(node))]
-}
-
-function htmlRuby(node: Html.Element, context: Context): Inline[] {
-  const pairs: RubyPairNode[] = []
-  let base: Inline[] = []
-  for (const child of content(node)) {
-    if (isElement(child) && child.tagName === 'rt') {
-      pairs.push({ type: 'ruby_pair', base: coalesce(base), annotation: inlineChildren(child, context) })
-      base = []
-    } else if (isElement(child) && child.tagName === 'rp') {
-      degraded(context, child, 'Ruby parentheses omitted')
-    } else if (isElement(child) && child.tagName === 'rb') {
-      base.push(...inlineChildren(child, context))
-    } else {
-      base.push(...inline(child, context))
-    }
-  }
-  if (base.length) degraded(context, node, 'Ruby base without annotation became text')
-  return pairs.length ? [{ type: 'ruby', pairs }, ...base] : base
-}
-
-function footnoteInline(node: Html.Element, context: Context): Inline[] | undefined {
-  if (node.tagName === 'a' && attr(node, 'role') === 'doc-backlink') {
-    degraded(context, node, 'Generated footnote backlink omitted')
-    return []
-  }
-  if (node.tagName === 'a' && (attr(node, 'role') === 'doc-noteref' || attr(node, 'data-footnote-ref') !== undefined)) {
-    return [{ type: 'footnote_ref', key: footnoteKey(attr(node, 'href') ?? ''), namespace: 'footnote' }]
-  }
-  if (node.tagName === 'sup' && classNames(attr(node, 'class') ?? '').includes('footnote-ref')) {
-    const anchor = elements(node).find(child => child.tagName === 'a')
-    if (anchor) return [{ type: 'footnote_ref', key: footnoteKey(attr(anchor, 'href') ?? ''), namespace: 'footnote' }]
-  }
-  return undefined
-}
-
-function htmlLink(node: Html.Element, children: Inline[], context: Context): Inline[] {
-  const href = attr(node, 'href')
-  const safe = href === undefined ? undefined : safeUrl(context, node.tagName, href, ...location(node))
-  const tooltip = attr(node, 'title')
-  return [{ type: 'link', children, ...(safe !== undefined ? { href: safe } : {}),
-    ...(tooltip !== undefined ? { tooltip } : {}), ...attrs(node, ['href', 'title']) }]
-}
-
-function htmlImage(node: Html.Element, context: Context): Inline[] {
-  const src = attr(node, 'src')
-  const safe = src === undefined ? undefined : safeUrl(context, node.tagName, src, ...location(node))
-  const long = attr(node, 'longdesc')
-  const longSafe = long === undefined ? undefined : safeUrl(context, 'img.longdesc', long, ...location(node))
-  const longDescription = longSafe !== undefined ? [paragraph([{ type: 'link' as const, href: longSafe,
-    children: [text(longSafe)] }])] : undefined
-  const tooltip = attr(node, 'title')
-  return [{ type: 'image', ...(safe !== undefined ? { src: safe } : {}), alt: attr(node, 'alt') ?? '',
-    ...(tooltip !== undefined ? { tooltip } : {}),
-    ...(longDescription ? { longDescription } : {}), ...attrs(node, ['src', 'alt', 'title', 'longdesc']) }]
-}
-
-function formatInline(node: Html.Element, children: Inline[]): Inline[] | undefined {
-  switch (node.tagName) {
-    case 'em': case 'i': return [{ type: 'emphasis', children, ...attrs(node) }]
-    case 'strong': case 'b': return [{ type: 'strong', children, ...attrs(node) }]
-    case 's': case 'strike': return [{ type: 'strike', children, ...attrs(node) }]
-    case 'del': return [{ type: 'delete', children, ...attrs(node) }]
-    case 'ins': return [{ type: 'insert', children, ...attrs(node) }]
-    case 'mark': return [{ type: 'highlight', children, ...attrs(node) }]
-    case 'u': return [{ type: 'underline', children, ...attrs(node) }]
-    case 'sub': return [{ type: 'subscript', children, ...attrs(node) }]
-    case 'sup': return [{ type: 'superscript', children, ...attrs(node) }]
-    case 'code': return [{ type: 'code', value: plain(node), ...attrs(node) }]
-    default: return undefined
-  }
-}
-
-function blockChildren(node: Html.Element, context: Context): Block[] {
-  return content(node).flatMap(child => block(child, context))
-}
-
-function tableCell(node: Html.Element, context: Context): TableCellNode {
-  const hasBlocks = elements(node).some(child => ['p', 'ul', 'ol', 'div', 'blockquote', 'pre', 'table', 'dl', 'figure']
-    .includes(child.tagName))
-  const result: TableCellNode = hasBlocks ? { type: 'table_cell', header: node.tagName === 'th',
-    children: blockChildren(node, context) } : cell(cellInline(node, context), node.tagName === 'th')
-  const colspan = htmlSpan(attr(node, 'colspan'))
-  const rowspan = htmlRowspan(node, context)
-  if (colspan !== undefined) result.colspan = colspan
-  if (rowspan !== undefined) result.rowspan = rowspan
-  const scope = attr(node, 'scope')
-  if (scope === 'col' || scope === 'row' || scope === 'colgroup' || scope === 'rowgroup') result.scope = scope
-  const align = attr(node, 'align')
-  if (align === 'left' || align === 'right' || align === 'center') result.align = align
-  const valign = attr(node, 'valign')
-  if (valign === 'top' || valign === 'middle' || valign === 'bottom' || valign === 'baseline') result.valign = valign
-  Object.assign(result, attrs(node, ['colspan', 'rowspan', 'scope', 'align', 'valign']))
+function blocks(nodes: Html.ChildNode[], host: Html.ChildNode, context: HtmlContext): Block[] {
+  const result: Block[] = []
+  for (const node of flow(nodes, host, context)) result.push(node)
   return result
 }
 
-function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
-  let changed = false
-  for (let at = 0; at < group.length; at++) {
-    const child = group[at]
-    if (child?.type === 'soft_break' || child?.type === 'hard_break') { group[at] = text(' '); changed = true }
-    else if (child?.type === 'ruby') for (const pair of child.pairs) pending.push(pair.base, pair.annotation)
-    else if (child !== undefined && 'children' in child && child.type !== 'citation_group') pending.push(child.children)
-  }
-  return changed
-}
-
-function cellInline(node: Html.Element, context: Context): Inline[] {
-  const children = inlineChildren(node, context)
-  const pending: Inline[][] = [children]
-  let changed = false
-  while (pending.length > 0) {
-    const group = pending.pop()
-    if (group !== undefined) changed = flattenCellGroup(group, pending) || changed
-  }
-  if (changed) degraded(context, node, 'HTML table cell line break normalized to a space')
-  return coalesce(children)
-}
-
-function rows(node: Html.Element, context: Context): TableRowNode[] {
-  if (node.tagName !== 'table') {
-    for (const child of elements(node)) if (child.tagName !== 'tr') unsupported(context, child, 'Non-row child in table group')
-  }
-  return elements(node).filter(child => child.nodeName === 'tr').map(child => {
-    for (const entry of elements(child)) {
-      if (entry.nodeName !== 'th' && entry.nodeName !== 'td') unsupported(context, entry, 'Non-cell child in HTML row')
+/** The children of the document, and of a section a render opened in it (C2-H-026), where templates stand (C2-H-114). */
+function documentChild(node: Html.ChildNode, context: HtmlContext): DocumentChild[] {
+  if (!isElement(node)) return block(node, context)
+  const template = node.tagName === 'template' ? abbreviationTemplate(node, context) : undefined
+  if (template !== undefined) return template
+  if (node.tagName === 'section') return section(node, context, documentChild)
+  if (['html', 'body'].includes(node.tagName)) {
+    if (node.attrs.some(entry => !['lang', 'dir'].includes(entry.name))) {
+      degraded(context, node, `HTML ${node.tagName} wrapper attributes omitted`)
     }
-    return { ...row(elements(child).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
-      .map(entry => tableCell(entry, context))), ...attrs(child) }
-  })
-}
-
-function table(node: Html.Element, context: Context): Block {
-  const direct = rows(node, context)
-  const groups = elements(node).filter(child => child.nodeName === 'thead' || child.nodeName === 'tbody' ||
-    child.nodeName === 'tfoot')
-  const children: Extract<Block, { type: 'table' }>['children'] = groups.map(group => {
-    if (group.nodeName === 'thead') return { type: 'table_head', children: rows(group, context), ...attrs(group) }
-    if (group.nodeName === 'tfoot') return { type: 'table_foot', children: rows(group, context), ...attrs(group) }
-    return { type: 'table_body', children: rows(group, context), ...attrs(group) }
-  })
-  if (direct.length) children.unshift({ type: 'table_body', children: direct })
-  if (!children.some(group => group.type === 'table_body')) children.push({ type: 'table_body', children: [] })
-  const width = Math.max(0, ...children.flatMap(group => group.type === 'comment' ? [] : group.children
-    .filter(entry => entry.type === 'table_row').map(entry => entry.children.reduce((sum, entryCell) =>
-      sum + (entryCell.colspan ?? 1), 0))))
-  const caption = elements(node).find(child => child.nodeName === 'caption')
-  for (const child of elements(node)) {
-    if (!['caption', 'thead', 'tbody', 'tfoot', 'tr'].includes(child.tagName)) {
-      unsupported(context, child, `Unsupported table child ${child.tagName}`)
-    }
+    return flow(content(node), node, context, documentChild)
   }
-  return { type: 'table', children, columns: Array.from({ length: width }, () => ({ type: 'table_column' })),
-    ...(caption ? { caption: { type: 'caption', children: [paragraph(inlineChildren(caption, context))],
-      ...attrs(caption) } } : {}), ...attrs(node) }
+  return block(node, context)
 }
 
-function definitionList(node: Html.Element, context: Context): Block {
-  const children: Extract<Block, { type: 'definition_list' }>['children'] = []
-  for (const child of content(node)) {
-    if (child.nodeName === 'dt') children.push({ type: 'definition_term', children: inlineChildren(child, context),
-      ...attrs(child) })
-    else if (child.nodeName === 'dd') children.push({ type: 'definition_description',
-      children: blockChildren(child, context), ...attrs(child) })
-    else if (!isText(child) || child.value.trim()) unsupported(context, child, 'Unexpected definition list child')
-  }
-  return { type: 'definition_list', children, ...attrs(node) }
+function blockChildren(node: Html.Element, context: HtmlContext): Block[] {
+  return blocks(content(node), node, context)
 }
 
-function listItem(node: Html.Element, context: Context): Extract<Block, { type: 'list' }>['children'][number] {
-  const checkbox = elements(node).find(child => child.nodeName === 'input' && attr(child, 'type') === 'checkbox')
-  if (checkbox && checkbox.attrs.some(entry => !['type', 'checked', 'disabled'].includes(entry.name))) {
-    degraded(context, checkbox, 'Checkbox attributes outside task state omitted')
-  }
-  const children = content(node).filter(child => child !== checkbox).flatMap((child, index) => {
-    if (checkbox && index === 0 && isText(child) && child.value.startsWith(' ')) {
-      const inline = trimInlineEdges(normalizeBreaks(softText(child.value.slice(1)), child, context), child, context)
-      return inline.length ? [paragraph(inline)] : []
-    }
-    return block(child, context)
-  })
-  return { type: 'list_item', children, ...(checkbox ? { task: { mark: attr(checkbox, 'checked') !== undefined ? 'x' : ' ' } } : {}),
-    ...attrs(node) }
-}
-
-function block(node: Html.ChildNode, context: Context): Block[] {
+function block(node: Html.ChildNode, context: HtmlContext): Block[] {
   if (isText(node)) {
     if (!node.value.trim()) return []
     return [paragraph(trimInlineEdges(normalizeBreaks(softText(node.value), node, context), node, context))]
@@ -433,93 +119,518 @@ function block(node: Html.ChildNode, context: Context): Block[] {
   return []
 }
 
-function blockElement(node: Html.Element, context: Context): Block[] {
-  const simple = simpleBlockElement(node, context)
+function blockElement(node: Html.Element, context: HtmlContext): Block[] {
+  const simple = simpleBlockElement(node, context) ?? containerElement(node, context)
   if (simple !== undefined) return simple
   switch (node.tagName) {
-    case 'ul': case 'ol': return htmlList(node, context)
+    case 'ul': case 'ol': return [htmlList(node, context)]
     case 'pre': return htmlPre(node, context)
     case 'table': return [table(node, context)]
     case 'dl': return [definitionList(node, context)]
-    case 'figure': {
-      const caption = elements(node).find(child => child.nodeName === 'figcaption')
-      const children = content(node).filter(child => child !== caption).flatMap(child => block(child, context))
-      return [{ type: 'figure', children, ...(caption ? { caption: { type: 'caption',
-        children: blockChildren(caption, context), ...attrs(caption) } } : {}),
-        ...attrs(node) }]
-    }
+    case 'figure': return [figure(node, context)]
     case 'details': return detailsBlock(node, context)
     case 'script': case 'style': return [{ type: 'raw_block', format: 'html', value: serializeOuter(node) }]
-    case 'template': degraded(context, node, 'HTML template retained as raw HTML');
-      return [{ type: 'raw_block', format: 'html', value: serializeOuter(node) }]
+    case 'template': return rawTemplate(node, context)
     default: return fallbackBlock(node, context)
   }
 }
 
-function detailsBlock(node: Html.Element, context: Context): Block[] {
+function rawTemplate(node: Html.Element, context: HtmlContext): Block[] {
+  if (has(node, 'data-carve-abbreviations')) {
+    ignoredCarrier(context, node, 'data-carve-abbreviations', 'a template is read only at the top level of the flow')
+  }
+  // C2-H-186: the reserved name does not stay, also on a template that is kept as raw HTML.
+  node.attrs = node.attrs.filter(entry => !CARRIERS.has(entry.name))
+  degraded(context, node, 'HTML template retained as raw HTML')
+  return [{ type: 'raw_block', format: 'html', value: serializeOuter(node) }]
+}
+
+function detailsBlock(node: Html.Element, context: HtmlContext): Block[] {
   degraded(context, node, 'Details disclosure mapped to a div')
-  const mapped = attrs(node)
+  const mapped = attrs(context, node)
   return [{ type: 'div', children: blockChildren(node, context), ...mapped,
     attrs: { ...mapped.attrs, classes: ['details', ...(mapped.attrs?.classes ?? [])] } }]
 }
 
-function htmlPre(node: Html.Element, context: Context): Block[] {
+/** C2-H-047, C2-H-048: the title of the opener on `<pre>`, and under `roundtrip` its label (C2-H-114). */
+function htmlPre(node: Html.Element, context: HtmlContext): Block[] {
   const code = elements(node).find(child => child.nodeName === 'code')
-  const classes = code ? classNames(attr(code, 'class') ?? '') : []
+  const classes = code ? classList(code) : []
   const language = classes.find(name => name.startsWith('language-'))?.slice(9)
   if (code && (code.attrs.some(entry => entry.name !== 'class') || classes.some(name => !name.startsWith('language-')))) {
     degraded(context, code, 'Code element attributes other than language omitted')
   }
   const value = code ? plain(code) : plain(node)
+  const title = attr(node, 'title')
+  const label = codeLabel(node, code, context)
   return [{ type: 'code_block', value: value && !value.endsWith('\n') ? `${value}\n` : value,
     ...(language ? { syntax: language } : {}),
-    ...attrs(node) }]
+    ...(title !== undefined ? { title: [{ type: 'text' as const, value: title }] } : {}),
+    ...(label !== undefined ? { groupLabel: label } : {}),
+    ...attrs(context, node, title !== undefined ? ['title'] : []) }]
 }
 
-function htmlList(node: Html.Element, context: Context): Block[] {
-  const items = elements(node).filter(child => child.nodeName === 'li').map(child => listItem(child, context))
-  for (const child of elements(node)) if (child.tagName !== 'li') unsupported(context, child, 'Non-item child in HTML list')
-  const start = htmlInteger(attr(node, 'start'))
-  const result = list(node.tagName === 'ol', items, !items.some(item => item.children.some(child =>
-    child.type === 'paragraph' && item.children.filter(entry => entry.type !== 'list').length > 1)), start)
-  return [{ ...result, ...attrs(node, ['start', 'type']) }]
+/** C2-H-186, C2-B-117: a fence label holds no `]` and no line break, and the `<pre>` holds one `<code>` and nothing else. */
+function codeLabel(node: Html.Element, code: Html.Element | undefined, context: HtmlContext): string | undefined {
+  const label = attr(node, 'data-carve-label')
+  if (label === undefined) return undefined
+  const only = code !== undefined && content(node).every(child => child === code)
+  if (only && !label.includes(']') && !label.includes('\n') && !label.includes('\r')) return label
+  ignoredCarrier(context, node, 'data-carve-label', only ? 'the value is no fence label' : 'the element holds more than its code')
+  return undefined
 }
 
-function simpleBlockElement(node: Html.Element, context: Context): Block[] | undefined {
+function simpleBlockElement(node: Html.Element, context: HtmlContext): Block[] | undefined {
   switch (node.tagName) {
-    case 'p': return [{ type: 'paragraph', children: inlineChildren(node, context), ...attrs(node) }]
-    case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': return [{ type: 'heading',
-      level: Number(node.tagName[1]), children: inlineChildren(node, context), ...attrs(node) }]
-    case 'hr': return [{ type: 'thematic_break', ...attrs(node) }]
-    case 'blockquote': return [{ type: 'block_quote', children: blockChildren(node, context), ...attrs(node) }]
-    case 'section': return isFootnoteSection(node) ? footnoteSection(node, context) :
-      [{ type: 'section', children: blockChildren(node, context), ...attrs(node) }]
-    case 'div': return [{ type: 'div', children: blockChildren(node, context), ...attrs(node) }]
+    case 'p': return [paragraphElement(node, context)]
+    case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': return [heading(node, Number(node.tagName[1]), context)]
+    case 'hr': return [{ type: 'thematic_break', ...attrs(context, node) }]
+    case 'blockquote': return [{ type: 'block_quote', children: blockChildren(node, context), ...attrs(context, node) }]
+    case 'section': return section(node, context)
+    case 'aside': return admonition(node, context)
     default: return undefined
   }
 }
 
-function footnoteSection(node: Html.Element, context: Context): Block[] {
+function paragraphElement(node: Html.Element, context: HtmlContext): Block {
+  const children = inlineChildren(node, context)
+  const base = runParagraph(children)
+  return { ...base, ...attrs(context, node, [], true) }
+}
+
+/** C2-H-021, C2-H-023: a heading, its true level above six, and whether its id was authored (C2-H-114). */
+function heading(node: Html.Element, level: number, context: HtmlContext, id?: HeadingId): Block {
+  const own = headingId(node, context)
+  const chosen = id ?? own
+  const omit = ['id', ...(level > 6 ? ['role', 'aria-level'] : [])]
+  const mapped = attrs(context, node, omit, true)
+  const withId = chosen.authored === undefined ? mapped : { ...mapped, attrs: { ...mapped.attrs, id: chosen.authored } }
+  return { type: 'heading', level, children: inlineChildren(node, context), ...withId }
+}
+
+interface HeadingId { authored?: string }
+
+function headingId(node: Html.Element, context: HtmlContext): HeadingId {
+  const id = attr(node, 'id')
+  const explicit = has(node, 'data-carve-explicit-id')
+  const generated = has(node, 'data-carve-generated-id')
+  if (explicit && generated) {
+    ignoredCarrier(context, node, 'data-carve-explicit-id', 'an id is authored or generated, not both')
+    return id === undefined ? {} : { authored: id }
+  }
+  if ((explicit || generated) && (id === undefined || id === '')) {
+    ignoredCarrier(context, node, explicit ? 'data-carve-explicit-id' : 'data-carve-generated-id', 'the element has no id')
+    return {}
+  }
+  if (generated) return {}
+  return id === undefined ? {} : { authored: id }
+}
+
+function headingLevel(node: Html.Element): number | undefined {
+  if (/^h[1-6]$/u.test(node.tagName)) return Number(node.tagName[1])
+  if (node.tagName !== 'div' || attr(node, 'role') !== 'heading') return undefined
+  const level = htmlInteger(attr(node, 'aria-level'))
+  return level !== undefined && level > 6 ? level : undefined
+}
+
+/** C2-H-026, C2-H-027: a section a render opens at a heading reads back as the heading and the blocks it holds. */
+function section<T extends DocumentChild>(node: Html.Element, context: HtmlContext, reader: Reader<T | Block> = block): (T | Block)[] {
+  if (isFootnoteSection(node)) return footnoteSection(node, context)
+  const first = elements(node)[0]
+  const level = first === undefined ? undefined : headingLevel(first)
+  const before = first === undefined ? [] : content(node).slice(0, content(node).indexOf(first))
+  if (first === undefined || level === undefined || !before.every(isBlank)) {
+    for (const name of ['data-carve-explicit-id', 'data-carve-generated-id']) {
+      if (has(node, name)) ignoredCarrier(context, node, name, 'the section opens with no heading')
+    }
+    return [{ type: 'section', children: blockChildren(node, context), ...attrs(context, node) }]
+  }
+  const id = headingId(node, context)
+  const rest = content(node).slice(content(node).indexOf(first) + 1)
+  return [heading(first, level, context, id), ...flow(rest, node, context, reader)]
+}
+
+/** C2-H-089: the notes stand at the section; an inline footnote reads back at its reference (C2-H-114). */
+function footnoteSection(node: Html.Element, context: HtmlContext): Block[] {
   const ordered = elements(node).find(child => child.tagName === 'ol')
   if (ordered === undefined) {
     unsupported(context, node, 'Footnote section has no ordered list')
     return []
   }
+  const notes: DocumentNode['children'] = []
   for (const item of elements(ordered).filter(child => child.tagName === 'li')) {
     const id = attr(item, 'id')
     if (!id) { unsupported(context, item, 'Footnote has no id'); continue }
-    context.deferred?.push({ type: 'footnote', key: footnoteKey(id), namespace: 'footnote',
-      children: blockChildren(item, context) })
+    const note = context.notes.get(id)
+    if (note?.inline === true) continue
+    notes.push({ type: 'footnote', key: note?.label ?? footnoteKeyOf(id), namespace: 'footnote', children: blockChildren(item, context) })
   }
-  return []
+  if (!context.roundtrip) {
+    context.deferred?.push(...notes)
+    return []
+  }
+  context.footnotes.push(...notes.filter(note => note.type === 'footnote'))
+  return notesDirective(node, context)
 }
 
-function fallbackBlock(node: Html.Element, context: Context): Block[] {
-  if (node.tagName === 'img') return [{ type: 'paragraph', role: 'image', children: htmlImage(node, context) }]
-  if (node.tagName === 'math') {
-    const children = htmlMath(node, context)
-    return [{ type: 'paragraph', ...(children[0]?.type === 'math' ? { role: 'math' as const } : {}), children }]
+/**
+ * C2-H-093, C2-H-158: a top-level `::: footnotes` directive places the section and gives it its title and label.
+ * A section with either, or with blocks behind it, stood at a directive; its blocks were written before it.
+ */
+function notesDirective(node: Html.Element, context: HtmlContext): Block[] {
+  const parts = titled(node, context)
+  const parent = node.parentNode
+  const siblings = parent === null ? [] : parent.childNodes
+  const behind = siblings.slice(siblings.indexOf(node) + 1).some(child => !isBlank(child))
+  if (parts.title === undefined && parts.groupLabel === undefined && !behind) return []
+  return [{ type: 'directive', kind: 'footnotes', children: [], ...(parts.title ? { title: parts.title } : {}),
+    ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}) }]
+}
+
+function footnoteKeyOf(id: string): string {
+  for (const prefix of ['user-content-fn-', 'fn-', 'fn']) if (id.startsWith(prefix)) return id.slice(prefix.length)
+  return id
+}
+
+const ADMONITION_KINDS = ['note', 'tip', 'warning', 'danger', 'info', 'success', 'example', 'quote'] as const
+const DIRECTIVE_KINDS = ['bibliography', 'footnotes', 'glossary', 'index', 'references', 'toc'] as const
+
+function isKind<T extends string>(kinds: readonly T[], value: string | undefined): value is T {
+  return kinds.some(kind => kind === value)
+}
+
+/** C2-H-154: `<p class="admonition-title">` and `<p class="div-label">` lead the body of a div or admonition. */
+function titled(node: Html.Element, context: HtmlContext): { title?: Inline[], groupLabel?: string, rest: Html.ChildNode[] } {
+  const nodes = content(node)
+  let index = 0
+  const next = (name: string): Html.Element | undefined => {
+    while (index < nodes.length && isBlank(nodes[index] ?? nodes[0]!)) index++
+    const candidate = nodes[index]
+    if (candidate === undefined || !isElement(candidate) || candidate.tagName !== 'p' || attr(candidate, 'class') !== name) return undefined
+    index++
+    return candidate
   }
+  const title = next('admonition-title')
+  const label = next('div-label')
+  return { ...(title ? { title: inlineChildren(title, context) } : {}), ...(label ? { groupLabel: plain(label) } : {}),
+    rest: nodes.slice(index) }
+}
+
+function admonition(node: Html.Element, context: HtmlContext): Block[] | undefined {
+  const classes = classList(node)
+  const kind = classes[1]
+  if (classes[0] !== 'admonition' || !isKind(ADMONITION_KINDS, kind)) return undefined
+  const parts = titled(node, context)
+  const mapped = withoutKeys(withoutClasses(attrs(context, node), ['admonition', kind]), ['aria-label', 'aria-labelledby'])
+  return [{ type: 'admonition', kind, ...(parts.title ? { title: parts.title } : {}),
+    ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}),
+    children: flow(parts.rest, node, context), ...mapped }]
+}
+
+function containerElement(node: Html.Element, context: HtmlContext): Block[] | undefined {
+  if (node.tagName !== 'div') return undefined
+  const level = headingLevel(node)
+  if (level !== undefined) return [heading(node, level, context)]
+  const fault = lineBlockFault(node)
+  if (has(node, 'data-carve-line-block') && fault === undefined) return [lineBlock(node, context)]
+  if (fault !== undefined && has(node, 'data-carve-line-block')) ignoredCarrier(context, node, 'data-carve-line-block', fault)
+  if (has(node, 'data-carve-div') && node.attrs.length > 1) {
+    ignoredCarrier(context, node, 'data-carve-div', 'the div carries other attributes')
+  }
+  return [divElement(node, context)]
+}
+
+/** C2-H-186: why a `data-carve-line-block` is not read, or undefined when it is. */
+function lineBlockFault(node: Html.Element): string | undefined {
+  if (has(node, 'data-carve-div')) return 'the element is also a div'
+  if (!classList(node).includes('line-block')) return 'the element lacks the class line-block'
+  return content(node).every(child => isBlank(child) || (isElement(child) && child.tagName === 'p')) ? undefined
+    : 'the element holds more than paragraphs'
+}
+
+function divElement(node: Html.Element, context: HtmlContext): Block {
+  const parts = titled(node, context)
+  const mapped = attrs(context, node, [], true)
+  const kind = mapped.attrs?.classes?.[0]
+  const head = { ...(parts.title ? { title: parts.title } : {}),
+    ...(parts.groupLabel !== undefined ? { groupLabel: parts.groupLabel } : {}) }
+  // C2-H-157: a directive that places nothing is a div with its kind as the first class.
+  if (isKind(DIRECTIVE_KINDS, kind)) {
+    return { type: 'directive', kind, ...head, children: flow(parts.rest, node, context), ...withoutClasses(mapped, [kind]) }
+  }
+  return { type: 'div', ...head, children: flow(parts.rest, node, context), ...mapped }
+}
+
+/** C2-H-043: one paragraph per stanza, a line per `<br>`, and leading spaces as no-break spaces. */
+function lineBlock(node: Html.Element, context: HtmlContext): Block {
+  const lines: Extract<Block, { type: 'line_block' }>['children'] = []
+  for (const stanza of elements(node).filter(child => child.tagName === 'p')) {
+    if (lines.length > 0) lines.push({ type: 'line', children: [] })
+    let current: Html.ChildNode[] = []
+    const flush = (): void => { lines.push({ type: 'line', children: lineInline(current, stanza, context) }); current = [] }
+    for (const child of content(stanza)) {
+      if (isElement(child) && child.tagName === 'br') flush()
+      else current.push(child)
+    }
+    flush()
+  }
+  return { type: 'line_block', children: lines, ...withoutClasses(attrs(context, node), ['line-block']) }
+}
+
+function lineInline(nodes: Html.ChildNode[], host: Html.Element, context: HtmlContext): Inline[] {
+  const children = coalesce(nodes.flatMap(node => inline(node, context)))
+  const first = children[0]
+  if (first?.type === 'soft_break') children.shift()
+  let spaces = ''
+  while (children[0]?.type === 'non_breaking_space') { children.shift(); spaces += ' ' }
+  const lead = children[0]
+  if (lead?.type === 'text' && lead.value.startsWith('\u00a0')) {
+    let count = 0
+    while (lead.value[count] === '\u00a0') count++
+    spaces += ' '.repeat(count)
+    lead.value = lead.value.slice(count)
+  }
+  if (spaces !== '') {
+    if (lead?.type === 'text') lead.value = spaces + lead.value
+    else children.unshift({ type: 'text', value: spaces })
+  }
+  return normalizeBreaks(coalesce(children), host, context)
+}
+
+/** C2-H-030, C2-H-031, C2-H-037: the marker an ordered list derives its attributes from, and the bullet of `data-marker`. */
+function listMarker(node: Html.Element, context: HtmlContext): ListNode['marker'] {
+  const carried = attr(node, 'data-marker')
+  if (node.tagName === 'ul') {
+    if (carried === undefined || carried === '-' || carried === '*') return { kind: 'bullet', char: carried ?? '-' }
+    ignoredCarrier(context, node, 'data-marker', 'the bullet is not a list marker')
+    return { kind: 'bullet', char: '-' }
+  }
+  if (carried !== undefined) ignoredCarrier(context, node, 'data-marker', 'an ordered list has no bullet')
+  const type = attr(node, 'type')
+  const start = htmlInteger(attr(node, 'start'))
+  return { kind: 'ordered', style: type === 'a' || type === 'A' || type === 'i' || type === 'I' ? type : '1',
+    delimiter: attr(node, 'data-delim') === ')' ? ')' : '.', ...(start !== undefined && start !== 1 ? { start } : {}) }
+}
+
+/** C2-H-034: a loose list writes the first paragraph of an item as `<p>`, which a tight list leaves bare. */
+function hasLooseItem(node: Html.Element): boolean {
+  return elements(node).some(item => item.tagName === 'li' && elements(item).some(child => child.tagName === 'p' &&
+    child.attrs.length === 0 && content(item).slice(0, content(item).indexOf(child)).every(entry => isBlank(entry) ||
+    (isElement(entry) && entry.tagName === 'input'))))
+}
+
+/** C2-H-138: under `roundtrip` a tight list says so; without the carriers the HTML is read as it stands. */
+function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' {
+  const loose = hasLooseItem(node)
+  if (has(node, 'data-carve-tight')) {
+    if (!loose) return 'tight'
+    ignoredCarrier(context, node, 'data-carve-tight', 'an item writes its first paragraph as an element')
+    return 'loose'
+  }
+  if (context.roundtrip || loose) return 'loose'
+  return items.some(item => item.children.filter(child => child.type !== 'list').length > 1) ? 'loose' : 'tight'
+}
+
+function htmlList(node: Html.Element, context: HtmlContext): ListNode {
+  const items = elements(node).filter(child => child.nodeName === 'li').map(child => listItem(child, context))
+  for (const child of elements(node)) if (child.tagName !== 'li') unsupported(context, child, 'Non-item child in HTML list')
+  const mapped = attrs(context, node, ['start', 'type', 'data-delim'])
+  const tasks = items.some(item => item.task !== undefined)
+  return { type: 'list', children: items, marker: listMarker(node, context), spacing: listSpacing(node, items, context),
+    ...(tasks ? withoutClasses(mapped, ['task-list']) : mapped) }
+}
+
+/** C2-H-032, C2-H-033: the box of a task item, its state, and the class and style every render gives the item. */
+function listItem(node: Html.Element, context: HtmlContext): ListItemNode {
+  const checkbox = elements(node).find(child => child.nodeName === 'input' && attr(child, 'type') === 'checkbox')
+  if (checkbox?.attrs.some(entry => !['type', 'checked', 'disabled', 'aria-label'].includes(entry.name)) === true) {
+    degraded(context, checkbox, 'Checkbox attributes outside task state omitted')
+  }
+  const nodes = content(node).filter(child => child !== checkbox)
+  const lead = nodes[0]
+  if (checkbox && lead !== undefined && isText(lead) && lead.value.startsWith(' ')) {
+    nodes[0] = { ...lead, value: lead.value.slice(1) }
+  }
+  const state = attr(node, 'data-task-state')
+  const mark = state ?? (checkbox && attr(checkbox, 'checked') !== undefined ? 'x' : ' ')
+  const mapped = attrs(context, node, ['data-task-state'])
+  const own = checkbox ? withoutStyle(withoutClasses(mapped, ['task'])) : mapped
+  return { type: 'list_item', children: blocks(nodes, node, context), ...(checkbox ? { task: { mark } } : {}), ...own }
+}
+
+function withoutStyle(mapped: MappedAttrs): MappedAttrs {
+  const keyValues = mapped.attrs?.keyValues
+  if (keyValues === undefined) return mapped
+  const style = keyValues.find(([key]) => key === 'style')
+  if (style === undefined) return mapped
+  const rest = style[1] === 'list-style: none' ? undefined : style[1].startsWith('list-style: none; ') ? style[1].slice(18) : style[1]
+  const next = keyValues.flatMap((entry): [string, string][] => entry !== style ? [entry] : rest === undefined ? [] : [['style', rest]])
+  return withoutKeys({ ...mapped, attrs: { ...mapped.attrs, keyValues: next } }, [])
+}
+
+function figureCaption(node: Html.Element, context: HtmlContext): CaptionNode {
+  return { type: 'caption', children: blockChildren(node, context), ...attrs(context, node) }
+}
+
+/** C2-H-063, C2-H-064: a figure, a figure group and its panels; a table panel wraps the table bare. */
+function figure(node: Html.Element, context: HtmlContext, drop: readonly string[] = []): Block {
+  const classes = classList(node)
+  const group = classes[0] === 'carve-figure-group'
+  const caption = elements(node).find(child => child.nodeName === 'figcaption')
+  const nodes = content(node).filter(child => child !== caption)
+  const children = group ? nodes.flatMap(child => isElement(child) && child.tagName === 'figure' ? [panel(child, context)]
+    : block(child, context)) : flow(nodes, node, context)
+  const parts = { children, ...(caption ? { caption: figureCaption(caption, context) } : {}) }
+  if (group) return { type: 'figure_group', ...parts, ...withoutClasses(attrs(context, node), ['carve-figure-group']) }
+  return { type: 'figure', ...parts, ...withoutClasses(attrs(context, node), drop) }
+}
+
+function panel(node: Html.Element, context: HtmlContext): Block {
+  const inner = elements(node)
+  const only = inner.length === 1 ? inner[0] : undefined
+  if (classList(node)[0] === 'carve-figure-panel' && only?.tagName === 'table' && node.attrs.length === 1) return table(only, context)
+  return figure(node, context, classList(node)[0] === 'carve-figure-panel' ? ['carve-figure-panel'] : [])
+}
+
+function tableCell(node: Html.Element, context: HtmlContext, inHead: boolean): TableCellNode {
+  const hasBlocks = elements(node).some(child => BLOCK_TAGS.has(child.tagName))
+  const result: TableCellNode = hasBlocks ? { type: 'table_cell', header: node.tagName === 'th',
+    children: blockChildren(node, context) } : cell(cellInline(node, context), node.tagName === 'th')
+  const colspan = htmlSpan(attr(node, 'colspan'))
+  const rowspan = htmlRowspan(node, context)
+  if (colspan !== undefined) result.colspan = colspan
+  if (rowspan !== undefined) result.rowspan = rowspan
+  cellMarks(node, result, inHead)
+  const styled = result.align !== undefined && attr(node, 'align') === undefined
+  Object.assign(result, attrs(context, node, ['colspan', 'rowspan', 'scope', 'align', 'valign', ...(styled ? ['style'] : [])]))
+  return result
+}
+
+const SCOPES = ['col', 'row', 'colgroup', 'rowgroup'] as const
+const VALIGNS = ['top', 'middle', 'bottom', 'baseline'] as const
+const ALIGNS = ['left', 'right', 'center'] as const
+
+/** C2-H-056 to C2-H-058: the scope, other than the default a render writes on every header cell, and the alignments. */
+function cellMarks(node: Html.Element, result: TableCellNode, inHead: boolean): void {
+  const scope = attr(node, 'scope')
+  const implied = node.tagName === 'th' && scope === (inHead ? 'col' : 'row')
+  if (!implied && isKind(SCOPES, scope)) result.scope = scope
+  const align = attr(node, 'align') ?? cellAlign(attr(node, 'style'))
+  if (isKind(ALIGNS, align)) result.align = align
+  const valign = attr(node, 'valign')
+  if (isKind(VALIGNS, valign)) result.valign = valign
+}
+
+const CELL_ALIGNS: Readonly<Record<string, string>> = {
+  'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
+}
+
+function cellAlign(style: string | undefined): string | undefined {
+  return style === undefined ? undefined : CELL_ALIGNS[style]
+}
+
+function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
+  let changed = false
+  for (let index = 0; index < group.length; index++) {
+    const child = group[index]
+    if (child?.type === 'soft_break' || child?.type === 'hard_break') { group[index] = { type: 'text', value: ' ' }; changed = true }
+    else if (child?.type === 'ruby') for (const pair of child.pairs) pending.push(pair.base, pair.annotation)
+    else if (child !== undefined && 'children' in child && child.type !== 'citation_group') pending.push(child.children)
+  }
+  return changed
+}
+
+function cellInline(node: Html.Element, context: HtmlContext): Inline[] {
+  const children = inlineChildren(node, context)
+  if (context.roundtrip) return children
+  const pending: Inline[][] = [children]
+  let changed = false
+  while (pending.length > 0) {
+    const group = pending.pop()
+    if (group !== undefined) changed = flattenCellGroup(group, pending) || changed
+  }
+  if (changed) degraded(context, node, 'HTML table cell line break normalized to a space')
+  return coalesce(children)
+}
+
+function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableRowNode[] {
+  if (node.tagName !== 'table') {
+    for (const child of elements(node)) if (child.tagName !== 'tr') unsupported(context, child, 'Non-row child in table group')
+  }
+  return elements(node).filter(child => child.nodeName === 'tr').map(child => {
+    for (const entry of elements(child)) {
+      if (entry.nodeName !== 'th' && entry.nodeName !== 'td') unsupported(context, entry, 'Non-cell child in HTML row')
+    }
+    return { ...row(elements(child).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
+      .map(entry => tableCell(entry, context, inHead))), ...attrs(context, child) }
+  })
+}
+
+type TableChildren = Extract<Block, { type: 'table' }>['children']
+
+function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
+  const direct = rows(node, context, false)
+  const children: TableChildren = elements(node).filter(child => ['thead', 'tbody', 'tfoot'].includes(child.nodeName)).map(group => {
+    if (group.nodeName === 'thead') return { type: 'table_head', children: rows(group, context, true), ...attrs(context, group) }
+    if (group.nodeName === 'tfoot') return { type: 'table_foot', children: rows(group, context, false), ...attrs(context, group) }
+    return { type: 'table_body', children: rows(group, context, false), ...attrs(context, group) }
+  })
+  if (direct.length) children.unshift({ type: 'table_body', children: direct })
+  return children
+}
+
+/** C2-H-152: the widths of a column group, a percent each. */
+function columnWidths(node: Html.Element): (number | undefined)[] {
+  const group = elements(node).find(child => child.tagName === 'colgroup')
+  return (group === undefined ? [] : elements(group).filter(child => child.tagName === 'col')).map(col => {
+    const style = attr(col, 'style') ?? ''
+    if (!style.startsWith('width: ') || !style.endsWith('%;')) return undefined
+    const value = Number(style.slice(7, -2))
+    return Number.isFinite(value) && value > 0 ? value / 100 : undefined
+  })
+}
+
+function tableColumns(children: TableChildren, node: Html.Element): TableColumnNode[] {
+  const width = Math.max(0, ...children.flatMap(group => group.type === 'comment' ? [] : group.children
+    .filter(entry => entry.type === 'table_row').map(entry => entry.children.reduce((sum, entryCell) =>
+      sum + (entryCell.colspan ?? 1), 0))))
+  const widths = columnWidths(node)
+  return Array.from({ length: width }, (_, index) => {
+    const value = widths[index]
+    return value === undefined ? { type: 'table_column' as const }
+      : { type: 'table_column' as const, width: value, authored: true as const }
+  })
+}
+
+function table(node: Html.Element, context: HtmlContext): Block {
+  const children = tableGroups(node, context)
+  const caption = elements(node).find(child => child.nodeName === 'caption')
+  for (const child of elements(node)) {
+    if (!['caption', 'thead', 'tbody', 'tfoot', 'tr', 'colgroup'].includes(child.tagName)) {
+      unsupported(context, child, `Unsupported table child ${child.tagName}`)
+    }
+  }
+  const captionNode = caption === undefined ? undefined : figureCaption(caption, context)
+  const result: TableNode = { type: 'table', children, columns: tableColumns(children, node),
+    ...(captionNode ? { caption: captionNode } : {}), ...attrs(context, node) }
+  resolveAlignments(result)
+  return result
+}
+
+function definitionList(node: Html.Element, context: HtmlContext): Block {
+  const children: Extract<Block, { type: 'definition_list' }>['children'] = []
+  for (const child of content(node)) {
+    if (isElement(child) && child.nodeName === 'dt') {
+      children.push({ type: 'definition_term', children: inlineChildren(child, context), ...attrs(context, child) })
+    } else if (isElement(child) && child.nodeName === 'dd') {
+      children.push({ type: 'definition_description', children: blockChildren(child, context), ...attrs(context, child) })
+    } else if (!isText(child) || child.value.trim()) unsupported(context, child, 'Unexpected definition list child')
+  }
+  return { type: 'definition_list', children, ...attrs(context, node) }
+}
+
+function fallbackBlock(node: Html.Element, context: HtmlContext): Block[] {
+  if (node.tagName === 'img') return [{ type: 'paragraph', role: 'image', children: htmlImage(node, context) }]
   if (['html', 'body', 'main', 'article'].includes(node.tagName)) {
     if (node.attrs.some(entry => !['lang', 'dir'].includes(entry.name))) {
       degraded(context, node, `HTML ${node.tagName} wrapper attributes omitted`)
@@ -534,7 +645,7 @@ function fallbackBlock(node: Html.Element, context: Context): Block[] {
   return [paragraph(inline(node, context))]
 }
 
-function auditElement(node: Html.ChildNode, context: Context): void {
+function auditElement(node: Html.ChildNode, context: HtmlContext): void {
   if (!isElement(node)) return
   if (['script', 'style', 'template'].includes(node.tagName)) return
   for (const attribute of node.attrs) {
@@ -547,18 +658,24 @@ function auditElement(node: Html.ChildNode, context: Context): void {
 }
 
 export function importHtml(input: string): ImportResult {
-  const context: Context = { format: 'html', input, diagnostics: [], deferred: [] }
   const lower = input.toLowerCase()
   const full = lower.includes('<!doctype') || lower.includes('<html') || lower.includes('<head')
   const foreign = full ? parse(input, { sourceCodeLocationInfo: true }) :
     parseFragment(input, { sourceCodeLocationInfo: true })
   ensureForeignDepth(foreign, 'html')
+  const context: HtmlContext = { format: 'html', input, diagnostics: [], deferred: [], roundtrip: holdsCarrier(foreign.childNodes),
+    notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
+    headingIds: new Set() }
+  collectNotes(foreign.childNodes, context)
   rootLanguage(foreign.childNodes, context)
   for (const child of foreign.childNodes) auditElement(child, context)
-  return complete(context, [...foreign.childNodes.flatMap(child => block(child, context)), ...(context.deferred ?? [])])
+  collectTemplates(foreign.childNodes, context)
+  const first = foreign.childNodes[0]
+  const children = first === undefined ? [] : flow(foreign.childNodes, first, context, documentChild)
+  return complete(context, [...children, ...context.definitions.values(), ...context.footnotes, ...(context.deferred ?? [])])
 }
 
-function rootLanguage(nodes: Html.ChildNode[], context: Context): void {
+function rootLanguage(nodes: Html.ChildNode[], context: HtmlContext): void {
   const html = nodes.find(child => isElement(child) && child.tagName === 'html')
   if (html && isElement(html)) {
     const body = elements(html).find(child => child.tagName === 'body')
@@ -568,3 +685,4 @@ function rootLanguage(nodes: Html.ChildNode[], context: Context): void {
     if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') context.rootDir = dir
   }
 }
+
