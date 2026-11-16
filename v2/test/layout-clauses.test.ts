@@ -117,7 +117,7 @@ describe('shape', () => {
     }))).toBe('/lineEndings: is not one of none, lf, crlf, cr, mixed')
     expect(refusal(recordWith((changed) => {
       changed['encoding'] = 'utf-16'
-    }))).toBe('/encoding: is not utf-8')
+    }))).toBe('/encoding: is not one of utf-8, base64')
     expect(refusal([])).toBe(': the record is not an object')
   })
 

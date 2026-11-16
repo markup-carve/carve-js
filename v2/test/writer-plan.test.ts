@@ -3,18 +3,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { CARVE_SOURCES as EXAMPLES } from '../scripts/corpus.ts'
 import { generateWriterTables } from '../scripts/generate-writer-tables.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { format } from '../src/index.ts'
 import { writeTreeWithStats, type WriterPath } from '../src/write.ts'
 
 const root = join(import.meta.dirname, '..')
-
-interface Example {
-  input: string
-}
-
-const EXAMPLES = JSON.parse(readFileSync(join(root, 'data/examples.json'), 'utf8')) as Example[]
 
 function formatBy(source: string, path: WriterPath): ReturnType<typeof writeTreeWithStats> {
   const parsed = parseWithLayout(source, { extensions: [] })

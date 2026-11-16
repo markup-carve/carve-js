@@ -3,13 +3,12 @@
 // on their own (C2-W-089), so one block is written again only for its own escapes.
 import { childNodes, type DocumentNode, forEachSlot, isRecord, type Node, pointerToken, SOURCE_ORDER, type TextNode } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
-import { validateTree } from './ast-validate.ts'
+import { beyondParserLevels, nodeLevels, validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
-import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
@@ -701,20 +700,21 @@ function refuseDeepGroup(w: Writer, group: readonly Node[]): boolean {
   return true
 }
 
-/** C2-W-011: a tree beyond the parser's nesting limit has no source that reads back as that tree. */
+/**
+ * C2-W-011, C2-A-171: a tree beyond the parser's nesting limit has no source that reads back as that tree. The
+ * levels are those the reader counts; the children of an include are not written, so they do not count.
+ */
 function beyondSourceDepth(group: readonly Node[]): boolean {
-  const pending = group.map((node) => ({ node, depth: 0 }))
+  const pending = group.map((node) => ({ node, levels: nodeLevels(node.type, 0, 0) }))
   for (;;) {
     const item = pending.pop()
     if (item === undefined) return false
-    let hasChild = false
+    if (beyondParserLevels(item.levels)) return true
+    if (item.node.type === 'include') continue
+    const [blocks, inlines] = item.levels
     forEachSlot(item.node, (children) => {
-      for (const node of children) {
-        hasChild = true
-        pending.push({ node, depth: item.depth + 1 })
-      }
+      for (const node of children) pending.push({ node, levels: nodeLevels(node.type, blocks, inlines) })
     })
-    if (hasChild && item.depth > MAX_DEPTH) return true
   }
 }
 

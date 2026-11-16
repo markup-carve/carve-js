@@ -527,18 +527,23 @@ const INLINE_LEVELS: ReadonlySet<string> = new Set(
   INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type) && type !== 'inline_footnote'),
 )
 
+/** C2-A-171: the open blocks and inline levels at a node of type `type` below `blocks` and `inlines`. */
+export function nodeLevels(type: string, blocks: number, inlines: number): [number, number] {
+  if (BLOCK_LEVELS.has(type)) return [blocks + 1, 0]
+  if (CONTENT_HOLDERS.has(type)) return [blocks, 0]
+  return INLINE_LEVELS.has(type) ? [blocks, inlines + 1] : [blocks, inlines]
+}
+
+/** C2-A-171: whether the levels are deeper than the parser makes. */
+export function beyondParserLevels([blocks, inlines]: readonly [number, number]): boolean {
+  return blocks > MAX_DEPTH || inlines > DEPTH_CAP
+}
+
 /** C2-A-171: refuses a node deeper than the parser makes, by the levels of each kind, counted within its file. */
 function levels(walk: Walk, type: string, path: string): Walk {
-  if (BLOCK_LEVELS.has(type)) {
-    const blocks = (walk.blocks ?? 0) + 1
-    if (blocks > MAX_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
-    return { ...walk, blocks, inlines: 0 }
-  }
-  if (CONTENT_HOLDERS.has(type)) return { ...walk, inlines: 0 }
-  if (!INLINE_LEVELS.has(type)) return walk
-  const inlines = (walk.inlines ?? 0) + 1
-  if (inlines > DEPTH_CAP) fail(path, 'the tree is nested deeper than a parser can produce')
-  return { ...walk, inlines }
+  const [blocks, inlines] = nodeLevels(type, walk.blocks ?? 0, walk.inlines ?? 0)
+  if (beyondParserLevels([blocks, inlines])) fail(path, 'the tree is nested deeper than a parser can produce')
+  return { ...walk, blocks, inlines }
 }
 
 type FieldCheck = (value: Value, path: string, walk: Walk, node: Fields) => void

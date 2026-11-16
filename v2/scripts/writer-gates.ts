@@ -16,7 +16,7 @@
 // the documents of the property generator and the examples. `format` writes such a group with no parse, so each
 // one is a loss it would not report.
 // With --silent a run fails only on a failure with no reported loss.
-import { readFileSync } from 'node:fs'
+import { CARVE_SOURCES } from './corpus.ts'
 import { parseWithLayout } from '../src/api.ts'
 import { format, parse, tabsExtensions, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
 import { writeTreeWithStats } from '../src/write.ts'
@@ -26,12 +26,6 @@ import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
 import {
   checkWriter, enumerateWriter, isReportedLoss, type RandomRunResult, randomWriter, seededRandom,
 } from '../test/support/writer-checks.ts'
-
-interface Example {
-  file: string
-  number: number
-  input: string
-}
 
 const silentOnly = process.argv.includes('--silent')
 
@@ -51,7 +45,7 @@ function summary(what: string, counts: Counts): boolean {
 }
 
 function runExamples(): boolean {
-  const examples = JSON.parse(readFileSync(new URL('../data/examples.json', import.meta.url), 'utf8')) as Example[]
+  const examples = CARVE_SOURCES
   const counts: Counts = { inputs: examples.length, refused: 0, losses: 0, failures: 0, undecided: 0 }
   const lines: string[] = []
   const undecided: string[] = []
@@ -60,10 +54,10 @@ function runExamples(): boolean {
     if (failure === 'refused') counts.refused++
     else if (failure !== null && isReportedLoss(failure)) {
       counts.losses++
-      lines.push(`  loss: ${example.file} example ${example.number}: ${failure}`)
+      lines.push(`  loss: ${example.id}: ${failure}`)
     } else if (failure !== null) {
       counts.failures++
-      lines.push(`  ${example.file} example ${example.number}: ${failure}`)
+      lines.push(`  ${example.id}: ${failure}`)
     }
   }
   counts.undecided = undecided.length
@@ -177,8 +171,7 @@ function runPlanCheck(contents: number, documents: number, seed: number, propert
   const documentRandom = seededRandom(seed + 1)
   for (let at = 0; at < contents; at++) inputs.push([0, () => randomContent(contentRandom)])
   for (let at = 0; at < documents; at++) inputs.push([1, () => randomDocument(documentRandom)])
-  const examples = JSON.parse(readFileSync(new URL('../data/examples.json', import.meta.url), 'utf8')) as Example[]
-  for (const example of examples) inputs.push([2, () => example.input])
+  for (const example of CARVE_SOURCES) inputs.push([2, () => example.input])
   const corpus = loadCorpus(undefined)
   const generator = propertyRandom(seed)
   for (let at = 0; at < property; at++) inputs.push([3, () => generate(generator, corpus, 4096)])

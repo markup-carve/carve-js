@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, extname } from 'node:path'
+import { CARVE_SOURCES } from '../scripts/corpus.ts'
 import { LINE_SHAPES } from '../test/support/enumerate.ts'
 import { WRITER_TOKENS } from '../test/support/inline-enumerate.ts'
 
@@ -57,7 +58,7 @@ export function loadCorpus(extra?: string): Corpus {
   files('v2/test/fixtures', '.crv', paths)
   files('v2/proptest/corpus', '.crv', focusedPaths)
   if (extra !== undefined) files(extra, '.crv', paths)
-  const examples = JSON.parse(readFileSync('v2/data/examples.json', 'utf8')) as { input: string }[]
+  const examples = CARVE_SOURCES
   const documents = [...examples.map((item) => item.input), ...paths.map((path) => readFileSync(path, 'utf8')),
     ...focusedPaths.map((path) => readFileSync(path, 'utf8'))]
   const dictionary: string[] = []

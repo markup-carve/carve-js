@@ -342,6 +342,11 @@ export function isLineComment(src: string, pos: number, end: number): boolean {
   return runLength(src, pos, end, PERCENT) === 2
 }
 
+/** C2-B-133: after whitespace inside a line `%%` starts a line comment, so a longer run opens no comment block there. */
+export function isInnerLineComment(src: string, pos: number, end: number): boolean {
+  return runLength(src, pos, end, PERCENT) >= 2
+}
+
 /** Offset of the content of the caption line at `pos`, or -1 (C2-B-146). */
 export function captionContentStart(src: string, pos: number, end: number): number {
   if (pos + 1 >= end || src.charCodeAt(pos) !== CARET || src.charCodeAt(pos + 1) !== SPACE) return -1
@@ -603,7 +608,7 @@ function rowTailValid(src: string, pipe: number, end: number): boolean {
   if (tail === behind) return false
   // C2-B-166: the closing pipe is the last pipe of the line, so a pipe in the comment ends no row; the search stops at the line end.
   const later = src.indexOf('|', tail)
-  return isLineComment(src, tail, end) && (later < 0 || later >= end)
+  return isInnerLineComment(src, tail, end) && (later < 0 || later >= end)
 }
 
 /**

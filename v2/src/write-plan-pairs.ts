@@ -25,6 +25,8 @@ const CAN_OPEN = 1
 const CAN_CLOSE = 2
 const BETWEEN_WORDS = 4
 
+const BRACKET_OPEN_CODE = 91
+
 interface Token {
   kind: number
   start: number
@@ -59,6 +61,8 @@ interface Stack {
   live: number
   /** A bracket of the tree past the cap, which the reader demotes to text. */
   demoted: boolean
+  /** Where the open entries first reached the cap, or -1: a bracket behind it may be text (C2-I-118). */
+  fullAt: number
 }
 
 function depth(s: Stack): number {
@@ -201,6 +205,7 @@ function scan(leaf: Leaf, escaped: Uint8Array): Token[] {
 function push(s: Stack, token: number, cls: number, below: number): number {
   s.entries.push({ token, cls, below, slash: s.lastSlash, star: s.lastStar })
   s.live++
+  if (s.live >= DEPTH_CAP && s.fullAt < 0) s.fullAt = s.tokens[token]!.start
   return s.entries.length - 1
 }
 
@@ -304,7 +309,7 @@ function braceOpener(s: Stack, token: number): void {
 function pairAll(tokens: Token[]): Stack {
   const s: Stack = {
     tokens, entries: [], top: new Array<number>(BARRIER).fill(-1), floor: -1, lastSlash: -1, lastStar: -1,
-    live: 0, demoted: false,
+    live: 0, demoted: false, fullAt: -1,
   }
   for (let at = 0; at < tokens.length; at++) {
     const kind = tokens[at]!.kind
@@ -379,6 +384,16 @@ function textPairOpener(leaf: Leaf, tokens: readonly Token[]): number {
   return -1
 }
 
+/**
+ * C2-I-118: a bracket the bracket check escaped behind the point where the open delimiters reached the cap. That
+ * check counts open nodes and brackets only, so such a bracket may be text the reader never pairs, and the repair decides.
+ */
+function escapedBracketFrom(leaf: Leaf, escaped: Uint8Array, from: number): boolean {
+  if (from < 0) return false
+  for (let at = from; at < leaf.codes.length; at++) if (escaped[at] === 1 && leaf.codes[at] === BRACKET_OPEN_CODE) return true
+  return false
+}
+
 /** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
 export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
   let tokens = scan(leaf, escaped)
@@ -392,7 +407,7 @@ export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
     s = pairAll(tokens)
   }
   // C2-I-118, C2-B-190: the depth counts from zero in each content, whatever blocks stand around it.
-  if (s.demoted) return undecide(leaf, 'depth cap')
+  if (s.demoted || escapedBracketFrom(leaf, escaped, s.fullAt)) return undecide(leaf, 'depth cap')
   const formed = formedNodes(leaf, tokens)
   if (formed === null) return undecide(leaf, 'text pairs')
   for (let at = 0; at < leaf.codes.length && leaf.undecided === null; at++) {

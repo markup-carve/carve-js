@@ -1,23 +1,15 @@
 // The two gates of the writer (C2-W-002, C2-W-003), with and without the sidecar, on the example
 // inputs of the specification and on the small enumerations. The larger ones run in
 // scripts/writer-gates.ts.
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { CARVE_SOURCES } from '../scripts/corpus.ts'
 import { LINE_SHAPES } from './support/enumerate.ts'
 import { INLINE_TOKENS, WRITER_TOKENS } from './support/inline-enumerate.ts'
 import { checkGates, checkWriter, enumerateWriter, seededRandom } from './support/writer-checks.ts'
 
-interface Example {
-  file: string
-  number: number
-  input: string
-}
-
-const EXAMPLES = JSON.parse(readFileSync(new URL('../data/examples.json', import.meta.url), 'utf8')) as Example[]
-
 describe('the gates of the writer', () => {
   it('C2-W-002, C2-W-003, C2-W-088: every example input of the specification', () => {
-    const failures = EXAMPLES.map((example) => [`${example.file} ${example.number}`, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
+    const failures = CARVE_SOURCES.map((example) => [example.id, checkWriter(example.input)]).filter((entry) => entry[1] !== null)
     expect(failures).toEqual([])
   })
 

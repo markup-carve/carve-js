@@ -134,11 +134,24 @@ jobs:
       - run: npm ci
       - run: npm run test:lint:v2
 
-      # Every example of the block chapter, the inline chapter and the HTML document, rendered and
-      # compared byte for byte. Prints the number per document and per label, and fails when an
-      # example fails without a written verdict.
+      # The corpus of the specification at the pinned commit: every example, clause case, refused and
+      # positive tree and layout sidecar. Prints the table per kind and fails on an entry that is not held.
       - name: Conformance
         run: npm run conformance:v2
+
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./v2/data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: markup-carve/carve
+          ref: ${{ steps.pin.outputs.commit }}
+          path: carve-spec
+
+      # The copies in v2/data equal the corpus and the trees of the specification at the pin.
+      - name: Corpus copies
+        run: CARVE_SPEC_DIR=carve-spec npx vitest run v2/test/corpus.test.ts
       - run: npm run differential-migrate:v2
       - run: npm run test:migrate:v2
 

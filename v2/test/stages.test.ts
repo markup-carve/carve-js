@@ -17,7 +17,7 @@ describe('the stages', () => {
     for (const example of EXAMPLES) {
       const options = exampleOptions(example)
       const staged = outcome(() => renderTree(resolveTree(parseTree(example.input), options)))
-      expect(staged, example.label).toBe(outcome(() => render(example.input, options)))
+      expect(staged, `${example.file} ${example.number}`).toBe(outcome(() => render(example.input, options)))
     }
   })
 

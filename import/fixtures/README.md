@@ -9,4 +9,4 @@
 - `html-shapes.json`: local real-world HTML shapes used by the importer tests.
 
 CommonMark examples come from the installed `commonmark.json` package, version 0.31.0.
-Carve examples come from the engine's `v2/data/examples.json`.
+Carve examples come from the conformance corpus of the specification, copied to `v2/data/conformance/examples.json`.

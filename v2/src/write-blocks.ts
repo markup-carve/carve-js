@@ -231,10 +231,21 @@ function loseBlankKey(w: Writer, node: LinkReferenceDefinitionNode | FootnoteNod
   lose(w, node, 'key')
 }
 
+/** C2-I-013: a backslash before a parenthesis or a backslash would read as an escape, so it is escaped. */
+function definitionDestination(href: string): string {
+  let out = ''
+  for (let at = 0; at < href.length; at++) {
+    const char = href[at]!
+    if (char === '\\' && at + 1 < href.length && '()\\'.includes(href[at + 1]!)) out += '\\'
+    out += char
+  }
+  return out
+}
+
 function linkDefinition(w: Writer, node: LinkReferenceDefinitionNode, prefix: string): void {
   attributeLine(w, node, prefix)
   loseBlankKey(w, node)
-  const href = node.href
+  const href = definitionDestination(node.href)
   if (href === '') lose(w, node, 'href')
   const authored = node.tooltip
   const title = authored === undefined ? '' : ` ${quoted(authored)}`

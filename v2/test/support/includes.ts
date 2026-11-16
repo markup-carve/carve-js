@@ -1,22 +1,25 @@
 // A resolver over virtual files for the include tests: each name is its own id (spec/0.2/includes.md, conventions).
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { type Node } from '../../src/ast.ts'
+import { CORPUS_EXAMPLES, fileContent } from '../../scripts/corpus.ts'
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../../src/include-settings.ts'
-import { type RenderOptions } from '../../src/options.ts'
 
 export interface IncludeExample {
   number: number
-  flags: string[]
-  files: Record<string, string>
+  files: Record<string, string | Uint8Array>
   input: string
   html: string | null
   tree: unknown
 }
 
-export const INCLUDE_EXAMPLES: readonly IncludeExample[] = JSON.parse(
-  readFileSync(join(import.meta.dirname, '../../data/include-examples.json'), 'utf8'),
-) as IncludeExample[]
+/** The examples of includes.md in the conformance corpus, each with the files its resolver serves. */
+const CORPUS_INCLUDES = CORPUS_EXAMPLES.filter((example) => example.kind === 'include')
+
+export const INCLUDE_EXAMPLES: readonly IncludeExample[] = CORPUS_INCLUDES.map((example) => ({
+  number: example.number,
+  files: Object.fromEntries(Object.entries(example.files ?? {}).map(([name, file]) => [name, fileContent(file)])),
+  input: example.input ?? '',
+  html: example.expected.html ?? null,
+  tree: example.expected.tree ?? null,
+}))
 
 export function includeExample(number: number): IncludeExample {
   const example = INCLUDE_EXAMPLES.find((entry) => entry.number === number)
@@ -37,20 +40,7 @@ export function includes(files: Readonly<Record<string, string | Uint8Array>>, m
   return { resolver: virtualResolver(files), ...more }
 }
 
-/** The options an example names beside its number. */
-export function exampleOptions(example: IncludeExample): RenderOptions {
-  const config = includes(example.files)
-  const options: RenderOptions = { includes: config }
-  for (const flag of example.flags) {
-    if (flag === 'with the depth limit lowered to 1') config.depth = 1
-    else if (flag === 'sourceLines on') options.sourceLines = true
-    else if (flag === 'profile set to comment') options.profile = 'comment'
-    else throw new Error(`unknown flag ${flag}`)
-  }
-  return options
-}
-
 /** The tree as JSON without `pos`, as the examples leave positions out. */
-export function withoutPositions(node: Node): unknown {
+export function withoutPositions(node: unknown): unknown {
   return JSON.parse(JSON.stringify(node, (key, value: unknown) => (key === 'pos' ? undefined : value)))
 }

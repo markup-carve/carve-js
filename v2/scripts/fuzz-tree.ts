@@ -7,8 +7,7 @@
 // nests a node in itself 300 levels deep. One mutant in ten instead sets a field of fixed values to a value that
 // is valid for another node type (C2-A-050): if the reader accepts it, it must render as the tree it came from.
 // The same seed gives the same mutants.
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { CARVE_SOURCES } from './corpus.ts'
 import { CarveTreeError, decodeTree, encodeTree, parse, render, tabsExtensions, writeWithDiagnostics } from '../src/index.ts'
 import { NODE_TABLE } from '../src/ast-validate.ts'
 
@@ -311,7 +310,7 @@ if (process.argv[1] === import.meta.filename) {
   const count = Number(option('count', '200000'))
   const seed = Number(option('seed', '1'))
   const report = Number(option('report', '20'))
-  const examples = JSON.parse(readFileSync(join(import.meta.dirname, '../data/examples.json'), 'utf8')) as { input: string }[]
+  const examples = CARVE_SOURCES
   const treeOf = (src: string, positions: boolean): Json => JSON.parse(encodeTree(parse(src, { positions }))) as Json
   const parsed = examples.flatMap(({ input }) => [treeOf(input, true), treeOf(input, false)])
   const tabs = ':::: tabs\n::: tab "One"\nBody\n:::\n::::\n'

@@ -13,7 +13,7 @@ import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS, PERCENT } from './chars.t
 import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
-import { attributeBlocksEnd, countValue, isLineComment, rowClosingPipe, skipSpaces } from './lines.ts'
+import { attributeBlocksEnd, countValue, isInnerLineComment, rowClosingPipe, skipSpaces } from './lines.ts'
 import { trimSpaces } from './source.ts'
 import type { BlockNode } from './tree.ts'
 import { holdsBidiControl } from './unicode.ts'
@@ -159,7 +159,7 @@ function rowTail(src: string, row: BlockNode, lineEnd: number): [number, number]
   if (pipe < 0) return [lineEnd, -1]
   const behind = row.aux !== 0 ? attributeBlocksEnd(src, row.aux, lineEnd) : pipe + 1
   const tail = skipSpaces(src, behind, lineEnd)
-  return tail < lineEnd && tail > behind && isLineComment(src, tail, lineEnd) ? [behind, tail] : [lineEnd, -1]
+  return tail < lineEnd && tail > behind && isInnerLineComment(src, tail, lineEnd) ? [behind, tail] : [lineEnd, -1]
 }
 
 /** C2-A-086: the trailing line comment of a row, from the first space before its `%%` to the line ending (C2-A-151). */

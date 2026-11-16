@@ -51,7 +51,8 @@ export interface NodeLayout {
 /** C2-L-007. */
 export interface SourceLayout {
   version: 2
-  encoding: 'utf-8'
+  /** C2-L-056: `base64` for a byte input that is not well-formed UTF-8, whose bytes `source` then holds. */
+  encoding: 'utf-8' | 'base64'
   source: string
   lineEndings: 'none' | 'lf' | 'crlf' | 'cr' | 'mixed'
   bom: boolean

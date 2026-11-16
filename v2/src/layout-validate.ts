@@ -23,6 +23,9 @@ type Check = (value: unknown, path: string) => void
 
 const ROOT_FIELDS = ['version', 'encoding', 'source', 'lineEndings', 'bom', 'nodes']
 const LINE_ENDINGS = ['none', 'lf', 'crlf', 'cr', 'mixed']
+const ENCODINGS = ['utf-8', 'base64']
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const WRAP_FIELDS = ['line', 'path', 'offset', 'row']
 
 function fail(path: string, reason: string): never {
@@ -135,7 +138,7 @@ function checkRoot(record: Fields): void {
   for (const key of Object.keys(record)) if (!ROOT_FIELDS.includes(key)) fail(`/${key}`, 'is not a field of the record')
   // C2-L-008.
   if (record['version'] !== LAYOUT_VERSION) fail('/version', `version ${String(record['version'])} is not implemented`)
-  if (record['encoding'] !== 'utf-8') fail('/encoding', 'is not utf-8')
+  oneOf(ENCODINGS)(record['encoding'], '/encoding')
   checkString(record['source'], '/source')
   oneOf(LINE_ENDINGS)(record['lineEndings'], '/lineEndings')
   checkBoolean(record['bom'], '/bom')
@@ -165,11 +168,50 @@ export function compareDocumentOrder(a: string, b: string): number {
   return left.length - right.length
 }
 
+/** The six bits of the base64 digit at `at` of `text`, or -1 for padding. */
+function digit(text: string, at: number, padding: boolean): number {
+  const value = BASE64.indexOf(text[at] ?? '')
+  if (value >= 0 || (padding && text[at] === '=')) return value
+  return fail('/source', `is not base64: ${JSON.stringify(text[at])} at ${at}`)
+}
+
+/** C2-L-056: the bytes of a base64 source in the alphabet of RFC 4648, section 4, with padding. */
+function base64Bytes(text: string): Uint8Array {
+  if (text.length % 4 !== 0) fail('/source', 'is not base64: its length is not a multiple of 4')
+  const padding = text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0
+  const bytes = new Uint8Array(text.length / 4 * 3 - padding)
+  for (let at = 0; at < text.length; at += 4) {
+    const last = at + 4 === text.length
+    const bits = digit(text, at, false) << 18 | digit(text, at + 1, false) << 12
+      | Math.max(0, digit(text, at + 2, last && padding === 2)) << 6 | Math.max(0, digit(text, at + 3, last && padding > 0))
+    const out = at / 4 * 3
+    bytes[out] = bits >> 16
+    if (out + 1 < bytes.length) bytes[out + 1] = bits >> 8 & 0xff
+    if (out + 2 < bytes.length) bytes[out + 2] = bits & 0xff
+  }
+  return bytes
+}
+
+/** C2-L-012, C2-L-056: the byte length of the input: its UTF-8 bytes, or the bytes of a base64 source. */
+function inputLength(record: Fields): number {
+  const source = record['source'] as string
+  if (record['encoding'] === 'utf-8') return utf8Length(source)
+  const bytes = base64Bytes(source)
+  let wellFormed = true
+  try {
+    STRICT_UTF8.decode(bytes)
+  } catch {
+    wellFormed = false
+  }
+  if (wellFormed) fail('/encoding', 'is base64 for bytes that are well-formed UTF-8')
+  return bytes.length
+}
+
 /** Returns `value` as a record, or throws a `CarveLayoutError` for a record the document refuses. */
 export function validateLayout(value: unknown): SourceLayout {
   if (!isRecord(value)) fail('', 'the record is not an object')
   checkRoot(value)
-  const length = utf8Length(value['source'] as string)
+  const length = inputLength(value)
   let previous: string | null = null
   ;(value['nodes'] as unknown[]).forEach((entry, index) => {
     const path = checkEntry(entry, `/nodes/${index}`, length)

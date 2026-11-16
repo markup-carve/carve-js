@@ -2,6 +2,14 @@
 
 The 0.2 engine is in `v2/src`. Its public TypeScript entry point is `v2/src/index.ts`.
 
+## Conformance
+
+The conformance gate is the corpus of the specification (`spec/0.2/conformance` and `spec/0.2/trees` of `markup-carve/carve`), copied to `v2/data/conformance` and `v2/data/trees` at the commit that `v2/data/spec-pin.json` names. `node v2/scripts/pin-spec.ts <carve checkout>` refreshes the copies, the data files and the pin; run the generate scripts after a data file changes.
+
+- `v2/test/corpus.test.ts` runs every Carve example (render, write, lint and include), every clause case, every refused and positive tree and every layout sidecar. `import/test/corpus.test.ts` runs the HTML import examples.
+- An example whose stated result departs from its clause is held by name in `v2/scripts/corpus-held.ts` or the import test, with the entry of `_EXAMPLE_FIXES.md` that gives the clause-correct result. A held field must keep failing.
+- `npm run conformance:v2` prints the table per kind and document. With `CARVE_SPEC_DIR` set to a checkout at the pin, the corpus test also checks that the copies equal the specification.
+
 ## Formatting API
 
 `format(source)` and `write(document)` return source when the writer can spell the result without loss. If the writer loses a field or node, or refuses a repair, these calls throw `CarveWriteError`. Its `diagnostics` property names the loss. Use `formatWithDiagnostics` or `writeWithDiagnostics` to receive the nearest source and its diagnostics. A result with `writer-refused` is not canonical. `write` and `writeWithDiagnostics` parse each written group of blocks once more and compare it with the tree; pass `{ check: false }` to skip that parse for a tree that a parse returned. `format` writes the tree of its own parse and makes no such parse.

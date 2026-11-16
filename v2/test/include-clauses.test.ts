@@ -18,6 +18,11 @@ function includeAt(src: string, files: Readonly<Record<string, string | Uint8Arr
   return node
 }
 
+/** The child at `at` of the expected document of an example, the include node its stated tree shows. */
+function expectedChild(example: { tree: unknown }, at = 0): unknown {
+  return (example.tree as { children: unknown[] }).children[at]
+}
+
 describe('1. the tree contract', () => {
   it('C2-N-017, C2-A-181: an expanded include carries file and children, and a reader accepts it', () => {
     const document = parse('Top.\n\n{{ a.crv }}', { includes: includes({ 'a.crv': '---\nt: 1\n---\n\n[x]: /y\n\nA.\n' }) })
@@ -108,7 +113,7 @@ describe('3. whole-file expansion', () => {
   it('C2-N-019: Example 4, positions are local to the file and name it', () => {
     const example = includeExample(4)
     const node = parse(example.input, { includes: includes(example.files) }).children[1]
-    expect(node).toEqual(example.tree)
+    expect(JSON.parse(JSON.stringify(node))).toEqual(expectedChild(example, 1))
   })
 
   it('C2-N-019: a nested node names its own file, and the include its including file', () => {
@@ -294,7 +299,7 @@ describe('8. writer, fmt and the Carve target', () => {
 describe('9. frontmatter and abbreviations of included files', () => {
   it('C2-N-021: Example 5, the frontmatter is the first child and no metadata of the document', () => {
     const example = includeExample(5)
-    expect(withoutPositions(includeAt(example.input, example.files, 1))).toEqual(example.tree)
+    expect(withoutPositions(includeAt(example.input, example.files, 1))).toEqual(withoutPositions(expectedChild(example, 1)))
   })
 
   it('C2-N-023: Example 7, the parent term applies in the child and the child term wins', () => {
@@ -409,7 +414,7 @@ describe('12. lines and region', () => {
 describe('13. code mode, attributes, captions and tables', () => {
   it('C2-N-042: Example 15, the tree of a region read as js with the attributes copied to the child', () => {
     const example = includeExample(15)
-    expect(withoutPositions(includeAt(example.input, example.files))).toEqual(example.tree)
+    expect(withoutPositions(includeAt(example.input, example.files))).toEqual(withoutPositions(expectedChild(example)))
   })
 
   it('C2-N-043: the payload of a file and two blank lines is the same with and without a line range', () => {

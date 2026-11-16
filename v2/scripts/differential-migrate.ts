@@ -6,6 +6,7 @@ import { compareHtml } from '../../upgrade/src/compare.ts'
 import { AST_RESULTS } from '../src/ast-tables.ts'
 import { formatWithDiagnostics, migrateTree, parse, render, treesEqual, type Diagnostic, writeWithDiagnostics } from '../src/index.ts'
 import { object } from '../migrate/shared.ts'
+import { CARVE_SOURCES } from './corpus.ts'
 
 interface Input { name: string, source: string }
 interface Finding { count: number, example: Input, path: string }
@@ -29,14 +30,7 @@ function files(root: string, directory = root): Input[] {
 }
 
 function inputs(full: boolean): Input[] {
-  const examples: unknown = JSON.parse(readFileSync(join(ROOT, 'v2/data/examples.json'), 'utf8'))
-  const result: Input[] = []
-  const values: unknown[] = Array.isArray(examples) ? examples : []
-  values.forEach((entry, index) => {
-    if (typeof entry === 'object' && entry !== null && 'input' in entry && typeof entry.input === 'string') {
-      result.push({ name: `example ${index + 1}`, source: entry.input })
-    }
-  })
+  const result: Input[] = CARVE_SOURCES.map((entry) => ({ name: entry.id, source: entry.input }))
   if (!full) return result
   for (const root of [ROOT, join(ROOT, '../carve'), join(ROOT, '../carve-main')]) {
     try { result.push(...files(root).map((input) => ({ ...input, name: `${root}: ${input.name}` }))) } catch { continue }

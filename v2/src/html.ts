@@ -115,9 +115,9 @@ function hasAttributes(attrs: Attrs | undefined): boolean {
   return attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || (attrs.keyValues?.length ?? 0) > 0)
 }
 
-/** A paragraph that is written as `<p>`. */
+/** A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it. */
 function isTextParagraph(node: Node | undefined): node is ParagraphNode {
-  return node !== undefined && node.type === 'paragraph' && !isBareImage(node)
+  return node !== undefined && node.type === 'paragraph' && !isBareImage(node) && node.caption === undefined
 }
 
 /** Writes `node` through the writer of its type, where it has one. */
@@ -199,7 +199,7 @@ function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
   return `<${name}${tag(r, node, parts)}>${inlineHtml(r, node.children)}</${name}>`
 }
 
-/** C2-H-006: a quote whose only visible child is one paragraph is written on one line. */
+/** C2-H-006: a quote whose only visible child is one paragraph without a caption is written on one line. */
 function quote(r: Render, node: BlockQuoteNode, level: number): void {
   const visible = visibleBlocks(node.children)
   const first = visible[0]
