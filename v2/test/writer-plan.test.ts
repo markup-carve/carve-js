@@ -414,6 +414,16 @@ describe('the planned writer', () => {
     expect(formatBy('x`a`{=\\_}\n', 'both').stats.differences).toEqual([])
   })
 
+  it('C2-I-060, C2-I-111: a brace before a dash run with no closer of its mark in the leaf is text, and the plan writes it bare', () => {
+    for (const source of ['a {-- b\n', 'a {--- b\n', 'a {... b\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('x {--}\n', 'both').stats.repaired).toBe(1)
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')

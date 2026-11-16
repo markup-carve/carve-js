@@ -267,20 +267,22 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const next = code(leaf, at + 1)
   undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')
   // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
-  undecidedIf(leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS), leaf, 'brace')
+  // C2-I-060: with no closer of that mark later in the leaf, the opener is text and the atom keeps its source.
+  const opens = leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS)
+  undecidedIf(opens && lastClose(leaf, code(leaf, at + 1)) > at, leaf, 'brace')
 }
 
-/** The last `%}` or `#}` of the leaf, for the mark `value`, or -1; found once per leaf. */
+/** The last `}` of the leaf behind the ASCII mark `value`, or -1; found once per leaf for every mark. */
 function lastClose(leaf: Leaf, value: number): number {
   if (leaf.closes === null) {
-    leaf.closes = [-1, -1]
+    const closes = new Int32Array(128).fill(-1)
     for (let at = leaf.codes.length - 1; at > 0; at--) {
-      const mark = leaf.codes[at] === 125 ? leaf.codes[at - 1] : -1
-      if (mark === 37 && leaf.closes[0] < 0) leaf.closes[0] = at
-      if (mark === 35 && leaf.closes[1] < 0) leaf.closes[1] = at
+      const mark = leaf.codes[at] === 125 ? leaf.codes[at - 1]! : 128
+      if (mark < 128 && closes[mark]! < 0) closes[mark] = at
     }
+    leaf.closes = closes
   }
-  return leaf.closes[value === 37 ? 0 : 1]!
+  return value < 128 ? (leaf.closes[value] ?? -1) : -1
 }
 
 /** A closing brace behind an atom whose source ends in a braced mark. */

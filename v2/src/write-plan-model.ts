@@ -48,8 +48,8 @@ export interface Leaf {
   inTitle: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number
-  /** The last `%}` and the last `#}`, once a brace asked for them. */
-  closes: [number, number] | null
+  /** Per ASCII mark, the last `}` behind it, once a brace asked for them. */
+  closes: Int32Array | null
   /** The unit of the last `]` of the leaf, of any kind, or -1. */
   lastBracket: number
   /** C2-I-094: the opening bracket of each inline extension of text, with its colon. */
