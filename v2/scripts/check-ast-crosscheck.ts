@@ -61,6 +61,8 @@ const BEYOND_SCHEMA = [
   'extension nesting exceeds 32',
   // C2-A-082: a caption on a paragraph whose role is neither image nor math is refused; the schema has no such dependency.
   'a caption needs a paragraph whose role is image or math',
+  // C2-A-093: a row span that reaches past the last row of its group is refused; the schema cannot count rows.
+  'a row span reaches past the last row of its group',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {
