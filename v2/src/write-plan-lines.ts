@@ -197,13 +197,20 @@ function colon(leaf: Leaf, at: number, place: LeafPlace): number {
   return place.before === 'definition_list' || place.inDescriptionList ? UNDECIDED : NO_ESCAPE
 }
 
+/**
+ * C2-B-016: a description mark or a term mark opens on every line inside a description list, except that a term mark
+ * directly after paragraph text inside an item is a lazy line (C2-B-023).
+ */
+function laterColon(leaf: Leaf, at: number, place: LeafPlace): number {
+  return place.inItem && runEnd(leaf, at, 58) - at === 2 ? NO_ESCAPE : colon(leaf, at, place)
+}
+
 /** A later line of a paragraph: list markers only inside an item (C2-B-015). */
 function laterLine(leaf: Leaf, at: number, place: LeafPlace): number {
   const value = code(leaf, at)
   // C2-B-092: an attribute line is no interrupter, so below a line of the paragraph it is text.
   if (value === 123) return NO_ESCAPE
-  // C2-B-016: a description mark or a term mark opens on every line inside a description list.
-  if (place.inDescriptionList && value === 58) return colon(leaf, at, place)
+  if (place.inDescriptionList && value === 58) return laterColon(leaf, at, place)
   // C2-B-036: an ordered marker interrupts a paragraph only with the number 1.
   if (place.inItem && value >= 48 && value <= 57) return value === 49 && code(leaf, at + 1) < 48 ? digits(leaf, at) : NO_ESCAPE
   if (place.inItem && (value === 45 || value === 42 || value === 46)) return firstLine(leaf, at, place)
