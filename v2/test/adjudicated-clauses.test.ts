@@ -280,3 +280,17 @@ describe('C2-H-024: authored ids are reserved first, also that of an unresolved 
     expect(findings('[x][y]{#i}\n\n{#i}\nb')).toContain('duplicate-id')
   })
 })
+
+describe('C2-I-033: a quoted value may hold the other quote and a closing brace', () => {
+  it('C2-B-090: such a block is an attribute line, and the same holds in every block prefix', () => {
+    expect(render('{x=\'"\'}\na')).toBe('<p x="&quot;">a</p>')
+    expect(render('{x="\'"}\na')).toBe('<p x="&apos;">a</p>')
+    expect(render('{x=\'}"\'}\na')).toBe('<p x="}&quot;">a</p>')
+    expect(render('{x=\'a\\\'b\'}\na')).toBe('<p x="a&apos;b">a</p>')
+    expect(first('-{x=\'"\'} b')).toMatchObject({ type: 'list', children: [{ attrs: { keyValues: [['x', '"']] } }] })
+    expect(render('|{x=\'"\'} a|')).toContain('<td x="&quot;">a</td>')
+    expect(render('| a |{x=\'"\'}')).toContain('<tr x="&quot;">')
+    expect(first('![a](u){x=\'"\'}\n^ c')).toMatchObject({ type: 'figure' })
+    expect(first("{x='a}\nb")).not.toHaveProperty('attrs')
+  })
+})
