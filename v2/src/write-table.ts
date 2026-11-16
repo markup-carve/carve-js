@@ -205,13 +205,21 @@ function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): 
   else if (block !== '') emit(w, prefix, block)
   const entries = tableEntries(w, table, flags)
   const rows = entries.filter((entry): entry is WrittenRow => 'lines' in entry)
+  // C2-A-086: a comment that ends the last group stands before a continuation row; an empty one adds nothing (C2-B-184).
+  const closing = endsWithGroupComment(table)
+  const last = rows[rows.length - 1]
+  if (closing && last !== undefined) dropBlankTail(last)
   if (w.alignTables) alignColumns(rows)
   for (const entry of entries) {
     if ('lines' in entry) emitRow(w, prefix, entry)
     else lineComment(w, entry, prefix)
   }
-  // C2-A-086: a comment that ends the last group stands before a continuation row; an empty one adds nothing (C2-B-184).
-  if (endsWithGroupComment(table)) emit(w, prefix, '+ |')
+  if (closing) emit(w, prefix, '+ |')
+}
+
+/** Trap: the recorded empty continuation row that followed the comment is the one written after it. */
+function dropBlankTail(row: WrittenRow): void {
+  while (row.lines.length > 1 && row.lines.at(-1)?.every((part) => part.trim() === '') === true) row.lines.pop()
 }
 
 function endsWithGroupComment(table: TableNode): boolean {

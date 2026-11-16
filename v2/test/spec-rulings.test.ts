@@ -306,6 +306,13 @@ describe('the trailing line comment of a table row', () => {
     }
   })
 
+  it('C2-W-004, C2-B-184: the empty continuation row after the comment is written once, so the written form is stable', () => {
+    for (const src of ['| a |\n%% c\n+ b |', '|= a |\n  %% c\n+ b |', '| ^ | < |\n%% c\n+ b |']) {
+      const written = format(src)
+      expect(format(written), src).toBe(written)
+    }
+  })
+
   it('C2-W-135: the writer writes the comment as a comment-only line below the row', () => {
     expect(format('| 1 | 2 | %% note\n| 3 | 4 |')).toBe('| 1 | 2 |\n%% note\n| 3 | 4 |\n')
   })
