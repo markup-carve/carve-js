@@ -155,12 +155,16 @@ describe('C2-B-206, C2-A-181: a malformed include is still an include', () => {
     expect(node('{{ a.crv#s#t }}')).toMatchObject({ type: 'paragraph' })
   })
 
-  it('C2-H-133: the unexpanded include is reported include-unresolved, and lint reports each invalid option', async () => {
+  it('C2-H-133, C2-N-025, C2-N-061: the unexpanded include is reported include-unresolved, and the parse reports its first cause', async () => {
     const { renderWithDiagnostics } = await import('../src/index.ts')
-    const { lint } = await import('../lint/lint.ts')
-    expect(renderWithDiagnostics('{{ a.crv @shift:x @size:2 }}').diagnostics.map((item) => item.code)).toEqual(['include-unresolved'])
-    expect(lint('{{ a.crv @shift:x @size:2 }}').filter((item) => item.code === 'include-option-invalid').map((item) => item.range))
-      .toEqual([{ startOffset: 9, endOffset: 17 }, { startOffset: 18, endOffset: 25 }])
+    expect(renderWithDiagnostics('{{ a.crv @shift:x @size:2 }}').diagnostics.map((item) => item.code))
+      .toEqual(['include-no-resolver', 'include-unresolved'])
+    const includes = { resolver: () => ({ text: 'x', id: 'a.crv' }) }
+    expect(renderWithDiagnostics('{{ a.crv @shift:x @size:2 }}', { includes }).diagnostics.map((item) => [item.code, item.message]))
+      .toEqual([
+        ['include-option-invalid', 'The include option @shift:x has a value outside the shape of its key, so the include is not expanded. Correct it or remove it.'],
+        ['include-unresolved', 'Include "a.crv" could not be resolved.'],
+      ])
   })
 })
 

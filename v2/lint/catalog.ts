@@ -425,10 +425,16 @@ export const CATALOG = {
       "% for a comment block.",
     ].join(''),
   ] },
-  "include-option-invalid": { severity: "warning", default: "on", messages: [
+  "include-attributes-unused": { severity: "warning", default: "on", messages: [
     [
-      "The include option ${option} ${reason}, so it has no effect. Correct",
-      " it or remove it.",
+      "The attributes above this include apply to nothing, because it has n",
+      "o @code option. Remove them or move them into the included file.",
+    ].join(''),
+  ] },
+  "include-lines-table-rows-hint": { severity: "hint", default: "on", messages: [
+    [
+      "@lines counts physical lines. Use @rows to select records of this ta",
+      "ble.",
     ].join(''),
   ] },
   "indented-code-block": { severity: "warning", default: "on", messages: [
@@ -675,9 +681,9 @@ export const CATALOG = {
   "unattached-caption": { severity: "warning", default: "on", messages: [
     [
       "This caption line is not directly below an image, table, code block,",
-      " quote, math block or figure group, so it is text. If a blank line s",
-      "eparates it from such a block, remove the blank line; otherwise esca",
-      "pe the caret.",
+      " quote, math block, figure group or code include, so it is text. If ",
+      "a blank line separates it from such a block, remove the blank line; ",
+      "otherwise escape the caret.",
     ].join(''),
   ] },
   "unattached-inline-attribute": { severity: "hint", default: "on", messages: [

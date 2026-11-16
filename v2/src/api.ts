@@ -1,12 +1,15 @@
 // The public interface of the 0.2 engine: `parse` gives the tree of contract 2.0, `render` gives HTML.
 // Both are compositions of three stages: parse (source to tree), resolve (tree to resolved tree) and render.
 import { type DocumentNode } from './ast.ts'
-import { buildSource, type ParsedTree } from './ast-blocks.ts'
+import { buildSource, type ParseFacts, type ParsedTree } from './ast-blocks.ts'
+import { expandTree, reportNoResolver } from './expand.ts'
+import { type LayoutTrace } from './ast-inline.ts'
 import { validateTree } from './ast-validate.ts'
 import { renderDocument } from './html.ts'
 import { buildLayout, createLayoutTrace, type SourceLayout } from './layout.ts'
 import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts'
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
+import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
 import { applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
@@ -76,12 +79,63 @@ function checkLength(src: string, settings: Settings): void {
   if (src.length > limit || utf8Length(src) > limit) throw new CarveInputError(settings.profile, limit)
 }
 
+/** The facts of the top-level parse with those of every included file and the findings of the expansion. */
+function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Findings): ParseFacts {
+  const all = [top, ...files]
+  const leaves = new Set(top.resolvableLeaves)
+  for (const facts of files) for (const leaf of facts.resolvableLeaves) leaves.add(leaf)
+  let names: Map<Node, string> | null = null
+  if (top.sourceNames !== null) names = new Map(all.flatMap((facts) => [...facts.sourceNames ?? []]))
+  return {
+    ...top,
+    sourceNames: names,
+    resolvableLeaves: leaves,
+    bidi: all.some((facts) => facts.bidi),
+    addFindings: (findings) => {
+      for (const facts of all) facts.addFindings(findings)
+      findings.entries.push(...found.entries)
+      findings.nodes.push(...found.nodes)
+    },
+    footnoteLines: (node) => all.reduce((lines, facts) => lines || facts.footnoteLines(node), 0),
+    markupLine: (node) => {
+      for (const facts of all) {
+        const line = facts.markupLine(node)
+        if (line !== undefined) return line
+      }
+      return undefined
+    },
+  }
+}
+
+/**
+ * C2-N-003, C2-N-006: the parse of a top-level source, with its includes expanded when the options give a resolver.
+ * Without one every include is reported, and a source without includes is returned as it was parsed.
+ */
+function parseSource(src: string, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
+  const names = settings.extensions.length > 0
+  const parse = (text: string, outer: ParseFacts['scope'] | null): ParsedTree =>
+    applyExtensions(buildSource(text, positions, null, outer === null ? trace : null, names, null, outer), settings.extensions)
+  const parsed = parse(src, null)
+  const facts = parsed.facts
+  const includes = settings.includes
+  // C2-N-006: expansion runs where a resolver is given, also over a document that holds no include.
+  if (includes !== null) parsed.document.stages = ['includeExpansion']
+  if (facts === null || facts.includes.length === 0) return parsed
+  if (includes === null) {
+    const found: Findings = { entries: [], nodes: [] }
+    reportNoResolver(facts.includes, found)
+    return { document: parsed.document, facts: combinedFacts(facts, [], found) }
+  }
+  const expanded = expandTree(parsed, includes, parse, settings.headingIds, positions)
+  return { document: parsed.document, facts: combinedFacts(facts, expanded.facts, expanded.findings) }
+}
+
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
 function inputStage(input: string | DocumentNode, settings: Settings): ParsedTree {
   if (typeof input === 'string') {
     checkLength(input, settings)
     // C2-H-016: only the source lines need positions.
-    return applyExtensions(buildSource(input, settings.sourceLines, null, null, settings.extensions.length > 0), settings.extensions)
+    return parseSource(input, settings, settings.sourceLines)
   }
   validateTree(input, undefined, undefined, settings.extensions)
   return { document: input, facts: null }
@@ -117,7 +171,7 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */
 export function parseTree(src: string, options?: ParseOptions): ParsedTree {
   const settings = readOptions(options, 'parse')
-  return applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0), settings.extensions)
+  return parseSource(src, settings, options?.positions !== false)
 }
 
 /**
@@ -155,8 +209,7 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
-  const parsed = applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0),
-    settings.extensions)
+  const parsed = parseSource(src, settings, options?.positions !== false)
   const resolved = resolveStage(parsed, settings)
   return { document: resolved.document, diagnostics: parseDiagnostics(resolved, parsed) }
 }
@@ -164,8 +217,7 @@ export function parseWithDiagnostics(src: string, options?: ParseOptions): Parse
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
 export function parse(src: string, options?: ParseOptions): DocumentNode {
   const settings = readOptions(options, 'parse')
-  return resolveStage(applyExtensions(buildSource(src, options?.positions !== false, null, null, settings.extensions.length > 0),
-    settings.extensions), settings).document
+  return resolveStage(parseSource(src, settings, options?.positions !== false), settings).document
 }
 
 /**
@@ -175,7 +227,7 @@ export function parse(src: string, options?: ParseOptions): DocumentNode {
 export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
-  const parsed = applyExtensions(buildSource(src, true, null, trace, settings.extensions.length > 0), settings.extensions)
+  const parsed = parseSource(src, settings, true, trace)
   const resolved = resolveStage(parsed, settings)
   const diagnostics = parseDiagnostics(resolved, parsed)
   return { document: resolved.document, diagnostics, layout: buildLayout(src, resolved.document, trace) }

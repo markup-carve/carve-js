@@ -191,6 +191,8 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   else visitInline(walk, node, path, frame)
   // C2-L-011: document order, the slots in the order in which the source holds them, as positions are placed.
   forEachSlot(node, (nodes, step, single) => {
+    // C2-N-082: the record covers the nodes of the top-level document, and none in the children of an include.
+    if (node.type === 'include' && step === 'children') return
     if (single) visit(walk, nodes[0]!, `${path}/${step}`, inner)
     else visitList(walk, nodes, `${path}/${step}`, inner)
   }, SOURCE_ORDER, walk.declarations)

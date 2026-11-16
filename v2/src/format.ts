@@ -37,7 +37,9 @@ export function formatWithDiagnostics(source: string, options?: FormatOptions): 
   // C2-W-091: the tree is the parse of the source, so the writer does not parse its plan again.
   const writeOptions = normalize ? { alignTables, extensions } : { layout: parsed.layout, alignTables, extensions }
   const written = writeTree(parsed.document, writeOptions, false)
-  return { source: written.source, diagnostics: [...parsed.diagnostics, ...written.diagnostics] }
+  // C2-N-005: a processor whose output is Carve source expands nothing, so no include is missing a resolver.
+  const found = parsed.diagnostics.filter((entry) => entry.code !== 'include-no-resolver')
+  return { source: written.source, diagnostics: [...found, ...written.diagnostics] }
 }
 
 /** The canonical form of `source` (spec/0.2/writer.md). C2-W-002: it parses to the tree of `source`. */

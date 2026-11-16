@@ -16,6 +16,7 @@ import {
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
 import { includeSource } from './include.ts'
+import { includeMessage } from './expand.ts'
 import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
@@ -72,8 +73,19 @@ function onlyComments(nodes: readonly Node[]): boolean {
   return true
 }
 
+/** C2-N-075: the blocks of `nodes` with each expanded include read as its children, recursively. */
+function expandedBlocks(nodes: readonly Node[]): readonly Node[] {
+  for (const node of nodes) if (node.type === 'include' && node.children !== undefined) return nodes.flatMap(expandedNode)
+  return nodes
+}
+
+function expandedNode(node: Node): readonly Node[] {
+  return node.type === 'include' && node.children !== undefined ? expandedBlocks(node.children) : [node]
+}
+
 /** The blocks of `nodes` that write something: the list itself where all of them do. */
-function visibleBlocks<N extends Node>(nodes: readonly N[]): readonly N[] {
+function visibleBlocks(list: readonly Node[]): readonly Node[] {
+  const nodes = expandedBlocks(list)
   for (const node of nodes) if (!isVisible(node)) return nodes.filter(isVisible)
   return nodes
 }
@@ -257,7 +269,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
 
 /** C2-H-040: a description with one visible block writes a paragraph bare, unless it carries attributes (C2-H-018). */
 function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
-  const blocks = node.children.filter(isVisible)
+  const blocks = visibleBlocks(node.children)
   const first = blocks[0]
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
@@ -447,9 +459,18 @@ function lineBlock(r: Render, node: LineBlockNode, level: number): void {
 
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: IncludeNode, level: number): void {
-  loss(r, node, 'include-unresolved', `the include of ${node.path} was not expanded`)
+  const children = node.children
+  if (children !== undefined) {
+    writeBlocks(r, children, level)
+    return
+  }
+  loss(r, node, 'include-unresolved', includeMessage('include-unresolved', { path: node.path }))
   // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
   line(r, level, `<p${tag(r, node, { bare: true })}>${escapeText(includeSource(node))}</p>`)
+  // C2-N-074, C2-H-165: its caption follows as one more paragraph of its plain text.
+  const caption = node.caption?.children[0]
+  const text = caption?.type === 'paragraph' ? plainText(caption.children) : ''
+  if (text !== '') line(r, level, `<p>${escapeText(text)}</p>`)
 }
 
 /** C2-A-127: an extension this engine does not know renders through its fallback. */
@@ -515,7 +536,8 @@ function nextExtensionId(r: Render, prefix: string): string {
 function authoredIds(document: DocumentNode): Set<string> {
   const ids = new Set<string>()
   const visit = (node: Node): void => {
-    if (node.attrs?.id !== undefined) ids.add(node.attrs.id)
+    // C2-N-072: the attributes of an include are inert.
+    if (node.attrs?.id !== undefined && node.type !== 'include') ids.add(node.attrs.id)
     if (node.type === 'heading' && node.generatedId !== undefined) ids.add(node.generatedId)
     forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) }, undefined, document.extensions)
   }
@@ -786,7 +808,8 @@ function openSection(r: Render, node: HeadingNode, open: number[]): void {
  * C2-H-178, C2-H-179: under `roundtrip` a run of abbreviation definitions is one template that holds the run as the
  * canonical writer spells it, escaped as text. C2-H-181: what the writer cannot spell is reported as a render loss.
  */
-function writeTemplate(r: Render, document: DocumentNode, run: DocumentNode['children'], level: number): void {
+function writeTemplate(r: Render, document: DocumentNode, nodes: readonly Node[], level: number): void {
+  const run = nodes.flatMap((node) => (node.type === 'abbreviation_def' ? [node] : []))
   const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run }, undefined)
   for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
   const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
@@ -795,9 +818,9 @@ function writeTemplate(r: Render, document: DocumentNode, run: DocumentNode['chi
 }
 
 /** The end of the run of abbreviation definitions that starts at `start`. */
-function runEnd(children: DocumentNode['children'], start: number): number {
+function runEnd(children: readonly Node[], start: number, own: ReadonlySet<Node> | null): number {
   let end = start
-  while (children[end]?.type === 'abbreviation_def') end++
+  while (children[end]?.type === 'abbreviation_def' && (own === null || own.has(children[end]!))) end++
   return end
 }
 
@@ -806,12 +829,14 @@ function writeDocument(r: Render, document: DocumentNode): void {
   const open: number[] = []
   const hasNotes = r.resolution.notes.length > 0
   let placed = false
-  const children = document.children
+  const children = expandedBlocks(document.children)
+  // C2-N-079: the template covers the definitions of the document, and those of an included file get none.
+  const own = children === document.children ? null : new Set<Node>(document.children)
   for (let index = 0; index < children.length; index++) {
     const node = children[index]
     if (node === undefined) break
-    if (node.type === 'abbreviation_def' && r.settings.roundtrip) {
-      const end = runEnd(children, index)
+    if (node.type === 'abbreviation_def' && r.settings.roundtrip && (own === null || own.has(node))) {
+      const end = runEnd(children, index, own)
       writeTemplate(r, document, children.slice(index, end), open.length)
       index = end - 1
     } else if (node.type === 'heading' && r.settings.sections) {
@@ -827,6 +852,20 @@ function writeDocument(r: Render, document: DocumentNode): void {
   }
   closeSections(r, open, 0)
   if (hasNotes && !placed) writeNotes(r, 0, null)
+}
+
+/** C2-N-079: an import of roundtrip HTML cannot recover the directive of an expanded include that no other one holds. */
+function reportExpanded(r: Render, document: DocumentNode): void {
+  const pending: Node[] = [document]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'include' && node.children !== undefined) {
+      loss(r, node, 'include-expanded-roundtrip', includeMessage('include-expanded-roundtrip', { path: node.path }))
+      continue
+    }
+    const below: Node[] = []
+    forEachSlot(node, (nodes) => { below.push(...nodes) }, undefined, document.extensions)
+    for (let at = below.length - 1; at >= 0; at--) pending.push(below[at]!)
+  }
 }
 
 interface RenderResult {
@@ -881,6 +920,7 @@ export function renderDocument(
       return null
     }
   }
+  if (settings.roundtrip) reportExpanded(r, document)
   writeDocument(r, document)
   return { html: r.out.slice(1), losses: r.losses }
 }

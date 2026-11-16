@@ -25,11 +25,12 @@ import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
-  isFrontmatterCloser, isFrontmatterOpener, isIncludeLine, isLineComment,
+  isFrontmatterCloser, isFrontmatterOpener, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
+import { readInclude } from './include.ts'
 import { isImageOnly } from './image-line.ts'
 import { isFigureOpener, openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
@@ -911,8 +912,11 @@ function openAttributeLine(state: BlockState, end: number): boolean {
 }
 
 function openInclude(state: BlockState, end: number): boolean {
-  if (!isIncludeLine(state.src, state.cursor.pos, end)) return false
+  const parts = readInclude(state.src, state.cursor.pos, end)
+  if (parts === null) return false
   writeLeafLine(state, enterTag(state, INCLUDE, 0), INCLUDE, end)
+  // C2-B-147: a code include takes a caption.
+  if (parts.options.code !== undefined) state.above.captionDepth = state.containers.depth
   return true
 }
 

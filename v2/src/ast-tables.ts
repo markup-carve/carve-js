@@ -79,6 +79,8 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
     {"field":"src","when":"reference use"},
   ]],
   ["include", [
+    {"field":"children"},
+    {"field":"file"},
   ]],
   ["inline_extension", [
   ]],
@@ -400,6 +402,8 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
     "metadata.bibliography.containerTitle",
   ]],
   ["include", [
+    "children",
+    "caption",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",

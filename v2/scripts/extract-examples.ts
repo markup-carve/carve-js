@@ -15,11 +15,14 @@ export interface SpecExample {
 }
 
 const FILES = ['syntax-blocks.md', 'syntax-inline.md', 'html.md', 'ast.md']
+const INCLUDES = 'includes.md'
 const NEW_DATA = [
-  'ast-results.json', 'ast-schema.json', 'extensions.json', 'layout-schema.json', 'node-slots.json', 'unicode-categories.json',
+  'ast-results.json', 'ast-schema.json', 'extensions.json', 'includes.json', 'layout-schema.json', 'node-slots.json',
+  'unicode-categories.json',
 ]
 const HEADER = /^Example (\d+) \((generated|unverified)([^)]*)\)\s*$/
 const FENCE = /^(`{3,})(\w*)\s*$/
+const FILE = /^File `([^`]+)`:\s*$/
 
 function fencedBlock(lines: string[], at: number): { info: string, body: string, next: number } | null {
   const open = FENCE.exec(lines[at] ?? '')
@@ -58,12 +61,56 @@ export function examplesOf(file: string, text: string): SpecExample[] {
   return examples
 }
 
+/** An example of the Includes document: the files its resolver serves, the entry, the HTML and the tree where shown. */
+export interface IncludeExample {
+  number: number
+  flags: string[]
+  files: Record<string, string>
+  input: string
+  html: string
+  tree: unknown
+}
+
+function includeExample(lines: string[], at: number, header: RegExpExecArray): IncludeExample {
+  const files: Record<string, string> = {}
+  const fences: string[] = []
+  let tree: unknown = null
+  let name: string | null = null
+  for (let line = at + 1; line < lines.length && HEADER.exec(lines[line]!) === null && !lines[line]!.startsWith('**C2-'); line++) {
+    const file = FILE.exec(lines[line]!)
+    if (file !== null) name = file[1]!
+    const block = fencedBlock(lines, line)
+    if (block === null) continue
+    if (name !== null) files[name] = `${block.body}\n`
+    else if (block.info === 'json') tree = JSON.parse(block.body)
+    else fences.push(block.body)
+    name = null
+    line = block.next - 1
+  }
+  if (fences.length < 2) throw new Error(`${INCLUDES}: example ${header[1]!} has no carve and html fence`)
+  const flags = header[3]!.split(',').map((flag) => flag.replaceAll('`', '').trim()).filter((flag) => flag !== '')
+  return { number: Number(header[1]), flags, files, input: fences[0]!, html: fences[1]!, tree }
+}
+
+/** The examples of the Includes document, each with the files a fence below a `File` line gives. */
+export function includeExamplesOf(text: string): IncludeExample[] {
+  const lines = text.split('\n')
+  const examples: IncludeExample[] = []
+  for (let at = 0; at < lines.length; at++) {
+    const header = HEADER.exec(lines[at]!)
+    if (header !== null) examples.push(includeExample(lines, at, header))
+  }
+  return examples
+}
+
 if (process.argv[1] === import.meta.filename) {
   const spec = process.argv[2]
   if (spec === undefined) throw new Error('usage: extract-examples.ts <path to spec/0.2>')
   const data = join(import.meta.dirname, '../data')
   const examples = FILES.flatMap((file) => examplesOf(file, readFileSync(join(spec, file), 'utf8')))
   writeFileSync(join(data, 'examples.json'), `${JSON.stringify(examples, null, 1)}\n`)
+  const includes = includeExamplesOf(readFileSync(join(spec, INCLUDES), 'utf8'))
+  writeFileSync(join(data, 'include-examples.json'), `${JSON.stringify(includes, null, 1)}\n`)
   // The generated tables in src/ are written from these copies; run the generate scripts after a copy changes.
   const copies = [...new Set([...readdirSync(data), ...NEW_DATA])]
     .filter((name) => name.endsWith('.json') && existsSync(join(spec, 'data', name)))
@@ -71,5 +118,5 @@ if (process.argv[1] === import.meta.filename) {
   const schemas = ['carve-source.schema.json', 'carve-style.schema.json', 'carve-annotation.schema.json']
   mkdirSync(join(data, 'schemas'), { recursive: true })
   for (const name of schemas) copyFileSync(join(spec, 'data/schemas', name), join(data, 'schemas', name))
-  console.log(`${examples.length} examples, ${copies.length + schemas.length} data files`)
+  console.log(`${examples.length} examples, ${includes.length} include examples, ${copies.length + schemas.length} data files`)
 }

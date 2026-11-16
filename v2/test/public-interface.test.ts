@@ -37,7 +37,10 @@ describe('the public interface', () => {
     expect(parsed.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([['duplicate-id', 'parse']])
     expect(JSON.stringify(parsed.document)).not.toContain('duplicate')
     const rendered = engine.renderWithDiagnostics('{{ a.crv }}')
-    expect(rendered.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([['include-unresolved', 'render-loss']])
+    // C2-N-003: without a resolver the include is reported in the parse channel too.
+    expect(rendered.diagnostics.map((entry) => [entry.code, entry.channel])).toEqual([
+      ['include-no-resolver', 'parse'], ['include-unresolved', 'render-loss'],
+    ])
   })
 
   it('parse refuses a render option, and render refuses a tree that is no tree of contract 2.0', () => {

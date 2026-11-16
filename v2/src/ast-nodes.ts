@@ -171,7 +171,7 @@ export interface DocumentNode extends NodeBase {
   astVersion: string
   srcByteLength?: number
   extensions?: ExtensionDeclaration[]
-  stages?: ("referenceResolution" | "tableAlignment")[]
+  stages?: ("includeExpansion" | "referenceResolution" | "tableAlignment")[]
   resources?: Resource[]
 }
 
@@ -238,10 +238,13 @@ export interface ImageNode extends NodeBase {
 
 export interface IncludeNode extends NodeBase {
   type: "include"
+  children?: (Block | FootnoteNode | LinkReferenceDefinitionNode | AbbreviationDefNode | CitationDefinitionNode | FrontmatterNode)[]
   path: string
   section?: string
   options?: IncludeOptions
   invalid?: string[]
+  file?: string
+  caption?: CaptionNode
 }
 
 export interface InlineExtensionNode extends NodeBase {

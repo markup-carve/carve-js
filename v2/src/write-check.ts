@@ -1236,7 +1236,8 @@ function compareBlock(c: Check, e: Node, a: Node): boolean {
   if (e.type === 'table_cell') c.flags |= IN_CELL
   compareFields(c, e, a)
   if (isInlineParent(e)) compareInlines(c, e.children, childNodes(a), e)
-  else compareBlocks(c, childNodes(e), childNodes(a), e)
+  // C2-N-081: the children of an include are a result of its expansion, which the source does not hold.
+  else if (e.type !== 'include') compareBlocks(c, childNodes(e), childNodes(a), e)
   compareSlots(c, e, a)
   c.spanMarks = marks
   c.flags = flags

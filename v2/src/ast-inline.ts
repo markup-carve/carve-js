@@ -1,7 +1,7 @@
 // The inline nodes of the public tree (spec/0.2/ast.md), built straight from the events of the inline pass.
 import {
-  type Attrs, type DeleteNode, type EmphasisNode, type HighlightNode, type ImageNode, type Inline, type InlineFootnoteNode,
-  type InsertNode, type LinkNode, type Node, type SpanNode, type StrikeNode, type StrongNode, type SubscriptNode,
+  type Attrs, type DeleteNode, type EmphasisNode, type HighlightNode, type ImageNode, type IncludeNode, type Inline,
+  type InlineFootnoteNode, type InsertNode, type LinkNode, type Node, type SpanNode, type StrikeNode, type StrongNode, type SubscriptNode,
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
 import { CR, LF } from './chars.ts'
@@ -73,6 +73,8 @@ export interface TreeContext {
   notes: ParseNote[]
   /** The source range of each footnote definition, which a duplicate reports the lines of (C2-B-085). */
   footnoteBlocks: Map<Node, BlockNode>
+  /** The include nodes in the order they are built, which is the order of the tree (C2-N-018). */
+  includes: IncludeNode[]
 }
 
 // How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard break.

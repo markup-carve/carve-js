@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { type Content, NODE_TABLE } from '../src/ast-validate.ts'
 import { MAX_COLUMNS, wrapJson } from './wrap-literal.ts'
 
-const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES } = NODE_TABLE
+const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT } = NODE_TABLE
 
 /** `table_cell` is `TableCellNode`. */
 export function interfaceName(type: string): string {
@@ -101,7 +101,9 @@ export function generateAstNodes(): string {
   for (const type of types) {
     const [content, required, optional] = RULES.get(type)!
     lines.push('', `export interface ${interfaceName(type)} extends NodeBase {`, `  type: ${JSON.stringify(type)}`)
+    const later = OPTIONAL_CONTENT.get(type)
     if (content !== 'none') lines.push(`  children: ${childrenType(content)}`)
+    else if (later !== undefined) lines.push(`  children?: ${childrenType(later)}`)
     for (const name of required) lines.push(...fieldLines(name, fieldType(type, name)))
     for (const name of optional) lines.push(...fieldLines(name, fieldType(type, name), true))
     lines.push('}')

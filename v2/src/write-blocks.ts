@@ -199,7 +199,7 @@ function heading(w: Writer, node: HeadingNode, prefix: string, flags: number): v
 }
 
 /** C2-W-058: an include directive in the spelling the renderer shows too (C2-H-171). */
-function include(w: Writer, node: IncludeNode, prefix: string): void {
+function include(w: Writer, node: IncludeNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   // C2-B-202, C2-W-117: an empty path and a path with a line break have no spelling.
   if (node.path === '' || node.path.includes('\n')) lose(w, node, 'path')
@@ -207,6 +207,8 @@ function include(w: Writer, node: IncludeNode, prefix: string): void {
   const unread = unreadField(node, source)
   if (unread !== null) lose(w, node, unread)
   emit(w, prefix, source)
+  // C2-N-080: the caption of a code include stands below its directive.
+  caption(w, node.caption, prefix, flags)
 }
 
 /**

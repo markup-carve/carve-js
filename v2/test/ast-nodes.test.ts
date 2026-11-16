@@ -18,7 +18,8 @@ it('each node type of the validator has an interface with exactly its fields', (
     expect(body, type).not.toBeNull()
     const fields = body![1]!.split('\n').map((line) => line.trim()).filter((line) => !line.startsWith('|'))
       .map((line) => line.split(':')[0]!)
-    const expected = ['type', ...(content === 'none' ? [] : ['children']), ...required, ...optional.map((name) => `${name}?`)]
+    const later = NODE_TABLE.OPTIONAL_CONTENT.has(type) ? ['children?'] : []
+    const expected = ['type', ...(content === 'none' ? later : ['children']), ...required, ...optional.map((name) => `${name}?`)]
     expect(fields, type).toEqual(expected)
   }
 })

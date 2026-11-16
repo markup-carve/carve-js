@@ -3,6 +3,7 @@ import {
   BOOLEAN_DEFAULTS, DEFAULT_DENIED_SCHEMES, DEFAULT_LABELS, ENUM_DEFAULTS, ENUM_VALUES, NULL_DEFAULTS, OPTION_KINDS, OPTION_TYPES,
 } from './option-tables.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
+import { includeSettings, type IncludeSettings } from './include-settings.ts'
 
 export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii'
 export type Mode = 'interactive' | 'static'
@@ -56,6 +57,8 @@ export type RenderOptions = Omit<Options, 'alignTables' | 'normalize' | 'rules' 
 /** The options with every default filled in. */
 export interface Settings {
   extensions: readonly ExtensionDefinition[]
+  /** C2-N-003: the resolver and the two limits, or null when nothing is expanded. */
+  includes: IncludeSettings | null
   renderers: Readonly<Record<string, ExtensionRenderer>>
   urlPolicy: UrlPolicy
   headingIds: HeadingIds
@@ -86,13 +89,6 @@ export class CarveOptionError extends Error {
 }
 
 type OptionMap = Readonly<Record<string, unknown>>
-
-/** Whether a value of the declared type of its option asks for nothing: an empty list or map, or no value. */
-function isEmpty(value: unknown): boolean {
-  if (value === undefined || value === null) return true
-  if (Array.isArray(value)) return value.length === 0
-  return isPlainObject(value) && Object.keys(value).length === 0
-}
 
 function enumValue(options: OptionMap, name: string): string {
   const value = options[name]
@@ -229,9 +225,6 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }
   }
-  for (const name of ['includes']) {
-    if (!isEmpty(given[name])) throw new CarveOptionError(name, 'not offered by this engine')
-  }
 }
 
 function extensionsValue(value: unknown): readonly ExtensionDefinition[] {
@@ -319,6 +312,7 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
   const allowed = schemeSet(policy, 'allow')
   return {
     extensions: extensionsValue(given['extensions']),
+    includes: includeSettings(given['includes'], (reason) => new CarveOptionError('includes', reason)),
     renderers: renderersValue(given['renderers']),
     urlPolicy: policy,
     headingIds: enumValue(given, 'headingIds') as HeadingIds,

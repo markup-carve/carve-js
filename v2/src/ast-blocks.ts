@@ -1,9 +1,9 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
 import {
   AST_VERSION, type Block, type BlockQuoteNode, type CaptionNode, type CodeBlockNode, type CommentNode, type DefinitionListNode,
-  type DocumentNode, type FigureGroupNode, type FrontmatterNode, type HeadingNode, type Inline, isFieldValue, type LineBlockNode,
-  type LineNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Marker, type Node, type ParagraphNode,
-  type TableNode,
+  type DocumentNode, type FigureGroupNode, type FrontmatterNode, type HeadingNode, type IncludeNode, type Inline,
+  isFieldValue, type LineBlockNode, type LineNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Marker,
+  type Node, type ParagraphNode, type TableNode,
 } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
@@ -339,6 +339,12 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
   return out
 }
 
+function includeBlock(ctx: TreeContext, node: BlockNode): IncludeNode {
+  const out = includeNode(ctx.src, node.spans![0]!, node.spans![1]!)
+  ctx.includes.push(out)
+  return out
+}
+
 function headingNode(ctx: TreeContext, node: BlockNode, flow: number): HeadingNode {
   return noteLeaf(ctx, { type: 'heading', level: node.aux, children: leafChildren(ctx, node, flow) })
 }
@@ -357,7 +363,7 @@ const BUILDERS = new Map<number, BlockBuilder<Block>>([
   [HEADING, headingNode],
   [THEMATIC_BREAK, () => ({ type: 'thematic_break' })],
   [COMMENT, commentNode],
-  [INCLUDE, (ctx, node) => includeNode(ctx.src, node.spans![0]!, node.spans![1]!)],
+  [INCLUDE, includeBlock],
 ])
 
 // C2-A-052: the block pass opens definitions and the frontmatter at the top level only (C2-B-086, C2-B-164).
@@ -487,7 +493,7 @@ function takeCaption(target: CaptionedBlock, caption: CaptionNode): void {
   if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
 }
 
-type CaptionedBlock = TableNode | FigureGroupNode | ParagraphNode | CodeBlockNode | BlockQuoteNode
+type CaptionedBlock = TableNode | FigureGroupNode | ParagraphNode | CodeBlockNode | BlockQuoteNode | IncludeNode
 
 const DOCUMENT_ONLY = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
 
@@ -510,6 +516,9 @@ function attachCaption(list: DocumentChild[], caption: CaptionNode): void {
     for (const node of list.splice(at + 1)) if (node.type === 'comment') target.children.push(node)
     takeCaption(target, caption)
   } else if (target.type === 'paragraph' || target.type === 'code_block' || target.type === 'block_quote') {
+    takeCaption(target, caption)
+  } else if (target.type === 'include' && target.options?.code !== undefined) {
+    // C2-B-147, C2-N-073: a code include takes a caption, which its expansion gives to its child.
     takeCaption(target, caption)
   }
 }
@@ -561,6 +570,13 @@ function collectLinkKeys(src: string, root: BlockNode): Set<string> | null {
   return keys
 }
 
+/** C2-N-054: the link keys of a file and of the files around it, which decide what forms a reference. */
+function withOuterKeys(own: ReadonlySet<string> | null, outer: ReadonlySet<string> | null): ReadonlySet<string> | null {
+  if (outer === null) return own
+  if (own === null) return outer
+  return new Set([...own, ...outer])
+}
+
 /** What a parse knows of the tree it built, which resolution reads beside the tree. */
 export interface ParseFacts {
   sourceNames: ReadonlyMap<Node, string> | null
@@ -574,6 +590,16 @@ export interface ParseFacts {
   footnoteLines: (node: Node) => number
   /** C2-H-062: the line of the own markup of a block that took attribute lines, behind them (C2-A-148). */
   markupLine: (node: Node) => number | undefined
+  /** The include nodes of the tree in tree order (C2-N-018). */
+  includes: readonly IncludeNode[]
+  /** C2-N-023, C2-N-054: the terms and the link keys the source was read with, which a file it includes reads too. */
+  scope: OuterScope
+}
+
+/** C2-N-023, C2-N-054: what an included file reads of the files around it: their terms and their link keys. */
+export interface OuterScope {
+  abbreviations: ReadonlyMap<string, string>
+  linkKeys: ReadonlySet<string> | null
 }
 
 /** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
@@ -601,7 +627,7 @@ export function inlineContent(text: string): Inline[] {
   try {
     const ctx: TreeContext = {
       src: text, positions: false, inline, abbreviations: new Map(), markup: new Map(), resolvable: false,
-      resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null,
+      resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null, includes: [],
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
   } finally {
@@ -632,6 +658,8 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
       const pos = node.pos
       return markup === undefined || pos === undefined ? undefined : pos.startLine + lineCount(src, pos.startOffset, markup) - 1
     },
+    includes: ctx.includes,
+    scope: { abbreviations: ctx.abbreviations, linkKeys: ctx.inline.definitions },
   }
   return { document, facts }
 }
@@ -643,7 +671,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
-  collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null,
+  collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null, outer: OuterScope | null = null,
 ): ParsedTree {
   // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
   const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
@@ -653,11 +681,14 @@ export function buildSource(
   try {
     scanBlocks(blocks, text)
     const root = buildTree(blocks.events, blocks.eventLength)
-    inline.definitions = linkKeys ?? collectLinkKeys(text, root)
+    const own = linkKeys ?? collectLinkKeys(text, root)
+    inline.definitions = outer === null ? own : withOuterKeys(own, outer.linkKeys)
+    const terms = abbreviations ?? collectAbbreviations(text, root)
+    if (outer !== null) for (const [term, expansion] of outer.abbreviations) if (!terms.has(term)) terms.set(term, expansion)
     const ctx: TreeContext = {
-      src: text, positions, inline, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
+      src: text, positions, inline, abbreviations: terms, markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
-      sourceNames: collectSourceNames ? new Map() : null,
+      sourceNames: collectSourceNames ? new Map() : null, includes: [],
     }
     return buildDocument(ctx, root, src)
   } finally {

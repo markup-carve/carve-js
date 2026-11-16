@@ -602,7 +602,7 @@ describe('every option is checked against its declared type first', () => {
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
   }
   // Values of the right type that this engine does not offer, or that no stage of it reads.
-  const UNOFFERED: Readonly<Record<string, unknown>> = { includes: { root: '.' } }
+  const UNOFFERED: Readonly<Record<string, unknown>> = {}
   const SAMPLES: readonly [string, unknown][] = [
     ['a string', 'x'], ['a number', 1], ['a boolean', true], ['a list', ['x']], ['a map', { x: 'y' }], ['a function', () => null],
     ['a Map', new Map([['a', 'b']])],

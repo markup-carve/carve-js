@@ -38,6 +38,7 @@ const INLINES = [
   'soft_break', 'span', 'strike', 'strong', 'subscript', 'superscript', 'symbol', 'tag', 'text', 'underline', 'xref',
 ]
 const TABLE_GROUPS = ['table_head', 'table_body', 'table_foot']
+const DOCUMENT_CHILDREN = [...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
 const COMMON = ['type', 'attrs', 'data', 'pos', 'segments', 'metadata', 'dir', 'lang']
 
 /** What the `children` of a node type hold: `blocks`, `inlines`, `none`, or the member types by name. */
@@ -74,10 +75,7 @@ const RULES = new Map<string, Rule>([
   ['delete', ['inlines', [], []]],
   ['directive', ['blocks', ['kind'], ['title', 'groupLabel', 'tocTarget']]],
   ['div', ['blocks', [], ['title', 'groupLabel']]],
-  ['document', [
-    [...BLOCKS, 'footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter'],
-    ['astVersion'], ['srcByteLength', 'extensions', 'stages', 'resources'],
-  ]],
+  ['document', [DOCUMENT_CHILDREN, ['astVersion'], ['srcByteLength', 'extensions', 'stages', 'resources']]],
   ['emphasis', ['inlines', [], []]],
   ['figure_group', ['blocks', [], ['caption']]],
   ['footnote', ['blocks', REFERENCE, []]],
@@ -89,7 +87,7 @@ const RULES = new Map<string, Rule>([
   ['image', ['none', [], [
     'src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm', 'longDescription',
   ]]],
-  ['include', ['none', ['path'], ['section', 'options', 'invalid']]],
+  ['include', ['none', ['path'], ['section', 'options', 'invalid', 'file', 'caption']]],
   ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'version', 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
@@ -136,7 +134,7 @@ const STRINGS = [
   'key', 'namespace', 'expansion', 'kind', 'groupLabel', 'href', 'text', 'name', 'version', 'raw', 'syntax', 'form',
   'tocTarget', 'generatedId', 'src', 'alt', 'tooltip', 'targetKind', 'resourceId', 'path', 'section', 'spacing',
   'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
-  'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope',
+  'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope', 'file',
 ]
 const INTEGERS = ['n', 'number', 'level', 'headRows', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
 const BOOLEANS = ['display', 'header', 'decorative', 'useIndex']
@@ -179,11 +177,13 @@ const ENUMS = new Map<string, readonly string[]>([
   ['citation.namespace', ['citation']],
   ['citation_definition.namespace', ['citation']],
 ])
-const STAGES = ['referenceResolution', 'tableAlignment']
+const STAGES = ['includeExpansion', 'referenceResolution', 'tableAlignment']
+// C2-N-017: an include holds children once it is expanded, and none before.
+const OPTIONAL_CONTENT = new Map<string, Content>([['include', DOCUMENT_CHILDREN]])
 const ORDERED_STYLES = ['1', 'a', 'A', 'i', 'I']
 
 /** The node table and the field kinds, which scripts/generate-ast-nodes.ts writes the node interfaces from. */
-export const NODE_TABLE = { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES }
+export const NODE_TABLE = { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT }
 
 type Value = unknown
 type Fields = Record<string, Value>
@@ -977,7 +977,19 @@ function checkFields(node: Fields, type: string, rule: Rule, path: string, walk:
   for (const name of required) if (node[name] === undefined) fail(`${path}/${name}`, 'a required field is missing')
   for (const name of Object.keys(node)) if (name !== 'type' && name !== 'children') checkField(node, type, rule, name, path, walk)
   if (content !== 'none') checkList(node['children'], `${path}/children`, content, walk)
-  else if (node['children'] !== undefined) fail(`${path}/children`, `${type} holds no children`)
+  else if (node['children'] !== undefined) checkOptionalChildren(node, type, path, walk)
+}
+
+/** C2-N-017, C2-A-049, C2-A-171: the children of an expanded include are counted from level 0 again, in their own file. */
+function checkOptionalChildren(node: Fields, type: string, path: string, walk: Walk): void {
+  const content = OPTIONAL_CONTENT.get(type)
+  if (content === undefined) fail(`${path}/children`, `${type} holds no children`)
+  if (node['file'] === undefined) fail(`${path}/file`, 'an expanded include names its file')
+  checkList(node['children'], `${path}/children`, content, { ...walk, depth: -1 })
+  const children = node['children'] as Fields[]
+  children.forEach((child, index) => {
+    if (child['type'] === 'frontmatter' && index > 0) fail(`${path}/children/${index}`, 'frontmatter is not the first child')
+  })
 }
 
 function checkNode(value: Value, path: string, allowed: readonly string[], walk: Walk): void {

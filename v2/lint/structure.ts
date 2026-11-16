@@ -1,5 +1,4 @@
 import { type Node } from '../src/ast.ts'
-import { readInclude } from '../src/include.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
@@ -338,17 +337,6 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   let indent = 0
   while (second.text[indent] === ' ') indent++
   if (indent > width) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
-}
-
-/** C2-B-206: every option the include node keeps in `invalid`, at its place in the directive. */
-function includeOptionInvalid(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'include' || node.invalid === undefined) return
-  const range = bounds(node, context)
-  const parts = range === null ? null : readInclude(context.source, range[0], range[1])
-  for (const problem of parts?.problems ?? []) {
-    const option = context.source.slice(problem.start, problem.end)
-    context.report('include-option-invalid', problem.start, problem.end, path, { option, reason: problem.reason })
-  }
 }
 
 function figureNested(node: Node, path: string, context: LintContext): void {
@@ -1075,7 +1063,6 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
   nodeRule('table-span-marker-attribute', ['table_cell'], spanMarkerAttribute),
-  nodeRule('include-option-invalid', ['include'], includeOptionInvalid),
   nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
   nodeRule('unresolved-reference-link', ['link', 'image'], unresolvedReference),

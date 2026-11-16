@@ -681,12 +681,15 @@ describe('the position of a diagnostic', () => {
     expect(parseWithDiagnostics('{#a}\nx\n\n{#a}\ny', { positions: false }).diagnostics.map((entry) => [entry.path, entry.range])).toEqual([['/children/1', undefined]])
     const output = renderWithDiagnostics('a\n\n> {{ x.crv }}\n\n::: note "t `r`{=tex}"\n:::\n\n| `c`{=tex} |\n^ `q`{=tex}')
     expect(output.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([
-      ['include-unresolved', '/children/1/children/0'], ['raw-format-dropped', '/children/2/title/1'],
+      ['include-no-resolver', '/children/1/children/0'], ['include-unresolved', '/children/1/children/0'],
+      ['raw-format-dropped', '/children/2/title/1'],
       ['raw-format-dropped', '/children/3/caption/children/0/children/0'],
       ['raw-format-dropped', '/children/3/children/0/children/0/children/0/children/0/children/0'],
     ])
     const lines = renderWithDiagnostics('a\n\n{{ x.crv }}', { sourceLines: true }).diagnostics
-    expect(lines.map((entry) => [entry.path, entry.range])).toEqual([['/children/1', { startOffset: 3, endOffset: 14 }]])
+    expect(lines.map((entry) => [entry.path, entry.range])).toEqual([
+      ['/children/1', { startOffset: 3, endOffset: 14 }], ['/children/1', { startOffset: 3, endOffset: 14 }],
+    ])
   })
 
   it('C2-A-173: a finding on a supplied tree has the path alone, also where its node is a copy the renderer made', () => {
