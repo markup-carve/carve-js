@@ -1,6 +1,6 @@
 // The rulings of the 0.2 specification that the engine follows: one describe per ruling, each test named by its clause.
 import { describe, expect, it } from 'vitest'
-import { parseWithDiagnostics, render } from '../src/index.ts'
+import { CarveTreeError, type DocumentNode, parse, parseWithDiagnostics, render, validateTree } from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
 import { UNICODE_VERSION } from '../src/unicode-tables.ts'
 
@@ -57,5 +57,25 @@ describe('the Unicode version', () => {
   it('C2-I-122: a URL character outside ASCII has no White_Space, is no control and no format character', () => {
     for (const code of [0x85, 0xa0, 0x2028, 0x3000, 0x9f, 0x200b, 0xfeff]) expect(isUrlCharacter(code), code.toString(16)).toBe(false)
     for (const code of [0xe9, 0x4e00, 0x3d000]) expect(isUrlCharacter(code), code.toString(16)).toBe(true)
+  })
+})
+
+describe('the include shift', () => {
+  it('C2-B-205: a shift has one to nine digits; ten are outside the shape and the line is a paragraph', () => {
+    const document = parse('{{ a.crv @shift:-123456789 }}\n\n{{ a.crv @shift:1234567890 }}\n\n{{ a.crv @shift:+000000001 }}\n')
+    expect(document.children.map((node) => node.type)).toEqual(['include', 'paragraph', 'include'])
+    expect(document.children[0]).toMatchObject({ options: { shift: -123456789 } })
+    expect(document.children[2]).toMatchObject({ options: { shift: 1 } })
+    expect(parse('{{ a.crv @shift:99999999999999999999 }}\n').children[0]?.type).toBe('paragraph')
+  })
+})
+
+describe('the include shift in a supplied tree', () => {
+  it('C2-B-205, C2-A-181: a supplied shift of ten digits is refused', () => {
+    const include = (shift: number): DocumentNode => ({
+      type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', options: { shift } }],
+    })
+    expect(() => validateTree(include(999_999_999))).not.toThrow()
+    expect(() => validateTree(include(1_234_567_890))).toThrow(CarveTreeError)
   })
 })

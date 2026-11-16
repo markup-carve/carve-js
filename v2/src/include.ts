@@ -170,11 +170,14 @@ function isIdentifier(value: string): boolean {
 }
 
 /** `auto`, or a decimal integer with an optional sign. */
+const MAX_SHIFT_DIGITS = 9
+
 function isShift(value: string): boolean {
   if (value === 'auto') return true
   const first = value.charCodeAt(0)
   const start = first === PLUS || first === HYPHEN ? 1 : 0
-  if (start === value.length) return false
+  // C2-B-205: one to nine digits, as a list marker holds (C2-B-219).
+  if (start === value.length || value.length - start > MAX_SHIFT_DIGITS) return false
   for (let p = start; p < value.length; p++) if (!isAsciiDigit(value.charCodeAt(p))) return false
   return true
 }

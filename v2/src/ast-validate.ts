@@ -209,13 +209,17 @@ function checkPairs(value: Value, path: string): void {
   })
 }
 
+const MAX_SHIFT = 999_999_999
+
 /** C2-A-181: decoded values under the six include option names. */
 function checkOption(name: string, item: Value, path: string): void {
   if (name === 'lines' || name === 'region' || name === 'rows') requireString(item, path)
   else if (name === 'cols') {
     if (typeof item !== 'string') checkStrings(item, path)
   } else if (name === 'shift') {
-    if (item !== 'auto' && !Number.isInteger(item)) fail(path, 'not an integer or auto')
+    // C2-B-205: at most nine digits.
+    const shift = typeof item === 'number' && Number.isInteger(item) && Math.abs(item) <= MAX_SHIFT
+    if (item !== 'auto' && !shift) fail(path, 'not an integer of nine digits or auto')
   } else if (name === 'code') {
     if (item !== true) requireString(item, path)
   } else fail(path, 'not an include option')
