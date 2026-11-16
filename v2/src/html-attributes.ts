@@ -302,16 +302,27 @@ function isAsciiWhitespace(code: number): boolean {
   return code === SPACE_CODE || (code >= 9 && code <= 13 && code !== 11)
 }
 
-/** C2-H-161: true when one entry of a list of URLs fails the test. `commas` also separate entries. */
-function listHasDeniedPrefix(value: string, commas: boolean): boolean {
+/** C2-H-161: true when `fails` holds for one entry of a list of URLs. `commas` also separate entries. */
+function listHas(value: string, commas: boolean, fails: (start: number, end: number) => boolean): boolean {
   let start = 0
   for (let at = 0; at <= value.length; at++) {
     const code = at < value.length ? value.charCodeAt(at) : SPACE_CODE
     if (!isAsciiWhitespace(code) && !(commas && code === COMMA_CODE)) continue
-    if (hasDeniedPrefix(value, start, at)) return true
+    if (at > start && fails(start, at)) return true
     start = at + 1
   }
   return false
+}
+
+function listHasDeniedPrefix(value: string, commas: boolean): boolean {
+  return listHas(value, commas, (start, end) => hasDeniedPrefix(value, start, end))
+}
+
+/** C2-H-159, C2-H-161: the value of a URL list attribute, empty when one of its tokens fails the URL policy. */
+function urlListValue(r: Render, name: string, value: string): string {
+  const commas = URL_LIST_ATTRIBUTES.get(name)
+  if (commas === undefined || value === '') return value
+  return listHas(value, commas, (start, end) => !schemePasses(r, value.slice(start, end))) ? '' : value
 }
 
 function hexValue(code: number): number {
@@ -446,7 +457,9 @@ function addKeyValue(
     return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
   }
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
-  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) return list.add(key, keyValue(name, value))
+  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) {
+    return list.add(key, urlListValue(r, name, keyValue(name, value)))
+  }
   if (!style.hasStyle) list.add('style', style.declarations)
 }
 

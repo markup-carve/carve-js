@@ -26,6 +26,7 @@ export const FLAG_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map<string, 
   ['--social {"mentionUrl":"https://x.org/u/{name}"}', { social: { mentionUrl: 'https://x.org/u/{name}' } }],
   ['--profile comment', { profile: 'comment' }],
   ['--profile minimal', { profile: 'minimal' }],
+  ['urlPolicy set to {"allow": ["mailto"]}', { urlPolicy: { allow: ['mailto'] } }],
 ])
 
 /** The options of an example: those of its flags, then those listed for it. A flag with no entry is an error. */
@@ -40,11 +41,7 @@ export function exampleOptions(example: SpecExample): RenderOptions {
 }
 
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
-export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
-  // C2-H-006, C2-H-040: a comment is not counted among the visible children of a quote, so a quote of one paragraph and
-  // a comment is written on one line; the example writes it expanded.
-  ['syntax-blocks.md:257', 'follows C2-H-006: the comment child is not visible, so the quote is written on one line'],
-])
+export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([])
 
 export function exampleId(example: SpecExample): string {
   return `${example.file}:${example.number}`

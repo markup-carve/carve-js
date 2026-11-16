@@ -10,7 +10,7 @@ export interface IncludeExample {
   flags: string[]
   files: Record<string, string>
   input: string
-  html: string
+  html: string | null
   tree: unknown
 }
 

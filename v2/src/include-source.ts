@@ -156,13 +156,12 @@ export function regionRange(text: string, lines: FileLines, name: string, code: 
   return scan.range ?? REGION_MISSING
 }
 
-/** C2-N-043: the payload of a code include: one line feed after each selected line, and a lone CR read as one. */
+/** C2-N-043: the payload of a code include: one line feed after each selected line; a lone CR stays content (C2-B-010). */
 export function payloadOf(text: string, lines: FileLines, range: LineRange, skip: (index: number) => boolean): string {
   let payload = ''
   for (let index = range.from; index < range.to; index++) {
     if (skip(index)) continue
-    const line = text.slice(lines.starts[index], lines.ends[index])
-    payload += `${line.includes('\r') ? line.replaceAll('\r', '\n') : line}\n`
+    payload += `${text.slice(lines.starts[index], lines.ends[index])}\n`
   }
   return payload
 }

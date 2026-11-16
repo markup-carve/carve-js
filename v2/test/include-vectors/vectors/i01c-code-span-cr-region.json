@@ -28,7 +28,7 @@
     ],
     "positions": []
   },
-  "note": "_VECTORS.md lists it unchanged; C2-B-010 ends a line only at LF, so the file is one line and its region marker is malformed",
+  "note": "_VECTORS.md lists it unchanged; C2-B-010 and C2-N-043 end a line only at LF, so the file is one line and its region marker is malformed",
   "entry": "{{ q.js @region:a @code }}\n",
   "files": {
     "q.js": "// #region a\rx\r\ryy\r// #endregion a\r"

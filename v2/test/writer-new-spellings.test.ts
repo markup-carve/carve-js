@@ -8,11 +8,11 @@ function list(value: string): DocumentNode['children'][number] {
 }
 
 describe('new writer and parser spellings', () => {
-  it('C2-W-122, C2-B-091: the following list has its attribute line above the comment', () => {
+  it('C2-W-122, C2-B-024: the following list has its attribute line above the comment, behind a blank line (Example 264)', () => {
     const root: DocumentNode = { type: 'document', astVersion: '2.0', children: [list('a'),
       { type: 'comment', form: 'line', value: 'note' }, { ...list('b'), attrs: { classes: ['x'] } }] }
     const written = writeWithDiagnostics(root)
-    expect(written.source).toBe('- a\n{.x}\n%% note\n- b\n')
+    expect(written.source).toBe('- a\n\n{.x}\n%% note\n- b\n')
     expect(written.diagnostics).toEqual([])
     expect(treesEqual(parse(written.source), root)).toBe(true)
   })

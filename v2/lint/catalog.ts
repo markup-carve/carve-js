@@ -643,6 +643,11 @@ export const CATALOG = {
       " applies to no cell and carve fmt drops it. Move the attributes to t",
       "he cell it joins, or remove them.",
     ].join(''),
+    [
+      "This \"${marker}\" joins the cell ${direction}, and its header mark ma",
+      "kes no head row, so it marks no cell and carve fmt drops it. Remove ",
+      "the \"=\", or make the row a head row.",
+    ].join(''),
   ] },
   "table-span-marker-blocked": { severity: "warning", default: "on", messages: [
     [

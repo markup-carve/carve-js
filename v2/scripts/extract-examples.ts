@@ -23,6 +23,8 @@ const NEW_DATA = [
 const HEADER = /^Example (\d+) \((generated|unverified)([^)]*)\)\s*$/
 const FENCE = /^(`{3,})(\w*)\s*$/
 const FILE = /^File `([^`]+)`:\s*$/
+// A file stated as bytes in prose, as Example 32 states one.
+const FILE_BYTES = /^File `([^`]+)` holds the \w+ bytes `([0-9A-F ]+)`/
 
 function fencedBlock(lines: string[], at: number): { info: string, body: string, next: number } | null {
   const open = FENCE.exec(lines[at] ?? '')
@@ -67,8 +69,12 @@ export interface IncludeExample {
   flags: string[]
   files: Record<string, string>
   input: string
-  html: string
+  html: string | null
   tree: unknown
+}
+
+function bytesText(hex: string): string {
+  return String.fromCharCode(...hex.split(' ').map((pair) => Number.parseInt(pair, 16)))
 }
 
 function includeExample(lines: string[], at: number, header: RegExpExecArray): IncludeExample {
@@ -79,6 +85,8 @@ function includeExample(lines: string[], at: number, header: RegExpExecArray): I
   for (let line = at + 1; line < lines.length && HEADER.exec(lines[line]!) === null && !lines[line]!.startsWith('**C2-'); line++) {
     const file = FILE.exec(lines[line]!)
     if (file !== null) name = file[1]!
+    const bytes = FILE_BYTES.exec(lines[line]!)
+    if (bytes !== null) files[bytes[1]!] = bytesText(bytes[2]!)
     const block = fencedBlock(lines, line)
     if (block === null) continue
     if (name !== null) files[name] = `${block.body}\n`
@@ -87,9 +95,10 @@ function includeExample(lines: string[], at: number, header: RegExpExecArray): I
     name = null
     line = block.next - 1
   }
-  if (fences.length < 2) throw new Error(`${INCLUDES}: example ${header[1]!} has no carve and html fence`)
+  // An example may show the tree alone, with no HTML.
+  if (fences.length < (tree === null ? 2 : 1)) throw new Error(`${INCLUDES}: example ${header[1]!} has no carve and html fence`)
   const flags = header[3]!.split(',').map((flag) => flag.replaceAll('`', '').trim()).filter((flag) => flag !== '')
-  return { number: Number(header[1]), flags, files, input: fences[0]!, html: fences[1]!, tree }
+  return { number: Number(header[1]), flags, files, input: fences[0]!, html: fences[1] ?? null, tree }
 }
 
 /** The examples of the Includes document, each with the files a fence below a `File` line gives. */

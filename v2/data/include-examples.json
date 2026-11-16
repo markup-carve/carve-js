@@ -32,7 +32,8 @@
    "astVersion": "2.0",
    "stages": [
     "includeExpansion",
-    "referenceResolution"
+    "referenceResolution",
+    "tableAlignment"
    ],
    "children": [
     {
@@ -195,6 +196,17 @@
   "tree": null
  },
  {
+  "number": 33,
+  "flags": [],
+  "files": {
+   "a.crv": "{#pick}\n{{ b.crv }}\n",
+   "b.crv": "B.\n"
+  },
+  "input": "{{ a.crv #pick }}",
+  "html": "<p>{{ a.crv #pick }}</p>",
+  "tree": null
+ },
+ {
   "number": 11,
   "flags": [],
   "files": {
@@ -277,6 +289,30 @@
        ]
       ]
      }
+    }
+   ]
+  }
+ },
+ {
+  "number": 32,
+  "flags": [],
+  "files": {
+   "a.txt": "a\rb"
+  },
+  "input": "{{ a.txt @code @lines:1-1 }}",
+  "html": null,
+  "tree": {
+   "type": "include",
+   "path": "a.txt",
+   "options": {
+    "code": true,
+    "lines": "1-1"
+   },
+   "file": "a.txt",
+   "children": [
+    {
+     "type": "code_block",
+     "value": "a\rb\n"
     }
    ]
   }

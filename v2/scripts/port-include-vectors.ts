@@ -259,8 +259,12 @@ const CHANGES: Readonly<Record<string, Change>> = {
 const RULED: Readonly<Record<string, Change & { note: string }>> = {
   // C2-B-010: a lone CR is no line end, so the file is one line and its marker is malformed (C2-N-040).
   'i01c-code-span-cr-region': { clauses: ['C2-B-010', 'C2-N-034', 'C2-N-040', 'C2-N-041'],
-    note: 'C2-B-010 ends a line only at LF, so the file is one line and its region marker is malformed',
+    note: 'C2-B-010 and C2-N-043 end a line only at LF, so the file is one line and its region marker is malformed',
     expected: { html: '<p>{{ q.js @region:a @code }}</p>', warnings: UNEXPANDED('include-region-invalid'), positions: [] } },
+  // C2-N-043, C2-B-010: a lone CR stays content of its line in the payload, as in an authored fence.
+  'i01c-code-crlf': { clauses: ['C2-N-043', 'C2-B-010'],
+    note: 'C2-N-043 keeps a lone CR as content of its line, where 0.1 read it as a line end',
+    expected: { html: '<pre><code class="language-js">a()\nb()\rc()\n</code></pre>' } },
   // C2-N-002: `{{` with no path is text, each brace read on its own; the inline chapter forms no tag behind `{{ `.
   'i01-section-only-no-path-literal': { clauses: ['C2-N-002', 'C2-B-202'],
     note: 'a directive with no path is text, which the 0.2 inline chapter reads with no tag in it',

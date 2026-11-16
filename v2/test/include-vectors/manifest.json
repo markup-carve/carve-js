@@ -1,8 +1,8 @@
 {
   "source": "tests/include-conformance/vectors on main of markup-carve/carve (0.1)",
   "total": 212,
-  "unchanged": 107,
-  "changed": 80,
+  "unchanged": 106,
+  "changed": 81,
   "reclassified": [
     "i01-lines-start-past-the-end-carve",
     "i01-section-list-item-id-selects-nothing",
@@ -22,6 +22,7 @@
     "i01b-region-unclosed",
     "i01b-region-unmatched-end",
     "i01b-region-unnamed-opener",
+    "i01c-code-crlf",
     "i01c-code-span-cr-region",
     "i11-missing-section-resolved"
   ],

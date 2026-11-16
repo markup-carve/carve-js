@@ -663,7 +663,9 @@ function beforeSibling(w: Writer, nodes: readonly Node[], at: number, before: No
     && w.prewrittenAttributes !== following ? followingAttributes(w, following) : ''
   if (before !== null) {
     const nested = layout === ENTRIES || (layout === TIGHT_ITEM && isNestedList(w, before, node, at))
-    const blanks = attributes !== '' || w.prewrittenAttributes === node ? 0 : blankLinesBetween(w, before, list, node, nested)
+    // C2-B-024, Example 264: an attribute line directly below an open paragraph is a lazy line of it, so one blank line
+    // closes the container before the attribute lines of the next block that stand above a comment (C2-W-122).
+    const blanks = attributes !== '' ? 1 : w.prewrittenAttributes === node ? 0 : blankLinesBetween(w, before, list, node, nested)
     for (let blank = blanks; blank > 0; blank--) emit(w, prefix, '')
   }
   if (attributes !== '' && following !== undefined) {
