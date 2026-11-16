@@ -156,6 +156,15 @@ describe('the planned writer', () => {
     expect(formatBy('a \\[^b] c\n', 'both').stats.planned).toBe(0)
   })
 
+  it('C2-I-078, C2-I-079: a label that starts with an at-sign or holds only blanks names no reference, and no bracket is escaped', () => {
+    for (const source of ['[a][@]\n', '[[]][@]\n', '[a][@x]\n', '[a][ ]\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

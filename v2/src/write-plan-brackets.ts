@@ -28,10 +28,15 @@ const NO_DECISION = 2
  * A comment may end the line first, so a `%` leaves the pair to the repair.
  */
 function labelEnd(leaf: Leaf, at: number): number {
+  // C2-I-078: a label whose first character is an at-sign is reserved for citations and is no reference label.
+  if (leaf.codes[at] === 64) return LITERAL
+  let blank = true
   for (let unit = at; unit < leaf.codes.length; unit++) {
-    const value = leaf.codes[unit]
+    const value = leaf.codes[unit]!
     if (value === 37) return NO_DECISION
-    if (value === CLOSING && leaf.kinds[unit - 1] !== ESCAPE) return ESCAPE_OPENER
+    // C2-I-079: a label that holds only spaces, tabs or a line break is none, and the brackets are text.
+    if (value === CLOSING && leaf.kinds[unit - 1] !== ESCAPE) return blank && unit > at ? LITERAL : ESCAPE_OPENER
+    if (value !== 32 && value !== 9 && value !== 10) blank = false
   }
   return LITERAL
 }
