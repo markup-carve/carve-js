@@ -44,6 +44,7 @@ const CASES = [
   { id: 'setext-heading-underline', trigger: 'A\n---', near: '= A', fragment: '---' },
   { id: 'deprecated-spaced-thematic-break', trigger: '- - -', near: '***', fragment: '- - -' },
   { id: 'block-marker-as-text', trigger: '~~~js\nx\n~~~', near: '```js\nx\n```', fragment: '~~~js' },
+  { id: 'block-marker-as-text', trigger: '{.x\npara', near: '{.x}\npara', fragment: '{.x' },
   { id: 'html-comment-renders-as-text', trigger: '<!-- x -->', near: '%% x', fragment: '<!-- x -->' },
   { id: 'bare-html-tag', trigger: '<b>x</b>', near: '[x](/b)', fragment: '<b>' },
   { id: 'empty-reference-definition', trigger: '[a]:', near: '[a]: /u', fragment: '[a]:' },

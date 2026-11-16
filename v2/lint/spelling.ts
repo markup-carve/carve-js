@@ -1,3 +1,4 @@
+import { isAttributeLine } from '../src/lines.ts'
 import { type Line, type LintContext, type Rule } from './types.ts'
 
 function trimmed(line: Line): { text: string, start: number } {
@@ -77,9 +78,18 @@ function spacedBreak(line: Line, context: LintContext): void {
   if (isSpacedRun(trimmed(line).text)) reportLine('deprecated-spaced-thematic-break', line, context)
 }
 
+/** The characters that open an attribute block after its brace: a class, an id or a key. */
+function opensAttributes(code: number): boolean {
+  return code === 46 || code === 35 || code === 95 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
 function tildeFence(line: Line, context: LintContext): void {
   const text = trimmed(line).text
-  if (text.startsWith('~~~') && line.paragraph) reportLine('block-marker-as-text', line, context, { what: 'a tilde fence' })
+  if (!line.paragraph) return
+  if (text.startsWith('~~~')) return reportLine('block-marker-as-text', line, context, { what: 'a tilde fence' })
+  if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)) {
+    reportLine('block-marker-as-text', line, context, { what: 'an attribute line' })
+  }
 }
 
 function htmlComment(line: Line, context: LintContext): void {
