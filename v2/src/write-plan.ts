@@ -590,7 +590,7 @@ function blockShape(node: Node): string | null {
 }
 
 const TOP_PLACE: LeafPlace = {
-  paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, before: null, documentStart: false,
+  paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, nested: false, item: null, before: null, documentStart: false,
 }
 
 /** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
@@ -602,6 +602,8 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
     inItem: type !== 'block_quote' && (place.inItem || type === 'list_item' || type === 'definition_description' || type === 'footnote'),
     inQuote: place.inQuote || type === 'block_quote',
     inDescriptionList: place.inDescriptionList || type === 'definition_list',
+    nested: place.nested || type !== 'paragraph',
+    item: node.type === 'list_item' ? (node.task === undefined ? 'plain' : 'task') : type === 'paragraph' ? place.item : null,
     before,
     documentStart: false,
   }

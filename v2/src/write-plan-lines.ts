@@ -2,6 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
+import { isDefinition, taskBoxEnd } from './lines.ts'
 import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
@@ -12,6 +13,10 @@ export interface LeafPlace {
   inItem: boolean
   inQuote: boolean
   inDescriptionList: boolean
+  /** Inside any container: a definition does not open there (C2-B-081). */
+  nested: boolean
+  /** The leaf is the content of a list item, which has a task box or not (C2-B-046), or null. */
+  item: 'plain' | 'task' | null
   /** The type of the block before the paragraph, or null. */
   before: string | null
   /** The leaf starts the document: its first line is line 1. */
@@ -222,7 +227,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [37, percent],
   [SPACE, () => UNDECIDED],
   [TAB, () => UNDECIDED],
-  [91, (leaf, at, place, first) => decidedIf(definitionShape(leaf, at) || (first && taskBoxShape(leaf, at, place)))],
+  [91, bracketLine],
   [123, (leaf, at) => decidedIf(!isBracedOpener(code(leaf, at + 1)) && lineEndsWith(leaf, at, 125))],
   [94, caption],
   [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
@@ -255,16 +260,42 @@ function isBracedOpener(value: number): boolean {
   return value >= 0 && '*+,-/^~='.includes(String.fromCharCode(value))
 }
 
-/** C2-B-046: a task box stands directly after the marker, so only the first line of the first block of an item has one. */
-function taskBoxShape(leaf: Leaf, at: number, place: LeafPlace): boolean {
-  return place.inItem && place.before === null && code(leaf, at + 2) === 93
-}
-
 function definitionShape(leaf: Leaf, at: number): boolean {
   for (let unit = at; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) {
     if (leaf.codes[unit] === 93 && code(leaf, unit + 1) === 58) return true
   }
   return false
+}
+
+/**
+ * C2-B-081, C2-B-082, C2-B-083: the first line of a paragraph outside every container opens a definition when the
+ * reader's definition shape matches it; a later line is a lazy line (C2-B-024). A line that holds a node is left to
+ * the repair.
+ */
+function bracketLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
+  if (!first) return NO_ESCAPE
+  if (place.item !== null && place.before === null) return taskBoxLine(leaf, at, place.item)
+  if (place.nested || !definitionShape(leaf, at)) return NO_ESCAPE
+  const [line, whole] = textOfLine(leaf, at)
+  if (!whole) return UNDECIDED
+  return isDefinition(line, 0, line.length) ? at : NO_ESCAPE
+}
+
+/** C2-B-046: a task box stands directly after the marker, so only the first line of the first block of an item has one. */
+function taskBoxLine(leaf: Leaf, at: number, item: 'plain' | 'task'): number {
+  if (code(leaf, at + 2) !== 93) return NO_ESCAPE
+  if (item === 'task') return UNDECIDED
+  // A node behind the text is content the box needs after its space.
+  const [line, whole] = textOfLine(leaf, at)
+  const shape = whole ? line : `${line}x`
+  return taskBoxEnd(shape, 0, shape.length) >= 0 ? at : NO_ESCAPE
+}
+
+/** The text of the line from `at` up to its end or its first unit that is not text, and whether that is the end. */
+function textOfLine(leaf: Leaf, at: number): [string, boolean] {
+  let end = at
+  while (end < leaf.codes.length && leaf.codes[end] !== LF && (leaf.kinds[end] === TEXT || leaf.kinds[end] === ESCAPE)) end++
+  return [String.fromCharCode(...leaf.codes.slice(at, end)), end === leaf.codes.length || leaf.codes[end] === LF]
 }
 
 const ROMAN_LOWER = 'ivxlcdm'

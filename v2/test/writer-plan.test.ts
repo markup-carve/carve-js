@@ -233,6 +233,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-024, C2-B-046, C2-B-081: a bracket at a line start is planned by the definition and task box shapes', () => {
+    const sources = ['\\[a]: /u\n', 'x\n[a]: /u\n', '- \\[x] a\n', '- [x]\ta\n', '::: d\n[a]: /u\n:::\n', '> [a]: /u\n', '[a]: /u extra\n']
+    for (const source of sources) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.reasons.has('line start ['), source).toBe(false)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')
