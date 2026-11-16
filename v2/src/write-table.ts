@@ -134,10 +134,11 @@ interface WrittenCell {
   places: number[]
 }
 
-function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: number): WrittenCell {
+function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: number, head: boolean): WrittenCell {
   const spanned = cell.span
   const span = spanned === undefined ? undefined : SPAN_MARKS.get(spanned)
-  if (span !== undefined) return { prefix: '', parts: [span], places: [] }
+  // C2-W-063, C2-B-174: in the head the mark carries the header mark, so that a row of marks stays a head row.
+  if (span !== undefined) return { prefix: head ? '=' : '', parts: [span], places: [] }
   const parts = cellContent(w, cell, flags).split('\n')
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
   if (recorded !== null) return { prefix: cellPrefix(cell), parts, places: recorded }
@@ -148,8 +149,8 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
   return { prefix: cellPrefix(cell), parts: [joined], places: [] }
 }
 
-function writtenRow(w: Writer, row: TableRowNode, flags: number): WrittenRow {
-  const cells = row.children.map((cell) => writtenCell(w, row, cell, flags))
+function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean): WrittenRow {
+  const cells = row.children.map((cell) => writtenCell(w, row, cell, flags, head))
   let below = w.facts?.get(row)?.continuationLines ?? 0
   for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
   const lines: string[][] = []
@@ -190,7 +191,10 @@ function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow |
   const entries: (WrittenRow | CommentNode)[] = []
   for (const group of table.children) {
     if (group.type === 'comment') entries.push(group)
-    else for (const row of group.children) entries.push(row.type === 'table_row' ? writtenRow(w, row, flags) : row)
+    else {
+      const head = group.type === 'table_head'
+      for (const row of group.children) entries.push(row.type === 'table_row' ? writtenRow(w, row, flags, head) : row)
+    }
   }
   return entries
 }
