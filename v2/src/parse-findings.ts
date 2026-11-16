@@ -116,7 +116,7 @@ function titleMessage(src: string, note: ParseNote): string {
   const rest = note.from < 0 ? (space < 0 ? '' : line.slice(space).trim()) : src.slice(note.from, lineEnd).trim()
   const [text, label] = note.from < 0 ? [rest, ''] : splitLabel(rest)
   const opener = type === '' ? run : `${run} ${type}`
-  if (CURLY_QUOTES.includes(text.charAt(0))) {
+  if (text !== '' && CURLY_QUOTES.includes(text.charAt(0))) {
     const title = text.slice(1, CURLY_QUOTES.includes(text.charAt(text.length - 1)) ? -1 : undefined)
     return `The title after "${type || run}" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before `
       + `Carve parsed it. A fence title needs straight double quotes: ${opener} "${title}"${label}.`
@@ -135,6 +135,10 @@ function attributeMessage(src: string, note: ParseNote): string {
   const blockEnd = braceBlocksEnd(src, note.from, lineEnd)
   const attributes = src.slice(note.from, blockEnd)
   const opener = `${src.slice(note.block.start, note.from)}${src.slice(blockEnd, lineEnd)}`.trim()
+  if (note.node.type === 'div' || note.node.type === 'directive') {
+    return `A ${note.node.type} carries no inline attributes, so "${attributes}" after the name is not valid. The block opens without `
+      + `them (use: "${attributes}" on its own line directly above the opener, then "${opener}").`
+  }
   if (note.block.kind === CODE) {
     return `A code fence carries no inline attributes, so "${attributes}" after the info string is not valid. The block opens `
       + `without them (use: "${attributes}" on its own line directly above the fence, then "${opener}").`

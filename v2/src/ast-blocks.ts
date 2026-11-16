@@ -112,14 +112,27 @@ function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
 
 /**
  * C2-B-122: further words on the opener do not stop the block from opening. C2-B-105: an attribute block
- * behind a fence language or an admonition name is reported as such.
+ * behind a fence language or an admonition name is reported as such; C2-B-225: so is one glued to any name.
  */
 function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named: boolean): void {
   if (!info.extra) return
   const src = ctx.src
   const lineEnd = lineFeedAt(src, node.start)
   const at = info.extraStart
-  const attribute = named && src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(src, at, lineEnd) > at
+  const glued = info.wordStart >= 0 && at === info.wordEnd
+  const attribute = (named || glued) && src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(src, at, lineEnd) > at
+  ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
+}
+
+/** C2-B-122: a raw fence takes no title and no label, so each is further words; C2-B-225: so is what is glued to the format. */
+function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo): void {
+  const title = info.titleStart >= 0 ? info.titleStart - 1 : -1
+  const label = info.labelStart >= 0 ? info.labelStart - 1 : -1
+  const from = [info.extra ? info.extraStart : -1, title, label].filter((at) => at >= 0)
+  if (from.length === 0) return
+  const at = Math.min(...from)
+  const lineEnd = lineFeedAt(ctx.src, node.start)
+  const attribute = at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
@@ -132,7 +145,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
   // C2-B-116: `=` and a format name make a raw block, which takes no title and no label (C2-B-122).
   if ((node.flags & FLAG_RAW) !== 0) {
     const raw: Block = { type: 'raw_block', format: word.slice(1), value }
-    if (info.extra || info.titleStart >= 0 || info.labelStart >= 0) ctx.notes.push({ what: TITLE_SYNTAX, node: raw, block: node, from: -1 })
+    noteRawWords(ctx, node, raw, info)
     return raw
   }
   const out: CodeBlockNode = { type: 'code_block', value }
