@@ -29,7 +29,7 @@ export interface Plan {
   escapes: Map<TextNode, number[]>
   /** C2-W-069: the bare emphasis and strong that the next write gives their braced form. */
   respell: Node[]
-  /** C2-I-118: for each list of nodes of the group, twice the number of blocks around it, a bound of its depth. */
+  /** C2-I-118: for each list of nodes of the group, the number of nodes around it, a bound of its depth (C2-B-190). */
   depths: Map<readonly Node[], number>
   /** Where each list of nodes of the group stands, for the rules of its line starts. */
   places: Map<readonly Node[], LeafPlace>
@@ -620,7 +620,10 @@ function opaqueBlock(leaf: Leaf, at: number, end: number): number {
   return end
 }
 
-/** Records the depth bound of every list of nodes below `nodes`: twice the number of nodes around its owner. */
+/**
+ * Records the depth bound of every list of nodes below `nodes`: the number of nodes around its owner, each of which
+ * counts at most one toward the cap (C2-B-190).
+ */
 export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): void {
   const pending: [readonly Node[], number, LeafPlace][] = [[nodes, 0, TOP_PLACE]]
   for (;;) {
@@ -634,7 +637,7 @@ export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): 
       const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
       inner.documentStart = first && level === 0 && at === 0
       forEachSlot(node, (children) => {
-        plan.depths.set(children, 2 * level)
+        plan.depths.set(children, level)
         plan.places.set(children, inner)
         pending.push([children, level + 1, inner])
       })

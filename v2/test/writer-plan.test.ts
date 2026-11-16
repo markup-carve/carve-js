@@ -335,6 +335,16 @@ describe('the planned writer', () => {
     expect(result.stats.differences).toEqual([])
   })
 
+  it('C2-B-190, C2-I-118: the blocks around a leaf count one each toward the cap, so brackets inside 100 quotes are planned', () => {
+    for (const source of [`${'> '.repeat(100)}x ${'['.repeat(98)}a\n`, `${'> '.repeat(100)}x ${'['.repeat(98)}a${']'.repeat(98)} y\n`]) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(101)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')
