@@ -58,3 +58,18 @@ describe('new writer and parser spellings', () => {
     }
   })
 })
+
+describe('a span mark that joins nothing', () => {
+  it('C2-W-063, C2-B-173, C2-B-174: the text of such a cell is written with an escape, in the first row, column and foot', () => {
+    const cases: [string, string][] = [
+      ['| ^ | a |\n| b | c |', '| \\^ | a |\n| b | c |\n'],
+      ['|= ^|', '|= \\^ |\n'],
+      ['| < | a |', '| \\< | a |\n'],
+      ['{footer-rows=1}\n| a | b |\n| ^ | e |', '{footer-rows=1}\n| a | b |\n| \\^ | e |\n'],
+    ]
+    for (const [input, written] of cases) {
+      expect(format(input), input).toBe(written)
+      expect(treesEqual(parse(written), parse(input)), input).toBe(true)
+    }
+  })
+})
