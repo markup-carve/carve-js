@@ -134,4 +134,15 @@ describe('stored tree migration', () => {
     const result = migrateTree(old)
     assert.equal(treesEqual(result.document, parse('```js\nx\n```\n%% c\n^ L')), true)
   })
+
+  it('C2-B-174, C2-B-173: a 0.1 row span from the body into the foot leaves the mark as the text of the foot cell', () => {
+    const old = { type: 'document', children: [{ type: 'table', attrs: { keyValues: { 'footer-rows': '1' }, order: ['footer-rows'] },
+      rows: [
+        { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [{ type: 'text', value: 'a' }], rowspan: 2 }] },
+        { type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [], span: 'rowspan' }] },
+      ],
+      rowGroups: { headRows: 0, bodies: [{ headRows: 0, bodyRows: 1 }], footRows: 1 } }] }
+    const result = migrateTree(old)
+    assert.equal(treesEqual(result.document, parse('{footer-rows=1}\n| a |\n| ^ |')), true)
+  })
 })

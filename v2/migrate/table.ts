@@ -80,24 +80,33 @@ function implicitGroups(rows: Fields[]): Fields[] {
 }
 
 function normalizeSpans(groups: Fields[]): void {
-  let prior: Fields | undefined
   for (const group of groups) {
     const rows = nodeList(group['children'])
     rows.forEach((row, rowIndex) => {
       nodeList(row['children']).forEach((cell, columnIndex) => {
-        const previousRow = rowIndex === 0 && group['type'] === 'table_foot' ? prior : rows[rowIndex - 1]
-        const previous = nodeList(previousRow?.['children'])[columnIndex]
-        const left = nodeList(row['children'])[columnIndex - 1]
-        const invalid = cell['span'] === 'colspan' && (columnIndex === 0 || left?.['span'] === 'rowspan') ||
-          cell['span'] === 'rowspan' && (previous === undefined || previous['span'] === 'colspan' ||
-            (integer(previous?.['colspan']) ?? 1) > 1)
-        if (!invalid) return
+        // C2-B-174: no span crosses from the body into the foot; 0.1 joined that mark, 0.2 reads it as text.
+        if (rowIndex === 0 && group['type'] === 'table_foot' && cell['span'] === 'rowspan') return markText(cell, '^')
+        if (!joinsNothing(cell, nodeList(row['children'])[columnIndex - 1], nodeList(rows[rowIndex - 1]?.['children'])[columnIndex])) {
+          return
+        }
         delete cell['span']
         if (nodeList(cell['children']).length === 0) cell['children'] = [{ type: 'cell_paragraph', children: [] }]
       })
     })
-    prior = rows[rows.length - 1] ?? prior
   }
+}
+
+/** C2-B-172, C2-B-173: a `<` with no cell to its left or behind a row span, a `^` with no cell above or below a column span. */
+function joinsNothing(cell: Fields, left: Fields | undefined, above: Fields | undefined): boolean {
+  if (cell['span'] === 'colspan') return left === undefined || left['span'] === 'rowspan'
+  if (cell['span'] !== 'rowspan') return false
+  return above === undefined || above['span'] === 'colspan' || (integer(above['colspan']) ?? 1) > 1
+}
+
+/** C2-B-173: a span mark that joins nothing is an ordinary cell that holds the mark as text. */
+function markText(cell: Fields, mark: string): void {
+  delete cell['span']
+  cell['children'] = [{ type: 'cell_paragraph', children: [{ type: 'text', value: mark }] }]
 }
 
 function countRowspan(rows: Fields[], at: number, column: number): number {
@@ -107,15 +116,15 @@ function countRowspan(rows: Fields[], at: number, column: number): number {
 }
 
 function recountRowspans(groups: Fields[]): void {
-  groups.forEach((group, index) => {
-    const own = nodeList(group['children'])
-    const foot = group['type'] === 'table_body' && groups[index + 1]?.['type'] === 'table_foot' ?
-      nodeList(groups[index + 1]?.['children']) : []
-    const rows = [...own, ...foot]
-    own.forEach((row, at) => nodeList(row['children']).forEach((cell, column) => {
-      if (integer(cell['rowspan']) !== undefined) cell['rowspan'] = countRowspan(rows, at, column)
+  for (const group of groups) {
+    const rows = nodeList(group['children'])
+    rows.forEach((row, at) => nodeList(row['children']).forEach((cell, column) => {
+      if (integer(cell['rowspan']) === undefined) return
+      const count = countRowspan(rows, at, column)
+      if (count > 1) cell['rowspan'] = count
+      else delete cell['rowspan']
     }))
-  })
+  }
 }
 
 function column(value: unknown): Fields {
