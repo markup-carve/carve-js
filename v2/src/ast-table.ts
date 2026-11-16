@@ -228,6 +228,12 @@ function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): G
     groups.trailing.push(out)
     cursor.trailingEnd = child.end
   }
+  // C2-A-086, C2-A-145: a comment before a continuation row of the last row is not below that row.
+  const range = groups.ranges.get(cursor.group)
+  while (range !== undefined && (groups.trailing[0]?.pos?.startOffset ?? range[1]) < range[1]) {
+    const comment = groups.trailing.shift()
+    if (comment !== undefined) cursor.group.push(comment)
+  }
   return groups
 }
 

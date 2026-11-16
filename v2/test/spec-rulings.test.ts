@@ -292,6 +292,20 @@ describe('the trailing line comment of a table row', () => {
     expect(render(src)).toContain('<tr class="r"><td>1</td><td>2</td></tr>\n    <tr><td>3</td><td>4</td></tr>')
   })
 
+  it('C2-A-086, C2-A-145: a comment before a continuation row of the last row stays in its group', () => {
+    for (const src of ['| a |\n%% c\n+ b |', '| a | %% c\n+ b |', '|= a |\n%% c\n+ b |']) {
+      const table = parse(src).children[0]
+      const children = table?.type === 'table' ? table.children : []
+      expect(children.map((node) => node.type), src).toEqual([src.startsWith('|=') ? 'table_head' : 'table_body'])
+      const group = children[0]
+      expect(group?.type !== 'comment' ? group?.children.map((node) => node.type) : [], src).toEqual(['table_row', 'comment'])
+      // C2-B-184: the writer spells the comment with an empty continuation row after it.
+      const written = format(src)
+      expect(written, src).toMatch(/%% c\n\+ \|\n$/)
+      expect(parse(written).children[0]?.type, src).toBe('table')
+    }
+  })
+
   it('C2-W-135: the writer writes the comment as a comment-only line below the row', () => {
     expect(format('| 1 | 2 | %% note\n| 3 | 4 |')).toBe('| 1 | 2 |\n%% note\n| 3 | 4 |\n')
   })

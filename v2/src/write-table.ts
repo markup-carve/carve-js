@@ -210,6 +210,13 @@ function pipeTable(w: Writer, table: TableNode, prefix: string, flags: number): 
     if ('lines' in entry) emitRow(w, prefix, entry)
     else lineComment(w, entry, prefix)
   }
+  // C2-A-086: a comment that ends the last group stands before a continuation row; an empty one adds nothing (C2-B-184).
+  if (endsWithGroupComment(table)) emit(w, prefix, '+ |')
+}
+
+function endsWithGroupComment(table: TableNode): boolean {
+  const last = table.children[table.children.length - 1]
+  return last !== undefined && last.type !== 'comment' && last.children[last.children.length - 1]?.type === 'comment'
 }
 
 /** Whether `cell` holds what a cell of a delimited table can: plain text and nothing else (C2-B-180). */
@@ -263,14 +270,23 @@ function firstValue(cell: TableCellNode): string | undefined {
   return first !== undefined && 'value' in first ? first.value : undefined
 }
 
-/** Whether the first node of the first block of `cell` is text with a line break. */
-function cellHoldsLineBreak(cell: TableCellNode): boolean {
-  return firstValue(cell)?.includes('\n') === true
+function isBlankCode(code: number): boolean {
+  return code === 32 || code === 9
 }
 
-function holdsLineBreak(table: TableNode): boolean {
+/**
+ * Whether the text of `cell` has no spelling in a pipe cell: a line break (C2-W-005), or a space or a tab at either
+ * end, which is padding of a pipe cell (C2-B-171).
+ */
+function cellNeedsDelimited(cell: TableCellNode): boolean {
+  const value = firstValue(cell)
+  if (value === undefined || value === '') return false
+  return value.includes('\n') || isBlankCode(value.charCodeAt(0)) || isBlankCode(value.charCodeAt(value.length - 1))
+}
+
+function needsDelimited(table: TableNode): boolean {
   return table.children.some((group) => group.type !== 'comment' && group.children.some(
-    (row) => row.type === 'table_row' && row.children.some(cellHoldsLineBreak),
+    (row) => row.type === 'table_row' && row.children.some(cellNeedsDelimited),
   ))
 }
 
@@ -291,8 +307,7 @@ function tableFormat(w: Writer, table: TableNode): string {
     return 'pipe'
   }
   if (recorded === 'csv' || recorded === 'tsv') return recorded
-  // C2-W-005: a cell of a pipe table holds no line break.
-  return declares || rows === 0 || holdsLineBreak(table) ? 'csv' : 'pipe'
+  return declares || rows === 0 || needsDelimited(table) ? 'csv' : 'pipe'
 }
 
 /** C2-W-066: a cell that holds the separator, a double quote or a line break stands in double quotes. */

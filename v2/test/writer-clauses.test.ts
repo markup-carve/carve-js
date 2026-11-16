@@ -704,6 +704,11 @@ describe('canonical forms: tables', () => {
     expect(losses(empty)).toEqual([])
   })
 
+  it('C2-W-066, C2-B-171: a cell text with a space or a tab at either end keeps the delimited form', () => {
+    expect(write(parse('{table}\n```csv\n 1\n```'))).toBe('{table}\n```csv\n 1\n```\n')
+    expect(write(parse('{table}\n```csv\na,b\t\n```'))).toBe('{table}\n```csv\na,b\t\n```\n')
+  })
+
   it('C2-W-066: a table whose body carries headRows is a delimited table with its header-rows attribute', () => {
     const src = '{table header-rows=2}\n```csv\na,b\nc,d\ne,f\n```'
     expect(ofType(ofType(parse(src).children[0], 'table').children[1], 'table_body').headRows).toBe(2)
