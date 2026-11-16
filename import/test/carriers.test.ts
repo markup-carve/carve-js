@@ -239,6 +239,7 @@ describe('C2-H-026 to C2-H-093 renderer structures read back', () => {
     ['C2-H-055 table groups', '<thead>'],
     ['C2-H-042 admonitions', 'class="admonition'],
     ['C2-H-075 the time element', '<time'],
+    ['C2-H-075 C2-H-178 the abbr element and the abbreviation template', '<abbr'],
     ['C2-H-114 divs', 'data-carve-div'],
   ])('%s: every example that writes it imports back', (_name, marker) => {
     const result = examplesWith(marker)
