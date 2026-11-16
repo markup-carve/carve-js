@@ -1,6 +1,5 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
-import smartPunctuation from '../../../v2/data/smart-punctuation.json' with { type: 'json' }
-import { isAsciiLetter, isWordCharacter } from '../../../v2/src/unicode.ts'
+import { isAsciiDigit, isWordCharacter } from '../../../v2/src/unicode.ts'
 import { isInside } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
@@ -66,30 +65,20 @@ function substitution(ctx: Context, node: Node01): void {
   change(ctx, 'U-069', end - 2, end, '+}', message)
 }
 
+/** C2-I-104: whitespace, a no-break space or opening punctuation before a quote opens it. */
+const OPENS_AFTER = new Set([0x20, 0x09, 0x0a, 0xa0, 0x28, 0x5b, 0x7b, 0x3d, 0x3a, 0x201c, 0x2018])
+
 function isOpeningPlace(src: string, at: number): boolean {
-  if (at === 0) return true
-  const before = src.charCodeAt(at - 1)
-  return before === 0x20 || before === 0x09 || before === 0x0a || before === 0x28 || before === 0x5b
+  return at === 0 || OPENS_AFTER.has(src.charCodeAt(at - 1))
 }
 
-const APOSTROPHE_WORDS = new Set(smartPunctuation.apostrophe_words.words)
 
-/** Whether the quote at `at` stands before a word 0.2 itself reads as an elision (C2-I-107). */
-function isElision(src: string, at: number): boolean {
-  let end = at + 1
-  while (end < src.length && isAsciiLetter(src.charCodeAt(end))) end++
-  return (
-    APOSTROPHE_WORDS.has(src.slice(at + 1, end).toLowerCase()) &&
-    !(end < src.length && src.charCodeAt(end) >= 0x80 && isWordCharacter(src.codePointAt(end)!))
-  )
-}
-
-/** U-071: 0.1 demoted an opening single quote with no closer; 0.2 never changes an emitted quote (C2-I-110). */
+/** U-071: 0.1 demoted an opening single quote with no closer; 0.2 opens it by its neighbors alone (C2-I-104, C2-I-105). */
 function demotedQuote(ctx: Context, node: Node01): void {
   const start = node.pos!.startOffset
   if (node.kind !== 'right_single_quote' || ctx.src[start] !== "'" || !isOpeningPlace(ctx.src, start)) return
   const next = ctx.src.charCodeAt(start + 1)
-  if (Number.isNaN(next) || next === 0x20 || next === 0x0a || isElision(ctx.src, start)) return
+  if (Number.isNaN(next) || next === 0x20 || next === 0x0a || isAsciiDigit(next)) return
   change(
     ctx,
     'U-071',

@@ -299,7 +299,7 @@ const VARIANTS: Variant[] = [
   {
     entries: 'U-071',
     input: "'Twas 'quoted' and 'open\n",
-    output: "'Twas 'quoted' and ’open\n",
+    output: "’Twas 'quoted' and ’open\n",
     check: 'pass',
     stable: true
   },
