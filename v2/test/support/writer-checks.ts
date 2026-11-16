@@ -436,10 +436,24 @@ function punctuationRepair(source: BareText, tree: DocumentNode, seeds: readonly
   return first
 }
 
+/** C2-W-125: the first punctuation escape that, with those placed, reads as the tree without another step of the procedure. */
+function aloneRepair(source: BareText, tree: DocumentNode, seeds: readonly number[]): number {
+  for (let at = 0; at < source.bare.length; at++) {
+    if (seeds.includes(at) || !isAsciiPunctuation(source.bare.charCodeAt(at))) continue
+    if (treesEqual(parse(withEscapes(source.bare, [...seeds, at].sort((x, y) => x - y)).text), tree)) return at
+  }
+  return -1
+}
+
 function nextRepair(source: BareText, tree: DocumentNode, seeds: readonly number[], missing: Map<string, number>): number {
-  const candidates = [...addedBackslashes({ ...source, added: seeds }, missing), lengthenedEnd(source, seeds)]
+  const lengthened = lengthenedEnd(source, seeds)
+  const candidates = [...addedBackslashes({ ...source, added: seeds }, missing), lengthened]
     .filter((at) => at >= 0 && !seeds.includes(at))
   for (const candidate of candidates) if ('form' in runProcedure(source, tree, [...seeds, candidate])) return candidate
+  const alone = aloneRepair(source, tree, seeds)
+  if (alone >= 0) return alone
+  // C2-W-125: where no case gives the tree alone, case six keeps its backslash when it fits.
+  if (lengthened >= 0 && !seeds.includes(lengthened)) return lengthened
   const repair = punctuationRepair(source, tree, seeds)
   return repair >= 0 ? repair : candidates[0] ?? -1
 }

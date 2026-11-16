@@ -4,7 +4,7 @@ import {
   childNodes, type CommentNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
-import { IN_CELL, writeInlines } from './write-inline.ts'
+import { IN_CELL, lineCommentText, writeInlines } from './write-inline.ts'
 import { AFTER_MARK, AS_INLINES, planLeaf, unplanned } from './write-plan.ts'
 import { emit, lose, loseKey, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
@@ -182,8 +182,7 @@ function emitRow(w: Writer, prefix: string, row: WrittenRow): void {
 }
 
 function lineComment(w: Writer, node: CommentNode, prefix: string): void {
-  const value = node.value
-  emit(w, prefix, value === '' ? '%%' : `%% ${value}`)
+  emit(w, prefix, lineCommentText(w, node, node.value))
 }
 
 /** The written rows of `table` and the comments between them, in source order (C2-A-086). */
