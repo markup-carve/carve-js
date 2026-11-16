@@ -241,19 +241,6 @@ function conflictingListStart(output: string): Candidate[] {
   return found
 }
 
-function quotedIdValue(output: string): Candidate[] {
-  const lines = output.split('\n')
-  const found: Candidate[] = []
-  for (let at = 0; at < lines.length; at++) {
-    const value = lines[at] ?? ''
-    if (!value.startsWith("{id='") || !value.endsWith("'}") || !value.includes('"')) continue
-    const changed = [...lines]
-    changed[at] = '{id="' + value.slice(5, -2).replaceAll('"', '\\"') + '"}'
-    found.push(candidate('U-231', changed.join('\n'), 'the quote inside the id value was escaped'))
-  }
-  return found
-}
-
 function consumedListAttribute(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -621,7 +608,6 @@ export function rescueMinor(
     ...quotedAttribute(output),
     ...multilineQuotedAttribute(output),
     ...conflictingListStart(output),
-    ...quotedIdValue(output),
     ...consumedListAttribute(output),
     ...captionBoundary(output),
     ...emptyFootnote(output),

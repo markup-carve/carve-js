@@ -266,9 +266,7 @@
     "line": 2950,
     "input": "a------- b-------- c---------- d----------- e-------------\n",
     "check": "mismatch",
-    "entries": [
-      "U-173"
-    ]
+    "entries": []
   },
   {
     "cause": "C11",
@@ -300,7 +298,7 @@
     "input": "![a][r]\n^ cap\n",
     "check": "pass",
     "entries": [
-      "U-183"
+      "X-003"
     ]
   },
   {
@@ -311,7 +309,7 @@
     "input": "![a][nope]\n^ cap\n",
     "check": "pass",
     "entries": [
-      "U-183"
+      "X-003"
     ]
   },
   {
@@ -322,7 +320,7 @@
     "input": "![a][r]\n^ cap one\ncontinued\n",
     "check": "pass",
     "entries": [
-      "U-183"
+      "X-003"
     ]
   },
   {
@@ -2209,9 +2207,7 @@
     "line": 96,
     "input": "::: note [/i/]\nbody\n:::\n",
     "check": "mismatch",
-    "entries": [
-      "U-156"
-    ]
+    "entries": []
   },
   {
     "cause": "C84",
@@ -2220,9 +2216,7 @@
     "line": 113,
     "input": "::: note [`x`]\nbody\n:::\n",
     "check": "mismatch",
-    "entries": [
-      "U-156"
-    ]
+    "entries": []
   },
   {
     "cause": "C85",
@@ -2401,8 +2395,10 @@
     "path": "resources/examples/edge-cases/0152-leading-attribute-brace-before-an-inline-span-stays-literal.md",
     "line": 22,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-190"
+    ]
   },
   {
     "cause": "C43",
@@ -2410,8 +2406,10 @@
     "path": "tests/corpus/152-leading-attribute-brace-before-an-inline-span-stays-literal-2.crv",
     "line": 1,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-190"
+    ]
   },
   {
     "cause": "C90",

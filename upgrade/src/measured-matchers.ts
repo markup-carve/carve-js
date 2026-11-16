@@ -2,10 +2,6 @@ function lineStarts(input: string, prefixes: readonly string[]): boolean {
   return input.split('\n').some((line) => prefixes.some((prefix) => line.trimStart().startsWith(prefix)))
 }
 
-function divNameHasBracket(input: string): boolean {
-  return input.split('\n').some((line) => line.trimStart().startsWith('::: ') && line.includes('['))
-}
-
 function titledFenceHasTail(input: string): boolean {
   return input.split('\n').some((line) => {
     if (!line.trimStart().startsWith('```')) return false
@@ -23,15 +19,6 @@ function fenceInfoHasBacktick(input: string): boolean {
     while (value.charCodeAt(run) === 0x60) run++
     return value.slice(run).includes('`')
   })
-}
-
-function hasLongDash(input: string): boolean {
-  let run = 0
-  for (let at = 0; at < input.length; at++) {
-    run = input.charCodeAt(at) === 0x2d ? run + 1 : 0
-    if (run >= 7) return true
-  }
-  return false
 }
 
 function rejectedHtmlControl(input: string, expected: string, actual: string): boolean {
@@ -70,7 +57,6 @@ function blockMatch(input: string, expected: string, actual: string): string | n
   if (input.includes('{loose}') && input.includes('::')) return 'U-172'
   if (input.includes('\r') && lineStarts(input, ['# '])) return 'U-176'
   if (lineStarts(input, ['# \t', '## \t', '### \t'])) return 'U-174'
-  if (divNameHasBracket(input)) return 'U-156'
   if (titledFenceHasTail(input) || fenceInfoHasBacktick(input)) return 'U-157'
   if (lineStarts(input, ['-  [', '*  [', '.  ['])) return 'U-163'
   if (lineStarts(input, ['-{', '*{', '.{']) && input.includes('} {')) return 'U-169'
@@ -169,7 +155,6 @@ function referenceMatch(input: string, expected: string, actual: string): string
 }
 
 function inlinePunctuationMatch(input: string, expected: string): string | null {
-  if (hasLongDash(input)) return 'U-173'
   if (hasTrailingSigil(input) && (expected.includes('class="mention"') || expected.includes('class="tag"')
     || expected.includes('<strong>#') || expected.includes('<strong>@'))) return 'U-170'
   if (input.includes(':') && input.includes('[%%')) return 'U-149'
@@ -209,10 +194,6 @@ function mixedDelimiterShape(input: string, expected: string, actual: string): b
   return expected.startsWith('<p><strong>') && actual.startsWith('<p>*')
 }
 
-function bracedQuote(input: string): boolean {
-  return (input.includes('{+') || input.includes('{-')) && input.includes('"')
-}
-
 function bracedBoundary(input: string): boolean {
   const nested = ['{-{', '{+{', '{_{', '{~{', '{={', '{-a-}{+{', '{-a-}{-{']
   if (nested.some((shape) => input.includes(shape))) return true
@@ -231,7 +212,6 @@ function adjacentDelimiterMatch(input: string, expected: string, actual: string)
 
 function inlineDelimiterMatch(input: string, expected: string, actual: string): string | null {
   if (mixedDelimiterShape(input, expected, actual)) return 'U-145'
-  if (bracedQuote(input)) return 'U-144'
   if (bracedBoundary(input)) return 'U-201'
   if (!input.includes('`') && !input.includes('%%') && (input.includes('/*') || input.includes('*/'))) return 'U-145'
   if (input.includes('_{') || input.includes('~{')) return 'U-151'

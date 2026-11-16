@@ -207,17 +207,6 @@
     "right": "</p>"
   },
   {
-    "id": "U-144",
-    "before": [
-      "-”"
-    ],
-    "after": [
-      "-“"
-    ],
-    "left": "<ins>",
-    "right": "</ins>"
-  },
-  {
     "id": "U-145",
     "before": [
       "<em>",
@@ -293,17 +282,6 @@
     ],
     "left": "<p>",
     "right": "</p>"
-  },
-  {
-    "id": "U-156",
-    "before": [
-      "<div class=\"e\">"
-    ],
-    "after": [
-      "<div class=\"e[\">"
-    ],
-    "left": null,
-    "right": "</div>"
   },
   {
     "id": "U-157",
@@ -569,17 +547,6 @@
     ],
     "left": null,
     "right": "<dt>"
-  },
-  {
-    "id": "U-173",
-    "before": [
-      "c––––"
-    ],
-    "after": [
-      "c–——"
-    ],
-    "left": "<p>",
-    "right": "</p>"
   },
   {
     "id": "U-174",

@@ -1,3 +1,4 @@
+import { closedRunCandidates } from './backtick-rescue.ts'
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
@@ -14,8 +15,7 @@ const SIMPLE: readonly [string, string, string][] = [
   ['U-185', '|=|', '|\\=|'],
   ['U-188', ':+-:', ':\\+-:'],
   ['U-189', '[^]', '[\\^]'],
-  ['U-137', '-{} ', '- '],
-  ['U-208', '-{+', '\\-{+']
+  ['U-137', '-{} ', '- ']
 ]
 
 function simpleCandidates(output: string): Candidate[] {
@@ -118,22 +118,6 @@ function languageCandidates(output: string): Candidate[] {
     at = output.indexOf(':', at + 1)
   }
   if (combined !== output) found.push({ id: 'U-192', output: combined })
-  return found
-}
-
-function quotedBraceCandidates(output: string): Candidate[] {
-  const found: Candidate[] = []
-  let at = output.indexOf("='")
-  while (at >= 0) {
-    const close = output.indexOf("'", at + 2)
-    if (close > at + 2) {
-      const value = output.slice(at + 2, close)
-      if (value.includes('}') && !value.includes('"')) {
-        found.push({ id: 'U-196', output: output.slice(0, at + 1) + '"' + value + '"' + output.slice(close + 1) })
-      }
-    }
-    at = output.indexOf("='", at + 2)
-  }
   return found
 }
 
@@ -245,6 +229,7 @@ function lineCandidates(output: string): Candidate[] {
     const start = lineStart(lines, line)
     if (value.startsWith('[@]:'))
       found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
+    // C2-B-147: an unresolved block image reference above a caption is a figure in 0.2; the map withdrew U-183 for `![][]` only.
     if (
       value.startsWith('![') &&
       lineText(lines, line + 1)
@@ -252,10 +237,10 @@ function lineCandidates(output: string): Candidate[] {
         .startsWith('^ ')
     ) {
       const escaped = output.slice(0, start) + '\\' + output.slice(start)
-      found.push({ id: 'U-183', output: escaped })
+      found.push({ id: 'X-003', output: escaped })
       if (lineText(lines, line + 2).trimStart().startsWith('^ ')) {
         const nextCaption = lineStart(lines, line + 2) + 1
-        found.push({ id: 'U-183', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
+        found.push({ id: 'X-003', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
       }
     }
     if (value.includes(': ```')) descriptionFence = line
@@ -346,9 +331,9 @@ export function rescueTargeted(
     ...itemDefinitionCandidates(input),
     ...tableCodeSpanCandidates(input),
     ...smartQuoteCandidates(output, expected),
+    ...smartQuoteCandidates(output, expected).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190')),
     ...metadataCandidates(output),
     ...languageCandidates(output),
-    ...quotedBraceCandidates(output),
     ...substitutionAttributeCandidates(input, output),
     ...nestedFootnoteCandidates(output),
     ...floatingAttributeCandidates(output),

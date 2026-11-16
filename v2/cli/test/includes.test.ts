@@ -1,11 +1,12 @@
 // The command line expands includes by default, with the directory of the entry file as containment root (C2-N-004,
 // C2-N-012 to C2-N-014), and the file resolver keeps every target inside that root.
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { render, renderWithDiagnostics } from '../../src/index.ts'
+import { INCLUDE_BYTES } from '../../src/include-tables.ts'
 import { cliIncludes, fileResolver } from '../include-fs.ts'
 
 const main = join(import.meta.dirname, '../main.ts')
@@ -59,6 +60,35 @@ describe('the file resolver', () => {
     expect(codes('{{ linkdir/secret.crv }}', root)[0]).toBe('include-outside-root')
     expect(codes('{{ linkdir/missing.crv }}', root)[0]).toBe('include-outside-root')
     expect(JSON.stringify(renderWithDiagnostics('{{ link.crv }}', { includes: fileResolver(root) }))).not.toContain('SECRET')
+  })
+
+  it('C2-N-013: a directory swapped for a link to an outside directory between the test and the read is never read', () => {
+    const outside = tree({ 'a.crv': 'TOP SECRET\n' })
+    const root = tree({ 'inner/a.crv': 'Inner.\n' })
+    const swap = (): void => {
+      renameSync(join(root, 'inner'), join(root, 'moved'))
+      symlinkSync(outside, join(root, 'inner'))
+    }
+    const output = renderWithDiagnostics('{{ inner/a.crv }}', { includes: fileResolver(root, { afterTest: swap }) })
+    expect(JSON.stringify(output)).not.toContain('SECRET')
+    expect(output.diagnostics.map((entry) => entry.code)[0]).toBe('include-outside-root')
+  })
+
+  it('C2-N-013: a file swapped for a link to an outside file after the test is not read', () => {
+    const outside = tree({ 'secret.crv': 'TOP SECRET\n' })
+    const root = tree({ 'a.crv': 'A.\n' })
+    const swap = (): void => {
+      symlinkSync(join(outside, 'secret.crv'), join(root, 'swapped'))
+      renameSync(join(root, 'swapped'), join(root, 'a.crv'))
+    }
+    const output = renderWithDiagnostics('{{ a.crv }}', { includes: fileResolver(root, { afterTest: swap }) })
+    expect(JSON.stringify(output)).not.toContain('SECRET')
+  })
+
+  it('C2-N-065: a file past the size cap is refused with include-budget, not as unreadable', () => {
+    const root = tree({ 'big.crv': 'é'.repeat(INCLUDE_BYTES / 2 + 1), 'small.crv': 'S.\n' })
+    expect(codes('{{ big.crv }}\n\n{{ small.crv }}', root)).toEqual(['include-budget', 'include-unresolved'])
+    expect(render('{{ small.crv }}', { includes: fileResolver(root) })).toBe('<p>S.</p>')
   })
 
   it('C2-N-009: two spellings of one target give one id, so a cycle through them is found', () => {

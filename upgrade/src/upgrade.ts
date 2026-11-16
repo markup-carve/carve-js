@@ -20,6 +20,7 @@ import { removeListMarkerTab } from './html-list-tab.ts'
 import { removeTrailingLineBlockSpaces } from './html-line-block.ts'
 import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
+import { rescueBacktick } from './backtick-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineOf, lineText, readLines } from './source.ts'
 
@@ -332,6 +333,17 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
   return records
 }
 
+/** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
+function rescueMismatch(input: string, output: string, mismatch: ReportRecord): { output: string; record: ReportRecord } | null {
+  const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
+    rescueCombinedInline, rescueHeadingBraceTag, rescueNestedNote, rescueTargeted, rescueMinor, rescueBacktick]
+  for (const rescue of rescues) {
+    const rescued = rescue(input, output, mismatch)
+    if (rescued !== null) return rescued
+  }
+  return null
+}
+
 function upgradeCore(input: string): UpgradeResult {
   const done = rewrite(input)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
@@ -339,14 +351,7 @@ function upgradeCore(input: string): UpgradeResult {
   if (check === 'mismatch') {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
-      const rescued = rescueFence(input, done.output, mismatch) ?? rescuePlus(input, done.output, mismatch)
-        ?? rescueQuote(input, done.output, mismatch) ?? rescueEmptyDefinitionItem(input, done.output, mismatch)
-        ?? rescueDescription(input, done.output, mismatch)
-        ?? rescuePercent(input, done.output, mismatch) ?? rescueCombinedInline(input, done.output, mismatch)
-        ?? rescueHeadingBraceTag(input, done.output, mismatch)
-        ?? rescueNestedNote(input, done.output, mismatch)
-        ?? rescueTargeted(input, done.output, mismatch)
-        ?? rescueMinor(input, done.output, mismatch)
+      const rescued = rescueMismatch(input, done.output, mismatch)
       done.records = rescued === null ? rewrittenRecords : recordsAfterRescue(input, rescued, rewrittenRecords)
       if (rescued !== null) {
         done.records.push(rescued.record)

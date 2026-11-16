@@ -1,6 +1,6 @@
 // The resolver of the command line (C2-N-012 to C2-N-014): it reads files below one containment root. An id is the
 // canonical path of the target relative to the root, so `a/b.crv` and `a/./b.crv` are one id (C2-N-009).
-import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { type IncludeAnswer, type IncludeRequest, type IncludeResolver } from '../src/include-settings.ts'
 import { INCLUDE_BYTES } from '../src/include-tables.ts'
@@ -49,24 +49,73 @@ function errorCode(error: unknown): string {
 }
 
 /**
+ * The bytes of the open file, at most a little past the size cap: a file past it is refused by the expansion with
+ * `include-budget` (C2-N-065) and is never read into memory whole.
+ */
+function readCapped(fd: number): Uint8Array {
+  const limit = INCLUDE_BYTES + 4
+  const buffer = new Uint8Array(limit)
+  let length = 0
+  for (let read = 1; read > 0 && length < limit; length += read) read = readSync(fd, buffer, length, limit - length, null)
+  if (length <= INCLUDE_BYTES) return buffer.subarray(0, length)
+  // Trap: a cut inside a character makes the prefix read as non_text instead of past the cap.
+  let lead = length - 1
+  while (lead > INCLUDE_BYTES && ((buffer[lead] ?? 0) & 0xc0) === 0x80) lead--
+  return buffer.subarray(0, lead + sequenceLength(buffer[lead] ?? 0) <= length ? length : lead)
+}
+
+/** The length of the UTF-8 sequence that `lead` starts. */
+function sequenceLength(lead: number): number {
+  if (lead >= 0xf0) return 4
+  if (lead >= 0xe0) return 3
+  return lead >= 0xc0 ? 2 : 1
+}
+
+/**
+ * C2-N-013: reads the file that the containment test passed. After the open, the path is canonicalized and tested
+ * again, and the open file must be the file found there, so a link swapped between test and open is never read.
+ */
+function readTested(root: string, wanted: string, target: string): IncludeAnswer {
+  let fd: number
+  try {
+    // A FIFO opened without O_NONBLOCK would block until a writer comes.
+    fd = openSync(target, constants.O_RDONLY | constants.O_NONBLOCK)
+  } catch (error) {
+    const code = errorCode(error)
+    return { error: code === 'ENOENT' || code === 'ENOTDIR' ? 'not_found' : 'unreadable' }
+  }
+  try {
+    const opened = fstatSync(fd)
+    const again = canonical(wanted)
+    if (!inside(root, again)) return { error: 'outside_root' }
+    const there = statSync(again)
+    if (there.dev !== opened.dev || there.ino !== opened.ino || !opened.isFile()) return { error: 'unreadable' }
+    return { text: readCapped(fd), id: idOf(root, again) }
+  } catch {
+    return { error: 'unreadable' }
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/** A step a test runs between the containment test and the read, to change the file system there. */
+export interface ResolverHooks {
+  afterTest?: () => void
+}
+
+/**
  * C2-N-012 to C2-N-014: reads below `root`, an absolute path whose canonical form the caller has taken. The test of
  * containment comes before any test of existence, so a cause never tells whether a file outside the root exists.
  */
-export function fileResolver(root: string): IncludeResolver {
+export function fileResolver(root: string, hooks: ResolverHooks = {}): IncludeResolver {
   return (request: IncludeRequest): IncludeAnswer => {
     if (hasScheme(request.path)) return { error: 'outside_root' }
     const base = request.from === undefined ? root : dirname(join(root, request.from))
-    const target = canonical(resolve(base, request.path))
+    const wanted = resolve(base, request.path)
+    const target = canonical(wanted)
     if (!inside(root, target)) return { error: 'outside_root' }
-    try {
-      const info = statSync(target)
-      // A FIFO or a device would block the read, and a file past the size cap is not read into memory (C2-N-065).
-      if (!info.isFile() || info.size > INCLUDE_BYTES) return { error: 'unreadable' }
-      return { text: readFileSync(target), id: idOf(root, target) }
-    } catch (error) {
-      const code = errorCode(error)
-      return { error: code === 'ENOENT' || code === 'ENOTDIR' ? 'not_found' : 'unreadable' }
-    }
+    hooks.afterTest?.()
+    return readTested(root, wanted, target)
   }
 }
 

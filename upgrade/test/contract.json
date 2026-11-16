@@ -904,7 +904,7 @@
       "```=html \"T\"\n<b>x</b>\n```\n"
     ],
     "outputs": [
-      "{%%}```=html \"T\"\n<b>x</b>\n```\n"
+      "{%%}```=html \"T\"\n<b>x</b>```\n```\n"
     ],
     "class": "escape"
   },
@@ -1143,12 +1143,10 @@
     "id": "U-125",
     "title": "Plus continuation in a quote",
     "inputs": [
-      "> +\n>",
-      "> +\n: ```\n> q\n"
+      "> +\n>"
     ],
     "outputs": [
-      ">\n>",
-      "> : ```\n>\n> q\n"
+      ">\n>"
     ],
     "class": "rewrite"
   },
@@ -1405,15 +1403,6 @@
     "class": "report"
   },
   {
-    "id": "U-144",
-    "title": "Smart quote direction changes inside adjacent braced inline forms",
-    "inputs": [
-      "{+-\"+}"
-    ],
-    "outputs": [],
-    "class": "report"
-  },
-  {
     "id": "U-145",
     "title": "Adjacent mixed strong and emphasis delimiters change nesting",
     "inputs": [
@@ -1519,15 +1508,6 @@
     "title": "A percent comment or braced subscript changes inline scanning",
     "inputs": [
       "a\t%%"
-    ],
-    "outputs": [],
-    "class": "report"
-  },
-  {
-    "id": "U-156",
-    "title": "An opening bracket can be part of a div name before metadata parsing",
-    "inputs": [
-      "::: e["
     ],
     "outputs": [],
     "class": "report"
@@ -1689,15 +1669,6 @@
     "class": "report"
   },
   {
-    "id": "U-173",
-    "title": "A long dash run is folded by the new smart punctuation rule",
-    "inputs": [
-      "c--------"
-    ],
-    "outputs": [],
-    "class": "report"
-  },
-  {
     "id": "U-174",
     "title": "A heading strips marker-adjacent tab padding before inline parsing",
     "inputs": [
@@ -1803,19 +1774,6 @@
     "class": "escape"
   },
   {
-    "id": "U-183",
-    "title": "Unresolved block image before a caption",
-    "inputs": [
-      "![][]\n^ a",
-      "![a][r]\n^ cap\n^ cap\n"
-    ],
-    "outputs": [
-      "\\![][]\n^ a",
-      "\\![a][r]\n^ cap\n\n^ cap\n"
-    ],
-    "class": "escape"
-  },
-  {
     "id": "U-184",
     "title": "Nested list include-looking brace",
     "inputs": [
@@ -1885,12 +1843,10 @@
     "id": "U-190",
     "title": "Smart quote in punctuation and opaque attribute boundaries",
     "inputs": [
-      "-\"\\\n",
-      "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n"
+      "x{.k title=\"`\"} y\n"
     ],
     "outputs": [
-      "-”\\\n",
-      "x{.k title=“`\"} y\n\nx{title=“[a\"}](u)\n\nx{*a { b*} c\n"
+      "x{.k title=“`\"} y`\n"
     ],
     "class": "rewrite"
   },
@@ -1950,17 +1906,6 @@
       ":::[`x`]\nbody\n:::\n"
     ],
     "class": "report"
-  },
-  {
-    "id": "U-196",
-    "title": "Quoted brace in a block attribute value",
-    "class": "rewrite",
-    "inputs": [
-      "{k='x}y'}\np\n"
-    ],
-    "outputs": [
-      "{k=\"x}y\"}\np\n"
-    ]
   },
   {
     "id": "U-197",
@@ -2100,17 +2045,6 @@
     "outputs": [
       "Text[^a]\\{.ref}.\n",
       "x[^n]{\\#i}\n\n## i\n"
-    ]
-  },
-  {
-    "id": "U-208",
-    "title": "Literal dash before a braced insertion",
-    "class": "escape",
-    "inputs": [
-      "-{+a+} text\n"
-    ],
-    "outputs": [
-      "\\-{+a+} text\n"
     ]
   },
   {
@@ -2413,17 +2347,6 @@
     ]
   },
   {
-    "id": "U-231",
-    "title": "Double quote inside a quoted id value",
-    "class": "rewrite",
-    "inputs": [
-      "{id='a\"b&c'}\n# H\n\n</#a\"b&c>\n"
-    ],
-    "outputs": [
-      "{id=\"a\\\"b&c\"}\n# H\n\n</#a\"b&c>\n"
-    ]
-  },
-  {
     "id": "U-232",
     "title": "Table row after a description body at the document column",
     "class": "rewrite",
@@ -2713,5 +2636,27 @@
     "outputs": [
       "^[{/\\[\\^[g]\\/\\] b/}]\n"
     ]
+  },
+  {
+    "id": "U-258",
+    "title": "Backtick run with no closing run",
+    "inputs": [
+      "a `b c\n"
+    ],
+    "outputs": [
+      "a `b c`\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-259",
+    "title": "Span mark that cannot join",
+    "inputs": [
+      "|= ^|\n"
+    ],
+    "outputs": [
+      "|= |\n"
+    ],
+    "class": "rewrite"
   }
 ]

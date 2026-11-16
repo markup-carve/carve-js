@@ -5,11 +5,6 @@
     "message": "C2-I-047,C2-I-051: adjacent inline delimiters use the 0.2 flanking and nesting rules"
   },
   {
-    "id": "U-144",
-    "input": "{+-\"+}",
-    "message": "C2-I-035,C2-I-048: smart quote direction changes inside adjacent braced inline forms"
-  },
-  {
     "id": "U-145",
     "input": "/*//",
     "message": "C2-I-047,C2-I-048,C2-I-051: adjacent mixed strong and emphasis delimiters change nesting"
@@ -63,11 +58,6 @@
     "id": "U-155",
     "input": "a\t%%",
     "message": "C2-I-034,C2-I-039: a percent comment or braced subscript changes inline scanning"
-  },
-  {
-    "id": "U-156",
-    "input": "::: e[",
-    "message": "C2-B-119: an opening bracket can be part of a div name before metadata parsing"
   },
   {
     "id": "U-157",
@@ -148,11 +138,6 @@
     "id": "U-172",
     "input": "{loose}\n:: T",
     "message": "C2-B-066,C2-H-040: a loose key on a description list remains an ordinary html attribute"
-  },
-  {
-    "id": "U-173",
-    "input": "c--------",
-    "message": "C2-I-040: a long dash run is folded by the new smart punctuation rule"
   },
   {
     "id": "U-174",

@@ -41,16 +41,6 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
   'U-114#4': { entry: 'U-114', check: 'mismatch' },
-  // C2-B-119: the div name ends at its character set, so 0.2 writes the class `e` as 0.1 does.
-  'U-156#0': { check: 'pass' },
-  // C2-I-111: the run is decided as a whole, so 0.2 writes four en dashes as 0.1 does.
-  'U-173#0': { check: 'pass' },
-  // C2-I-034, C2-B-101: an invalid brace block makes no list marker, so 0.2 reads the paragraph of 0.1.
-  'U-208#0': { check: 'pass' },
-  // Withdrawn with U-156, U-173 and U-208: the source gives the same HTML in 0.1 and 0.2 (C2-I-072, C2-B-090, C2-I-033).
-  'U-183#0': { check: 'pass' },
-  'U-196#0': { check: 'pass' },
-  'U-231#0': { check: 'pass' },
   // C2-B-117: spaces separate the parts of an opener, so a tab before `""` leaves no title, in 0.2 as in 0.1.
   'U-191#0': { check: 'pass' },
   // C2-H-019: a paragraph that holds only comments and line breaks writes nothing, in 0.2 as in 0.1.
@@ -118,7 +108,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers all 231 entries', () => {
-    expect(cases.length).toBe(231)
+  it('covers the 226 entries of the upgrade map', () => {
+    expect(cases.length).toBe(226)
   })
 })

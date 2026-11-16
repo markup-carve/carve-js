@@ -874,12 +874,6 @@
       "lint": []
     },
     {
-      "id": "U-144",
-      "name": "smart quote direction changes inside adjacent braced inline forms",
-      "class": "report",
-      "lint": []
-    },
-    {
       "id": "U-145",
       "name": "adjacent mixed strong and emphasis delimiters change nesting",
       "class": "report",
@@ -942,12 +936,6 @@
     {
       "id": "U-155",
       "name": "a percent comment or braced subscript changes inline scanning",
-      "class": "report",
-      "lint": []
-    },
-    {
-      "id": "U-156",
-      "name": "an opening bracket can be part of a div name before metadata parsing",
       "class": "report",
       "lint": []
     },
@@ -1048,12 +1036,6 @@
       "lint": []
     },
     {
-      "id": "U-173",
-      "name": "a long dash run is folded by the new smart punctuation rule",
-      "class": "report",
-      "lint": []
-    },
-    {
       "id": "U-174",
       "name": "a heading strips marker-adjacent tab padding before inline parsing",
       "class": "report",
@@ -1106,12 +1088,6 @@
     {
       "id": "U-182",
       "name": "braced inline opener in a bracket",
-      "class": "escape",
-      "lint": []
-    },
-    {
-      "id": "U-183",
-      "name": "unresolved block image before a caption",
       "class": "escape",
       "lint": []
     },
@@ -1188,12 +1164,6 @@
       "lint": []
     },
     {
-      "id": "U-196",
-      "name": "quoted brace in a block attribute value",
-      "class": "rewrite",
-      "lint": []
-    },
-    {
       "id": "U-197",
       "name": "attribute consumed at a list boundary",
       "class": "rewrite",
@@ -1244,12 +1214,6 @@
     {
       "id": "U-207",
       "name": "literal attribute after an unresolved footnote",
-      "class": "escape",
-      "lint": []
-    },
-    {
-      "id": "U-208",
-      "name": "literal dash before a braced insertion",
       "class": "escape",
       "lint": []
     },
@@ -1376,12 +1340,6 @@
     {
       "id": "U-230",
       "name": "conflicting ordered list start attribute",
-      "class": "rewrite",
-      "lint": []
-    },
-    {
-      "id": "U-231",
-      "name": "double quote inside a quoted id value",
       "class": "rewrite",
       "lint": []
     },
@@ -1540,6 +1498,20 @@
       "name": "nested bracket text in an inline note",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-258",
+      "name": "backtick run with no closing run of its length",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-259",
+      "name": "span mark that cannot join",
+      "class": "rewrite",
+      "lint": [
+        "table-span-marker-blocked"
+      ]
     }
   ],
   "extensions": [
@@ -1553,6 +1525,12 @@
       "id": "X-002",
       "name": "U+0000 in the source",
       "class": "none",
+      "lint": []
+    },
+    {
+      "id": "X-003",
+      "name": "unresolved block image reference before a caption",
+      "class": "escape",
       "lint": []
     }
   ]

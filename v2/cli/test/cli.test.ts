@@ -79,12 +79,12 @@ describe('carve2 process', () => {
     expect(result.stderr).toMatch(/structure-unspellable/)
   })
 
-  it('C2-W-011: an image-only paragraph and a denied destination import with output and status 0', () => {
+  it('C2-W-011, C2-M-083: an image-only paragraph and a denied destination import with output and status 0', () => {
     const image = cli(['import', '--from=html'], '<p><img src="a.png" alt="i"></p>\n')
     expect([image.status, image.stdout]).toEqual([0, '![i](a.png)\n'])
     const denied = cli(['import', '--from=html'], '<p><a href="javascript:x">t</a></p>\n')
     expect([denied.status, denied.stdout]).toEqual([0, 't\n'])
-    expect(denied.stderr).toMatch(/^carve\[import-degraded\]:/)
+    expect(denied.stderr).toMatch(/^carve\[import-destination-denied\]:/)
   })
 
   it('C2-W-011: normalized Markdown imports return source and report degradation', () => {
@@ -101,7 +101,7 @@ describe('carve2 process', () => {
       const result = cli(['import', '--from=html'], source)
       expect(result.status).toBe(0)
       expect(result.stdout).toBe(expected)
-      expect(result.stderr).toMatch(/^carve\[import-degraded\]:/)
+      expect(result.stderr).toMatch(/^carve\[import-whitespace-normalized\]:/)
     }
   })
 
@@ -112,7 +112,7 @@ describe('carve2 process', () => {
     const normalized = cli(['import', '--from=html'], '\n- a\n b')
     expect(normalized.status).toBe(0)
     expect(normalized.stdout).toBe('\\- a\nb\n')
-    expect(normalized.stderr).toMatch(/^carve\[import-degraded\]:/)
+    expect(normalized.stderr).toMatch(/^carve\[import-whitespace-normalized\]:/)
   })
 
   it('C2-H-052: render uses stdin, explicit stdin, files, options and one raw HTML notice', () => {
