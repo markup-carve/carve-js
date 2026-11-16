@@ -144,6 +144,16 @@ describe('the planned writer', () => {
     expect(formatBy('*a*#} x\n', 'both').stats.planned).toBe(0)
   })
 
+  it('C2-I-087: a bracket and a caret with no later `]` in the content open nothing, and the plan writes them bare', () => {
+    for (const source of ['a \\[^b\n', '*a \\[^b*\n', 'a \\[^\n', 'a \\[^b\n\nc]\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source.replace('\\[', '['))
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('a \\[^b] c\n', 'both').stats.planned).toBe(0)
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

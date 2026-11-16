@@ -150,9 +150,12 @@ function nextIs(leaf: Leaf, at: number, chars: string): boolean {
   return next >= 0 && chars.includes(String.fromCharCode(next))
 }
 
-/** C2-W-094: an opening bracket before `^` may open a footnote reference; pairs are checked in write-plan-brackets.ts. */
+/**
+ * C2-W-094: an opening bracket before `^` opens a footnote reference where a `]` follows (C2-I-087); pairs are checked
+ * in write-plan-brackets.ts.
+ */
 function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  undecidedIf(!isLiteral(leaf, at, escaped) && nextIs(leaf, at, '^'), leaf, 'footnote bracket')
+  undecidedIf(!isLiteral(leaf, at, escaped) && nextIs(leaf, at, '^') && leaf.lastBracket > at + 1, leaf, 'footnote bracket')
 }
 
 // C2-I-037: the atoms that are no host of an attribute block.
@@ -297,8 +300,9 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   },
   ']': () => undefined,
   '^': (leaf, at, escaped) => {
-    // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil.
-    if (code(leaf, at - 1) === 91 || code(leaf, at - 1) === 123) undecide(leaf, 'footnote bracket')
+    // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil; behind `[` a footnote reference
+    // where a `]` follows (C2-I-087).
+    if (code(leaf, at - 1) === 123 || (code(leaf, at - 1) === 91 && leaf.lastBracket > at)) undecide(leaf, 'footnote bracket')
     else gluedSigil(leaf, at, escaped, treeBracket, '')
   },
   '_': () => undefined,
