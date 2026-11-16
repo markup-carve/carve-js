@@ -294,3 +294,15 @@ describe('C2-I-033: a quoted value may hold the other quote and a closing brace'
     expect(first("{x='a}\nb")).not.toHaveProperty('attrs')
   })
 })
+
+describe('C2-H-016, C2-H-166: a kept `<li>` carries `data-source-line`', () => {
+  it('C2-H-166: an item past the bound keeps its `<li>` and the source line of the item', () => {
+    const options = { profile: 'minimal', sourceLines: true } as const
+    expect(render('- - -C2-A-034', options)).toBe(
+      '<ul data-source-line="1">\n  <li data-source-line="1">\n    <ul data-source-line="1">\n      <li data-source-line="1">-C2-A-034</li>\n'
+      + '    </ul>\n  </li>\n</ul>',
+    )
+    expect(render('- a\n- - # h\n  - b', options)).toContain('<li data-source-line="3">b</li>')
+    expect(render('- - a', { profile: 'minimal' })).toContain('<li>a</li>')
+  })
+})

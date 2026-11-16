@@ -218,11 +218,14 @@ function noteGone(filter: Filter, node: Node): void {
   }, undefined, filter.declarations)
 }
 
-/** An item stays an item, as its list expects. */
+/** An item stays an item, as its list expects. C2-H-166: it keeps its `<li>`, so its source line stays (C2-H-016). */
 function degradedItem(node: ListItemNode): ListItemNode[] {
   const children: Block[] = []
   for (const child of node.children) if (!UNWRITTEN.includes(child.type)) children.push(...degradedBlocks(child))
-  return children.length === 0 ? [] : [{ type: 'list_item', children }]
+  if (children.length === 0) return []
+  const item: ListItemNode = { type: 'list_item', children }
+  if (node.pos !== undefined) item.pos = node.pos
+  return [item]
 }
 
 /** C2-H-163: the deny list of the axis, then its allow list, then the nesting bound. */
