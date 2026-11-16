@@ -258,3 +258,13 @@ describe('C2-B-171, C2-I-034: a cell prefix is the valid brace block, and an inv
     expect(cell('|{-}{.d} x|')).not.toHaveProperty('attrs')
   })
 })
+
+describe('C2-B-043: a bare dot whose content starts with a dot and a space is no marker', () => {
+  it('C2-B-043: the content starts at the first content character, whatever the spaces before it', () => {
+    for (const src of ['. . a', '.  . a', '.   . a', '. \t. a', '.{.c} . a', '.{.c}  . a', '. . . and then silence']) {
+      expect(first(src)['type']).toBe('paragraph')
+    }
+    expect(render('.  . a')).toBe('<p>.  . a</p>')
+    for (const src of ['.  a', '.  .a', '. .', '1.  . a']) expect(first(src)['type']).toBe('list')
+  })
+})

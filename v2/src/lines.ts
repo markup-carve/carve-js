@@ -196,10 +196,11 @@ export function orderedMarkerEnd(src: string, pos: number, delimiter: number, en
   // C2-B-040: an uppercase marker and a dot needs two spaces, so an initial or an abbreviation stays text.
   const spaces = src.charCodeAt(delimiter) === DOT && delimiter > pos && isUpper(src.charCodeAt(pos)) ? 2 : 1
   const content = afterMarkerSpace(src, attributeBlocksEnd(src, delimiter + 1, end), end, spaces)
-  // C2-B-043: a bare dot before a dot and a space is an ellipsis written with spaces, no marker.
-  const ellipsis = content >= 0 && src.charCodeAt(content) === DOT && content + 1 < end && src.charCodeAt(content + 1) === SPACE
-  if (delimiter === pos && ellipsis) return -1
-  return content
+  if (delimiter !== pos || content < 0) return content
+  // C2-B-043: a bare dot whose content, from its first character on, starts with a dot and a space is no marker.
+  const first = skipSpaces(src, content, end)
+  const ellipsis = src.charCodeAt(first) === DOT && first + 1 < end && src.charCodeAt(first + 1) === SPACE
+  return ellipsis ? -1 : content
 }
 
 /** C2-B-015: the list marker at `pos` is a bullet or an ordered marker with the value 1, so it may open a list in a paragraph. */
