@@ -160,6 +160,16 @@ function attrsOf(node: Fields): Fields {
   return result
 }
 
+/** G1: the HTML input stream reads a carriage return in a destination as a line feed too. */
+const destinations: Loss = (node, _list, _at, found) => {
+  if (node['type'] !== 'link' && node['type'] !== 'image') return undefined
+  const name = node['type'] === 'link' ? 'href' : 'src'
+  const value = node[name]
+  if (typeof value !== 'string' || !value.includes('\r')) return undefined
+  found.add('G1 carriage return')
+  return [{ ...node, [name]: value.replaceAll('\r\n', '\n').replaceAll('\r', '\n') }]
+}
+
 /** C2-H-176, C2-H-172: the characters of text and code; C2-H-114 carrier text keeps its bidirectional controls. */
 const characters: Loss = (node, _list, _at, found) => {
   const type = node['type']
@@ -180,8 +190,11 @@ const characters: Loss = (node, _list, _at, found) => {
 /** A value whose line endings HTML reads back: as they stand in code and math, as soft breaks in text. */
 function lineEnds(node: Fields, written: string): Fields[] {
   if (node['type'] !== 'text') return [{ ...node, value: written }]
-  const parts = written.split('\n').flatMap((part, at) => [...(at > 0 ? [{ type: 'soft_break' }] : []),
-    ...(part === '' ? [] : [text(part)])])
+  const lines = written.split('\n')
+  // C2-I-002, C2-I-103: the importer reads the spaces and tabs around a line ending as part of it.
+  const parts = lines.map((line, at) => at === 0 ? line : line.replace(/^[ \t]+/u, ''))
+    .map((line, at) => at === lines.length - 1 ? line : line.replace(/[ \t]+$/u, ''))
+    .flatMap((part, at) => [...(at > 0 ? [{ type: 'soft_break' }] : []), ...(part === '' ? [] : [text(part)])])
   // The importer reads a run of line endings as one soft break.
   return parts.filter((part, at) => part['type'] !== 'soft_break' || parts[at - 1]?.['type'] !== 'soft_break')
 }
@@ -453,17 +466,6 @@ const blockForms: Loss = (node, _list, _at, found) => {
   return undefined
 }
 
-/** G2: C2-H-002 writes the character and the node alike as `&nbsp;`; a `roundtrip` render reads it as the node. */
-function spaceNodes(tree: Fields, found: Set<string>): Fields {
-  return walk(tree, [(node) => {
-    const value = node['value']
-    if (node['type'] !== 'text' || typeof value !== 'string' || !value.includes('\u00a0')) return undefined
-    found.add('G2 no-break space')
-    return value.split('\u00a0').flatMap((part, at) => [...(at > 0 ? [{ type: 'non_breaking_space' }] : []),
-      ...(part === '' ? [] : [text(part)])])
-  }], found)
-}
-
 const EDGE_BLOCKS = ['paragraph', 'heading', 'cell_paragraph', 'definition_term', 'caption']
 
 /** G1: a line feed that a carriage return became sits at a block edge, where the importer omits it. */
@@ -475,11 +477,13 @@ function edgeBreaks(tree: Fields): void {
     let end = list.length
     while (start < end && list[start]?.['type'] === 'soft_break') start++
     while (end > start && list[end - 1]?.['type'] === 'soft_break') end--
-    node['children'] = list.slice(start, end)
+    // The importer reads a run of line endings as one soft break, also across the nodes a line ending split.
+    node['children'] = list.slice(start, end).filter((entry, at, kept) => entry['type'] !== 'soft_break' ||
+      kept[at - 1]?.['type'] !== 'soft_break')
   })
 }
 
-/** G2: without a carrier the render reads as foreign HTML: a no-break space is the character, a line ending before `<br>` is layout. */
+/** C2-H-195 rows 3 and 5: a no-break space is the character, and a line ending before `<br>` is layout. */
 function plainSpaces(tree: Fields, found: Set<string>): Fields {
   return walk(tree, [(node) => {
     if (node['type'] !== 'non_breaking_space') return undefined
@@ -492,7 +496,7 @@ function plainSpaces(tree: Fields, found: Set<string>): Fields {
   }], found)
 }
 
-/** G2: without a carrier the render reads as foreign HTML, whose cell line breaks the importer writes as spaces. */
+/** C2-H-195 row 7: a line break in a cell reads as a space. */
 function cellBreaks(tree: Fields, found: Set<string>): void {
   eachNode(tree, node => {
     if (node['type'] === 'cell_paragraph' && flattenBreaks(node)) found.add('G2 cell line break')
@@ -546,21 +550,18 @@ function definitionsAtEnd(tree: Fields, found: Set<string>): void {
   tree['children'] = next
 }
 
-/** The parsed tree as a `roundtrip` render can write it, and the clauses that changed it. `carriers`: the HTML holds one. */
-export function project(document: DocumentNode, carriers = true): { tree: DocumentNode, losses: string[] } {
+/** The parsed tree as a `roundtrip` render and an import give it back (C2-H-195, C2-H-197), and the clauses that changed it. */
+export function project(document: DocumentNode): { tree: DocumentNode, losses: string[] } {
   const found = new Set<string>()
   const copy: unknown = structuredClone(document)
   if (!isFields(copy)) return { tree: document, losses: [] }
   markCommentParagraphs(copy)
   mergedDefinitions(copy, found)
-  let tree = walk(copy, [unresolved, asText, characters, linkText, blockForms], found)
+  let tree = walk(copy, [unresolved, asText, characters, destinations, linkText, blockForms], found)
   tree = emptyParagraphs(tree, found)
   if (['G1 carriage return', 'G7 line feed in text', 'C2-H-176 C2-H-172 characters'].some(loss => found.has(loss))) edgeBreaks(tree)
-  if (carriers) tree = spaceNodes(tree, found)
-  else {
-    tree = plainSpaces(tree, found)
-    cellBreaks(tree, found)
-  }
+  tree = plainSpaces(tree, found)
+  cellBreaks(tree, found)
   uniqueClasses(tree, found)
   lineBlocks(tree, found)
   spanMarks(tree, found)
