@@ -133,7 +133,7 @@ export function withDestination(node: Inline): Inline[] {
     return node.attrs === undefined ? node.children : [{ type: 'span', children: node.children, attrs: node.attrs }]
   }
   if (node.type !== 'image' || node.src !== undefined || node.key !== undefined) return [node]
-  const alt = node.alt === '' ? [] : [text(node.alt)]
+  const alt = node.alt === undefined || node.alt === '' ? [] : [text(node.alt)]
   return node.attrs === undefined ? alt : [{ type: 'span', children: alt, attrs: node.attrs }]
 }
 
