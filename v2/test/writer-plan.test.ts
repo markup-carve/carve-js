@@ -209,14 +209,14 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-017, C2-W-091: a text backtick before a code span that nothing before it can pair with is planned escaped', () => {
-    for (const source of ['a \\` b `c`\n', 'a \\`\\`\n\n`c`\n', 'x \\` `c` `d`\n']) {
+    for (const source of ['a \\` b `c`\n', 'a ``\n\n`c`\n', 'x \\` `c` `d`\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
     // Behind a mark of the tree, a delimiter or another backtick of text, the repair decides the order.
-    for (const source of ['/a \\` b `c`/\n', '[a \\` `c`](/u)\n', 'a \\`\\` `c`\n', '*a \\` `c`\n']) {
+    for (const source of ['/a \\` b `c`/\n', '[a \\` `c`](/u)\n', '*a \\` `c`\n']) {
       expect(formatBy(source, 'both').stats.planned, source).toBe(0)
     }
   })
@@ -474,7 +474,6 @@ describe('the planned writer', () => {
 
   // `format` writes a planned group with no parse, so a block the plan cannot check goes to the repair, which reports the loss.
   const UNCHECKED_BLOCKS: readonly [string, string, string][] = [
-    ['C2-B-158: a paragraph of one display math and no role', '$$`x^', 'field-unspellable'],
     ['C2-B-157: a container on the first line of a footnote', '[^f]: - :::', 'structure-unspellable'],
   ]
   for (const [clause, source, code] of UNCHECKED_BLOCKS) {

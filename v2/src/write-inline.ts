@@ -223,6 +223,15 @@ export function codeSpan(value: string): string {
   return padded ? `${run} ${value} ${run}` : `${run}${value}${run}`
 }
 
+/**
+ * C2-W-077, C2-W-117: a value that starts with a line break and ends with a backtick loses the pad before the line
+ * break (C2-I-002), so it has no spelling; the padded form is written and reported.
+ */
+function spanValue(w: Writer, node: Node, value: string): string {
+  if (value.startsWith('\n') && value.endsWith('`')) lose(w, node, 'value')
+  return codeSpan(value)
+}
+
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
 function destination(value: string): string {
   const unmatched = new Set<number>()
@@ -399,10 +408,10 @@ const WRITERS: InlineWriters = {
   inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
   inline_extension: inlineExtension,
   footnote_ref: (_w, node) => `[^${labelText(node.key)}]`,
-  code: (_w, node) => codeSpan(node.value),
-  literal_inline: (_w, node) => `!${codeSpan(node.value)}`,
-  math: (_w, node) => `${node.display ? '$$' : '$'}${codeSpan(node.value)}`,
-  raw_inline: (_w, node) => `${codeSpan(node.value)}{=${node.format}}`,
+  code: (w, node) => spanValue(w, node, node.value),
+  literal_inline: (w, node) => `!${spanValue(w, node, node.value)}`,
+  math: (w, node) => `${node.display ? '$$' : '$'}${spanValue(w, node, node.value)}`,
+  raw_inline: (w, node) => `${spanValue(w, node, node.value)}{=${node.format}}`,
   symbol: (_w, node) => `:${node.name}:`,
   mention: mentionNode,
   tag: (_w, node) => `#${node.name}`,
@@ -516,34 +525,9 @@ function doubleLastBackslash(w: Writer, node: TextNode, nodes: readonly Node[], 
   w.escapes.set(node, [...(escapes ?? []), last])
 }
 
-/**
- * C2-I-002, C2-I-016: a value that starts with a line break and ends with a backtick loses the pad before the line
- * break, so no closed span keeps it. At the end of a content the span stays open and runs to that end (C2-I-017).
- * Returns the closed and the open spelling of such a last node, or null.
- */
-export function openSpanAtEnd(nodes: readonly Node[], flags: number): [string, string] | null {
-  const last = nodes[nodes.length - 1]
-  if (last === undefined || (flags & (IN_CELL | BARE_BREAKS)) !== 0 || braceBlock(last) !== '') return null
-  if (nodes.length > 1 && joinsNextCode(nodes, nodes.length - 2)) return null
-  const parts = spanParts(last)
-  if (parts === null || !parts[1].startsWith('\n') || !parts[1].endsWith('`')) return null
-  const [sigil, value] = parts
-  const closed = codeSpan(value)
-  return [sigil + closed, sigil + closed.slice(0, closed.indexOf(' ')) + value]
-}
-
-/** The sigil and the value of a span that may stay open: code, literal text and math. */
-function spanParts(node: Node): [string, string] | null {
-  if (node.type === 'code') return ['', node.value]
-  if (node.type === 'literal_inline') return ['!', node.value]
-  return node.type === 'math' ? [node.display ? '$$' : '$', node.value] : null
-}
-
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */
 export function writeContent(w: Writer, nodes: readonly Node[], flags: number): string {
   const out = writeInlines(w, nodes, flags)
-  const open = openSpanAtEnd(nodes, flags)
-  if (open !== null && out.endsWith(open[0])) return out.slice(0, -open[0].length) + open[1]
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') return trimEnd(out)
   // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022).

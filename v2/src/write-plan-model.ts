@@ -4,7 +4,7 @@
 import { forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
-  BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, openSpanAtEnd, rawReference,
+  BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference,
   target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
@@ -48,6 +48,8 @@ export interface Leaf {
   inTitle: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number
+  /** Per unit, how a backtick of text is written (TICK_BARE, TICK_ESCAPED, TICK_UNDECIDED), once a backtick asked. */
+  ticks: Uint8Array | null
   /** Per ASCII mark, the last `}` behind it, once a brace asked for them. */
   closes: Int32Array | null
   /** Per ASCII mark, the first `{` before it, once a hyphen run asked for them. */
@@ -67,8 +69,8 @@ export interface Leaf {
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, footnoteQuotes: [], angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, closes: null,
-    opens: null, extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    singleQuoteOpen: false, footnoteQuotes: [], angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, ticks: null,
+    closes: null, opens: null, extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 
@@ -233,7 +235,6 @@ export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
 
 /** `writeContent`: no space or tab of text at the end, and no line ending of a final hard break (C2-W-022). */
 export function modelContent(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {
-  if (openSpanAtEnd(nodes, flags) !== null) return undecide(leaf, 'open span')
   modelInlines(w, leaf, nodes, flags)
   const last = nodes[nodes.length - 1]
   if (last?.type === 'text') trimText(leaf, 0)

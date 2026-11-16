@@ -103,12 +103,18 @@ function bullet(leaf: Leaf, at: number): number {
 /** C2-B-014, C2-B-159, C2-B-166: what opens on every line: a fence run, a star run alone, a table row. */
 function anyLine(leaf: Leaf, at: number, value: number): number {
   const end = runEnd(leaf, at, value)
-  if (value === 96) return end - at >= 3 ? at : NO_ESCAPE
+  if (value === 96) return end - at >= 3 && !tickBehind(leaf, end) ? at : NO_ESCAPE
   if (value === 58) return end - at < 3 ? NO_ESCAPE : divLine(leaf, at, end)
   if (value === 37) return end - at < 3 ? NO_ESCAPE : fence(leaf, at, end)
   if (value === 42) return end - at >= 3 && restIsBlank(leaf, end) ? at : NO_ESCAPE
   if (value === 124) return pipeLine(leaf, at)
   return NO_ESCAPE
+}
+
+/** C2-B-118: a backtick in the info string makes the run no fence opener. */
+function tickBehind(leaf: Leaf, from: number): boolean {
+  for (let at = from; !isLineEnd(code(leaf, at)); at++) if (code(leaf, at) === 96) return true
+  return false
 }
 
 /** C2-B-119, C2-B-196: a colon run is a div line where spaces or the line end follow it, or only blanks; glued to a name, it is text. */

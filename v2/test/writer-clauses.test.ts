@@ -239,7 +239,7 @@ describe('what the writer cannot spell', () => {
 
   it('C2-W-016: a code span whose later line would open a block is refused with field-unspellable', () => {
     expect(losses(documentOf(paragraph(code('a\n::: x'))))).toContain('field-unspellable /children/0/children/0')
-    expect(checkWriter('[^a]: a\n- ```\n- a')).toBe('refused')
+    expect(checkWriter('[^a]: a\n`x\n- a`')).toBe('refused')
     expect(losses(documentOf(paragraph(code('a\nb'))))).toEqual([])
   })
 
@@ -988,7 +988,7 @@ describe('escaping', () => {
   })
 
   it('C2-W-095: a sigil that would form is escaped', () => {
-    for (const src of ['\\@user', '\\#tag', '\\:smile:', '\\:ext[c]', '\\<https://a.b>', '\\</#id>', '\\`a\\`', '\\$`m`', '\\...', 'x \\"a\\"']) expect(format(src)).toBe(`${src}\n`)
+    for (const src of ['\\@user', '\\#tag', '\\:smile:', '\\:ext[c]', '\\<https://a.b>', '\\</#id>', '\\`a`', '\\$`m`', '\\...', 'x \\"a\\"']) expect(format(src)).toBe(`${src}\n`)
     expect(format('a\\@b \\: c')).toBe('a@b : c\n')
   })
 

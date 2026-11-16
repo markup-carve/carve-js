@@ -454,44 +454,66 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   ']': () => undefined,
   '^': caret,
   '_': () => undefined,
-  // C2-I-017, C2-W-091: a backtick run opens a code span even unclosed, so each backtick of text takes a backslash.
-  '`': (leaf, at, escaped) => {
-    if (isLiteral(leaf, at, escaped)) return
-    // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
-    // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
-    // Inside a mark of the tree, behind a delimiter of text, the procedure escapes that delimiter first.
-    if (leaf.inCell) undecide(leaf, 'backtick in a cell')
-    else if (leaf.lastAtomTick > at && !unclosedRun(leaf, at) && !opensFirst(leaf, at)) undecide(leaf, 'backtick before a code span')
-    else if (leaf.textMark && leaf.openDepth > 0) undecide(leaf, 'backtick in a mark')
-    else escaped[at] = 1
-  },
+  '`': backtick,
   '{': brace,
   '|': () => undefined,
   '}': closingBrace,
   '~': () => undefined,
 }
 
+const TICK_BARE = 1
+const TICK_ESCAPED = 2
+const TICK_UNDECIDED = 3
+
 /**
- * C2-I-017, C2-W-091: whether the bare run of text backticks at `at` opens a code span that no later run closes, so
- * that it runs to the end of the content. Then nothing behind it pairs with anything before it, and the procedure
- * escapes it before anything it uncovers. The backticks of text before it are escaped by then, those behind it are
- * bare, and in an open span a backslash escapes nothing, so every later run counts by its length. A run glued to the
- * backticks of an atom is left to the repair.
+ * C2-I-015, C2-I-017: a run opens only where a run of its length stands later in the content, and that search is
+ * lexical, so an escaped backtick closes too. From the end, a run of text stays bare when no later run has its
+ * length; otherwise each of its backticks takes a backslash and leaves runs of one. A run glued to an atom or to
+ * an escape of the writer is left to the repair.
  */
-function unclosedRun(leaf: Leaf, at: number): boolean {
+function tickPlan(leaf: Leaf): Uint8Array {
   const codes = leaf.codes
-  let end = at
-  while (code(leaf, end) === 96 && leaf.kinds[end] === TEXT) end++
-  if (code(leaf, end) === 96) return false
-  const length = end - at
-  for (let start = end; start < codes.length; start++) {
-    if (codes[start] !== 96) continue
-    let stop = start
-    while (codes[stop] === 96) stop++
-    if (stop - start === length) return false
-    start = stop
+  const ticks = new Uint8Array(codes.length)
+  const later = new Set<number>()
+  let end = codes.length
+  while (end > 0) {
+    if (codes[end - 1] !== 96) {
+      end--
+      continue
+    }
+    let start = end - 1
+    while (start > 0 && codes[start - 1] === 96) start--
+    const length = end - start
+    const decision = tickRun(leaf, start, end, later.has(length))
+    if (decision === TICK_ESCAPED) later.add(1)
+    else later.add(length)
+    ticks.fill(decision, start, end)
+    end = start
   }
-  return true
+  return ticks
+}
+
+function tickRun(leaf: Leaf, start: number, end: number, closes: boolean): number {
+  let text = 0
+  for (let at = start; at < end; at++) if (leaf.kinds[at] === TEXT) text++
+  if (text === 0) return 0
+  if (text < end - start || leaf.kinds[start - 1] === ESCAPE) return TICK_UNDECIDED
+  return closes ? TICK_ESCAPED : TICK_BARE
+}
+
+function backtick(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  if (isLiteral(leaf, at, escaped)) return
+  leaf.ticks ??= tickPlan(leaf)
+  const decision = leaf.ticks[at]
+  if (decision === TICK_BARE) return
+  // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
+  // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
+  // Inside a mark of the tree, behind a delimiter of text, the procedure escapes that delimiter first.
+  if (decision === TICK_UNDECIDED) undecide(leaf, 'backtick glued')
+  else if (leaf.inCell) undecide(leaf, 'backtick in a cell')
+  else if (leaf.lastAtomTick > at && !opensFirst(leaf, at)) undecide(leaf, 'backtick before a code span')
+  else if (leaf.textMark && leaf.openDepth > 0) undecide(leaf, 'backtick in a mark')
+  else escaped[at] = 1
 }
 
 /**

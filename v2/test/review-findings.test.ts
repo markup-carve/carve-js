@@ -294,11 +294,10 @@ describe('the depth cap over blocks and inlines together', () => {
 describe('writer output that read back as another tree', () => {
   const BACKSLASH = '\\'
 
-  it('C2-W-002, C2-W-003: a backtick in emphasis keeps its escape, so the emphasis stays bare and reads back', () => {
-    const source = `/${BACKSLASH}${BACKTICK}:/`
-    expect(format(source)).toBe(`${source}\n`)
-    expect(format(`*${BACKSLASH}${BACKTICK}:*`)).toBe(`*${BACKSLASH}${BACKTICK}:*\n`)
-    expect(writeWithDiagnostics(parse(source)).diagnostics).toEqual([])
+  it('C2-W-002, C2-W-003, C2-I-017: a lone backtick in emphasis is text, so the emphasis stays bare and reads back', () => {
+    expect(format(`/${BACKSLASH}${BACKTICK}:/`)).toBe(`/${BACKTICK}:/\n`)
+    expect(format(`*${BACKSLASH}${BACKTICK}:*`)).toBe(`*${BACKTICK}:*\n`)
+    expect(writeWithDiagnostics(parse(`/${BACKTICK}:/`)).diagnostics).toEqual([])
   })
 
   it('C2-W-002, C2-W-003: a backtick behind a code span is escaped, so the span does not take it', () => {
@@ -375,9 +374,9 @@ describe('what the random writer gates found', () => {
   })
 
   it('C2-W-088: a content that opens a block on its own is probed behind a word', () => {
-    expect(format(`/:: ${BACKSLASH}${BACKTICK}a/`)).toBe(`/:: ${BACKSLASH}${BACKTICK}a/\n`)
-    expect(format(`{-${BACKSLASH}${BACKTICK}\n||-}`)).toBe(`{-${BACKSLASH}${BACKTICK}\n||-}\n`)
-    expect(format(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*`)).toBe(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*\n`)
+    expect(format(`/:: ${BACKSLASH}${BACKTICK}a/`)).toBe(`/:: ${BACKTICK}a/\n`)
+    expect(format(`{-${BACKSLASH}${BACKTICK}\n||-}`)).toBe(`{-${BACKTICK}\n||-}\n`)
+    expect(format(`${BACKSLASH}"*${BACKSLASH}${BACKTICK}u*`)).toBe(`${BACKSLASH}"*${BACKTICK}u*\n`)
   })
 })
 
@@ -467,7 +466,7 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-097: a backslash that ends a text is written as two before punctuation, a space or the end of a line', () => {
-    expect(format(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/`)).toBe(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/${BACKTICK}\n`)
+    expect(format(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/`)).toBe(`x(/u)${BACKSLASH}${BACKSLASH}${BACKTICK}/\n`)
     expect(format(`a${BACKSLASH}${BACKSLASH}`)).toBe(`a${BACKSLASH}${BACKSLASH}\n`)
   })
 
@@ -477,8 +476,8 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-088: a construct inside the content takes its escape before the end of the content', () => {
-    expect(format(`x(/u)${BACKSLASH}${BACKTICK}[^/`)).toBe(`x(/u)${BACKSLASH}${BACKTICK}[^/\n`)
-    expect(format(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/`)).toBe(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/\n`)
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}[^/`)).toBe(`x(/u)${BACKTICK}[^/\n`)
+    expect(format(`x(/u)${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKSLASH}/`)).toBe(`x(/u)${BACKTICK}${BACKSLASH}${BACKSLASH}/\n`)
   })
 
   it('C2-W-093: a closing mark at the end of the content, glued to the closer, takes the backslash', () => {
@@ -487,11 +486,11 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-099: a content that starts with the mark of its opener continues the run, so its first hyphen is escaped', () => {
-    expect(format(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}`)).toBe(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}\n`)
+    expect(format(`x{-${BACKSLASH}-${BACKSLASH}${BACKTICK}-}`)).toBe(`x{--${BACKTICK}-}\n`)
   })
 
   it('C2-W-092: a text that ends before a line break takes no escape for the markup of the next line', () => {
-    expect(format(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}`)).toBe(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}${BACKTICK}\n`)
+    expect(format(`x[^\n${BACKSLASH}${BACKTICK}${BACKTICK}`)).toBe(`x[^\n${BACKTICK}${BACKTICK}\n`)
   })
 })
 
@@ -535,7 +534,7 @@ describe('what the third code review found', () => {
 
   it('C2-W-088: escapes are found again in the final spelling, before a code span opener and behind byte-order marks', () => {
     faithful(`/*{${BACKSLASH}${BACKTICK}(*/${BACKSLASH}${BACKTICK}`)
-    expect(faithful(`${BOM}${BOM}${BACKSLASH}${BACKTICK}`)).toBe(`\n${BOM}${BACKSLASH}${BACKTICK}\n`)
+    expect(faithful(`${BOM}${BOM}${BACKSLASH}${BACKTICK}`)).toBe(`\n${BOM}${BACKTICK}\n`)
   })
 
   it('C2-W-016: a lone CR at the end of a line is refused with field-unspellable; inside a line it is text', () => {
@@ -547,7 +546,8 @@ describe('what the third code review found', () => {
   it('C2-W-088: many escaped backticks take linear time', () => {
     const source = `x${`${BACKSLASH}${BACKTICK}`.repeat(20000)}z`
     const started = performance.now()
-    expect(format(source)).toBe(`${source}\n`)
+    // C2-I-017: one run of 20,000 backticks has no closer of its length, so it is text.
+    expect(format(source)).toBe(`x${BACKTICK.repeat(20000)}z\n`)
     expect(performance.now() - started).toBeLessThan(3000)
   })
 
@@ -654,8 +654,8 @@ describe('what the random writer gate found after the third review', () => {
   })
 
   it('C2-W-088: a content that needs one escape after another takes them all', () => {
-    expect(format(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*`)).toBe(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*\n`)
-    expect(format(`{- |${BACKSLASH}${BACKTICK}a-}`)).toBe(`{- |${BACKSLASH}${BACKTICK}a-}\n`)
+    expect(format(`*${BACKSLASH}${BACKTICK}${BACKSLASH}${BACKTICK}}*`)).toBe(`*${BACKTICK}${BACKTICK}}*\n`)
+    expect(format(`{- |${BACKSLASH}${BACKTICK}a-}`)).toBe(`{- |${BACKTICK}a-}\n`)
   })
 
   it('C2-W-016: a CR behind spaces at the end of a line, and a line of only a CR, are refused at the text', () => {
@@ -675,7 +675,8 @@ describe('what the random writer gate found after the third review', () => {
 
   it('C2-W-125: every lone bracket of an inline footnote takes the backslash, also beside an escaped backtick', () => {
     for (const source of [`^[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`, `^[${BACKSLASH}[${BACKSLASH}[]`, `:n[${BACKSLASH}[${BACKSLASH}${BACKTICK}]`]) {
-      expect(format(source)).toBe(`${source}\n`)
+      // C2-I-017: the lone backtick is text and takes no backslash.
+      expect(format(source)).toBe(`${source.replace(`${BACKSLASH}${BACKTICK}`, BACKTICK)}\n`)
     }
   })
 
@@ -685,11 +686,11 @@ describe('what the random writer gate found after the third review', () => {
   })
 
   it('C2-W-069: emphasis glued behind the closer of emphasis is braced', () => {
-    expect(format(`/${BACKSLASH}${BACKTICK}/{/[/}`)).toBe(`/${BACKSLASH}${BACKTICK}/{/[/}\n`)
+    expect(format(`/${BACKSLASH}${BACKTICK}/{/[/}`)).toBe(`/${BACKTICK}/{/[/}\n`)
   })
 
   it('C2-W-088: a content that starts with a line break is probed behind a word', () => {
-    expect(format(`{-\n/${BACKSLASH}${BACKTICK}%-}`)).toBe(`{-\n/${BACKSLASH}${BACKTICK}%-}\n`)
+    expect(format(`{-\n/${BACKSLASH}${BACKTICK}%-}`)).toBe(`{-\n/${BACKTICK}%-}\n`)
   })
 
   it('C2-W-016: a paragraph of only a CR is refused at its text', () => {
