@@ -163,14 +163,19 @@ const characters: Loss = (node, _list, _at, found) => {
   const value = str(node['value'])
   let written = type === 'math' ? value : htmlText(value, true)
   if (written !== value) found.add('C2-H-176 C2-H-172 characters')
+  if (written === '' && type === 'text') return []
   const feed = type === 'text' && written.includes('\n')
   if (!written.includes('\r') && !feed) return written === value ? undefined : [{ ...node, value: written }]
   // The HTML input stream reads a carriage return as a line feed (_SPEC_GAPS.md G1).
   if (written.includes('\r')) found.add('G1 carriage return')
   // A text value that holds a line feed, as a CSV cell can, reads back as a soft break (_SPEC_GAPS.md G7).
   if (feed) found.add('G7 line feed in text')
-  written = written.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
-  if (type !== 'text') return [{ ...node, value: written }]
+  return lineEnds(node, written.replaceAll('\r\n', '\n').replaceAll('\r', '\n'))
+}
+
+/** A value whose line endings HTML reads back: as they stand in code and math, as soft breaks in text. */
+function lineEnds(node: Fields, written: string): Fields[] {
+  if (node['type'] !== 'text') return [{ ...node, value: written }]
   const parts = written.split('\n').flatMap((part, at) => [...(at > 0 ? [{ type: 'soft_break' }] : []),
     ...(part === '' ? [] : [text(part)])])
   // The importer reads a run of line endings as one soft break.
@@ -185,7 +190,9 @@ function applyLosses(list: Fields[], at: number, losses: Loss[], all: Loss[], fo
     const replaced = loss(node, list, at, found)
     if (replaced === undefined) continue
     const rest = losses.slice(index + 1)
-    return replaced.flatMap((entry, position) => entry === node ? [entry] : applyLosses(replaced, position, rest, all, found))
+    // What a loss gave is new, so every loss applies to it; the losses behind this one apply to its own node again.
+    return replaced.flatMap((entry, position) => entry === node ? [entry]
+      : applyLosses(replaced, position, entry['type'] === node['type'] ? rest : all, all, found))
   }
   return [walk(node, all, found)]
 }
@@ -318,7 +325,9 @@ function footnotesAtEnd(document: Fields, found: Set<string>): void {
     }
   }
   visit(document)
-  const placed = notes.filter(note => order.has(str(note['key'])))
+  // C2-H-089: one note per number, so a later definition of a key writes nothing.
+  const placed = notes.filter((note, at) => order.has(str(note['key'])) &&
+    notes.findIndex(other => other['key'] === note['key']) === at)
     .sort((a, b) => (order.get(str(a['key'])) ?? 0) - (order.get(str(b['key'])) ?? 0))
   const rest = list.filter(node => node['type'] !== 'footnote')
   const moved = [...rest, ...placed]
@@ -531,7 +540,7 @@ export function project(document: DocumentNode, carriers = true): { tree: Docume
   mergedDefinitions(copy, found)
   let tree = walk(copy, [unresolved, asText, characters, linkText, blockForms], found)
   tree = emptyParagraphs(tree, found)
-  if (found.has('G1 carriage return') || found.has('G7 line feed in text')) edgeBreaks(tree)
+  if (['G1 carriage return', 'G7 line feed in text', 'C2-H-176 C2-H-172 characters'].some(loss => found.has(loss))) edgeBreaks(tree)
   if (carriers) tree = spaceNodes(tree, found)
   else {
     tree = plainSpaces(tree, found)
