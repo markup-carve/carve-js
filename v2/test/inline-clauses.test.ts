@@ -521,7 +521,7 @@ describe('links and images', () => {
     expect(inline('![a *b* [c](/x)](/u "T") ![a][b] ![a][]')).toBe('img(/u "T")"a *b* [c](/x)" " " imgref(b)"a" " " imgref(=a)"a"')
     expect(inline('![a] ![a]{.c} \\![a](/u) ! [a](/u)')).toBe('"![a] !" span["a"]{.c} " !" a(/u)["a"] " ! " a(/u)["a"]')
     expect(inline('![a', 'b](/u)')).toBe('img(/u)"a|b"')
-    expect(inline('![a `]` b](/u)')).toBe('img(/u)"a `]` b"')
+    expect(inline('x ![a `]` b](/u)')).toBe('"x " img(/u)"a `]` b"')
     expect(inline('*a ![b* c](/u)*')).toBe('strong["a " img(/u)"b* c"]')
   })
 })

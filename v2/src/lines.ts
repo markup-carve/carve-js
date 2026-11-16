@@ -3,12 +3,12 @@
 import { type AttributeMemo, type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
-  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE, PAREN_OPEN,
+  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TAB, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
 import { isSpaceOrTab } from './source.ts'
-import { isAsciiDigit, isWhitespace } from './unicode.ts'
+import { isAsciiDigit } from './unicode.ts'
 
 const MAX_HEADING_LEVEL = 6
 const MAX_ORDERED_DIGITS = 9
@@ -432,62 +432,6 @@ export function isDefinition(src: string, pos: number, end: number): boolean {
   return footnoteMarkerEnd(src, pos, end) >= 0 || isLinkDefinition(src, pos, end) || isAbbreviation(src, pos, end)
 }
 
-/** Offset after the bracket pair that opens at `pos` with `open`, or -1. */
-function pairEnd(src: string, pos: number, end: number, open: number, close: number): number {
-  let depth = 0
-  for (let p = pos; p < end; p++) {
-    const code = src.charCodeAt(p)
-    if (code === BACKSLASH) p++
-    else if (code === open) depth++
-    else if (code === close && --depth === 0) return p + 1
-  }
-  return -1
-}
-
-/** C2-B-197: exactly one image form, `![alt](destination)` or `![alt][label]`, with optional glued brace blocks. */
-/** C2-I-068: the offset behind a link tail whose title opens at `pos`: a quoted title, spaces and `)`; or -1. */
-function titleTailEnd(src: string, pos: number, end: number): number {
-  const quote = src.charCodeAt(pos)
-  if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return -1
-  const after = quotedEnd(src, pos, end, quote)
-  if (after < 0) return -1
-  const p = skipSpaces(src, after, end)
-  return p < end && src.charCodeAt(p) === PAREN_CLOSE ? p + 1 : -1
-}
-
-/**
- * C2-I-066 to C2-I-069: the offset behind the link tail whose `(` is at `pos`, or -1. The destination
- * runs to whitespace with its parentheses balanced or escaped, and a title stands after exactly one space.
- */
-function linkTailEnd(src: string, pos: number, end: number): number {
-  let depth = 0
-  let p = pos + 1
-  for (; p < end && !isWhitespace(src.charCodeAt(p)); p++) {
-    const code = src.charCodeAt(p)
-    if (code === PAREN_OPEN) depth++
-    else if (code === PAREN_CLOSE && depth-- === 0) return p + 1
-    else if (code === BACKSLASH && isDestinationEscape(src.charCodeAt(p + 1))) p++
-  }
-  return depth === 0 && p < end && src.charCodeAt(p) === SPACE ? titleTailEnd(src, p + 1, end) : -1
-}
-
-/** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
-function isDestinationEscape(code: number): boolean {
-  return code === PAREN_OPEN || code === PAREN_CLOSE || code === BACKSLASH
-}
-
-export function isImageOnly(src: string, pos: number, end: number): boolean {
-  if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
-  let p = pairEnd(src, pos + 1, end, BRACKET_OPEN, BRACKET_CLOSE)
-  if (p < 0 || p >= end) return false
-  const code = src.charCodeAt(p)
-  // C2-B-197: the shape is that of the inline form, so a tail the inline pass rejects makes no block image line.
-  if (code === PAREN_OPEN) p = linkTailEnd(src, p, end)
-  else if (code === BRACKET_OPEN) p = pairEnd(src, p, end, BRACKET_OPEN, BRACKET_CLOSE)
-  else return false
-  return p >= 0 && skipSpaces(src, attributeBlocksEnd(src, p, end), end) === end
-}
-
 /** C2-B-198: exactly one display math span, `$$` glued to a code span, with optional glued brace blocks. */
 export function isDisplayMathOnly(src: string, pos: number, end: number): boolean {
   if (pos + 2 >= end || src.charCodeAt(pos) !== DOLLAR || src.charCodeAt(pos + 1) !== DOLLAR) return false
@@ -576,7 +520,7 @@ export function countValue(value: string | null): number {
  * Built at the first backtick, so a line without one costs nothing; each length keeps a cursor, so
  * finding every closing run of a forward scan is linear in the line (C2-B-169).
  */
-class BacktickRuns {
+export class BacktickRuns {
   private readonly starts = new Map<number, number[]>()
   private readonly cursors = new Map<number, number>()
 

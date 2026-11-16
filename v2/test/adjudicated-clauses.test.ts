@@ -119,3 +119,55 @@ describe('C2-H-165: a degraded node that leaves no text is dropped', () => {
     expect(render('| a |\n|  |\n', { profile: 'minimal' })).toBe('<p>a<br>\n</p>')
   })
 })
+
+describe('C2-B-197: a block image line has the shape of the inline image form', () => {
+  const kind = (line: string): string => {
+    const node = first(`${line}\n^ cap\n`)
+    if (node['type'] !== 'figure') return String(node['type'])
+    const inner = (node['children'] as { role?: string }[])[0]!
+    return inner.role === 'image' ? 'figure' : 'figure without image'
+  }
+  const role = (line: string): unknown => first(`${line}\n`)['role']
+
+  it('C2-I-076: a reference label runs to the next `]` and may hold `[`', () => {
+    expect(kind('![a][b[c]')).toBe('figure')
+    expect(role('![x][a[b]')).toBe('image')
+    expect(kind('![a][b\\]c]')).toBe('figure')
+    expect(kind('![a][b[c]d]')).toBe('paragraph')
+    expect(kind('![a][b`]`]')).toBe('paragraph')
+  })
+
+  it('C2-I-078, C2-I-079: a blank label and one that starts with `@` or `^` are no labels', () => {
+    for (const line of ['![a][ ]', '![a][\t]', '![a][@x]', '![a][^n]', '![ ][]', '![][]']) {
+      expect(kind(line)).toBe('paragraph')
+      expect(role(line)).toBeUndefined()
+    }
+    expect(kind('![a][]')).toBe('figure')
+    expect(kind('![a][ @x]')).toBe('figure')
+  })
+
+  it('C2-I-024, C2-I-077: a line comment in the alt or the label leaves the form open', () => {
+    for (const line of ['![a][b %% c]', '![a %% b](x)', '![a\t%% b](x)', '![a [b %% c] d](x)']) {
+      expect(kind(line)).toBe('paragraph')
+    }
+    expect(kind('![a%%b](x)')).toBe('figure')
+    expect(kind('![a][b%%c]')).toBe('figure')
+  })
+
+  it('C2-I-068, C2-I-069: only spaces stand between the title and `)`', () => {
+    expect(kind('![i](a "t"\t)')).toBe('paragraph')
+    expect(kind('![i](a "t"  )')).toBe('figure')
+    expect(kind("![i](a 't')")).toBe('figure')
+    expect(kind('![i](a\t"t")')).toBe('paragraph')
+  })
+
+  it('C2-I-006: the alt closes where the inline bracket stack closes it, behind the atoms of the line', () => {
+    for (const line of [
+      '![a `]` b](x)', '![a <h:x]> b](x)', '![a {% ] %} b](x)', '![a \\] b](x)', '![a [b] c](x)', '![a [b](u]v) c](x)',
+      '![a [b][c[d] e](x)', '![a [b]{k="]"} c](x)', '![a [^n] b](x)', '![a ^[b] c](x)', '![a :n[b] c](x)', '![](x)',
+    ]) {
+      expect(kind(line)).toBe('figure')
+    }
+    for (const line of ['![a](x) b', '![a](x', '![a [b](x)', '![a](x)(y)', '![a]', '![a] (x)']) expect(kind(line)).toBe('paragraph')
+  })
+})

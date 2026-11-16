@@ -25,11 +25,12 @@ import {
   attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
-  isFigureName, isFrontmatterCloser, isFrontmatterOpener, isImageOnly, isIncludeLine, isLineComment,
+  isFigureName, isFrontmatterCloser, isFrontmatterOpener, isIncludeLine, isLineComment,
   isLinkDefinition, isListMarker, isQuoteMark, opensListInParagraph, isThematicBreak, orderedDelimiter,
   orderedMarkerEnd, romanLetterValue, romanValue, rowAttributeStart, rowClosingPipe, separatorPipes, skipSpaces, taskBoxEnd,
   termMarkEnd, trimEnd,
 } from './lines.ts'
+import { isImageOnly } from './image-line.ts'
 import { openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
 import { addLine, type BlockState, MAX_DEPTH, NO_DEPTH, NO_LEAF, NO_LINE, writeEvent } from './state.ts'

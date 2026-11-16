@@ -210,7 +210,7 @@ function crossReference(state: InlineState, pos: number): number {
 }
 
 /** C2-I-073: the offset of the `>` that closes the URL whose scheme starts at `pos`, or NONE. */
-function urlEnd(text: string, pos: number, end: number): number {
+export function urlEnd(text: string, pos: number, end: number): number {
   if (!inClass(text.charCodeAt(pos), CLASS_SCHEME_FIRST)) return NONE
   let p = classRunEnd(text, pos + 1, end, CLASS_SCHEME_REST)
   if (p >= end || text.charCodeAt(p) !== COLON) return NONE
@@ -224,7 +224,7 @@ function urlEnd(text: string, pos: number, end: number): number {
 }
 
 /** C2-I-073: the offset of the `>` that closes the email address that starts at `pos`, or NONE. */
-function emailEnd(text: string, pos: number, end: number): number {
+export function emailEnd(text: string, pos: number, end: number): number {
   const at = classRunEnd(text, pos, end, CLASS_EMAIL_LOCAL)
   if (at === pos || at >= end || text.charCodeAt(at) !== AT_SIGN) return NONE
   const close = classRunEnd(text, at + 1, end, CLASS_EMAIL_DOMAIN)
