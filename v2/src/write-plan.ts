@@ -17,6 +17,7 @@ import { checkSmart } from './write-plan-smart.ts'
 import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
 import { type Writer } from './write-state.ts'
+import { MAX_DEPTH } from './state.ts'
 
 /** What one planned write of a group collects. */
 export interface Plan {
@@ -714,25 +715,36 @@ function opaqueBlock(leaf: Leaf, at: number, end: number): number {
   return end
 }
 
+// C2-B-190: the containers that count toward the block cap.
+const BLOCK_CAP_CONTAINERS: readonly string[] = [
+  'block_quote', 'list', 'list_item', 'definition_list', 'definition_description', 'footnote', 'div', 'admonition', 'directive',
+  'figure_group', 'line_block',
+]
+
 /** Records where every list of nodes below `nodes` stands, and the blocks whose spelling the plan does not check. */
 export function notePlaces(plan: Plan, nodes: readonly Node[], first: boolean): void {
-  const pending: [readonly Node[], number, LeafPlace][] = [[nodes, 0, TOP_PLACE]]
+  const pending: Pending[] = [[nodes, 0, 0, TOP_PLACE]]
   for (;;) {
     const item = pending.pop()
     if (item === undefined) return
-    const [list, level, place] = item
-    for (let at = 0; at < list.length; at++) {
-      const node = list[at]!
-      const shape = blockShape(node)
-      if (shape !== null && plan.undecided === null) plan.undecided = shape
-      const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
-      inner.documentStart = first && level === 0 && at === 0
-      forEachSlot(node, (children) => {
-        plan.places.set(children, inner)
-        pending.push([children, level + 1, inner])
-      })
-    }
+    for (let at = 0; at < item[0].length; at++) noteNode(plan, pending, item, at, first)
   }
+}
+
+/** A list of nodes with its nesting below the group, the number of containers around it (C2-B-190), and its place. */
+type Pending = [readonly Node[], number, number, LeafPlace]
+
+function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, place]: Pending, at: number, first: boolean): void {
+  const node = list[at]!
+  const shape = blockShape(node, containers)
+  if (shape !== null && plan.undecided === null) plan.undecided = shape
+  const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
+  inner.documentStart = first && depth === 0 && at === 0
+  const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)
+  forEachSlot(node, (children) => {
+    plan.places.set(children, inner)
+    pending.push([children, depth + 1, below, inner])
+  })
 }
 
 /** True when `children` is one node for which `test` holds, besides comments and breaks, as the reader tests it. */
@@ -750,7 +762,9 @@ function holdsOnly(children: readonly Node[], test: (node: Node) => boolean): bo
  * display math and no role may read back with one. A footnote reads the columns of a container on its first line
  * from behind its label, where the writer indents by two, so only a paragraph is planned there.
  */
-function blockShape(node: Node): string | null {
+function blockShape(node: Node, level: number): string | null {
+  // C2-B-190: past the block cap an opener is text, which the line rules of the plan do not know.
+  if (level >= MAX_DEPTH) return 'block depth cap'
   if (node.type === 'paragraph' && node.role === undefined && holdsOnly(node.children,
     (child) => child.type === 'image' || (child.type === 'math' && child.display))) return 'block role'
   if (node.type === 'footnote' && node.children.length > 0 && node.children[0]!.type !== 'paragraph') return 'footnote container'

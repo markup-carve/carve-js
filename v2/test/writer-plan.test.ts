@@ -352,6 +352,13 @@ describe('the planned writer', () => {
     expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(201)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
   })
 
+  it('C2-B-190: a block past the block cap is left to the repair, since an opener there is text', () => {
+    const result = formatBy(`${'> '.repeat(200)}>\n`, 'both')
+    expect(result.stats.planned).toBe(0)
+    expect(result.stats.differences).toEqual([])
+    expect(result.output.source).toBe(`${'> '.repeat(200)}>\n`)
+  })
+
   it('C2-I-118: the open delimiters and brackets of a content count together, so a link behind 199 of them is planned', () => {
     const source = `${'*a '.repeat(199)}[x](u)\n`
     const result = formatBy(source, 'both')
