@@ -89,16 +89,16 @@ function digits(leaf: Leaf, at: number): number {
   if (end - at > 9 || (mark !== 46 && mark !== 41)) return NO_ESCAPE
   // C2-B-101: the attributes of an item abut its marker.
   if (code(leaf, end + 1) === BRACE_OPEN) return UNDECIDED
-  if (hasContentBehind(leaf, end + 1)) return end
-  return restIsBlank(leaf, end + 1) ? UNDECIDED : NO_ESCAPE
+  // C2-B-033: a bare marker is text.
+  return hasContentBehind(leaf, end + 1) ? end : NO_ESCAPE
 }
 
 /** C2-B-015: a bullet and content. */
 function bullet(leaf: Leaf, at: number): number {
   // C2-B-101: the attributes of an item abut its marker.
   if (code(leaf, at + 1) === BRACE_OPEN) return UNDECIDED
-  if (hasContentBehind(leaf, at + 1)) return at
-  return restIsBlank(leaf, at + 1) ? UNDECIDED : NO_ESCAPE
+  // C2-B-033: a bare marker is text.
+  return hasContentBehind(leaf, at + 1) ? at : NO_ESCAPE
 }
 
 /** C2-B-014, C2-B-159, C2-B-166: what opens on every line: a fence run, a star run alone, a table row. */

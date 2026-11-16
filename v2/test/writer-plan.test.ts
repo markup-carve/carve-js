@@ -352,6 +352,15 @@ describe('the planned writer', () => {
     expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(201)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
   })
 
+  it('C2-B-033: a bare list marker at a line start is text, so it is planned bare', () => {
+    for (const source of ['-\n', 'a\n-\n', '1.\n', '> -\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-190: a block past the block cap is left to the repair, since an opener there is text', () => {
     const result = formatBy(`${'> '.repeat(200)}>\n`, 'both')
     expect(result.stats.planned).toBe(0)
