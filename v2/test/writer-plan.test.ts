@@ -452,14 +452,15 @@ describe('the planned writer', () => {
   })
 })
 
-// Five shapes that the repair wrote in time above linear: each doubling of the input may at most
-// multiply the time of the writer by 2.6 on average. The fastest of five runs is taken against the noise of the machine.
+// Shapes that the writer wrote in time above linear: each doubling of the input may at most
+// multiply the time of the writer by 2.8 on average. The fastest of three runs is taken against the noise of the machine.
 const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
   ['unclosed braced emphasis openers', (n) => ` ${'{/a {/b /} { '.repeat(n)}\n`],
   ['braced strong around code spans', (n) => `${'{*a {*b `c` *} {*a {*b `c`'.repeat(n)}\n`],
   ['prose with marks', (n) => `${'word /em/ *strong* `code` [link](/u) -\\-- '.repeat(n)}end\n`],
   ['paragraphs', (n) => 'A paragraph with a line,\nand a second line.\n\n'.repeat(n)],
   ['table rows', (n) => '| a | b *c* |\n'.repeat(n)],
+  ['text bracket pairs before an unclosed parenthesis', (n) => `${'[a]( '.repeat(n)}\n`],
 ]
 
 /** The fastest of `runs` writes of the parse of `source`; the parse itself is not timed. */

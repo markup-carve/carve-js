@@ -73,8 +73,9 @@ function referenceReading(leaf: Leaf, opener: number, closer: number): number {
  * which is an inline footnote (C2-I-089) or a full or collapsed reference (C2-I-072, C2-I-075). A link tail, an
  * attribute block, a definition, a footnote reference or a shortcut is left to the repair.
  */
-function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolean, escaped: Uint8Array): number {
-  if (hasKeys) return NO_DECISION
+function pairReading(scan: Scan, opener: number, closer: number): number {
+  const { leaf, escaped } = scan
+  if (scan.hasKeys) return NO_DECISION
   if (isFootnoteCaret(leaf, opener - 1, escaped)) return ESCAPE_OPENER
   if (leaf.codes[opener + 1] === 94) return NO_DECISION
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
@@ -83,14 +84,8 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   // C2-B-081, C2-B-084: a definition or an abbreviation opens only at the start of a paragraph's first line, which the
   // line rules decide with the reader's shapes.
   if (next === ':') return LITERAL
-  if (next === '(') return closesOnLine(leaf, closer + 2, 41) ? NO_DECISION : LITERAL
+  if (next === '(') return closesOnLine(scan, closer + 2) ? NO_DECISION : LITERAL
   return next === '' || !FOLLOWERS.includes(next) ? LITERAL : NO_DECISION
-}
-
-/** C2-I-069: whether `value` follows on the line from `at` on, in any unit; a link tail stands on one line. */
-function closesOnLine(leaf: Leaf, at: number, value: number): boolean {
-  for (let unit = at; unit < leaf.codes.length && leaf.codes[unit] !== 10; unit++) if (leaf.codes[unit] === value) return true
-  return false
 }
 
 interface Scan {
@@ -98,6 +93,22 @@ interface Scan {
   escaped: Uint8Array
   openers: number[]
   hasKeys: boolean
+  /** Per unit, whether a `)` follows on its line from it on; built once per leaf so the scan stays linear (C2-W-089). */
+  closes: Uint8Array | null
+}
+
+/** C2-I-069: whether a `)` follows on the line from `at` on, in any unit; a link tail stands on one line. */
+function closesOnLine(scan: Scan, at: number): boolean {
+  const codes = scan.leaf.codes
+  if (scan.closes === null) {
+    const closes = new Uint8Array(codes.length + 1)
+    for (let unit = codes.length - 1; unit >= 0; unit--) {
+      const value = codes[unit]
+      closes[unit] = value === 41 ? 1 : value === 10 ? 0 : (closes[unit + 1] ?? 0)
+    }
+    scan.closes = closes
+  }
+  return scan.closes[at] === 1
 }
 
 /** Pairs the closing bracket at `at` with the nearest opener and decides the pair. */
@@ -108,7 +119,7 @@ function closePair(scan: Scan, at: number): void {
   const textOpener = leaf.kinds[opener] === TEXT
   if (textOpener !== (leaf.kinds[at] === TEXT)) return undecide(leaf, 'bracket pair')
   if (!textOpener) return
-  const reading = pairReading(leaf, opener, at, scan.hasKeys, scan.escaped)
+  const reading = pairReading(scan, opener, at)
   // With an opener left below it, the closing bracket would pair with that one once this opener is escaped.
   if (reading === NO_DECISION || (reading === ESCAPE_OPENER && openers.length > 0)) return undecide(leaf, 'bracket pair')
   if (reading === ESCAPE_OPENER) scan.escaped[opener] = 1
@@ -123,7 +134,7 @@ function closePair(scan: Scan, at: number): void {
 
 /** `bound` is the depth bound of the leaf's blocks (noteDepths). */
 export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean, bound: number): void {
-  const scan: Scan = { leaf, escaped, openers: [], hasKeys }
+  const scan: Scan = { leaf, escaped, openers: [], hasKeys, closes: null }
   const codes = leaf.codes
   let nodes = 0
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
