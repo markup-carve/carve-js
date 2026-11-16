@@ -70,8 +70,6 @@ export interface InlineState {
   codeRunEnd: number
   /** C2-H-172: whether the text the scan has read so far holds a bidirectional control. */
   bidi: boolean
-  /** Open containers of the block pass around this content (C2-I-118). */
-  baseDepth: number
   /** Definition keys from the completed block pass, including definitions after this content. */
   definitions: ReadonlySet<string> | null
 
@@ -121,6 +119,17 @@ export interface InlineState {
   lastSlash: number
   lastStar: number
 
+  // The shadow of the delimiter stack the scan keeps to count open entries (inline-depth.ts, C2-I-118).
+  depthClass: Int8Array
+  depthToken: Int32Array
+  depthSlash: Int32Array
+  depthStar: Int32Array
+  depthLength: number
+  depthLive: number
+  depthFloor: number
+  depthLastSlash: number
+  depthLastStar: number
+
   // Emission: the line of the source cursor, the last search for a line break and its answer,
   // and the typography state.
   line: number
@@ -152,7 +161,6 @@ function createState(): InlineState {
     codeRunCursors: new Map(),
     codeRunEnd: 0,
     bidi: false,
-    baseDepth: 0,
     definitions: null,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,
@@ -186,6 +194,15 @@ function createState(): InlineState {
     stackFloor: NONE,
     lastSlash: NONE,
     lastStar: NONE,
+    depthClass: new Int8Array(INITIAL_STACK),
+    depthToken: new Int32Array(INITIAL_STACK),
+    depthSlash: new Int32Array(INITIAL_STACK),
+    depthStar: new Int32Array(INITIAL_STACK),
+    depthLength: 0,
+    depthLive: 0,
+    depthFloor: NONE,
+    depthLastSlash: NONE,
+    depthLastStar: NONE,
     line: 0,
     breakFrom: 0,
     nextBreak: NONE,

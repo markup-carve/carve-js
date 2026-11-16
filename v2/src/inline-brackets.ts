@@ -9,23 +9,24 @@ import {
 import {
   ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
 } from './inline-kinds.ts'
+import { atDepthCap, enterBracket, leaveBracket } from './inline-depth.ts'
 import {
   closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_CLOSE,
   TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
-import { DEPTH_CAP } from './inline-tables.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
 /** Pushes a bracket opener that spans `[start, end)`. C2-I-118: past the cap it is text, and the scan goes on behind it. */
 export function openBracket(state: InlineState, start: number, end: number, form: number): number {
-  if (state.baseDepth + state.bracketDepth >= DEPTH_CAP) return end
+  if (atDepthCap(state)) return end
   if (state.bracketDepth === state.brackets.length) {
     const larger = new Int32Array(state.brackets.length * 2)
     larger.set(state.brackets)
     state.brackets = larger
   }
   state.brackets[state.bracketDepth++] = pushToken(state, TOKEN_OPEN, start, end, form, NONE, 0, NONE)
+  enterBracket(state)
   return end
 }
 
@@ -260,13 +261,15 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   const form = state.tokens[open + TOKEN_A]!
   if (form >= OPEN_FOOTNOTE) {
     closePair(state, open, pos, form === OPEN_FOOTNOTE ? INLINE_FOOTNOTE : INLINE_EXTENSION)
+    leaveBracket(state, true)
     return pos + 1
   }
   const end = closeConstruct(state, open, pos)
+  const formed = end !== NONE || (state.definitions !== null && closeShortcut(state, open, pos) !== NONE)
+  leaveBracket(state, formed)
   if (end !== NONE) return end
-  if (state.definitions !== null && closeShortcut(state, open, pos) !== NONE) return pos + 1
   // C2-I-065: the pair forms no construct. It is text and bounds nothing.
-  state.tokens[open] = TOKEN_TEXT
+  if (!formed) state.tokens[open] = TOKEN_TEXT
   return pos + 1
 }
 

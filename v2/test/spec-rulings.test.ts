@@ -324,18 +324,20 @@ describe('the cap of a bracket construct', () => {
     expect(html).toContain('*<a href="u">x</a> <img src="v" alt="y"')
   })
 
-  it('C2-I-118: the block depth and an open delimiter entry count toward the cap of an image and of a link alike', () => {
-    for (const tail of ['- *![x](u)', '- *[x](u)']) {
-      const html = render(`${'> '.repeat(197)}${tail}`)
+  it('C2-I-118: open delimiter entries count toward the cap of an image and of a link alike, and blocks do not', () => {
+    for (const tail of ['*![x](u)', '*[x](u)']) {
+      const html = render(`${'{^'.repeat(199)}${tail}`)
       expect(html, tail).not.toContain('<img')
       expect(html, tail).not.toContain('<a ')
+      expect(render(`${'> '.repeat(197)}- ${tail}`), tail).toMatch(/<img|<a /)
     }
   })
 
-  it('C2-I-126: a bracket opener that is text at the cap pairs with nothing', () => {
-    let node = parse(`${'> '.repeat(199)}:n[[]`).children[0]
-    while (node?.type === 'block_quote') node = node.children[0]
-    expect(node?.type === 'paragraph' ? node.children : null).toMatchObject([{ type: 'inline_extension', name: 'n', children: [{ type: 'text', value: '[' }] }])
+  it('C2-I-118: a bracket opener that is text at the cap pairs with nothing', () => {
+    const node = parse(`${'*a '.repeat(199)}:n[[]`).children[0]
+    expect(node?.type === 'paragraph' ? node.children.slice(1) : null).toMatchObject([
+      { type: 'inline_extension', name: 'n', children: [{ type: 'text', value: '[' }] },
+    ])
   })
 })
 

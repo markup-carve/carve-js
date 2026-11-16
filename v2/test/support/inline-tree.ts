@@ -9,7 +9,7 @@ import {
 } from '../../src/inline-kinds.ts'
 import { isPlainText, scanInline } from '../../src/inline-scan.ts'
 import { acquireInlineState, type InlineState, releaseInlineState } from '../../src/inline-state.ts'
-import { CAPTION, CELL, DIV, DOCUMENT, HEADING, LINE_BLOCK, PARAGRAPH, TERM } from '../../src/kinds.ts'
+import { CAPTION, CELL, HEADING, LINE_BLOCK, PARAGRAPH, TERM } from '../../src/kinds.ts'
 import { type BlockNode } from '../../src/tree.ts'
 import { parseBlockTree } from '../../src/index.ts'
 
@@ -136,37 +136,36 @@ function hasInlineContent(kind: number): boolean {
 
 /** The inline nodes of the content `spans[from..to)` of a leaf. */
 function contentInlines(
-  state: InlineState, src: string, spans: number[], from: number, to: number, depth: number, lineComments: boolean,
+  state: InlineState, src: string, spans: number[], from: number, to: number, lineComments: boolean,
 ): InlineNode[] {
   const start = spans[from]!
   const end = spans[from + 1]!
   if (to - from === 2 && isPlainText(src, start, end)) return [textNode(src.slice(start, end), start, end)]
-  scanInline(state, src, spans, from, to, depth, lineComments)
+  scanInline(state, src, spans, from, to, lineComments)
   return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
 }
 
 /** C2-B-130, C2-B-144: each line of a line block is a content of its own, and `%%` is text in it. */
-function lineInlines(state: InlineState, src: string, spans: number[], depth: number): InlineNode[] {
+function lineInlines(state: InlineState, src: string, spans: number[]): InlineNode[] {
   const lines: InlineNode[] = []
   for (let at = 0; at < spans.length; at += 2) {
     const line = createNode(LINE, spans[at]!, 0, 0)
     line.end = spans[at + 1]!
-    line.children = contentInlines(state, src, spans, at, at + 2, depth, false)
+    line.children = contentInlines(state, src, spans, at, at + 2, false)
     lines.push(line)
   }
   return lines
 }
 
-/** Reads the inline content of every text leaf and cell below `node`. `depth` is the number of open containers around it (C2-I-118). */
-function readInlines(state: InlineState, src: string, node: TreeNode, depth: number): void {
+/** Reads the inline content of every text leaf and cell below `node`. */
+function readInlines(state: InlineState, src: string, node: TreeNode): void {
   node.inlines = null
   if (node.children !== null) {
-    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
-    for (const child of node.children) readInlines(state, src, child, inner)
+    for (const child of node.children) readInlines(state, src, child)
   } else if (hasInlineContent(node.kind)) {
-    node.inlines = contentInlines(state, src, node.spans!, 0, node.spans!.length, depth, true)
+    node.inlines = contentInlines(state, src, node.spans!, 0, node.spans!.length, true)
   } else if (node.kind === LINE_BLOCK) {
-    node.inlines = lineInlines(state, src, node.spans!, depth)
+    node.inlines = lineInlines(state, src, node.spans!)
   }
 }
 
@@ -175,7 +174,7 @@ export function parseTree(src: string): TreeNode {
   const root = parseBlockTree(src) as TreeNode
   const state = acquireInlineState()
   try {
-    readInlines(state, src, root, 0)
+    readInlines(state, src, root)
     return root
   } finally {
     releaseInlineState(state)

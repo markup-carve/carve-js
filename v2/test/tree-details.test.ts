@@ -175,10 +175,15 @@ describe('the reader at its bounds', () => {
     return documentOf(node)
   }
 
-  it('accepts a tree at the depth bound and refuses the next level', () => {
+  it('C2-A-171: accepts a tree at the depth bound and refuses the next level', () => {
     expect(refusal(nest(MAX_TREE_DEPTH - 2))).toBeNull()
     expect(refusal(nest(MAX_TREE_DEPTH - 1))).not.toBeNull()
-    expect(MAX_TREE_DEPTH).toBe(416)
+    expect(MAX_TREE_DEPTH).toBe(616)
+  })
+
+  it('C2-A-171: accepts 200 quotes around a content nested 200 levels deep, as the parser makes them', () => {
+    const src = `${'> '.repeat(200)}${'{^'.repeat(200)}x${'^}'.repeat(200)}`
+    expect(refusal(parse(src))).toBeNull()
   })
 
   it('accepts typed metadata, 4096 resource references and 32 nested fallbacks, and refuses one more', () => {

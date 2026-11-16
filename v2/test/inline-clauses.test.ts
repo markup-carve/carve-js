@@ -801,9 +801,9 @@ describe('the depth cap', () => {
     expect(depth(inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`), 'span[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${'^['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'fn[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${':n['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'ext(n)[')).toBe(MAX_DEPTH)
-    // Blocks and inlines count together: two quotes leave room for 198 inline nodes.
-    expect(depth(tree(`> > ${'{^'.repeat(MAX_DEPTH)}x${'^}'.repeat(MAX_DEPTH)}`), 'sup[')).toBe(MAX_DEPTH - 2)
-    expect(depth(tree(`> - ${'['.repeat(MAX_DEPTH)}x${']{.c}'.repeat(MAX_DEPTH)}`), 'span[')).toBe(MAX_DEPTH - 3)
+    // No block counts: behind a quote and a list item each content nests to the cap by itself.
+    expect(depth(tree(`> > ${'{^'.repeat(MAX_DEPTH)}x${'^}'.repeat(MAX_DEPTH)}`), 'sup[')).toBe(MAX_DEPTH)
+    expect(depth(tree(`> - ${'['.repeat(MAX_DEPTH)}x${']{.c}'.repeat(MAX_DEPTH)}`), 'span[')).toBe(MAX_DEPTH)
     // Brackets and delimiters count together.
     const mixed = inline(`${'['.repeat(150)}${'{^'.repeat(60)}x${'^}'.repeat(60)}${']{.c}'.repeat(150)}`)
     expect(depth(mixed, 'span[') + depth(mixed, 'sup[')).toBe(MAX_DEPTH)
@@ -992,7 +992,10 @@ describe('more cases per clause', () => {
     const spans = inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`)
     expect(spans.slice('span['.repeat(MAX_DEPTH).length, 'span['.repeat(MAX_DEPTH).length + 9)).toBe('"[x"]{.c}')
     expect(spans.endsWith(']{.c} "]{.c}"')).toBe(true)
-    expect(inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)).toContain('span["[[" strong["a"] "]"]{.c}')
+    // The open brackets count for the delimiter openers inside them too.
+    const brackets = inline(`${'['.repeat(MAX_DEPTH)}[*a*]${']{.c}'.repeat(MAX_DEPTH)}`)
+    expect(brackets).toContain('span["[[*a*]"]{.c}')
+    expect(brackets.endsWith(']{.c} "]{.c}"')).toBe(true)
   })
 })
 
@@ -1002,8 +1005,8 @@ describe('what the events hold', () => {
   function eventsAfter(before: string, src: string): number[] {
     const state = acquireInlineState()
     try {
-      scanInline(state, before, [0, before.length], 0, 2, 0, true)
-      scanInline(state, src, [0, src.length], 0, 2, 0, true)
+      scanInline(state, before, [0, before.length], 0, 2, true)
+      scanInline(state, src, [0, src.length], 0, 2, true)
       return Array.from(state.events.subarray(0, state.eventLength))
     } finally {
       releaseInlineState(state)
@@ -1036,9 +1039,9 @@ describe('what the events hold', () => {
     const src = '%% c\nd'
     const state = acquireInlineState()
     try {
-      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, true)
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, true)
       expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('%%" c" sb "d"')
-      scanInline(state, src, [0, 4, 5, 6], 0, 4, 0, false)
+      scanInline(state, src, [0, 4, 5, 6], 0, 4, false)
       expect(inlineShapeOf(src, buildInlineTree(src, state.events, state.eventLength, () => ''))).toBe('"%% c" sb "d"')
     } finally {
       releaseInlineState(state)

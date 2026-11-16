@@ -56,8 +56,6 @@ export interface TreeContext {
   positions: boolean
   /** The state the inline pass of each content runs in. */
   inline: InlineState
-  /** C2-I-118: the number of open containers around the block being built. */
-  depth: number
   /** C2-I-098: the expansion of each defined term. The first definition of a term wins (C2-B-085). */
   abbreviations: Map<string, string>
   /** The offset of the own markup of each block that took attribute lines (C2-A-148). */
@@ -391,7 +389,7 @@ export function contentNodes(ctx: TreeContext, spans: number[], from: number, to
     addText(ctx, list, ctx.src.slice(spans[from], spans[from + 1]), spans[from]!, spans[from + 1]!)
     return list
   }
-  scanInline(ctx.inline, ctx.src, spans, from, to, ctx.depth, lineComments, (flow & FLOW_KIND_MASK) === FLOW_CELL)
+  scanInline(ctx.inline, ctx.src, spans, from, to, lineComments, (flow & FLOW_KIND_MASK) === FLOW_CELL)
   return buildFromEvents(ctx, spans, flow)
 }
 

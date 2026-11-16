@@ -23,7 +23,7 @@ import { cpus, loadavg } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, DIV, DOCUMENT, EVENT_WIDTH, HEADING,
+  acquireInlineState, acquireState, type BlockNode, buildTree, CAPTION, CELL, EVENT_WIDTH, HEADING,
   format, LINE_BLOCK, PARAGRAPH, parse, parseWithLayout, releaseInlineState, releaseState, render, scanBlocks,
   scanInline, TERM,
 } from '../src/index.ts'
@@ -196,20 +196,18 @@ interface Content {
   spans: number[]
   from: number
   to: number
-  depth: number
   lineComments: boolean
 }
 
 /** The contents the inline pass reads in the tree below `node`, as src/tree.ts finds them. */
-function contentsOf(node: BlockNode, depth: number, out: Content[]): Content[] {
+function contentsOf(node: BlockNode, out: Content[]): Content[] {
   const spans = node.spans ?? []
   if (node.children !== null) {
-    const inner = node.kind > DOCUMENT && node.kind <= DIV ? depth + 1 : depth
-    for (const child of node.children) contentsOf(child, inner, out)
+    for (const child of node.children) contentsOf(child, out)
   } else if (node.kind === LINE_BLOCK) {
-    for (let at = 0; at < spans.length; at += 2) out.push({ spans, from: at, to: at + 2, depth, lineComments: false })
+    for (let at = 0; at < spans.length; at += 2) out.push({ spans, from: at, to: at + 2, lineComments: false })
   } else if ([PARAGRAPH, HEADING, TERM, CAPTION, CELL].includes(node.kind)) {
-    out.push({ spans, from: 0, to: spans.length, depth, lineComments: true })
+    out.push({ spans, from: 0, to: spans.length, lineComments: true })
   }
   return out
 }
@@ -234,12 +232,12 @@ for (const file of files) {
   }
   // The inline pass alone: every content of the document, on one reused state, with no tree built.
   scanBlocks(state, src)
-  const contents = contentsOf(buildTree(state.events, state.eventLength), 0, [])
+  const contents = contentsOf(buildTree(state.events, state.eventLength), [])
   let inlineEvents = 0
   const inlineScan = (): void => {
     inlineEvents = 0
     for (const content of contents) {
-      scanInline(inlineState, src, content.spans, content.from, content.to, content.depth, content.lineComments)
+      scanInline(inlineState, src, content.spans, content.from, content.to, content.lineComments)
       inlineEvents += inlineState.eventLength
     }
   }

@@ -277,9 +277,8 @@ describe('the depth cap over blocks and inlines together', () => {
     return node.children
   }
 
-  it('C2-B-190, C2-I-118: a div title counts the blocks around it and the div, so a link past 200 is text', () => {
-    expect(inQuotes(199, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'text', value: '[x](/u)' }])
-    expect(inQuotes(198, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }])
+  it('C2-B-190, C2-I-118: a div title counts no block, so a link forms in it behind 199 quotes', () => {
+    expect(inQuotes(199, ['::: note "[x](/u)"'])[0]!.title).toEqual([{ type: 'link', href: '/u', children: [{ type: 'text', value: 'x' }] }])
   })
 
   it('C2-B-190: a description mark that would open a container past the cap is term text, and nothing crashes', () => {

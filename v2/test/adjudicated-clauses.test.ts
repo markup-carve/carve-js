@@ -48,29 +48,29 @@ describe('C2-B-119/122/196: a sigil starts a sigil div also when further words a
   })
 })
 
-describe('C2-I-118/126: the scan goes on behind an opener that failed at the cap', () => {
-  const innermost = (src: string): unknown => {
-    let node = parse(src).children[0] as unknown as { type: string, children: unknown[] }
-    while (node.type === 'block_quote') node = node.children[0] as typeof node
-    return JSON.parse(JSON.stringify(node.children, (key, value: unknown) => key === 'pos' ? undefined : value))
+describe('C2-I-118: the scan goes on behind an opener that failed at the cap', () => {
+  // The children of the paragraph behind `open` braced openers that never close, without that prefix.
+  const behind = (open: number, content: string): unknown => {
+    const children = (parse(`${'{^'.repeat(open)}${content}`).children[0] as unknown as { children: { value?: string }[] }).children
+    const head = children[0]!.value!.slice(open * 2)
+    const rest = head === '' ? children.slice(1) : [{ ...children[0], value: head }, ...children.slice(1)]
+    return JSON.parse(JSON.stringify(rest, (key, value: unknown) => key === 'pos' ? undefined : value))
   }
 
   it('C2-I-118: behind `^[`, `![` and `:name[` the next bracket is no footnote reference', () => {
     for (const opener of ['^[', '![', ':n[', ':ab-c[']) {
-      const children = innermost(`${'> '.repeat(200)}${opener}^x]`)
-      expect(children).toEqual([{ type: 'text', value: `${opener}^x]` }])
+      expect(behind(200, `${opener}^x]`)).toEqual([{ type: 'text', value: `${opener}^x]` }])
     }
-    expect(innermost(`${'> '.repeat(200)}^[^"]`)).toEqual([
+    expect(behind(200, '^[^"]')).toEqual([
       { type: 'text', value: '^[^' },
       { type: 'smart_punctuation', kind: 'right_double_quote', glyph: '”', source: '"' },
       { type: 'text', value: ']' },
     ])
   })
 
-  it('C2-I-126: an opener that failed at the cap pairs with no closing bracket', () => {
-    const children = innermost(`${'> '.repeat(199)}[a ^[^x] b](u)`)
-    expect(JSON.stringify(children)).not.toContain('footnote_ref')
-    expect(innermost(`${'> '.repeat(199)}^[a ^[^x] b]`)).toEqual([
+  it('C2-I-118: an opener that failed at the cap pairs with no closing bracket', () => {
+    expect(JSON.stringify(behind(199, '[a ^[^x] b](u)'))).not.toContain('footnote_ref')
+    expect(behind(199, '^[a ^[^x] b]')).toEqual([
       { type: 'inline_footnote', children: [{ type: 'text', value: 'a ^[^x' }], number: 1 }, { type: 'text', value: ' b]' },
     ])
   })
@@ -319,28 +319,36 @@ describe('C2-H-051: the carrier of a raw span stands only around the escaped pay
   })
 })
 
-describe('C2-I-118: what counts against the depth cap where a delimiter is open before a bracket construct', () => {
-  // The inline children of the one leaf at the bottom of the blocks of `src`, as `type` or `type(children)`.
-  const leaf = (src: string): string => {
-    let node = parse(src).children[0] as unknown as { type: string, children: { type: string }[] }
-    while (['block_quote', 'list', 'list_item'].includes(node.type)) node = node.children[0] as typeof node
+describe('C2-I-118: the open entries of both stacks count when an opener is read', () => {
+  // The inline children of the first paragraph behind `open` unpaired star openers, as `type` or `type(children)`.
+  const leaf = (open: number, content: string): string => {
+    const node = parse(`${'*a '.repeat(open)}${content}`).children[0] as unknown as { children: { type: string }[] }
     const show = (child: { type: string, value?: string, children?: unknown[] }): string =>
       child.type === 'text' ? JSON.stringify(child.value) : `${child.type}(${(child.children ?? []).map((c) => show(c as typeof child)).join(' ')})`
-    return node.children.map(show).join(' ')
+    const shown = node.children.map(show).join(' ')
+    return shown.replace(`"${'*a '.repeat(open)}`, '"').replace(/^"" /, '')
   }
+  const brackets = (open: number, content: string): string => render(`${'['.repeat(open)}${content}`)
 
-  it('C2-I-118: an opening bracket counts the block depth and the open brackets, not the open delimiter entries', () => {
-    expect(leaf(`${'> '.repeat(198)}*:n[[]`)).toBe('"*:n[[]"')
-    expect(leaf(`${'> '.repeat(199)}:n[[]`)).toBe('inline_extension("[")')
+  it('C2-I-118: an opening bracket counts the open delimiter entries', () => {
+    expect(leaf(198, ':n[[]')).toBe('":n[[]"')
+    expect(leaf(199, ':n[[]')).toBe('inline_extension("[")')
+    expect(leaf(199, '[x](u)')).toBe('link("x")')
+    expect(leaf(200, '[x](u)')).toBe('"[x](u)"')
   })
 
-  it('C2-I-118: a bracket construct counts the block depth, the constructs around it and the open delimiter entries', () => {
-    expect(leaf(`${'> '.repeat(198)}[*:n[a]`)).toBe('"[*" inline_extension("a")')
-    expect(leaf(`${'> '.repeat(198)}*:n[a]`)).toBe('"*" inline_extension("a")')
-    expect(leaf(`${'> '.repeat(199)}*:n[a]`)).toBe('"*:n[a]"')
-    expect(leaf(`${'> '.repeat(197)}- *![x](u)`)).toBe('"*![x](u)"')
-    expect(leaf(`${'> '.repeat(197)}- *[x](u)`)).toBe('"*[x](u)"')
-    expect(leaf(`${'> '.repeat(196)}- *[x](u)`)).toBe('"*" link("x")')
+  it('C2-I-118: a delimiter opener counts the open brackets', () => {
+    expect(brackets(199, '*a*')).toContain('<strong>a</strong>')
+    expect(brackets(200, '*a*')).not.toContain('<strong>')
+    expect(brackets(199, '{^a^}')).toContain('<sup>a</sup>')
+    expect(brackets(200, '{^a^}')).not.toContain('<sup>')
+  })
+
+  it('C2-I-118: a closed construct leaves the count, with the entries inside it', () => {
+    expect(leaf(199, '[x](u) [y](v)')).toBe('link("x") " " link("y")')
+    expect(leaf(198, '[*b](u) *c [y](v)')).toBe('link("*b") " *c " link("y")')
+    // A pair that forms no construct bounds nothing: the star inside it stays open.
+    expect(leaf(198, '[*b] *c [y](v)')).toBe('"[*b] *c [y](v)"')
   })
 })
 

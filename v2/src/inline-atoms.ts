@@ -19,6 +19,7 @@ import {
   CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_RAW_FIRST, CLASS_RAW_REST, CLASS_SCHEME_FIRST,
   CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY,
 } from './inline-tables.ts'
+import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
   codePointAt, codePointBefore, isAsciiLetter, isAsciiPunctuation, isJoining, isBoundarySpace, isUrlCharacter, isWhitespace, NO_BREAK_SPACE,
@@ -294,7 +295,9 @@ export function scanBrace(state: InlineState, pos: number): number {
   if (next === HASH) return bracedComment(state, pos, EDITORIAL)
   // C2-I-050: a mark before a combining mark is text, and so the brace is (C2-I-044).
   if (!inClass(next, CLASS_BRACED_MARK) || isJoining(codePointAt(text, pos + 2, state.end))) return pos + 1
-  pushToken(state, TOKEN_BRACED_OPEN, pos, pos + 2, BRACED_MARKS.indexOf(String.fromCharCode(next)), NONE, 0, NONE)
+  // C2-I-118: an opener read at the cap is text and is not pushed.
+  if (atDepthCap(state)) return pos + 2
+  countBracedOpen(state, pushToken(state, TOKEN_BRACED_OPEN, pos, pos + 2, BRACED_MARKS.indexOf(String.fromCharCode(next)), NONE, 0, NONE))
   return pos + 2
 }
 

@@ -5,7 +5,7 @@ import { isFenceWord } from './opener.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
-import { SMART_KIND_NAMES } from './inline-tables.ts'
+import { DEPTH_CAP, SMART_KIND_NAMES } from './inline-tables.ts'
 import { type ExtensionDefinition, type ExtensionSlot } from './extensions/types.ts'
 
 /** A tree that a reader refuses. `path` is an RFC 6901 pointer to the node or the field. */
@@ -22,8 +22,9 @@ export class CarveTreeError extends Error {
 }
 
 // C2-A-171: the deepest tree the parser makes. A list and its item are two nodes per level of the
-// cap, and a table, a figure and a caption add their member nodes above a leaf.
-export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + 16
+// block cap, a table, a figure and a caption add their member nodes above a leaf, and each inline
+// content nests to its own cap below it.
+export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + DEPTH_CAP + 16
 
 const BLOCKS = [
   'admonition', 'block_extension', 'block_quote', 'code_block', 'comment', 'definition_list', 'directive', 'div', 'figure',

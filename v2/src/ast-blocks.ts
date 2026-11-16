@@ -20,7 +20,7 @@ import {
   ABBREVIATION, BULLET_LIST, CAPTION, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST, DIV, FLAG_ALPHA,
   FLAG_AUTO, FLAG_BLOCK_MATH, FLAG_DELIMITED, FLAG_FIGURE, FLAG_HARD_BREAKS, FLAG_IMAGE, FLAG_MARKER_ATTRIBUTES,
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
-  DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
+  HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
@@ -379,17 +379,6 @@ function readsOwnAttributes(node: BlockNode): boolean {
   return node.kind === TABLE || node.kind === DIV || (node.kind === CODE && (node.flags & FLAG_DELIMITED) !== 0)
 }
 
-/** Builds the node of `node` with `build`. C2-I-118: the depth of a content counts the containers around it. */
-function buildBlock<N extends Node>(
-  ctx: TreeContext, node: BlockNode, flow: number, attributes: Attributes | null, build: BlockBuilder<N>,
-): N {
-  const container = node.kind > DOCUMENT && node.kind <= DIV
-  if (container) ctx.depth++
-  const out = build(ctx, node, flow, attributes)
-  if (container) ctx.depth--
-  return out
-}
-
 /**
  * C2-A-154: a div with no closer ends after its last child that has a position, or after its opener line,
  * also where the closer of an outer div ended it.
@@ -418,7 +407,7 @@ function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): 
 function blockNode<N extends Node>(ctx: TreeContext, node: BlockNode, flow: number, build: BlockBuilder<N>): N {
   const own = readsOwnAttributes(node)
   const attributes = own && node.kind !== DIV ? null : readAttributeLines(ctx.src, node.attributes)
-  const out = buildBlock(ctx, node, flow, attributes, build)
+  const out = build(ctx, node, flow, attributes)
   if (!own) setAttributes(out, attributes)
   // C2-B-111, C2-B-163: a fence, a comment block, a div, a line block or frontmatter that ends without its closer.
   if ((node.exitFlags & FLAG_UNCLOSED) !== 0 && (node.kind === DIV || isOpaqueLeaf(node.kind))) {
@@ -617,7 +606,7 @@ export function inlineContent(text: string): Inline[] {
   inline.definitions = new Set()
   try {
     const ctx: TreeContext = {
-      src: text, positions: false, inline, depth: 0, abbreviations: new Map(), markup: new Map(), resolvable: false,
+      src: text, positions: false, inline, abbreviations: new Map(), markup: new Map(), resolvable: false,
       resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null,
     }
     return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
@@ -667,7 +656,7 @@ export function buildSource(
     const root = buildTree(blocks.events, blocks.eventLength)
     inline.definitions = linkKeys ?? collectLinkKeys(text, root)
     const ctx: TreeContext = {
-      src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
+      src: text, positions, inline, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
       resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null,
     }

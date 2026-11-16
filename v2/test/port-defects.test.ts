@@ -411,21 +411,27 @@ describe('C2-A-213: a supplied shortcut reference with no definition stays unres
 })
 
 describe('C2-I-118: an image and a link meet the depth cap alike', () => {
-  const leaf = (depth: number, content: string): unknown[] => {
-    let node = parse(`${'> '.repeat(depth)}${content}`) as unknown as { children: { type: string }[] }
-    while (node.children[0]!.type !== 'paragraph') node = node.children[0] as unknown as typeof node
-    return (node.children[0] as unknown as { children: { type: string }[] }).children.map((child) => child.type)
+  // The types of the children of the first paragraph, behind `open` unpaired openers `*a ` of a star.
+  const leaf = (open: number, content: string): unknown[] => {
+    const node = parse(`${'*a '.repeat(open)}${content}`).children[0] as unknown as { children: { type: string }[] }
+    return node.children.map((child) => child.type)
   }
 
   it('C2-I-118: an open delimiter entry counts for both bracket constructs', () => {
-    expect(leaf(197, '- *![x](u)')).toEqual(leaf(197, '- *[x](u)'))
-    expect(leaf(197, '- *![x](u)')).toEqual(['text'])
-    expect(leaf(197, '- *a* ![x](u)')).toEqual(['strong', 'text', 'image'])
-    expect(leaf(197, '- *a* [x](u)')).toEqual(['strong', 'text', 'link'])
-    expect(leaf(197, '- ![x](u)')).toEqual(['image'])
-    expect(leaf(197, '- [x](u)')).toEqual(['link'])
-    expect(leaf(198, '- ![x](u)')).toEqual(['text'])
-    expect(leaf(196, '- *![x](u)')).toEqual(['text', 'image'])
+    expect(leaf(199, '![x](u)')).toEqual(leaf(199, '[x](u)').map((type) => type === 'link' ? 'image' : type))
+    expect(leaf(199, '*![x](u)')).toEqual(['text'])
+    expect(leaf(199, '*[x](u)')).toEqual(['text'])
+    expect(leaf(198, '*a* ![x](u)')).toEqual(['text', 'strong', 'text', 'image'])
+    expect(leaf(198, '*a* [x](u)')).toEqual(['text', 'strong', 'text', 'link'])
+    expect(leaf(199, '![x](u)')).toEqual(['text', 'image'])
+    expect(leaf(200, '![x](u)')).toEqual(['text'])
+    expect(leaf(198, '*![x](u)')).toEqual(['text', 'image'])
+  })
+
+  it('C2-I-118: no block counts, so behind 197 quote marks a list item forms its link', () => {
+    let node = parse(`${'> '.repeat(197)}- *[x](u) *![y](v)`).children[0] as unknown as { type: string, children: unknown[] }
+    while (node.type !== 'paragraph') node = node.children[0] as typeof node
+    expect(node.children.map((child) => (child as { type: string }).type)).toEqual(['text', 'link', 'text', 'image'])
   })
 })
 

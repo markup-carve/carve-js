@@ -64,7 +64,7 @@ function time(src: string): number {
   let best = Infinity
   for (let run = 0; run < 2; run++) {
     const before = cpuMicros()
-    scanInline(state, src, spans, 0, spans.length, 0, true)
+    scanInline(state, src, spans, 0, spans.length, true)
     best = Math.min(best, cpuMicros() - before)
   }
   return best / 1000

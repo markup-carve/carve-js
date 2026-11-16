@@ -167,7 +167,7 @@ export function generateInlineTables(read: DataReader): string {
     '',
     ...markLines(read),
     '',
-    `export const DEPTH_CAP = ${byName(cap, 'depth_cap').value}`,
+    `export const DEPTH_CAP = ${byName(cap, 'inline_depth').value}`,
     '',
   ].join('\n')
 }
