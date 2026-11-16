@@ -60,7 +60,8 @@ void test('C2-W-088: needless bracket and brace escapes are removed', () => {
 
 void test('C2-W-125: ordered repairs keep required bracket and brace escapes', () => {
   const cases: readonly (readonly [string, string])[] = [
-    ['x^[\\`a`]', 'x^\\[\\`a`]`\n'],
+    // C2-I-017: the backtick behind the escaped one has no closer, so the footnote closes at the bracket.
+    ['x^[\\`a`]', 'x^[\\`a`]\n'],
     ['x{#a\\--}', 'x\\{#a-\\-}\n'],
     ['x{#\\---}', 'x\\{#\\---}\n'],
     ['x<a:b>{#\\--}', 'x<a:b>\\{#-\\-}\n'],
