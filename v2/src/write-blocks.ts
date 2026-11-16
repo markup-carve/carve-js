@@ -353,10 +353,20 @@ function caption(w: Writer, node: CaptionNode | undefined, prefix: string, flags
   if (blocks.length !== 1) lose(w, node, null)
   const parts: string[] = []
   for (const block of blocks) {
+    if (holdsMarkBeforeNumber(childNodes(block))) unplanned(w, 'caption number')
     parts.push(planLeaf(w, childNodes(block), flags, writeContent(w, childNodes(block), flags), AS_CONTENT, AFTER_MARK))
   }
   w.lead = `${w.lead ?? prefix}^ `
   emitLines(w, prefix, '  ', parts.join(' '))
+}
+
+/** C2-B-150, C2-B-207: a `#` of top-level text before the number mark, which the reader would take as the mark. */
+function holdsMarkBeforeNumber(nodes: readonly Node[]): boolean {
+  for (const node of nodes) {
+    if (node.type === 'caption_number') return false
+    if (node.type === 'text' && node.value.includes('#')) return true
+  }
+  return false
 }
 
 /** The number of comments at the end of `nodes`. */

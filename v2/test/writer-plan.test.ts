@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateWriterTables } from '../scripts/generate-writer-tables.ts'
 import { parseWithLayout } from '../src/api.ts'
+import { format } from '../src/index.ts'
 import { writeTreeWithStats, type WriterPath } from '../src/write.ts'
 
 const root = join(import.meta.dirname, '..')
@@ -111,6 +112,15 @@ describe('the planned writer', () => {
     }
     // Below a line that holds a node, the line above may be a block of its own, so the repair decides.
     for (const source of ['a *b*\n\\^ c\n', '![i](u)\n\\^ b\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+  })
+
+  it('C2-B-150, C2-B-207: a text `#` of a caption before its number mark keeps its backslash in the formatted source', () => {
+    for (const source of ['![b](b.png)\n^ Two \\# more\n', '![b](b.png)\n^ *Figure* 2. Two \\# more\n', '![b](b.png)\n^ a \\#\n']) {
+      expect(format(source), source).toBe(source)
+      expect(formatBy(source, 'plan').stats.planned, source).toBe(0)
+    }
+    // Behind the mark every `#` is text (C2-B-207), and a `#` inside markup is no mark.
+    for (const source of ['![b](b.png)\n^ Fig # Two # more\n', '![b](b.png)\n^ *a #* b\n']) expect(format(source), source).toBe(source)
   })
 
   it('C2-B-166, C2-B-167: a pipe line where no pipe can close a row is text, and the plan writes it bare', () => {
