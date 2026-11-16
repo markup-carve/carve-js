@@ -5,7 +5,7 @@
 import {
   CLAUSE_CASES, CORPUS_EXAMPLES, EXAMPLE_TREES, LAYOUT_FIXTURES, REFUSED_TREES, SPEC_PIN, SUPPLIED_TREES,
 } from './corpus.ts'
-import { clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutAccepted, refusalPath } from './corpus-checks.ts'
+import { clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, refusalPath } from './corpus-checks.ts'
 import { HELD, REFUSED_AT } from './corpus-held.ts'
 import { decodeTree } from '../src/index.ts'
 
@@ -73,7 +73,7 @@ for (const entry of SUPPLIED_TREES) {
   if (failed.length > 0) failures.push(`nodes ${entry.id}: refused`)
 }
 for (const entry of LAYOUT_FIXTURES) {
-  const failed = layoutAccepted(entry) === (entry.refused !== true) ? [] : [entry.refused === true ? 'accepted' : 'refused']
+  const failed = layoutMismatches(entry).map((mismatch) => mismatch.field)
   count('layouts', failed)
   if (failed.length > 0) failures.push(`layout ${entry.id}: ${failed.join(', ')}`)
 }

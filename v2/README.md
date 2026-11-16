@@ -10,6 +10,10 @@ The conformance gate is the corpus of the specification (`spec/0.2/conformance` 
 - An example whose stated result departs from its clause is held by name in `v2/scripts/corpus-held.ts` or the import test, with the entry of `_EXAMPLE_FIXES.md` that gives the clause-correct result. A held field must keep failing.
 - `npm run conformance:v2` prints the table per kind and document. With `CARVE_SPEC_DIR` set to a checkout at the pin, the corpus test also checks that the copies equal the specification.
 
+## Byte input
+
+`parse`, `parseTree`, `parseWithDiagnostics`, `parseWithLayout`, `render` and `renderWithDiagnostics` take a string or a `Uint8Array`. Bytes are decoded as UTF-8 by the WHATWG decoder: each maximal subpart of an ill-formed sequence reads as one U+FFFD, and every position counts the source bytes (C2-B-218). The layout of bytes that are not well-formed UTF-8 has `encoding: "base64"` and keeps the bytes in `source` (C2-L-056); `validateLayout` accepts it.
+
 ## Formatting API
 
 `format(source)` and `write(document)` return source when the writer can spell the result without loss. If the writer loses a field or node, or refuses a repair, these calls throw `CarveWriteError`. Its `diagnostics` property names the loss. Use `formatWithDiagnostics` or `writeWithDiagnostics` to receive the nearest source and its diagnostics. A result with `writer-refused` is not canonical. `write` and `writeWithDiagnostics` parse each written group of blocks once more and compare it with the tree; pass `{ check: false }` to skip that parse for a tree that a parse returned. `format` writes the tree of its own parse and makes no such parse.

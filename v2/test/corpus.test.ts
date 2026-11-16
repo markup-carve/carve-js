@@ -8,7 +8,7 @@ import {
   CLAUSE_CASES, CORPUS_EXAMPLES, DATA, EXAMPLE_TREES, LAYOUT_FIXTURES, REFUSED_TREES, SPEC_PIN, SUPPLIED_TREES, TREE_FILES,
 } from '../scripts/corpus.ts'
 import {
-  clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutAccepted, type Mismatch, refusalPath,
+  clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, type Mismatch, refusalPath,
 } from '../scripts/corpus-checks.ts'
 import { HELD, REFUSED_AT } from '../scripts/corpus-held.ts'
 import { CORPUS_DIRECTORIES } from '../scripts/pin-spec.ts'
@@ -83,8 +83,8 @@ describe('the trees of the specification', () => {
     for (const entry of SUPPLIED_TREES) expect(() => decodeTree(JSON.stringify(entry.tree)), entry.id).not.toThrow()
   })
 
-  it('C2-L-007, C2-L-012, C2-L-056: each layout sidecar is accepted or refused as trees/layouts.json says', () => {
-    for (const entry of LAYOUT_FIXTURES) expect(layoutAccepted(entry), entry.id).toBe(entry.refused !== true)
+  it('C2-L-007, C2-L-012, C2-L-056: each layout sidecar is accepted or refused as trees/layouts.json says, and is this engine\'s', () => {
+    for (const entry of LAYOUT_FIXTURES) expect(fields(layoutMismatches(entry)), entry.id).toEqual([])
   })
 })
 

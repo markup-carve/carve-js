@@ -1,7 +1,9 @@
 // Engine defects the conformance corpus of the specification found, each fixed at its clause.
 import { describe, expect, it } from 'vitest'
+import { sourceText } from '../src/byte-source.ts'
+import { utf8Length } from '../src/positions.ts'
 import { checkWriter } from './support/writer-checks.ts'
-import { CarveLayoutError, CarveTreeError, decodeTree, validateTreeWithAnnotations, encodeTree, format, parse, render, validateLayout, write } from '../src/index.ts'
+import { CarveLayoutError, CarveTreeError, decodeTree, parseWithLayout, validateTreeWithAnnotations, encodeTree, format, parse, render, validateLayout, write } from '../src/index.ts'
 
 const children = (src: string): unknown => (JSON.parse(encodeTree(parse(src, { positions: false }))) as { children: unknown }).children
 
@@ -108,5 +110,48 @@ describe('annotation ranges', () => {
     expect(() => validateTreeWithAnnotations(tree, range('/children/1', 0, 3))).not.toThrow()
     expect(() => validateTreeWithAnnotations(tree, range('/children/1', 0, 4))).toThrow('/ranges/0/end/offset')
     expect(() => validateTreeWithAnnotations(tree, range('', 0, 6))).not.toThrow()
+  })
+})
+
+describe('a source given as bytes', () => {
+  const bytes = (...values: number[]): Uint8Array => Uint8Array.from(values)
+
+  it('C2-B-218: each maximal subpart of an ill-formed sequence is one U+FFFD, and offsets count the source bytes', () => {
+    type Paragraph = { pos: { endOffset: number }, children: [{ value: string }] }
+    const tree = JSON.parse(encodeTree(parse(bytes(0x61, 0xe2, 0x82, 0x62)))) as { children: [Paragraph] }
+    const paragraph = tree.children[0]
+    expect(paragraph.children[0].value).toBe('a\ufffdb')
+    expect(paragraph.pos.endOffset).toBe(4)
+    expect(parse(bytes(0x61, 0xff, 0x62)).srcByteLength).toBe(3)
+    expect(render(bytes(0x61, 0xff, 0x0a, 0x0a, 0x2d, 0x20, 0x62))).toBe('<p>a\ufffd</p>\n<ul>\n  <li>b</li>\n</ul>')
+  })
+
+  it('C2-B-218: the subparts agree with the WHATWG decoder: the text less each U+FFFD it adds is the source bytes', () => {
+    let seed = 7
+    const next = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed
+    }
+    for (let round = 0; round < 2000; round++) {
+      const pick = [0x61, 0x80, 0xbf, 0xc2, 0xe0, 0xed, 0xf0, 0xf4, 0xff]
+      const input = Uint8Array.from({ length: 1 + (next() % 12) }, () => pick[next() % pick.length] ?? 0)
+      const source = sourceText(input)
+      const added = source.replaced.reduce((total, [, length]) => total + 3 - length, 0)
+      expect(utf8Length(source.text) - added, String(input)).toBe(input.length)
+      expect(source.replaced.length, String(input)).toBe(source.text.split('\ufffd').length - 1)
+    }
+  })
+
+  it('C2-B-218: well-formed bytes read as the string they encode', () => {
+    expect(parse(new TextEncoder().encode('# \u00e9\n'))).toEqual(parse('# \u00e9\n'))
+  })
+
+  it('C2-L-056, C2-L-012: the layout of ill-formed bytes holds them in base64, and its ranges count them', () => {
+    const { layout } = parseWithLayout(bytes(0x61, 0xff, 0x0a, 0x0a, 0x62))
+    expect(layout.encoding).toBe('base64')
+    expect(layout.source).toBe('Yf8KCmI=')
+    expect(layout.nodes.map((node) => [node.startByte, node.endByte])).toEqual([[0, 2], [4, 5]])
+    expect(validateLayout(layout)).toBe(layout)
+    expect(parseWithLayout(new TextEncoder().encode('a\n')).layout.encoding).toBe('utf-8')
   })
 })

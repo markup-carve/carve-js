@@ -5,11 +5,12 @@ import { treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError } from '../src/ast-validate.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import {
-  decodeTree, encodeTree, format, lint, parse, type ParseOptions, parseTree, renderWithDiagnostics, resolveTree, type RenderOptions,
-  validateLayout,
+  decodeTree, encodeTree, format, lint, parse, type ParseOptions, parseTree, parseWithLayout, renderWithDiagnostics, resolveTree,
+  type RenderOptions, validateLayout,
 } from '../src/index.ts'
+import { isRecord } from '../src/ast.ts'
 import {
-  type ClauseCase, type CorpusExample, corpusOptions, corpusResolver, type ExampleTree, type LayoutFixture, type RefusedTree,
+  type ClauseCase, type CorpusExample, corpusOptions, corpusResolver, type ExampleTree, hexBytes, type LayoutFixture, type RefusedTree,
 } from './corpus.ts'
 
 export interface Mismatch {
@@ -149,4 +150,19 @@ export function exampleTreeMismatches(entry: ExampleTree): Mismatch[] {
 /** Whether `validateLayout` accepts the sidecar of a layout fixture. */
 export function layoutAccepted(entry: LayoutFixture): boolean {
   return typeof outcome(() => validateLayout(entry.layout)) !== 'string'
+}
+
+/**
+ * A layout fixture: accepted or refused as it says, and an accepted one is the sidecar this engine writes for its input,
+ * the bytes of `input` or else the string of its `source`.
+ */
+export function layoutMismatches(entry: LayoutFixture): Mismatch[] {
+  const accepted = layoutAccepted(entry)
+  if (accepted !== (entry.refused !== true)) return [{ field: 'accepted', actual: accepted, expected: entry.refused !== true }]
+  if (!accepted || !isRecord(entry.layout)) return []
+  const source = entry.layout['source']
+  const input = entry.input === undefined ? source : hexBytes(entry.input)
+  if (typeof input !== 'string' && !(input instanceof Uint8Array)) return []
+  const layout = outcome(() => parseWithLayout(input).layout)
+  return same(layout, entry.layout) ? [] : [{ field: 'layout', actual: layout, expected: entry.layout }]
 }

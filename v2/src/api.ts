@@ -15,6 +15,7 @@ import { applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
 import { applyExtensions } from './extensions/claims.ts'
+import { base64, mapPositions, type SourceText, sourceText } from './byte-source.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -130,12 +131,24 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
   return { document: parsed.document, facts: combinedFacts(facts, expanded.facts, expanded.findings) }
 }
 
+/** C2-B-218: the parse of a string or of bytes; the positions of bytes count the source bytes. */
+function parseInput(source: SourceText, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
+  const parsed = parseSource(source.text, settings, positions, trace)
+  const bytes = source.bytes
+  if (bytes !== null) {
+    mapPositions(source, parsed.document)
+    parsed.document.srcByteLength = bytes.length
+  }
+  return parsed
+}
+
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
-function inputStage(input: string | DocumentNode, settings: Settings): ParsedTree {
-  if (typeof input === 'string') {
-    checkLength(input, settings)
+function inputStage(input: string | Uint8Array | DocumentNode, settings: Settings): ParsedTree {
+  if (typeof input === 'string' || input instanceof Uint8Array) {
+    const source = sourceText(input)
+    checkLength(source.text, settings)
     // C2-H-016: only the source lines need positions.
-    return parseSource(input, settings, settings.sourceLines)
+    return parseInput(source, settings, settings.sourceLines)
   }
   validateTree(input, undefined, undefined, settings.extensions)
   return { document: input, facts: null }
@@ -169,9 +182,9 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
 }
 
 /** The parse stage: the tree of `src` before resolution (C2-A-106). Positions are on unless `positions` is false. */
-export function parseTree(src: string, options?: ParseOptions): ParsedTree {
+export function parseTree(src: string | Uint8Array, options?: ParseOptions): ParsedTree {
   const settings = readOptions(options, 'parse')
-  return parseSource(src, settings, options?.positions !== false)
+  return parseInput(sourceText(src), settings, options?.positions !== false)
 }
 
 /**
@@ -207,37 +220,46 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
 }
 
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
-export function parseWithDiagnostics(src: string, options?: ParseOptions): ParseResult {
+export function parseWithDiagnostics(src: string | Uint8Array, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
-  const parsed = parseSource(src, settings, options?.positions !== false)
+  const parsed = parseInput(sourceText(src), settings, options?.positions !== false)
   const resolved = resolveStage(parsed, settings)
   return { document: resolved.document, diagnostics: parseDiagnostics(resolved, parsed) }
 }
 
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
-export function parse(src: string, options?: ParseOptions): DocumentNode {
+export function parse(src: string | Uint8Array, options?: ParseOptions): DocumentNode {
   const settings = readOptions(options, 'parse')
-  return resolveStage(parseSource(src, settings, options?.positions !== false), settings).document
+  return resolveStage(parseInput(sourceText(src), settings, options?.positions !== false), settings).document
 }
 
 /**
  * The resolved tree of `src` with its diagnostics and its source-layout record (spec/0.2/source-layout.md).
  * The tree is the one `parse` gives (C2-L-003). Positions are always built, since the record states its ranges in them.
  */
-export function parseWithLayout(src: string, options?: ParseOptions): LayoutResult {
+export function parseWithLayout(src: string | Uint8Array, options?: ParseOptions): LayoutResult {
   const settings = readOptions(options, 'parse')
   const trace = createLayoutTrace()
-  const parsed = parseSource(src, settings, true, trace)
+  const source = sourceText(src)
+  const parsed = parseInput(source, settings, true, trace)
   const resolved = resolveStage(parsed, settings)
   const diagnostics = parseDiagnostics(resolved, parsed)
-  return { document: resolved.document, diagnostics, layout: buildLayout(src, resolved.document, trace) }
+  return { document: resolved.document, diagnostics, layout: sourceLayout(source, resolved.document, trace) }
+}
+
+/** C2-L-056: the layout of bytes that are not well-formed UTF-8 keeps them in base64, and its ranges count them. */
+function sourceLayout(source: SourceText, document: DocumentNode, trace: LayoutTrace): SourceLayout {
+  // The ranges are those of the positions, which count the source bytes already.
+  const layout = buildLayout(source.text, document, trace)
+  const bytes = source.bytes
+  return bytes === null ? layout : { ...layout, encoding: 'base64', source: base64(bytes) }
 }
 
 /**
  * The HTML of Carve source or of a tree (spec/0.2/html.md), with the diagnostics of the run, each
  * with its position (C2-A-173). Under `strictLosses` a render that lost something returns no output.
  */
-export function renderWithDiagnostics(input: string | DocumentNode, options?: RenderOptions): RenderOutput {
+export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
   const parsed = inputStage(input, settings)
   const resolved = resolveStage(parsed, settings)
@@ -250,7 +272,7 @@ export function renderWithDiagnostics(input: string | DocumentNode, options?: Re
  * The HTML fragment of Carve source or of a tree: the three stages in a row. Under `strictLosses`
  * a render loss throws. The diagnostics are not asked for, so they are given a position only where a loss is thrown.
  */
-export function render(input: string | DocumentNode, options?: RenderOptions): string {
+export function render(input: string | Uint8Array | DocumentNode, options?: RenderOptions): string {
   const settings = readOptions(options, 'render')
   return renderTree(resolveStage(inputStage(input, settings), settings))
 }
