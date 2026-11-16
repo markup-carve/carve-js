@@ -11,7 +11,7 @@ import {
 import { blockText, plainText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
-  attributes, escapeAttribute, escapeText, loss, type Pair, type Render, type TagParts,
+  attributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
@@ -781,7 +781,8 @@ function writeTemplate(r: Render, document: DocumentNode, run: DocumentNode['chi
   const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run }, undefined)
   for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
   const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
-  line(r, level, `<template data-carve-abbreviations>${escapeText(source)}</template>`)
+  // C2-H-172: the template text is data for a reader and keeps its bidirectional controls.
+  line(r, level, `<template data-carve-abbreviations>${escapeCarrierText(source)}</template>`)
 }
 
 /** The end of the run of abbreviation definitions that starts at `start`. */

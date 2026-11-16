@@ -436,6 +436,8 @@ describe('abbreviation templates', () => {
       '<template data-carve-abbreviations>*[A]: Alpha</template>\n<template data-carve-abbreviations>*[B]: Beta</template>\n' +
       '<p><abbr title="Alpha">A</abbr> <abbr title="Beta">B</abbr>.</p>', RT],
     ['C2-H-071: without roundtrip a definition writes nothing', '*[A]: Alpha\n\nA.', '<p><abbr title="Alpha">A</abbr>.</p>'],
+    ['C2-H-172, C2-H-179: the template text and the title keep a bidirectional control', '*[A]: x‮y\n\nA.',
+      '<template data-carve-abbreviations>*[A]: x‮y</template>\n<p><abbr title="x‮y">A</abbr>.</p>', RT],
   ])
 
   it('C2-H-181: an expansion that holds a line break is reported by the writer as a render loss', () => {
