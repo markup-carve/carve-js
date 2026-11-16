@@ -33,19 +33,22 @@ interface Frame {
   node: Node
   above: Frame | null
   step: string
+  /** C2-N-053: the file of the node, the `file` of the nearest expanded include around it, or undefined for the top level. */
+  file: string | undefined
 }
 
-function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Frame, slot: string): void {
+function pushList(stack: Frame[], list: readonly Node[] | undefined, above: Frame, slot: string, file: string | undefined): void {
   if (list === undefined) return
-  for (let at = list.length - 1; at >= 0; at--) stack.push({ node: list[at]!, above, step: `${slot}/${at}` })
+  for (let at = list.length - 1; at >= 0; at--) stack.push({ node: list[at]!, above, step: `${slot}/${at}`, file })
 }
 
 /** The fields that hold nodes (C2-A-024), and the columns of a table, which are nodes too. */
 function pushSlots(stack: Frame[], frame: Frame, declarations: readonly ExtensionDeclaration[]): void {
   const node = frame.node
+  const file = node.type === 'include' && node.children !== undefined ? node.file : frame.file
   forEachSlot(node, (nodes, step, single) => {
-    if (single) stack.push({ node: nodes[0]!, above: frame, step })
-    else pushList(stack, nodes, frame, step)
+    if (single) stack.push({ node: nodes[0]!, above: frame, step, file: frame.file })
+    else pushList(stack, nodes, frame, step, step === 'children' ? file : frame.file)
   }, undefined, declarations)
 }
 
@@ -56,13 +59,18 @@ function pointerOf(frame: Frame): string {
   return steps.length === 0 ? '' : `/${steps.reverse().join('/')}`
 }
 
-/** The pointer of each node of `wanted` that stands in the tree below `document`. */
-function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, string> {
-  const found = new Map<Node, string>()
-  const stack: Frame[] = [{ node: document, above: null, step: '' }]
+interface Place {
+  pointer: string
+  file: string | undefined
+}
+
+/** The pointer and the file of each node of `wanted` that stands in the tree below `document`. */
+function pointers(document: DocumentNode, wanted: Set<Node>): Map<Node, Place> {
+  const found = new Map<Node, Place>()
+  const stack: Frame[] = [{ node: document, above: null, step: '', file: undefined }]
   while (stack.length > 0 && found.size < wanted.size) {
     const frame = stack.pop()!
-    if (wanted.has(frame.node)) found.set(frame.node, pointerOf(frame))
+    if (wanted.has(frame.node)) found.set(frame.node, { pointer: pointerOf(frame), file: frame.file })
     pushSlots(stack, frame, document.extensions ?? [])
   }
   return found
@@ -81,11 +89,12 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
   const found = pointers(document, wanted)
   entries.forEach((entry, at) => {
     const node = nodes[at] ?? null
-    const path = node === null ? undefined : found.get(node)
-    entry.path = (path ?? '') + (findings.steps?.get(entry) ?? '')
-    const pos = path === undefined || node === null ? undefined : node.pos
+    const place = node === null ? undefined : found.get(node)
+    entry.path = (place?.pointer ?? '') + (findings.steps?.get(entry) ?? '')
+    const pos = place === undefined || node === null ? undefined : node.pos
     if (pos !== undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
-    if (pos?.file !== undefined) entry.file = pos.file
+    // C2-N-063: the range is counted in the file of the node, which the include around it names.
+    if (place?.file !== undefined) entry.file = place.file
   })
   return entries
 }
