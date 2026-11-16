@@ -113,6 +113,17 @@ describe('the planned writer', () => {
     for (const source of ['a *b*\n\\^ c\n', '![i](u)\n\\^ b\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
+  it('C2-B-166, C2-B-167: a pipe line where no pipe can close a row is text, and the plan writes it bare', () => {
+    for (const source of ['\\| c | d\n', 'a\n\\| c | d\n', '\\| a |b\n', '\\| a |x %% c\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source.replace('\\|', '|'))
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    // A brace block or a line comment behind a pipe may make it the closing pipe, so the repair decides.
+    for (const source of ['\\| a | {.x}\n', '\\| a |{.x}\n', '\\| a | %% c\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

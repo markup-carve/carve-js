@@ -138,9 +138,17 @@ function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
 function pipeLine(leaf: Leaf, at: number): number {
   if (lineEndsWith(leaf, at, 124)) return at
   for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) {
-    if (leaf.codes[unit] === 124) return UNDECIDED
+    if (leaf.codes[unit] === 124 && mayCloseRow(leaf, unit + 1)) return UNDECIDED
   }
   return NO_ESCAPE
+}
+
+/** C2-B-167: behind a closing pipe only a brace block, glued or after a space, or a line comment after whitespace may follow. */
+function mayCloseRow(leaf: Leaf, at: number): boolean {
+  let unit = at
+  while (isBlank(code(leaf, unit))) unit++
+  const value = code(leaf, unit)
+  return value === 123 || isLineEnd(value) || (unit > at && value === 37)
 }
 
 /** C2-B-133: a line comment at the start of a line. */
