@@ -28,7 +28,7 @@ export const CLASS_SMART_TRIGGER = 4194304
 export const CHARACTER_CLASSES: readonly number[] = [
   0, 0, 0, 0, 0, 0, 0, 0, 0, 262144, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  262144, 6291460, 6553600, 4, 4, 4, 4, 6553604, 5242884, 2097156, 524292, 4721694, 2621444, 4767390, 6291486, 1572868,
+  262144, 6291460, 6553600, 4, 4, 4, 4, 6553604, 5242884, 2097156, 524292, 4721694, 2621444, 4767390, 6291486, 524292,
   179870, 179870, 179870, 179870, 179870, 179870, 179870, 179870, 179870, 179870, 3145732, 2097156, 4194304, 5767172, 4194304, 2097156,
   4, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143,
   262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 262143, 1048580, 262144, 2097156, 524288, 588764,
@@ -78,6 +78,7 @@ export const SMART_RUNS: readonly (readonly [string, number])[] = [
   [">=", 3],
 ]
 
+// Retired with C2-I-107 (spec 91410e53); kept until the writer plan (write-plan-smart.ts) follows C2-I-104.
 export const APOSTROPHE_WORDS: readonly string[] = ["bout","cause","em","n","til","tis","tisn","twas","twasn","twere","twill","twould"]
 
 /** The marks of the braced forms, the node each makes, and the marks that are bare delimiters. */

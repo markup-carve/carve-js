@@ -116,3 +116,23 @@ describe('C2-I-017, C2-I-119: a backtick run with no closing run is text', () =>
     expect(render(src)).toBe(`<p>${src}</p>`)
   })
 })
+
+describe('C2-I-104, C2-I-105: a straight quote is read from its neighbor before it alone', () => {
+  it('C2-I-104: behind a hard break a quote opens, the hard break being whitespace', () => {
+    expect(render("a\\\n'b'")).toBe('<p>a<br>\n‘b’</p>')
+  })
+
+  it('C2-I-104: behind a closing mark, a closing bracket and an atom a quote closes; a braced comment is transparent', () => {
+    expect(render("*'a'* and `x`'s and [b](/u)'s and {%c%}'d' and x{%c%}'s")).toBe(
+      '<p><strong>‘a’</strong> and <code>x</code>’s and <a href="/u">b</a>’s and ‘d’ and x’s</p>',
+    )
+  })
+
+  it('C2-I-105: a single quote before an ASCII digit closes, also where it would open', () => {
+    expect(render("'90s and ('5) and \"'7\"")).toBe('<p>’90s and (’5) and “’7”</p>')
+  })
+
+  it('C2-I-104: arrows and the plus-minus sign do not change', () => {
+    expect(render('a --> b <=> c +- d C++-e')).toBe('<p>a → b ⇔ c ± d C++-e</p>')
+  })
+})

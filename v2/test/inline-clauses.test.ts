@@ -700,7 +700,7 @@ describe('hard break and soft break', () => {
 describe('smart typography', () => {
   it('C2-I-104: where a straight quote opens', () => {
     expect(inline('"a" ("b") ["c"] {"d"} ="e" :"f" -"g" a"h"')).toBe(
-      '‹“› "a" ‹”› " (" ‹“› "b" ‹”› ") [" ‹“› "c" ‹”› "] {" ‹“› "d" ‹”› "} =" ‹“› "e" ‹”› " :" ‹“› "f" ‹”› " -" ‹“› "g" ‹”› " a" ‹”› "h" ‹”›',
+      '‹“› "a" ‹”› " (" ‹“› "b" ‹”› ") [" ‹“› "c" ‹”› "] {" ‹“› "d" ‹”› "} =" ‹“› "e" ‹”› " :" ‹“› "f" ‹”› " -" ‹”› "g" ‹”› " a" ‹”› "h" ‹”›',
     )
     expect(inline('a\\ "b" “"c" *"d"* [e]{.c}"f" `g`"h" ["i"](/u)')).toBe(
       '"a" nbsp ‹“› "b" ‹”› " “" ‹“› "c" ‹”› " " strong[‹“› "d" ‹”›] " " span["e"]{.c} ‹”› "f" ‹”› " " code"g" ‹”› "h" ‹”› " " a(/u)[‹“› "i" ‹”›]',
@@ -713,34 +713,34 @@ describe('smart typography', () => {
     expect(inline("'90s a '5 ('6)")).toBe('‹’› "90s a " ‹’› "5 (" ‹’› "6)"')
   })
 
-  it('C2-I-106: after a hyphen, a dash or a slash a quote closes before the end, whitespace or closing punctuation', () => {
-    expect(inline('"a---" b a/" c -"d" e/"f" g-"')).toBe('‹“› "a" ‹—› ‹”› " b a/" ‹”› " c -" ‹“› "d" ‹”› " e/" ‹“› "f" ‹”› " g-" ‹”›')
-    expect(inline('a/". a/", a/"; a/": a/"! a/"? a/") a/"] a/"\' a/""')).toBe(
-      '"a/" ‹”› ". a/" ‹”› ", a/" ‹”› "; a/" ‹”› ": a/" ‹”› "! a/" ‹”› "? a/" ‹”› ") a/" ‹”› "] a/" ‹”› ‹’› " a/" ‹”› ‹”›',
-    )
-    expect(inline("a-'b a-' c")).toBe('"a-" ‹‘› "b a-" ‹’› " c"')
+  it('C2-I-104: behind a hyphen, a dash or a slash a quote closes, whatever follows it', () => {
+    expect(inline('"a---" b a/" c -"d" e/"f" g-"')).toBe('‹“› "a" ‹—› ‹”› " b a/" ‹”› " c -" ‹”› "d" ‹”› " e/" ‹”› "f" ‹”› " g-" ‹”›')
+    expect(inline("a-'b a-' c")).toBe('"a-" ‹’› "b a-" ‹’› " c"')
   })
 
-  it('C2-I-107: a single quote that would open before one of the listed words is an apostrophe', () => {
+  it('C2-I-104: no word list, so a single quote at the start of a word opens and one between letters closes', () => {
     expect(inline("'tis 'Tis 'TWAS 'em 'cause 'til 'n 'bout 'twere 'twill 'twould 'tisn't 'twasn't")).toBe(
-      '‹’› "tis " ‹’› "Tis " ‹’› "TWAS " ‹’› "em " ‹’› "cause " ‹’› "til " ‹’› "n " ‹’› "bout " ‹’› "twere " ‹’› "twill " ‹’› "twould " ‹’› "tisn" ‹’› "t " ‹’› "twasn" ‹’› "t"',
+      '‹‘› "tis " ‹‘› "Tis " ‹‘› "TWAS " ‹‘› "em " ‹‘› "cause " ‹‘› "til " ‹‘› "n " ‹‘› "bout " ‹‘› "twere " ‹‘› "twill " ‹‘› "twould " ‹‘› "tisn" ‹’› "t " ‹‘› "twasn" ‹’› "t"',
     )
-    expect(inline("'emily")).toBe('‹‘› "emily"')
+    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹‘› "n" ‹’› ". " ‹‘› "em" ‹’› "s " ‹‘› "til" ‹’›')
   })
 
-  it('C2-I-108: the word is quoted when a single quote and no letter or number follow it', () => {
-    expect(inline("'em' 'n'. 'em's 'til'")).toBe('‹‘› "em" ‹’› " " ‹’› "n" ‹’› ". " ‹’› "em" ‹’› "s " ‹‘› "til" ‹’›')
-  })
-
-  it('C2-I-109: single quotes do not nest', () => {
-    expect(inline("'a 'b' c' 'd'")).toBe('‹‘› "a " ‹’› "b" ‹’› " c" ‹’› " " ‹‘› "d" ‹’›')
-    expect(inline("'a b's 'c' d'")).toBe('‹‘› "a b" ‹’› "s " ‹’› "c" ‹’› " d" ‹’›')
-    expect(inline("'a ^['b' 'c'] 'd'")).toBe('‹‘› "a " fn[‹‘› "b" ‹’› " " ‹‘› "c" ‹’›] " " ‹’› "d" ‹’›')
+  it('C2-I-104: quotes do not pair, so each reads only the neighbor before it', () => {
+    expect(inline("'a 'b' c' 'd'")).toBe('‹‘› "a " ‹‘› "b" ‹’› " c" ‹’› " " ‹‘› "d" ‹’›')
+    expect(inline("'a b's 'c' d'")).toBe('‹‘› "a b" ‹’› "s " ‹‘› "c" ‹’› " d" ‹’›')
+    expect(inline("'a ^['b' 'c'] 'd'")).toBe('‹‘› "a " fn[‹‘› "b" ‹’› " " ‹‘› "c" ‹’›] " " ‹‘› "d" ‹’›')
     expect(inline("'a '(b)'")).toBe('‹‘› "a " ‹‘› "(b)" ‹’›')
     expect(tree("'a", '', "'b'")).toBe('p[‹‘› "a"] p[‹‘› "b" ‹’›]')
   })
 
-  it('C2-I-110: a quote that was emitted is never changed', () => {
+  it('C2-I-104: a straight quote that opens is opening punctuation for the quote behind it', () => {
+    expect(inline('"\'a\'" \'"b"\' ""c"" \'\'d\'\'')).toBe(
+      '‹“› ‹‘› "a" ‹’› ‹”› " " ‹‘› ‹“› "b" ‹”› ‹’› " " ‹“› ‹“› "c" ‹”› ‹”› " " ‹‘› ‹‘› "d" ‹’› ‹’›',
+    )
+    expect(inline("a'b' 'c'd x''")).toBe('"a" ‹’› "b" ‹’› " " ‹‘› "c" ‹’› "d x" ‹’› ‹’›')
+  })
+
+  it('C2-I-104: an opening quote without a closing quote stays an opening quote', () => {
     expect(inline("say 'word and \"more")).toBe('"say " ‹‘› "word and " ‹“› "more"')
   })
 
@@ -962,19 +962,14 @@ describe('more cases per clause', () => {
     expect(inline('a "{%c%}"b')).toBe('"a " ‹“› {%}"c" ‹“› "b"')
   })
 
-  it('C2-I-106: a backslash that follows the quote is a character like any other', () => {
-    expect(inline('a/"\\', 'b')).toBe('"a/" ‹“› br "b"')
+  it('C2-I-104: a backslash behind the quote is no neighbor of it', () => {
+    expect(inline('a/"\\', 'b')).toBe('"a/" ‹”› br "b"')
   })
 
-  it('C2-I-107: the word ends where its letters end', () => {
-    expect(inline("'em2 x 'em_x 'em-x")).toBe('‹’› "em2 x " ‹’› "em_x " ‹’› "em-x"')
-    expect(inline("'tisx y")).toBe('‹‘› "tisx y"')
-    expect(inline("'emé y")).toBe('‹‘› "emé y"')
-  })
-
-  it('C2-I-109: a link keeps the run of single quotes, and a footnote gives it back', () => {
-    expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›')
-    expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹’› "c d" ‹’›]')
+  it('C2-I-104: a link and a footnote are no neighbors of the quotes inside and after them', () => {
+    expect(inline("'a [b](/u) 'c d'")).toBe('‹‘› "a " a(/u)["b"] " " ‹‘› "c d" ‹’›')
+    expect(inline("x ^['a [b](/u) 'c d']")).toBe('"x " fn[‹‘› "a " a(/u)["b"] " " ‹‘› "c d" ‹’›]')
+    expect(inline("'em2 x 'em_x 'em-x")).toBe('‹‘› "em2 x " ‹‘› "em_x " ‹‘› "em-x"')
   })
 
   it('C2-I-116: a hyphen that belongs to a braced closer is no part of the run', () => {

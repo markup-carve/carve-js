@@ -52,6 +52,10 @@ function codesOf(entries: string[]): number[] {
   return codes
 }
 
+// The rows smart-punctuation.json lost with the local quote rule, as they stood before it.
+const RETIRED_QUOTE_CLOSES_BEFORE = ['!', '"', "'", ')', ',', '.', ':', ';', '?', ']']
+const RETIRED_APOSTROPHE_WORDS = ['bout', 'cause', 'em', 'n', 'til', 'tis', 'tisn', 'twas', 'twasn', 'twere', 'twill', 'twould']
+
 /** The character classes of the inline scan, as [constant, characters]. A class is one bit of the table. */
 function characterClasses(read: DataReader): [string, string[]][] {
   const atoms = load<{ atoms: (Named & {
@@ -62,10 +66,7 @@ function characterClasses(read: DataReader): [string, string[]][] {
   const sigils = load<{ sigils: (Named & { name_shape: Shape }) [] }>(read, 'inline-sigils.json').sigils
   const attributes = load<{ shapes: (Named & { shape: Shape })[] }>(read, 'attribute-block.json').shapes
   const braces = load<{ order: (Named & { marks?: string[] })[] }>(read, 'inline-braces.json').order
-  const smart = load<{
-    quote_opens_after: Shape
-    quote_closes_after_hyphen_dash_or_slash_before: Shape
-  }>(read, 'smart-punctuation.json')
+  const smart = load<{ quote_opens_after: Shape }>(read, 'smart-punctuation.json')
   const autolink = byName(atoms, 'autolink')
   const raw = byName(atoms, 'raw_inline').suffix_name!
   const extension = byName(sigils, 'inline_extension').name_shape
@@ -92,8 +93,10 @@ function characterClasses(read: DataReader): [string, string[]][] {
     ['LANGUAGE', byName(attributes, 'language_tag').shape.chars!],
     ['VALUE_END', byName(attributes, 'unquoted_value').shape.excluded!],
     ['BRACED_MARK', byName(braces, 'braced_opener').marks!],
-    ['QUOTE_OPENS_AFTER', smart.quote_opens_after.chars!],
-    ['QUOTE_CLOSES_BEFORE', smart.quote_closes_after_hyphen_dash_or_slash_before.chars!],
+    // C2-I-104: the two curly opening quotes are not ASCII, and the quote rule tests them by their code.
+    ['QUOTE_OPENS_AFTER', smart.quote_opens_after.chars!.filter((char) => char.charCodeAt(0) < ASCII)],
+    // Retired with C2-I-106 (spec 91410e53); kept until the writer plan (write-plan-smart.ts) follows C2-I-104.
+    ['QUOTE_CLOSES_BEFORE', RETIRED_QUOTE_CLOSES_BEFORE],
   ]
 }
 
@@ -117,7 +120,6 @@ function smartLines(read: DataReader): { lines: string[], triggers: number[] } {
     runs: Run[]
     quotes: Glyph[]
     dashes: Glyph[]
-    apostrophe_words: { words: string[] }
   }>(read, 'smart-punctuation.json')
   const replaced = smart.runs.filter((run) => run.replaced)
   const kinds = new Map<string, string>()
@@ -133,7 +135,8 @@ function smartLines(read: DataReader): { lines: string[], triggers: number[] } {
   lines.push('', '/** The replaced runs, the longest first, as [source, kind]. */')
   lines.push(`export const SMART_RUNS: readonly (readonly [string, number])[] = [`)
   for (const run of runs) lines.push(`  [${JSON.stringify(run.source)}, ${names.indexOf(run.kind!)}],`)
-  lines.push(']', '', ...wrapJson('export const APOSTROPHE_WORDS: readonly string[] = ', smart.apostrophe_words.words))
+  lines.push(']', '', '// Retired with C2-I-107 (spec 91410e53); kept until the writer plan (write-plan-smart.ts) follows C2-I-104.')
+  lines.push(...wrapJson('export const APOSTROPHE_WORDS: readonly string[] = ', RETIRED_APOSTROPHE_WORDS))
   const first = (row: { source: string }): number => row.source.charCodeAt(0)
   const glyphs = [...smart.quotes, ...smart.dashes] as (Glyph & { source: string })[]
   const triggers = [...new Set([...runs.map(first), ...glyphs.map(first)])]

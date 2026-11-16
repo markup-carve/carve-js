@@ -4,7 +4,7 @@ import { BRACE_CLOSE, LF, LOWER_A, SPACE } from './chars.ts'
 import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
 import {
   ATTRIBUTE_BLOCK, BRACED_KINDS, BRACKET_SPAN, DESTINATION, EMPHASIS, ESCAPE, FLAG_BRACED, FLAG_COLLAPSED,
-  FLAG_REFERENCE, FLAG_SHORTCUT, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, INLINE_FOOTNOTE, isHost, LABEL, NBSP,
+  FLAG_REFERENCE, FLAG_SHORTCUT, HARD_BREAK, IMAGE, INLINE_COMMENT, INLINE_EXTENSION, isHost, LABEL, NBSP,
   RAW_INLINE, SMART, SOFT_BREAK, STRONG, TITLE,
 } from './inline-kinds.ts'
 import {
@@ -16,7 +16,6 @@ import { startOfContent, toSource, writeText } from './typography.ts'
 
 const SLASH_MARK = BRACED_MARKS.indexOf(BARE_MARKS[0]!)
 const NO_BREAK_SPACE = 0xa0
-const MAX_FOOTNOTES = 256
 
 /**
  * The offset of the first line break at or behind `pos`, or the end of the content. The answer
@@ -134,11 +133,6 @@ function writeOpen(state: InlineState, at: number): number {
     writePieces(state, end, state.textRun)
     return at + TOKEN_WIDTH
   }
-  if (kind === INLINE_FOOTNOTE && state.footnoteDepth < MAX_FOOTNOTES) {
-    // C2-I-109: an inline footnote has its own run of single quotes.
-    state.footnoteQuotes[state.footnoteDepth++] = state.singleQuoteOpen ? 1 : 0
-    state.singleQuoteOpen = false
-  }
   startOfContent(state)
   return at + TOKEN_WIDTH
 }
@@ -148,7 +142,6 @@ function writeClose(state: InlineState, at: number): number {
   const kind = tokens[tokens[at + TOKEN_A]! + TOKEN_C]!
   let end = tokens[at + TOKEN_END]!
   let next = at + TOKEN_WIDTH
-  if (kind === INLINE_FOOTNOTE && state.footnoteDepth > 0) state.singleQuoteOpen = state.footnoteQuotes[--state.footnoteDepth] === 1
   if (next < state.tokenLength && (tokens[next] === TOKEN_TAIL || tokens[next] === LABEL) && kind !== BRACKET_SPAN) {
     if (tokens[next] === TOKEN_TAIL) writeTail(state, next)
     else writeLabel(state, next)
@@ -208,8 +201,6 @@ export function writeEvents(state: InlineState): void {
   const tokens = state.tokens
   state.eventLength = 0
   state.line = 0
-  state.singleQuoteOpen = false
-  state.footnoteDepth = 0
   state.breakFrom = 0
   state.nextBreak = NONE
   startOfContent(state)
