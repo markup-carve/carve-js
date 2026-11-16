@@ -102,6 +102,17 @@ describe('the planned writer', () => {
     for (const source of ['a\r \nb\n', 'x %% c\r\t\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
+  it('C2-B-146, C2-B-149: a caption mark below a line of text or after a blank line is text, and the plan writes it bare', () => {
+    for (const source of ['a\n\\^ b\n', '\\^ b\n', 'x\n\n\\^ b\n', '- a\n  \\^ b\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source.replace('\\^', '^'))
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    // Below a line that holds a node, the line above may be a block of its own, so the repair decides.
+    for (const source of ['a *b*\n\\^ c\n', '![i](u)\n\\^ b\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

@@ -204,7 +204,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [TAB, () => UNDECIDED],
   [91, (leaf, at, place, first) => decidedIf(definitionShape(leaf, at) || (first && taskBoxShape(leaf, at, place)))],
   [123, (leaf, at) => decidedIf(!isBracedOpener(code(leaf, at + 1)) && lineEndsWith(leaf, at, 125))],
-  [94, (leaf, at) => decidedIf(isBlank(code(leaf, at + 1)) || isLineEnd(code(leaf, at + 1)))],
+  [94, caption],
   [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
 ])
 
@@ -213,6 +213,22 @@ function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, firs
   const rule = OTHER_RULES.get(value)
   if (rule !== undefined) return rule(leaf, at, place, first)
   return decidedIf(letterMarker(leaf, at))
+}
+
+/**
+ * C2-B-146, C2-B-149: a caption line attaches only directly below an image, a table, a code block, a quote, a math
+ * block or a figure group of its container. Below a line of text of the paragraph, or as the first line of the first
+ * block of its container, it is text. Below a line that holds a node of the tree, or below another block, it is left
+ * to the repair.
+ */
+function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
+  if (!isBlank(code(leaf, at + 1)) && !isLineEnd(code(leaf, at + 1))) return NO_ESCAPE
+  if (first) return decidedIf(place.before !== null)
+  let unit = at - 2
+  for (; unit >= 0 && leaf.codes[unit] !== LF; unit--) {
+    if (leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) return UNDECIDED
+  }
+  return NO_ESCAPE
 }
 
 function isBracedOpener(value: number): boolean {
