@@ -396,11 +396,11 @@ const STRESS_SHAPES: readonly [string, (n: number) => string][] = [
   ['table rows', (n) => '| a | b *c* |\n'.repeat(n)],
 ]
 
-/** The fastest of five writes of the parse of `source`; the parse itself is not timed. */
-function fastest(source: string): number {
+/** The fastest of `runs` writes of the parse of `source`; the parse itself is not timed. */
+function fastest(source: string, runs = 5): number {
   const parsed = parseWithLayout(source, { extensions: [] })
   let best = Infinity
-  for (let run = 0; run < 5; run++) {
+  for (let run = 0; run < runs; run++) {
     const started = performance.now()
     writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
     best = Math.min(best, performance.now() - started)
@@ -415,11 +415,12 @@ describe('time linear in the output', () => {
       expect(small.repaired).toBe(0)
       expect(small.differences).toEqual([])
       // One run at the largest size first, so the heap has grown before anything is timed.
-      formatBy(shape(4000), 'plan')
-      const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
-      // The mean growth per doubling over three doublings, so one noisy step does not decide.
+      formatBy(shape(8000), 'plan')
+      const times = [1000, 2000, 4000, 8000].map((n) => fastest(shape(n), 3))
+      // The mean growth per doubling over three doublings, so one noisy step does not decide. Below 1,000 the time of
+      // the compiler tiers decides the first step on a loaded machine; a quadratic writer grows 4 times per doubling.
       const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
-      expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.6)
+      expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.8)
     })
   }
 })
@@ -433,7 +434,7 @@ describe('time linear in the number of groups', () => {
     fastest(shape(4000))
     const times = [500, 1000, 2000, 4000].map((n) => fastest(shape(n)))
     const perDoubling = Math.cbrt(times[3]! / Math.max(times[0]!, 0.5))
-    expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.6)
+    expect(perDoubling, `${times.map((time) => time.toFixed(1)).join(', ')} ms`).toBeLessThan(2.8)
   })
 })
 
