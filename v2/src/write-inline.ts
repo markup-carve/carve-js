@@ -331,8 +331,57 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
 function collapsedContent(node: LinkNode, content: string, flags: number): string {
   const key = node.key
   if (node.refForm !== 'collapsed' || key === undefined || (flags & IN_CELL) !== 0 || foldLabel(content) === key) return content
-  const read: ParagraphNode = { type: 'paragraph', children: inlineContent(key) }
-  return treesEqual(read, { type: 'paragraph', children: node.children }) ? key : content
+  const children: ParagraphNode = { type: 'paragraph', children: node.children }
+  for (const candidate of [escapedLike(content, key), key]) {
+    if (candidate !== null && treesEqual({ type: 'paragraph', children: inlineContent(candidate) }, children)) return candidate
+  }
+  return content
+}
+
+/**
+ * C2-I-001, C2-I-079: the content with a backslash before each ASCII punctuation character that the key escapes,
+ * where the two differ in nothing else than those and the whitespace the fold collapses; null otherwise.
+ */
+function escapedLike(content: string, key: string): string | null {
+  let out = ''
+  let at = 0
+  let k = 0
+  while (at < content.length) {
+    const char = content[at]!
+    if (isLabelSpace(char)) {
+      const end = spaceRunEnd(content, at)
+      out += content.slice(at, end)
+      k = keyAfterSpace(key, k, end < content.length)
+      at = end
+      continue
+    }
+    const escape = keyEscapes(key, k, char)
+    if (!escape && key[k] !== char) return null
+    out += escape ? '\\' + char : char
+    k += escape ? 2 : 1
+    at++
+  }
+  return k === key.length && foldLabel(out) === key ? out : null
+}
+
+/** C2-I-079: the fold drops the space at the start and at the end of a label and makes one space of each run between. */
+function keyAfterSpace(key: string, k: number, inner: boolean): number {
+  return k > 0 && inner && key[k] === ' ' ? k + 1 : k
+}
+
+/** C2-I-001: the key holds an escape of the ASCII punctuation character `char` at `k`. */
+function keyEscapes(key: string, k: number, char: string): boolean {
+  return key[k] === '\\' && key[k + 1] === char && char !== '\\' && isAsciiPunctuation(char.charCodeAt(0))
+}
+
+function spaceRunEnd(content: string, at: number): number {
+  let end = at
+  while (end < content.length && isLabelSpace(content[end]!)) end++
+  return end
+}
+
+function isLabelSpace(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\n'
 }
 
 function imageNode(w: Writer, node: ImageNode, flags: number): string {
@@ -355,6 +404,13 @@ function mentionNode(w: Writer, node: MentionNode): string {
   return `@${node.target}`
 }
 
+/** C2-W-022, C2-W-117: a line comment; a value that ends with a space or a tab loses it, and the loss is reported. */
+export function lineCommentText(w: Writer, node: CommentNode, value: string): string {
+  const kept = trimEnd(value)
+  if (kept.length !== value.length) lose(w, node, 'value')
+  return kept === '' ? '%%' : `%% ${kept}`
+}
+
 /** C2-W-059: the comment forms that inline content holds. */
 function commentNode(w: Writer, node: CommentNode, flags: number): string {
   const value = cellValue(w, node, node.value, flags)
@@ -362,7 +418,7 @@ function commentNode(w: Writer, node: CommentNode, flags: number): string {
   // which read the same value where it does not start or end with a space.
   const glued = (w.forms.get(node) ?? 0) > 0 && !value.startsWith(' ') && !value.endsWith(' ')
   if (node.form === 'braced') return glued ? `{%${value}%}` : bracedComment(value)
-  return value === '' ? '%%' : `%% ${value}`
+  return lineCommentText(w, node, value)
 }
 
 function abbreviationNode(w: Writer, node: NodeOfType['abbreviation']): string {

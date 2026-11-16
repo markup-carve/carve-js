@@ -81,3 +81,13 @@ describe('the writer at the depth cap', () => {
     expect(format(source)).toBe(`${source}\n`)
   })
 })
+
+describe('collapsed references', () => {
+  it('C2-W-075, C2-I-079: a collapsed reference whose label breaks a line keeps the escapes its key holds', () => {
+    for (const source of ['[\n\\*][]', '[a\n\\*\\_ b][]', '[ \\[x\\]\n y][]']) {
+      for (const normalize of [false, true]) {
+        expect(children(format(source, { normalize })), `${source} ${normalize}`).toEqual(children(source))
+      }
+    }
+  })
+})
