@@ -405,3 +405,37 @@ describe('options', () => {
     expect(lossCodes(src, { roundtrip: true })).toEqual(['raw-format-dropped', 'destination-denied', 'carrier-attribute-dropped'])
   })
 })
+
+describe('abbreviation templates', () => {
+  const RT: RenderOptions = { roundtrip: true }
+  check([
+    ['C2-H-178, C2-H-179: a run of definitions is one template, the definitions apart by a blank line',
+      '*[HTML]: HyperText Markup Language\n*[CSS]: Cascading Style Sheets\n\nHTML and CSS.',
+      '<template data-carve-abbreviations>*[HTML]: HyperText Markup Language\n\n*[CSS]: Cascading Style Sheets</template>\n' +
+      '<p><abbr title="HyperText Markup Language">HTML</abbr> and <abbr title="Cascading Style Sheets">CSS</abbr>.</p>', RT],
+    ['C2-H-178: two runs give two templates, the second inside the section of its place',
+      '*[A]: Alpha\n\n# H\n\nA and B.\n\n*[B]: Beta',
+      '<template data-carve-abbreviations>*[A]: Alpha</template>\n<section data-carve-generated-id id="H">\n  <h1>H</h1>\n' +
+      '  <p><abbr title="Alpha">A</abbr> and <abbr title="Beta">B</abbr>.</p>\n' +
+      '  <template data-carve-abbreviations>*[B]: Beta</template>\n</section>', RT],
+    ['C2-H-179: the attribute line of a definition is text of the template', '{#x .c}\n*[A]: Alpha\n\nA.',
+      '<template data-carve-abbreviations>{#x .c}\n*[A]: Alpha</template>\n<p><abbr title="Alpha">A</abbr>.</p>', RT],
+    ['C2-H-180: an unused definition and a duplicate are written like the others', '*[A]: First\n*[A]: Second\n*[U]: Unused\n\nA.',
+      '<template data-carve-abbreviations>*[A]: First\n\n*[A]: Second\n\n*[U]: Unused</template>\n' +
+      '<p><abbr title="First">A</abbr>.</p>', RT],
+    ['C2-H-179: the text is escaped as text content', '*[RnD]: R&D <research> "and" development\n\nRnD.',
+      '<template data-carve-abbreviations>*[RnD]: R&amp;D &lt;research&gt; "and" development</template>\n' +
+      '<p><abbr title="R&amp;D &lt;research&gt; &quot;and&quot; development">RnD</abbr>.</p>', RT],
+    ['C2-H-178: a comment ends the run', '*[A]: Alpha\n%% c\n*[B]: Beta\n\nA B.',
+      '<template data-carve-abbreviations>*[A]: Alpha</template>\n<template data-carve-abbreviations>*[B]: Beta</template>\n' +
+      '<p><abbr title="Alpha">A</abbr> <abbr title="Beta">B</abbr>.</p>', RT],
+    ['C2-H-071: without roundtrip a definition writes nothing', '*[A]: Alpha\n\nA.', '<p><abbr title="Alpha">A</abbr>.</p>'],
+  ])
+
+  it('C2-H-181: an expansion that holds a line break is reported by the writer as a render loss', () => {
+    const tree = parse('*[A]: Alpha\n\nA.')
+    const definition = tree.children[0]
+    if (definition?.type === 'abbreviation_def') definition.expansion = 'Al\npha'
+    expect(lossCodes(tree, RT)).toContain('field-unspellable')
+  })
+})

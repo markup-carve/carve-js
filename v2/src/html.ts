@@ -20,6 +20,7 @@ import { PROFILES } from './render-tables.ts'
 import { hasAuthoredName, headMarks, type Note, type Resolution } from './resolve.ts'
 import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
 import { NODE_TABLE } from './ast-validate.ts'
+import { writeTree } from './write.ts'
 import { type ExtensionRenderHost } from './extensions/types.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
@@ -756,13 +757,38 @@ function openSection(r: Render, node: HeadingNode, open: number[]): void {
   line(r, open.length, headingHtml(r, node, true))
 }
 
+/**
+ * C2-H-178, C2-H-179: under `roundtrip` a run of abbreviation definitions is one template that holds the run as the
+ * canonical writer spells it, escaped as text. C2-H-181: what the writer cannot spell is reported as a render loss.
+ */
+function writeTemplate(r: Render, document: DocumentNode, run: DocumentNode['children'], level: number): void {
+  const written = writeTree({ type: 'document', astVersion: document.astVersion, children: run }, undefined)
+  for (const entry of written.diagnostics) loss(r, run[0] ?? null, entry.code, entry.message)
+  const source = written.source.endsWith('\n') ? written.source.slice(0, -1) : written.source
+  line(r, level, `<template data-carve-abbreviations>${escapeText(source)}</template>`)
+}
+
+/** The end of the run of abbreviation definitions that starts at `start`. */
+function runEnd(children: DocumentNode['children'], start: number): number {
+  let end = start
+  while (children[end]?.type === 'abbreviation_def') end++
+  return end
+}
+
 /** Writes the blocks of the document; C2-H-093: the footnote section stands at a top-level directive or at the end. */
 function writeDocument(r: Render, document: DocumentNode): void {
   const open: number[] = []
   const hasNotes = r.resolution.notes.length > 0
   let placed = false
-  for (const node of document.children) {
-    if (node.type === 'heading' && r.settings.sections) {
+  const children = document.children
+  for (let index = 0; index < children.length; index++) {
+    const node = children[index]
+    if (node === undefined) break
+    if (node.type === 'abbreviation_def' && r.settings.roundtrip) {
+      const end = runEnd(children, index)
+      writeTemplate(r, document, children.slice(index, end), open.length)
+      index = end - 1
+    } else if (node.type === 'heading' && r.settings.sections) {
       openSection(r, node, open)
     } else if (isNotesDirective(node) && hasNotes && !placed) {
       placed = true
