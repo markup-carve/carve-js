@@ -1,6 +1,7 @@
 // C2-W-094: the brackets of a planned leaf, paired the way the reader pairs them (C2-I-006). A pair
 // of text brackets is literal where the closing bracket starts no destination, reference, attribute
 // block or definition and its label can name no reference; every other pair is left to the repair.
+import { emptyBlockEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { CLOSE, ESCAPE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const OPENING = 91
@@ -42,6 +43,20 @@ function labelEnd(leaf: Leaf, at: number): number {
 }
 
 /**
+ * C2-I-064, C2-I-040: whether the brace at `at` opens an attribute block that makes the pair a span. The block is read
+ * by the reader's grammar on the read text from the brace on; text that a node or an escape cuts short is left to
+ * the repair.
+ */
+function braceReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  let end = at
+  while (end < leaf.codes.length && isReadText(leaf, end, escaped)) end++
+  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  const forms = readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0 || emptyBlockEnd(text, 0, text.length) >= 0
+  if (forms) return ESCAPE_OPENER
+  return end === leaf.codes.length ? LITERAL : NO_DECISION
+}
+
+/**
  * How the text pair at `[opener, closer]` reads: literal, or a construct whose opener takes the backslash (C2-W-090),
  * which is an inline footnote (C2-I-089) or a full or collapsed reference (C2-I-072, C2-I-075). A link tail, an
  * attribute block, a definition, a footnote reference or a shortcut is left to the repair.
@@ -51,6 +66,7 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   if (leaf.codes[opener - 1] === 94 && isReadText(leaf, opener - 1, escaped)) return ESCAPE_OPENER
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
   if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
+  if (next === '{' && isReadText(leaf, closer + 1, escaped)) return braceReading(leaf, closer + 1, escaped)
   return next === '' || !FOLLOWERS.includes(next) ? LITERAL : NO_DECISION
 }
 
