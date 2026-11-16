@@ -32,9 +32,7 @@ interface IncludeOption {
   rank: number
   name: string
   value: string
-  without_value: string
-  outside_shape: string
-  repeated: string
+  needs_value: boolean
 }
 
 interface IncludeOptions {
@@ -76,11 +74,7 @@ function profileLines(row: ProfileRow): string[] {
 }
 
 function includeOptionLine(row: IncludeOption): string {
-  const fields = [
-    `value: ${JSON.stringify(row.value)}`, `withoutValue: ${JSON.stringify(row.without_value)}`,
-    `outsideShape: ${JSON.stringify(row.outside_shape)}`, `repeated: ${JSON.stringify(row.repeated)}`,
-  ]
-  return `  [${JSON.stringify(row.name)}, { ${fields.join(', ')} }],`
+  return `  [${JSON.stringify(row.name)}, { value: ${JSON.stringify(row.value)}, needsValue: ${row.needs_value} }],`
 }
 
 /** The text of src/render-tables.ts for the three data files. */
@@ -140,14 +134,12 @@ export function generateRenderTables(slugJson: string, policyJson: string, inclu
     '])',
     '',
     '/**',
-    ' * C2-B-205, C2-B-206: the shape of the value of each include option, and what a line is when the option has no value,',
-    ' * a value outside the shape, or stands twice.',
+    ' * C2-B-205, C2-B-206: the shape of the value of each include option, and whether an option with no value or an empty',
+    ' * one is invalid.',
     ' */',
     'export interface IncludeOptionRule {',
     '  value: string',
-    '  withoutValue: string',
-    '  outsideShape: string',
-    '  repeated: string',
+    '  needsValue: boolean',
     '}',
     '',
     '/** In the order of C2-A-181. */',

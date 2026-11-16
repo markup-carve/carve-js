@@ -64,12 +64,13 @@ describe('the Unicode version', () => {
 })
 
 describe('the include shift', () => {
-  it('C2-B-205: a shift has one to nine digits; ten are outside the shape and the line is a paragraph', () => {
+  it('C2-B-205, C2-B-206: a shift has one to nine digits; ten are outside the shape, an invalid option of the include', () => {
     const document = parse('{{ a.crv @shift:-123456789 }}\n\n{{ a.crv @shift:1234567890 }}\n\n{{ a.crv @shift:+000000001 }}\n')
-    expect(document.children.map((node) => node.type)).toEqual(['include', 'paragraph', 'include'])
+    expect(document.children.map((node) => node.type)).toEqual(['include', 'include', 'include'])
     expect(document.children[0]).toMatchObject({ options: { shift: -123456789 } })
+    expect(document.children[1]).toMatchObject({ invalid: ['@shift:1234567890'] })
     expect(document.children[2]).toMatchObject({ options: { shift: 1 } })
-    expect(parse('{{ a.crv @shift:99999999999999999999 }}\n').children[0]?.type).toBe('paragraph')
+    expect(parse('{{ a.crv @shift:99999999999999999999 }}\n').children[0]).toMatchObject({ invalid: ['@shift:99999999999999999999'] })
   })
 })
 
@@ -379,13 +380,14 @@ describe('spec data rulings', () => {
     expect(treesEqual(tree({ number: 1 }), tree({ number: 2 }))).toBe(true)
   })
 
-  it('D5, C2-A-181: out-of-shape rows and cols values on an include node validate', () => {
-    const cases: [string, Record<string, string>][] = [
-      ['{{ a.crv @rows }}', { rows: '' }], ['{{ a.crv @rows:x }}', { rows: 'x' }], ['{{ a.crv @cols:"a,,b" }}', { cols: 'a,,b' }],
+  it('C2-B-206, C2-A-181: out-of-shape rows and cols values are invalid options as written, and the node validates', () => {
+    const cases: [string, string[]][] = [
+      ['{{ a.crv @rows }}', ['@rows']], ['{{ a.crv @rows:x }}', ['@rows:x']], ['{{ a.crv @cols:"a,,b" }}', ['@cols:"a,,b"']],
     ]
-    for (const [src, options] of cases) {
+    for (const [src, invalid] of cases) {
       const tree = parse(src)
-      expect(tree.children[0], src).toMatchObject({ type: 'include', options })
+      expect(tree.children[0], src).toEqual(expect.objectContaining({ type: 'include', invalid }))
+      expect(tree.children[0], src).not.toHaveProperty('options')
       expect(() => validateTree(tree), src).not.toThrow()
     }
   })

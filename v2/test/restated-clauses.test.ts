@@ -104,7 +104,7 @@ describe('the include directive', () => {
     const refused = ['{{\ta.crv }}', '{{a.crv }}', '{{ a.crv}}', '{{ a.crv\t}}', '{{ a.crv }} x', '{{ }}', '{{}}', '{{ a.crv x}', '{  a.crv }}', '{{ a.crv }']
     expect(refused.map(kind)).toEqual(Array(10).fill('paragraph'))
     // The closing braces are the first ones outside a quoted run.
-    expect(block('{{ "a }} b" @rows:"1 }} 2" }}')).toEqual({ type: 'include', path: 'a }} b', options: { rows: '1 }} 2' } })
+    expect(block('{{ "a }} b" @rows:"1 }} 2" }}')).toEqual({ type: 'include', path: 'a }} b', invalid: ['@rows:"1 }} 2"'] })
   })
 
   it('C2-B-202: a bare, a double-quoted and a curly-quoted path, and an empty one makes the line text', () => {
@@ -129,7 +129,7 @@ describe('the include directive', () => {
   it('C2-B-204: an option is an at-sign, a key and an optional value; an unquoted value ends at the next option', () => {
     expect(ofType(block('{{ a.crv @shift:1@lines:1-8 }}'), 'include').options).toEqual({ lines: '1-8', shift: 1 })
     expect(ofType(block('{{ a.crv @lines:"1-2" @code:\'c\' }}'), 'include').options).toEqual({ lines: '1-2', code: 'c' })
-    expect(ofType(block('{{ a.crv @rows:"a @ b }} c" }}'), 'include').options).toEqual({ rows: 'a @ b }} c' })
+    expect(ofType(block('{{ a.crv @rows:"a @ b }} c" }}'), 'include').invalid).toEqual(['@rows:"a @ b }} c"'])
     expect(['{{ a.crv @ }}', '{{ a.crv @1k }}', '{{ a.crv @rows: }}', '{{ a.crv @rows:"x }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
   })
 
@@ -139,32 +139,36 @@ describe('the include directive', () => {
       '@shift:-3', '@shift:007', '@code', '@code:c++', '@code:a-b_c#d.e/f',
     ]
     for (const option of valid) expect([option, kind(`{{ a.crv ${option} }}`)]).toEqual([option, 'include'])
-    // Outside its shape, an option of `shift`, `region` and `code` makes the line a paragraph.
-    const refused = ['@shift:x', '@shift:+', '@shift:1.5', '@region:1r', '@region:"r 1"', '@code:c!', '@code:""']
-    for (const option of refused) expect([option, kind(`{{ a.crv ${option} }}`)]).toEqual([option, 'paragraph'])
+    // Outside its shape an option of any key is invalid: the node keeps it as written (C2-B-206).
+    const refused = [
+      '@shift:x', '@shift:+', '@shift:1.5', '@shift:1234567890', '@region:1r', '@region:"r 1"', '@code:c!', '@code:""',
+      '@lines:5-1', '@lines:0-1', '@rows:01-2', '@rows:1-', '@cols:x', '@cols:"a,,b"', "@cols:'a,b'",
+    ]
+    for (const option of refused) expect(block(`{{ a.crv ${option} }}`)).toEqual({ type: 'include', path: 'a.crv', invalid: [option] })
   })
 
-  it('C2-B-206: a second section, an unknown key, and what the table sends to `paragraph` make a paragraph; the rest leaves an include node', () => {
-    expect(['{{ a.crv @foo:1 }}', '{{ a.crv @lines }}', '{{ a.crv @region }}', '{{ a.crv @shift }}'].map(kind)).toEqual(Array(4).fill('paragraph'))
-    expect(['{{ a.crv @lines:1-2 @lines:3-4 }}', '{{ a.crv @code @code }}', '{{ a.crv @shift:1 @shift:2 }}'].map(kind)).toEqual(Array(3).fill('paragraph'))
-    // Outside its shape, `lines`, `rows` and `cols` leave a node that an expansion reports.
-    expect(ofType(block('{{ a.crv @lines:5-1 @rows:01-2 @cols:x }}'), 'include').options).toEqual({ lines: '5-1', rows: '01-2', cols: 'x' })
-    expect(ofType(block('{{ a.crv @rows @cols }}'), 'include').options).toEqual({ rows: '', cols: '' })
+  it('C2-B-206: every line of the basic shape is an include; an unknown key, a missing value and a repeated key are invalid', () => {
+    const invalid = (src: string): unknown => ofType(block(src), 'include').invalid
+    expect(['{{ a.crv @foo:1 }}', '{{ a.crv @lines }}', '{{ a.crv @region }}', '{{ a.crv @shift }}', '{{ a.crv @rows }}', '{{ a.crv @cols }}']
+      .map(invalid)).toEqual([['@foo:1'], ['@lines'], ['@region'], ['@shift'], ['@rows'], ['@cols']])
+    expect(block('{{ a.crv @lines:1-2 @lines:3-4 }}')).toEqual({ type: 'include', path: 'a.crv', options: { lines: '1-2' }, invalid: ['@lines:3-4'] })
+    expect(block('{{ a.crv @code @code }}')).toEqual({ type: 'include', path: 'a.crv', options: { code: true }, invalid: ['@code'] })
+    // A key repeats also when its first option was invalid.
+    expect(invalid('{{ a.crv @shift:x @shift:1 }}')).toEqual(['@shift:x', '@shift:1'])
+    expect(['{{ a.crv #s #t }}', '{{ a.crv#s#t @code }}'].map(kind)).toEqual(['paragraph', 'paragraph'])
   })
 
-  it('C2-A-181: the options are decoded, and repeated rows or cols keeps the first', () => {
+  it('C2-A-181: the options are decoded, a repeated key keeps the first, and invalid options stay as written', () => {
     expect(ofType(block('{{ a.crv @code @shift:1 @cols:"a,b" @rows:1-2 @region:r @lines:1-2 }}'), 'include').options)
       .toEqual({ lines: '1-2', region: 'r', rows: '1-2', cols: ['a', 'b'], shift: 1, code: true })
-    expect(ofType(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}'), 'include').options)
-      .toEqual({ rows: '1-2', cols: ['a,b'] })
-    // A quoted value that is no list of names is a value like any other: its quotes go and its escapes are read.
-    const cols = (written: string): unknown => ofType(block(`{{ a.crv @cols:${written} }}`), 'include').options
-    expect(cols('"\\,"')).toEqual({ cols: [','] })
-    expect(cols('"a,,b"')).toEqual({ cols: 'a,,b' })
-    expect(cols('"a,"')).toEqual({ cols: 'a,' })
-    expect(cols('",a"')).toEqual({ cols: ',a' })
-    expect(cols('""')).toEqual({ cols: '' })
-    expect(cols("'a,b'")).toEqual({ cols: 'a,b' })
+    expect(block('{{ a.crv @rows:1-2 @rows:3-4 @cols:"a\\,b" @cols:1-2 }}'))
+      .toEqual({ type: 'include', path: 'a.crv', options: { rows: '1-2', cols: ['a,b'] }, invalid: ['@rows:3-4', '@cols:1-2'] })
+    // A double-quoted value of `cols` that is no list of names is outside the shape, with its quotes and escapes kept.
+    const cols = (written: string): unknown => block(`{{ a.crv @cols:${written} }}`)
+    expect(cols('"\\,"')).toEqual({ type: 'include', path: 'a.crv', options: { cols: [','] } })
+    for (const written of ['"a,,b"', '"a,"', '",a"', '""', "'a,b'"]) {
+      expect(cols(written)).toEqual({ type: 'include', path: 'a.crv', invalid: [`@cols:${written}`] })
+    }
   })
 
   it('C2-A-182, C2-A-151: an include node starts at its opening braces and owns the spaces at the end of its line', () => {
@@ -175,10 +179,12 @@ describe('the include directive', () => {
   check([
     ['C2-H-133, C2-W-058: an unexpanded directive is written with one space between its parts, and a path is quoted where the bare form does not hold it',
       '{{ "my file.crv"   #Intro @shift:1 @lines:1-5 }}', '<p>{{ "my file.crv" #Intro @lines:1-5 @shift:1 }}</p>'],
-    ['C2-H-133: an option with no value is its key, a list of names keeps its quotes, and a value with a space is quoted',
-      '{{ a.crv @code @cols:"a,b" @rows:"1 2" }}', '<p>{{ a.crv @rows:"1 2" @cols:"a,b" @code }}</p>'],
-    ['C2-B-206: a line that is no directive is a paragraph, and its at-sign reads as a mention',
-      '{{ a.crv @shift:x }}', '<p>{{ a.crv <span class="mention"><strong>@shift</strong></span>:x }}</p>'],
+    ['C2-H-133: an option with no value is its key, a list of names keeps its quotes, and an invalid option follows as written',
+      '{{ a.crv @code @cols:"a,b" @rows:"1 2" }}', '<p>{{ a.crv @cols:"a,b" @code @rows:"1 2" }}</p>'],
+    ['C2-B-206, C2-H-133: a directive with invalid options is an include, and renders them as the tree holds them',
+      '{{ a.crv @shift:x @size:2 }}', '<p>{{ a.crv @shift:x @size:2 }}</p>'],
+    ['C2-B-203: a line with a second section is no directive, and its at-sign reads as a mention',
+      '{{ a.crv#s#t @x }}', '<p>{{ a.crv#s#t <span class="mention"><strong>@x</strong></span> }}</p>'],
   ])
 })
 

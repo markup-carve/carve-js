@@ -89,7 +89,7 @@ const RULES = new Map<string, Rule>([
   ['image', ['none', [], [
     'src', 'alt', 'decorative', 'tooltip', 'targetKind', 'key', 'namespace', 'resourceId', 'refForm', 'longDescription',
   ]]],
-  ['include', ['none', ['path'], ['section', 'options']]],
+  ['include', ['none', ['path'], ['section', 'options', 'invalid']]],
   ['inline_extension', ['inlines', ['name'], [...EXTENSION, 'version', 'fallback']]],
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
@@ -226,6 +226,15 @@ function checkOption(name: string, item: Value, path: string): void {
     // C2-A-181: `code` is a syntax string, a language word (C2-B-117), or `true`.
     if (item !== true && (typeof item !== 'string' || !isFenceWord(item, false))) fail(path, 'not a syntax string or true')
   } else fail(path, 'not an include option')
+}
+
+/** C2-A-181: a non-empty list of options as written, each starting with `@`. */
+function checkInvalid(value: Value, path: string): void {
+  const entries = requireArray(value, path)
+  if (entries.length === 0) fail(path, 'an empty list of invalid options')
+  entries.forEach((entry, index) => {
+    if (typeof entry !== 'string' || !entry.startsWith('@')) fail(`${path}/${index}`, 'not an option as written')
+  })
 }
 
 function checkOptions(value: Value, path: string): void {
@@ -771,6 +780,7 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['marker', checkMarker],
   ['task', checkTask],
   ['options', checkOptions],
+  ['invalid', checkInvalid],
   ['locator', checkLocator],
   ['longDescription', nodeList('blocks')],
   ['headerIds', checkHeaderIds],

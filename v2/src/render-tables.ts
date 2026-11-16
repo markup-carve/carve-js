@@ -101,22 +101,20 @@ export const PROFILES: ReadonlyMap<string, ProfileRule> = new Map([
 ])
 
 /**
- * C2-B-205, C2-B-206: the shape of the value of each include option, and what a line is when the option has no value,
- * a value outside the shape, or stands twice.
+ * C2-B-205, C2-B-206: the shape of the value of each include option, and whether an option with no value or an empty
+ * one is invalid.
  */
 export interface IncludeOptionRule {
   value: string
-  withoutValue: string
-  outsideShape: string
-  repeated: string
+  needsValue: boolean
 }
 
 /** In the order of C2-A-181. */
 export const INCLUDE_OPTIONS: ReadonlyMap<string, IncludeOptionRule> = new Map([
-  ["lines", { value: "range", withoutValue: "paragraph", outsideShape: "include_node", repeated: "paragraph" }],
-  ["region", { value: "identifier", withoutValue: "paragraph", outsideShape: "paragraph", repeated: "paragraph" }],
-  ["rows", { value: "range", withoutValue: "include_node", outsideShape: "include_node", repeated: "include_node" }],
-  ["cols", { value: "range_or_names", withoutValue: "include_node", outsideShape: "include_node", repeated: "include_node" }],
-  ["shift", { value: "signed_integer_or_auto", withoutValue: "paragraph", outsideShape: "paragraph", repeated: "paragraph" }],
-  ["code", { value: "language", withoutValue: "valid", outsideShape: "paragraph", repeated: "paragraph" }],
+  ["lines", { value: "range", needsValue: true }],
+  ["region", { value: "identifier", needsValue: true }],
+  ["rows", { value: "range", needsValue: true }],
+  ["cols", { value: "range_or_names", needsValue: true }],
+  ["shift", { value: "signed_integer_or_auto", needsValue: true }],
+  ["code", { value: "language", needsValue: false }],
 ])

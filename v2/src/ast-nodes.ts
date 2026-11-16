@@ -246,6 +246,7 @@ export interface IncludeNode extends NodeBase {
   path: string
   section?: string
   options?: IncludeOptions
+  invalid?: string[]
 }
 
 export interface InlineExtensionNode extends NodeBase {

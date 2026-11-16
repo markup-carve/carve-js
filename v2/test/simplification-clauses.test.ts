@@ -136,3 +136,30 @@ describe('C2-I-104, C2-I-105: a straight quote is read from its neighbor before 
     expect(render('a --> b <=> c +- d C++-e')).toBe('<p>a → b ⇔ c ± d C++-e</p>')
   })
 })
+
+describe('C2-B-206, C2-A-181: a malformed include is still an include', () => {
+  const node = (src: string): unknown => JSON.parse(JSON.stringify(parse(src).children[0], (key, value: unknown) => key === 'pos' ? undefined : value))
+
+  it('C2-B-206: invalid options go to `invalid` as written, in source order, and render as the tree holds them', () => {
+    expect(node('{{ a.crv @shift:x @size:2 }}')).toEqual({ type: 'include', path: 'a.crv', invalid: ['@shift:x', '@size:2'] })
+    expect(render('{{ a.crv @shift:x @size:2 }}')).toBe('<p>{{ a.crv @shift:x @size:2 }}</p>')
+    expect(node('{{ t.csv @rows:9-1 @cols:"a,,b" @rows }}')).toEqual({ type: 'include', path: 't.csv', invalid: ['@rows:9-1', '@cols:"a,,b"', '@rows'] })
+    expect(render('{{ t.csv @rows:9-1 @cols:"a,,b" @rows }}')).toBe('<p>{{ t.csv @rows:9-1 @cols:"a,,b" @rows }}</p>')
+  })
+
+  it('C2-B-206: a key that stood earlier is invalid, and the first one keeps its effect', () => {
+    expect(node('{{ a.crv @lines:2-3 @lines:1-2 }}')).toEqual({ type: 'include', path: 'a.crv', options: { lines: '2-3' }, invalid: ['@lines:1-2'] })
+  })
+
+  it('C2-B-203: a second section is outside the basic shape, so the line is text', () => {
+    expect(node('{{ a.crv#s#t }}')).toMatchObject({ type: 'paragraph' })
+  })
+
+  it('C2-H-133: the unexpanded include is reported include-unresolved, and lint reports each invalid option', async () => {
+    const { renderWithDiagnostics } = await import('../src/index.ts')
+    const { lint } = await import('../lint/lint.ts')
+    expect(renderWithDiagnostics('{{ a.crv @shift:x @size:2 }}').diagnostics.map((item) => item.code)).toEqual(['include-unresolved'])
+    expect(lint('{{ a.crv @shift:x @size:2 }}').filter((item) => item.code === 'include-option-invalid').map((item) => item.range))
+      .toEqual([{ startOffset: 9, endOffset: 17 }, { startOffset: 18, endOffset: 25 }])
+  })
+})

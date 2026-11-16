@@ -35,5 +35,6 @@ export function includeNode(src: string, start: number, end: number): IncludeNod
   const out: IncludeNode = { type: 'include', path: parts.path }
   if (parts.section !== null) out.section = parts.section
   if (Object.keys(parts.options).length > 0) out.options = parts.options
+  if (parts.invalid.length > 0) out.invalid = parts.invalid
   return out
 }

@@ -161,10 +161,10 @@ describe('more edges', () => {
     expect(render('a *b* [c]{.d}', { sourceLines: true })).toBe('<p data-source-line="1">a <strong>b</strong> <span class="d">c</span></p>')
   })
 
-  it('an object with more fields than another is not equal to it, and an empty quoted option value is empty', () => {
+  it('an object with more fields than another is not equal to it, and an empty quoted value is no value (C2-B-206)', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1 } }), documentOf({ ...paragraph(), data: { a: 1, b: 2 } }))).toBe(false)
     expect(treesEqual(documentOf({ ...paragraph(), data: { a: 1, b: 2 } }), documentOf({ ...paragraph(), data: { a: 1 } }))).toBe(false)
-    expect(ofType(block('{{ a.crv @rows:"" @region:"x" }}'), 'include').options).toEqual({ region: 'x', rows: '' })
+    expect(block('{{ a.crv @rows:"" @region:"x" }}')).toEqual({ type: 'include', path: 'a.crv', options: { region: 'x' }, invalid: ['@rows:""'] })
   })
 })
 
@@ -306,7 +306,7 @@ describe('one-line blocks in detail', () => {
     expect(block('{{ a.crv plain @code }}').type).toBe('paragraph')
     expect(block('{{ a.crv @:v }}').type).toBe('paragraph')
     expect(block('{{ a.crv @rows: }}').type).toBe('paragraph')
-    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').options).toEqual({ rows: 'a " @b' })
+    expect(ofType(block('{{ a.crv @rows:"a \\" @b" }}'), 'include').invalid).toEqual(['@rows:"a \\" @b"'])
     expect(block('{{ a.crv @rows:"x }}').type).toBe('paragraph')
     expect(block('{{ a.crv#s@code:v }}')).toEqual({ type: 'include', path: 'a.crv', section: 's', options: { code: 'v' } })
     expect(block('{{ "a \\" b.crv" #s }}')).toEqual({ type: 'include', path: 'a " b.crv', section: 's' })
