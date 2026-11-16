@@ -106,7 +106,6 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["math", [
     {"field":"number"},
-    {"field":"numberPrefix"},
   ]],
   ["mention", [
   ]],

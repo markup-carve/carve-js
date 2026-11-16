@@ -15,20 +15,15 @@ export interface SpecExample {
 
 export const EXAMPLES = JSON.parse(readFileSync(join(import.meta.dirname, '../../data/examples.json'), 'utf8')) as SpecExample[]
 
-/**
- * The options an example is rendered with, where they are not the defaults. Example 23 of the
- * HTML document stands in the section on the roundtrip carriers and shows the output with them.
- */
-export const EXAMPLE_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map([['html.md:23', { roundtrip: true }]])
+/** The options an example is rendered with beyond those of its flags. */
+export const EXAMPLE_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map()
 
-/**
- * The options each flag behind the label of an example stands for. `--no-raw-html` is the default
- * of 0.2 (C2-H-127), and `lowercaseHeadingIds` is the 0.1 name of the value the flag beside it gives.
- */
+/** The options each flag behind the label of an example stands for. `--no-raw-html` is the default of 0.2 (C2-H-127). */
 export const FLAG_OPTIONS: ReadonlyMap<string, RenderOptions> = new Map<string, RenderOptions>([
   ['--no-raw-html', {}],
-  ['lowercaseHeadingIds', { headingIds: 'lower' }],
-  ['which is headingIds: lower', { headingIds: 'lower' }],
+  ['--roundtrip', { roundtrip: true }],
+  ['--heading-ids lower', { headingIds: 'lower' }],
+  ['--social {"mentionUrl":"https://x.org/u/{name}"}', { social: { mentionUrl: 'https://x.org/u/{name}' } }],
   ['--profile comment', { profile: 'comment' }],
   ['--profile minimal', { profile: 'minimal' }],
 ])

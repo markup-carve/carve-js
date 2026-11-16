@@ -559,6 +559,12 @@ export const CATALOG = {
       "ut a space or punctuation before it.",
     ].join(''),
   ] },
+  "table-attribute-invalid": { severity: "warning", default: "on", messages: [
+    [
+      "The value of ${key} is not valid, so the table ignores the whole att",
+      "ribute. Correct every entry, or remove the attribute.",
+    ].join(''),
+  ] },
   "table-column-arity": { severity: "warning", default: "on", messages: [
     [
       "${key} supplies ${count} column entries for a ${widest}-column table",
