@@ -288,12 +288,13 @@ describe('the other clauses of the eight commits', () => {
     expect(html).not.toContain('class="c"')
   })
 
-  it('C2-B-184: an editorial comment, math, a literal and a raw span join a continuation row with a line feed', () => {
+  it('C2-B-184: an editorial comment, math, a literal and a raw span do not cross a continuation row', () => {
     const cell = (src: string): unknown => parse(src, { positions: false }).children?.[0]
-    expect(JSON.stringify(cell('| {#a | b |\n+ x#} | c |'))).toContain('"value":"a\\nx"')
-    expect(JSON.stringify(cell(`| $${TICK}a | b |\n+ b${TICK} | c |`))).toContain('"value":"a\\nb"')
-    expect(JSON.stringify(cell(`| !${TICK}a | b |\n+ b${TICK} | c |`))).toContain('"value":"a\\nb"')
-    expect(JSON.stringify(cell(`| ${TICK}a | b |\n+ b${TICK}{=html} | c |`))).toContain('"value":"a\\nb"')
+    // The unclosed `{#` is text, and the `#a` behind it a tag.
+    expect(JSON.stringify(cell('| {#a | b |\n+ x#} | c |'))).toContain('{"type":"text","value":"{"},{"type":"tag","name":"a"},{"type":"text","value":" x#}"}')
+    expect(JSON.stringify(cell(`| $${TICK}a | b |\n+ b${TICK} | c |`))).toContain(`"value":"$${TICK}a b${TICK}"`)
+    expect(JSON.stringify(cell(`| !${TICK}a | b |\n+ b${TICK} | c |`))).toContain(`"value":"!${TICK}a b${TICK}"`)
+    expect(JSON.stringify(cell(`| ${TICK}a | b |\n+ b${TICK}{=html} | c |`))).toContain(`"value":"${TICK}a b${TICK}{=html}"`)
   })
 
   it('C2-B-184: ordinary text joins a continuation row with a space', () => {

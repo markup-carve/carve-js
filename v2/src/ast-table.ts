@@ -1,13 +1,13 @@
 // The tables of the public tree (C2-A-086 to C2-A-095): groups, rows, cells and columns, from
 // the rows of the block tree and from the rows of a delimited table.
 import {
-  type CellParagraphNode, type CommentNode, isFieldValue, type TableBodyNode, type TableCellNode, type TableColumnNode,
+  type CellParagraphNode, type CommentNode, type Inline, isFieldValue, type TableBodyNode, type TableCellNode, type TableColumnNode,
   type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  commentValue, FLOW_CELL, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
+  commentValue, contentNodes, FLOW_CELL, FLOW_UNPLACED, joinFragment, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS, PERCENT } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
@@ -81,12 +81,29 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   return attributes
 }
 
+/** C2-B-184: each fragment of a cell is an inline content of its own. */
+function fragmentInlines(ctx: TreeContext, spans: number[], flow: number): Inline[] {
+  if (spans.length <= 2) return leafInlines(ctx, spans, flow)
+  ctx.resolvable = false
+  const children: Inline[] = []
+  let joined = false
+  for (let at = 0; at < spans.length; at += 2) {
+    // An empty fragment adds nothing.
+    if (spans[at] === spans[at + 1]) continue
+    const nodes = contentNodes(ctx, spans, at, at + 2, true, flow)
+    if (joined) joinFragment(ctx, children, nodes, spans[at]!)
+    else for (const child of nodes) children.push(child)
+    joined = true
+  }
+  return children
+}
+
 function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
   const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![1]! > node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_CELL
-  const children = leafInlines(ctx, node.spans!, flow)
-  // C2-I-098: a cell is inline flow like any other leaf.
+  const children = fragmentInlines(ctx, node.spans!, flow)
+  // C2-I-098: a cell is inline flow like any other leaf. A term holds no space, so none matches across a join.
   if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
   const paragraph: CellParagraphNode = noteLeaf(ctx, { type: 'cell_paragraph', children })
   const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }

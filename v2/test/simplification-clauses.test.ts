@@ -60,3 +60,36 @@ describe('C2-B-137: a comment-only line is invisible to block structure', () => 
     expect(render('{.x}\n%% c\npara')).toBe('<p class="x">para</p>')
   })
 })
+
+describe('C2-B-184, C2-I-120: each fragment of a continuation row is an inline content of its own', () => {
+  // The children of the paragraph of the first cell of the first table.
+  const cell = (src: string): unknown => {
+    type Branch = { type: string, children?: Branch[] }
+    let node = parse(src, { positions: false }).children.find((child) => child.type === 'table') as Branch | undefined
+    while (node !== undefined && node.type !== 'cell_paragraph') node = node.children?.[0]
+    return node?.children ?? null
+  }
+
+  it('C2-B-184: Example 249 and a strong span that would cross the row are text, joined by one space', () => {
+    expect(render('| `a | 1 |\n+ b` | 2 |')).toContain('<tr><td>`a b`</td><td>1 2</td></tr>')
+    expect(render('| *a |\n+ b* |')).toContain('<tr><td>*a b*</td></tr>')
+    expect(cell('| *a* |\n+ *b* |')).toEqual([
+      { type: 'strong', children: [{ type: 'text', value: 'a' }] }, { type: 'text', value: ' ' },
+      { type: 'strong', children: [{ type: 'text', value: 'b' }] },
+    ])
+  })
+
+  it('C2-I-102: a backslash at the end of a fragment is a hard break, followed by the joining space', () => {
+    expect(cell('| a\\ |\n+ b |')).toEqual([{ type: 'text', value: 'a' }, { type: 'hard_break' }, { type: 'text', value: ' b' }])
+  })
+
+  it('C2-I-098: an abbreviation term split across two rows does not match across the join', () => {
+    expect(cell('*[HT]: Hyper Text\n\n| H |\n+ T |')).toEqual([{ type: 'text', value: 'H T' }])
+    expect(JSON.stringify(cell('*[HT]: Hyper Text\n\n| HT |\n+ x |'))).toContain('"abbreviation"')
+  })
+
+  it('C2-B-184: an empty fragment adds nothing, and a cell that starts in a continuation row has no joining space', () => {
+    expect(cell('| a |\n+ |\n+ c |')).toEqual([{ type: 'text', value: 'a c' }])
+    expect(cell('| |\n+ b |')).toEqual([{ type: 'text', value: 'b' }])
+  })
+})

@@ -75,8 +75,7 @@ export interface TreeContext {
   footnoteBlocks: Map<Node, BlockNode>
 }
 
-// How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard
-// break. C2-A-094: the line end before a continuation fragment is one space of text.
+// How the breaks of a content are read. C2-A-068: every line end of a hard-break block is a hard break.
 export const FLOW_PLAIN = 0
 export const FLOW_HARD_BREAKS = 1
 export const FLOW_CELL = 2
@@ -217,20 +216,28 @@ function addRun(ctx: TreeContext, list: Inline[], value: string, start: number, 
   else if (last.pos !== undefined) last.pos.endOffset = end
 }
 
-function traceBreak(trace: LayoutTrace, text: TextNode, fragment: number): void {
-  const breaks = trace.breaks.get(text)
-  if (breaks === undefined) trace.breaks.set(text, [text.value.length, fragment])
-  else breaks.push(text.value.length, fragment)
+/**
+ * C2-B-184, C2-A-094: appends the nodes of the next fragment of a cell, which starts at the source
+ * offset `fragment`, behind one space of text. C2-L-020: the text node that holds the space records it.
+ */
+export function joinFragment(ctx: TreeContext, list: Inline[], nodes: Inline[], fragment: number): void {
+  addText(ctx, list, ' ', -1, -1)
+  const text = list[list.length - 1]!
+  if (ctx.trace !== null && text.type === 'text') {
+    const breaks = ctx.trace.breaks.get(text)
+    if (breaks === undefined) ctx.trace.breaks.set(text, [text.value.length, fragment])
+    else breaks.push(text.value.length, fragment)
+  }
+  const first = nodes[0]
+  if (first?.type === 'text' && text.type === 'text') {
+    text.value += first.value
+    nodes = nodes.slice(1)
+  }
+  for (const node of nodes) list.push(node)
 }
 
 function addBreak(ctx: TreeContext, list: Inline[], node: InlineFrame, flow: number): void {
   const kind = flow & FLOW_KIND_MASK
-  if (kind === FLOW_CELL) {
-    addText(ctx, list, ' ', -1, -1)
-    const text = list[list.length - 1]
-    if (ctx.trace !== null && text?.type === 'text') traceBreak(ctx.trace, text, node.end)
-    return
-  }
   const out: Inline = kind === FLOW_HARD_BREAKS ? { type: 'hard_break' } : { type: 'soft_break' }
   if ((flow & FLOW_UNPLACED) !== 0) return void list.push(out)
   // C2-A-151: the spaces that a line comment before the break owns are not the break's.

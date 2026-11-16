@@ -140,11 +140,11 @@ describe('a start value of more than nine digits', () => {
 })
 
 describe('tables', () => {
-  it('C2-B-184: a code span across continuation rows keeps its line feed', () => {
+  it('C2-B-184: Example 249, a backtick run whose closer is in the next fragment is text', () => {
     const table = parse('| `a | x |\n+ b` | y |', { positions: false }).children[0]
     const cell = ofType(childrenOf(childrenOf(childrenOf(table)[0])[0])[0], 'table_cell')
-    expect(cell.children).toEqual([{ type: 'cell_paragraph', children: [{ type: 'code', value: 'a\nb' }] }])
-    expect(render('| `a | x |\n+ b` | y |')).toBe('<table>\n  <tbody>\n    <tr><td><code>a\nb</code></td><td>x y</td></tr>\n  </tbody>\n</table>')
+    expect(cell.children).toEqual([{ type: 'cell_paragraph', children: [{ type: 'text', value: '`a b`' }] }])
+    expect(render('| `a | x |\n+ b` | y |')).toBe('<table>\n  <tbody>\n    <tr><td>`a b`</td><td>x y</td></tr>\n  </tbody>\n</table>')
   })
 
   it('C2-B-221: headRows is the declared count also past the last row, and the writer writes it back', () => {
@@ -308,13 +308,13 @@ describe('the other clauses of the two commits', () => {
     ])
   })
 
-  it('C2-L-048: a wrap behind a hard break names the node behind it, and content that starts in a continuation row has offset 0', () => {
+  it('C2-L-048: a wrap behind a hard break names the joining space behind it, and content that starts in a continuation row has offset 0', () => {
     expect(entry('| a\\ | x |\n+ b | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
-      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/2', offset: 0 }])
+      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/2', offset: 1 }])
     expect(entry('| | x |\n+ b | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
       .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 0 }])
     expect(entry('| `a | x |\n+ b` | y |', '/children/0/children/0/children/0/children/0')!['wraps'])
-      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 2 }])
+      .toEqual([{ line: 1, path: '/children/0/children/0/children/0/children/0/children/0/children/0', offset: 3 }])
   })
 
   it('C2-L-049: rawRef runs from the bracket, without the image mark and the attribute block, read without prefixes', () => {
