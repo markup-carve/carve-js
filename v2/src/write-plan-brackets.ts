@@ -2,6 +2,7 @@
 // of text brackets is literal where the closing bracket starts no destination, reference, attribute
 // block or definition and its label can name no reference; every other pair is left to the repair.
 import { emptyBlockEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
+import { DEPTH_CAP } from './inline-tables.ts'
 import { CLOSE, ESCAPE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const OPENING = 91
@@ -102,13 +103,19 @@ function closePair(scan: Scan, at: number): void {
   scan.escaped[colon] = 1
 }
 
-export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean): void {
+/** `bound` is the depth bound of the leaf's blocks (noteDepths). */
+export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean, bound: number): void {
   const scan: Scan = { leaf, escaped, openers: [], hasKeys }
   const codes = leaf.codes
+  let nodes = 0
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
+    if (leaf.kinds[at] === OPEN) nodes++
+    else if (leaf.kinds[at] === CLOSE) nodes--
     const value = codes[at]
     if ((value !== OPENING && value !== CLOSING) || !isBracket(leaf, at, escaped)) continue
     leaf.cursor = at
+    // C2-I-118: an opening bracket is text where the blocks, the open nodes and the open brackets reach the cap.
+    if (value === OPENING && scan.openers.length + nodes + bound >= DEPTH_CAP) return undecide(leaf, 'depth cap')
     if (value === OPENING) scan.openers.push(at)
     else closePair(scan, at)
   }

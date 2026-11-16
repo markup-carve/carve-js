@@ -297,6 +297,14 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-118: a text bracket pair past the depth cap is left to the repair, which keeps it bare', () => {
+    const source = `${'['.repeat(210)}x${']'.repeat(210)}{.a}\n`
+    const result = formatBy(source, 'both')
+    expect(result.output.source).toBe(source)
+    expect(result.stats.reasons.has('depth cap')).toBe(true)
+    expect(result.stats.differences).toEqual([])
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

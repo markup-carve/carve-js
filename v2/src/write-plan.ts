@@ -684,7 +684,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: num
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
-  if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
+  if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0, bound)
   if (leaf.undecided === null) checkPairs(leaf, escaped, bound)
   return escaped
 }
