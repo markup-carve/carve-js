@@ -47,6 +47,8 @@ export function examplesOf(file: string, text: string): SpecExample[] {
       blocks.push(block)
       line = block.next
     }
+    // An example stated in prose (Example 247 of the block chapter) has no fence; its test is written by hand.
+    if (blocks.length === 0) continue
     if (blocks.length < 2 || blocks[0]!.info !== 'carve' || blocks[1]!.info !== 'html') {
       throw new Error(`${file}: example ${header[1]!} has no carve and html fence`)
     }
