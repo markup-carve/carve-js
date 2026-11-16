@@ -31,3 +31,16 @@ describe('C2-W-137: comment-splits-table-row', () => {
     expect(findings('| a |\n+ b |\n%% x\n', 'comment-splits-table-row')).toEqual([])
   })
 })
+
+describe('C2-B-174: table-span-marker-attribute', () => {
+  it('C2-B-174: a brace block in the prefix of a joining span mark is reported, Example 253', () => {
+    const found = findings('|= H |\n|={.x} ^ |\n| a |\n', 'table-span-marker-attribute')
+    expect(found.map((entry) => entry.range)).toEqual([{ startOffset: 8, endOffset: 16 }])
+    expect(findings('| a |{.r} b |\n| c |{.x} < |\n', 'table-span-marker-attribute')).toHaveLength(1)
+  })
+
+  it('C2-B-174: a joining mark with no brace block, or with only the header mark, is not reported', () => {
+    expect(findings('|= H |\n|= ^ |\n| a |\n', 'table-span-marker-attribute')).toEqual([])
+    expect(findings('| a | < |\n', 'table-span-marker-attribute')).toEqual([])
+  })
+})

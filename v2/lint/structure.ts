@@ -897,6 +897,15 @@ function spanMarkerBlocked(node: Node, path: string, context: LintContext): void
   reportNode('table-span-marker-blocked', node, path, context, { marker, reason })
 }
 
+/** C2-B-174: the brace block in the prefix of a span mark that joins a cell applies to no cell, and fmt drops it. */
+function spanMarkerAttribute(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'table_cell' || node.span === undefined) return
+  const prefix = raw(node, context)
+  if (!(prefix.startsWith('=') ? prefix.slice(1) : prefix).startsWith('{')) return
+  const marker = node.span === 'rowspan' ? '^' : '<'
+  reportNode('table-span-marker-attribute', node, path, context, { marker, direction: marker === '^' ? 'above it' : 'to its left' })
+}
+
 function unevenListIndent(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'list') return
   for (let at = 1; at < node.children.length; at++) {
@@ -1065,6 +1074,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('consumed-key-near-miss', ['table'], consumedNearMiss),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
+  nodeRule('table-span-marker-attribute', ['table_cell'], spanMarkerAttribute),
   nodeRule('include-option-invalid', ['include'], includeOptionInvalid),
   nodeRule('uneven-list-indent', ['list'], unevenListIndent),
   nodeRule('non-descriptive-link-text', ['link'], nonDescriptiveLink),
