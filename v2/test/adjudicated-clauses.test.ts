@@ -197,3 +197,13 @@ describe('C2-B-127: `figure` with no title and no label gives a figure group', (
     }
   })
 })
+
+describe('C2-H-149, C2-A-084: a figure group nested in a group is no panel', () => {
+  it('C2-H-149: the caption of a nested figure group takes the next number of its key', () => {
+    const src = '::: figure\n::: figure\n![a](a.png)\n^ (a) First\n:::\n^ Figure #: Both\n:::\n'
+    expect(render(src)).toContain('<figcaption>Figure 1: Both</figcaption>')
+    expect(render(`${src}\n::: figure\n![b](b.png)\n^ (a) x\n:::\n^ Figure #: Next\n:::\n`)).toContain('<figcaption>Figure 2: Next</figcaption>')
+    expect(render('::: figure\n![a](a.png)\n^ Figure #: Panel\n:::\n')).toContain('<figcaption>Figure #: Panel</figcaption>')
+    expect(render('::: figure\n| x |\n^ Table #: Panel\n:::\n')).toContain('Table #: Panel')
+  })
+})

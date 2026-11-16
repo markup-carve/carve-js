@@ -105,7 +105,8 @@ function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
 }
 
 function visitHost(node: FigureNode | FigureGroupNode | TableNode, walk: Walk): void {
-  const panel = walk.parent?.type === 'figure_group'
+  // C2-A-084: the panels of a group are its `figure` and `table` children; a nested group is a group of its own.
+  const panel = walk.parent?.type === 'figure_group' && node.type !== 'figure_group'
   if (node.type === 'table') alignColumns(node)
   if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel })
   visitSlots(walk, node)
