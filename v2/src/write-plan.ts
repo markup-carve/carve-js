@@ -127,7 +127,9 @@ function sigil(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = codePointBefore(leaf, at - 1)
   if (before === -2 || behindBracedComment(leaf, at)) return undecide(leaf, 'sigil')
   if (before >= 0 && isWordCharacter(before)) return
-  if (nextIs(leaf, at, '}')) return undecide(leaf, 'sigil')
+  // C2-I-063: `@}` closes nothing, and `#}` closes an editorial comment only behind its opener `{#`, which brace()
+  // leaves to the repair. Behind a mark or an atom the repair may place its escape elsewhere, so it decides there.
+  if (nextIs(leaf, at, '}') && at > 0 && leaf.kinds[at - 1] !== TEXT) return undecide(leaf, 'sigil')
   const name = sigilName(leaf, at)
   if (name === UNKNOWN) undecide(leaf, 'sigil')
   else if (name === NAME) escaped[at] = 1

@@ -124,6 +124,16 @@ describe('the planned writer', () => {
     for (const source of ['\\| a | {.x}\n', '\\| a |{.x}\n', '\\| a | %% c\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
+  it('C2-I-090, C2-I-063: a sigil before a closing brace behind text forms nothing, and the plan writes it bare', () => {
+    for (const source of ['a @} b\n', 'a #} b\n', '#} x\n', '@}\n', '{#a#} #} x\n', 'x (#}) y\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('*a*#} x\n', 'both').stats.planned).toBe(0)
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')
