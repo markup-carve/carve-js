@@ -41,9 +41,9 @@ export function exampleOptions(example: SpecExample): RenderOptions {
 
 /** The examples this engine does not match, each with the verdict on it. A failure without a verdict fails the test. */
 export const VERDICTS: ReadonlyMap<string, string> = new Map<string, string>([
-  // _TODO_B_r8_p2_lint.md entry 2: the example follows the letter of C2-H-032 (`aria-label=""` on an empty task label);
-  // omitting it is proposed in _OPEN.md, and the engines keep it out until that is ruled.
-  ['syntax-blocks.md:246', 'held: an empty task label writes no aria-label until the proposal of _OPEN.md is ruled'],
+  // C2-H-006, C2-H-040: a comment is not counted among the visible children of a quote, so a quote of one paragraph and
+  // a comment is written on one line; the example writes it expanded.
+  ['syntax-blocks.md:257', 'follows C2-H-006: the comment child is not visible, so the quote is written on one line'],
 ])
 
 export function exampleId(example: SpecExample): string {

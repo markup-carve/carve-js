@@ -631,6 +631,13 @@ export const CATALOG = {
       " text; close the table row.",
     ].join(''),
   ] },
+  "table-span-marker-attribute": { severity: "warning", default: "on", messages: [
+    [
+      "This \"${marker}\" joins the cell ${direction}, so its attribute block",
+      " applies to no cell and carve fmt drops it. Move the attributes to t",
+      "he cell it joins, or remove them.",
+    ].join(''),
+  ] },
   "table-span-marker-blocked": { severity: "warning", default: "on", messages: [
     [
       "The \"${marker}\" span marker cannot extend a cell. ${reason} It is a ",
