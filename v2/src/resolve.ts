@@ -11,7 +11,8 @@ import {
   type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
-import { type ParseFacts } from './ast-blocks.ts'
+import { inlineContent, type ParseFacts } from './ast-blocks.ts'
+import { foldLabel } from './ast-attributes.ts'
 import { captionLabelText, plainText } from './ast-text.ts'
 import { addFinding, type Diagnostic, type Findings } from './diagnostics.ts'
 import { type HeadingIds } from './options.ts'
@@ -330,24 +331,30 @@ function headingId(heading: HeadingNode): string | undefined {
   return heading.attrs?.id ?? heading.generatedId
 }
 
-/** C2-I-084: the folded source and the plain text of each heading that can be a target; the first heading wins. */
-function headingIndex(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Map<string, HeadingNode> {
+/**
+ * C2-I-084: the folded plain text of each heading that can be a target; the first heading wins. The tree alone gives
+ * it, so a tree resolves the same with and without its source.
+ */
+function headingIndex(walk: Walk, mode: HeadingIds): Map<string, HeadingNode> {
   const index = new Map<string, HeadingNode>()
   for (const heading of walk.headings) {
     if (mode === 'off' && heading.attrs?.id === undefined) continue
-    const source = facts?.headingSource(heading)
-    if (source !== undefined && !index.has(source)) index.set(source, heading)
-    const text = plainText(heading.children)
+    const text = foldLabel(plainText(heading.children))
     if (!index.has(text)) index.set(text, heading)
   }
   return index
+}
+
+/** C2-I-084: the stored key read as inline content of its own, then its plain text, folded. */
+function keyText(key: string): string {
+  return foldLabel(plainText(inlineContent(key)))
 }
 
 /** What a reference resolves to: a definition, or a heading (C2-I-084). */
 type Target = LinkReferenceDefinitionNode | HeadingNode
 
 /** C2-A-109: the definition or the heading each reference resolves to. An image never resolves to a heading (C2-I-083). */
-function findTargets(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Map<Reference, Target> {
+function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
   const targets = new Map<Reference, Target>()
   // The headings are indexed when the first reference finds no definition, which most documents never need.
   let headings: Map<string, HeadingNode> | null = null
@@ -357,8 +364,8 @@ function findTargets(walk: Walk, mode: HeadingIds, facts: ParseFacts | null): Ma
     let target: Target | undefined = walk.resolution.definitions.get(key)
     // C2-I-081, C2-A-213: a heading alone never forms a shortcut reference, so a supplied one stays unresolved.
     if (target === undefined && reference.type === 'link' && reference.refForm !== 'shortcut') {
-      headings ??= headingIndex(walk, mode, facts)
-      target = headings.get(key)
+      headings ??= headingIndex(walk, mode)
+      target = headings.get(keyText(key))
     }
     if (target !== undefined) targets.set(reference, target)
   }
@@ -544,7 +551,7 @@ export function resolve(
     if (body !== null) for (const child of body.children) visit(walk, child, body)
   }
   const kept = keptReferences(document, walk, facts)
-  const targets = findTargets(walk, mode, facts)
+  const targets = findTargets(walk, mode)
   const taken = reserveIds(walk, targets, kept)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)

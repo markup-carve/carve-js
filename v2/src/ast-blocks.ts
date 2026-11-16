@@ -8,7 +8,7 @@ import {
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, foldLabel, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  addText, commentValue, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
+  addText, commentValue, contentNodes, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
   setAttributes, type TreeContext,
 } from './ast-inline.ts'
 import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
@@ -322,10 +322,7 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
 }
 
 function headingNode(ctx: TreeContext, node: BlockNode, flow: number): HeadingNode {
-  const out: HeadingNode = noteLeaf(ctx, { type: 'heading', level: node.aux, children: leafChildren(ctx, node, flow) })
-  // C2-I-084: a reference finds a heading by the folded source of its text, which is read when one looks.
-  ctx.headingSpans.set(out, node.spans!)
-  return out
+  return noteLeaf(ctx, { type: 'heading', level: node.aux, children: leafChildren(ctx, node, flow) })
 }
 
 const BUILDERS = new Map<number, BlockBuilder<Block>>([
@@ -556,8 +553,6 @@ function collectLinkKeys(src: string, root: BlockNode): Set<string> | null {
 /** What a parse knows of the tree it built, which resolution reads beside the tree. */
 export interface ParseFacts {
   sourceNames: ReadonlyMap<Node, string> | null
-  /** C2-I-084: the folded source of the text of a heading of the tree, or undefined for a node that is none. */
-  headingSource: (heading: Node) => string | undefined
   /** The leaves with inline content that holds an id, a reference, a note or a cross-reference. */
   resolvableLeaves: ReadonlySet<Node>
   /** C2-H-172: whether the inline content of the source holds a bidirectional control. */
@@ -582,11 +577,23 @@ function lineCount(src: string, start: number, end: number): number {
   return count
 }
 
-function headingSource(src: string, spans: number[] | undefined): string | undefined {
-  if (spans === undefined) return undefined
-  const lines: string[] = []
-  for (let at = 0; at < spans.length; at += 2) lines.push(src.slice(spans[at], spans[at + 1]))
-  return foldLabel(lines.join('\n'))
+/**
+ * C2-I-084: `text` read as inline content of its own, in which no reference resolves, as the heading lookup reads a
+ * stored key. An opener left unclosed is text (C2-I-119).
+ */
+export function inlineContent(text: string): Inline[] {
+  const inline = acquireInlineState()
+  inline.bidi = false
+  inline.definitions = new Set()
+  try {
+    const ctx: TreeContext = {
+      src: text, positions: false, inline, depth: 0, abbreviations: new Map(), markup: new Map(), resolvable: false,
+      resolvableLeaves: new Set(), trace: null, notes: [], footnoteBlocks: new Map(), sourceNames: null,
+    }
+    return contentNodes(ctx, [0, text.length], 0, 2, true, FLOW_PLAIN)
+  } finally {
+    releaseInlineState(inline)
+  }
 }
 
 /** `source` is the source as given, of which offsets count the bytes; `ctx.src` is the text that was read. */
@@ -600,7 +607,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
   }
   const facts: ParseFacts = {
     sourceNames: ctx.sourceNames,
-    headingSource: (heading) => headingSource(src, ctx.headingSpans.get(heading)), resolvableLeaves: ctx.resolvableLeaves,
+    resolvableLeaves: ctx.resolvableLeaves,
     bidi: ctx.inline.bidi,
     addFindings: (findings) => addParseFindings(src, ctx.notes, findings),
     footnoteLines: (node) => {
@@ -631,7 +638,7 @@ export function buildSource(
     inline.definitions = linkKeys ?? collectLinkKeys(text, root)
     const ctx: TreeContext = {
       src: text, positions, inline, depth: 0, abbreviations: abbreviations ?? collectAbbreviations(text, root), markup: new Map(),
-      headingSpans: new Map(), resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
+      resolvable: false, resolvableLeaves: new Set(), trace, notes: [], footnoteBlocks: new Map(),
       sourceNames: collectSourceNames ? new Map() : null,
     }
     return buildDocument(ctx, root, src)

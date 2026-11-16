@@ -1,7 +1,7 @@
 // The rulings of the 0.2 specification that the engine follows: one describe per ruling, each test named by its clause.
 import { describe, expect, it } from 'vitest'
 import {
-  CarveOptionError, CarveTreeError, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree,
+  CarveOptionError, CarveTreeError, type DocumentNode, format, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree,
   type RenderOptions, validateTree,
 } from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
@@ -154,5 +154,40 @@ describe('references to degraded headings', () => {
     expect(profiled.document).toEqual(plain)
     renderTree(profiled)
     expect(profiled.document).toEqual(plain)
+  })
+})
+
+describe('heading lookup by plain text', () => {
+  it('C2-I-084: emphasis in the key finds a plain heading, and so does the braced form', () => {
+    expect(render('# A bold title\n\n[A *bold* title][] and [x][A {*bold*} title]\n')).toBe([
+      '<section id="A-bold-title">', '  <h1>A bold title</h1>',
+      '  <p><a href="#A-bold-title">A <strong>bold</strong> title</a> and <a href="#A-bold-title">x</a></p>', '</section>',
+    ].join('\n'))
+  })
+
+  it('C2-I-084, C2-W-004: a braced heading is found by bare emphasis, before and after the formatter', () => {
+    const source = '# A {*bold*} title\n\n[A *bold* title][] and [A bold title][]\n'
+    const html = render(source)
+    expect(html.match(/href="#A-bold-title"/g)).toHaveLength(2)
+    expect(render(format(source))).toBe(html)
+  })
+
+  it('C2-I-084, C2-A-109: no source text is read, so a tree resolves the same without its source', () => {
+    for (const source of ['# A bold title\n\n[A *bold* title][] and [x][A {*bold*} title]\n', '# A {*bold*} title\n\n[A *bold* title][]\n']) {
+      const tree = parse(source, { positions: false })
+      expect(render(JSON.parse(JSON.stringify(tree)) as DocumentNode)).toBe(render(source))
+    }
+  })
+
+  it('C2-I-081, C2-A-213: a supplied shortcut never reaches a heading', () => {
+    const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [
+      { type: 'heading', level: 1, children: [{ type: 'text', value: 'H' }] },
+      { type: 'paragraph', children: [{ type: 'link', key: 'H', namespace: 'link', refForm: 'shortcut', children: [{ type: 'text', value: 'H' }] }] },
+    ] }
+    expect(render(document)).toContain('<p>[H]</p>')
+  })
+
+  it('C2-I-084: an escaped apostrophe gives no glyph, so the key does not find the smart heading', () => {
+    expect(render("# It's a*b\n\n[go][It\\'s a\\*b]\n")).toContain('<p>[go][It\\\'s a\\*b]</p>')
   })
 })

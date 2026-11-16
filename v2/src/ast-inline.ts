@@ -60,8 +60,6 @@ export interface TreeContext {
   abbreviations: Map<string, string>
   /** The offset of the own markup of each block that took attribute lines (C2-A-148). */
   markup: Map<Node, number>
-  /** The source lines of the text of each heading, as a start and an end per line (C2-I-084). */
-  headingSpans: Map<Node, number[]>
   /**
    * Set when an inline node is built that resolution reads: one with an id, a reference, a note or
    * a cross-reference. A leaf asks it after its content is built.
