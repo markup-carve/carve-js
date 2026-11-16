@@ -137,13 +137,12 @@ describe('the planned writer', () => {
   })
 
   it('C2-I-090, C2-I-063: a sigil before a closing brace behind text forms nothing, and the plan writes it bare', () => {
-    for (const source of ['a @} b\n', 'a #} b\n', '#} x\n', '@}\n', '{#a#} #} x\n', 'x (#}) y\n']) {
+    for (const source of ['a @} b\n', 'a #} b\n', '#} x\n', '@}\n', '{#a#} #} x\n', 'x (#}) y\n', '*a*#} x\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    expect(formatBy('*a*#} x\n', 'both').stats.planned).toBe(0)
   })
 
   it('C2-I-087: a bracket and a caret with no later `]` in the content open nothing, and the plan writes them bare', () => {
@@ -275,6 +274,15 @@ describe('the planned writer', () => {
     for (const source of ['x :B8[^ab] c\n', 'x![^a]\n', 'x![^[[]\n', 'x^[^[[]\n', 'x^[^![]\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
+  it('C2-I-063: a sigil of text before a closing brace is planned bare behind a node', () => {
+    for (const source of ['x `a`#} y\n', 'x `a`@} y\n', 'x /a/#} y\n', 'x `a`\\#a y\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
   })
