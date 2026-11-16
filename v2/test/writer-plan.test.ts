@@ -278,6 +278,17 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-090, C2-B-091, C2-B-092: a first line that is an attribute line is escaped before a next line and bare alone', () => {
+    for (const source of ['\\{.x}\nb\n', '{.x}\n', '\\{.x}{#y}\nb\n', '- \\{.x}\n  b\n', '> \\{.x}\n> b\n', '\\{.x}\n`c`\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    // Stacked attribute lines are left to the repair.
+    expect(formatBy('{.x}\n{.y}\n', 'both').stats.repaired).toBe(1)
+  })
+
   it('C2-I-063: a sigil of text before a closing brace is planned bare behind a node', () => {
     for (const source of ['x `a`#} y\n', 'x `a`@} y\n', 'x /a/#} y\n', 'x `a`\\#a y\n']) {
       const result = formatBy(source, 'both')

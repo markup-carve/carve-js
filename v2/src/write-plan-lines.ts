@@ -2,7 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
-import { isAbbreviation, isDefinition, taskBoxEnd } from './lines.ts'
+import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
 import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
@@ -235,7 +235,7 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [SPACE, () => UNDECIDED],
   [TAB, () => UNDECIDED],
   [91, bracketLine],
-  [123, (leaf, at) => decidedIf(!isBracedOpener(code(leaf, at + 1)) && lineEndsWith(leaf, at, 125))],
+  [123, attributeLine],
   [94, caption],
   [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
 ])
@@ -261,6 +261,22 @@ function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): numb
     if (leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) return UNDECIDED
   }
   return NO_ESCAPE
+}
+
+/**
+ * C2-B-090, C2-B-091, C2-B-092: a first line that is an attribute line applies to the block the next line starts, so
+ * the brace takes the backslash; alone it becomes a paragraph of its text. Stacked attribute lines and lines that
+ * hold a node are left to the repair.
+ */
+function attributeLine(leaf: Leaf, at: number, _place: LeafPlace, first: boolean): number {
+  if (isBracedOpener(code(leaf, at + 1)) || !lineEndsWith(leaf, at, 125)) return NO_ESCAPE
+  if (!first) return UNDECIDED
+  const [line, whole] = textOfLine(leaf, at)
+  if (!whole || !isAttributeLine(line, 0, line.length)) return UNDECIDED
+  const next = at + line.length + 1
+  if (next > leaf.codes.length) return NO_ESCAPE
+  const [after, afterWhole] = textOfLine(leaf, next)
+  return afterWhole && isAttributeLine(after, 0, after.length) ? UNDECIDED : at
 }
 
 function isBracedOpener(value: number): boolean {
