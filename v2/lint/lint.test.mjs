@@ -123,6 +123,7 @@ const CASES = [
   { id: 'semantic-attribute-value-ignored', trigger: '[x]{mark=foo}', near: '[x]{mark}', fragment: 'mark=foo' },
   { id: 'table-column-arity', trigger: '{widths=10}\n| a | b |', near: '{widths=10,20}\n| a | b |',
     fragment: 'widths=10' },
+  { id: 'table-attribute-invalid', trigger: '{widths=x}\n| a |', near: '{widths=10}\n| a |', fragment: 'widths=x' },
   { id: 'table-column-overlap', trigger: '{aligns=left}\n|={>} a |= b |',
     near: '{aligns=left}\n|= a |= b |', fragment: 'aligns=left' },
   { id: 'table-marker-run-padding', trigger: '|{.x}> a |', near: '|>{.x} a |', fragment: '{.x}>' },

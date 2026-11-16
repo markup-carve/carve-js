@@ -2550,10 +2550,8 @@
     "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
     "line": 14,
     "input": "# [g][]\\\n",
-    "check": "mismatch",
-    "entries": [
-      "U-148"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C96",
@@ -2561,10 +2559,8 @@
     "path": "resources/examples/edge-cases/1025-a-terminal-heading-hard-break-keeps-its-implicit-reference.md",
     "line": 31,
     "input": "# g\\\n\n[g][]\n",
-    "check": "mismatch",
-    "entries": [
-      "U-148"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C96",
@@ -2572,10 +2568,8 @@
     "path": "resources/examples/edge-cases/1026-nested-reference-labels-contribute-to-heading-text.md",
     "line": 28,
     "input": "# [[x][]][]\n",
-    "check": "mismatch",
-    "entries": [
-      "U-148"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C97",

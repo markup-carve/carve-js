@@ -187,6 +187,10 @@ describe('heading lookup by plain text', () => {
     expect(render(document)).toContain('<p>[H]</p>')
   })
 
+  it('C2-I-084, C2-H-143: a link gives the text of its children before any reference resolves, its own heading included', () => {
+    expect(render('# [g][]\n')).toBe('<section id="g">\n  <h1><a href="#g">g</a></h1>\n</section>')
+  })
+
   it('C2-I-084: an escaped apostrophe gives no glyph, so the key does not find the smart heading', () => {
     expect(render("# It's a*b\n\n[go][It\\'s a\\*b]\n")).toContain('<p>[go][It\\\'s a\\*b]</p>')
   })
