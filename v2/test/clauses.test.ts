@@ -371,16 +371,17 @@ describe('comments', () => {
     expect(blocks('= %% c')).toBe('h1"%% c"')
   })
 
-  it('C2-B-137: a comment-only line is skipped by ownership and by the count of blank lines', () => {
+  it('C2-B-137: a comment-only line is no line for ownership, for the count of blank lines and for a heading', () => {
     expect(blocks('- a', '', '%% c', '  b')).toBe('ul(-)[li[p"a" %"%% c" p"b"]]')
     expect(blocks('- a', '', '', '%% c', '', '- b')).toBe('ul(-)[li[p"a" %"%% c"]] ul(-)[li[p"b"]]')
     expect(blocks('- a', '', '%% c', '- b')).toBe('ul(-,loose)[li[p"a" %"%% c"] li[p"b"]]')
-    expect(blocks('- > = a', '%% c', '  > b')).toBe('ul(-)[li[quote[h1"a" %"%% c" p"b"]]]')
+    expect(blocks('- > = a', '%% c', '  > b')).toBe('ul(-)[li[quote[h1"a|%% c" p"b"]]]')
   })
 
-  it('C2-B-138: the comment is a child of the innermost open container, whatever its indent', () => {
+  it('C2-B-138: the comment is a child of the open leaf, or of the innermost open container, whatever its indent', () => {
     expect(blocks('%% c')).toBe('%"%% c"')
-    expect(blocks('- - = a', '%% c')).toBe('ul(-)[li[ul(-)[li[h1"a" %"%% c"]]]]')
+    expect(blocks('- - = a', '%% c')).toBe('ul(-)[li[ul(-)[li[h1"a|%% c"]]]]')
+    expect(blocks('- - ***', '%% c')).toBe('ul(-)[li[ul(-)[li[hr %"%% c"]]]]')
     expect(blocks('= a', '        %% c')).toBe('h1"a|%% c"')
   })
 
@@ -458,7 +459,8 @@ describe('readings the chapter leaves open', () => {
   })
 
   it('C2-B-138: with no leaf open in a quote, a comment line is a comment node', () => {
-    expect(blocks('> = a', '> %% c')).toBe('quote[h1"a" %"%% c"]')
+    expect(blocks('> = a', '> %% c')).toBe('quote[h1"a|%% c"]')
+    expect(blocks('> ***', '> %% c')).toBe('quote[hr %"%% c"]')
   })
 
   it('C2-B-010: a lone carriage return is not a line ending', () => {

@@ -122,9 +122,18 @@ function lazyLine(state: BlockState, matched: number, lineStart: number, end: nu
   if (interruptsLeaf(state, matched, lineStart, end)) return false
   writeEvent(state, SPAN_TAG, cursor.pos, end)
   state.contentEnd = end
-  // C2-B-157: a comment-only line below a block image or a math block does not count.
-  if (!isLineComment(state.src, cursor.pos, end)) state.leaf.lines++
+  state.leaf.lines++
   return true
+}
+
+/**
+ * C2-B-137, C2-B-138: a comment-only line is no line for block structure. It closes, continues and opens
+ * nothing; its comment goes into the open leaf, or else into the innermost open container.
+ */
+function commentLine(state: BlockState, end: number): void {
+  if (!isTextLeaf(state.leaf.kind)) return writeComment(state, end)
+  writeEvent(state, SPAN_TAG, state.cursor.pos, end)
+  state.contentEnd = end
 }
 
 function scanLine(state: BlockState, lineStart: number, end: number): void {
@@ -132,6 +141,7 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
   const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
   const blank = cursor.pos >= end
+  if (!isOpaqueLeaf(leaf.kind) && isLineComment(state.src, cursor.pos, end)) return commentLine(state, end)
   if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
@@ -145,8 +155,6 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
     closeLeaf(state)
     return openLine(state, matched, lineStart, end, captions)
   }
-  // C2-B-137, C2-B-138: a comment-only line closes nothing and counts neither as blank nor as content.
-  if (isLineComment(state.src, cursor.pos, end)) return writeComment(state, end)
   openLine(state, matched, lineStart, end, captionsAfterBlock(state, matched, end))
 }
 
@@ -157,13 +165,7 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
     if (owned) opaqueLine(state, lineStart, end, blank)
     return owned
   }
-  if (blank) return false
-  if (isLineComment(state.src, state.cursor.pos, end)) {
-    // C2-B-137: a comment-only line does not end a table.
-    writeComment(state, end)
-    return true
-  }
-  return owned && tableLine(state, end)
+  return !blank && owned && tableLine(state, end)
 }
 
 /** A line that is not blank, not a lazy line and not a comment-only line: it closes and opens blocks. */

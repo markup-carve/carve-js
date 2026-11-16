@@ -255,7 +255,10 @@ function multilineTerm(node: Node, path: string, context: LintContext): void {
 function headingContinuation(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const first = context.lines[node.pos.startLine - 1]
-  const second = context.lines[node.pos.startLine]
+  // C2-B-137: the line that continues the heading may stand below comment-only lines.
+  let next = node.pos.startLine
+  while (next < node.pos.endLine && context.lines[next]?.text.trimStart().startsWith('%%') === true) next++
+  const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
   const marker = first.text.trimStart()
   let width = 0

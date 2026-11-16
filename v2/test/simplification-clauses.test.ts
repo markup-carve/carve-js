@@ -33,3 +33,30 @@ describe('C2-B-190, C2-I-118: block and inline depth are limited each by itself'
     expect(JSON.stringify(closed)).toContain('"link"')
   })
 })
+
+describe('C2-B-137: a comment-only line is invisible to block structure', () => {
+  const shape = (src: string): unknown => JSON.parse(JSON.stringify(parse(src).children, (key, value: unknown) => key === 'pos' ? undefined : value))
+
+  it('C2-B-137, C2-B-154: Example 248, a comment-only line at column 0 does not close the heading', () => {
+    expect(render('= Title\n%% note\n  continues')).toBe('<section id="Title-continues">\n  <h1>Title\ncontinues</h1>\n</section>')
+    expect(shape('= Title\n%% note\n  continues')).toEqual([{
+      type: 'heading', level: 1, generatedId: 'Title-continues', children: [
+        { type: 'text', value: 'Title' }, { type: 'soft_break' }, { type: 'comment', form: 'line', value: 'note' },
+        { type: 'soft_break' }, { type: 'text', value: 'continues' },
+      ],
+    }])
+  })
+
+  it('C2-B-138: below a heading the comment is the last child of the heading, and the heading spans its line', () => {
+    const node = parse('= Title\n%% note\ntext').children[0]
+    expect(node).toMatchObject({ type: 'heading', pos: { startLine: 1, endLine: 2 } })
+    expect(node?.type === 'heading' ? node.children.at(-1) : null).toMatchObject({ type: 'comment', value: 'note' })
+    expect(render('= Title\n%% note\ntext')).toBe('<section id="Title">\n  <h1>Title</h1>\n  <p>text</p>\n</section>')
+  })
+
+  it('C2-B-137: whatever its indent it closes no container and no table, and a pending attribute line waits', () => {
+    expect(render('- a\n%% c\n  b')).toBe('<ul>\n  <li>a\nb</li>\n</ul>')
+    expect(render('| a |\n%% c\n| b |')).toContain('<tr><td>b</td></tr>')
+    expect(render('{.x}\n%% c\npara')).toBe('<p class="x">para</p>')
+  })
+})
