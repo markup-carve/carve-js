@@ -147,14 +147,18 @@ describe('tables', () => {
     expect(render('| `a | x |\n+ b` | y |')).toBe('<table>\n  <tbody>\n    <tr><td>`a b`</td><td>x y</td></tr>\n  </tbody>\n</table>')
   })
 
-  it('C2-B-221: headRows is the declared count also past the last row, and the writer writes it back', () => {
+  it('C2-B-209, C2-B-221: a count past the last row is clamped, so every row stands in the head and there is no body', () => {
     const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
-    const document = parse(src, { positions: false })
-    const table = ofType(document.children[0], 'table')
-    expect(table.children).toHaveLength(1)
-    expect(ofType(table.children[0], 'table_body').headRows).toBe(5)
-    expect(format(src)).toBe(`${src}\n`)
-    expect(write(document)).toContain('header-rows=5')
+    const table = ofType(parse(src, { positions: false }).children[0], 'table')
+    expect(table.children.map((group) => group.type)).toEqual(['table_head'])
+    expect(ofType(table.children[0], 'table_head').children).toHaveLength(2)
+    expect(table).not.toHaveProperty('attrs')
+  })
+
+  it('C2-W-066: a delimited table whose rows all stand in its head is written with the count of its head rows', () => {
+    const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
+    expect(format(src)).toBe(`{table header-rows=2}\n${FENCE}csv\na,b\nc,d\n${FENCE}\n`)
+    expect(write(parse(src, { positions: false }))).toContain('header-rows=2')
   })
 })
 
@@ -245,7 +249,8 @@ describe('the other clauses of the two commits', () => {
   })
 
   it('C2-H-171: an option value with a space, a tab, @ or } stands in quotes, and the options stand in the order of C2-W-058', () => {
-    expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:a,,b }}</p>')
+    // C2-B-206: `"a,,b"` is no list of names, so the option is invalid and stands as the source spelled it.
+    expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:"a,,b" }}</p>')
     const document: DocumentNode = {
       type: 'document', astVersion: '2.0',
       // C2-A-181: `code` is a syntax string, so the closing brace stands in an out-of-shape `cols` value.

@@ -54,6 +54,8 @@ const CASES = [
   { id: 'unattached-block-attribute', trigger: '{.x}', near: '{.x}\ntext', fragment: '{.x}' },
   { id: 'empty-include-path', trigger: '{{ }}', near: '{{ file.crv }}', fragment: '{{ }}' },
   { id: 'include-option-invalid', trigger: '{{ a.crv @shift:x }}', near: '{{ a.crv @shift:1 }}', fragment: '@shift:x' },
+  { id: 'table-row-count-clamped', trigger: '{table header-rows=5}\n```csv\na,b\nc,d\n```', near: '{table header-rows=2}\n```csv\na,b\nc,d\n```',
+    fragment: 'header-rows=5' },
   { id: 'link-gap-before-destination', trigger: '[x] (/u)', near: '[x](/u)', fragment: '] (' },
   { id: 'deprecated-bare-underline', trigger: 'a _x_ b', near: 'a {_x_} b', fragment: '_x_' },
   { id: 'deprecated-bare-strike', trigger: 'a ~x~ b', near: 'a {~x~} b', fragment: '~x~' },

@@ -252,11 +252,11 @@ describe('the table attributes', () => {
   const rows = (src: string): string => render(src).replaceAll(/\n */g, '').replaceAll(/<\/?table>/g, '')
   const csv = (attributes: string, ...lines: string[]): string => `${attributes}\n${FENCE}csv\n${lines.join('\n')}\n${FENCE}`
 
-  it('C2-B-209: the first row of a delimited table is its head, a count sets it, and a count past the last row gives no head and header cells', () => {
+  it('C2-B-209: the first row of a delimited table is its head, a count sets it, and a count past the last row takes every row' + ' into the head', () => {
     expect(rows(csv('{table}', 'a', 'b'))).toBe('<thead><tr><th scope="col">a</th></tr></thead><tbody><tr><td>b</td></tr></tbody>')
     expect(rows(csv('{table header-rows=2}', 'a', 'b'))).toBe('<thead><tr><th scope="col">a</th></tr><tr><th scope="col">b</th></tr></thead>')
     expect(rows(csv('{table header-rows=0}', 'a', 'b'))).toBe('<tbody><tr><td>a</td></tr><tr><td>b</td></tr></tbody>')
-    expect(rows(csv('{table header-rows=3}', 'a', 'b'))).toBe('<tbody><tr><th scope="row">a</th></tr><tr><th scope="row">b</th></tr></tbody>')
+    expect(rows(csv('{table header-rows=3}', 'a', 'b'))).toBe('<thead><tr><th scope="col">a</th></tr><tr><th scope="col">b</th></tr></thead>')
   })
 
   it('C2-B-210: a count is one or more digits, an empty value counts as 1, and any other value has no effect', () => {
@@ -281,7 +281,9 @@ describe('the table attributes', () => {
     expect(body('{table header-rows=x}').headRows).toBeUndefined()
     expect(body('{table header-rows=1}').headRows).toBe(1)
     expect(body('{table header-rows=0}').headRows).toBe(0)
-    expect(body('{table header-rows=5}').headRows).toBe(5)
+    // C2-B-221: the effective count; past the last row there is no body to carry it.
+    expect(ofType(ofType(block(csv('{table header-rows=1 footer-rows=1}', 'a', 'b', 'c')), 'table').children[1], 'table_body').headRows).toBe(1)
+    expect(ofType(block(csv('{table header-rows=5}', 'a', 'b')), 'table').children.map((group) => group.type)).toEqual(['table_head'])
   })
 
   it('C2-B-211: an entry of `aligns` that is left, right or center sets the column, and any other leaves every column unset', () => {

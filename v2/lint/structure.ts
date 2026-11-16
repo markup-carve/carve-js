@@ -92,6 +92,32 @@ function invalidTableAttribute(node: Node, path: string, context: LintContext): 
   }
 }
 
+function groupRows(node: Node, type: string): number {
+  if (node.type !== 'table') return 0
+  let rows = 0
+  for (const group of node.children) {
+    if (group.type !== 'comment' && group.type === type) rows += group.children.filter((row) => row.type === 'table_row').length
+  }
+  return rows
+}
+
+/** C2-B-187, C2-B-209: a valid count larger than the rows it can take is clamped, and the hint names the count to write. */
+function rowCountClamped(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'table' || node.pos === undefined) return
+  const head = groupRows(node, 'table_head')
+  const below = groupRows(node, 'table_body') + groupRows(node, 'table_foot')
+  const limits: [string, number][] = [['footer-rows', below]]
+  if (context.layouts.get(path)?.sourceFormat !== 'pipe') limits.unshift(['header-rows', head + below])
+  const line = context.lines[node.pos.startLine - 1]
+  for (const [key, limit] of limits) {
+    const value = attributeValue(node, context, key)
+    if (line === undefined || value === undefined || !/^\d+$/.test(value) || Number(value) <= limit) continue
+    const at = line.text.indexOf(`${key}=`)
+    context.report('table-row-count-clamped', line.start + at, line.start + at + key.length + 1 + value.length, path,
+      { key, count: value, effective: String(limit) })
+  }
+}
+
 function attributeValue(node: Node, context: LintContext, key: string): string | undefined {
   if (node.pos === undefined) return undefined
   const line = context.lines[node.pos.startLine - 1]?.text.trim()
@@ -952,6 +978,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
   nodeRule('table-column-arity', ['table'], tableColumnArity),
   nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
+  nodeRule('table-row-count-clamped', ['table'], rowCountClamped),
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
   nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),

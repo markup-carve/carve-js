@@ -365,20 +365,19 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
   if (!ctx.inline.bidi) ctx.inline.bidi = holdsBidiControl(ctx.src, node.start, node.end)
   const attributes = readAttributeLines(ctx.src, node.attributes)
   takeKey(attributes, 'table')
-  // C2-B-209: a count past the last row gives no head, and every cell is a header cell.
-  const allHeaders = source.headRows > rows.length
-  const head = allHeaders ? 0 : source.headRows
+  // C2-B-209: a count past the last row is the number of rows.
+  const head = Math.min(source.headRows, rows.length)
   // C2-B-187: the footer rows are counted among the rows below the head.
   const footer = Math.min(Math.max(0, countValue(keyOf(attributes, 'footer-rows'))), Math.max(0, rows.length - head))
   const groups = emptyGroups()
   rows.forEach((cells, index) => {
     groups.width = Math.max(groups.width, cells.length)
     const group = index < head ? groups.head : index < rows.length - footer ? groups.body : groups.foot
-    group.push(delimitedRow(cells, allHeaders || index < head))
+    group.push(delimitedRow(cells, index < head))
   })
   const table = tableOf(ctx, groups, attributes, true)
-  // C2-A-088: a body whose partition the source declared carries `headRows`.
-  if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = source.headRows
+  // C2-A-088, C2-B-221: a body whose partition the source declared carries the effective count.
+  if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = head
   // C2-B-181: a quote that never closes is reported, and the block stays a table.
   if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node, from: 0 })
   return table

@@ -209,3 +209,30 @@ describe('C2-B-172 to C2-B-174: a span mark that cannot join is literal, and no 
     expect([codes('|= ^ |= A |\n| 1 | 2 |'), codes('| a |\n| ^ |'), codes('| \\^ |'), codes('|=|^|')]).toEqual([1, 0, 0, 1])
   })
 })
+
+describe('C2-B-209, C2-B-221: a declared head-row count is clamped', () => {
+  const FENCE = '```'
+
+  it('C2-B-209: a count past the last row takes every row into the head, consumed from attrs, and lint names the count to write', async () => {
+    const src = `{table header-rows=5}\n${FENCE}csv\na,b\nc,d\n${FENCE}`
+    expect(render(src)).toBe(
+      '<table>\n  <thead>\n    <tr><th scope="col">a</th><th scope="col">b</th></tr>\n'
+      + '    <tr><th scope="col">c</th><th scope="col">d</th></tr>\n  </thead>\n</table>',
+    )
+    const { lint } = await import('../lint/lint.ts')
+    const found = lint(src).filter((item) => item.code === 'table-row-count-clamped')
+    expect(found.map((item) => [item.severity, item.range, item.message])).toEqual([
+      ['hint', { startOffset: 7, endOffset: 20 }, 'header-rows=5 asks for more rows than the table has, so it takes 2. Write header-rows=2.'],
+    ])
+  })
+
+  it('C2-B-187, C2-B-221: the head takes its rows first, and a clamped footer count is reported too', async () => {
+    const src = `{table header-rows=2 footer-rows=2}\n${FENCE}csv\na\nb\nc\n${FENCE}`
+    expect(render(src)).toContain('<tfoot>\n    <tr><td>c</td></tr>\n  </tfoot>')
+    const { lint } = await import('../lint/lint.ts')
+    expect(lint(src).filter((item) => item.code === 'table-row-count-clamped').map((item) => item.message)).toEqual([
+      'footer-rows=2 asks for more rows than the table has, so it takes 1. Write footer-rows=1.',
+    ])
+    expect(lint('{footer-rows=1}\n| a |\n| b |').filter((item) => item.code === 'table-row-count-clamped')).toEqual([])
+  })
+})
