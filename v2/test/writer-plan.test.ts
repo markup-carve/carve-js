@@ -374,6 +374,15 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-055: behind a bare `{` of text the caret makes a braced opener, no footnote sigil, and the plan decides it', () => {
+    for (const source of ['a {^b c\n', 'a \\{^b^} c\n', 'a {^[x] c\n', 'a {^\\[^a] c\n', 'a {^`c` d\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')

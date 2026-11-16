@@ -10,7 +10,7 @@ import {
 } from './write-plan-model.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { opensAngleAtom } from './write-plan-angle.ts'
-import { checkBrackets } from './write-plan-brackets.ts'
+import { checkBrackets, isFootnoteCaret } from './write-plan-brackets.ts'
 import { checkPairs } from './write-plan-pairs.ts'
 import { colonName, NAME, sigilName, UNKNOWN } from './write-plan-sigil.ts'
 import { checkSmart } from './write-plan-smart.ts'
@@ -164,7 +164,7 @@ function openedBefore(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (leaf.kinds[at - 1] !== TEXT) return -1
   const before = code(leaf, at - 1)
   if (before === 33) return UNREAD
-  return before === 94 && !isLiteral(leaf, at - 1, escaped) ? NO_REFERENCE : -1
+  return isFootnoteCaret(leaf, at - 1, escaped) ? NO_REFERENCE : -1
 }
 
 /**
@@ -327,6 +327,20 @@ function gluedSigil(leaf: Leaf, at: number, escaped: Uint8Array, opens: (leaf: L
   undecidedIf(nextIs(leaf, at, rest), leaf, `sigil ${String.fromCharCode(code(leaf, at))}`)
 }
 
+/**
+ * C2-I-055: behind a bare `{` of text the caret makes a braced opener, which write-plan-pairs.ts pairs, and no
+ * footnote sigil; behind `[` it makes a footnote reference where a `]` follows (C2-I-087).
+ */
+function caret(leaf: Leaf, at: number, escaped: Uint8Array): void {
+  const before = code(leaf, at - 1)
+  const textBefore = leaf.kinds[at - 1] === TEXT
+  if (before === 123 && textBefore && !isLiteral(leaf, at - 1, escaped)) return
+  if ((before === 123 && !textBefore) || (before === 91 && leaf.lastBracket > at && !footnotePlanned(leaf, at - 1, escaped))) {
+    return undecide(leaf, 'footnote bracket')
+  }
+  gluedSigil(leaf, at, escaped, treeBracket, '')
+}
+
 /** C2-I-073, C2-I-096, C2-I-117: an autolink, a cross-reference or an arrow or comparison that opens at `<`. */
 function angle(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
@@ -382,14 +396,7 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
     undecidedIf(leaf.kinds[at - 1] !== ESCAPE && (next === 32 || isAsciiPunctuation(next)), leaf, 'backslash')
   },
   ']': () => undefined,
-  '^': (leaf, at, escaped) => {
-    // C2-I-055: behind `{` the caret makes a braced opener, not a footnote sigil; behind `[` a footnote reference
-    // where a `]` follows (C2-I-087).
-    if (code(leaf, at - 1) === 123 || (code(leaf, at - 1) === 91 && leaf.lastBracket > at && !footnotePlanned(leaf, at - 1, escaped))) {
-      undecide(leaf, 'footnote bracket')
-    }
-    else gluedSigil(leaf, at, escaped, treeBracket, '')
-  },
+  '^': caret,
   '_': () => undefined,
   // C2-I-017, C2-W-091: a backtick run opens a code span even unclosed, so each backtick of text takes a backslash.
   '`': (leaf, at, escaped) => {

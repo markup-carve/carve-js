@@ -21,6 +21,11 @@ function isReadText(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   return leaf.kinds[at] === TEXT && escaped[at] === 0 && leaf.kinds[at - 1] !== ESCAPE
 }
 
+/** C2-I-089, C2-I-055: a bare caret of text opens `^[`, unless a bare `{` of text before it makes `{^` of it. */
+export function isFootnoteCaret(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  return leaf.codes[at] === 94 && isReadText(leaf, at, escaped) && !(leaf.codes[at - 1] === 123 && isReadText(leaf, at - 1, escaped))
+}
+
 const LITERAL = 0
 const ESCAPE_OPENER = 1
 const NO_DECISION = 2
@@ -64,7 +69,7 @@ function braceReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
  */
 function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolean, escaped: Uint8Array): number {
   if (hasKeys) return NO_DECISION
-  if (leaf.codes[opener - 1] === 94 && isReadText(leaf, opener - 1, escaped)) return ESCAPE_OPENER
+  if (isFootnoteCaret(leaf, opener - 1, escaped)) return ESCAPE_OPENER
   if (leaf.codes[opener + 1] === 94) return NO_DECISION
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
   if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
