@@ -322,13 +322,48 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
     // C2-B-169: in a cell the run is read against the pipes of its row. C2-W-091: bare, the run would pair
     // with a later code span of the tree and shift it, and the procedure escapes what that shift uncovers first.
     // Inside a mark of the tree, behind a delimiter of text, the procedure escapes that delimiter first.
-    if (leaf.inCell || leaf.lastAtomTick > at || (leaf.textMark && leaf.openDepth > 0)) undecide(leaf, 'backtick')
+    if (leaf.inCell) undecide(leaf, 'backtick in a cell')
+    else if (leaf.lastAtomTick > at && !unclosedRun(leaf, at) && !opensFirst(leaf, at)) undecide(leaf, 'backtick before a code span')
+    else if (leaf.textMark && leaf.openDepth > 0) undecide(leaf, 'backtick in a mark')
     else escaped[at] = 1
   },
   '{': brace,
   '|': () => undefined,
   '}': closingBrace,
   '~': () => undefined,
+}
+
+/**
+ * C2-I-017, C2-W-091: whether the bare run of text backticks at `at` opens a code span that no later run closes, so
+ * that it runs to the end of the content. Then nothing behind it pairs with anything before it, and the procedure
+ * escapes it before anything it uncovers. The backticks of text before it are escaped by then, those behind it are
+ * bare, and in an open span a backslash escapes nothing, so every later run counts by its length. A run glued to the
+ * backticks of an atom is left to the repair.
+ */
+function unclosedRun(leaf: Leaf, at: number): boolean {
+  const codes = leaf.codes
+  let end = at
+  while (code(leaf, end) === 96 && leaf.kinds[end] === TEXT) end++
+  if (code(leaf, end) === 96) return false
+  const length = end - at
+  for (let start = end; start < codes.length; start++) {
+    if (codes[start] !== 96) continue
+    let stop = start
+    while (codes[stop] === 96) stop++
+    if (stop - start === length) return false
+    start = stop
+  }
+  return true
+}
+
+/**
+ * C2-W-088, C2-W-091: bare, the text backtick at `at` pairs with a later run and shifts what lies behind it. Where
+ * nothing before it can open a construct, no mark of the tree is open and no sigil is glued to it, the code span it
+ * opens is the leftmost construct the tree does not hold, so the procedure escapes it first, as the plan does.
+ */
+function opensFirst(leaf: Leaf, at: number): boolean {
+  const before = code(leaf, at - 1)
+  return !leaf.textOpener && leaf.openDepth === 0 && before !== 33 && before !== 36
 }
 
 /** The run of `value` at `at` and its length. */
@@ -468,12 +503,16 @@ function textUnit(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (block >= 0) return opaqueBlock(leaf, at, block)
   RESOLVERS[String.fromCharCode(value)]?.(leaf, at, escaped)
   if (DELIMITER_CHARACTERS.includes(String.fromCharCode(value))) leaf.textMark = true
+  // Escaped or not: the procedure reaches a later unit with this one still bare.
+  if (TEXT_OPENERS.includes(String.fromCharCode(value)) && leaf.kinds[at - 1] !== ESCAPE) leaf.textOpener = true
   return at + 1
 }
 
 // C2-I-028: a valid attribute block stands on one line; a longer stretch is left to the repair.
 const LONGEST_BLOCK = 256
 const DELIMITER_CHARACTERS = '*+,-/=^_~{'
+// The characters of text that can open a construct whose end lies further on.
+const TEXT_OPENERS = '*+,-/=^_~{[<!$:@#%&`"\''
 
 /** C2-I-043: the end of the valid attribute block that the text brace at `at` opens, or -1. */
 function attributeBlockEnd(leaf: Leaf, at: number, escaped: Uint8Array): number {

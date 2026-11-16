@@ -54,6 +54,8 @@ export interface Leaf {
   extensions: Map<number, number>
   /** Whether a delimiter character of text came before the unit in the scan. */
   textMark: boolean
+  /** Whether a character of text that can open a construct came before the unit in the scan. */
+  textOpener: boolean
   /** The number of marks of the tree open at the unit in the scan. */
   openDepth: number
 }
@@ -62,7 +64,7 @@ export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null, extensions: new Map(),
-    textMark: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 
