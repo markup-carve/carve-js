@@ -39,13 +39,41 @@ export interface Context {
   deferred?: DocumentNode['children']
   rootLang?: string
   rootDir?: 'ltr' | 'rtl' | 'auto'
+  /** The UTF-8 offset of each UTF-16 offset of `input`, built at the first finding with a range. */
+  byteOffsets?: Uint32Array
+}
+
+function unitBytes(input: string, at: number): number {
+  const code = input.charCodeAt(at)
+  if (code < 0x80) return 1
+  if (code < 0x800) return 2
+  if (code >= 0xd800 && code <= 0xdbff) {
+    const next = input.charCodeAt(at + 1)
+    return next >= 0xdc00 && next <= 0xdfff ? 4 : 3
+  }
+  if (code >= 0xdc00 && code <= 0xdfff) {
+    const before = input.charCodeAt(at - 1)
+    return before >= 0xd800 && before <= 0xdbff ? 0 : 3
+  }
+  return 3
+}
+
+/** The UTF-8 offset of `at`, as `Buffer.byteLength` gives it for the input before `at`; one table per input keeps it linear. */
+function byteOffset(context: Context, at: number): number {
+  let table = context.byteOffsets
+  if (table === undefined) {
+    table = new Uint32Array(context.input.length + 1)
+    for (let index = 0; index < context.input.length; index++) table[index + 1] = (table[index] ?? 0) + unitBytes(context.input, index)
+    context.byteOffsets = table
+  }
+  return table[Math.min(Math.max(at, 0), context.input.length)] ?? 0
 }
 
 export function finding(context: Context, code: 'import-unsupported' | 'import-degraded', foreignType: string,
   message: string, start?: number, end?: number): void {
   const range = start === undefined || end === undefined ? undefined : {
-    startOffset: Buffer.byteLength(context.input.slice(0, start)),
-    endOffset: Buffer.byteLength(context.input.slice(0, end)),
+    startOffset: byteOffset(context, start),
+    endOffset: byteOffset(context, end),
   }
   context.diagnostics.push({ code, severity: 'warning', channel: 'render-loss', message, foreignType,
     ...(range ? { range } : {}) })

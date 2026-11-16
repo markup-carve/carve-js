@@ -27,6 +27,7 @@ describe('C2-H-182 import time grows linearly with the input', () => {
     const small = render(shape(1000), { roundtrip: true })
     const large = render(shape(2000), { roundtrip: true })
     best(small)
-    expect(best(large) / best(small)).toBeLessThan(3)
+    const ratio = best(large) / best(small)
+    expect(ratio).toBeLessThan(3)
   })
 })
