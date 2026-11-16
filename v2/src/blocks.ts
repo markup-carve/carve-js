@@ -808,7 +808,9 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   const src = state.src
   const attribute = rowAttributeStart(src, closing, end)
   writeEvent(state, eventTag(ENTER, ROW, 0), cursor.pos, attribute < 0 ? 0 : attribute)
-  const head: HeadTest = { headers: 0, others: 0, widths: [], owner: -1, above: leaf.tableWidths, first: leaf.tableHeadRows === 0 }
+  const head: HeadTest = {
+    headers: 0, others: 0, starts: [], widths: [], owner: -1, above: leaf.tableWidths, first: leaf.tableHeadRows === 0,
+  }
   let pipe = cursor.pos
   for (const next of separatorPipes(src, pipe + 1, closing + 1)) {
     const flags = writeCell(state, pipe, next)
@@ -820,13 +822,15 @@ function writeRow(state: BlockState, closing: number, end: number): void {
   // C2-B-178: the head is the leading rows made only of header cells.
   leaf.tableHeadOpen = leaf.tableHeadOpen && head.headers > 0 && head.others === 0
   if (leaf.tableHeadOpen) leaf.tableHeadRows++
-  leaf.tableWidths = head.widths
+  leaf.tableWidths = head.starts.map((start) => head.widths[start]!)
 }
 
-/** The head test of one row (C2-B-178): its cells counted, and the width of the cell that covers each column. */
+/** The head test of one row (C2-B-178): its cells counted, and for each column the start of the cell that covers it. */
 interface HeadTest {
   headers: number
   others: number
+  starts: number[]
+  /** The width of each cell, by the column where it starts. */
   widths: number[]
   /** The column where the cell to the left starts, or -1 when no cell of this row is there to extend. */
   owner: number
@@ -839,16 +843,17 @@ interface HeadTest {
  * part of that cell, and only its header mark counts; a mark that joins nothing counts as the cell it is.
  */
 function testHeadCell(head: HeadTest, flags: number): void {
-  const column = head.widths.length
+  const column = head.starts.length
   const header = (flags & FLAG_HEADER) !== 0
   if ((flags & FLAG_SPAN_LEFT) !== 0 && head.owner >= 0) {
-    const width = column - head.owner + 1
-    for (let at = head.owner; at <= column; at++) head.widths[at] = width
+    head.starts.push(head.owner)
+    head.widths[head.owner]!++
     if (header) head.headers++
     return
   }
+  head.starts.push(column)
+  head.widths[column] = 1
   if ((flags & FLAG_SPAN_UP) !== 0 && !head.first && head.above[column] === 1) {
-    head.widths.push(1)
     // C2-B-172: a cell joined upward leaves no cell of this row to its left.
     head.owner = -1
     if (header) head.headers++
@@ -857,7 +862,6 @@ function testHeadCell(head: HeadTest, flags: number): void {
   if (header) head.headers++
   else head.others++
   head.owner = column
-  head.widths.push(1)
 }
 
 /** Writes the cell between the pipes at `pipe` and `next` and returns its flags. */
