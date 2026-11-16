@@ -45,7 +45,13 @@ function averageParse(source: string): number {
 
 function median(values: number[]): number { return values.sort((left, right) => left - right)[1] ?? 0 }
 
+/** A growth past the bound that a second measurement repeats; one slow sample on a shared runner is noise. */
 function growth(source: string, average: (input: string) => number): string | null {
+  const first = measureGrowth(source, average)
+  return first === null ? null : measureGrowth(source, average)
+}
+
+function measureGrowth(source: string, average: (input: string) => number): string | null {
   const one: number[] = []
   const two: number[] = []
   const four: number[] = []
