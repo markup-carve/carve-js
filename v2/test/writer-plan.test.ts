@@ -364,6 +364,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-W-088, C2-W-090: a pair of two marks of text takes the backslash on its opener, as the procedure gives it', () => {
+    // C2-I-050: a mark before a combining mark is text, and so is the brace before it, so no pair forms there.
+    for (const source of ['a \\*b* c\n', 'a /b \\*c* d/ e\n', 'a \\*b* \\*c* d\n', '{,\u{fe0e}x,}\n', '{~\u{301}a~>b~} {~c~>d~}\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')

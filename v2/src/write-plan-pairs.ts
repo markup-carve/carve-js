@@ -163,11 +163,20 @@ function bracketToken(tokens: Token[], leaf: Leaf, at: number): boolean {
   return false
 }
 
+/** The code point written at `at`, as the reader reads the source, or NO_CHARACTER. */
+function rawCodePoint(leaf: Leaf, at: number): number {
+  const code = leaf.codes[at] ?? NO_CHARACTER
+  const low = leaf.codes[at + 1] ?? 0
+  return code >= 0xd800 && code < 0xdc00 && low >= 0xdc00 && low < 0xe000 ? (code - 0xd800) * 0x400 + low - 0xdc00 + 0x10000 : code
+}
+
 function scanAt(tokens: Token[], leaf: Leaf, at: number, escaped: Uint8Array): number {
   const codes = leaf.codes
   const code = codes[at]!
   if (bracketToken(tokens, leaf, at)) return at + 1
-  if (code === BRACE_OPEN && isPlain(leaf, escaped, at + 1) && MARKS.includes(String.fromCharCode(codes[at + 1]!))) {
+  // C2-I-050: a mark before a combining mark is text, and so is the brace before it.
+  const braced = MARKS.includes(String.fromCharCode(codes[at + 1] ?? 0)) && !isJoining(rawCodePoint(leaf, at + 2))
+  if (code === BRACE_OPEN && isPlain(leaf, escaped, at + 1) && braced) {
     addToken(tokens, BRACED_OPEN, at, at + 2, MARKS.indexOf(String.fromCharCode(codes[at + 1]!)), 0)
     return at + 2
   }
@@ -353,11 +362,39 @@ function respell(leaf: Leaf, at: number, owner: Node): void {
   leaf.respell.push(owner)
 }
 
+// C2-W-088, C2-W-090: a pair of two marks of text is a node the tree does not hold, the leftmost one the procedure
+// meets, so it escapes the opener and reads again; the plan repeats that on its own scan, a bounded number of times.
+const TEXT_PAIR_ROUNDS = 4
+
+/** The first unit of the opener of the leftmost pair whose marks are both text, behind pairs of the tree only, or -1. */
+function textPairOpener(leaf: Leaf, tokens: readonly Token[]): number {
+  for (const token of tokens) {
+    if (token.kind === ENTER || token.kind === LEAVE || token.pair < 0) continue
+    const pair = tokens[token.pair]!
+    if (pair.start < token.start) continue
+    const owner = ownerOf(leaf, token.start, token.end)
+    if (owner !== null) {
+      if (owner === MIXED || ownerOf(leaf, pair.start, pair.end) !== owner) return -1
+      continue
+    }
+    return ownerOf(leaf, pair.start, pair.end) === null ? token.start : -1
+  }
+  return -1
+}
+
 /** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
 export function checkPairs(leaf: Leaf, escaped: Uint8Array, depthBound: number): void {
-  const tokens = scan(leaf, escaped)
+  let tokens = scan(leaf, escaped)
+  let s = pairAll(tokens, 0)
+  for (let round = 0; ; round++) {
+    const opener = textPairOpener(leaf, tokens)
+    if (opener < 0) break
+    if (round === TEXT_PAIR_ROUNDS) return undecide(leaf, 'text pairs')
+    escaped[opener] = 1
+    tokens = scan(leaf, escaped)
+    s = pairAll(tokens, 0)
+  }
   // C2-I-118: the plan knows the depth of a leaf at the top level only; elsewhere the cap must stay out of reach.
-  const s = pairAll(tokens, 0)
   if (s.demoted || (depthBound > 0 && s.deepest + depthBound >= DEPTH_CAP)) return undecide(leaf, 'depth cap')
   const formed = formedNodes(leaf, tokens)
   if (formed === null) return undecide(leaf, 'text pairs')
