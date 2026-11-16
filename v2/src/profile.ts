@@ -214,8 +214,20 @@ function sourceText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): s
   return SOURCE_TEXT[type]?.(node, undefined)
 }
 
+/** C2-H-165: the inline form of a degraded inline node, which every node inside it at any depth takes too. */
+function inlineForm(node: Inline): string {
+  const source = sourceText(node.type, node)
+  if (source !== undefined) return source
+  if (isInlineParent(node)) {
+    let out = ''
+    for (const child of node.children) out += inlineForm(child)
+    return out
+  }
+  return spelledText(node.type, node) ?? plainText([node])
+}
+
 function degradedInline(node: Inline): TextNode[] {
-  const text = sourceText(node.type, node) ?? inlineText(node)
+  const text = inlineForm(node)
   return text === '' ? [] : [{ type: 'text', value: text }]
 }
 
