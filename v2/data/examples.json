@@ -633,6 +633,14 @@
  },
  {
   "file": "syntax-blocks.md",
+  "number": 241,
+  "label": "unverified",
+  "flags": [],
+  "input": "*[HTML]:  Hyper Text\n\nHTML",
+  "html": "<p><abbr title=\" Hyper Text\">HTML</abbr></p>"
+ },
+ {
+  "file": "syntax-blocks.md",
   "number": 79,
   "label": "generated",
   "flags": [],
@@ -1062,6 +1070,14 @@
   "flags": [],
   "input": ":::  \"T\"\nx\n:::\n\n::: [l]\nz\n:::\n\n:::[x] y",
   "html": "<div>\n  <p class=\"admonition-title\">T</p>\n  <p>x</p>\n</div>\n<div>\n  <p class=\"div-label\">l</p>\n  <p>z</p>\n</div>\n<p>:::[x] y</p>"
+ },
+ {
+  "file": "syntax-blocks.md",
+  "number": 240,
+  "label": "unverified",
+  "flags": [],
+  "input": "::: >a\nx\n:::\n\n::: *\ny\n:::",
+  "html": "<blockquote><p>x</p></blockquote>\n<div>\n  <p>y</p>\n</div>"
  },
  {
   "file": "syntax-blocks.md",
@@ -1910,6 +1926,14 @@
   "flags": [],
   "input": "- one\n- two\n\n- three",
   "html": "<ul>\n  <li><p>one</p></li>\n  <li><p>two</p></li>\n  <li><p>three</p></li>\n</ul>"
+ },
+ {
+  "file": "syntax-inline.md",
+  "number": 120,
+  "label": "unverified",
+  "flags": [],
+  "input": "| a\\  |",
+  "html": "<table>\n  <tbody>\n    <tr><td>a<br>\n</td></tr>\n  </tbody>\n</table>"
  },
  {
   "file": "syntax-inline.md",
@@ -3005,6 +3029,16 @@
  },
  {
   "file": "html.md",
+  "number": 49,
+  "label": "unverified",
+  "flags": [
+   "--roundtrip"
+  ],
+  "input": "`<b>x</b>`{=html}",
+  "html": "<p><span data-carve-raw=\"html\">&lt;b&gt;x&lt;/b&gt;</span></p>"
+ },
+ {
+  "file": "html.md",
   "number": 12,
   "label": "generated",
   "flags": [],
@@ -3058,6 +3092,14 @@
   "flags": [],
   "input": "a %% c\n\n{% only %}\n\n%%%\nblock\n%%%\n\nb {% mid %} c",
   "html": "<p>a</p>\n<p>b  c</p>"
+ },
+ {
+  "file": "html.md",
+  "number": 47,
+  "label": "unverified",
+  "flags": [],
+  "input": "a\n{*x\n%% c\n*} b",
+  "html": "<p>a\n<strong>x\n</strong> b</p>"
  },
  {
   "file": "html.md",
@@ -3203,6 +3245,27 @@
   ],
   "input": "*[RnD]: R&D <research> \"and\" development\n\nRnD.",
   "html": "<template data-carve-abbreviations>*[RnD]: R&amp;D &lt;research&gt; \"and\" development</template>\n<p><abbr title=\"R&amp;D &lt;research&gt; &quot;and&quot; development\">RnD</abbr>.</p>"
+ },
+ {
+  "file": "html.md",
+  "number": 50,
+  "label": "unverified",
+  "flags": [
+   "--roundtrip",
+   "--profile comment"
+  ],
+  "input": "*[A]: Able\n\nA b",
+  "html": "<template data-carve-abbreviations>*[A]: Able</template>\n<p>A b</p>"
+ },
+ {
+  "file": "html.md",
+  "number": 48,
+  "label": "unverified",
+  "flags": [
+   "--profile minimal"
+  ],
+  "input": "a {#c#} b $`m",
+  "html": "<p>a  b $`m`</p>"
  },
  {
   "file": "html.md",
