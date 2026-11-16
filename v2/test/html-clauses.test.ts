@@ -359,6 +359,12 @@ describe('roundtrip carriers', () => {
   it('C2-H-116: the dropped attribute is reported as a render loss', () => {
     expect(lossCodes('[t]{data-carve-ref=x}', { roundtrip: true })).toEqual(['carrier-attribute-dropped'])
   })
+
+  it('C2-H-115: the 18 reserved names include the new data-carve-ref-shortcut and the reserved data-carve-src', () => {
+    for (const name of ['data-carve-ref-shortcut', 'data-carve-ref-collapsed', 'data-carve-src']) {
+      expect(lossCodes(`[t]{${name}=x}`, { roundtrip: true }), name).toEqual(['carrier-attribute-dropped'])
+    }
+  })
 })
 
 describe('options', () => {
