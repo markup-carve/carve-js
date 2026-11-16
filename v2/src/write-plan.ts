@@ -225,6 +225,11 @@ function behindHost(leaf: Leaf, at: number): boolean {
   return kind === ATOM && !NO_HOSTS.has(leaf.owners[at - 1]!.type)
 }
 
+/** C2-I-022, C2-I-045: only behind a plain code span is `{=` a raw marker; anywhere else it is a braced opener. */
+function behindCode(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at - 1] === ATOM && leaf.owners[at - 1]?.type === 'code'
+}
+
 /** C2-I-028: whether a `}` follows the brace at `at` on its line; a CR is read past, so a `}` behind it counts. */
 function closesOnLine(leaf: Leaf, at: number): boolean {
   if (at < leaf.braceFailEnd) return false
@@ -258,7 +263,7 @@ function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
 function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped)) return
   // C2-I-028: behind a host the brace may open its attribute block; a braced opener is no attribute block.
-  if (behindHost(leaf, at) && !nextIs(leaf, at, '*+,-/^~') && closesOnLine(leaf, at)) {
+  if (behindHost(leaf, at) && !nextIs(leaf, at, behindCode(leaf, at) ? '*+,-/^~' : '*+,-/^~=') && closesOnLine(leaf, at)) {
     const reading = hostBlock(leaf, at, escaped)
     if (reading === UNDECIDED) return undecide(leaf, 'attribute block')
     if (reading === ESCAPED) return void (escaped[at] = 1)
