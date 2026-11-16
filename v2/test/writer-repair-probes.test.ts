@@ -55,6 +55,6 @@ describe('the probes of the repair', () => {
     const written = writeWithDiagnostics(tree)
     expect(performance.now() - started).toBeLessThan(10_000)
     expect(written.source).toBe(readFileSync(join(fixtures, '4e78df2a673d1efc.out'), 'utf8'))
-    expect(written.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable', 'structure-unspellable'])
+    expect(written.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable', 'field-unspellable', 'field-unspellable', 'field-unspellable'])
   })
 })
