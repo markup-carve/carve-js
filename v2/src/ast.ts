@@ -132,7 +132,7 @@ const INLINE_PARENT_TYPES: ReadonlySet<string> = new Set(INLINE_PARENTS)
 export type BlockParent = Extract<Node, { children: Block[] }>
 
 const BLOCK_PARENTS: readonly BlockParent['type'][] = [
-  'admonition', 'block_extension', 'block_quote', 'caption', 'definition_description', 'directive', 'div', 'figure',
+  'admonition', 'block_extension', 'block_quote', 'caption', 'definition_description', 'directive', 'div',
   'figure_group', 'footnote', 'list_item', 'section',
 ]
 

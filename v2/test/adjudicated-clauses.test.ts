@@ -122,10 +122,10 @@ describe('C2-H-165: a degraded node that leaves no text is dropped', () => {
 
 describe('C2-B-197: a block image line has the shape of the inline image form', () => {
   const kind = (line: string): string => {
+    // C2-A-082: a block image takes the caption in its own slot.
     const node = first(`${line}\n^ cap\n`)
-    if (node['type'] !== 'figure') return String(node['type'])
-    const inner = (node['children'] as { role?: string }[])[0]!
-    return inner.role === 'image' ? 'figure' : 'figure without image'
+    if (node['caption'] === undefined) return String(node['type'])
+    return node['role'] === 'image' ? 'figure' : 'figure without image'
   }
   const role = (line: string): unknown => first(`${line}\n`)['role']
 
@@ -290,7 +290,7 @@ describe('C2-I-033: a quoted value may hold the other quote and a closing brace'
     expect(first('-{x=\'"\'} b')).toMatchObject({ type: 'list', children: [{ attrs: { keyValues: [['x', '"']] } }] })
     expect(render('|{x=\'"\'} a|')).toContain('<td x="&quot;">a</td>')
     expect(render('| a |{x=\'"\'}')).toContain('<tr x="&quot;">')
-    expect(first('![a](u){x=\'"\'}\n^ c')).toMatchObject({ type: 'figure' })
+    expect(first('![a](u){x=\'"\'}\n^ c')).toMatchObject({ type: 'paragraph', role: 'image', caption: { type: 'caption' } })
     expect(first("{x='a}\nb")).not.toHaveProperty('attrs')
   })
 })

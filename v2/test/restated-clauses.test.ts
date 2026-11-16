@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateRenderTables } from '../scripts/generate-render-tables.ts'
 import {
-  type CaptionNode, CarveInputError, CarveRenderError, type FigureGroupNode, type FigureNode, type Inline, type MathNode, parse,
+  type CaptionNode, CarveInputError, CarveRenderError, type FigureGroupNode, type Inline, type MathNode, type ParagraphNode, parse,
   parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics, type RubyNode, type SpanNode, type TableBodyNode,
   type TableCellNode, type TableNode,
 } from '../src/index.ts'
@@ -224,18 +224,18 @@ describe('caption numbering', () => {
     expect(JSON.stringify(unused)).toContain('{"type":"caption_number"}')
   })
 
-  it('C2-H-151: in a supplied tree a display equation with a prefix takes the next number of that key, and a figure whose caption has a mark owns it', () => {
+  it('C2-H-151: in a supplied tree a display equation with a prefix takes the next number of that key, and a math block whose caption has a mark owns it', () => {
     const math = (extra: Partial<MathNode> = {}): MathNode => ({ type: 'math', display: true, value: 'x', numberPrefix: 'Eq.', number: 0, ...extra })
     const caption = (...children: Inline[]): CaptionNode => ({ type: 'caption', children: [{ type: 'paragraph', children }] })
-    const numbered: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
-    const plain: FigureNode = { type: 'figure', children: [paragraph(math())], caption: caption(text('no mark')) }
+    const numbered: ParagraphNode = { ...paragraph(math()), role: 'math', caption: caption(text('Eq. '), { type: 'caption_number' }) }
+    const plain: ParagraphNode = { ...paragraph(math()), role: 'math', caption: caption(text('no mark')) }
     const document = documentOf(paragraph(math()), numbered, plain, paragraph(math({ display: false })), paragraph(math({ numberPrefix: 'Other' })))
     const html = render(document)
     expect([...html.matchAll(/class="equation-number">([^<]*)</g)].map((match) => match[1])).toEqual(['Eq. 1', 'Eq. 3', 'Other 1'])
     expect(html).toContain('<p><span class="math display" role="math">\\[x\\]</span> <span class="equation-number">Eq. 1</span></p>')
     expect(html).toContain('<figcaption>Eq. 2</figcaption>')
     expect(render('$$`x`\n^ Equation #')).toContain('<figcaption>Equation 1</figcaption>')
-    // A figure group owns the number like a figure, and a table does not.
+    // A figure group owns the number like a captioned block, and a table does not.
     const group: FigureGroupNode = { type: 'figure_group', children: [paragraph(math())], caption: caption(text('Eq. '), { type: 'caption_number' }) }
     const cell: TableCellNode = { type: 'table_cell', header: false, children: [paragraph(math())] }
     const table: TableNode = {

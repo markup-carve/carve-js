@@ -108,8 +108,8 @@ const cases: Record<string, Case> = {
     path: 'document.children.0.children.0.children.0.children.0.children.0.type', expected: 'cell_paragraph' },
   'T-038': { children: [{ type: 'figure', target: 'image', shortCaption: [text('short')],
     children: [paragraph(text('x'))], caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
-    path: 'document.children.0.kind', expected: 'image',
-    also: { 'document.children.0.caption.short.0.value': 'short', 'document.children.0.target': undefined } },
+    path: 'document.children.0.caption.short.0.value', expected: 'short',
+    also: { 'document.children.0.kind': undefined, 'document.children.0.target': undefined } },
   'T-039': { children: [paragraph({ type: 'mention', user: 'alice' })],
     path: 'document.children.0.children.0.target', expected: 'alice',
     also: { 'document.children.0.children.0.kind': 'user', 'document.children.0.children.0.user': undefined } },
@@ -138,6 +138,15 @@ const cases: Record<string, Case> = {
     root: { extensions: [{ name: 'test.note', version: '1', required: false, slots: [] }] },
     path: 'document.children.0.source.body', expected: 'safe\n',
     also: { 'document.children.0.fallback.0.type': 'paragraph' } },
+  'T-051': { children: [{ type: 'figure', kind: 'image', attrs: { id: 'f' },
+    children: [{ type: 'paragraph', role: 'image', children: [{ type: 'image', src: 'x', alt: 'a' }] }, { type: 'comment', form: 'line', value: 'c' }],
+    caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
+    path: 'document.children.0.type', expected: 'paragraph',
+    also: { 'document.children.0.attrs.id': 'f', 'document.children.0.caption.type': 'caption', 'document.children.0.children.1.type': 'comment',
+      'document.children.0.kind': undefined } },
+  'T-052': { children: [{ type: 'figure', children: [paragraph(text('a')), paragraph(text('b'))],
+    caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
+    path: 'document.children.0.type', expected: 'figure_group', also: { 'document.children.0.caption.type': 'caption' } },
 }
 
 const map = JSON.parse(readFileSync(join(import.meta.dirname, '../data/upgrade-map.json'), 'utf8')) as

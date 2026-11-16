@@ -22,12 +22,12 @@ export class CarveTreeError extends Error {
 }
 
 // C2-A-171: the deepest tree the parser makes. A list and its item are two nodes per level of the
-// block cap, a table, a figure and a caption add their member nodes above a leaf, and each inline
+// block cap, a table, a figure group and a caption add their member nodes above a leaf, and each inline
 // content nests to its own cap below it.
 export const MAX_TREE_DEPTH = 2 * MAX_DEPTH + DEPTH_CAP + 16
 
 const BLOCKS = [
-  'admonition', 'block_extension', 'block_quote', 'code_block', 'comment', 'definition_list', 'directive', 'div', 'figure',
+  'admonition', 'block_extension', 'block_quote', 'code_block', 'comment', 'definition_list', 'directive', 'div',
   'figure_group', 'heading', 'include', 'line_block', 'list', 'paragraph', 'raw_block', 'section', 'table', 'thematic_break',
 ]
 const INLINES = [
@@ -54,7 +54,7 @@ const RULES = new Map<string, Rule>([
   ['admonition', ['blocks', ['kind'], ['title', 'groupLabel']]],
   ['autolink', ['none', ['href'], ['text']]],
   ['block_extension', ['blocks', ['name', 'version', 'fallback'], EXTENSION]],
-  ['block_quote', ['blocks', [], []]],
+  ['block_quote', ['blocks', [], ['caption']]],
   ['caption', ['blocks', [], ['short']]],
   ['caption_number', ['none', [], ['n']]],
   ['cell_paragraph', ['inlines', [], []]],
@@ -64,7 +64,7 @@ const RULES = new Map<string, Rule>([
   ['citation_definition', ['inlines', REFERENCE, []]],
   ['citation_group', [['citation'], ['raw'], []]],
   ['code', ['none', ['value'], []]],
-  ['code_block', ['none', ['value'], ['syntax', 'title', 'groupLabel']]],
+  ['code_block', ['none', ['value'], ['syntax', 'title', 'groupLabel', 'caption']]],
   ['comment', ['none', ['form', 'value'], []]],
   ['critic_comment', ['none', ['value'], []]],
   ['definition_description', ['blocks', [], []]],
@@ -78,7 +78,6 @@ const RULES = new Map<string, Rule>([
     ['astVersion'], ['srcByteLength', 'extensions', 'stages', 'resources'],
   ]],
   ['emphasis', ['inlines', [], []]],
-  ['figure', ['blocks', [], ['caption', 'kind']]],
   ['figure_group', ['blocks', [], ['caption']]],
   ['footnote', ['blocks', REFERENCE, []]],
   ['footnote_ref', ['none', REFERENCE, ['number']]],
@@ -103,7 +102,7 @@ const RULES = new Map<string, Rule>([
   ['math', ['none', ['display', 'value'], ['number', 'numberPrefix']]],
   ['mention', ['none', ['target', 'kind'], ['label']]],
   ['non_breaking_space', ['none', [], []]],
-  ['paragraph', ['inlines', [], ['role']]],
+  ['paragraph', ['inlines', [], ['role', 'caption']]],
   ['raw_block', ['none', ['format', 'value'], []]],
   ['raw_inline', ['none', ['format', 'value'], []]],
   ['ruby', ['none', ['pairs'], []]],
@@ -166,7 +165,6 @@ const ENUMS = new Map<string, readonly string[]>([
   ['image.targetKind', ['url', 'wiki', 'doc', 'xref']],
   ['directive.tocTarget', ['headings', 'figures', 'tables', 'listings']],
   ['directive.kind', ['bibliography', 'footnotes', 'glossary', 'index', 'references', 'toc']],
-  ['figure.kind', ['image', 'table', 'listing', 'equation', 'other']],
   ['admonition.kind', ['note', 'tip', 'warning', 'danger', 'info', 'success', 'example', 'quote']],
   ['*.namespace', ['link', 'footnote', 'citation', 'abbr', 'heading']],
   // C2-A-077 to C2-A-079, C2-A-103, C2-A-117, C2-A-121: the namespace of each reference and definition.
@@ -785,7 +783,13 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   ['longDescription', nodeList('blocks')],
   ['headerIds', checkHeaderIds],
   ['title', checkTitle],
-  ['caption', (value, path, walk) => checkNode(value, path, ['caption'], walk)],
+  ['caption', (value, path, walk, node) => {
+    // C2-A-082: a paragraph takes a caption only as a block image or a math block.
+    if (node['type'] === 'paragraph' && node['role'] !== 'image' && node['role'] !== 'math') {
+      fail(path, 'a caption needs a paragraph whose role is image or math')
+    }
+    checkNode(value, path, ['caption'], walk)
+  }],
   ['fallback', (value, path, walk, node) => {
     const qualified = typeof node['name'] === 'string' && node['name'].includes('.')
     const inner: Walk = { ...walk, coreFallback: walk.coreFallback || qualified,

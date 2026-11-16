@@ -383,23 +383,30 @@ describe('figures and captions', () => {
     expect(at(block('| a |\n^ c *d*'), 'caption')).toEqual(caption('c ', { type: 'strong', children: [text('d')] }))
   })
 
-  it('C2-A-082: a table carries its caption; an image, a code block, a quote and a math block are wrapped in a figure', () => {
-    expect(block('![a](b)\n^ c')).toEqual({
-      type: 'figure', children: [{ ...paragraph({ type: 'image', src: 'b', alt: 'a' }), role: 'image' }], caption: caption('c'),
-    })
-    expect(types([block('```\n```\n^ c'), block('> q\n^ c'), block('$$`x`\n^ c'), block('| a |\n^ c')])).toEqual(['figure', 'figure', 'figure', 'table'])
-    expect(types(childrenOf(block('```\n```\n%% x\n^ c')))).toEqual(['code_block', 'comment'])
+  it('C2-A-082: an image, a code block, a quote, a math block and a table carry their caption in their own slot', () => {
+    expect(block('![a](b)\n^ c')).toEqual({ ...paragraph({ type: 'image', src: 'b', alt: 'a' }), role: 'image', caption: caption('c') })
+    const captioned = [block('```\n```\n^ c'), block('> q\n^ c'), block('$$`x`\n^ c'), block('| a |\n^ c')]
+    expect(types(captioned)).toEqual(['code_block', 'block_quote', 'paragraph', 'table'])
+    for (const node of captioned) expect(at(node, 'caption')).toEqual(caption('c'))
+    // Behind a code block, which holds no children, the comment is the sibling after it (C2-A-145).
+    expect(types(blocks('```\n```\n%% x\n^ c'))).toEqual(['code_block', 'comment'])
+    expect(types(childrenOf(block('![a](b)\n%% x\n^ c')))).toEqual(['image', 'soft_break', 'comment'])
     expect(types(childrenOf(block('| a |\n%% x\n^ c')))).toEqual(['table_body', 'comment'])
     expect(types(childrenOf(block('| a |\n%% x')))).toEqual(['table_body', 'comment'])
   })
 
-  it('C2-A-083: a parsed figure makes no claim about its kind', () => {
-    expect(ofType(block('> q\n^ c'), 'figure').kind).toBeUndefined()
+  it('C2-A-082, C2-A-183: a captioned block keeps the attributes of its attribute line, and a caption needs a role', () => {
+    expect(block('{#f .w}\n![a](x.png)\n^ Sun')).toMatchObject({ type: 'paragraph', role: 'image', attrs: { id: 'f', classes: ['w'] } })
+    const supplied = { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children: [text('x')], caption: caption('c') }] }
+    expect(() => decodeTree(JSON.stringify(supplied))).toThrow(CarveTreeError)
+    expect(() => decodeTree(JSON.stringify({ type: 'document', astVersion: '2.0', children: [{ type: 'figure', children: [] }] })))
+      .toThrow(CarveTreeError)
   })
 
-  it('C2-A-084, C2-A-085: a figure group carries its blocks in source order and the caption of the group', () => {
+  it('C2-A-084: a figure group carries its blocks in source order and the caption of the group', () => {
     const group = ofType(block('::: figure\n![a](b)\n^ one\n\n| x |\n^ two\n:::\n^ both'), 'figure_group')
-    expect(types(group.children)).toEqual(['figure', 'table'])
+    expect(types(group.children)).toEqual(['paragraph', 'table'])
+    expect(at(group, 'children.0.caption')).toEqual(caption('one'))
     expect(at(group, 'children.1.caption')).toEqual(caption('two'))
     expect(group.caption).toEqual(caption('both'))
   })
@@ -612,7 +619,7 @@ describe('facts set at close', () => {
     expect(treesEqual(tree('| a |\n^ c'), tree('| a |\n\n^ c'))).toBe(false)
   })
 
-  it('C2-A-183: the attributes of a captioned block are those of the figure; a table carries its own', () => {
+  it('C2-A-183: a captioned block carries the attributes of its attribute line, as a table does', () => {
     expect(block('{#f .c}\n> q\n^ c').attrs).toEqual({ id: 'f', classes: ['c'] })
     expect(at(block('{#f .c}\n> q\n^ c'), 'children.0.attrs')).toBeUndefined()
     expect(block('{#f}\n| a |\n^ c').attrs).toEqual({ id: 'f' })

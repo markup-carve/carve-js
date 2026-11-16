@@ -126,4 +126,12 @@ describe('stored tree migration', () => {
     assert.equal(list?.type, 'list')
     if (list?.type === 'list') assert.deepEqual(list.children[0]?.task, { mark: 'x' })
   })
+
+  it('T-051, C2-A-082: a stored figure of a code block keeps its comments as siblings after the block, which takes the caption', () => {
+    const cap = { type: 'caption', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'L' }] }] }
+    const old = { type: 'document', astVersion: '2.0', children: [{ type: 'figure', kind: 'listing',
+      children: [{ type: 'code_block', value: 'x\n', syntax: 'js' }, { type: 'comment', form: 'line', value: 'c' }], caption: cap }] }
+    const result = migrateTree(old)
+    assert.equal(treesEqual(result.document, parse('```js\nx\n```\n%% c\n^ L')), true)
+  })
 })

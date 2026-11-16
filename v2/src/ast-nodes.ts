@@ -60,6 +60,7 @@ export interface BlockExtensionNode extends NodeBase {
 export interface BlockQuoteNode extends NodeBase {
   type: "block_quote"
   children: Block[]
+  caption?: CaptionNode
 }
 
 export interface CaptionNode extends NodeBase {
@@ -114,6 +115,7 @@ export interface CodeBlockNode extends NodeBase {
   syntax?: string
   title?: Inline[]
   groupLabel?: string
+  caption?: CaptionNode
 }
 
 export interface CommentNode extends NodeBase {
@@ -176,13 +178,6 @@ export interface DocumentNode extends NodeBase {
 export interface EmphasisNode extends NodeBase {
   type: "emphasis"
   children: Inline[]
-}
-
-export interface FigureNode extends NodeBase {
-  type: "figure"
-  children: Block[]
-  caption?: CaptionNode
-  kind?: "image" | "table" | "listing" | "equation" | "other"
 }
 
 export interface FigureGroupNode extends NodeBase {
@@ -343,6 +338,7 @@ export interface ParagraphNode extends NodeBase {
   type: "paragraph"
   children: Inline[]
   role?: "image" | "math"
+  caption?: CaptionNode
 }
 
 export interface RawBlockNode extends NodeBase {
@@ -526,7 +522,6 @@ export type Block =
   | DefinitionListNode
   | DirectiveNode
   | DivNode
-  | FigureNode
   | FigureGroupNode
   | HeadingNode
   | IncludeNode
@@ -603,7 +598,6 @@ export type Node =
   | DivNode
   | DocumentNode
   | EmphasisNode
-  | FigureNode
   | FigureGroupNode
   | FootnoteNode
   | FootnoteRefNode
@@ -680,7 +674,6 @@ export interface NodeOfType {
   div: DivNode
   document: DocumentNode
   emphasis: EmphasisNode
-  figure: FigureNode
   figure_group: FigureGroupNode
   footnote: FootnoteNode
   footnote_ref: FootnoteRefNode
@@ -765,7 +758,6 @@ export const FIELD_VALUES = {
   "image.targetKind": ["url","wiki","doc","xref"],
   "directive.tocTarget": ["headings","figures","tables","listings"],
   "directive.kind": ["bibliography","footnotes","glossary","index","references","toc"],
-  "figure.kind": ["image","table","listing","equation","other"],
   "admonition.kind": ["note","tip","warning","danger","info","success","example","quote"],
   "*.namespace": ["link","footnote","citation","abbr","heading"],
   "link.namespace": ["link"],

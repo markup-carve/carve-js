@@ -251,8 +251,8 @@ describe('the nodes that omit pos', () => {
   })
 
   it('C2-A-158: a caption number spans its mark, and the text on each side spans its own characters', () => {
-    const figure = parse('![i](a.png)\n^ Figure #: cap').children[0]
-    const first = figure?.type === 'figure' ? figure.caption?.children[0] : undefined
+    const image = parse('![i](a.png)\n^ Figure #: cap').children[0]
+    const first = image?.type === 'paragraph' ? image.caption?.children[0] : undefined
     const parts = first?.type === 'paragraph' ? first.children : []
     expect(parts.map((node) => [node.type, spanOf(node)])).toEqual([['text', [14, 21]], ['caption_number', [21, 22]], ['text', [22, 27]]])
   })

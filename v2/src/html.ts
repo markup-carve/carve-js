@@ -3,7 +3,7 @@ import {
   type AdmonitionNode, type Attrs, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
   forEachSlot,
-  type FigureGroupNode, type FigureNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
+  type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
   type ListItemNode,
   type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
   type TableCellNode, type TableColumnNode, type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
@@ -107,7 +107,8 @@ function isTextParagraph(node: Node | undefined): node is ParagraphNode {
 /** Writes `node` through the writer of its type, where it has one. */
 function writeBlock<T extends keyof NodeOfType>(r: Render, type: T, node: NodeOfType[T], level: number): void {
   const start = r.longDescriptions.length
-  BLOCKS[type]?.(r, node, level)
+  if (isCaptionedBlock(node)) captioned(r, node, level, NO_CLASSES)
+  else BLOCKS[type]?.(r, node, level)
   const descriptions = r.longDescriptions.splice(start)
   for (const blocks of descriptions) writeBlocks(r, blocks, level)
 }
@@ -335,19 +336,45 @@ function tablePanel(r: Render, node: TableNode, level: number): void {
   line(r, level, '</figure>')
 }
 
-function figureOf(r: Render, node: FigureNode | FigureGroupNode, level: number, base: readonly string[]): void {
-  line(r, level, `<figure${tag(r, node, { base })}>`)
+function figureGroup(r: Render, node: FigureGroupNode, level: number): void {
+  line(r, level, `<figure${tag(r, node, { base: GROUP_CLASSES })}>`)
   const before = r.count
-  const group = base === GROUP_CLASSES
   for (const child of node.children) {
-    // C2-H-064, C2-A-084: each panel of a group, a figure or a table; a table keeps its caption and attributes (C2-H-061).
-    if (group && child.type === 'figure') figureOf(r, child, level + 1, PANEL_CLASSES)
-    else if (group && child.type === 'table') tablePanel(r, child, level + 1)
+    // C2-H-064, C2-A-084: each panel of a group, a captioned block or a table; a table keeps its caption and attributes (C2-H-061).
+    if (isCaptionedBlock(child)) captioned(r, child, level + 1, PANEL_CLASSES)
+    else if (child.type === 'table') tablePanel(r, child, level + 1)
     else writeBlock(r, child.type, child, level + 1)
   }
   const caption = node.caption
   if (caption !== undefined) captionLine(r, caption, 'figcaption', level + 1)
   if (r.count === before) rawLine(r, '')
+  line(r, level, '</figure>')
+}
+
+type CaptionedBlock = (ParagraphNode | CodeBlockNode | BlockQuoteNode) & { caption: CaptionNode }
+
+/** C2-A-082: an image paragraph, a math block, a code block or a quote that carries a caption. */
+function isCaptionedBlock(node: Node): node is CaptionedBlock {
+  return (node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote') && node.caption !== undefined
+}
+
+/**
+ * C2-H-062, C2-H-063: `<figure>` around the block and its `<figcaption>`. The figure carries the attributes, the
+ * language, the direction and the first line of the block; the block inside carries only what it generates and the
+ * line of its own markup.
+ */
+function captioned(r: Render, node: CaptionedBlock, level: number, base: readonly string[]): void {
+  line(r, level, `<figure${tag(r, node, { base })}>`)
+  const inner: ParagraphNode | CodeBlockNode | BlockQuoteNode = { ...node }
+  delete inner.caption
+  delete inner.attrs
+  delete inner.lang
+  delete inner.dir
+  const pos = node.pos
+  const markup = r.resolution.markupLines.get(node)
+  if (pos !== undefined && markup !== undefined) inner.pos = { ...pos, startLine: markup }
+  writeBlock(r, inner.type, inner, level + 1)
+  captionLine(r, node.caption, 'figcaption', level + 1)
   line(r, level, '</figure>')
 }
 
@@ -659,8 +686,7 @@ const BLOCKS: BlockWriters = {
   div,
   directive: div,
   admonition,
-  figure: (r, node, level) => figureOf(r, node, level, NO_CLASSES),
-  figure_group: (r, node, level) => figureOf(r, node, level, GROUP_CLASSES),
+  figure_group: figureGroup,
   table,
   code_block: codeBlock,
   raw_block: rawBlock,

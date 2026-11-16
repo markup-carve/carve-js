@@ -3,11 +3,12 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import {
-  type AbbreviationDefNode, type AdmonitionNode, type CaptionNode, type DirectiveNode, type DivNode,
-  type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FigureNode, type FootnoteNode, type FootnoteRefNode,
+  type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, type CaptionNode, type CodeBlockNode, type DirectiveNode,
+  type DivNode,
+  type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
   CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
-  type NodeOfType,
+  type NodeOfType, type ParagraphNode,
   type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
 } from './ast.ts'
@@ -44,11 +45,16 @@ export interface Resolution {
   diagnostics: Diagnostic[]
   /** C2-H-177: for a render under a profile, the `#id` targets of the degraded headings. */
   goneTargets?: ReadonlySet<string>
+  /** C2-H-062: the line of the own markup of each captioned block of a parse that took attribute lines. */
+  markupLines: Map<Node, number>
 }
+
+/** C2-A-082: a block that carries its caption in its own slot. */
+type CaptionHost = FigureGroupNode | TableNode | ParagraphNode | CodeBlockNode | BlockQuoteNode
 
 /** One taker of a sequence number: a caption with its host, or a numbered equation of a supplied tree (C2-H-151). */
 type CaptionUse =
-  | { caption: CaptionNode, host: FigureNode | FigureGroupNode | TableNode, panel: boolean }
+  | { caption: CaptionNode, host: CaptionHost, panel: boolean }
   | { caption: null, host: MathNode, prefix: string }
 
 /** A link or an image written as a reference (C2-A-105). */
@@ -74,6 +80,7 @@ interface Walk {
   resolvableLeaves: ReadonlySet<Node> | null
   /** The parent of the node whose visitor runs. A visitor reads it before it visits anything below. */
   parent: Node | null
+  markupLine: ((node: Node) => number | undefined) | null
 }
 
 /** C2-W-113: a duplicate is a finding of the parse channel, reported on the later node. */
@@ -104,11 +111,13 @@ function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
   else useNote(walk, node, definition)
 }
 
-function visitHost(node: FigureNode | FigureGroupNode | TableNode, walk: Walk): void {
-  // C2-A-084: the panels of a group are its `figure` and `table` children; a nested group is a group of its own.
+function visitHost(node: CaptionHost, walk: Walk): void {
+  // C2-A-084: the panels of a group are its tables and its captioned blocks; a nested group is a group of its own.
   const panel = walk.parent?.type === 'figure_group' && node.type !== 'figure_group'
   if (node.type === 'table') alignColumns(node)
   if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel })
+  const line = node.caption === undefined || node.type === 'table' ? undefined : walk.markupLine?.(node)
+  if (line !== undefined) walk.resolution.markupLines.set(node, line)
   visitSlots(walk, node)
 }
 
@@ -126,9 +135,9 @@ function captionInlines(caption: CaptionNode): Inline[] {
   return first?.type === 'paragraph' || first?.type === 'heading' ? first.children : []
 }
 
-/** True for a figure or a figure group whose caption, `caption`, has a number mark. A table owns no number of an equation. */
+/** True for a captioned block or a figure group whose caption, `caption`, has a number mark. A table owns no number of an equation. */
 function ownsNumber(node: Node, caption: CaptionNode): boolean {
-  if (node.type !== 'figure' && node.type !== 'figure_group') return false
+  if (node.type === 'table') return false
   return captionInlines(caption).some((child) => child.type === 'caption_number')
 }
 
@@ -192,7 +201,6 @@ const STEPS = new Map<string, Step>([
   on('link', CHILDREN, visitReference),
   on('image', NOTHING, visitReference),
   on('xref', NOTHING, (node, walk) => void walk.xrefs.push(node)),
-  on('figure', NOTHING, visitHost),
   on('figure_group', NOTHING, visitHost),
   on('table', NOTHING, visitHost),
   on('math', NOTHING, visitMath),
@@ -219,7 +227,7 @@ function visitChildren(walk: Walk, node: Node): void {
 }
 
 /** The slots of a node that may carry a title or a caption (C2-A-025); a caption that owns a number counts the figures below it. */
-function visitSlots(walk: Walk, node: FigureNode | FigureGroupNode | TableNode | AdmonitionNode | DirectiveNode | DivNode): void {
+function visitSlots(walk: Walk, node: CaptionHost | AdmonitionNode | DirectiveNode | DivNode): void {
   const caption = 'caption' in node ? node.caption : undefined
   const owns = caption !== undefined && ownsNumber(node, caption)
   forEachSlot(node, (nodes, step) => {
@@ -227,6 +235,11 @@ function visitSlots(walk: Walk, node: FigureNode | FigureGroupNode | TableNode |
     for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
     if (owns && step === 'children') walk.numberedFigures--
   }, SOURCE_ORDER, walk.declarations)
+}
+
+/** C2-A-082: an image paragraph, a math block, a code block or a quote that carries a caption. */
+function isCaptionedBlock(node: Node): node is ParagraphNode | CodeBlockNode | BlockQuoteNode {
+  return (node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote') && node.caption !== undefined
 }
 
 /** Whether the leaf `node` may hold a node that resolution reads: any leaf of a supplied tree, and the noted leaves of a parse. */
@@ -241,6 +254,10 @@ function mayResolve(walk: Walk, node: Node): boolean {
  */
 function visit(walk: Walk, node: Node, parent: Node | null): void {
   if (node.attrs?.id !== undefined) walk.identified.push(node)
+  if (isCaptionedBlock(node)) {
+    walk.parent = parent
+    return visitHost(node, walk)
+  }
   const step = STEPS.get(node.type)
   if (step === undefined) return visitChildren(walk, node)
   if (step.visit !== null) {
@@ -534,12 +551,13 @@ export function resolve(
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
     definitions: new Map(), notes: [], noteOf: new Map(), refIds: new Map(), xrefText: new Map(), labelIds: new Map(),
-    findings, diagnostics: findings.entries,
+    findings, diagnostics: findings.entries, markupLines: new Map(),
   }
   const walk: Walk = {
     declarations: document.extensions ?? [],
     resolution, footnotes: new Map(), headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
+    markupLine: facts?.markupLine ?? null,
   }
   collectDefinitions(document, walk, facts)
   visit(walk, document, null)

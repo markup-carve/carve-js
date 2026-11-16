@@ -480,7 +480,11 @@ function figureCaption(node: Html.Element, context: HtmlContext): CaptionNode {
   return { type: 'caption', children: blockChildren(node, context), ...attrs(context, node) }
 }
 
-/** C2-H-063, C2-H-064: a figure, a figure group and its panels; a table panel wraps the table bare. */
+/**
+ * C2-H-199, C2-H-063, C2-H-064: a figure, a figure group and its panels; a table panel wraps the table bare. A figure
+ * that holds one block that can carry a caption is that block, with the caption in its slot and the attributes of
+ * the figure (C2-A-082, C2-A-183); any other figure is a figure group of its blocks.
+ */
 function figure(node: Html.Element, context: HtmlContext, drop: readonly string[] = []): Block {
   const classes = classList(node)
   const group = classes[0] === 'carve-figure-group'
@@ -488,9 +492,14 @@ function figure(node: Html.Element, context: HtmlContext, drop: readonly string[
   const nodes = content(node).filter(child => child !== caption)
   const children = group ? nodes.flatMap(child => isElement(child) && child.tagName === 'figure' ? [panel(child, context)]
     : block(child, context)) : flow(nodes, node, context)
-  const parts = { children, ...(caption ? { caption: figureCaption(caption, context) } : {}) }
-  if (group) return { type: 'figure_group', ...parts, ...withoutClasses(attrs(context, node), ['carve-figure-group']) }
-  return { type: 'figure', ...parts, ...withoutClasses(attrs(context, node), drop) }
+  const captionPart = caption ? { caption: figureCaption(caption, context) } : {}
+  if (group) return { type: 'figure_group', children, ...captionPart, ...withoutClasses(attrs(context, node), ['carve-figure-group']) }
+  const own = withoutClasses(attrs(context, node), drop)
+  const only = children.length === 1 ? children[0] : undefined
+  if (only?.type === 'code_block' || only?.type === 'block_quote' || (only?.type === 'paragraph' && only.role !== undefined)) {
+    return { ...only, ...captionPart, ...own }
+  }
+  return { type: 'figure_group', children, ...captionPart, ...own }
 }
 
 function panel(node: Html.Element, context: HtmlContext): Block {

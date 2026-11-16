@@ -133,7 +133,30 @@ function migrateNode(old: Fields, path: string, state: MigrationState): Fields[]
   coalesceText(node)
   promoteImages(node)
   arrangeDefinitions(node)
-  return [node]
+  return node['type'] === 'figure' ? unwrapFigure(node) : [node]
+}
+
+/** Whether `node` can carry a caption in its own slot (C2-A-082). */
+function captionable(node: Fields | undefined): node is Fields {
+  const type = node?.['type']
+  return type === 'code_block' || type === 'block_quote' || (type === 'paragraph' && (node?.['role'] === 'image' || node?.['role'] === 'math'))
+}
+
+/**
+ * T-051, T-052 (C2-A-082, C2-A-178): a figure of one captionable block and comments after it becomes that block, with
+ * the caption and the attributes of the figure; behind a code block the comments stay siblings, elsewhere the block
+ * holds them. Any other figure becomes a figure group. `kind` is dropped.
+ */
+function unwrapFigure(figure: Fields): Fields[] {
+  const children = nodeList(figure['children'])
+  const [first, ...rest] = children
+  delete figure['kind']
+  if (!captionable(first) || !rest.every((child) => child['type'] === 'comment')) return [{ ...figure, type: 'figure_group' }]
+  const block: Fields = { ...first }
+  for (const field of ['caption', 'attrs', 'lang', 'dir', 'pos']) if (figure[field] !== undefined) block[field] = figure[field]
+  if (block['type'] === 'code_block') return [block, ...rest]
+  block['children'] = [...nodeList(block['children']), ...rest]
+  return [block]
 }
 
 function version(value: Fields, envelope: Fields | undefined): void {

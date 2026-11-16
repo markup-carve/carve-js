@@ -69,7 +69,7 @@ const SEEDS: Json[] = [
       },
       { type: 'code_block', value: 'x\n', syntax: 'js', title: [{ type: 'emphasis', children: [TEXT] }], groupLabel: 'g' },
       { type: 'directive', kind: 'toc', tocTarget: 'headings', title: [TEXT], children: [] },
-      { type: 'figure', kind: 'image', caption: { type: 'caption', short: [TEXT], children: [PARAGRAPH] }, children: [PARAGRAPH] },
+      { type: 'block_quote', caption: { type: 'caption', short: [TEXT], children: [PARAGRAPH] }, children: [PARAGRAPH] },
       { type: 'include', path: "a'b.crv", section: 's', options: { lines: '1-2', code: true, cols: ['a', 'b'] } },
       { type: 'link_reference_definition', key: 'k', namespace: 'link', href: '/u', tooltip: 'Title' },
       { type: 'citation_definition', key: 'a', namespace: 'citation', children: [],

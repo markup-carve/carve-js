@@ -120,9 +120,6 @@ describe('what the writer cannot spell', () => {
     expect(nearest(short)).toBe('| a |\n^ cap\n')
     expect(losses(short)).toEqual(['field-unspellable /children/0/caption'])
 
-    const figure = documentOf({ type: 'figure', caption: { type: 'caption', children: [paragraph('fig')] }, children: [ofType(parse('| a |').children[0], 'table')] })
-    expect(nearest(figure)).toBe('| a |\n^ fig\n')
-    expect(losses(figure)).toEqual(['structure-unspellable /children/0'])
   })
 
   it('C2-W-117: a field no clause writes is left out and reported as field-unspellable', () => {
@@ -130,9 +127,6 @@ describe('what the writer cannot spell', () => {
     expect(nearest(loose)).toBe('- a\n')
     expect(losses(loose)).toEqual(['field-unspellable /children/0'])
 
-    const kind = edited('![i](u)\n^ cap', (blocks) => { ofType(blocks[0], 'figure').kind = 'image' })
-    expect(nearest(kind)).toBe('![i](u)\n^ cap\n')
-    expect(losses(kind)).toEqual(['field-unspellable /children/0'])
 
     const tocTarget = edited('::: toc\n:::', (blocks) => { ofType(blocks[0], 'directive').tocTarget = 'figures' })
     expect(nearest(tocTarget)).toBe('::: toc\n\n:::\n')

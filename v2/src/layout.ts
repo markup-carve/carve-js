@@ -1,6 +1,6 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
 // second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
-import { captionOf, type DocumentNode, type ExtensionDeclaration, type FigureNode, forEachSlot, type Node, SOURCE_ORDER,
+import { captionOf, type DocumentNode, type ExtensionDeclaration, forEachSlot, type Node, SOURCE_ORDER,
   type TableCellNode } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'
 import { CELL, QUOTE, ROW, TABLE } from './kinds.ts'
@@ -142,7 +142,7 @@ function visitBlock(walk: Walk, node: Node, path: string, origin: BlockNode, fra
   if (origin.kind === ROW) return visitRow(walk, node, path, origin, frame)
   if (origin.kind === CELL && node.type === 'table_cell') return visitCell(walk, node, path, origin, frame)
   const start = firstOffset(origin)
-  // C2-A-154: a table and a figure group end behind their caption.
+  // C2-A-154: a block that carries a caption ends behind it.
   const captionNode = captionOf(node)
   const caption = captionNode === undefined ? undefined : walk.trace.blocks.get(captionNode)
   const end = caption === undefined ? origin.end : Math.max(origin.end, caption.end)
@@ -157,19 +157,6 @@ function visitBlock(walk: Walk, node: Node, path: string, origin: BlockNode, fra
     start, end, quotes: frame.quotes + (quote ? 1 : 0), open: quote, spans: origin.spans,
     table: origin.kind === TABLE ? tableRows(origin) : null, row: -1,
   }
-}
-
-/** A figure is made of the block it holds and the caption below it, and has no block of its own. */
-function visitFigure(walk: Walk, node: FigureNode, path: string, frame: Frame): Frame {
-  const first = node.children[0]
-  const target = first === undefined ? undefined : walk.trace.blocks.get(first)
-  const caption = node.caption === undefined ? undefined : walk.trace.blocks.get(node.caption)
-  if (target === undefined || caption === undefined) return frame
-  const start = firstOffset(target)
-  const facts: Facts = {}
-  setBlankLines(walk, start, caption.end, frame, facts)
-  addEntry(walk, node, path, start, caption.end, facts)
-  return { ...frame, start, end: caption.end, open: false }
 }
 
 /** C2-L-022: the reference of a link or an image, from its opening bracket to the bracket that closes its label. */
@@ -198,7 +185,6 @@ function visit(walk: Walk, node: Node, path: string, frame: Frame): void {
   const origin = walk.trace.blocks.get(node)
   let inner = frame
   if (origin !== undefined) inner = visitBlock(walk, node, path, origin, frame)
-  else if (node.type === 'figure') inner = visitFigure(walk, node, path, frame)
   else if ((node.type === 'block_extension' || node.type === 'inline_extension') && node.source !== undefined) {
     inner = visitExtension(walk, node, path, frame)
   }

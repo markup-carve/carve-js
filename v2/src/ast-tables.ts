@@ -59,8 +59,6 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["emphasis", [
   ]],
-  ["figure", [
-  ]],
   ["figure_group", [
   ]],
   ["footnote", [
@@ -209,6 +207,7 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["block_quote", [
     "children",
+    "caption",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",
@@ -266,6 +265,7 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["code_block", [
     "title",
+    "caption",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",
@@ -340,14 +340,6 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["emphasis", [
     "children",
-    "metadata.title",
-    "metadata.subtitle",
-    "metadata.bibliography.title",
-    "metadata.bibliography.containerTitle",
-  ]],
-  ["figure", [
-    "children",
-    "caption",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",
@@ -503,6 +495,7 @@ export const NODE_SLOTS: ReadonlyMap<string, readonly string[]> = new Map([
   ]],
   ["paragraph", [
     "children",
+    "caption",
     "metadata.title",
     "metadata.subtitle",
     "metadata.bibliography.title",

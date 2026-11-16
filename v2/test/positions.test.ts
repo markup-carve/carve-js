@@ -105,10 +105,12 @@ describe('invariants', () => {
     expect(placed('a [b](c) d', 'children.0.children.1')).toBe('1:3-1:9@2-8')
   })
 
-  it('C2-A-148, C2-A-183: a captioned block starts at its own markup, and the figure at the attribute line', () => {
+  it('C2-A-148, C2-A-154, C2-A-183: a captioned block starts at its attribute line and ends with its caption', () => {
     expect(placed('{#f}\n> q\n^ c', 'children.0')).toBe('1:1-3:4@0-12')
-    expect(placed('{#f}\n> q\n^ c', 'children.0.children.0')).toBe('2:1-2:4@5-8')
+    expect(placed('{#f}\n> q\n^ c', 'children.0.children.0')).toBe('2:3-2:4@7-8')
     expect(placed('{#f}\n> q\n^ c', 'children.0.caption')).toBe('3:1-3:4@9-12')
+    expect(placed('```\nx\n```\n%% c\n^ L', 'children.0')).toBe('1:1-5:4@0-18')
+    expect(placed('```\nx\n```\n%% c\n^ L', 'children.1')).toBe('4:1-4:5@10-14')
   })
 
   it('C2-A-149: a table cell spans the text between its pipes', () => {

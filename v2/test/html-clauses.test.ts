@@ -174,8 +174,8 @@ describe('captions and figures', () => {
 
   it('C2-H-065, C2-H-068: a supplied caption with several blocks gives every paragraph p, and caption.short is not written', () => {
     const caption: CaptionNode = { type: 'caption', children: [paragraph('a'), paragraph('b')], short: [text('s')] }
-    expect(render(documentOf({ type: 'figure', children: [{ type: 'thematic_break' }], caption }))).toBe(
-      '<figure>\n  <hr>\n  <figcaption>\n    <p>a</p>\n    <p>b</p>\n  </figcaption>\n</figure>',
+    expect(render(documentOf({ type: 'block_quote', children: [paragraph('q')], caption }))).toBe(
+      '<figure>\n  <blockquote><p>q</p></blockquote>\n  <figcaption>\n    <p>a</p>\n    <p>b</p>\n  </figcaption>\n</figure>',
     )
   })
 })

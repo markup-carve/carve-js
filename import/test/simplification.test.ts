@@ -79,3 +79,22 @@ describe('C2-H-198: rebuilt link definitions and the heading lookup', () => {
     expect(parse('[a][k2] [b][k1] [c][k2]\n\n[k1]: /one "T"\n[k2]: /two').children.length).toBe(3)
   })
 })
+
+describe('C2-H-199: a figure is read as the block it holds', () => {
+  const tree = (src: string): unknown[] => (strip(parse(src, { positions: false }).children) as unknown[])
+
+  it('C2-H-199, C2-A-082: the block takes the caption in its slot and the attributes of the figure', () => {
+    for (const src of ['{#f .w}\n![a](x.png)\n^ Sun', '```js\nx\n```\n^ L', '> q\n^ Q', '$$`x`\n^ E']) {
+      expect(blocks(render(src)), src).toEqual(tree(src))
+    }
+  })
+
+  it('C2-H-199, C2-H-064: a panel figure is read the same way without its class, and a table panel gives the table', () => {
+    const src = '::: figure\n![a](a.png)\n^ (a) A\n\n| t |\n^ T\n:::\n^ Both'
+    expect(blocks(render(src))).toEqual(tree(src))
+  })
+
+  it('C2-A-084: a figure that holds no captionable block alone is read as a figure group', () => {
+    expect(blocks('<figure><p>a</p><p>b</p><figcaption>c</figcaption></figure>')).toMatchObject([{ type: 'figure_group' }])
+  })
+})

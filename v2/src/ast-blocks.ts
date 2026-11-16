@@ -1,7 +1,7 @@
 // The block nodes of the public tree (spec/0.2/ast.md), from the block tree and its inline content.
 import {
-  AST_VERSION, type Block, type CaptionNode, type CodeBlockNode, type CommentNode, type DefinitionListNode, type DocumentNode,
-  type FigureGroupNode, type FigureNode, type FrontmatterNode, type HeadingNode, type Inline, isFieldValue, type LineBlockNode,
+  AST_VERSION, type Block, type BlockQuoteNode, type CaptionNode, type CodeBlockNode, type CommentNode, type DefinitionListNode,
+  type DocumentNode, type FigureGroupNode, type FrontmatterNode, type HeadingNode, type Inline, isFieldValue, type LineBlockNode,
   type LineNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Marker, type Node, type ParagraphNode,
   type TableNode,
 } from './ast.ts'
@@ -480,13 +480,13 @@ function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
   }
 }
 
-/** C2-A-082, C2-A-183: attaches a caption to the block above it, through the comments between them. */
-/** A table or a figure group takes the caption itself, with the comments before it as its last children. */
-function captionHost(target: TableNode | FigureGroupNode, comments: CommentNode[], caption: CaptionNode): void {
-  for (const comment of comments) target.children.push(comment)
+/** C2-A-154: a block that carries a caption ends where its caption ends. */
+function takeCaption(target: CaptionedBlock, caption: CaptionNode): void {
   target.caption = caption
   if (target.pos !== undefined && caption.pos !== undefined) target.pos.endOffset = caption.pos.endOffset
 }
+
+type CaptionedBlock = TableNode | FigureGroupNode | ParagraphNode | CodeBlockNode | BlockQuoteNode
 
 const DOCUMENT_ONLY = ['footnote', 'link_reference_definition', 'abbreviation_def', 'citation_definition', 'frontmatter']
 
@@ -494,32 +494,23 @@ function isBlock(node: DocumentChild): node is Block {
   return !DOCUMENT_ONLY.includes(node.type)
 }
 
-/** `list` holds blocks, and at the top level also definitions, to which no caption attaches (C2-B-147). */
-function attachCaption(ctx: TreeContext, list: DocumentChild[], caption: CaptionNode): void {
+/**
+ * C2-A-082, C2-A-183: the block above takes the caption in its own slot and keeps its attributes. A table or a figure
+ * group takes the comments between it and the caption as its last children; behind a code block, which holds no
+ * children, they stay its siblings after it, inside its span (C2-A-145). `list` holds blocks, and at the top level
+ * also definitions, to which no caption attaches (C2-B-147).
+ */
+function attachCaption(list: DocumentChild[], caption: CaptionNode): void {
   let at = list.length - 1
   while (at >= 0 && list[at]!.type === 'comment') at--
   const target = list[at]
   if (target === undefined || !isBlock(target)) return
-  const comments: CommentNode[] = []
-  for (const node of list.splice(at + 1)) if (node.type === 'comment') comments.push(node)
-  if (target.type === 'table' || target.type === 'figure_group') return captionHost(target, comments, caption)
-  list[at] = figureOf(ctx, target, comments, caption)
-}
-
-/** The figure that holds `target`, the comments behind it and the caption. */
-function figureOf(ctx: TreeContext, target: Block, comments: CommentNode[], caption: CaptionNode): FigureNode {
-  const figure: FigureNode = { type: 'figure', children: [target, ...comments], caption }
-  // The attribute line above a captioned block applies to the figure.
-  if (target.attrs !== undefined) figure.attrs = target.attrs
-  if (target.lang !== undefined) figure.lang = target.lang
-  delete target.attrs
-  delete target.lang
-  if (target.pos !== undefined && caption.pos !== undefined) {
-    figure.pos = { ...target.pos, endOffset: caption.pos.endOffset }
-    // C2-A-148: the block inside starts at its own markup, behind the attribute lines the figure took.
-    target.pos.startOffset = ctx.markup.get(target) ?? target.pos.startOffset
+  if (target.type === 'table' || target.type === 'figure_group') {
+    for (const node of list.splice(at + 1)) if (node.type === 'comment') target.children.push(node)
+    takeCaption(target, caption)
+  } else if (target.type === 'paragraph' || target.type === 'code_block' || target.type === 'block_quote') {
+    takeCaption(target, caption)
   }
-  return figure
 }
 
 /** The nodes of `nodes`, each made by its builder in `builders`, with each caption attached to the block above it. */
@@ -528,7 +519,7 @@ function buildChildren<N extends DocumentChild>(
 ): N[] {
   const list: N[] = []
   for (const node of nodes) {
-    if (node.kind === CAPTION) attachCaption(ctx, list, captionNode(ctx, node, flow))
+    if (node.kind === CAPTION) attachCaption(list, captionNode(ctx, node, flow))
     else list.push(blockNode(ctx, node, flow, builders.get(node.kind)!))
   }
   return list
@@ -580,6 +571,8 @@ export interface ParseFacts {
   addFindings: (findings: Findings) => void
   /** C2-B-085: the number of source lines of a footnote definition of the tree, or 0 for a node that is none. */
   footnoteLines: (node: Node) => number
+  /** C2-H-062: the line of the own markup of a block that took attribute lines, behind them (C2-A-148). */
+  markupLine: (node: Node) => number | undefined
 }
 
 /** The output of the parse stage: the tree before resolution (C2-A-106) and what the parse knows of it. */
@@ -632,6 +625,11 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
     footnoteLines: (node) => {
       const block = ctx.footnoteBlocks.get(node)
       return block === undefined ? 0 : lineCount(src, block.start, block.end)
+    },
+    markupLine: (node) => {
+      const markup = ctx.markup.get(node)
+      const pos = node.pos
+      return markup === undefined || pos === undefined ? undefined : pos.startLine + lineCount(src, pos.startOffset, markup) - 1
     },
   }
   return { document, facts }

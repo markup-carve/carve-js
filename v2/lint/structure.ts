@@ -278,9 +278,10 @@ function tableRows(node: Node, path: string, context: LintContext): void {
   }
 }
 
+/** C2-A-084: the children of a group that carry a caption. */
 function panelCount(node: Node): number {
   if (node.type !== 'figure_group') return 0
-  return node.children.filter((child) => child.type === 'figure' || ('caption' in child && child.caption !== undefined)).length
+  return node.children.filter((child) => 'caption' in child && child.caption !== undefined).length
 }
 
 function figureEmpty(node: Node, path: string, context: LintContext): void {

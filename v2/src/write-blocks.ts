@@ -3,7 +3,7 @@
 import {
   type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode,
   type CommentNode, type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
-  type FigureGroupNode, type FigureNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
+  type FigureGroupNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
   type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
 } from './ast.ts'
@@ -318,11 +318,18 @@ function fenced(w: Writer, node: Node, prefix: string, opener: string, blankWhen
 function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   const children = node.children
-  if (isFenced(w, node)) return fenced(w, node, prefix, ' >', false, () => writeBlocks(w, children, prefix, flags, false))
-  if (children.length === 0) return emit(w, prefix, '>')
+  if (isFenced(w, node)) {
+    fenced(w, node, prefix, ' >', false, () => writeBlocks(w, children, prefix, flags, false))
+    return caption(w, node.caption, prefix, flags)
+  }
+  if (children.length === 0) {
+    emit(w, prefix, '>')
+    return caption(w, node.caption, prefix, flags)
+  }
   w.lead = `${w.lead ?? prefix}> `
   writeBlocks(w, children, `${prefix}> `, flags, false)
   if (w.lead !== null) emit(w, prefix, '')
+  caption(w, node.caption, prefix, flags)
 }
 
 function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, flags: number): string {
@@ -412,12 +419,21 @@ function figureGroup(w: Writer, node: FigureGroupNode, prefix: string, flags: nu
   caption(w, captionNode, prefix, flags)
 }
 
-/** C2-A-082: a captioned block, the comments below it and its caption, with no blank line between. */
-function figure(w: Writer, node: FigureNode, prefix: string, flags: number): void {
-  attributeLine(w, node, prefix)
-  if (node.kind !== undefined) lose(w, node, 'kind')
-  for (const child of node.children) writeBlock(w, child, prefix, flags)
+/**
+ * C2-W-059, C2-A-082: a code block that carries a caption, then the comments that follow it as its siblings, then the
+ * caption, with no blank line between. Returns the index of the last of those comments.
+ */
+function captionedCode(w: Writer, nodes: readonly Node[], at: number, prefix: string, flags: number): number {
+  const node = nodes[at]!
+  if (node.type !== 'code_block') return at
+  codeBlock(w, node, prefix)
+  let last = at
+  for (let next = nodes[last + 1]; next?.type === 'comment' && next.form === 'line'; next = nodes[last + 1]) {
+    comment(w, next, prefix)
+    last++
+  }
   caption(w, node.caption, prefix, flags)
+  return last
 }
 
 /** C2-W-032, C2-W-080: one line of source per `line`; an empty line block has its closer below its opener. */
@@ -488,13 +504,19 @@ function table(w: Writer, node: TableNode, prefix: string, flags: number): void 
 }
 
 const WRITERS: BlockWriters = {
-  paragraph: (w, node, prefix, flags) => textLeaf(w, node, prefix, flags, '', ''),
+  paragraph: (w, node, prefix, flags) => {
+    textLeaf(w, node, prefix, flags, '', '')
+    caption(w, node.caption, prefix, flags)
+  },
   heading,
   thematic_break: (w, node, prefix) => {
     attributeLine(w, node, prefix)
     emit(w, prefix, '***')
   },
-  code_block: codeBlock,
+  code_block: (w, node, prefix, flags) => {
+    codeBlock(w, node, prefix)
+    caption(w, node.caption, prefix, flags)
+  },
   raw_block: codeBlock,
   comment,
   frontmatter,
@@ -511,7 +533,6 @@ const WRITERS: BlockWriters = {
   admonition: namedDiv,
   directive: namedDiv,
   figure_group: figureGroup,
-  figure,
   line_block: lineBlock,
   table,
   block_extension: blockExtension,
@@ -530,7 +551,7 @@ function writeBlock(w: Writer, node: Node, prefix: string, flags: number): void 
 }
 
 const LAZY_CONTAINERS: readonly string[] = [
-  'list', 'list_item', 'block_quote', 'definition_list', 'definition_description', 'footnote', 'figure',
+  'list', 'list_item', 'block_quote', 'definition_list', 'definition_description', 'footnote',
 ]
 /** The containers that an indent or a mark keeps open, so that a comment-only line below one stays in it (C2-B-138). */
 const OPEN_CONTAINERS: readonly string[] = ['list', 'list_item', 'definition_list', 'definition_description', 'footnote']
@@ -660,7 +681,8 @@ function writeSiblings(w: Writer, nodes: readonly Node[], prefix: string, flags:
     beforeSibling(w, nodes, at, before, list, prefix, layout)
     markFenceBeforeComment(w, node, next)
     const written = w.lines.length
-    writeBlock(w, node, prefix, flags)
+    if (node.type === 'code_block' && node.caption !== undefined) at = captionedCode(w, nodes, at, prefix, flags)
+    else writeBlock(w, node, prefix, flags)
     if (w.lines.length === written) {
       // C2-W-029: a block that writes nothing leaves no blank line behind.
       w.lines.length = start

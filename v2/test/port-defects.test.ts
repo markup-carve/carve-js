@@ -154,10 +154,11 @@ describe('C2-I-034/040: an invalid or empty brace block in a block prefix is tex
   })
 
   it('C2-B-197/198: a block image or display math line takes only valid glued blocks', () => {
-    expect(types('![a](u){x<}\n^ c\n')).toEqual(['paragraph'])
-    expect(types('![a](u){.x}\n^ c\n')).toEqual(['figure'])
-    expect(types('$$`m`{x<}\n^ c\n')).toEqual(['paragraph'])
-    expect(types('$$`m`{.x}\n^ c\n')).toEqual(['figure'])
+    // C2-A-082: the block takes the caption in its own slot.
+    expect(parse('![a](u){x<}\n^ c\n').children[0]).not.toHaveProperty('caption')
+    expect(parse('![a](u){.x}\n^ c\n').children[0]).toHaveProperty('caption')
+    expect(parse('$$`m`{x<}\n^ c\n').children[0]).not.toHaveProperty('caption')
+    expect(parse('$$`m`{.x}\n^ c\n').children[0]).toHaveProperty('caption')
   })
 })
 
@@ -238,9 +239,10 @@ describe('C2-B-017/197: only a block image line takes a caption below a paragrap
 
   it('C2-B-197: every tail of the inline form still makes one', () => {
     for (const line of ['![a](u)', '![a]()', '![a](u "t")', "![a](u 't')", '![a](u "t"  )', '![a](u(x))', '![a](u\\))', '![a](u){.c}']) {
-      expect(types(`${line}\n^ C\n`), line).toEqual(['figure'])
+      expect(parse(`${line}\n^ C\n`).children, line).toMatchObject([{ type: 'paragraph', role: 'image', caption: { type: 'caption' } }])
     }
-    expect(types('![a][l]\n^ C\n\n[l]: u\n')).toEqual(['figure', 'link_reference_definition'])
+    expect(types('![a][l]\n^ C\n\n[l]: u\n')).toEqual(['paragraph', 'link_reference_definition'])
+    expect(parse('![a][l]\n^ C\n\n[l]: u\n').children[0]).toHaveProperty('caption')
   })
 })
 
@@ -331,7 +333,7 @@ describe('C2-I-032: an unquoted value may hold an opening brace in every block b
     expect(parse('-{s={} x\n').children[0]).toMatchObject({ type: 'list', children: [{ attrs: { keyValues: [['s', '{']] } }] })
     expect(render('|{s={} a |\n')).toContain('<td s="{">a</td>')
     expect(render('| a |{s={}\n')).toContain('<tr s="{">')
-    expect(types('![a](u){s={}\n^ c\n')).toEqual(['figure'])
+    expect(parse('![a](u){s={}\n^ c\n').children[0]).toMatchObject({ role: 'image', caption: { type: 'caption' } })
   })
 
   it('C2-I-029/034: a brace inside a part that is no value still makes no block', () => {

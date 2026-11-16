@@ -59,6 +59,8 @@ const BEYOND_SCHEMA = [
   'the document and envelope versions differ', 'fallbacks are nested deeper', 'the tree is nested deeper',
   'the start lies behind the end', 'coordinates disagree with the source', 'a node in an opaque object',
   'extension nesting exceeds 32',
+  // C2-A-082: a caption on a paragraph whose role is neither image nor math is refused; the schema has no such dependency.
+  'a caption needs a paragraph whose role is image or math',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {

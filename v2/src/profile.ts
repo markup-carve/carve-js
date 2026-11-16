@@ -2,7 +2,7 @@
 // (C2-H-165). The profile is a render option and changes no tree (C2-H-121): the render applies it to the
 // resolved tree, writes it, and puts every list back, so resolution has seen the whole tree.
 import {
-  type Block, type BlockQuoteNode, captionOf, DEFINITION_TYPES, type DocumentNode, type ExtensionDeclaration,
+  type Block, type BlockQuoteNode, type CaptionNode, captionOf, DEFINITION_TYPES, type DocumentNode, type ExtensionDeclaration,
   forEachSlot, type HeadingNode, type Inline,
   isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
   type TableNode, type TableRowNode, type TextNode, titleOf,
@@ -123,11 +123,22 @@ function markedText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): s
   return MARKED_TEXT[type]?.(node, undefined)
 }
 
-/** The text a degraded block leaves. */
+/** The text a degraded block leaves; a captioned block leaves the text of its caption behind its own (C2-H-165). */
 function blockText(node: Node): string {
+  const caption = captionedLeaf(node)
+  if (caption === undefined) return ownText(node)
+  return [ownText(node), blockText(caption)].filter((part) => part !== '').join(' ')
+}
+
+function ownText(node: Node): string {
   const marked = markedText(node.type, node)
   if (marked !== undefined) return marked
   return isInlineParent(node) ? inlinesText(node.children) : containerText(node)
+}
+
+/** C2-A-082: the caption of an image paragraph, a math block, a code block or a quote, which HTML writes as a `<figure>`. */
+function captionedLeaf(node: Node): CaptionNode | undefined {
+  return node.type === 'paragraph' || node.type === 'code_block' || node.type === 'block_quote' ? node.caption : undefined
 }
 
 function textParagraph(text: string): ParagraphNode[] {
@@ -158,11 +169,13 @@ function tableParagraph(node: TableNode): ParagraphNode[] {
 function degradedBlocks(node: Node): ParagraphNode[] {
   // C2-H-165: a table keeps its caption, with its number, as a paragraph below its rows.
   if (node.type === 'table') return [...tableParagraph(node), ...(node.caption === undefined ? [] : degradedBlocks(node.caption))]
+  const caption = captionedLeaf(node)
+  if (caption !== undefined) return [...textParagraph(ownText(node)), ...degradedBlocks(caption)]
   if (node.type in MARKED_TEXT || isInlineParent(node) || !('children' in node)) return textParagraph(blockText(node))
   const out: ParagraphNode[] = []
   for (const child of node.children) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))
-  const caption = captionOf(node)
-  if (caption !== undefined) out.push(...degradedBlocks(caption))
+  const groupCaption = captionOf(node)
+  if (groupCaption !== undefined) out.push(...degradedBlocks(groupCaption))
   return out
 }
 
@@ -231,10 +244,12 @@ function degradedItem(node: ListItemNode): ListItemNode[] {
 /** C2-H-163: the deny list of the axis, then its allow list, then the nesting bound. */
 function isOutside(filter: Filter, node: Node, block: boolean, depth: number): boolean {
   const rule = filter.rule
+  // C2-H-163: a captioned block is tested as its `<figure>`, a type that no allow list names.
+  const type = block && captionedLeaf(node) !== undefined ? 'figure' : node.type
   const denied = block ? rule.deniedBlock : rule.deniedInline
-  if (denied?.includes(node.type) === true) return true
+  if (denied?.includes(type) === true) return true
   const allowed = block ? rule.allowedBlock : rule.allowedInline
-  if (allowed !== null && !allowed.includes(node.type)) return true
+  if (allowed !== null && !allowed.includes(type)) return true
   return rule.maxNesting >= 0 && depth > rule.maxNesting
 }
 
