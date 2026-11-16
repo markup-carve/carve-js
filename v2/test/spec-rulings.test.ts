@@ -266,3 +266,33 @@ describe('the nodes that omit pos', () => {
     expect(inlines.map((node) => [node.type, spanOf(node)])).toEqual([['text', [2, 4]], ['strong', [4, 7]], ['text', null], ['code', [18, 21]]])
   })
 })
+
+describe('the trailing line comment of a table row', () => {
+  function shape(nodes: readonly { type: string, pos?: { startOffset: number, endOffset: number } }[]): unknown[] {
+    return nodes.map((node) => [node.type, node.pos?.startOffset, node.pos?.endOffset])
+  }
+
+  it('C2-A-086, C2-B-167: the comment stands below the row in its group, and the row ends at its closing pipe', () => {
+    const table = parse('| 1 | 2 | %% note\n| 3 | 4 |').children[0]
+    const body = table?.type === 'table' ? table.children[0] : undefined
+    const rows = body?.type === 'table_body' ? body.children : []
+    expect(shape(rows)).toEqual([['table_row', 0, 9], ['comment', 9, 17], ['table_row', 18, 27]])
+    expect(rows[1]).toMatchObject({ type: 'comment', form: 'line', value: 'note' })
+  })
+
+  it('C2-A-086: behind a row attribute, and on the last row as the comment after the groups', () => {
+    const src = '| 1 | 2 |{.r} %% note\n| 3 | 4 | %% n2'
+    const table = parse(src).children[0]
+    const children = table?.type === 'table' ? table.children : []
+    expect(children.map((node) => node.type)).toEqual(['table_body', 'comment'])
+    const body = children[0]
+    const rows = body?.type === 'table_body' ? body.children : []
+    expect(shape(rows)).toEqual([['table_row', 0, 13], ['comment', 13, 21], ['table_row', 22, 31]])
+    expect(children[1]).toMatchObject({ value: 'n2', pos: { startOffset: 31, endOffset: 37 } })
+    expect(render(src)).toContain('<tr class="r"><td>1</td><td>2</td></tr>\n    <tr><td>3</td><td>4</td></tr>')
+  })
+
+  it('C2-W-135: the writer writes the comment as a comment-only line below the row', () => {
+    expect(format('| 1 | 2 | %% note\n| 3 | 4 |')).toBe('| 1 | 2 |\n%% note\n| 3 | 4 |\n')
+  })
+})

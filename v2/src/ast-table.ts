@@ -7,13 +7,13 @@ import {
 import { applyAbbreviations } from './ast-abbreviations.ts'
 import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, takeKey } from './ast-attributes.ts'
 import {
-  FLOW_CELL, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
+  commentValue, FLOW_CELL, FLOW_UNPLACED, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS } from './chars.ts'
+import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS, PERCENT } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
-import { countValue } from './lines.ts'
+import { attributeBlocksEnd, countValue, isLineComment, rowClosingPipe, skipSpaces } from './lines.ts'
 import { trimSpaces } from './source.ts'
 import type { BlockNode } from './tree.ts'
 import { holdsBidiControl } from './unicode.ts'
@@ -45,7 +45,7 @@ function emptyGroups(): Groups {
 function extend(groups: Groups, rows: GroupRows, start: number, end: number): void {
   const range = groups.ranges.get(rows)
   if (range === undefined) groups.ranges.set(rows, [start, end])
-  else range[1] = end
+  else range[1] = Math.max(range[1], end)
 }
 
 function alignmentOf(mark: number): 'left' | 'right' | 'center' {
@@ -127,7 +127,29 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
   return cells
 }
 
-function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): TableRowNode {
+function holdsPercent(src: string, start: number, end: number): boolean {
+  for (let at = start; at < end; at++) if (src.charCodeAt(at) === PERCENT) return true
+  return false
+}
+
+/**
+ * C2-B-167: the end of the row behind its closing pipe and row attribute, and where its trailing line
+ * comment starts, or -1 when it has none.
+ */
+function rowTail(src: string, row: BlockNode, lineEnd: number): [number, number] {
+  const pipe = holdsPercent(src, row.start, lineEnd) ? rowClosingPipe(src, row.start, lineEnd) : -1
+  if (pipe < 0) return [lineEnd, -1]
+  const behind = row.aux !== 0 ? attributeBlocksEnd(src, row.aux, lineEnd) : pipe + 1
+  const tail = skipSpaces(src, behind, lineEnd)
+  return tail < lineEnd && tail > behind && isLineComment(src, tail, lineEnd) ? [behind, tail] : [lineEnd, -1]
+}
+
+/** C2-A-086: the trailing line comment of a row, from the first space before its `%%` to the line ending (C2-A-151). */
+function rowComment(ctx: TreeContext, start: number, marker: number, lineEnd: number): CommentNode {
+  return place(ctx, { type: 'comment', form: 'line', value: commentValue(ctx.src.slice(marker + 2, lineEnd), false) }, start, lineEnd)
+}
+
+function rowNode(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): TableRowNode {
   const firstEnd = rowRangeEnd(ctx.src, row)
   const joined = firstEnd < row.end
   const out: TableRowNode = { type: 'table_row', children: rowCells(ctx, row, covered, joined ? firstEnd : row.end + 1) }
@@ -139,7 +161,7 @@ function rowNode(ctx: TreeContext, row: BlockNode, covered: number[]): TableRowN
     setAttributes(out, attributes)
   }
   // C2-A-158: a row that a continuation row joined has no position.
-  return joined ? out : place(ctx, out, row.start, row.end)
+  return joined ? out : place(ctx, out, row.start, rowEnd)
 }
 
 /** Where the sort of the rows of one table stands. */
@@ -174,12 +196,18 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   if (cursor.index === cursor.headRows) cursor.covered = []
   if (cursor.index < cursor.headRows) cursor.group = groups.head
   else cursor.group = cursor.index < cursor.footStart ? groups.body : groups.foot
-  const row = rowNode(ctx, child, cursor.covered)
+  const lineEnd = rowRangeEnd(ctx.src, child)
+  const [end, marker] = rowTail(ctx.src, child, lineEnd)
+  const row = rowNode(ctx, child, cursor.covered, marker < 0 ? child.end : end)
   groups.width = Math.max(groups.width, row.children.length)
   cursor.group.push(row)
   // C2-A-144, C2-A-151: the group owns the continuation rows of its rows.
-  extend(groups, cursor.group, child.start, child.end)
+  extend(groups, cursor.group, child.start, marker < 0 || lineEnd < child.end ? child.end : end)
   cursor.index++
+  if (marker < 0) return
+  // C2-A-086: the comment takes the place of a comment-only line directly below the row.
+  groups.trailing.push(rowComment(ctx, end, marker, lineEnd))
+  cursor.trailingEnd = lineEnd
 }
 
 function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): Groups {
