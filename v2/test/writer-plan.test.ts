@@ -289,6 +289,15 @@ describe('the planned writer', () => {
     expect(formatBy('{.x}\n{.y}\n', 'both').stats.repaired).toBe(1)
   })
 
+  it('C2-B-081, C2-B-082: a line that starts with a footnote reference of the tree opens no definition where its shape fails', () => {
+    for (const source of ['[^1]:A bare\n', '[^a][^b]: x\n', '[^a]:x\n\n[^a]: y\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-063: a sigil of text before a closing brace is planned bare behind a node', () => {
     for (const source of ['x `a`#} y\n', 'x `a`@} y\n', 'x /a/#} y\n', 'x `a`\\#a y\n']) {
       const result = formatBy(source, 'both')

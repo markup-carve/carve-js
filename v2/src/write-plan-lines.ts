@@ -299,6 +299,8 @@ function bracketLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): 
   if (!first) return NO_ESCAPE
   if (place.item !== null && place.before === null) return taskBoxLine(leaf, at, place.item)
   if (place.nested || !definitionShape(leaf, at)) return NO_ESCAPE
+  // An atom that starts the line takes no backslash; the reader sees its written body.
+  if (leaf.kinds[at] === ATOM) return decidedIf(isDefinitionLine(leaf, at))
   const [line, whole] = textOfLine(leaf, at)
   if (!whole) return UNDECIDED
   return isDefinition(line, 0, line.length) ? at : NO_ESCAPE
@@ -321,6 +323,13 @@ function taskBoxLine(leaf: Leaf, at: number, item: 'plain' | 'task'): number {
   const [line, whole] = textOfLine(leaf, at)
   const shape = whole ? line : `${line}x`
   return taskBoxEnd(shape, 0, shape.length) >= 0 ? at : NO_ESCAPE
+}
+
+function isDefinitionLine(leaf: Leaf, at: number): boolean {
+  let end = at
+  while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
+  const line = String.fromCharCode(...leaf.codes.slice(at, end))
+  return isDefinition(line, 0, line.length)
 }
 
 /** The text of the line from `at` up to its end or its first unit that is not text, and whether that is the end. */
