@@ -1,6 +1,7 @@
 import { parse, type Block as DjotBlock, type Inline as DjotInline, type Doc, type Row } from '@djot/djot'
 import type { Attrs, Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
 import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
+  withDestination,
   type Context, type ImportResult } from './kit.ts'
 
 function djotAttrs(node: { attributes?: Record<string, string> }): { attrs: Attrs } | Record<string, never> {
@@ -101,17 +102,17 @@ function quoteInline(node: Extract<DjotInline, { tag: 'double_quoted' | 'single_
 function linkInline(node: Extract<DjotInline, { tag: 'link' }>, context: Context): Inline[] {
   const href = node.destination !== undefined ? safeUrl(context, node.tag, node.destination,
     node.pos?.start.offset, node.pos?.end.offset) : undefined
-  return [{ type: 'link', children: inlines(node.children, context), ...(href !== undefined ? { href } : {}),
+  return withDestination({ type: 'link', children: inlines(node.children, context), ...(href !== undefined ? { href } : {}),
     ...(node.reference ? { key: node.reference, namespace: 'link' as const, refForm: 'full' as const } : {}),
-    ...djotAttrs(node) }]
+    ...djotAttrs(node) })
 }
 
 function imageInline(node: Extract<DjotInline, { tag: 'image' }>, context: Context): Inline[] {
   const src = node.destination !== undefined ? safeUrl(context, node.tag, node.destination,
     node.pos?.start.offset, node.pos?.end.offset) : undefined
-  return [{ type: 'image', alt: textOf(node.children), ...(src !== undefined ? { src } : {}),
+  return withDestination({ type: 'image', alt: textOf(node.children), ...(src !== undefined ? { src } : {}),
     ...(node.reference ? { key: node.reference, namespace: 'link' as const, refForm: 'full' as const } : {}),
-    ...djotAttrs(node) }]
+    ...djotAttrs(node) })
 }
 
 function tableRow(node: Row, context: Context): TableRowNode {

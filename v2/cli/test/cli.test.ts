@@ -79,6 +79,14 @@ describe('carve2 process', () => {
     expect(result.stderr).toMatch(/structure-unspellable/)
   })
 
+  it('C2-W-011: an image-only paragraph and a denied destination import with output and status 0', () => {
+    const image = cli(['import', '--from=html'], '<p><img src="a.png" alt="i"></p>\n')
+    expect([image.status, image.stdout]).toEqual([0, '![i](a.png)\n'])
+    const denied = cli(['import', '--from=html'], '<p><a href="javascript:x">t</a></p>\n')
+    expect([denied.status, denied.stdout]).toEqual([0, 't\n'])
+    expect(denied.stderr).toMatch(/^carve\[import-degraded\]:/)
+  })
+
   it('C2-W-011: normalized Markdown imports return source and report degradation', () => {
     for (const input of ['line one\nline two\n', '```js\nlet a = 1\n```\n']) {
       const result = cli(['import', '--from=markdown'], input)

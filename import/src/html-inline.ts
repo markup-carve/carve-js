@@ -5,7 +5,7 @@ import {
   at, attr, attrs, classList, content, degraded, elements, has, ignoredCarrier, isComment, isElement, isText, plain, unsupported,
   withoutClasses, withoutKeys, isRawFormat, isRawSpan, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
-import { coalesce, paragraph, safeUrl, softText, text } from './kit.ts'
+import { coalesce, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
 
 const EDGE_ELEMENTS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption', 'figcaption']
 
@@ -425,9 +425,9 @@ function htmlLink(node: Html.Element, children: Inline[], context: HtmlContext):
   if (ref !== undefined) define(context, ref.key, safe, node)
   // C2-H-141: the title of a reference is that of its definition, which HTML does not keep apart.
   const tooltip = ref === undefined ? attr(node, 'title') : undefined
-  return [{ type: 'link', children, ...(safe !== undefined ? { href: safe } : {}),
+  return withDestination({ type: 'link', children, ...(safe !== undefined ? { href: safe } : {}),
     ...(tooltip !== undefined ? { tooltip } : {}), ...(ref ? { key: ref.key, namespace: 'link' as const, refForm: ref.refForm } : {}),
-    ...attrs(context, node, ['href', 'title']) }]
+    ...attrs(context, node, ['href', 'title']) })
 }
 
 export function htmlImage(node: Html.Element, context: HtmlContext): Inline[] {
@@ -440,9 +440,9 @@ export function htmlImage(node: Html.Element, context: HtmlContext): Inline[] {
   const ref = reference(node, context)
   if (ref !== undefined) define(context, ref.key, safe, node)
   const tooltip = ref === undefined ? attr(node, 'title') : undefined
-  return [{ type: 'image', ...(safe !== undefined ? { src: safe } : {}), alt: attr(node, 'alt') ?? '',
+  return withDestination({ type: 'image', ...(safe !== undefined ? { src: safe } : {}), alt: attr(node, 'alt') ?? '',
     ...(tooltip !== undefined ? { tooltip } : {}), ...(ref ? { key: ref.key, namespace: 'link' as const, refForm: ref.refForm } : {}),
-    ...(longDescription ? { longDescription } : {}), ...attrs(context, node, ['src', 'alt', 'title', 'longdesc']) }]
+    ...(longDescription ? { longDescription } : {}), ...attrs(context, node, ['src', 'alt', 'title', 'longdesc']) })
 }
 
 function formatInline(node: Html.Element, children: Inline[], context: HtmlContext): Inline[] | undefined {

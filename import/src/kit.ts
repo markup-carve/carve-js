@@ -124,6 +124,19 @@ export function safeUrl(context: Context, foreignType: string, url: string, star
   return undefined
 }
 
+/**
+ * A link with no destination and no key, as from a denied or missing URL, has no Carve spelling
+ * (C2-W-011): it becomes its text, and an image its alternative text, in a span where attributes remain.
+ */
+export function withDestination(node: Inline): Inline[] {
+  if (node.type === 'link' && node.href === undefined && node.key === undefined) {
+    return node.attrs === undefined ? node.children : [{ type: 'span', children: node.children, attrs: node.attrs }]
+  }
+  if (node.type !== 'image' || node.src !== undefined || node.key !== undefined) return [node]
+  const alt = node.alt === '' ? [] : [text(node.alt)]
+  return node.attrs === undefined ? alt : [{ type: 'span', children: alt, attrs: node.attrs }]
+}
+
 export function text(value: string): Inline { return { type: 'text', value: value.replaceAll('\0', '\ufffd') } }
 export function softText(value: string): Inline[] {
   const limit = value.length

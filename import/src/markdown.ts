@@ -10,6 +10,7 @@ import { directiveFromMarkdown } from 'mdast-util-directive'
 import type { RootContent, PhrasingContent, TableRow } from 'mdast'
 import type { Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
 import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, softText,
+  withDestination,
   type Context, type ImportResult } from './kit.ts'
 
 function range(node: { position?: { start: { offset?: number | undefined }, end: { offset?: number | undefined } } | undefined }):
@@ -43,8 +44,8 @@ function plainInline(node: PlainInline, context: Context): Inline[] {
     case 'footnoteReference': return [{ type: 'footnote_ref', key: node.identifier, namespace: 'footnote' }]
     case 'image': {
       const src = safeUrl(context, node.type, node.url, ...range(node))
-      return [{ type: 'image', ...(src !== undefined ? { src } : {}), alt: node.alt ?? '',
-        ...(node.title != null ? { tooltip: node.title } : {}) }]
+      return withDestination({ type: 'image', ...(src !== undefined ? { src } : {}), alt: node.alt ?? '',
+        ...(node.title != null ? { tooltip: node.title } : {}) })
     }
     case 'imageReference': return imageReference(node, context)
     default: return assertNever(node)
@@ -65,8 +66,8 @@ function inline(node: PhrasingContent, context: Context): Inline[] {
     case 'delete': return [{ type: 'strike', children: inlineList(node.children, context) }]
     case 'link': {
       const href = safeUrl(context, node.type, node.url, ...range(node))
-      return [{ type: 'link', children: inlineList(node.children, context), ...(href !== undefined ? { href } : {}),
-        ...(node.title != null ? { tooltip: node.title } : {}) }]
+      return withDestination({ type: 'link', children: inlineList(node.children, context), ...(href !== undefined ? { href } : {}),
+        ...(node.title != null ? { tooltip: node.title } : {}) })
     }
     case 'linkReference':
       if (node.referenceType === 'shortcut') loss(context, node, 'Shortcut link reference became a full reference')

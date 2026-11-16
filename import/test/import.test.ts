@@ -369,12 +369,10 @@ describe('Carve 0.2 importers', () => {
   it('C2-H-173 applies the engine URL policy to imported destinations', () => {
     const result = importDocument('<p><a href="javascript:alert(1)">bad</a></p>', { from: 'html' })
     expect(result.diagnostics.some(row => row.code === 'import-degraded')).toBe(true)
-    const paragraph = result.document.children[0]
-    if (paragraph?.type === 'paragraph') {
-      const link = paragraph.children[0]
-      if (link?.type === 'link') expect(link.href).toBeUndefined()
-    }
-    expect(result.source).toBe('[bad]()\n')
+    // C2-W-011: a link with no destination has no spelling, so the denied link becomes its text.
+    expect(result.document.children[0]).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: 'bad' }] })
+    expect(result.source).toBe('bad\n')
+    expect(result.diagnostics.map(row => row.code)).not.toContain('field-unspellable')
   })
 
   it('C2-A-197 stores direct HTML alignment in carve.style', () => {
