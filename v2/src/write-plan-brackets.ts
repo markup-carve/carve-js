@@ -34,9 +34,9 @@ const NO_DECISION = 2
  * C2-I-076: whether a reference label that starts at `at` ends at a closing bracket that no backslash escapes.
  * A comment may end the line first, so a `%` leaves the pair to the repair.
  */
-function labelEnd(leaf: Leaf, at: number): number {
+function labelEnd(leaf: Leaf, at: number, full = true): number {
   // C2-I-078: a label whose first character is an at-sign is reserved for citations and is no reference label.
-  if (leaf.codes[at] === 64) return LITERAL
+  if (full && leaf.codes[at] === 64) return LITERAL
   let blank = true
   for (let unit = at; unit < leaf.codes.length; unit++) {
     const value = leaf.codes[unit]!
@@ -62,6 +62,12 @@ function braceReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
   return end === leaf.codes.length ? LITERAL : NO_DECISION
 }
 
+/** C2-I-072, C2-I-075, C2-I-079: a full reference reads the label behind the pair, a collapsed one the pair's own. */
+function referenceReading(leaf: Leaf, opener: number, closer: number): number {
+  if (closer === opener + 1) return NO_DECISION
+  return leaf.codes[closer + 2] === CLOSING ? labelEnd(leaf, opener + 1, false) : labelEnd(leaf, closer + 2)
+}
+
 /**
  * How the text pair at `[opener, closer]` reads: literal, or a construct whose opener takes the backslash (C2-W-090),
  * which is an inline footnote (C2-I-089) or a full or collapsed reference (C2-I-072, C2-I-075). A link tail, an
@@ -72,7 +78,7 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   if (isFootnoteCaret(leaf, opener - 1, escaped)) return ESCAPE_OPENER
   if (leaf.codes[opener + 1] === 94) return NO_DECISION
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
-  if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
+  if (next === '[' && isReadText(leaf, closer + 1, escaped)) return referenceReading(leaf, opener, closer)
   if (next === '{' && isReadText(leaf, closer + 1, escaped)) return braceReading(leaf, closer + 1, escaped)
   // C2-B-081, C2-B-084: a definition or an abbreviation opens only at the start of a paragraph's first line, which the
   // line rules decide with the reader's shapes.

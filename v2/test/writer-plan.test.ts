@@ -392,6 +392,15 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-075, C2-I-079: a collapsed reference takes its label from its pair, so a blank one forms nothing', () => {
+    for (const source of ['x[ ][]a\n', 'x\\[b][]a\n', 'x\\[@][]\n', 'x[\\ ][]a\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')
