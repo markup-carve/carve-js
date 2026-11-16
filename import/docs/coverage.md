@@ -14,9 +14,9 @@ are in [conformance.md](conformance.md).
 | Djot sections, divs, quotes, code, raw content, ordinary and task lists, definition lists, tables and captions | Their matching typed block nodes, with table groups and caption. |
 | Djot formatting, spans, symbols, math, links, images, references, footnotes and smart punctuation | Typed inline nodes, reference definitions and footnote definitions. |
 | HTML headings, paragraphs, quotes, lists, task boxes, definition lists, tables with groups and spans, figures, images, code languages, links and inline formatting | Matching typed nodes; cell blocks and image descriptions stay in their typed slots even where the writer reports C2-W-011. |
-| HTML role based footnotes and common `footnote-ref` wrappers | Typed footnote reference and definition nodes. Generated backlinks receive a degradation finding. |
-| HTML MathML with TeX annotation or `alttext`, ruby pairs, abbreviations, language, direction and direct alignment | Typed math, ruby, abbreviation and common fields; alignment enters `carve.style`. |
-| HTML comments and script or style blocks | HTML raw nodes holding parse5's serialized HTML form. |
+| HTML role based footnotes, GFM footnotes and common `footnote-ref` wrappers | Typed footnote reference and definition nodes. Backlinks are dropped without a report (C2-M-063). |
+| HTML MathML with TeX annotation or `alttext`, ruby pairs, abbreviations, language, direction and exact alignment declarations | Typed math, ruby, abbreviation and common fields; an exact `text-align` declaration on a paragraph, div or heading is the key `align` (C2-M-075). Any other `style` stays a key as written (C2-M-055). |
+| HTML comments and elements of the treatment `raw` | With the option `rawHtml` on, HTML raw nodes holding parse5's serialized HTML form; with it off (the default) dropped with `import-element-dropped` (C2-M-065, C2-M-066). |
 
 ## Explicit losses and omissions
 
@@ -28,14 +28,14 @@ are in [conformance.md](conformance.md).
 | Djot `+` bullets and parenthesized ordered markers | `import-degraded`: the 0.2 marker vocabulary has no matching spelling. List meaning survives. |
 | Djot quoted wrapper nodes | `import-degraded`: the wrapper becomes quote glyphs and children; there is no quoted-container inline node. |
 | Djot filter test commands | The importer reads the parser's resulting AST. A test harness filter command is outside the document language and has no AST node. |
-| HTML `details` and `summary` interaction | `import-degraded`: content becomes a div and span; Carve has no disclosure node. |
-| HTML `head`, `meta`, document `link`, standalone form controls, unexpected table or list children | `import-unsupported` at the foreign element position: no corresponding Carve content node. |
-| HTML event attributes and invalid direction | `import-unsupported` or `import-degraded` at the element position: event handlers are not document content and invalid `dir` cannot occupy the typed field. |
-| HTML `colgroup` and `col` | `import-unsupported`: HTML column groups can carry span and style semantics that the current mapper cannot derive safely as Carve columns. Existing table row and cell facts survive. |
-| HTML media embeds, arbitrary SVG, forms and custom elements | `import-degraded` to a span or content fallback: no core media or form node. The element name and attributes that have no rendering counterpart are reported. |
-| HTML `<q>`, `<time>`, `<samp>`, `<var>`, `<kbd>`, `<cite>` and `<dfn>` semantic spans | `import-degraded` to a span: the 0.2 core has no distinct node for these HTML element semantics. Their visible children and ordinary attributes survive. |
+| HTML `details` and `summary` interaction | `import-element-mapped`: a div whose first paragraph is the summary (C2-M-059); Carve has no disclosure node. |
+| HTML `head`, `meta`, document `link`, standalone form controls, unexpected table or list children | `import-element-dropped` for the head and the treatment `drop`, the treatment `raw` with `rawHtml` off, and `import-structure-repaired` for children a list, table or description list cannot hold (C2-M-005, C2-M-034, C2-M-036, C2-M-041). |
+| HTML event attributes, `srcdoc`, `formaction`, names that are no key and invalid direction | `import-attribute-dropped` at the element position (C2-M-052, C2-M-054). |
+| HTML `colgroup` and `col` | A `<col>` of the first `<colgroup>` whose style is exactly `width: N%;` gives its column's width (C2-M-041); other column group facts are not read. |
+| HTML media embeds, arbitrary SVG, forms and custom elements | Read by the table "Elements" of `import-html.md`: media, SVG and form controls are raw, form and sectioning containers a div, custom elements a span, each reported (C2-M-056, C2-M-057). |
+| HTML `<q>`, `<samp>`, `<var>`, `<cite>` and `<dfn>` semantic spans | `import-element-mapped` to a span; `<kbd>` and `<time>` are spans with their key (C2-M-047). Their visible children and ordinary attributes survive. |
 | HTML `<br>` inside a table cell and ordered task boxes | Kept as typed break and task nodes in the tree. The writer reports the source spelling loss; the importer does not flatten them before writing. |
-| MathML without TeX annotation or `alttext` | `import-unsupported`; visible text is retained. Concatenating MathML tokens would invent a wrong expression. |
+| MathML without TeX annotation or `alttext` | `import-element-mapped`; visible text is retained (C2-M-049). Concatenating MathML tokens would invent a wrong expression. |
 | Word, Google Docs and LibreOffice footnote anchor adapters from 0.1 | Omitted from the generic interface. Their reciprocal anchors alone do not establish note semantics; role based or common generated note structures are mapped. |
 | Carve 0.1 HTML roundtrip carriers, abbreviations encoded in carrier attributes, and source layout hints | Not decoded. They are renderer specific transport data, not ordinary HTML meaning; the 0.2 importer reports unsupported carrier elements or preserves ordinary attributes. |
 | 0.1 HTML mode, adapter, depth, node and diagnostic limit options | Not exposed by the one-interface brief. Parse5 and the engine validator enforce their own limits; errors from foreign inputs have `ImportInputError`. |

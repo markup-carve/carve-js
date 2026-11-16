@@ -60,7 +60,7 @@ describe('carriers that disagree', () => {
       { type: 'paragraph', children: [{ type: 'text' }, { type: 'footnote_ref', key: '1' }] },
       { type: 'footnote', key: '1' },
     ])
-    expect(result.diagnostics.filter((entry) => entry.code === 'import-degraded')).toHaveLength(2)
+    expect(result.diagnostics.filter((entry) => entry.code === 'import-carrier-ignored')).toHaveLength(2)
   })
 
   it('C2-H-172, C2-H-187: a template keeps a bidirectional control in the expansion it gives', () => {

@@ -1,0 +1,235 @@
+// The clauses of spec/0.2/import-html.md, each test named by the clause it proves.
+import { describe, expect, it } from 'vitest'
+import { encodeTree, validateTree } from '../../v2/src/index.ts'
+import { importDocument } from '../src/index.ts'
+
+const children = (html: string, rawHtml?: boolean): unknown => {
+  const result = importDocument(html, rawHtml === undefined ? { from: 'html' } : { from: 'html', rawHtml })
+  validateTree(result.document)
+  const tree = JSON.parse(encodeTree(result.document), (key, value: unknown) => key === 'pos' ? undefined : value) as { children: unknown }
+  return tree.children
+}
+const codes = (html: string, rawHtml?: boolean): string[] =>
+  importDocument(html, rawHtml === undefined ? { from: 'html' } : { from: 'html', rawHtml }).diagnostics.map(entry => entry.code)
+const source = (html: string, rawHtml?: boolean): string =>
+  importDocument(html, rawHtml === undefined ? { from: 'html' } : { from: 'html', rawHtml }).source
+const paragraphOf = (...inline: unknown[]): unknown => ({ type: 'paragraph', children: inline })
+const text = (value: string): unknown => ({ type: 'text', value })
+
+describe('scope and input', () => {
+  it('C2-M-002: an input that starts with <header is a fragment read with a body context', () => {
+    expect(children('<header class="top"><h1>Site</h1></header>')).toEqual([{ type: 'div', attrs: { classes: ['top'] },
+      children: [{ type: 'heading', level: 1, children: [text('Site')] }] }])
+    expect(children('<li>stray</li>')).toEqual([paragraphOf(text('stray'))])
+  })
+
+  it('C2-M-002: a document after leading whitespace and comments starts with <!doctype or <html', () => {
+    const result = importDocument(' <!-- c --> <HTML lang="de"><body><p>x</p></body></HTML>', { from: 'html' })
+    expect(result.document.lang).toBe('de')
+  })
+
+  it('C2-M-004, C2-M-005: the doctype and the head are dropped once each, a body class is a dropped attribute', () => {
+    const html = '<!DOCTYPE html>\n<html lang="de">\n<head><title>T</title><script>x()</script></head>\n'
+      + '<body class="page"><p>Hallo</p></body>\n</html>'
+    const result = importDocument(html, { from: 'html' })
+    expect(result.diagnostics.map(entry => [entry.code, entry.foreignType])).toEqual([
+      ['import-element-dropped', '#doctype'], ['import-element-dropped', 'head'], ['import-attribute-dropped', 'body'],
+    ])
+  })
+})
+
+describe('whitespace', () => {
+  it('C2-M-018: whitespace at the edges of the inline content of a block is removed', () => {
+    expect(children('<p>  lead <b>x</b> </p>')).toEqual([paragraphOf(text('lead '), { type: 'strong', children: [text('x')] })])
+    expect(codes('<p>  lead <b>x</b> </p>')).toContain('import-whitespace-normalized')
+  })
+
+  it('C2-M-018: a no-break space at an edge stays', () => {
+    expect(children('<p>&nbsp;a&nbsp;</p>')).toEqual([paragraphOf(text(' a '))])
+  })
+
+  it('C2-M-019: a <br> at the end of the inline content of a block is removed', () => {
+    expect(children('<p>a<br></p>')).toEqual([paragraphOf(text('a'))])
+  })
+
+  it('C2-M-020: import-whitespace-normalized has the severity hint', () => {
+    const entry = importDocument('<p> a</p>', { from: 'html' }).diagnostics.find(row => row.code === 'import-whitespace-normalized')
+    expect(entry?.severity).toBe('hint')
+  })
+})
+
+describe('block elements', () => {
+  it('C2-M-027: other attributes of a section that opens with a heading are dropped and reported', () => {
+    expect(children('<section class="c" id="s"><h2>T</h2></section>')).toEqual([
+      { type: 'heading', level: 2, children: [text('T')], attrs: { id: 's' } }])
+    expect(codes('<section class="c" id="s"><h2>T</h2></section>')).toEqual(['import-attribute-dropped'])
+  })
+
+  it('C2-M-028: a section that opens with no heading is a div, reported as mapped', () => {
+    expect(children('<section><p>no heading</p></section>')).toEqual([{ type: 'div', children: [paragraphOf(text('no heading'))] }])
+    expect(codes('<section><p>no heading</p></section>')).toEqual(['import-element-mapped'])
+  })
+})
+
+describe('lists', () => {
+  it('C2-M-031: <menu> is a bullet list', () => {
+    expect(children('<menu><li>a</li></menu>')).toEqual([{ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
+      children: [{ type: 'list_item', children: [paragraphOf(text('a'))] }] }])
+  })
+
+  it('C2-M-032: an unknown task state is dropped and reported; the box gives the mark', () => {
+    const html = '<ul><li data-task-state="q"><input type="checkbox"> x</li></ul>'
+    expect(children(html)).toEqual([{ type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
+      children: [{ type: 'list_item', task: { mark: ' ' }, children: [paragraphOf(text('x'))] }] }])
+    expect(codes(html)).toEqual(['import-attribute-dropped'])
+  })
+
+  it('C2-M-032: a known task state gives the mark', () => {
+    const list = children('<ul><li data-task-state="?"><input type="checkbox"> x</li></ul>') as { children: { task: unknown }[] }[]
+    expect(list[0]?.children[0]?.task).toEqual({ mark: '?' })
+  })
+
+  it('C2-M-033: a list with one item is tight', () => {
+    const list = children('<ul><li><p>only</p></li></ul>') as { spacing: string }[]
+    expect(list[0]?.spacing).toBe('tight')
+  })
+
+  it('C2-M-034: stray text in a list is dropped and reported', () => {
+    expect(codes('<ul><li>a</li>stray<p>p</p></ul>')).toEqual(['import-structure-repaired', 'import-structure-repaired'])
+  })
+
+  it('C2-M-036: a div child of a dl is read as the children it holds', () => {
+    expect(source('<dl><div><dt>a</dt><dd>b</dd></div></dl>')).toBe(':: a\n: b\n')
+  })
+
+  it('C2-M-036, C2-M-070: a dl with no entry is dropped and reported', () => {
+    expect(children('<dl><span>x</span></dl>')).toEqual([])
+    expect(codes('<dl><span>x</span></dl>')).toEqual(['import-structure-repaired', 'import-structure-repaired'])
+  })
+})
+
+describe('figures', () => {
+  it('C2-M-043: a figure that holds a table and a figcaption is the table with its caption', () => {
+    expect(source('<figure><table><tr><td>a</td></tr></table><figcaption>T</figcaption></figure>')).toBe('| a |\n^ T\n')
+  })
+})
+
+describe('inline elements', () => {
+  it('C2-M-046: <wbr> is dropped and reported', () => {
+    expect(children('<p>a<wbr>b</p>')).toEqual([paragraphOf(text('ab'))])
+    expect(codes('<p>a<wbr>b</p>')).toEqual(['import-element-dropped'])
+  })
+
+  it('C2-M-048: <rp> and the children of <rt> give no entry', () => {
+    expect(codes('<p><ruby>字<rp>(</rp><rt>ji</rt><rp>)</rp></ruby></p>').filter(code => code.startsWith('import-'))).toEqual([])
+  })
+
+  it('C2-M-049: the children of a <math> with a TeX source give no entry', () => {
+    const html = '<p><math display="block"><semantics><mi>x</mi>'
+      + '<annotation encoding="application/x-tex">x^2</annotation></semantics></math></p>'
+    expect(codes(html)).toEqual([])
+  })
+})
+
+describe('attributes', () => {
+  it('C2-M-054: a name that is no key is dropped and reported; srcdoc and formaction are dropped', () => {
+    const html = '<p><span x:y="1" srcdoc="a" formaction="b" data-k="2">t</span></p>'
+    expect(children(html)).toEqual([paragraphOf({ type: 'span', children: [text('t')], attrs: { keyValues: [['data-k', '2']] } })])
+    expect(codes(html)).toEqual(['import-attribute-dropped', 'import-attribute-dropped', 'import-attribute-dropped'])
+  })
+
+  it('C2-M-055: a style is a key as written and gives no other tree fact', () => {
+    const [first] = children('<p style="text-align:right ;color:red">x</p>') as { data?: unknown, attrs: unknown }[]
+    expect(first?.data).toBeUndefined()
+    expect(first?.attrs).toEqual({ keyValues: [['style', 'text-align:right ;color:red']] })
+  })
+
+  it('C2-M-075: an exact alignment declaration on a paragraph is the key align', () => {
+    const [first] = children('<p style="text-align: center;">x</p>') as { attrs: unknown }[]
+    expect(first?.attrs).toEqual({ keyValues: [['align', 'center']] })
+  })
+})
+
+describe('elements without a counterpart', () => {
+  it('C2-M-059: <details> is a div whose first block is the summary paragraph', () => {
+    const html = '<details><summary>More</summary><p>Body</p></details>'
+    expect(children(html)).toEqual([{ type: 'div', children: [paragraphOf(text('More')), paragraphOf(text('Body'))] }])
+    expect(codes(html)).toEqual(['import-element-mapped'])
+  })
+
+  it('C2-M-057: a span row and an unknown element are spans reported as mapped', () => {
+    expect(codes('<p><small>a</small> <my-tag>b</my-tag></p>')).toEqual(['import-element-mapped', 'import-element-mapped'])
+  })
+
+  it('C2-M-014: a block element in inline content is a span reported as mapped', () => {
+    expect(children('<em><p>x</p></em>')).toEqual([paragraphOf({ type: 'emphasis',
+      children: [{ type: 'span', children: [text('x')] }] })])
+    expect(codes('<em><p>x</p></em>')).toEqual(['import-element-mapped'])
+  })
+})
+
+describe('footnotes', () => {
+  it('C2-M-062, C2-M-063: a GFM reference in <sup> is the reference alone and the backlink is dropped with its space', () => {
+    const html = '<p>x<sup><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup></p>\n'
+      + '<section class="footnotes"><ol><li id="fn-1"><p>Note <a href="#fnref-1" data-footnote-backref class="footnote-backref">↩</a></p>'
+      + '</li></ol></section>'
+    expect(source(html)).toBe('x[^1]\n\n[^1]: Note\n')
+  })
+})
+
+describe('raw content', () => {
+  const html = '<!-- note --><p>a<!-- inline -->b</p><script>run()</script>\n<p>Video: <iframe src="/v"></iframe></p>'
+
+  it('C2-M-066: with rawHtml off every comment and raw element is dropped and reported once', () => {
+    expect(children(html)).toEqual([paragraphOf(text('ab')), paragraphOf(text('Video:'))])
+    const dropped = importDocument(html, { from: 'html' }).diagnostics.filter(entry => entry.code === 'import-element-dropped')
+    expect(dropped.map(entry => entry.foreignType)).toEqual(['#comment', '#comment', 'script', 'iframe'])
+  })
+
+  it('C2-M-066: with rawHtml off a data-carve-raw span is dropped with one entry for the span', () => {
+    const result = importDocument('<p>a<span data-carve-raw="html">&lt;script&gt;x()&lt;/script&gt;</span>b</p>', { from: 'html' })
+    expect(result.source).toBe('ab\n')
+    expect(result.diagnostics.map(entry => [entry.code, entry.foreignType])).toEqual([['import-element-dropped', 'span']])
+  })
+
+  it('C2-M-065: with rawHtml on a comment and a raw element are raw nodes whose block value ends with a line feed', () => {
+    expect(children(html, true)).toEqual([
+      { type: 'raw_block', format: 'html', value: '<!-- note -->\n' },
+      paragraphOf(text('a'), { type: 'raw_inline', format: 'html', value: '<!-- inline -->' }, text('b')),
+      { type: 'raw_block', format: 'html', value: '<script>run()</script>\n' },
+      paragraphOf(text('Video: '), { type: 'raw_inline', format: 'html', value: '<iframe src="/v"></iframe>' }),
+    ])
+    expect(codes(html, true)).toEqual([])
+  })
+
+  it('C2-M-066: an input that is no task box is raw', () => {
+    expect(children('<p>a <input type="text"></p>')).toEqual([paragraphOf(text('a'))])
+    expect(children('<p>a <input type="text"></p>', true)).toEqual([paragraphOf(text('a '),
+      { type: 'raw_inline', format: 'html', value: '<input type="text">' })])
+  })
+
+  it('C2-M-067: a reserved name is removed before an element is serialized as raw content', () => {
+    expect(children('<template data-carve-src="x"><b>t</b></template>', true)).toEqual([
+      { type: 'raw_block', format: 'html', value: '<template><b>t</b></template>\n' }])
+  })
+})
+
+describe('normalization', () => {
+  it('C2-M-069: an empty paragraph and an empty strong are dropped; an empty span with attributes stays', () => {
+    expect(children('<p></p><p><b></b>x<span id="a"></span></p>')).toEqual([
+      paragraphOf(text('x'), { type: 'span', children: [], attrs: { id: 'a' } })])
+    expect(codes('<p></p><p><b></b>x<span id="a"></span></p>')).toEqual([])
+  })
+
+  it('C2-M-069: a drop that loses an attribute is reported', () => {
+    expect(codes('<p class="c"></p>')).toEqual(['import-structure-repaired'])
+  })
+})
+
+describe('diagnostics', () => {
+  it('C2-M-080, C2-M-081: every entry is on the render-loss channel with a byte range and a foreign type', () => {
+    const result = importDocument('é<wbr>', { from: 'html' })
+    expect(result.diagnostics).toEqual([{ code: 'import-element-dropped', severity: 'warning', channel: 'render-loss',
+      message: expect.any(String) as unknown, foreignType: 'wbr', range: { startOffset: 2, endOffset: 7 } }])
+  })
+})

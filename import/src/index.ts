@@ -7,14 +7,17 @@ import { MAX_TREE_DEPTH } from '../../v2/src/index.ts'
 export { ImportInputError, type ImportDiagnostic, type ImportResult } from './kit.ts'
 export type { Format } from './kit.ts'
 
+/** The options of an import. `rawHtml` keeps comments and raw elements of HTML as raw nodes (C2-M-065, C2-M-066). */
+export interface ImportOptions { from: Format, rawHtml?: boolean }
+
 /** Parse a foreign document to a Carve 0.2 tree and write its canonical source. */
-export function importDocument(input: string, options: { from: Format }): ImportResult {
+export function importDocument(input: string, options: ImportOptions): ImportResult {
   try {
     switch (options.from) {
       case 'markdown':
       case 'gfm': return importMarkdown(input, options.from)
       case 'djot': return importDjot(input)
-      case 'html': return importHtml(input)
+      case 'html': return importHtml(input, options.rawHtml === true)
     }
   } catch (error) {
     if (error instanceof ImportInputError) throw error

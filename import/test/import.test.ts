@@ -12,7 +12,7 @@ const expectedHtmlSource: Record<string, string> = {
   'table groups and spans': '{footer-rows=1}\n|= Head |\n| A | B |\n| C |\n| Foot |\n',
   'definition list': ':: Term\n: Definition\n',
   'figure caption': '![Bars](chart.png)\n^ A chart\n',
-  details: '::: details\n[More]{}\n\nHidden content\n:::\n',
+  details: ':::\nMore\n\nHidden content\n:::\n',
   'language code': '```rust\nfn main() {}\n```\n',
   'GitHub task list': '{.contains-task-list}\n-{.task-list-item} [x] Done\n',
   'generated footnotes': 'Note[^1]\n\n[^1]: Text\n',
@@ -45,10 +45,10 @@ describe('Carve 0.2 importers', () => {
       .includes(entry.code))).toBe(true)
   })
 
-  it('C2-W-022 keeps one final line ending for imported HTML text', () => {
+  it('C2-W-022, C2-M-018 keeps one final line ending for imported HTML text', () => {
     const result = importDocument('a\n', { from: 'html' })
     expect(result.source).toBe('a\n')
-    expect(result.diagnostics.some((entry) => entry.code === 'import-degraded')).toBe(true)
+    expect(result.diagnostics.some((entry) => entry.code === 'import-whitespace-normalized')).toBe(true)
   })
 
   it.each([
@@ -77,10 +77,12 @@ describe('Carve 0.2 importers', () => {
     expect(result.source).toBe('- foo\n  - bar\n')
   })
 
-  it('C2-W-007 keeps a multi-paragraph list loose even with a nested list', () => {
-    const result = importDocument('<ul><li><p>a</p><p>b</p><ul><li>c</li></ul></li></ul>', { from: 'html' })
+  it('C2-W-007, C2-M-033 keeps a multi-paragraph list loose even with a nested list; a list of one item is tight', () => {
+    const result = importDocument('<ul><li><p>a</p><p>b</p><ul><li>c</li></ul></li><li>d</li></ul>', { from: 'html' })
     const first = result.document.children[0]
     expect(first?.type === 'list' ? first.spacing : undefined).toBe('loose')
+    const single = importDocument('<ul><li><p>a</p><p>b</p><ul><li>c</li></ul></li></ul>', { from: 'html' }).document.children[0]
+    expect(single?.type === 'list' ? single.spacing : undefined).toBe('tight')
   })
 
   it.each(['<table><tr><td>a\nb</td></tr></table>',
@@ -92,7 +94,7 @@ describe('Carve 0.2 importers', () => {
       const result = importDocument(input, { from: 'html' })
       expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
         .includes(entry.code))).toBe(false)
-      expect(result.diagnostics.some((entry) => entry.code === 'import-degraded')).toBe(true)
+      expect(result.diagnostics.some((entry) => entry.code === 'import-whitespace-normalized')).toBe(true)
       expect(format(result.source)).toBe(result.source)
     })
 
@@ -203,10 +205,10 @@ describe('Carve 0.2 importers', () => {
     expect(headings.source).toBe('= One\n\n====== Six\n')
   })
 
-  it('C2-A-050 diagnoses HTML rowspan zero, whose end-of-group meaning has no direct count', () => {
+  it('C2-M-039 reports HTML rowspan zero, whose end-of-group meaning has no direct count', () => {
     const input = '<table><tr><td rowspan="0">A</td></tr><tr><td>B</td></tr></table>'
     const result = importDocument(input, { from: 'html' })
-    expect(result.diagnostics.some((entry) => entry.code === 'import-degraded' && entry.foreignType === 'td')).toBe(true)
+    expect(result.diagnostics.some((entry) => entry.code === 'import-structure-repaired' && entry.foreignType === 'td')).toBe(true)
   })
 
   it('C2-A-050 keeps empty Djot link and image destinations as present fields', () => {
@@ -369,17 +371,17 @@ describe('Carve 0.2 importers', () => {
 
   it('C2-H-173 applies the engine URL policy to imported destinations', () => {
     const result = importDocument('<p><a href="javascript:alert(1)">bad</a></p>', { from: 'html' })
-    expect(result.diagnostics.some(row => row.code === 'import-degraded')).toBe(true)
+    expect(result.diagnostics.some(row => row.code === 'import-destination-denied')).toBe(true)
     // C2-W-011: a link with no destination has no spelling, so the denied link becomes its text.
     expect(result.document.children[0]).toMatchObject({ type: 'paragraph', children: [{ type: 'text', value: 'bad' }] })
     expect(result.source).toBe('bad\n')
     expect(result.diagnostics.map(row => row.code)).not.toContain('field-unspellable')
   })
 
-  it('C2-A-197 stores direct HTML alignment in carve.style', () => {
+  it('C2-M-055 takes no tree fact from a style that is no exact alignment declaration', () => {
     const result = importDocument('<p style="text-align: center" lang="en">center</p>', { from: 'html' })
     const first = result.document.children[0]
-    expect(first?.data?.['carve.style']).toEqual({ alignment: 'center' })
+    expect(first?.data).toBeUndefined()
     expect(first?.lang).toBe('en')
     expect(result.source).toBe('{:en style="text-align: center"}\ncenter\n')
   })
@@ -391,9 +393,9 @@ describe('Carve 0.2 importers', () => {
     expect(result.source).toBe('Bonjour\n')
   })
 
-  it('C2-A-173 records unsupported HTML nodes with a foreign type and range', () => {
+  it('C2-A-173, C2-M-066 records a dropped raw HTML element with a foreign type and range', () => {
     const result = importDocument('<input type="text">', { from: 'html' })
-    const finding = result.diagnostics.find(row => row.code === 'import-unsupported')
+    const finding = result.diagnostics.find(row => row.code === 'import-element-dropped')
     expect(finding?.foreignType).toBe('input')
     expect(finding?.range).toEqual({ startOffset: 0, endOffset: 19 })
     expect(result.source).toBe('\n')

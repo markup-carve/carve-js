@@ -35,6 +35,8 @@ export function ensureForeignDepth(root: unknown, format: Format): void {
 export interface Context {
   format: Format
   input: string
+  /** C2-M-065, C2-M-066: comments and raw elements are kept only with `rawHtml` on. */
+  rawHtml?: boolean
   diagnostics: ImportDiagnostic[]
   deferred?: DocumentNode['children']
   rootLang?: string
@@ -69,13 +71,20 @@ function byteOffset(context: Context, at: number): number {
   return table[Math.min(Math.max(at, 0), context.input.length)] ?? 0
 }
 
-export function finding(context: Context, code: 'import-unsupported' | 'import-degraded', foreignType: string,
+/** C2-M-083: the codes of the HTML importer. The Markdown and Djot importers keep the two codes of the 0.1 importer. */
+export type HtmlImportCode = 'import-attribute-dropped' | 'import-carrier-ignored' | 'import-destination-denied'
+  | 'import-element-dropped' | 'import-element-mapped' | 'import-structure-repaired' | 'import-whitespace-normalized'
+export type ImportCode = HtmlImportCode | 'import-unsupported' | 'import-degraded'
+
+export function finding(context: Context, code: ImportCode, foreignType: string,
   message: string, start?: number, end?: number): void {
   const range = start === undefined || end === undefined ? undefined : {
     startOffset: byteOffset(context, start),
     endOffset: byteOffset(context, end),
   }
-  context.diagnostics.push({ code, severity: 'warning', channel: 'render-loss', message, foreignType,
+  // C2-M-020: whitespace normalization changes no visible text.
+  const severity = code === 'import-whitespace-normalized' ? 'hint' : 'warning'
+  context.diagnostics.push({ code, severity, channel: 'render-loss', message, foreignType,
     ...(range ? { range } : {}) })
 }
 
@@ -120,7 +129,8 @@ export function classNames(value: string): string[] {
 
 export function safeUrl(context: Context, foreignType: string, url: string, start?: number, end?: number): string | undefined {
   if (isUrlAllowed(url)) return url
-  finding(context, 'import-degraded', foreignType, `Denied URL scheme in ${foreignType}`, start, end)
+  const code = context.format === 'html' ? 'import-destination-denied' : 'import-degraded'
+  finding(context, code, foreignType, `Denied URL scheme in ${foreignType}`, start, end)
   return undefined
 }
 

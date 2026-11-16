@@ -1,7 +1,7 @@
 // The parse5 reading shared by the HTML import modules, and the import state of one document.
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type { AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode } from '../../v2/src/index.ts'
-import { attrsOf, finding, type Context } from './kit.ts'
+import { attrsOf, finding, type Context, type HtmlImportCode } from './kit.ts'
 
 /** C2-H-115: the reserved names that a render with `roundtrip` writes; `data-carve-src` is reserved and never written. */
 export const CARRIERS: ReadonlySet<string> = new Set([
@@ -52,25 +52,39 @@ export function plain(node: Html.ChildNode): string {
   return content(node).map(plain).join('')
 }
 
+function located(node: Html.ChildNode): Html.ChildNode | undefined {
+  if (node.sourceCodeLocation) return node
+  let parent = node.parentNode
+  while (parent !== null && defaultTreeAdapter.isElementNode(parent)) {
+    if (parent.sourceCodeLocation) return parent
+    parent = parent.parentNode
+  }
+  return undefined
+}
+
+/** C2-M-081: an element the parser opened without a tag is located at the nearest element it has a location for. */
 function location(node: Html.ChildNode): [number | undefined, number | undefined] {
-  return [node.sourceCodeLocation?.startOffset, node.sourceCodeLocation?.endOffset]
+  const found = located(node)?.sourceCodeLocation
+  return [found?.startOffset, found?.endOffset]
 }
 
 export function at(node: Html.ChildNode): [number | undefined, number | undefined] { return location(node) }
 
-export function degraded(context: Context, node: Html.ChildNode, message: string): void {
-  const [start, end] = location(node)
-  finding(context, 'import-degraded', node.nodeName, message, start, end)
+/** C2-M-081: the lower-case tag name, or `#comment`, `#text` or `#doctype`. */
+export function foreignType(node: Html.ChildNode): string {
+  if (isElement(node)) return node.tagName.toLowerCase()
+  if (isText(node)) return '#text'
+  return isComment(node) ? '#comment' : '#doctype'
 }
 
-export function unsupported(context: Context, node: Html.ChildNode, message: string): void {
+export function report(context: Context, node: Html.ChildNode, code: HtmlImportCode, message: string): void {
   const [start, end] = location(node)
-  finding(context, 'import-unsupported', node.nodeName, message, start, end)
+  finding(context, code, foreignType(node), message, start, end)
 }
 
-/** C2-H-114: a carrier the HTML around it contradicts, or one with a malformed value, is not read. */
+/** C2-H-114: a carrier the HTML around it contradicts, or one with a malformed value, is not read (C2-M-009). */
 export function ignoredCarrier(context: Context, node: Html.Element, name: string, reason: string): void {
-  degraded(context, node, `Carrier ${name} ignored: ${reason}`)
+  report(context, node, 'import-carrier-ignored', `Carrier ${name} ignored: ${reason}`)
 }
 
 export function classList(node: Html.Element): string[] {
@@ -86,34 +100,51 @@ export function classList(node: Html.Element): string[] {
   return names
 }
 
-export interface MappedAttrs { attrs?: Attrs, lang?: string, dir?: 'ltr' | 'rtl' | 'auto', data?: Record<string, unknown> }
+export interface MappedAttrs { attrs?: Attrs, lang?: string, dir?: 'ltr' | 'rtl' | 'auto' }
 
 const ALIGN_STYLES: Readonly<Record<string, string>> = {
   'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
 }
 
-/** The authored attributes of `node`: without `omit`, event handlers and, in every document, the reserved names (C2-H-186). */
-function isAuthored(name: string, omit: readonly string[]): boolean {
-  if (omit.includes(name) || name.startsWith('on') || name === 'lang' || name === 'dir') return false
-  return !CARRIERS.has(name)
+function isKeyChar(code: number, first: boolean): boolean {
+  const letter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95
+  return first ? letter : letter || (code >= 48 && code <= 57) || code === 45
 }
 
-/** The authored attributes of `node`: without `omit`, event handlers and the reserved names. */
+/** C2-I-030: a key is an ASCII letter or `_`, then letters, digits, `_` and `-`. */
+export function isKey(name: string): boolean {
+  if (name === '') return false
+  for (let index = 0; index < name.length; index++) if (!isKeyChar(name.charCodeAt(index), index === 0)) return false
+  return true
+}
+
+/** C2-M-052, C2-M-054: the attributes dropped wherever they stand, and why; undefined for one the tree can keep. */
+export function droppedAttribute(name: string, value: string): string | undefined {
+  if (name.startsWith('on')) return 'an event handler'
+  if (name === 'srcdoc' || name === 'formaction') return 'a dropped attribute'
+  if (name === 'dir') return value === 'ltr' || value === 'rtl' || value === 'auto' ? undefined : 'an invalid direction'
+  return isKey(name) || CARRIERS.has(name) ? undefined : 'a name that is no key'
+}
+
+function isAuthored(item: { name: string, value: string }, omit: readonly string[]): boolean {
+  if (omit.includes(item.name) || item.name === 'lang' || item.name === 'dir') return false
+  return !CARRIERS.has(item.name) && droppedAttribute(item.name, item.value) === undefined
+}
+
+/**
+ * The authored attributes of `node`: without `omit`, the reserved names (C2-H-186) and the names C2-M-052 drops, which
+ * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align` (C2-M-075).
+ */
 export function attrs(_context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
   const entries: [string, string][] = []
-  let alignment: 'start' | 'center' | 'end' | 'justify' | undefined
   for (const item of node.attrs) {
-    if (!isAuthored(item.name, omit)) continue
-    const align = item.name === 'style' ? ALIGN_STYLES[item.value] : undefined
-    // C2-H-015: the declaration a render writes for an `align` key reads back as the key.
-    if (align !== undefined && alignStyle) entries.push(['align', align])
-    else entries.push([item.name, item.value])
-    if (item.name === 'style' && align === undefined) alignment = styleAlignment(item.value) ?? alignment
+    if (!isAuthored(item, omit)) continue
+    const align = item.name === 'style' && alignStyle ? ALIGN_STYLES[item.value] : undefined
+    entries.push(align === undefined ? [item.name, item.value] : ['align', align])
   }
   const result: MappedAttrs = languageOf(node)
   const mapped = attrsOf(entries)
   if (mapped) result.attrs = mapped
-  if (alignment !== undefined) result.data = { 'carve.style': { alignment } }
   return result
 }
 
@@ -124,18 +155,6 @@ function languageOf(node: Html.Element): MappedAttrs {
   if (lang) result.lang = lang
   if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') result.dir = dir
   return result
-}
-
-function styleAlignment(style: string): 'start' | 'center' | 'end' | 'justify' | undefined {
-  for (const declaration of style.split(';')) {
-    const colon = declaration.indexOf(':')
-    if (colon < 0 || declaration.slice(0, colon).trim().toLowerCase() !== 'text-align') continue
-    const value = declaration.slice(colon + 1).trim().toLowerCase()
-    if (value === 'left') return 'start'
-    if (value === 'right') return 'end'
-    if (value === 'center' || value === 'justify') return value
-  }
-  return undefined
 }
 
 /** The attributes of `mapped` with the classes `drop` removed, as the renderer adds them to every element of a kind. */

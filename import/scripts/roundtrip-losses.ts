@@ -496,6 +496,35 @@ function plainSpaces(tree: Fields, found: Set<string>): Fields {
   }], found)
 }
 
+/** The cell of the first head row that starts at column `at`, counting column spans. */
+function headCellAt(table: Fields, at: number): Fields | undefined {
+  const head = children(table).find(group => group['type'] === 'table_head')
+  const row = head === undefined ? undefined : children(head)[0]
+  let column = 0
+  for (const cell of row === undefined ? [] : children(row)) {
+    if (column === at) return cell
+    column += typeof cell['colspan'] === 'number' ? cell['colspan'] : 1
+  }
+  return undefined
+}
+
+/**
+ * C2-H-195 row 8: where a head row exists, every cell writes its resolved alignment, and the column's alignment comes
+ * back as a mark on the header cell, which aligns the column (C2-B-213); a mark the header cell has already wins.
+ */
+function columnAlignments(tree: Fields, found: Set<string>): void {
+  eachNode(tree, node => {
+    if (node['type'] !== 'table' || !Array.isArray(node['columns'])) return
+    node['columns'].filter(isFields).forEach((column, at) => {
+      const cell = column['align'] === undefined ? undefined : headCellAt(node, at)
+      if (cell === undefined) return
+      cell['align'] ??= column['align']
+      delete column['align']
+      found.add('C2-H-195 row 8 column alignment')
+    })
+  })
+}
+
 /** C2-H-195 row 7: a line break in a cell reads as a space. */
 function cellBreaks(tree: Fields, found: Set<string>): void {
   eachNode(tree, node => {
@@ -562,6 +591,7 @@ export function project(document: DocumentNode): { tree: DocumentNode, losses: s
   if (['G1 carriage return', 'G7 line feed in text', 'C2-H-176 C2-H-172 characters'].some(loss => found.has(loss))) edgeBreaks(tree)
   tree = plainSpaces(tree, found)
   cellBreaks(tree, found)
+  columnAlignments(tree, found)
   uniqueClasses(tree, found)
   lineBlocks(tree, found)
   spanMarks(tree, found)

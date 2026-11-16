@@ -1,13 +1,13 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { format } from '../../v2/src/index.ts'
 import { writerHasLoss } from '../../v2/src/write.ts'
 import { importDocument, ImportInputError, type Format } from '../src/index.ts'
 import { commonmarkCases, djotCases, gfmCases } from './suites.ts'
+import { specExamples } from './spec-examples.ts'
 
 interface Seed { from: Format, input: string }
-interface SpecExample { html: string }
-const specs = JSON.parse(readFileSync(join(import.meta.dirname, '../../v2/data/examples.json'), 'utf8')) as SpecExample[]
+const specs = specExamples()
 const seeds: Seed[] = [
   ...commonmarkCases().map(entry => ({ from: 'markdown' as const, input: entry.input })),
   ...gfmCases().map(entry => ({ from: 'gfm' as const, input: entry.input })),

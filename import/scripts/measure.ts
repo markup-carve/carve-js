@@ -4,12 +4,12 @@ import { defaultTreeAdapter, parseFragment, type DefaultTreeAdapterTypes as Html
 import { format, parseTree, render, type DocumentNode } from '../../v2/src/index.ts'
 import { importDocument, type Format, type ImportResult } from '../src/index.ts'
 import { commonmarkCases, djotCases, gfmCases, type Case } from './suites.ts'
+import { specExamples } from './spec-examples.ts'
 
 type HtmlVerdict = 'same' | 'same-text' | 'different'
 type TreeVerdict = 'exact' | 'same-meaning' | 'same-rendering' | 'same-text' | 'lossy'
 interface Tally { same: number, 'same-text': number, different: number }
 interface TreeTally { exact: number, 'same-meaning': number, 'same-rendering': number, 'same-text': number, lossy: number }
-interface Example { file: string, number: number, input: string, html: string }
 const outputPath = join(import.meta.dirname, '../docs/conformance.md')
 const blockTags = ['p', 'pre', 'blockquote', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'figure', 'figcaption',
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'section']
@@ -117,12 +117,12 @@ function treeVerdict(expected: DocumentNode, imported: ImportResult, expectedHtm
 }
 
 function measureTreeSuite(limit: number): string[] {
-  const examples = JSON.parse(readFileSync(join(import.meta.dirname, '../../v2/data/examples.json'), 'utf8')) as Example[]
+  const examples = specExamples()
   const tally: TreeTally = { exact: 0, 'same-meaning': 0, 'same-rendering': 0, 'same-text': 0, lossy: 0 }
   const lossy: string[] = []
   for (const example of examples.slice(0, limit)) {
     try {
-      const imported = importDocument(example.html, { from: 'html' })
+      const imported = importDocument(example.html, { from: 'html', rawHtml: true })
       const kind = treeVerdict(parseTree(example.input).document, imported, example.html)
       tally[kind]++
       if (kind === 'lossy') lossy.push(`${example.file}:${example.number}`)

@@ -5,6 +5,7 @@ import { parse, render, treesEqual, type DocumentNode } from '../../v2/src/index
 import { generate, loadCorpus, random } from '../../v2/proptest/generate.ts'
 import { importDocument } from '../src/index.ts'
 import { project } from './roundtrip-losses.ts'
+import { specExamples } from './spec-examples.ts'
 
 type Value = unknown
 type Fields = Record<string, unknown>
@@ -145,7 +146,8 @@ export function roundTrip(source: string): Outcome {
   const html = render(source, { roundtrip: true })
   const projected = project(expected)
   try {
-    const actual = withoutProvenance(importDocument(html, { from: 'html' }).document)
+    // C2-M-090: the guarantees assume an import with `rawHtml` on.
+    const actual = withoutProvenance(importDocument(html, { from: 'html', rawHtml: true }).document)
     const raw = treesEqual(expected, actual)
     const equal = raw || treesEqual(projected.tree, actual)
     return { raw, equal, classes: equal ? [] : diffTrees(projected.tree, actual), losses: raw ? [] : projected.losses, html }
@@ -178,11 +180,10 @@ export function emptyReport(): Report {
   return { documents: 0, raw: 0, equal: 0, errors: 0, classes: new Map(), losses: new Map() }
 }
 
-export interface Examples { input: string, flags: string[] }
 
 /** The specification examples, and `count` generated documents of at most `maxBytes` bytes from `seed`. */
 export function harnessInputs(count: number, seed: number, maxBytes: number): { examples: string[], generated: string[] } {
-  const examples = (JSON.parse(readFileSync(join(root, 'v2/data/examples.json'), 'utf8')) as Examples[]).map(entry => entry.input)
+  const examples = specExamples().map(entry => entry.input)
   const previous = process.cwd()
   process.chdir(root)
   try {

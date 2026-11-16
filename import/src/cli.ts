@@ -14,17 +14,17 @@ async function readInput(file: string): Promise<string | undefined> {
   }
 }
 
-const parsed = parseArgs({ options: { from: { type: 'string' } }, allowPositionals: true })
+const parsed = parseArgs({ options: { from: { type: 'string' }, 'raw-html': { type: 'boolean' } }, allowPositionals: true })
 const from = parsed.values.from
 const file = parsed.positionals[0]
 if (!isFormat(from) || file === undefined || parsed.positionals.length !== 1) {
-  process.stderr.write('Usage: carve-import --from markdown|gfm|djot|html FILE\n')
+  process.stderr.write('Usage: carve-import --from markdown|gfm|djot|html [--raw-html] FILE\n')
   process.exitCode = 2
 } else {
   const input = await readInput(file)
   if (input !== undefined) {
     try {
-      const result = importDocument(input, { from })
+      const result = importDocument(input, { from, rawHtml: parsed.values['raw-html'] === true })
       process.stdout.write(result.source)
       if (result.diagnostics.length) process.stderr.write(`${JSON.stringify(result.diagnostics, null, 2)}\n`)
     } catch (error) {

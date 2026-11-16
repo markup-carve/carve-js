@@ -2,15 +2,24 @@
 import { type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { foldLabel } from '../../v2/src/index.ts'
 import {
-  attr, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
+  attr, classList, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
 
 export function isFootnoteSection(node: Html.Element): boolean {
   return attr(node, 'role') === 'doc-endnotes' || attr(node, 'class')?.split(' ').includes('footnotes') === true
 }
 
-function isBacklink(node: Html.ChildNode): boolean {
-  return isElement(node) && node.tagName === 'a' && attr(node, 'role') === 'doc-backlink'
+/** C2-M-063: the backlink of a note, as a render and as GitHub write it. */
+export function isBacklink(node: Html.ChildNode): boolean {
+  if (!isElement(node) || node.tagName !== 'a') return false
+  return attr(node, 'role') === 'doc-backlink' || has(node, 'data-footnote-backref') || classList(node).includes('footnote-backref')
+}
+
+function withoutTrailingSpaces(node: Html.ChildNode | undefined): void {
+  if (node === undefined || !isText(node)) return
+  let end = node.value.length
+  while (end > 0 && (node.value[end - 1] === ' ' || node.value[end - 1] === '\t')) end--
+  node.value = node.value.slice(0, end)
 }
 
 /** C2-H-091: the backlinks a render adds to the last paragraph of a note, or as a paragraph of their own. */
@@ -21,12 +30,13 @@ function dropBacklinks(item: Html.Element): void {
   let end = nodes.length
   while (end > 0) {
     const node = nodes[end - 1]
-    if (node === undefined || !(isBacklink(node) || (isText(node) && node.value === ' '))) break
+    if (node === undefined || !(isBacklink(node) || (isText(node) && node.value.trim() === ''))) break
     end--
   }
   if (end === nodes.length || !nodes.slice(end).some(isBacklink)) return
   if (end > 0 && !nodes.slice(0, end).every(node => isText(node) && node.value.trim() === '')) {
     last.childNodes = nodes.slice(0, end)
+    withoutTrailingSpaces(last.childNodes.at(-1))
     return
   }
   item.childNodes = item.childNodes.filter(node => node !== last)

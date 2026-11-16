@@ -1,10 +1,12 @@
 // Inline HTML to Carve inline nodes: foreign markup, and the elements and carriers of a 0.2 render (C2-H-072 to C2-H-101).
-import { serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import { type DefaultTreeAdapterTypes as Html } from 'parse5'
 import { foldLabel, type Inline, type RubyPairNode } from '../../v2/src/index.ts'
 import {
-  at, attr, attrs, classList, content, degraded, elements, has, ignoredCarrier, isComment, isElement, isText, plain, unsupported,
+  at, attr, attrs, classList, content, elements, has, ignoredCarrier, isComment, isElement, isText, plain, report,
   withoutClasses, withoutKeys, isRawFormat, isRawSpan, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
+import { isBacklink } from './html-notes.ts'
+import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
 import { coalesce, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
 
 const EDGE_ELEMENTS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption', 'figcaption']
@@ -68,44 +70,54 @@ export function normalizeBreaks(children: Inline[], node: Html.ChildNode, contex
     else if (child.type === 'text') changed = appendText(result, child) || changed
     else result.push(child)
   }
-  if (changed) degraded(context, node, 'HTML whitespace around line ending normalized')
+  if (changed) report(context, node, 'import-whitespace-normalized', 'HTML whitespace around a line ending removed')
   return result
 }
 
+function edgeSpace(code: number): boolean { return code === 32 || (code >= 9 && code <= 13 && code !== 11) }
+
+function stripStart(value: string): string {
+  let index = 0
+  while (index < value.length && edgeSpace(value.charCodeAt(index))) index++
+  return value.slice(index)
+}
+
+function stripEnd(value: string): string {
+  let index = value.length
+  while (index > 0 && edgeSpace(value.charCodeAt(index - 1))) index--
+  return value.slice(0, index)
+}
+
+/** C2-M-018: whitespace of every kind and a soft break at the start of the inline content of a block. */
 function trimLeading(children: Inline[]): boolean {
   let trimmed = false
-  while (true) {
-    const first = children[0]
-    if (first?.type === 'soft_break' || (trimmed && first?.type === 'text' && trimStart(first.value) === '')) {
-      children.shift()
-      trimmed = true
-    } else break
+  for (let first = children[0]; first !== undefined; first = children[0]) {
+    if (first.type === 'soft_break') children.shift()
+    else if (first.type !== 'text' || stripStart(first.value) === first.value) break
+    else if (stripStart(first.value) === '') children.shift()
+    else first.value = stripStart(first.value)
+    trimmed = true
   }
-  const first = children[0]
-  if (trimmed && first?.type === 'text') first.value = trimStart(first.value)
   return trimmed
 }
 
+/** C2-M-018, C2-M-019: the same at the end, where a `<br>` renders no line either. */
 function trimTrailing(children: Inline[]): boolean {
   let trimmed = false
-  while (true) {
-    const last = children.at(-1)
-    const before = children.at(-2)
-    if (last?.type === 'soft_break' || (last?.type === 'text' && trimEnd(last.value) === ''
-      && before?.type === 'soft_break')) {
-      children.pop()
-      trimmed = true
-    } else break
+  for (let last = children.at(-1); last !== undefined; last = children.at(-1)) {
+    if (last.type === 'soft_break' || last.type === 'hard_break') children.pop()
+    else if (last.type !== 'text' || stripEnd(last.value) === last.value) break
+    else if (stripEnd(last.value) === '') children.pop()
+    else last.value = stripEnd(last.value)
+    trimmed = true
   }
-  const last = children.at(-1)
-  if (trimmed && last?.type === 'text') last.value = trimEnd(last.value)
   return trimmed
 }
 
 export function trimInlineEdges(children: Inline[], node: Html.ChildNode, context: HtmlContext): Inline[] {
   const leading = trimLeading(children)
   const trailing = trimTrailing(children)
-  if (leading || trailing) degraded(context, node, 'HTML line ending at block edge omitted')
+  if (leading || trailing) report(context, node, 'import-whitespace-normalized', 'Whitespace at the edge of a block removed')
   return children
 }
 
@@ -116,44 +128,100 @@ function textNodes(value: string): Inline[] {
 
 export function inline(node: Html.ChildNode, context: HtmlContext): Inline[] {
   if (isText(node)) return textNodes(node.value)
-  if (isComment(node)) return [{ type: 'raw_inline', format: 'html', value: serializeOuter(node) }]
+  if (isComment(node)) return rawInline(node, context)
   if (isElement(node)) return inlineElement(node, context)
-  unsupported(context, node, 'Doctype has no inline representation')
+  report(context, node, 'import-element-dropped', 'Doctype dropped')
   return []
+}
+
+/** C2-M-065, C2-M-066: a comment or raw element in inline content. */
+function rawInline(node: Html.ChildNode, context: HtmlContext): Inline[] {
+  return keepsRaw(node, context) ? [{ type: 'raw_inline', format: 'html', value: rawValue(node) }] : []
+}
+
+/** C2-M-056, C2-M-058: the treatment of an element in inline content, before the element is read by its row. */
+function treated(node: Html.Element, context: HtmlContext): Inline[] | undefined {
+  const kind = treatment(node)
+  if (kind === 'drop') return dropElement(node, context)
+  // C2-M-066: an `<input>` that is no task box, which its item reads, is raw.
+  if (kind === 'raw' || node.tagName === 'input') return rawInline(node, context)
+  if (kind === 'unwrap' || isOrphan(node)) {
+    if (node.tagName !== 'html' && node.tagName !== 'body') report(context, node, 'import-element-mapped', `HTML ${node.tagName} unwrapped`)
+    return inlineChildren(node, context)
+  }
+  // C2-M-014: a block element in inline content is a span of its inline content.
+  if (kind === 'map' && !isBlockElement(node)) return undefined
+  report(context, node, 'import-element-mapped', `HTML ${node.tagName} read as a span`)
+  return nonEmpty([{ type: 'span', children: inlineChildren(node, context), ...attrs(context, node) }], node, context)
 }
 
 function inlineElement(node: Html.Element, context: HtmlContext): Inline[] {
   const own = carveInline(node, context)
   if (own !== undefined) return own
+  const kept = treated(node, context) ?? leafInline(node, context)
+  if (kept !== undefined) return kept
   const children = inlineChildren(node, context)
   const formatted = formatInline(node, children, context)
-  if (formatted !== undefined) return formatted
+  if (formatted !== undefined) return nonEmpty(formatted, node, context)
+  switch (node.tagName) {
+    case 'a': return nonEmpty(htmlLink(node, children, context), node, context)
+    case 'abbr': return htmlAbbreviation(node, children, context)
+    case 'time': case 'kbd': return [semanticSpan(node, children, context)]
+    default: return nonEmpty([{ type: 'span', children, ...attrs(context, node) }], node, context)
+  }
+}
+
+/** The elements whose children are not read as inline content (C2-M-048, C2-M-049). */
+function leafInline(node: Html.Element, context: HtmlContext): Inline[] | undefined {
   switch (node.tagName) {
     case 'br': return [{ type: 'hard_break' }]
-    case 'wbr': degraded(context, node, 'Word break became a soft break'); return [{ type: 'soft_break' }]
-    case 'span': return [{ type: 'span', children, ...attrs(context, node) }]
-    case 'a': return htmlLink(node, children, context)
     case 'img': return htmlImage(node, context)
     case 'math': return htmlMath(node, context)
     case 'ruby': return htmlRuby(node, context)
-    case 'abbr': return htmlAbbreviation(node, children, context)
-    case 'time': case 'kbd': return [semanticSpan(node, children, context)]
-    case 'input': unsupported(context, node, 'Standalone input has no Carve inline node'); return []
-    default:
-      degraded(context, node, `HTML ${node.tagName} mapped to a span`)
-      return [{ type: 'span', children, ...attrs(context, node) }]
+    case 'code': return [{ type: 'code', value: plain(node), ...attrs(context, node) }]
+    default: return undefined
   }
+}
+
+const NEEDS_CONTENT: ReadonlySet<string> = new Set(['emphasis', 'strong', 'strike', 'delete', 'insert', 'highlight', 'underline',
+  'subscript', 'superscript', 'span', 'link'])
+
+/**
+ * C2-M-069: an inline node that needs content and has none is dropped, except a span with attributes; a drop that loses
+ * an attribute is reported.
+ */
+function nonEmpty(nodes: Inline[], node: Html.Element, context: HtmlContext): Inline[] {
+  return nodes.filter(item => {
+    if (!NEEDS_CONTENT.has(item.type) || !('children' in item) || item.children.length > 0) return true
+    const kept = 'attrs' in item && item.attrs !== undefined
+    if (item.type === 'span' && (kept || item.lang !== undefined || item.dir !== undefined)) return true
+    if (kept) report(context, node, 'import-structure-repaired', `Empty HTML ${node.tagName} with attributes dropped`)
+    return false
+  })
 }
 
 /** The elements a 0.2 render writes for a node of its own, read before the generic mapping. */
 function carveInline(node: Html.Element, context: HtmlContext): Inline[] | undefined {
   if (node.tagName === 'a') return footnoteInline(node, context) ?? anchorCarrier(node, context)
   if (node.tagName === 'span') return spanCarrier(node, context) ?? classedSpan(node, context)
-  if (node.tagName === 'sup' && classList(node).includes('footnote-ref')) {
-    const anchor = elements(node).find(child => child.tagName === 'a')
-    if (anchor) return [{ type: 'footnote_ref', key: footnoteKey(attr(anchor, 'href') ?? ''), namespace: 'footnote' }]
-  }
+  if (node.tagName === 'sup') return noteSup(node, context)
   return undefined
+}
+
+function isNoteRef(node: Html.ChildNode): node is Html.Element {
+  return isElement(node) && node.tagName === 'a' && (attr(node, 'role') === 'doc-noteref' || has(node, 'data-footnote-ref'))
+}
+
+/** C2-M-062: a `<sup>` that only holds a note reference, or whose first class is `footnote-ref`, is that reference alone. */
+function noteSup(node: Html.Element, context: HtmlContext): Inline[] | undefined {
+  const nodes = content(node)
+  const only = nodes.length === 1 ? nodes[0] : undefined
+  if (only !== undefined && isNoteRef(only)) return footnoteInline(only, context)
+  if (classList(node)[0] !== 'footnote-ref') return undefined
+  const anchor = elements(node).find(child => child.tagName === 'a')
+  if (anchor === undefined) return undefined
+  return isNoteRef(anchor) ? footnoteInline(anchor, context)
+    : [{ type: 'footnote_ref', key: footnoteKey(attr(anchor, 'href') ?? ''), namespace: 'footnote' }]
 }
 
 export function footnoteKey(fragment: string): string {
@@ -164,10 +232,8 @@ export function footnoteKey(fragment: string): string {
 
 /** C2-H-088: a note reference; C2-H-114: its key or, on the note, the inline footnote it stands for. */
 function footnoteInline(node: Html.Element, context: HtmlContext): Inline[] | undefined {
-  if (attr(node, 'role') === 'doc-backlink') {
-    degraded(context, node, 'Generated footnote backlink omitted')
-    return []
-  }
+  // C2-M-063: a backlink is dropped without a report.
+  if (isBacklink(node)) return []
   if (attr(node, 'role') !== 'doc-noteref' && !has(node, 'data-footnote-ref')) return undefined
   const href = attr(node, 'href') ?? ''
   const note = context.notes.get(href.startsWith('#') ? href.slice(1) : href)
@@ -278,7 +344,7 @@ function rawSpan(node: Html.Element, format: string, context: HtmlContext): Inli
       : 'the value is no raw format name')
     return undefined
   }
-  return [{ type: 'raw_inline', format, value: plain(node) }]
+  return keepsRaw(node, context) ? [{ type: 'raw_inline', format, value: plain(node) }] : []
 }
 
 const MATH_CLASSES = ['math', 'inline', 'display']
@@ -344,7 +410,7 @@ function htmlMath(node: Html.Element, context: HtmlContext): Inline[] {
     ['application/x-tex', 'text/x-tex', 'LaTeX'].includes(attr(child, 'encoding') ?? ''))
   const source = annotation ? plain(annotation) : attr(node, 'alttext')
   if (source !== undefined) return [{ type: 'math', display: attr(node, 'display') === 'block', value: source }]
-  unsupported(context, node, 'MathML has no TeX annotation or alttext')
+  report(context, node, 'import-element-mapped', 'MathML without a TeX source read as its text')
   return [text(plain(node))]
 }
 
@@ -364,7 +430,7 @@ function htmlRuby(node: Html.Element, context: HtmlContext): Inline[] {
       base = []
     } else base.push(...rubyBase(child, context))
   }
-  if (base.length) degraded(context, node, 'Ruby base without annotation became text')
+  if (base.length) report(context, node, 'import-structure-repaired', 'Ruby base without annotation read as text')
   const ruby: Inline = { type: 'ruby', pairs, ...attrs(context, node) }
   return pairs.length ? [ruby, ...base] : base
 }
@@ -427,7 +493,7 @@ export function htmlImage(node: Html.Element, context: HtmlContext): Inline[] {
   const src = attr(node, 'src')
   const safe = src === undefined ? undefined : safeUrl(context, node.tagName, src, ...at(node))
   const long = attr(node, 'longdesc')
-  const longSafe = long === undefined ? undefined : safeUrl(context, 'img.longdesc', long, ...at(node))
+  const longSafe = long === undefined ? undefined : safeUrl(context, node.tagName, long, ...at(node))
   const longDescription = longSafe !== undefined ? [paragraph([{ type: 'link' as const, href: longSafe,
     children: [text(longSafe)] }])] : undefined
   const ref = reference(node, context)
@@ -450,7 +516,6 @@ function formatInline(node: Html.Element, children: Inline[], context: HtmlConte
     case 'u': return [{ type: 'underline', children, ...mapped() }]
     case 'sub': return [{ type: 'subscript', children, ...mapped() }]
     case 'sup': return [{ type: 'superscript', children, ...mapped() }]
-    case 'code': return [{ type: 'code', value: plain(node), ...mapped() }]
     default: return undefined
   }
 }
