@@ -50,6 +50,7 @@ export const AS_LINE = 2
 /** Where the first unit of a leaf stands: at the start of a content line, or behind a mark on its line. */
 export const LINE_START = 1
 export const AFTER_MARK = 0
+export const IN_TITLE = 2
 
 const LF = 10
 const SPACE = 32
@@ -271,7 +272,8 @@ function angle(leaf: Leaf, at: number, escaped: Uint8Array): void {
 /** C2-B-133: `%%` at the start of a line or after whitespace opens a line comment; its first `%` takes the backslash. */
 function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-025: `%}` closes only a braced comment of text, whose `{%` the brace resolver leaves to the repair.
-  if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
+  // C2-I-023: a line comment starts only on a line of content, which a title is not.
+  if (leaf.inTitle || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
   const before = code(leaf, at - 1)
   if (before === 37 || before === 123) return undecide(leaf, 'mark %')
   if (isSpace(before)) escaped[at] = 1
@@ -612,6 +614,7 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
 function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number, place: LeafPlace | undefined): Uint8Array {
   const escaped = new Uint8Array(leaf.codes.length)
   leaf.inCell = (flags & IN_CELL) !== 0
+  leaf.inTitle = start === IN_TITLE
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)

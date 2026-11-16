@@ -16,7 +16,7 @@ import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.
 import { BARE_BREAKS, bracedComment, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
-import { AFTER_MARK, AS_CONTENT, AS_LINE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
+import { AFTER_MARK, AS_CONTENT, AS_INLINES, AS_LINE, IN_TITLE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
 import { parseChunk } from './write-check.ts'
 import { longestBareRun } from './write-fences.ts'
 import { tableAttribute, writeTable } from './write-table.ts'
@@ -311,8 +311,8 @@ function blockQuote(w: Writer, node: BlockQuoteNode, prefix: string, flags: numb
 
 function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, flags: number): string {
   const inlines = node.title
-  if (inlines !== undefined) unplanned(w, 'title')
-  const title = inlines === undefined ? null : writeInlines(w, inlines, flags)
+  // C2-B-119: the quoted title is one line of inline content behind the opener.
+  const title = inlines === undefined ? null : planLeaf(w, inlines, flags, writeInlines(w, inlines, flags), AS_INLINES, IN_TITLE)
   return openerTail(w, node, title, title ?? '')
 }
 

@@ -44,6 +44,8 @@ export interface Leaf {
   braceFailEnd: number
   /** The leaf is the content of a table cell. */
   inCell: boolean
+  /** The leaf is the quoted title of a div opener, which is no line of content (C2-B-119). */
+  inTitle: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number
   /** The last `%}` and the last `#}`, once a brace asked for them. */
@@ -63,8 +65,8 @@ export interface Leaf {
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, lastAtomTick: -1, closes: null, extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, closes: null,
+    extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 

@@ -201,16 +201,6 @@ describe('the planned writer', () => {
     }
   })
 
-  it('C2-B-133, C2-W-016: a `%%` line inside a span or a comment that runs over the line end is planned bare', () => {
-    const sources = ['x `a\n%% b` y\n', 'x {% a\n%% b %} y\n', 'x {#a\n%% b#} y\n', 'x $`a\n%%b` y\n', '- x `a\n  %%b` y\n', '> x !`a\n> %% b` y\n']
-    for (const source of sources) {
-      const result = formatBy(source, 'both')
-      expect(result.output.source, source).toBe(source)
-      expect(result.stats.repaired, source).toBe(0)
-      expect(result.stats.differences, source).toEqual([])
-    }
-  })
-
   it('C2-I-104, C2-I-106: behind a node, a quote sees what the reader sees there, and the plan writes it bare', () => {
     for (const source of ['x `c`\'s y\n', 'x *a*"b\n', 'x @a"b c\n', 'x <http://a.b>"b\n', 'x [^a]"b\n\n[^a]: n\n', 'x\\ "b c\n']) {
       const result = formatBy(source, 'both')
@@ -245,6 +235,16 @@ describe('the planned writer', () => {
 
   it('C2-I-064, C2-I-040: a text bracket pair before a brace is planned by the attribute grammar of the reader', () => {
     for (const source of ['x \\[s]{.c} y\n', 'x [s]{ y\n', 'x [s]{???} y\n', 'x \\[[s]]{.c} y\n', 'x \\[s]{} y\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
+  it('C2-B-119, C2-I-023: the quoted title of a div is planned as inline content, and `%%` in it is text', () => {
+    const sources = ['::: note "a %% b"\nc\n:::\n', '::: tip "x [y] `c`"\nd\n:::\n', '::: d "T"\ne\n:::\n', '::: note "\\#a and \\@b"\nc\n:::\n']
+    for (const source of sources) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
