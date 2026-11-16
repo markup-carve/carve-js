@@ -91,3 +91,11 @@ describe('the neighbors of plus-minus and arrows', () => {
     expect(render('+{%x%}+-b and a+-{%x%}+ and a+-{%x%}c')).toBe('<p>++-b and a+-+ and a±c</p>')
   })
 })
+
+describe('block image paragraphs', () => {
+  it('C2-H-020: an attributed block image paragraph keeps its <p>, which carries the attributes and the lang', () => {
+    expect(render('{.c #i}\n![a](x.png)\n\n{:de}\n![b](y.png)\n\n![c](z.png)\n')).toBe([
+      '<p id="i" class="c"><img src="x.png" alt="a"></p>', '<p lang="de"><img src="y.png" alt="b"></p>', '<img src="z.png" alt="c">',
+    ].join('\n'))
+  })
+})

@@ -194,7 +194,10 @@ function simpleBlockElement(node: Html.Element, context: HtmlContext): Block[] |
 
 function paragraphElement(node: Html.Element, context: HtmlContext): Block {
   const children = inlineChildren(node, context)
-  const base = runParagraph(children)
+  // C2-H-020: a block image keeps its `<p>` where the paragraph carries attributes or a `lang`. C2-B-197: a shortcut never is one.
+  const only = children.length === 1 ? children[0] : undefined
+  const image: Block = { type: 'paragraph', role: 'image', children }
+  const base = only?.type === 'image' && only.refForm !== 'shortcut' ? image : runParagraph(children)
   return { ...base, ...attrs(context, node, [], true) }
 }
 

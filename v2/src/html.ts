@@ -1,6 +1,6 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
 import {
-  type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
+  type AdmonitionNode, type Attrs, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
   forEachSlot,
   type FigureGroupNode, type FigureNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
@@ -84,12 +84,19 @@ function isVisible(node: Node): boolean {
   return node.type !== 'paragraph' || !onlyComments(node.children)
 }
 
-/** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
+/**
+ * C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`,
+ * and so does one whose paragraph carries attributes or a `lang`, which the `<p>` carries.
+ */
 function isBareImage(node: ParagraphNode): boolean {
-  if (node.role !== 'image') return false
+  if (node.role !== 'image' || node.lang !== undefined || hasAttributes(node.attrs)) return false
   // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
   for (const child of node.children) if (child.type === 'image') return child.key === undefined || child.src !== undefined
   return false
+}
+
+function hasAttributes(attrs: Attrs | undefined): boolean {
+  return attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || (attrs.keyValues?.length ?? 0) > 0)
 }
 
 /** A paragraph that is written as `<p>`. */
