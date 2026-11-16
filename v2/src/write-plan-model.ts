@@ -50,6 +50,8 @@ export interface Leaf {
   lastAtomTick: number
   /** Per ASCII mark, the last `}` behind it, once a brace asked for them. */
   closes: Int32Array | null
+  /** Per ASCII mark, the first `{` before it, once a hyphen run asked for them. */
+  opens: Int32Array | null
   /** The unit of the last `]` of the leaf, of any kind, or -1. */
   lastBracket: number
   /** C2-I-094: the opening bracket of each inline extension of text, with its colon. */
@@ -66,7 +68,7 @@ export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     singleQuoteOpen: false, footnoteQuotes: [], angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, closes: null,
-    extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    opens: null, extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 

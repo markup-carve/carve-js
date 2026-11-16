@@ -92,10 +92,25 @@ function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = code(leaf, at - 1)
   const after = code(leaf, end)
   // C2-I-115, C2-I-117: an arrow, a braced mark or `+-` that the run could make with its neighbors.
-  if (before === 43 || (end - at > 1 && (before === 123 || before === 60 || after === 125 || after === 62))) {
+  // C2-I-057: `-}` closes only while a `{-` is open, so with none before the run it is text.
+  const closer = after === 125 && firstOpen(leaf, 45) < at
+  if (before === 43 || (end - at > 1 && (before === 123 || before === 60 || closer || after === 62))) {
     return undecide(leaf, 'hyphen neighbor')
   }
   for (let unit = at + 1; unit < end; unit += 2) escaped[unit] = 1
+}
+
+/** The first `{` of the leaf before the ASCII mark `value`, or the leaf's length; found once per leaf for every mark. */
+function firstOpen(leaf: Leaf, value: number): number {
+  if (leaf.opens === null) {
+    const opens = new Int32Array(128).fill(leaf.codes.length)
+    for (let at = leaf.codes.length - 2; at >= 0; at--) {
+      const mark = leaf.codes[at] === 123 ? leaf.codes[at + 1]! : 128
+      if (mark < 128) opens[mark] = at
+    }
+    leaf.opens = opens
+  }
+  return leaf.opens[value] ?? leaf.codes.length
 }
 
 /** C2-W-095: a straight quote of text would read as a smart quote. */

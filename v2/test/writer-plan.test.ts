@@ -433,6 +433,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-057, C2-W-099: a hyphen run of text before `}` with no `{-` before it closes nothing, and the plan escapes the run', () => {
+    for (const source of ['a -\\-} b\n', 'a -\\--} b\n', '*a* -\\-}x\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    expect(formatBy('{-a -\\-} b\n', 'both').stats.repaired).toBe(1)
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')
