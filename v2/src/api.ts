@@ -108,7 +108,7 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
   if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi)
   const run = applyProfile(document, settings.profile, rule, losses)
   try {
-    return renderDocument(document, settings, liveResolution(resolved.resolution, run.gone), losses, resolved.bidi)
+    return renderDocument(document, settings, liveResolution(resolved.resolution, run.gone, run.goneTargets), losses, resolved.bidi)
   } finally {
     run.restore()
   }

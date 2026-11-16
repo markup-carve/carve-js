@@ -165,8 +165,10 @@ function link(node: LinkNode, r: Render): string {
   if (r.linkDepth > 0) return children(r, node)
   const key = node.key
   const href = node.href
-  if (key !== undefined && href === undefined) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
   const definition = key === undefined ? undefined : r.resolution.definitions.get(key)
+  // C2-H-177: a reference that resolved to a heading the profile degraded is written unresolved.
+  const gone = definition === undefined && href !== undefined && r.resolution.goneTargets?.has(href) === true
+  if (key !== undefined && (href === undefined || gone)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
   if (title !== undefined) structural.push(['title', title])
@@ -206,7 +208,7 @@ function autolink(node: AutolinkNode, r: Render): string {
 function xref(node: XrefNode, r: Render): string {
   const href = node.href
   // C2-H-086: unresolved, the characters as typed.
-  if (href === undefined) return escapeText(`</#${node.key}>`)
+  if (href === undefined || r.resolution.goneTargets?.has(href) === true) return escapeText(`</#${node.key}>`)
   // C2-H-097: the generated text is plain text.
   const text = escapeText(r.resolution.xrefText.get(node) ?? '')
   if (r.linkDepth > 0) return text

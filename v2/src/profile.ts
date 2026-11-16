@@ -23,12 +23,16 @@ interface Filter {
   undo: [Node[], Node[]][]
   /** The footnote references and inline footnotes inside degraded nodes: they write no reference. */
   gone: Set<Node>
+  /** C2-H-177: the `#id` targets of the degraded headings, which write no id. */
+  goneTargets: Set<string>
 }
 
 /** What a profile did to a tree for one render. */
 export interface ProfileRun {
   /** The footnote references and inline footnotes that the degraded forms took out. */
   readonly gone: ReadonlySet<Node>
+  /** C2-H-177: the targets of the headings that the profile degraded. */
+  readonly goneTargets: ReadonlySet<string>
   /** Puts every list the profile changed back as it was. */
   restore(): void
 }
@@ -202,6 +206,10 @@ function degradedInline(node: Inline): TextNode[] {
 /** Notes the footnote references and inline footnotes inside the degraded node `node`. */
 function noteGone(filter: Filter, node: Node): void {
   if (node.type === 'footnote_ref' || node.type === 'inline_footnote') filter.gone.add(node)
+  if (node.type === 'heading') {
+    const id = node.attrs?.id ?? node.generatedId
+    if (id !== undefined) filter.goneTargets.add(`#${id}`)
+  }
   forEachSlot(node, (nodes) => {
     for (const child of nodes) noteGone(filter, child)
   }, undefined, filter.declarations)
@@ -303,10 +311,11 @@ function filterNode(filter: Filter, node: Node, depth: number): void {
  * render calls `restore` when it has written the tree (C2-H-121).
  */
 export function applyProfile(document: DocumentNode, name: string, rule: ProfileRule, findings: Findings): ProfileRun {
-  const filter: Filter = { name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set() }
+  const filter: Filter = { name, rule, findings, declarations: document.extensions ?? [], undo: [], gone: new Set(), goneTargets: new Set() }
   filterNode(filter, document, 0)
   return {
     gone: filter.gone,
+    goneTargets: filter.goneTargets,
     restore: () => {
       // The lists are put back from the last change on, so a list inside a degraded part comes back before its parent.
       for (const [list, before] of [...filter.undo].reverse()) {
@@ -321,8 +330,8 @@ export function applyProfile(document: DocumentNode, name: string, rule: Profile
  * The resolution as the render sees it under a profile: a note keeps its number, and only the
  * references that the degraded forms left write a backlink. A note with none writes nothing.
  */
-export function liveResolution(resolution: Resolution, gone: ReadonlySet<Node>): Resolution {
-  if (gone.size === 0) return resolution
+export function liveResolution(resolution: Resolution, gone: ReadonlySet<Node>, goneTargets: ReadonlySet<string>): Resolution {
+  if (gone.size === 0 && goneTargets.size === 0) return resolution
   const goneIds = new Set<string>()
   for (const node of gone) {
     const id = resolution.refIds.get(node)
@@ -333,5 +342,5 @@ export function liveResolution(resolution: Resolution, gone: ReadonlySet<Node>):
     const refIds = note.refIds.filter((id) => !goneIds.has(id))
     if (refIds.length > 0) notes.push({ ...note, refIds })
   }
-  return { ...resolution, notes }
+  return { ...resolution, notes, goneTargets }
 }

@@ -1,6 +1,8 @@
 // The rulings of the 0.2 specification that the engine follows: one describe per ruling, each test named by its clause.
 import { describe, expect, it } from 'vitest'
-import { CarveOptionError, CarveTreeError, type DocumentNode, parse, parseWithDiagnostics, render, validateTree } from '../src/index.ts'
+import {
+  CarveOptionError, CarveTreeError, type DocumentNode, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree, validateTree,
+} from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
 import { UNICODE_VERSION } from '../src/unicode-tables.ts'
 
@@ -134,5 +136,22 @@ describe('degraded captions', () => {
   it('C2-H-165: the caption of a degraded figure, table or figure group keeps its number', () => {
     expect(render('![i](a.png)\n^ Figure #: cap\n\n| t |\n^ Table #: tc\n\n:::: figure\n::::\n^ Empty #\n', { profile: 'comment' }))
       .toBe('<p>[img: i]</p>\n<p>Figure 1: cap</p>\n<p>t</p>\n<p>Table 1: tc</p>\n<p>Empty 1</p>')
+  })
+})
+
+describe('references to degraded headings', () => {
+  const source = '## Sub *em* `code`\n\n[Sub em code][] and </#Sub-em-code>\n'
+
+  it('C2-H-177: a reference to a heading the profile degrades is written in its unresolved form', () => {
+    expect(render(source, { profile: 'comment' })).toBe('<p>## Sub em code</p>\n<p>[Sub em code][] and &lt;/#Sub-em-code&gt;</p>')
+    expect(render('{#h}\n## Sub\n\n[x][Sub]{.c} and </#h>\n', { profile: 'article' })).toContain('<a href="#h" class="c">x</a>')
+  })
+
+  it('C2-H-177, C2-H-121: resolution does not read the profile, so the tree is the same with and without it', () => {
+    const plain = resolveTree(parseTree(source)).document
+    const profiled = resolveTree(parseTree(source), { profile: 'comment' })
+    expect(profiled.document).toEqual(plain)
+    renderTree(profiled)
+    expect(profiled.document).toEqual(plain)
   })
 })

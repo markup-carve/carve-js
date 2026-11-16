@@ -41,6 +41,8 @@ export interface Resolution {
   /** The findings of resolution, each with its node. `diagnostics` is the list of its entries. */
   findings: Findings
   diagnostics: Diagnostic[]
+  /** C2-H-177: for a render under a profile, the `#id` targets of the degraded headings. */
+  goneTargets?: ReadonlySet<string>
 }
 
 /** One taker of a sequence number: a caption with its host, or a numbered equation of a supplied tree (C2-H-151). */
