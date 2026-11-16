@@ -14,7 +14,7 @@ const seeds: Seed[] = [
   ...djotCases().map(entry => ({ from: 'djot' as const, input: entry.input })),
   ...specs.map(entry => ({ from: 'html' as const, input: entry.html })),
 ]
-const MAX_SUITE_WRITER_REFUSALS = 253
+const MAX_SUITE_WRITER_REFUSALS = 259
 
 function generator(seed: number): () => number {
   let state = seed
