@@ -287,6 +287,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-081, C2-B-084, C2-B-024: a bracket pair before a colon opens a definition only where a first line starts one', () => {
+    const sources = ['x [a]: y\n', 'x\n[a]: y\n', '> [a]: /u\n', '- [a]: /u\n', '= [a]: b\n', 'x [a]:\n', '\\*[A]: b\n', '*[a-b]: x\n']
+    for (const source of sources) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

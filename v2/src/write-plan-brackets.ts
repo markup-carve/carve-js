@@ -6,8 +6,8 @@ import { CLOSE, ESCAPE, type Leaf, OPEN, TEXT, undecide } from './write-plan-mod
 
 const OPENING = 91
 const CLOSING = 93
-// `(` destination, `[` reference, `{` attribute block, `:` definition (C2-I-064, C2-I-066, C2-I-072, C2-B-081).
-const FOLLOWERS = '([{:'
+// `(` destination, `[` reference, `{` attribute block (C2-I-064, C2-I-066, C2-I-072).
+const FOLLOWERS = '([{'
 
 function isBracket(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   const kind = leaf.kinds[at]
@@ -68,6 +68,9 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
   if (next === '[' && isReadText(leaf, closer + 1, escaped)) return closer === opener + 1 ? NO_DECISION : labelEnd(leaf, closer + 2)
   if (next === '{' && isReadText(leaf, closer + 1, escaped)) return braceReading(leaf, closer + 1, escaped)
+  // C2-B-081, C2-B-084: a definition or an abbreviation opens only at the start of a paragraph's first line, which the
+  // line rules decide with the reader's shapes.
+  if (next === ':') return LITERAL
   return next === '' || !FOLLOWERS.includes(next) ? LITERAL : NO_DECISION
 }
 

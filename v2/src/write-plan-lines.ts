@@ -2,7 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
-import { isDefinition, taskBoxEnd } from './lines.ts'
+import { isAbbreviation, isDefinition, taskBoxEnd } from './lines.ts'
 import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
@@ -181,7 +181,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
   switch (value) {
     case 62: return quoteMark(leaf, at)
     case 45: return hyphenLine(leaf, at, place)
-    case 42: return runEnd(leaf, at, 42) - at >= 3 ? anyLine(leaf, at, 42) : bullet(leaf, at)
+    case 42: return runEnd(leaf, at, 42) - at >= 3 ? anyLine(leaf, at, 42) : starLine(leaf, at, place)
     case 46: return bareDot(leaf, at)
     case 58: return colon(leaf, at, place)
     default: return otherLine(leaf, at, value, place, true)
@@ -279,6 +279,15 @@ function bracketLine(leaf: Leaf, at: number, place: LeafPlace, first: boolean): 
   const [line, whole] = textOfLine(leaf, at)
   if (!whole) return UNDECIDED
   return isDefinition(line, 0, line.length) ? at : NO_ESCAPE
+}
+
+/** C2-B-084, C2-B-081: on the first line outside every container, `*[` opens an abbreviation where its shape matches. */
+function starLine(leaf: Leaf, at: number, place: LeafPlace): number {
+  if (code(leaf, at + 1) !== 91 || place.nested) return bullet(leaf, at)
+  // A node behind the text is content the expansion needs after its space.
+  const [line, whole] = textOfLine(leaf, at)
+  const shape = whole ? line : `${line}x`
+  return isAbbreviation(shape, 0, shape.length) ? at : NO_ESCAPE
 }
 
 /** C2-B-046: a task box stands directly after the marker, so only the first line of the first block of an item has one. */
