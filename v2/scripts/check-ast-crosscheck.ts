@@ -63,6 +63,8 @@ const BEYOND_SCHEMA = [
   'a caption needs a paragraph whose role is image or math',
   // C2-A-093: a row span that reaches past the last row of its group is refused; the schema cannot count rows.
   'a row span reaches past the last row of its group',
+  // C2-N-017: an include with children names its file; the schema states the two fields apart.
+  'an expanded include names its file',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {

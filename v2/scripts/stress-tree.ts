@@ -14,7 +14,8 @@ import { runInNewContext } from 'node:vm'
 import { parse, render } from '../src/index.ts'
 import { SHAPES } from './stress-inline.ts'
 
-export type Shape = readonly [string, (size: number) => string]
+/** A shape: its name, its document for a size, and for an include shape the files its resolver serves at that size. */
+export type Shape = readonly [string, (size: number) => string, ((size: number) => Readonly<Record<string, string>>)?]
 
 function option(name: string, fallback: string): string {
   const at = process.argv.indexOf(`--${name}`)
@@ -128,6 +129,35 @@ export const BLOCK_SHAPES: readonly Shape[] = [
 
 const INLINE_SHAPES: readonly Shape[] = SHAPES.map(([name, build]): Shape => [`inline: ${name}`, (size) => `x ${build(size)}`])
 
+// C2-N-064: a chain of includes is at most 16 files deep, so a deep shape repeats a chain of this length.
+const CHAIN = 16
+const FANOUT = 100
+
+function chain(): Record<string, string> {
+  const files: Record<string, string> = { [`f${CHAIN}`]: 'leaf [x][r]\n' }
+  for (let at = 0; at < CHAIN; at++) files[`f${at}`] = `= Level ${at}\n\n{{ f${at + 1} @shift:auto }}\n`
+  return files
+}
+
+// C2-N-018, C2-N-067: expansion takes time linear in the size of the expanded tree, wide or deep.
+export const INCLUDE_SHAPES: readonly Shape[] = [
+  ['includes of one file', (size) => '{{ a }}\n\n'.repeat(size), () => ({ a: 'A [x][r] *b* [^n]\n\n[^n]: note\n' })],
+  ['one include of a file of many blocks', () => '[r]: /u\n\n{{ big }}\n', (size) => ({ big: 'a [x][r]\n\n'.repeat(size) })],
+  ['chains of includes 16 files deep', (size) => `[r]: /u\n\n${'{{ f0 }}\n\n'.repeat(Math.ceil(size / CHAIN))}`, chain],
+  ['includes that hold many includes', (size) => '{{ mid }}\n\n'.repeat(Math.ceil(size / FANOUT)),
+    () => ({ mid: '- {{ leaf }}\n'.repeat(FANOUT), leaf: '= H\n\ntext\n' })],
+  ['sections of an included file', (size) => '{{ a #s @shift:1 }}\n\n'.repeat(size), () => ({ a: '= A\n\n{#s}\n= S\n\nbody\n\n= B\n' })],
+  ['lines and regions of an included file', (size) => '{{ a @lines:2-3 }}\n\n{{ a @region:r }}\n\n'.repeat(size),
+    () => ({ a: 'x\n%% #region r\ny\n%% #endregion\n' })],
+  ['code includes of a table', (size) => '{table}\n{{ t.csv @rows:2-3 @cols:"b,a" @code:csv }}\n\n'.repeat(size),
+    () => ({ 't.csv': 'a,b\n1,2\n3,4\n' })],
+]
+
+function includesOf(files: Readonly<Record<string, string>>): { includes: { resolver: (request: { path: string }) => unknown } } {
+  return { includes: { resolver: (request) => (Object.hasOwn(files, request.path) ? { text: files[request.path], id: request.path }
+    : { error: 'not_found' }) } }
+}
+
 // carve-php 0.1.17 needed three times the memory of 0.1.16 on one document. Bytes per byte of
 // input on 10 MB of the CommonMark core fixture, each bound twice the value measured on
 // 14 November 2026: the heap `render` takes before a collection (51), the heap of the tree
@@ -180,12 +210,13 @@ if (process.argv[1] === import.meta.filename) {
   console.log(`| Shape | parse ${sizes.join(' | parse ')} | Step | render ${sizes.join(' | render ')} | Step |`)
   console.log(`|---|${sizes.map(() => '--:').join('|')}|--:|${sizes.map(() => '--:').join('|')}|--:|`)
   let worst = 0
-  for (const [name, build] of [...BLOCK_SHAPES, ...INLINE_SHAPES]) {
+  for (const [name, build, filesOf] of [...BLOCK_SHAPES, ...INLINE_SHAPES, ...INCLUDE_SHAPES]) {
     if (!name.includes(only)) continue
     const sources = sizes.map(build)
+    const options = sizes.map((size) => (filesOf === undefined ? undefined : includesOf(filesOf(size))))
     const columns: string[] = []
     for (const action of [parse, render] as const) {
-      const times = sources.map((src) => time(() => void action(src)))
+      const times = sources.map((src, at) => time(() => void action(src, options[at] as never)))
       const step = times[times.length - 1]! / Math.max(times[times.length - 2]!, 0.5)
       worst = Math.max(worst, step)
       columns.push(`${times.map((ms) => ms.toFixed(1)).join(' | ')} | ${step.toFixed(1)}`)
