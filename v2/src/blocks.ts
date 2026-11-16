@@ -257,7 +257,8 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
   const leaf = state.leaf
   const above = state.above
   const line = state.lineCount - 1
-  if (blank) {
+  // C2-B-113 names the code fence, the comment block and the line block; frontmatter keeps its blank lines (C2-A-049).
+  if (blank && leaf.kind !== FRONTMATTER) {
     // Held back: blank lines before the end of an unclosed leaf are not its content (C2-B-009).
     if (above.heldBlankLine === NO_LINE) above.heldBlankLine = line
     return

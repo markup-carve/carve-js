@@ -22,7 +22,8 @@ export function checkDocument(src: string): string | null {
     if (shapeOf(src, buildTree(state.events, state.eventLength)) !== first) return 'a second parse differs'
     const terminated = src.endsWith('\n') ? src : `${src}\n`
     if (shape(terminated) !== first) return 'a final line ending changes the tree'
-    if (shape(`${terminated}\n`) !== first) return 'a trailing blank line changes the tree'
+    // C2-B-113 names its blocks; an unclosed frontmatter block takes the trailing blank line as written (C2-A-049).
+    if (!first.startsWith('fm!') && shape(`${terminated}\n`) !== first) return 'a trailing blank line changes the tree'
     return null
   } finally {
     releaseState(state)

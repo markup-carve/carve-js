@@ -225,3 +225,13 @@ describe('C2-B-084: an abbreviation expansion keeps what follows the one space',
     for (const src of ['*[B]:', '*[B]: ', '*[B]:   ', '*[B]: \t', '*[B]:\tx']) expect(first(src)['type']).toBe('paragraph')
   })
 })
+
+describe('C2-A-049, C2-B-113: an unclosed frontmatter block keeps its trailing blank lines', () => {
+  it('C2-B-163: the block runs to the end of the document, blank lines included', () => {
+    expect(first('---\nx\n  ')).toMatchObject({ type: 'frontmatter', value: 'x\n  \n' })
+    expect(first('---\nx\n\n')).toMatchObject({ type: 'frontmatter', value: 'x\n\n' })
+    expect(first('---\nx\n\n\ny\n')).toMatchObject({ type: 'frontmatter', value: 'x\n\n\ny\n' })
+    expect(first('---\nx\n\n---\n')).toMatchObject({ type: 'frontmatter', value: 'x\n\n' })
+    expect(render('---\nx\n  ')).toBe('')
+  })
+})
