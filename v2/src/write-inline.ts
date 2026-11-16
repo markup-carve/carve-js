@@ -292,8 +292,23 @@ export function rawReference(w: Writer, node: LinkNode | ImageNode, flags: numbe
   if (!raw.includes('\n')) return raw
   // C2-W-067: a break inside a label of a cell is not kept; the label folds it to a space (C2-I-079).
   if ((flags & IN_CELL) !== 0) return raw.replaceAll(/[ \t]*\n[ \t]*/g, ' ')
-  // C2-W-022: no space or tab stands at the end of a line of it.
-  return raw.replaceAll(/[ \t]+\n/g, '\n')
+  return trimLineEnds(raw)
+}
+
+/** C2-W-022: no space or tab stands at the end of a line, except a space that an odd run of backslashes escapes (C2-I-002). */
+function trimLineEnds(raw: string): string {
+  let out = ''
+  let from = 0
+  for (let end = raw.indexOf('\n'); end >= 0; end = raw.indexOf('\n', end + 1)) {
+    let cut = end
+    while (cut > from && (raw[cut - 1] === ' ' || raw[cut - 1] === '\t')) cut--
+    let slashes = 0
+    while (cut - slashes > from && raw[cut - 1 - slashes] === '\\') slashes++
+    if (slashes % 2 === 1 && raw[cut] === ' ') cut++
+    out += `${raw.slice(from, cut)}\n`
+    from = end + 1
+  }
+  return out + raw.slice(from)
 }
 
 function linkNode(w: Writer, node: LinkNode, flags: number): string {

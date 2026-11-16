@@ -83,3 +83,13 @@ describe('a code span whose value starts with a line break', () => {
     }
   })
 })
+
+describe('the spaces at the end of a line of a reference label', () => {
+  it('C2-W-022, C2-I-002: a space that a backslash escapes stays, so it is no hard break', () => {
+    for (const [input, written] of [['[\\ \n][]', '[\\ \n][]\n'], ['[\\\\ \n][]', '[\\\\\n][]\n'], ['[a \\  \n][]', '[a \\ \n][]\n']]) {
+      const out = formatWithDiagnostics(input!)
+      expect(out.source, input).toBe(written)
+      expect(treesEqual(parse(out.source), parse(input!)), input).toBe(true)
+    }
+  })
+})
