@@ -207,3 +207,21 @@ describe('C2-H-149, C2-A-084: a figure group nested in a group is no panel', () 
     expect(render('::: figure\n| x |\n^ Table #: Panel\n:::\n')).toContain('Table #: Panel')
   })
 })
+
+describe('C2-B-084: an abbreviation expansion keeps what follows the one space', () => {
+  const expansion = (src: string): unknown => first(src)['expansion']
+
+  it('C2-B-084: a leading space or tab stays in the expansion; the spaces and tabs that end the line do not', () => {
+    expect(expansion('*[B]:  lead')).toBe(' lead')
+    expect(expansion('*[B]: \tlead')).toBe('\tlead')
+    expect(expansion('*[B]:   two  ')).toBe('  two')
+    expect(expansion('*[B]: lead \t ')).toBe('lead')
+    expect(expansion('*[B]: a  b')).toBe('a  b')
+    expect(render('*[HTML]:  Hyper Text\n\nHTML')).toBe('<p><abbr title=" Hyper Text">HTML</abbr></p>')
+    expect(render('*[HTML]: \tHyper Text\n\nHTML')).toBe('<p><abbr title="\tHyper Text">HTML</abbr></p>')
+  })
+
+  it('C2-B-084: with no expansion behind the one space the line is text', () => {
+    for (const src of ['*[B]:', '*[B]: ', '*[B]:   ', '*[B]: \t', '*[B]:\tx']) expect(first(src)['type']).toBe('paragraph')
+  })
+})

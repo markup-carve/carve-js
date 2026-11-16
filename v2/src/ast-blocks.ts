@@ -22,8 +22,8 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { braceBlocksEnd, orderedDelimiter } from './lines.ts'
-import { lineFeedAt, trimSpaces } from './source.ts'
+import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
+import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
 import { finishPositions, utf8Length } from './positions.ts'
@@ -190,10 +190,14 @@ function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
   return { type: 'abbreviation_def', expansion, key, namespace: 'abbr' }
 }
 
-/** C2-B-084: the label and the expansion of an abbreviation definition. */
+/**
+ * C2-B-084: the label and the expansion of an abbreviation definition. Exactly one space follows the
+ * colon; the expansion keeps a leading space or tab and drops the spaces and tabs that end the line.
+ */
 function abbreviationParts(src: string, node: BlockNode): [string, string] {
   const [start, end] = definitionLabel(src, node.start)
-  return [src.slice(start, end), trimSpaces(src.slice(end + 2, node.spans![1]))]
+  const from = end + 3
+  return [src.slice(start, end), src.slice(from, trimEnd(src, from, node.spans![1]!))]
 }
 
 function linkDefinitionNode(ctx: TreeContext, node: BlockNode): LinkReferenceDefinitionNode {
