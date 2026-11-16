@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { parse, render, treesEqual, type DocumentNode } from '../../v2/src/index.ts'
 import { generate, loadCorpus, random } from '../../v2/proptest/generate.ts'
 import { importDocument } from '../src/index.ts'
+import { project } from './roundtrip-losses.ts'
+import { holdsCarrier } from '../src/html-notes.ts'
+import { parseFragment } from 'parse5'
 
 type Value = unknown
 type Fields = Record<string, unknown>
@@ -14,9 +17,12 @@ const results = (JSON.parse(readFileSync(join(root, 'v2/data/ast-results.json'),
   { nodes: Record<string, ResultEntry[]> }).nodes
 const GEOMETRY = ['pos', 'segments', 'srcByteLength']
 
-export interface Outcome { equal: boolean, classes: string[], html: string, error?: string }
+/** `raw`: the trees are equal as they stand; `equal`: equal once the losses of `losses` are applied to the parsed tree. */
+export interface Outcome { raw: boolean, equal: boolean, classes: string[], losses: string[], html: string, error?: string }
 export interface ClassTally { documents: number, example: string }
-export interface Report { documents: number, equal: number, errors: number, classes: Map<string, ClassTally> }
+export interface Report {
+  documents: number, raw: number, equal: number, errors: number, classes: Map<string, ClassTally>, losses: Map<string, ClassTally>
+}
 
 function isFields(value: Value): value is Fields {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -135,26 +141,29 @@ function withoutProvenance(document: DocumentNode): DocumentNode {
   return copy
 }
 
+function htmlHoldsCarrier(html: string): boolean {
+  return holdsCarrier(parseFragment(html).childNodes)
+}
+
 /** One round trip of `source`. */
 export function roundTrip(source: string): Outcome {
   const expected = parse(source)
   const html = render(source, { roundtrip: true })
+  const projected = project(expected, htmlHoldsCarrier(html))
   try {
     const actual = withoutProvenance(importDocument(html, { from: 'html' }).document)
-    const equal = treesEqual(expected, actual)
-    return { equal, classes: equal ? [] : diffTrees(expected, actual), html }
+    const raw = treesEqual(expected, actual)
+    const equal = raw || treesEqual(projected.tree, actual)
+    return { raw, equal, classes: equal ? [] : diffTrees(projected.tree, actual), losses: raw ? [] : projected.losses, html }
   } catch (error) {
-    return { equal: false, classes: ['import: exception'], html, error: String(error) }
+    return { raw: false, equal: false, classes: ['import: exception'], losses: [], html, error: String(error) }
   }
 }
 
-export function tally(report: Report, source: string, outcome: Outcome): void {
-  report.documents++
-  if (outcome.equal) report.equal++
-  if (outcome.error !== undefined) report.errors++
-  for (const name of outcome.classes) {
-    const entry = report.classes.get(name)
-    if (entry === undefined) report.classes.set(name, { documents: 1, example: source })
+function count(map: Map<string, ClassTally>, names: readonly string[], source: string): void {
+  for (const name of names) {
+    const entry = map.get(name)
+    if (entry === undefined) map.set(name, { documents: 1, example: source })
     else {
       entry.documents++
       if (source.length < entry.example.length) entry.example = source
@@ -162,8 +171,17 @@ export function tally(report: Report, source: string, outcome: Outcome): void {
   }
 }
 
+export function tally(report: Report, source: string, outcome: Outcome): void {
+  report.documents++
+  if (outcome.raw) report.raw++
+  if (outcome.equal) report.equal++
+  if (outcome.error !== undefined) report.errors++
+  count(report.classes, outcome.classes, source)
+  count(report.losses, outcome.losses, source)
+}
+
 export function emptyReport(): Report {
-  return { documents: 0, equal: 0, errors: 0, classes: new Map() }
+  return { documents: 0, raw: 0, equal: 0, errors: 0, classes: new Map(), losses: new Map() }
 }
 
 export interface Examples { input: string, flags: string[] }
@@ -188,7 +206,9 @@ export function measure(inputs: readonly string[]): Report {
   for (const source of inputs) {
     let outcome: Outcome
     try { outcome = roundTrip(source) }
-    catch (error) { outcome = { equal: false, classes: ['parse or render: exception'], html: '', error: String(error) } }
+    catch (error) {
+      outcome = { raw: false, equal: false, classes: ['parse or render: exception'], losses: [], html: '', error: String(error) }
+    }
     tally(report, source, outcome)
   }
   return report
@@ -198,14 +218,20 @@ function cell(text: string): string {
   return text.replaceAll('\\', '\\\\').replaceAll('|', '\\|').replaceAll('\n', '\\n').replaceAll('`', 'ˋ')
 }
 
-/** The report as a Markdown table, the most frequent class first. */
-export function reportTable(title: string, report: Report, exampleLength = 80): string[] {
-  const lines = [`## ${title}`, '', `Documents: ${report.documents}; equal trees: ${report.equal}; ` +
-    `import exceptions: ${report.errors}.`, '', '| Difference | Documents | Shortest input |', '| --- | ---: | --- |']
-  const entries = [...report.classes].sort((a, b) => b[1].documents - a[1].documents || a[0].localeCompare(b[0]))
-  for (const [name, entry] of entries) {
+function rows(map: Map<string, ClassTally>, exampleLength: number): string[] {
+  const entries = [...map].sort((a, b) => b[1].documents - a[1].documents || a[0].localeCompare(b[0]))
+  return entries.map(([name, entry]) => {
     const example = entry.example.length > exampleLength ? `${entry.example.slice(0, exampleLength)}…` : entry.example
-    lines.push(`| ${cell(name)} | ${entry.documents} | \`${cell(example)}\` |`)
-  }
-  return [...lines, '']
+    return `| ${cell(name)} | ${entry.documents} | ` + '`' + cell(example) + '` |'
+  })
+}
+
+/** The report as Markdown: the losses the specification names, then the differences that remain, the most frequent first. */
+export function reportTable(title: string, report: Report, exampleLength = 80): string[] {
+  return [`## ${title}`, '', `Documents: ${report.documents}; equal as they stand: ${report.raw}; ` +
+    `equal after the specified losses: ${report.equal}; import exceptions: ${report.errors}.`, '',
+    'Specified losses (documents whose parsed tree the clause changed):', '',
+    '| Clause | Documents | Shortest input |', '| --- | ---: | --- |', ...rows(report.losses, exampleLength), '',
+    'Differences that remain after the losses:', '',
+    '| Difference | Documents | Shortest input |', '| --- | ---: | --- |', ...rows(report.classes, exampleLength), '']
 }
