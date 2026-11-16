@@ -335,14 +335,22 @@ describe('the planned writer', () => {
     expect(result.stats.differences).toEqual([])
   })
 
-  it('C2-B-190, C2-I-118: the blocks around a leaf count one each toward the cap, so brackets inside 100 quotes are planned', () => {
-    for (const source of [`${'> '.repeat(100)}x ${'['.repeat(98)}a\n`, `${'> '.repeat(100)}x ${'['.repeat(98)}a${']'.repeat(98)} y\n`]) {
+  it('C2-B-190, C2-I-118: no block counts toward the inline cap, so brackets inside 100 quotes are planned', () => {
+    for (const source of [`${'> '.repeat(100)}x ${'['.repeat(101)}a\n`, `${'> '.repeat(100)}x ${'['.repeat(101)}a${']'.repeat(101)} y\n`]) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(101)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
+    expect(formatBy(`${'> '.repeat(100)}x ${'['.repeat(201)}a\n`, 'both').stats.reasons.has('depth cap')).toBe(true)
+  })
+
+  it('C2-I-118: the open delimiters and brackets of a content count together, so a link behind 199 of them is planned', () => {
+    const source = `${'*a '.repeat(199)}[x](u)\n`
+    const result = formatBy(source, 'both')
+    expect(result.output.source).toBe(source)
+    expect(result.stats.repaired).toBe(0)
+    expect(formatBy(`${'*a '.repeat(200)}[x](u)\n`, 'both').stats.planned).toBe(0)
   })
 
   it('C2-W-016: only a CR before a line feed or the end of the content joins a line end, so a CR before a CR is planned', () => {

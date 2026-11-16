@@ -55,16 +55,14 @@ interface Stack {
   floor: number
   lastSlash: number
   lastStar: number
-  /** C2-I-118: the open containers around the leaf and the open entries count toward the depth cap. */
-  base: number
+  /** C2-I-118: the open entries, brackets and delimiters together, count toward the depth cap. */
   live: number
-  deepest: number
   /** A bracket of the tree past the cap, which the reader demotes to text. */
   demoted: boolean
 }
 
 function depth(s: Stack): number {
-  return s.base + s.live
+  return s.live
 }
 
 /** A token whose units are partly a mark of the tree and partly something else. */
@@ -203,7 +201,6 @@ function scan(leaf: Leaf, escaped: Uint8Array): Token[] {
 function push(s: Stack, token: number, cls: number, below: number): number {
   s.entries.push({ token, cls, below, slash: s.lastSlash, star: s.lastStar })
   s.live++
-  s.deepest = Math.max(s.deepest, s.live)
   return s.entries.length - 1
 }
 
@@ -304,10 +301,10 @@ function braceOpener(s: Stack, token: number): void {
   if (depth(s) < DEPTH_CAP) s.top[mark] = push(s, token, mark, s.top[mark]!)
 }
 
-function pairAll(tokens: Token[], base: number): Stack {
+function pairAll(tokens: Token[]): Stack {
   const s: Stack = {
     tokens, entries: [], top: new Array<number>(BARRIER).fill(-1), floor: -1, lastSlash: -1, lastStar: -1,
-    base, live: 0, deepest: 0, demoted: false,
+    live: 0, demoted: false,
   }
   for (let at = 0; at < tokens.length; at++) {
     const kind = tokens[at]!.kind
@@ -383,19 +380,19 @@ function textPairOpener(leaf: Leaf, tokens: readonly Token[]): number {
 }
 
 /** C2-W-093: every pair the reader forms is a node of the tree, and the marks of every delimited node pair. */
-export function checkPairs(leaf: Leaf, escaped: Uint8Array, depthBound: number): void {
+export function checkPairs(leaf: Leaf, escaped: Uint8Array): void {
   let tokens = scan(leaf, escaped)
-  let s = pairAll(tokens, 0)
+  let s = pairAll(tokens)
   for (let round = 0; ; round++) {
     const opener = textPairOpener(leaf, tokens)
     if (opener < 0) break
     if (round === TEXT_PAIR_ROUNDS) return undecide(leaf, 'text pairs')
     escaped[opener] = 1
     tokens = scan(leaf, escaped)
-    s = pairAll(tokens, 0)
+    s = pairAll(tokens)
   }
-  // C2-I-118: the plan knows the depth of a leaf at the top level only; elsewhere the cap must stay out of reach.
-  if (s.demoted || (depthBound > 0 && s.deepest + depthBound >= DEPTH_CAP)) return undecide(leaf, 'depth cap')
+  // C2-I-118, C2-B-190: the depth counts from zero in each content, whatever blocks stand around it.
+  if (s.demoted) return undecide(leaf, 'depth cap')
   const formed = formedNodes(leaf, tokens)
   if (formed === null) return undecide(leaf, 'text pairs')
   for (let at = 0; at < leaf.codes.length && leaf.undecided === null; at++) {

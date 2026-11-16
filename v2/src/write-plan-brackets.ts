@@ -132,8 +132,7 @@ function closePair(scan: Scan, at: number): void {
   scan.escaped[colon] = 1
 }
 
-/** `bound` is the depth bound of the leaf's blocks (noteDepths). */
-export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean, bound: number): void {
+export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean): void {
   const scan: Scan = { leaf, escaped, openers: [], hasKeys, closes: null }
   const codes = leaf.codes
   let nodes = 0
@@ -143,8 +142,9 @@ export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean,
     const value = codes[at]
     if ((value !== OPENING && value !== CLOSING) || !isBracket(leaf, at, escaped)) continue
     leaf.cursor = at
-    // C2-I-118: an opening bracket is text where the blocks, the open nodes and the open brackets reach the cap.
-    if (value === OPENING && scan.openers.length + nodes + bound >= DEPTH_CAP) return undecide(leaf, 'depth cap')
+    // C2-I-118, C2-B-190: an opening bracket is text where the open nodes and the open brackets of the content reach the
+    // cap; no block counts. The open delimiters count too, so the leaf is left to the repair near the cap.
+    if (value === OPENING && scan.openers.length + nodes >= DEPTH_CAP) return undecide(leaf, 'depth cap')
     if (value === OPENING) scan.openers.push(at)
     else closePair(scan, at)
   }

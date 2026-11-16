@@ -29,8 +29,6 @@ export interface Plan {
   escapes: Map<TextNode, number[]>
   /** C2-W-069: the bare emphasis and strong that the next write gives their braced form. */
   respell: Node[]
-  /** C2-I-118: for each list of nodes of the group, the number of nodes around it, a bound of its depth (C2-B-190). */
-  depths: Map<readonly Node[], number>
   /** Where each list of nodes of the group stands, for the rules of its line starts. */
   places: Map<readonly Node[], LeafPlace>
   leaves: number
@@ -38,7 +36,7 @@ export interface Plan {
 
 export function createPlan(): Plan {
   return {
-    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], depths: new Map(), places: new Map(), leaves: 0,
+    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], places: new Map(), leaves: 0,
   }
 }
 
@@ -709,11 +707,8 @@ function opaqueBlock(leaf: Leaf, at: number, end: number): number {
   return end
 }
 
-/**
- * Records the depth bound of every list of nodes below `nodes`: the number of nodes around its owner, each of which
- * counts at most one toward the cap (C2-B-190).
- */
-export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): void {
+/** Records where every list of nodes below `nodes` stands, and the blocks whose spelling the plan does not check. */
+export function notePlaces(plan: Plan, nodes: readonly Node[], first: boolean): void {
   const pending: [readonly Node[], number, LeafPlace][] = [[nodes, 0, TOP_PLACE]]
   for (;;) {
     const item = pending.pop()
@@ -726,7 +721,6 @@ export function noteDepths(plan: Plan, nodes: readonly Node[], first: boolean): 
       const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
       inner.documentStart = first && level === 0 && at === 0
       forEachSlot(node, (children) => {
-        plan.depths.set(children, level)
         plan.places.set(children, inner)
         pending.push([children, level + 1, inner])
       })
@@ -776,15 +770,15 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
   }
 }
 
-function analyze(w: Writer, leaf: Leaf, start: number, flags: number, bound: number, place: LeafPlace | undefined): Uint8Array {
+function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: LeafPlace | undefined): Uint8Array {
   const escaped = new Uint8Array(leaf.codes.length)
   leaf.inCell = (flags & IN_CELL) !== 0
   leaf.inTitle = start === IN_TITLE
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
-  if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0, bound)
-  if (leaf.undecided === null) checkPairs(leaf, escaped, bound)
+  if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
+  if (leaf.undecided === null) checkPairs(leaf, escaped)
   return escaped
 }
 
@@ -818,9 +812,8 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
     leaf.offsets.push(-1)
   }
   if (leaf.undecided === null && leafText(leaf) !== content) undecide(leaf, 'model')
-  const bound = plan.depths.get(nodes)
-  if (bound === undefined) undecide(leaf, 'depth')
-  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, bound ?? 0, plan.places.get(nodes)) : new Uint8Array(0)
+  if (!plan.places.has(nodes)) undecide(leaf, 'place')
+  const escaped = leaf.undecided === null ? analyze(w, leaf, start, flags, plan.places.get(nodes)) : new Uint8Array(0)
   plan.leaves++
   if (leaf.undecided !== null) {
     plan.undecided = leaf.undecided

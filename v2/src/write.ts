@@ -11,7 +11,7 @@ import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
-import { createPlan, noteDepths, type Plan } from './write-plan.ts'
+import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
 
 /** One entry of a sidecar, as far as the writer reads it (C2-L-009, C2-L-046). */
@@ -580,7 +580,7 @@ function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
 function planWrite(w: Writer, group: readonly Node[], first: boolean): Plan {
   resetLines(w)
   w.plan = createPlan()
-  noteDepths(w.plan, group, first)
+  notePlaces(w.plan, group, first)
   writeBlocks(w, group, '', 0, false)
   const plan = w.plan
   w.plan = null
