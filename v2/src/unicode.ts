@@ -1,6 +1,8 @@
 // Character tests of the inline scan. ASCII is decided by comparisons; the Unicode classes are
 // read from the engine's tables only for a character outside ASCII, which is off the hot path.
+// C2-I-127: the tables are those of data/unicode-categories.json, never the runtime's.
 import { DIGIT_0, DIGIT_9, HYPHEN, LF, LOWER_A, LOWER_Z, SPACE, TAB, UNDERSCORE, UPPER_A, UPPER_Z } from './chars.ts'
+import { FORMAT_RANGES, LETTER_OR_NUMBER_RANGES, LETTER_RANGES, MARK_RANGES, NUMBER_RANGES } from './unicode-tables.ts'
 
 /** The start and the end of a content, which count as whitespace. */
 export const NO_CHARACTER = -1
@@ -10,11 +12,30 @@ const HIGH_SURROGATE = 0xd800
 const LOW_SURROGATE = 0xdc00
 const SURROGATE_END = 0xe000
 const ZERO_WIDTH_JOINER = 0x200d
-const LETTER_OR_NUMBER = /[\p{L}\p{N}]/u
-const LETTER = /\p{L}/u
-const COMBINING = /[\p{M}\u{fe00}-\u{fe0f}\u{e0100}-\u{e01ef}]/u
-// C2-I-122: the characters outside ASCII that are no URL characters.
-const NO_URL_CHARACTER = /[\p{Cc}\p{Cf}\p{White_Space}]/u
+// C2-I-050: the variation selectors, which are marks of category Mn too.
+const SELECTORS_FIRST = 0xfe00
+const SELECTORS_LAST = 0xfe0f
+const SUPPLEMENT_FIRST = 0xe0100
+const SUPPLEMENT_LAST = 0xe01ef
+const CONTROL_LAST = 0x9f
+const DELETE = 0x7f
+// White_Space outside ASCII; a stable property: U+0085, U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F, U+3000.
+const WHITE_SPACE_RANGES: readonly number[] = [
+  0x85, 0x85, 0xa0, 0xa0, 0x1680, 0x1680, 0x2000, 0x200a, 0x2028, 0x2029, 0x202f, 0x202f, 0x205f, 0x205f, 0x3000, 0x3000,
+]
+
+/** Whether `code` lies in one of the sorted inclusive ranges of `ranges`. */
+export function inRanges(ranges: readonly number[], code: number): boolean {
+  let low = 0
+  let high = (ranges.length >> 1) - 1
+  while (low <= high) {
+    const middle = (low + high) >> 1
+    if (code < ranges[middle * 2]!) high = middle - 1
+    else if (code > ranges[middle * 2 + 1]!) low = middle + 1
+    else return true
+  }
+  return false
+}
 
 export function isAsciiLetter(code: number): boolean {
   return (code >= LOWER_A && code <= LOWER_Z) || (code >= UPPER_A && code <= UPPER_Z)
@@ -36,13 +57,19 @@ export function isAsciiNameCharacter(code: number): boolean {
 /** A Unicode letter or number (general category L or N). */
 export function isWordCharacter(code: number): boolean {
   if (code < ASCII) return isAsciiLetter(code) || isAsciiDigit(code)
-  return LETTER_OR_NUMBER.test(String.fromCodePoint(code))
+  return inRanges(LETTER_OR_NUMBER_RANGES, code)
+}
+
+/** A Unicode number (general category N). */
+export function isNumber(code: number): boolean {
+  if (code < ASCII) return isAsciiDigit(code)
+  return inRanges(NUMBER_RANGES, code)
 }
 
 /** A Unicode letter (general category L). */
 export function isLetter(code: number): boolean {
   if (code < ASCII) return isAsciiLetter(code)
-  return LETTER.test(String.fromCodePoint(code))
+  return inRanges(LETTER_RANGES, code)
 }
 
 /** A space, a tab, a line break, or the edge of the content. */
@@ -60,12 +87,16 @@ export function isBoundarySpace(code: number): boolean {
 /** C2-I-050: a combining mark, a variation selector or a zero-width joiner. */
 export function isJoining(code: number): boolean {
   if (code < ASCII) return false
-  return code === ZERO_WIDTH_JOINER || COMBINING.test(String.fromCodePoint(code))
+  return code === ZERO_WIDTH_JOINER || inRanges(MARK_RANGES, code) || (code >= SELECTORS_FIRST && code <= SELECTORS_LAST) ||
+    (code >= SUPPLEMENT_FIRST && code <= SUPPLEMENT_LAST)
 }
 
 /** C2-I-122: a character outside ASCII that a URL may hold: no whitespace, no control and no format character. */
 export function isUrlCharacter(code: number): boolean {
-  return !NO_URL_CHARACTER.test(String.fromCodePoint(code))
+  // Cc is U+0000-U+001F and U+007F-U+009F; the ASCII White_Space characters are controls or the space.
+  if (code < ASCII) return code > SPACE && code !== DELETE
+  if (code <= CONTROL_LAST) return false
+  return !inRanges(FORMAT_RANGES, code) && !inRanges(WHITE_SPACE_RANGES, code)
 }
 
 export function isAsciiPunctuation(code: number): boolean {

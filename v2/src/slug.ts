@@ -1,7 +1,7 @@
 // The generated id of a heading (C2-H-022, C2-H-144 to C2-H-148): the slug of its plain text.
 import { type HeadingIds } from './options.ts'
 import { SLUG_REMOVED, SLUG_REVERSED } from './render-tables.ts'
-import { isAsciiAlphanumeric } from './unicode.ts'
+import { isAsciiAlphanumeric, isNumber } from './unicode.ts'
 
 // Letters that a canonical decomposition does not reduce to ASCII. The table of the `ascii` value is host-defined.
 const FOLDS = new Map([
@@ -61,7 +61,8 @@ function transliterate(text: string): string {
 }
 
 function startsWithNumber(slug: string): boolean {
-  return /^\p{N}/u.test(slug)
+  const first = slug.codePointAt(0)
+  return first !== undefined && isNumber(first)
 }
 
 function isAscii(text: string): boolean {

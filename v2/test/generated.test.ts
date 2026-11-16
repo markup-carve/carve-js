@@ -6,6 +6,7 @@ import { expect, it } from 'vitest'
 import { generateAstTables } from '../scripts/generate-ast-tables.ts'
 import { generateOptionTables } from '../scripts/generate-option-tables.ts'
 import { generateTreeTables } from '../scripts/generate-tree-tables.ts'
+import { generateUnicodeTables } from '../scripts/generate-unicode-tables.ts'
 import { generateCatalog } from '../lint/generate-catalog.ts'
 
 const root = join(import.meta.dirname, '..')
@@ -23,6 +24,10 @@ it('src/option-tables.ts is what scripts/generate-option-tables.ts writes', () =
   expect(read('src/option-tables.ts')).toBe(generateOptionTables(read('data/options.json')))
 })
 
+it('C2-I-127: src/unicode-tables.ts is what scripts/generate-unicode-tables.ts writes', () => {
+  expect(read('src/unicode-tables.ts')).toBe(generateUnicodeTables(read('data/unicode-categories.json')))
+})
+
 it('C2-W-106 lint/catalog.ts is generated from the specification table', () => {
   expect(read('lint/catalog.ts')).toBe(generateCatalog(read('data/lint-rules.json')))
 })
@@ -37,7 +42,7 @@ it.skipIf(!specPresent)(
   () => {
     for (const name of [
       'ast-results.json', 'ast-schema.json', 'div-names.json', 'layout-schema.json', 'node-slots.json',
-      'options.json', 'task-states.json',
+      'options.json', 'task-states.json', 'unicode-categories.json',
     ]) {
       expect(read(`data/${name}`)).toBe(readFileSync(join(specData, name), 'utf8'))
     }
