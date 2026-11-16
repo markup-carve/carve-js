@@ -11,7 +11,7 @@ import {
   addText, commentValue, contentNodes, FLOW_HARD_BREAKS, FLOW_PLAIN, type LayoutTrace, leafInlines, lineInlines, noteLeaf, place,
   setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { captionChildren, includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
+import { includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
 import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
@@ -283,7 +283,8 @@ interface DivHead {
 function divHead(ctx: TreeContext, info: OpenerInfo): DivHead {
   const head: DivHead = {}
   if (info.titleStart >= 0) {
-    const title = captionChildren(ctx, info.titleStart, info.titleEnd)
+    // C2-B-120: the title is an inline content of one line, in which `%%` after whitespace starts a line comment.
+    const title = contentNodes(ctx, [info.titleStart, info.titleEnd], 0, 2, true, FLOW_PLAIN)
     // C2-I-098: the title of a div is inline flow.
     if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, title)
     head.title = title

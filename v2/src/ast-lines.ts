@@ -1,7 +1,6 @@
 // The parts of one-line blocks that the block pass does not read: the title of an opener, the
 // fields of a link definition and of an include directive.
-import { type IncludeNode, type Inline, type LinkReferenceDefinitionNode } from './ast.ts'
-import { contentNodes, FLOW_PLAIN, type TreeContext } from './ast-inline.ts'
+import { type IncludeNode, type LinkReferenceDefinitionNode } from './ast.ts'
 import { unescape } from './attributes.ts'
 import { APOSTROPHE, QUOTE_MARK } from './chars.ts'
 import { readInclude } from './include.ts'
@@ -10,11 +9,6 @@ import { definitionDestinationEnd, quotedEnd, skipSpaces } from './lines.ts'
 /** The quoted title of a code fence, without its escapes (C2-B-120). */
 export function openerTitle(src: string, start: number, end: number): string {
   return unescape(src, start, end)
-}
-
-/** The inline content of `[start, end)`, one line of the source: the title of a div, an admonition or a directive. */
-export function captionChildren(ctx: TreeContext, start: number, end: number): Inline[] {
-  return contentNodes(ctx, [start, end], 0, 2, false, FLOW_PLAIN)
 }
 
 /** C2-B-083: the link definition of `key`, with the destination and the optional quoted title behind its colon. */
