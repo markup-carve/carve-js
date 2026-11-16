@@ -4,7 +4,7 @@
 import { type Node } from './ast.ts'
 import { APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER } from './inline-tables.ts'
 import { isBoundarySpace, isWordCharacter, NO_CHARACTER } from './unicode.ts'
-import { ATOM, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
+import { ATOM, CLOSE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const EN_DASH = 0x2013
 const EM_DASH = 0x2014
@@ -13,6 +13,8 @@ const LEFT_DOUBLE = 0x201c
 const HYPHEN = 45
 const SLASH = 47
 const LF = 10
+const LOWER_A = 97
+const NO_BREAK_SPACE = 0xa0
 const LONGEST_WORD = 6
 // The characters that a run of smart punctuation can continue with (data/smart-punctuation.json).
 const RUN_CHARACTERS = '!+-.<=>()'
@@ -49,14 +51,20 @@ function isBracedComment(leaf: Leaf, at: number): boolean {
   return leaf.kinds[at] === ATOM && owner?.type === 'comment' && owner.form === 'braced'
 }
 
-/** What the reader sees before the unit behind a mark or an atom: the glyph of a quote, the start of a content, a break. */
+/**
+ * What the reader sees before the unit behind a mark or an atom: the glyph of a quote, the start of a content, a
+ * break, a no-break space, and behind any other node that closed, a word character (`afterNode` in inline-emit.ts).
+ */
 function previousOfNode(leaf: Leaf, at: number): number | null {
   const owner = leaf.owners[at]
   const kind = leaf.kinds[at]
   if (kind === ATOM && owner?.type === 'smart_punctuation') return lastCodePoint(owner.glyph)
   // C2-I-104: the content of a node starts with no character before it.
   if (kind === OPEN) return NO_CHARACTER
-  return kind === ATOM && (owner?.type === 'soft_break' || owner?.type === 'hard_break') ? LF : null
+  if (kind === CLOSE) return LOWER_A
+  if (kind !== ATOM || owner === undefined || owner.type === 'comment') return null
+  if (owner.type === 'non_breaking_space') return NO_BREAK_SPACE
+  return owner.type === 'soft_break' || owner.type === 'hard_break' ? LF : LOWER_A
 }
 
 /** The code point of text that ends at unit `at`, the edge of the leaf, what a node leaves before it, or null. */
