@@ -236,3 +236,34 @@ describe('C2-B-209, C2-B-221: a declared head-row count is clamped', () => {
     expect(lint('{footer-rows=1}\n| a |\n| b |').filter((item) => item.code === 'table-row-count-clamped')).toEqual([])
   })
 })
+
+describe('C2-B-015, C2-B-054, C2-B-228: a marker body closes before a list marker it does not own', () => {
+  it('C2-B-228: Examples 242 and 243, a list marker left of a footnote body ends the body and opens a new list', () => {
+    const html = render('Text[^n].\n\n[^n]: note\n  - one\n- x')
+    expect(html).toContain('<p>Text<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>.</p>\n<ul>\n  <li>x</li>\n</ul>')
+    expect(html).toContain('<ul>\n        <li>one</li>\n      </ul>')
+    expect(render('Text[^n].\n\n[^n]: note\n  1. one\n2. x')).toContain('<ol start="2">\n  <li>x</li>\n</ol>')
+  })
+
+  it('C2-B-228: Example 244, the same below a description body', () => {
+    expect(render(':: t\n: d\n  - one\n- x')).toBe(
+      '<dl>\n  <dt>t</dt>\n  <dd>\n    <p>d</p>\n    <ul>\n      <li>one</li>\n    </ul>\n  </dd>\n</dl>\n<ul>\n  <li>x</li>\n</ul>',
+    )
+  })
+
+  it('C2-B-012, C2-B-022, C2-B-024: a line that is no interrupter stays lazy, and so does a marker where no list is open', () => {
+    expect(render('Text[^n].\n\n[^n]: note\n  - one\nx')).toContain('<li>one\nx</li>')
+    expect(render('Text[^n].\n\n[^n]: note\n- x')).toContain('<p>note\n- x')
+    expect(render(':: t\n: d\n- x')).toContain('<dd>d\n- x</dd>')
+  })
+})
+
+describe('the earlier settled entries of _TODO_B, kept', () => {
+  it('C2-B-084: Example 241, the second space of an abbreviation definition is the first character of its expansion', () => {
+    expect(parse('*[B]:  lead').children[0]).toMatchObject({ type: 'abbreviation_def', key: 'B', expansion: ' lead' })
+  })
+
+  it('C2-H-016, C2-H-166: a kept `<li>` under the minimal profile carries data-source-line like every other', () => {
+    expect(render('- - -C2-A-034', { profile: 'minimal', sourceLines: true })).toContain('<li data-source-line="1">-C2-A-034</li>')
+  })
+})

@@ -636,8 +636,8 @@ describe('definitions', () => {
     expect(blocks('[^a]: x', 'lazy')).toBe('fn[p"x|lazy"]')
   })
 
-  it('C2-B-015: a list marker indented past a footnote marker opens a list in the body', () => {
-    expect(blocks('[^a]: x', ' - i', '- j')).toBe('fn[p"x" ul(-)[li[p"i|- j"]]]')
+  it('C2-B-015, C2-B-228: a list marker indented past a footnote marker opens a list in the body, and one left of it ends the body', () => {
+    expect(blocks('[^a]: x', ' - i', '- j')).toBe('fn[p"x" ul(-)[li[p"i"]]] ul(-)[li[p"j"]]')
   })
 })
 

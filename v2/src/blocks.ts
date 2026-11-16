@@ -426,8 +426,18 @@ function markerInterrupts(state: BlockState, matched: number, end: number): bool
     // C2-B-055: between two open lists it joins the deeper one. C2-B-054: left of every open list it continues the outermost.
     return column <= containers.column[matched]! || isIndentContainer(containers.kind[matched - 2]!)
   }
+  // C2-B-015, C2-B-228: a footnote or description body the line is not indented past closes with the lists in it,
+  // so a marker below one of them opens a new list in the container that owns the line, whatever its value.
+  if ((kind === FOOTNOTE || kind === DESCRIPTION) && holdsList(state, matched)) return true
   // C2-B-022: at the column of a description list a list marker is a lazy line.
   return opens && kind === DESCRIPTION && column < containers.column[matched]! && isIndentContainer(containers.kind[matched - 2]!)
+}
+
+/** Whether a list is open inside the container at `index`. */
+function holdsList(state: BlockState, index: number): boolean {
+  const containers = state.containers
+  for (let at = index + 1; at < containers.depth; at++) if (isList(containers.kind[at]!)) return true
+  return false
 }
 
 /** C2-B-026: closes the containers that do not own the line. */
