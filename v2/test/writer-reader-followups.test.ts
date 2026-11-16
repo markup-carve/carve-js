@@ -2,7 +2,7 @@
 // at the end of every content line are no content (C2-I-002).
 import { describe, expect, it } from 'vitest'
 import {
-  decodeTree, format, formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics, type DocumentNode,
+  decodeTree, format, formatWithDiagnostics, parse, render, treesEqual, writeWithDiagnostics, type DocumentNode,
 } from '../src/index.ts'
 
 const FENCE = '```'
@@ -104,6 +104,9 @@ describe('the writer follow-ups of the reader fixes', () => {
       children: values.flatMap((value, at) => at === 0 ? [{ type: 'text', value }] : [{ type: 'soft_break' }, { type: 'text', value }]),
     }],
   }))
+  const abbreviation = (expansion: string): DocumentNode => decodeTree(JSON.stringify({
+    type: 'document', astVersion: '2.0', children: [{ type: 'abbreviation_def', key: 'A', namespace: 'abbr', expansion }],
+  }))
   const roundTrip = (tree: DocumentNode): string => {
     const out = writeWithDiagnostics(tree)
     expect(out.diagnostics).toEqual([])
@@ -118,5 +121,18 @@ describe('the writer follow-ups of the reader fixes', () => {
   it('C2-B-197: a text line of the shape of a block image line takes escapes, so the caret line below stays text', () => {
     expect(roundTrip(lines('![a][b[c]', '^ d'))).toBe('\\!\\[a][b[c]\n^ d\n')
     expect(roundTrip(lines('![a][ ]', '^ c'))).toBe('![a][ ]\n^ c\n')
+  })
+
+  it('C2-W-055, C2-B-084: an expansion keeps its leading blanks, and one that ends in a blank or holds a line break is reported', () => {
+    expect(roundTrip(abbreviation(' lead'))).toBe('*[A]:  lead\n')
+    for (const [expansion, written] of [['lead ', '*[A]: lead\n'], ['lead\t', '*[A]: lead\n'], ['A\nB', '*[A]: A B\n']]) {
+      const out = writeWithDiagnostics(abbreviation(expansion!))
+      expect(out.source, expansion).toBe(written)
+      expect(out.diagnostics.map((entry) => entry.code), expansion).toEqual(['field-unspellable'])
+    }
+  })
+
+  it('C2-W-055, C2-H-181, C2-H-187: the template of an expansion with a line break reads back as a definition', () => {
+    expect(render(abbreviation('A\nB'), { roundtrip: true })).toContain('*[A]: A B</template>')
   })
 })

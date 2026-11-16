@@ -1,8 +1,8 @@
 // The block nodes as Carve source: the layout of C2-W-017 to C2-W-034 and the canonical forms of
 // C2-W-035 to C2-W-060. A block writes its lines behind `prefix`, the prefix of its containers.
 import {
-  type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode, type CommentNode,
-  type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
+  type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, captionOf, type CaptionNode, childNodes, type CodeBlockNode,
+  type CommentNode, type DefinitionDescriptionNode, type DefinitionListNode, type DefinitionTermNode, type DirectiveNode, type DivNode,
   type FigureGroupNode, type FigureNode, type FootnoteNode, type FrontmatterNode, type HeadingNode, type IncludeNode,
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
   type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
@@ -207,6 +207,19 @@ function include(w: Writer, node: IncludeNode, prefix: string): void {
   const unread = unreadField(node, source)
   if (unread !== null) lose(w, node, unread)
   emit(w, prefix, source)
+}
+
+/**
+ * C2-W-055, C2-W-117: `*[key]:`, one space and the expansion. A line break of a supplied expansion is written as a
+ * space, and spaces and tabs at its end are left out, since they end the line (C2-W-022); both are reported.
+ */
+function abbreviationDefinition(w: Writer, node: AbbreviationDefNode, prefix: string): void {
+  attributeLine(w, node, prefix)
+  const expansion = node.expansion.replaceAll('\n', ' ')
+  let end = expansion.length
+  while (end > 0 && (expansion[end - 1] === ' ' || expansion[end - 1] === '\t')) end--
+  if (end < node.expansion.length || expansion !== node.expansion) lose(w, node, 'expansion')
+  emit(w, prefix, `*[${node.key}]: ${expansion.slice(0, end)}`)
 }
 
 /** C2-W-056: a link definition; its attributes stand on the line above (C2-B-106). */
@@ -487,10 +500,7 @@ const WRITERS: BlockWriters = {
   frontmatter,
   include,
   link_reference_definition: linkDefinition,
-  abbreviation_def: (w, node, prefix) => {
-    attributeLine(w, node, prefix)
-    emit(w, prefix, `*[${node.key}]: ${node.expansion}`)
-  },
+  abbreviation_def: abbreviationDefinition,
   footnote,
   list,
   definition_term: (w, node, prefix, flags) => textLeaf(w, node, prefix, flags, ':: ', '   '),
