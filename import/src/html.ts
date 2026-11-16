@@ -1,16 +1,18 @@
 import { parse, parseFragment, serializeOuter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type {
-  Block, CaptionNode, DocumentNode, Inline, ListItemNode, ListNode, TableCellNode, TableColumnNode, TableNode, TableRowNode,
+  Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
+  TableNode, TableRowNode,
 } from '../../v2/src/index.ts'
+import { resolveTree } from '../../v2/src/index.ts'
 import {
   attr, attrs, CARRIERS, classList, content, degraded, elements, has, ignoredCarrier, isBlank, isComment, isElement, isText, plain,
   unsupported, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
 } from './html-dom.ts'
 import { htmlImage, inline, inlineChildren, normalizeBreaks, trimInlineEdges } from './html-inline.ts'
-import { collectNotes, holdsCarrier, isFootnoteSection } from './html-notes.ts'
+import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
-import { cell, coalesce, complete, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
+import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
 
 const BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'blockquote', 'section', 'div', 'ul', 'ol', 'dl', 'pre',
   'table', 'figure', 'figcaption', 'aside', 'details', 'summary', 'template', 'script', 'style', 'html', 'body', 'head', 'main',
@@ -159,7 +161,7 @@ function detailsBlock(node: Html.Element, context: HtmlContext): Block[] {
     attrs: { ...mapped.attrs, classes: ['details', ...(mapped.attrs?.classes ?? [])] } }]
 }
 
-/** C2-H-047, C2-H-048: the title of the opener on `<pre>`, and under `roundtrip` its label (C2-H-114). */
+/** C2-H-047, C2-H-048: the title of the opener on `<pre>`, and its label (C2-H-114). */
 function htmlPre(node: Html.Element, context: HtmlContext): Block[] {
   const code = elements(node).find(child => child.nodeName === 'code')
   const classes = code ? classList(code) : []
@@ -274,10 +276,6 @@ function footnoteSection(node: Html.Element, context: HtmlContext): Block[] {
     const note = context.notes.get(id)
     if (note?.inline === true) continue
     notes.push({ type: 'footnote', key: note?.label ?? footnoteKeyOf(id), namespace: 'footnote', children: blockChildren(item, context) })
-  }
-  if (!context.roundtrip) {
-    context.deferred?.push(...notes)
-    return []
   }
   context.footnotes.push(...notes.filter(note => note.type === 'footnote'))
   return notesDirective(node, context)
@@ -429,7 +427,7 @@ function hasLooseItem(node: Html.Element): boolean {
     (isElement(entry) && entry.tagName === 'input'))))
 }
 
-/** C2-H-138: under `roundtrip` a tight list says so; without the carriers the HTML is read as it stands. */
+/** C2-H-138: a tight list says so with its carrier; without it the HTML is read as it stands (C2-H-195 row 6, C2-H-197). */
 function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlContext): 'tight' | 'loose' {
   const loose = hasLooseItem(node)
   if (has(node, 'data-carve-tight')) {
@@ -437,7 +435,7 @@ function listSpacing(node: Html.Element, items: ListItemNode[], context: HtmlCon
     ignoredCarrier(context, node, 'data-carve-tight', 'an item writes its first paragraph as an element')
     return 'loose'
   }
-  if (context.roundtrip || loose) return 'loose'
+  if (loose) return 'loose'
   return items.some(item => item.children.filter(child => child.type !== 'list').length > 1) ? 'loose' : 'tight'
 }
 
@@ -552,7 +550,6 @@ function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
 
 function cellInline(node: Html.Element, context: HtmlContext): Inline[] {
   const children = inlineChildren(node, context)
-  if (context.roundtrip) return children
   const pending: Inline[][] = [children]
   let changed = false
   while (pending.length > 0) {
@@ -567,12 +564,28 @@ function rows(node: Html.Element, context: HtmlContext, inHead: boolean): TableR
   if (node.tagName !== 'table') {
     for (const child of elements(node)) if (child.tagName !== 'tr') unsupported(context, child, 'Non-row child in table group')
   }
-  return elements(node).filter(child => child.nodeName === 'tr').map(child => {
+  const groupRows = elements(node).filter(child => child.nodeName === 'tr')
+  const result: TableRowNode[] = groupRows.map(child => {
     for (const entry of elements(child)) {
       if (entry.nodeName !== 'th' && entry.nodeName !== 'td') unsupported(context, entry, 'Non-cell child in HTML row')
     }
     return { ...row(elements(child).filter(entry => entry.nodeName === 'th' || entry.nodeName === 'td')
       .map(entry => tableCell(entry, context, inHead))), ...attrs(context, child) }
+  })
+  clampRowspans(result, groupRows, context)
+  return result
+}
+
+/** C2-A-093, C2-B-174: as in the HTML table model, a row span ends at the last row of its group. */
+function clampRowspans(result: TableRowNode[], groupRows: Html.Element[], context: HtmlContext): void {
+  result.forEach((tableRow, index) => {
+    for (const tableCell of tableRow.children) {
+      const room = result.length - index
+      if (tableCell.rowspan === undefined || tableCell.rowspan <= room) continue
+      degraded(context, groupRows[index]!, 'HTML rowspan past the end of its row group clamped')
+      if (room > 1) tableCell.rowspan = room
+      else delete tableCell.rowspan
+    }
   })
 }
 
@@ -673,16 +686,45 @@ export function importHtml(input: string): ImportResult {
   const foreign = full ? parse(input, { sourceCodeLocationInfo: true }) :
     parseFragment(input, { sourceCodeLocationInfo: true })
   ensureForeignDepth(foreign, 'html')
-  const context: HtmlContext = { format: 'html', input, diagnostics: [], deferred: [], roundtrip: holdsCarrier(foreign.childNodes),
+  const context: HtmlContext = { format: 'html', input, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
-    headingIds: new Set() }
+    anchorKeys: new Set() }
   collectNotes(foreign.childNodes, context)
   rootLanguage(foreign.childNodes, context)
   for (const child of foreign.childNodes) auditElement(child, context)
   collectTemplates(foreign.childNodes, context)
   const first = foreign.childNodes[0]
   const children = first === undefined ? [] : flow(foreign.childNodes, first, context, documentChild)
-  return complete(context, [...children, ...context.definitions.values(), ...context.footnotes, ...(context.deferred ?? [])])
+  return complete(context, [...children, ...rebuiltDefinitions(context, children), ...context.footnotes, ...(context.deferred ?? [])])
+}
+
+/** The `href` of the first link of each key in `keys` below `node`, as resolution gave it. */
+function resolvedHrefs(node: unknown, keys: Set<string>, found: Map<string, string | undefined>): void {
+  if (Array.isArray(node)) {
+    for (const item of node) resolvedHrefs(item, keys, found)
+    return
+  }
+  if (typeof node !== 'object' || node === null) return
+  const fields = node as Record<string, unknown>
+  const key = fields['key']
+  if (fields['type'] === 'link' && typeof key === 'string' && keys.has(key) && !found.has(key)) {
+    found.set(key, typeof fields['href'] === 'string' ? fields['href'] : undefined)
+  }
+  for (const value of Object.values(fields)) if (typeof value === 'object') resolvedHrefs(value, keys, found)
+}
+
+/**
+ * C2-H-198: no definition is rebuilt for a key whose first `<a>` links `#ID` where the heading lookup of the key
+ * (C2-I-084) finds the heading with that id in the imported tree; the tree is resolved without those definitions to see.
+ */
+function rebuiltDefinitions(context: HtmlContext, children: DocumentNode['children']): LinkReferenceDefinitionNode[] {
+  const all = [...context.definitions.values()]
+  if (context.anchorKeys.size === 0) return all
+  const others = all.filter(definition => !context.anchorKeys.has(definition.key))
+  const probe = documentOf(context, structuredClone([...children, ...others, ...context.footnotes]))
+  const found = new Map<string, string | undefined>()
+  resolvedHrefs(resolveTree(probe).document.children, context.anchorKeys, found)
+  return all.filter(definition => !context.anchorKeys.has(definition.key) || found.get(definition.key) !== definition.href)
 }
 
 function rootLanguage(nodes: Html.ChildNode[], context: HtmlContext): void {
