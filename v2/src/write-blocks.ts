@@ -529,7 +529,10 @@ const OPAQUE: readonly string[] = ['code_block', 'raw_block']
  */
 function takesLineBelow(w: Writer, node: Node): boolean {
   const type = node.type
-  if (type === 'paragraph' || type === 'definition_term' || type === 'table' || captionOf(node) !== undefined) return true
+  // C2-B-137, C2-B-138: a comment-only line below a heading is a child of the heading, whatever its indent.
+  if (type === 'paragraph' || type === 'heading' || type === 'definition_term' || type === 'table' || captionOf(node) !== undefined) {
+    return true
+  }
   if (!LAZY_CONTAINERS.includes(type) || isFenced(w, node)) return false
   // A line without the quote mark directly below a quote stays in it (C2-B-138); a blank line ends the quote.
   if (type === 'block_quote') return true

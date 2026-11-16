@@ -71,6 +71,12 @@ describe('blocks', () => {
     expect(format('- a\n  - b\n\n  %% c')).toBe('- a\n  - b\n\n    %% c\n')
   })
 
+  it('C2-W-059, C2-B-138: a comment line of a heading stands at its column, and a comment after the heading behind a blank line', () => {
+    expect(format('= H\n%% c\n  more')).toBe('= H\n%% c\n  more\n')
+    expect(format('= H\n\n%% c')).toBe('= H\n\n%% c\n')
+    expect(format('- = H\n\n  %% c')).toBe('- = H\n\n  %% c\n')
+  })
+
   it('C2-W-059: the comments between a figure group and its caption stand behind its closer, and one inside it stays inside', () => {
     expect(format('::: figure\n![a](b)\n:::\n%% one\n%% two\n^ cap')).toBe('::: figure\n![a](b)\n:::\n%% one\n%% two\n^ cap\n')
     expect(format('::: figure\n![a](b)\n\n%% in\n:::')).toBe('::: figure\n![a](b)\n\n%% in\n:::\n')

@@ -140,7 +140,8 @@ export function emitLines(w: Writer, prefix: string, indent: string, text: strin
     emit(w, inner, end < 0 ? text.slice(start) : text.slice(start, end))
     if (end < 0) return
     start = end + 1
-    inner = prefix + indent
+    // C2-W-059, C2-B-138: a comment-only line stands at the column of the leaf that holds it, not at its content column.
+    inner = text.startsWith('%%', start) ? prefix : prefix + indent
   }
 }
 
