@@ -50,3 +50,21 @@ describe('images in a bare tight-item paragraph', () => {
     expect(blocks).toMatchObject([{ type: 'paragraph', role: 'image' }, { type: 'paragraph', role: 'image' }])
   })
 })
+
+describe('carriers that disagree', () => {
+  it('C2-H-186: a reference and its note that carry different footnote keys are both read as they stand', () => {
+    const html = '<p>a<a href="#fn1" data-carve-footnote-label="x" role="doc-noteref">1</a></p>' +
+      '<section role="doc-endnotes"><ol><li id="fn1" data-carve-footnote-label="y"><p>n</p></li></ol></section>'
+    const result = importDocument(html, { from: 'html' })
+    expect(result.document.children).toMatchObject([
+      { type: 'paragraph', children: [{ type: 'text' }, { type: 'footnote_ref', key: '1' }] },
+      { type: 'footnote', key: '1' },
+    ])
+    expect(result.diagnostics.filter((entry) => entry.code === 'import-degraded')).toHaveLength(2)
+  })
+
+  it('C2-H-172, C2-H-187: a template keeps a bidirectional control in the expansion it gives', () => {
+    const html = '<template data-carve-abbreviations>*[A]: x‮y</template>\n<p><abbr title="x‮y">A</abbr>.</p>\n'
+    expect(importDocument(html, { from: 'html' }).document.children[0]).toMatchObject({ type: 'abbreviation_def', expansion: 'x‮y' })
+  })
+})

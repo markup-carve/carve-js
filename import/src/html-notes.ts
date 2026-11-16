@@ -53,13 +53,19 @@ function inlineFault(item: Html.Element, referenced: boolean): string | undefine
   return single ? undefined : 'the note holds more than one paragraph'
 }
 
-function noteEntry(item: Html.Element, referenced: boolean, context: HtmlContext): NoteEntry {
+function noteEntry(item: Html.Element, references: Set<string | undefined> | undefined, context: HtmlContext): NoteEntry {
+  const referenced = references !== undefined
   const label = attr(item, 'data-carve-footnote-label')
   const inline = has(item, 'data-carve-inline-footnote')
   const fault = inline ? inlineFault(item, referenced) : undefined
   if (fault !== undefined) ignoredCarrier(context, item, 'data-carve-inline-footnote', fault)
   if (label !== undefined && (label === '' || foldLabel(label) !== label || inline)) {
     ignoredCarrier(context, item, 'data-carve-footnote-label', inline ? 'the note is also an inline footnote' : 'the key is not folded')
+    return { item, inline: false }
+  }
+  // C2-H-186: a reference that carries another key makes the carriers of both disagree, and neither is read.
+  if (label !== undefined && [...references ?? []].some(key => key !== undefined && key !== label)) {
+    ignoredCarrier(context, item, 'data-carve-footnote-label', 'a reference to the note carries another key')
     return { item, inline: false }
   }
   return { item, ...(label !== undefined ? { label } : {}), inline: inline && fault === undefined }
@@ -69,7 +75,7 @@ function noteEntry(item: Html.Element, referenced: boolean, context: HtmlContext
 export function collectNotes(nodes: Html.ChildNode[], context: HtmlContext): void {
   const pending = [...nodes]
   const sections: Html.Element[] = []
-  const referenced = new Set<string>()
+  const referenced = new Map<string, Set<string | undefined>>()
   while (pending.length > 0) {
     const node = pending.pop()
     if (node === undefined || !isElement(node) || isRawSpan(node)) continue
@@ -81,11 +87,14 @@ export function collectNotes(nodes: Html.ChildNode[], context: HtmlContext): voi
   for (const section of sections) collectSection(section, referenced, context)
 }
 
-function recordIds(node: Html.Element, context: HtmlContext, referenced: Set<string>): void {
+function recordIds(node: Html.Element, context: HtmlContext, referenced: Map<string, Set<string | undefined>>): void {
   const id = attr(node, 'id')
   if (id !== undefined && isHeadingElement(node)) context.headingIds.add(id)
   const href = attr(node, 'href')
-  if (node.tagName === 'a' && href?.startsWith('#') === true && attr(node, 'role') === 'doc-noteref') referenced.add(href.slice(1))
+  if (node.tagName !== 'a' || href?.startsWith('#') !== true || attr(node, 'role') !== 'doc-noteref') return
+  const keys = referenced.get(href.slice(1)) ?? new Set<string | undefined>()
+  keys.add(attr(node, 'data-carve-footnote-label'))
+  referenced.set(href.slice(1), keys)
 }
 
 const HEADING_TAGS = ['section', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
@@ -94,11 +103,11 @@ function isHeadingElement(node: Html.Element): boolean {
   return HEADING_TAGS.includes(node.tagName) || attr(node, 'role') === 'heading'
 }
 
-function collectSection(node: Html.Element, referenced: Set<string>, context: HtmlContext): void {
+function collectSection(node: Html.Element, referenced: Map<string, Set<string | undefined>>, context: HtmlContext): void {
   const list = elements(node).find(child => child.tagName === 'ol')
   for (const item of list === undefined ? [] : elements(list).filter(child => child.tagName === 'li')) {
     const id = attr(item, 'id')
     if (context.roundtrip) dropBacklinks(item)
-    if (id !== undefined && id !== '') context.notes.set(id, noteEntry(item, referenced.has(id), context))
+    if (id !== undefined && id !== '') context.notes.set(id, noteEntry(item, referenced.get(id), context))
   }
 }
