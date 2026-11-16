@@ -1113,9 +1113,7 @@
     "line": 12,
     "input": "{k='x}y'}\np\n",
     "check": "pass",
-    "entries": [
-      "U-196"
-    ]
+    "entries": []
   },
   {
     "cause": "C35",
@@ -2975,9 +2973,7 @@
     "line": 77,
     "input": "{id='a\"b&c'}\n# H\n\n</#a\"b&c>\n",
     "check": "pass",
-    "entries": [
-      "U-231"
-    ]
+    "entries": []
   },
   {
     "cause": "C35",

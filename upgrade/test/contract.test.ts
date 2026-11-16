@@ -47,6 +47,10 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-173#0': { check: 'pass' },
   // C2-I-034, C2-B-101: an invalid brace block makes no list marker, so 0.2 reads the paragraph of 0.1.
   'U-208#0': { check: 'pass' },
+  // Withdrawn with U-156, U-173 and U-208: the source gives the same HTML in 0.1 and 0.2 (C2-I-072, C2-B-090, C2-I-033).
+  'U-183#0': { check: 'pass' },
+  'U-196#0': { check: 'pass' },
+  'U-231#0': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
