@@ -62,7 +62,7 @@
     "path": "resources/examples/edge-cases/0854-a-standalone-code-include-with-no-resolver-is-literal-in-every-host.md",
     "line": 24,
     "input": "> {{ a @code:a,b }}\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-011"
     ]
@@ -1392,9 +1392,7 @@
     "line": 12,
     "input": "\"a-\"\\\nb\n",
     "check": "pass",
-    "entries": [
-      "U-190"
-    ]
+    "entries": []
   },
   {
     "cause": "C43",
@@ -1403,9 +1401,7 @@
     "line": 70,
     "input": "'a/'\\\nb\n",
     "check": "pass",
-    "entries": [
-      "U-190"
-    ]
+    "entries": []
   },
   {
     "cause": "C46",
@@ -1447,10 +1443,8 @@
     "path": "resources/examples/edge-cases/0848-a-quote-before-a-span-closer-closes.md",
     "line": 36,
     "input": "{+\"Wait-\"+}\n",
-    "check": "mismatch",
-    "entries": [
-      "U-144"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C47",
@@ -2415,10 +2409,8 @@
     "path": "resources/examples/edge-cases/0152-leading-attribute-brace-before-an-inline-span-stays-literal.md",
     "line": 22,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
-    "check": "pass",
-    "entries": [
-      "U-190"
-    ]
+    "check": "mismatch",
+    "entries": []
   },
   {
     "cause": "C43",
@@ -2426,10 +2418,8 @@
     "path": "tests/corpus/152-leading-attribute-brace-before-an-inline-span-stays-literal-2.crv",
     "line": 1,
     "input": "x{.k title=\"`\"} y\n\nx{title=\"[a\"}](u)\n\nx{*a { b*} c\n",
-    "check": "pass",
-    "entries": [
-      "U-190"
-    ]
+    "check": "mismatch",
+    "entries": []
   },
   {
     "cause": "C90",
