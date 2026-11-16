@@ -2,9 +2,11 @@
 // content is a line feed in the string; the block that holds the content places the lines.
 import {
   type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
-  type MentionNode, type Node, type NodeOfType, type RubyNode, type TextNode, type InlineExtensionNode,
+  type MentionNode, type Node, type NodeOfType, type ParagraphNode, type RubyNode, type TextNode, type InlineExtensionNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
+import { foldLabel } from './ast-attributes.ts'
+import { inlineContent } from './ast-blocks.ts'
 import { parseChunk } from './write-check.ts'
 import { unitBytes } from './positions.ts'
 import { isAsciiPunctuation } from './unicode.ts'
@@ -283,7 +285,19 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
     const escapes = w.escapes.get(first) ?? []
     if (escapes[0] !== 0) w.escapes.set(first, [0, ...escapes])
   }
-  return `[${writeInlines(w, node.children, flags | IN_BRACKET)}]${target(node, node.href)}`
+  const content = writeInlines(w, node.children, flags | IN_BRACKET)
+  return `[${collapsedContent(node, content, flags)}]${target(node, node.href)}`
+}
+
+/**
+ * C2-W-075: the content of a collapsed reference folds to its key (C2-I-079). Where the written content does not, and
+ * the key read as content gives the children, the key is the content.
+ */
+function collapsedContent(node: LinkNode, content: string, flags: number): string {
+  const key = node.key
+  if (node.refForm !== 'collapsed' || key === undefined || (flags & IN_CELL) !== 0 || foldLabel(content) === key) return content
+  const read: ParagraphNode = { type: 'paragraph', children: inlineContent(key) }
+  return treesEqual(read, { type: 'paragraph', children: node.children }) ? key : content
 }
 
 function imageNode(w: Writer, node: ImageNode, flags: number): string {
