@@ -92,6 +92,50 @@ function invalidTableAttribute(node: Node, path: string, context: LintContext): 
   }
 }
 
+/** The offset of a line comment behind the closing pipe of a row line, or -1. */
+function trailingComment(text: string): number {
+  const at = text.indexOf('%%', text.lastIndexOf('|') + 1)
+  return at > 0 && (text[at - 1] === ' ' || text[at - 1] === '\t') ? at : -1
+}
+
+/** The comments read since the last row line of a table, and whether a row line stands above them. */
+interface RowWalk {
+  pending: [number, number][]
+  afterRow: boolean
+}
+
+/** One line of a table for `comment-splits-table-row`: `start` is its offset, `text` its text behind the container prefixes. */
+function walkRowLine(walk: RowWalk, start: number, text: string, path: string, context: LintContext): void {
+  const end = start + text.trimEnd().length
+  if (text.startsWith('%%')) {
+    if (walk.afterRow) walk.pending.push([start, end])
+    return
+  }
+  const row = text.startsWith('|') || text.startsWith('+')
+  if (text.startsWith('+') && walk.afterRow) {
+    for (const [from, to] of walk.pending) context.report('comment-splits-table-row', from, to, path)
+  }
+  walk.pending = []
+  walk.afterRow = row
+  const comment = row ? trailingComment(text) : -1
+  if (comment >= 0) walk.pending.push([start + comment, end])
+}
+
+/**
+ * C2-W-137: a comment between a table row and its continuation row (C2-B-175), as a comment-only line or as the
+ * trailing comment of the row, belongs after the whole row.
+ */
+function commentSplitsRow(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'table' || node.pos === undefined) return
+  const walk: RowWalk = { pending: [], afterRow: false }
+  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) continue
+    const offset = line.text.length - line.text.replace(/^[\t >]*/u, '').length
+    walkRowLine(walk, line.start + offset, line.text.slice(offset), path, context)
+  }
+}
+
 function groupRows(node: Node, type: string): number {
   if (node.type !== 'table') return 0
   let rows = 0
@@ -979,6 +1023,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('table-column-arity', ['table'], tableColumnArity),
   nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
   nodeRule('table-row-count-clamped', ['table'], rowCountClamped),
+  nodeRule('comment-splits-table-row', ['table'], commentSplitsRow),
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
   nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),

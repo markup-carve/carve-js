@@ -53,6 +53,7 @@ const CASES = [
   { id: 'indented-code-block', trigger: '    code', near: '```\ncode\n```', fragment: 'code' },
   { id: 'unattached-block-attribute', trigger: '{.x}', near: '{.x}\ntext', fragment: '{.x}' },
   { id: 'empty-include-path', trigger: '{{ }}', near: '{{ file.crv }}', fragment: '{{ }}' },
+  { id: 'comment-splits-table-row', trigger: '| a |\n%% x\n+ b |', near: '| a |\n+ b |\n%% x', fragment: '%% x' },
   { id: 'include-option-invalid', trigger: '{{ a.crv @shift:x }}', near: '{{ a.crv @shift:1 }}', fragment: '@shift:x' },
   { id: 'table-row-count-clamped', trigger: '{table header-rows=5}\n```csv\na,b\nc,d\n```', near: '{table header-rows=2}\n```csv\na,b\nc,d\n```',
     fragment: 'header-rows=5' },
