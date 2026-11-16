@@ -212,11 +212,31 @@ function closingBrace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   undecidedIf(before >= 0 && BRACED_CLOSER_MARKS.includes(String.fromCharCode(before)), leaf, 'brace')
 }
 
-/** A mark before a closing brace is paired in write-plan-pairs.ts; the other contexts of a mark are table entries. */
-function mark(chars: string): Resolver {
+/** Whether the bare text before `at` is one of `chars`, so that a run that starts there may take `at` in. */
+function runBefore(leaf: Leaf, at: number, escaped: Uint8Array, chars: string): boolean {
+  const before = code(leaf, at - 1)
+  return before >= 0 && leaf.kinds[at - 1] === TEXT && !isLiteral(leaf, at - 1, escaped) && chars.includes(String.fromCharCode(before))
+}
+
+/**
+ * C2-I-115, C2-I-117: a replaced run that starts at the text sign `at` (the sign and one of `seconds`, and `==>`)
+ * takes the backslash on the sign; `=>` is no replaced run. A sign that a run from the character before may take in,
+ * one of `inside`, is left to the repair, and so is a run that reaches into a node. A mark before a closing brace is
+ * paired in write-plan-pairs.ts.
+ */
+function signRun(seconds: string, inside: string): Resolver {
   return (leaf, at, escaped) => {
-    if (isLiteral(leaf, at, escaped)) return
-    undecidedIf(nextIs(leaf, at, chars), leaf, `mark ${String.fromCharCode(code(leaf, at))}`)
+    if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, seconds)) return
+    const why = `mark ${String.fromCharCode(code(leaf, at))}`
+    if (runBefore(leaf, at, escaped, inside) || leaf.kinds[at + 1] !== TEXT) return undecide(leaf, why)
+    if (code(leaf, at) !== 61) {
+      escaped[at] = 1
+      return
+    }
+    if (code(leaf, at + 1) === 61 && code(leaf, at + 2) === 62) {
+      if (leaf.kinds[at + 2] === TEXT) escaped[at] = 1
+      else undecide(leaf, why)
+    }
   }
 }
 
@@ -293,15 +313,15 @@ const RESOLVERS: Readonly<Record<string, Resolver>> = {
   '\'': quote,
   '(': (leaf, at) => undecidedIf(nextIs(leaf, at, 't') && code(leaf, at + 2) === 109, leaf, 'trademark'),
   '*': () => undefined,
-  '+': mark('-'),
+  '+': signRun('-', ''),
   ',': () => undefined,
   '-': hyphen,
   '.': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) dots(leaf, at) },
   '/': () => undefined,
   ':': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) colon(leaf, at, escaped) },
   '<': angle,
-  '=': mark('=>'),
-  '>': mark('='),
+  '=': signRun('=>', '!<=>'),
+  '>': signRun('=', '-=<'),
   '@': (leaf, at, escaped) => { if (!isLiteral(leaf, at, escaped)) sigil(leaf, at, escaped) },
   '[': bracket,
   // C2-W-097: a backslash the writer leaves single before punctuation stands in what it takes for a quoted brace

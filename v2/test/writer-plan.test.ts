@@ -252,6 +252,15 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-115, C2-I-117: a replaced run of signs takes the backslash on its first sign, and `=>` stays text', () => {
+    for (const source of ['a \\==> b\n', 'a => b\n', 'a \\>= b\n', 'a == b\n', 'a \\<\\==> b\n', 'a \\!\\==> b\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')
