@@ -75,3 +75,36 @@ describe('C2-I-118/126: the scan goes on behind an opener that failed at the cap
     ])
   })
 })
+
+describe('C2-B-130: a line block keeps the spaces that lead a line after the content-column strip', () => {
+  const lines = (src: string): unknown => {
+    const values: string[] = []
+    const walk = (node: { type: string, value?: string, children?: unknown[] }): void => {
+      if (node.type === 'line') values.push((node.children ?? []).map((child) => (child as { value?: string }).value ?? '').join(''))
+      else for (const child of node.children ?? []) walk(child as typeof node)
+    }
+    walk(parse(src) as unknown as { type: string })
+    return values
+  }
+
+  it('C2-B-130: the indent of the opener is not stripped from a line (no C2-B-029 strip)', () => {
+    expect(lines(' ::: |\n x\n :::\n')).toEqual([' x'])
+    expect(lines('  ::: |\n   x\n y\n  :::\n')).toEqual(['   x', ' y'])
+    expect(lines(' ::: |\n\tx\n :::\n')).toEqual(['\tx'])
+    expect(render(' ::: |\n x\n :::\n')).toBe('<div class="line-block">\n  <p>&nbsp;x</p>\n</div>')
+  })
+
+  it('C2-B-027, C2-B-130: in an item only the content column is stripped', () => {
+    expect(lines('- ::: |\n     x\n  :::\n')).toEqual(['   x'])
+    expect(lines('- a\n\n  ::: |\n    x\n  :::\n')).toEqual(['  x'])
+    expect(lines('- a\n\n    ::: |\n    x\n    :::\n')).toEqual(['  x'])
+    expect(lines('-   a\n\n    ::: |\n      x\n    :::\n')).toEqual(['  x'])
+    expect(lines('> - a\n>\n>   ::: |\n>    x\n>   :::\n')).toEqual([' x'])
+    expect(lines('[^n]: ::: |\n        x\n      :::\n\n[^n]\n')).toEqual(['  x'])
+  })
+
+  it('C2-B-004 to C2-B-007, C2-B-130: a tab behind a quote mark leads the line and stays', () => {
+    expect(lines('- > a\n  > \t::: |\n  > \tx\n  > \t:::\n')).toEqual(['\tx'])
+    expect(lines('> \t::: |\n> \t x\n> \t:::\n')).toEqual(['\t x'])
+  })
+})

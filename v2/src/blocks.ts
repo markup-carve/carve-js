@@ -449,10 +449,34 @@ function closeUnowned(state: BlockState, matched: number, end: number): void {
 
 /** Opens the blocks that start at the cursor. Containers may stack on one line (C2-B-057, C2-B-058, C2-B-072). */
 function openBlocks(state: BlockState, lineStart: number, end: number): void {
+  noteContentColumn(state, end)
   while (openContainer(state, lineStart, end)) {
     if (state.cursor.pos >= end) return
+    noteContentColumn(state, end)
   }
   openLeaf(state, lineStart, end)
+}
+
+/** The content column of the innermost container: the column of its first content character (C2-B-027). */
+function noteContentColumn(state: BlockState, end: number): void {
+  const containers = state.containers
+  const top = containers.depth - 1
+  const cursor = state.cursor
+  if (containers.content[top]! < 0 && cursor.pos < end) containers.content[top] = cursor.column - cursor.origin
+}
+
+/**
+ * C2-B-130: a line block is stripped by the content column of the innermost item, description or footnote
+ * body inside the innermost quote, or by the one space behind that quote mark (C2-B-003), not by its opener's indent.
+ */
+function lineBlockStrip(state: BlockState): number {
+  const containers = state.containers
+  for (let index = containers.depth - 1; index > 0; index--) {
+    const kind = containers.kind[index]!
+    if (kind === QUOTE) return 1
+    if (isIndentContainer(kind)) return Math.max(containers.content[index]!, 0)
+  }
+  return 0
 }
 
 /** Tries the container shapes the first character allows, in the order of their bits. */
@@ -928,6 +952,7 @@ function openDiv(state: BlockState, end: number): boolean {
     // C2-B-123: the body of a line block is one leaf.
     writeEvent(state, enterTag(state, LINE_BLOCK, 0), pos, length)
     openOpaqueLeaf(state, LINE_BLOCK, COLON, length)
+    state.leaf.fenceColumn = lineBlockStrip(state)
     return true
   }
   let style = 0
@@ -961,6 +986,7 @@ function push(state: BlockState, kind: number, flags: number, pos: number, aux: 
   const depth = containers.depth
   containers.kind[depth] = kind
   containers.column[depth] = column
+  containers.content[depth] = isIndentContainer(kind) ? -1 : 0
   containers.style[depth] = 0
   containers.loose[depth] = 0
   containers.depth = depth + 1

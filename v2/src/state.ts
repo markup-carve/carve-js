@@ -19,6 +19,8 @@ export interface Containers {
   // description list and the run length of a div. `style` holds the enter flags that are the kind of a list or of a div.
   kind: Uint8Array
   column: Int32Array
+  // The content column of an item, a description or a footnote body, or -1 until a block opens in it (C2-B-027).
+  content: Int32Array
   style: Uint8Array
   loose: Uint8Array
   depth: number
@@ -104,6 +106,7 @@ function createState(): BlockState {
     containers: {
       kind: new Uint8Array(MAX_DEPTH + 1),
       column: new Int32Array(MAX_DEPTH + 1),
+      content: new Int32Array(MAX_DEPTH + 1),
       style: new Uint8Array(MAX_DEPTH + 1),
       loose: new Uint8Array(MAX_DEPTH + 1),
       depth: 0,
