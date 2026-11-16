@@ -6,7 +6,7 @@ import { treesEqual } from './ast-json.ts'
 import { validateTree } from './ast-validate.ts'
 import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
-import { type Check, compareBlocks, createCheck, escapeOpeners, extendChains, parseChunk } from './write-check.ts'
+import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
 import { isSecondHalf, unitBytes } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
@@ -46,6 +46,8 @@ export interface WriterStats {
   reasons: Map<string, number>
   samples: Map<string, string>
   parses: number
+  /** The characters of each repaired group and the characters its repair parsed. */
+  work: [number, number][]
 }
 
 interface WriterRun {
@@ -466,14 +468,23 @@ interface RepairHistory {
 
 const MAX_REPAIR_CHARS = 20_000_000
 const MIN_REPAIR_ROUNDS = 32
+// C2-W-133: every parse of a repair, its probes included, reads at most this many characters per character of the
+// group, or the floor for a short group, so the repair of any group takes time linear in its size. The floor is
+// above the 20 million characters that the slowest of 20,000 property documents needs (four kilobytes of
+// unclosed braced openers past the depth cap), so no output that finished before is refused now.
+const WORK_FACTOR = 1000
+const WORK_FLOOR = 24_000_000
 
 /** C2-W-133: stop a repeated repair state or an exhausted repair budget. */
 function repeatedRepair(w: Writer, group: readonly Node[], history: RepairHistory): boolean {
   const chars = w.lines.reduce((total, line) => total + line.length + 1, 0)
-  if (history.rounds === 0) history.remainingChars = Math.max(history.remainingChars, chars * MIN_REPAIR_ROUNDS)
+  if (history.rounds === 0) {
+    history.remainingChars = Math.max(history.remainingChars, chars * MIN_REPAIR_ROUNDS)
+    w.work.limit = w.work.chars + Math.max(WORK_FLOOR, chars * WORK_FACTOR)
+  }
   history.rounds++
   history.remainingChars -= chars
-  if (history.rounds > 8192 || history.remainingChars < 0) {
+  if (history.rounds > 8192 || history.remainingChars < 0 || exhausted(w)) {
     const host = group[0]
     if (host !== undefined) refuseRepair(w, host)
     return true
@@ -647,7 +658,10 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
     }
   }
   run.stats.repaired++
-  return repairGroup(w, document, from, first, reported)
+  const work = w.work.chars
+  const end = repairGroup(w, document, from, first, reported)
+  run.stats.work.push([w.lines.reduce((total, line) => total + line.length + 1, 0), w.work.chars - work])
+  return end
 }
 
 /**
@@ -655,6 +669,12 @@ function writeGroup(w: Writer, run: WriterRun, document: DocumentNode, from: num
  * `first` says that the group starts the document, where line 1 can open frontmatter (C2-B-161).
  */
 function repairGroup(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
+  const end = repairRounds(w, document, from, first, reported)
+  w.work.limit = Infinity
+  return end
+}
+
+function repairRounds(w: Writer, document: DocumentNode, from: number, first: boolean, reported: number): number {
   const nodes = document.children
   const history: RepairHistory = { ids: new Map(), recent: [], seen: new Set(), rounds: 0, remainingChars: MAX_REPAIR_CHARS }
   for (;;) {
@@ -665,7 +685,7 @@ function repairGroup(w: Writer, document: DocumentNode, from: number, first: boo
     if (w.lines.length === 0) return end
     if (refuseDeepGroup(w, group)) return end
     if (repeatedRepair(w, group, history)) return end
-    if (!settle(w, document, group, first && !w.blankFirst)) {
+    if (!settle(w, document, group, first && !w.blankFirst) && !exhausted(w)) {
       if (w.losses.entries.length === reported) reportUnread(w, group)
       pruneGroupEscapes(w, group, first && !w.blankFirst)
       return end
@@ -794,6 +814,12 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
   let source = `${first ? '' : '\n'}${w.lines.join('\n')}\n`
   let at = source.indexOf('\\')
   while (at >= 0) {
+    // C2-W-133: each candidate is one parse more, so the pruning counts toward the limit of the repair.
+    if (exhausted(w)) {
+      const host = group[0]
+      if (host !== undefined) refuseRepair(w, host)
+      break
+    }
     if (prunableOpener(source, at)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
       const parsed = parseChunk(w, candidate).children
@@ -814,7 +840,7 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
 /** Writes a tree that is known to be valid, by the path `path`, and reports how it wrote it. */
 export function writeTreeWithStats(document: DocumentNode, options: WriteOptions | undefined, path: WriterPath = 'plan',
   check = options?.check !== false): { output: WriteOutput, stats: WriterStats } {
-  const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0 }
+  const stats: WriterStats = { planned: 0, repaired: 0, differences: [], reasons: new Map(), samples: new Map(), parses: 0, work: [] }
   const run: WriterRun = { path, check, stats }
   const layout = options?.layout
   const facts = layout === undefined ? null : new Map<Node, WriterFacts>()

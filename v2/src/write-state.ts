@@ -67,6 +67,21 @@ export interface Writer {
   plan: Plan | null
   /** The parses the writer made, for the test that the planned path makes none. */
   parses: number
+  /** C2-W-088: the result of each probe of the repair by the state it reads (write-check.ts), and an id of each node it read. */
+  probes: Map<string, ProbeResult>
+  nodeIds: Map<Node, number>
+  /** The text nodes that stand in for markup in a probe, one per node they stand beside, so that a probe keeps their identity. */
+  standIns: Map<Node, Map<string, TextNode>>
+  /** Whether a content line written alone opens a block, by its text (write-check.ts). */
+  lineOpens: Map<string, boolean>
+  /** C2-W-133: the characters every parse of the writer read, probes included, which share this record, and its limit. */
+  work: { chars: number, limit: number }
+}
+
+/** What one probe of the repair found: its result and the escapes it asked of the comparison, in order. */
+export interface ProbeResult {
+  found: boolean | null
+  taken: [TextNode, number][]
 }
 
 export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: boolean,
@@ -78,6 +93,7 @@ export function createWriter(facts: Map<Node, WriterFacts> | null, alignTables: 
     wrapStarts: null,    alignTables, blankFirst: false, losses: { entries: [], nodes: [] }, lost: new Set(),
     lostKeys: new Map(), colonRuns: new Map(), kindsBelow: new Map(), abbreviations: new Map(), linkKeys: new Set(), parsed: null,
     prewrittenAttributes: null, plan: null, parses: 0,
+    probes: new Map(), nodeIds: new Map(), standIns: new Map(), lineOpens: new Map(), work: { chars: 0, limit: Infinity },
   }
 }
 

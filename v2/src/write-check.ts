@@ -17,8 +17,14 @@ import { isAsciiAlphanumeric, isAsciiPunctuation } from './unicode.ts'
 /** The tree of `src`, one block of the document that `w` writes. Each call is counted in `w.parses`. */
 export function parseChunk(w: Writer, src: string, linkKeys: ReadonlySet<string> | null = w.linkKeys): DocumentNode {
   w.parses++
+  w.work.chars += src.length
   const extensions = w.extensions
   return applyExtensions(buildSource(src, true, w.abbreviations, null, extensions.length > 0, linkKeys), extensions).document
+}
+
+/** C2-W-133: whether the repair of the group has parsed more than its limit. */
+export function exhausted(w: Writer): boolean {
+  return w.work.chars > w.work.limit
 }
 
 /** One comparison of written blocks with their parse: what it asks the next write to change. */
@@ -410,32 +416,117 @@ function probeWriter(c: Check, expected: readonly Node[]): Writer {
     lostKeys: new Map(c.w.lostKeys) }
 }
 
+/** Where a probe is made, which fixes the escapes it may take over: the content of a node, or the content across its closer. */
+type ProbeSite = 'content' | 'across'
+
 /**
  * C2-W-088 on the inlines `expected` of `e` written and parsed on their own: while the parse holds a
  * construct that the tree does not, the opener of the leftmost one takes the backslash and they are
  * parsed again. The escapes that `takes` accepts go to `c` as escapes of this round. Null where the
  * inlines do not read as one paragraph, which tells nothing; otherwise whether an escape was asked for.
+ * The comparison inside a probe probes the next level of nesting, so a probe is made once for each
+ * state it reads (`probeKey`) and replayed after; without that, its cost grows with 3 to the power of the depth.
  */
-function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: number, takes: Takes = () => true): boolean | null {
+function probeEscapes(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite, takes: Takes): boolean | null {
+  const key = probeKey(c, e, expected, flags, site)
+  const known = c.w.probes.get(key)
+  if (known !== undefined) {
+    for (const [node, at] of known.taken) escapeAt(c, node, at)
+    return known.found
+  }
+  const before = c.escapes.length
+  const found = runProbe(c, e, expected, flags, takes)
+  // A probe cut short by the limit is not kept: its group is refused (C2-W-133).
+  if (!exhausted(c.w)) c.w.probes.set(key, { found, taken: c.escapes.slice(before) })
+  return found
+}
+
+function runProbe(c: Check, e: Node, expected: readonly Node[], flags: number, takes: Takes): boolean | null {
   const w = probeWriter(c, expected)
   let found = false
   for (let round = 0; round < MAX_PROBE_ROUNDS; round++) {
-    const source = `${writeInlines(w, expected, flags)}\n`
-    const parsed = parseChunk(c.w, source).children
-    const block = parsed[0]
-    if (parsed.length !== 1 || block?.type !== 'paragraph') return round === 0 ? null : found
-    const probe = createCheck(w)
-    probe.flags = flags
-    probe.source = source
-    compareInlines(probe, expected, block.children, e)
-    extendChains(probe)
-    const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
-    // A first parse that differs where no escape helps, as a content that starts with a line break, tells nothing.
-    if (taken.length === 0) return round === 0 && probe.losses.length > 0 ? null : found
+    // C2-W-133: past the repair limit the group is refused after this round, so nothing more is probed.
+    if (exhausted(c.w)) return found
+    const taken = probeRound(c, w, e, expected, flags, takes)
+    // A first parse that is no paragraph, or that differs where no escape helps, as a content that starts with a
+    // line break, tells nothing.
+    if (taken === null) return round === 0 ? null : found
+    if (taken.length === 0) return found
     found = true
     for (const [node, at] of taken) w.escapes.set(node, [...(w.escapes.get(node) ?? []), at].sort((x, y) => x - y))
   }
   return found
+}
+
+/** One round of a probe: the escapes it takes over into `c`, or null where its parse tells nothing. */
+function probeRound(c: Check, w: Writer, e: Node, expected: readonly Node[], flags: number, takes: Takes): [TextNode, number][] | null {
+  const source = `${writeInlines(w, expected, flags)}\n`
+  const parsed = parseChunk(c.w, source).children
+  const block = parsed[0]
+  if (parsed.length !== 1 || block?.type !== 'paragraph') return null
+  const probe = createCheck(w)
+  probe.flags = flags
+  probe.source = source
+  compareInlines(probe, expected, block.children, e)
+  extendChains(probe)
+  const taken = probe.escapes.filter(([node, at]) => takes(node, at) && escapeAt(c, node, at))
+  return taken.length === 0 && probe.losses.length > 0 ? null : taken
+}
+
+/** The id of `node` for the keys of the probes: one per node object. */
+function nodeIdOf(w: Writer, node: Node): number {
+  const known = w.nodeIds.get(node)
+  if (known !== undefined) return known
+  const id = w.nodeIds.size
+  w.nodeIds.set(node, id)
+  return id
+}
+
+/**
+ * The text `value` that stands in a probe for markup beside `anchor`, as the word before a content. A probe below
+ * may escape it, so a probe made again must see the same node, or its result names a node no longer written.
+ */
+function standIn(w: Writer, anchor: Node, role: string, value: string): TextNode {
+  const roles = w.standIns.get(anchor) ?? new Map<string, TextNode>()
+  w.standIns.set(anchor, roles)
+  const name = `${role} ${value}`
+  const known = roles.get(name)
+  if (known !== undefined) return known
+  const node: TextNode = { type: 'text', value }
+  roles.set(name, node)
+  return node
+}
+
+/**
+ * The state a probe reads, as a key: the site, the flags, the probed node and its state, the inlines,
+ * and of each node below them what the writer and `c` hold for it. The rest of what the writer reads is fixed for one write.
+ */
+function probeKey(c: Check, e: Node, expected: readonly Node[], flags: number, site: ProbeSite): string {
+  const w = c.w
+  // The comparison reads the form of `e` itself where its content ends early (`closedEarly`).
+  const parts: unknown[] = [site, flags, nodeIdOf(w, e), nodeState(c, e)]
+  for (const node of expected) parts.push(nodeIdOf(w, node))
+  const pending = [...expected]
+  for (;;) {
+    const node = pending.pop()
+    if (node === undefined) break
+    for (const child of childNodes(node)) pending.push(child)
+    const state = nodeState(c, node)
+    if (state !== null) parts.push(nodeIdOf(w, node), state)
+  }
+  return JSON.stringify(parts)
+}
+
+/** What the writer and the comparison `c` hold for `node`, or null where it holds nothing. */
+function nodeState(c: Check, node: Node): unknown[] | null {
+  const w = c.w
+  const escapes = node.type === 'text' ? w.escapes.get(node) : undefined
+  const marks = node.type === 'text' ? c.marks.get(node) : undefined
+  const form = w.forms.get(node)
+  const keys = w.lostKeys.get(node)
+  const lost = w.lost.has(node)
+  if (escapes === undefined && marks === undefined && form === undefined && keys === undefined && !lost) return null
+  return [escapes, marks === undefined ? undefined : [...marks], form, keys, lost]
 }
 
 /**
@@ -448,12 +539,12 @@ function escapeContentConstruct(c: Check, e: Node): boolean {
   if (!('children' in e) || e.children.length === 0) return false
   // A content that opens a block on its own line is read again behind a word, which opens none, and
   // then with its line breaks as spaces, so that no later line opens one either.
-  const word: Node = { type: 'text', value: 'x' }
-  const flat = e.children.map((node): Node => (node.type === 'soft_break' ? { type: 'text', value: ' ' } : node))
+  const word: Node = standIn(c.w, e, 'word', 'x')
+  const flat = e.children.map((node): Node => (node.type === 'soft_break' ? standIn(c.w, node, 'space', ' ') : node))
   // A content that starts with a line break reads as a paragraph only behind the word.
   const variants = isBreak(e.children[0]) ? [[word, ...e.children], [word, ...flat]] : [e.children, [word, ...e.children], [word, ...flat]]
   for (const expected of variants) {
-    const found = probeEscapes(c, e, expected, contentFlags(c, e))
+    const found = probeEscapes(c, e, expected, contentFlags(c, e), 'content', () => true)
     if (found !== null) return found
   }
   return false
@@ -470,8 +561,8 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const flags = contentFlags(c, e)
   const spelled = writeInlines(c.w, [e], c.flags)
   const content = writeInlines(c.w, e.children, flags)
-  const closer: Node = { type: 'text', value: spelled.slice(spelled.length - (spelled.length - content.length) / 2) }
-  const word: Node = { type: 'text', value: 'x' }
+  const closer: Node = standIn(c.w, e, 'closer', spelled.slice(spelled.length - (spelled.length - content.length) / 2))
+  const word: Node = standIn(c.w, e, 'word', 'x')
   let end = i + 1
   // A label or a bracket pair can run on over a line break (C2-I-076).
   while (end < es.length && end - i <= MAX_ACROSS) end++
@@ -482,7 +573,8 @@ function escapeAcrossCloser(c: Check, es: readonly Node[], i: number): boolean {
   const own = new Set(textsBelow(e))
   const takes = (node: TextNode, at: number): boolean => node !== closer && node !== word && !(own.has(node) && node.value[at] === mark)
   // Bare, a name sigil keeps its boundary; behind a word, no block opens and a leading space stays.
-  return probeEscapes(c, e, inlines, flags, takes) === true || probeEscapes(c, e, [word, ...inlines], flags, takes) === true
+  return probeEscapes(c, e, inlines, flags, 'across', takes) === true ||
+    probeEscapes(c, e, [word, ...inlines], flags, 'across', takes) === true
 }
 
 // The inlines behind a node that a probe across its closing mark reads, at most.
@@ -530,8 +622,13 @@ function escapeContentLine(c: Check, e: Node): boolean {
 function opensBlockAlone(c: Check, nodes: readonly Node[], from: number): boolean {
   let end = from
   while (end < nodes.length && !isBreak(nodes[end])) end++
-  const blocks = parseChunk(c.w, writeInlines(c.w, nodes.slice(from, end), c.flags)).children
-  return blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
+  const line = writeInlines(c.w, nodes.slice(from, end), c.flags)
+  const known = c.w.lineOpens.get(line)
+  if (known !== undefined || exhausted(c.w)) return known ?? false
+  const blocks = parseChunk(c.w, line).children
+  const opens = blocks.length !== 1 || blocks[0]!.type !== 'paragraph'
+  c.w.lineOpens.set(line, opens)
+  return opens
 }
 
 /** How far behind the start of the construct `a` its opener takes the backslash (C2-W-090, C2-W-099). */
