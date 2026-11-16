@@ -318,3 +318,28 @@ describe('C2-H-051: the carrier of a raw span stands only around the escaped pay
     expect(renderWithDiagnostics('`x`{=latex}', { roundtrip: true }).diagnostics.map((d) => d.code)).toEqual(['raw-format-dropped'])
   })
 })
+
+describe('C2-I-118: what counts against the depth cap where a delimiter is open before a bracket construct', () => {
+  // The inline children of the one leaf at the bottom of the blocks of `src`, as `type` or `type(children)`.
+  const leaf = (src: string): string => {
+    let node = parse(src).children[0] as unknown as { type: string, children: { type: string }[] }
+    while (['block_quote', 'list', 'list_item'].includes(node.type)) node = node.children[0] as typeof node
+    const show = (child: { type: string, value?: string, children?: unknown[] }): string =>
+      child.type === 'text' ? JSON.stringify(child.value) : `${child.type}(${(child.children ?? []).map((c) => show(c as typeof child)).join(' ')})`
+    return node.children.map(show).join(' ')
+  }
+
+  it('C2-I-118: an opening bracket counts the block depth and the open brackets, not the open delimiter entries', () => {
+    expect(leaf(`${'> '.repeat(198)}*:n[[]`)).toBe('"*:n[[]"')
+    expect(leaf(`${'> '.repeat(199)}:n[[]`)).toBe('inline_extension("[")')
+  })
+
+  it('C2-I-118: a bracket construct counts the block depth, the constructs around it and the open delimiter entries', () => {
+    expect(leaf(`${'> '.repeat(198)}[*:n[a]`)).toBe('"[*" inline_extension("a")')
+    expect(leaf(`${'> '.repeat(198)}*:n[a]`)).toBe('"*" inline_extension("a")')
+    expect(leaf(`${'> '.repeat(199)}*:n[a]`)).toBe('"*:n[a]"')
+    expect(leaf(`${'> '.repeat(197)}- *![x](u)`)).toBe('"*![x](u)"')
+    expect(leaf(`${'> '.repeat(197)}- *[x](u)`)).toBe('"*[x](u)"')
+    expect(leaf(`${'> '.repeat(196)}- *[x](u)`)).toBe('"*" link("x")')
+  })
+})
