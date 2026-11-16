@@ -200,11 +200,11 @@ describe('the spelling of an include directive', () => {
     type: 'document', astVersion: '2.0', children: [{ type: 'include', path: 'a.crv', ...fields }],
   }))
 
-  it('C2-B-204, C2-W-058: a typed value outside its shape is written in quotes and reported, since it reads back as invalid', () => {
-    const out = writeWithDiagnostics(include({ options: { lines: "'1" } }))
-    expect(out.source).toBe('{{ a.crv @lines:"\'1" }}\n')
-    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
-    expect(parse(out.source).children[0]).toMatchObject({ invalid: ['@lines:"\'1"'] })
+  it('C2-A-181, C2-B-204: a reader refuses a typed value outside its shape, and a quoted one reads back as invalid', () => {
+    for (const lines of ["'1", '5-1', '01-2']) expect(() => include({ options: { lines } }), lines).toThrow(CarveTreeError)
+    expect(() => include({ options: { cols: 'x' } })).toThrow(CarveTreeError)
+    expect(include({ options: { lines: '1-2', cols: ['a', 'b'] } }).children[0]).toMatchObject({ options: { lines: '1-2' } })
+    expect(parse('{{ a.crv @lines:"\'1" }}').children[0]).toMatchObject({ invalid: ['@lines:"\'1"'] })
   })
 
   it('C2-W-058, C2-A-181: an invalid entry is written as it is, and reported where it does not read back as itself', () => {

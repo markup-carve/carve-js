@@ -2,6 +2,7 @@
 // fails with a typed error that names what was wrong and the path of the node.
 import { AST_VERSION, type DocumentNode, isRecord, pointerKey } from './ast.ts'
 import { isFenceWord } from './opener.ts'
+import { isRange } from './include.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
@@ -212,18 +213,34 @@ function checkPairs(value: Value, path: string): void {
 const MAX_SHIFT = 999_999_999
 
 /** C2-A-181: decoded values under the six include option names. */
-function checkOption(name: string, item: Value, path: string): void {
-  if (name === 'lines' || name === 'region' || name === 'rows') requireString(item, path)
-  else if (name === 'cols') {
-    if (typeof item !== 'string') checkStrings(item, path)
-  } else if (name === 'shift') {
+const OPTION_CHECKS: ReadonlyMap<string, (item: Value, path: string) => void> = new Map([
+  ['region', (item: Value, path: string) => void requireString(item, path)],
+  ['lines', checkRange],
+  ['rows', checkRange],
+  ['cols', (item: Value, path: string) => {
+    if (typeof item === 'string') checkRange(item, path)
+    else checkStrings(item, path)
+  }],
+  ['shift', (item: Value, path: string) => {
     // C2-B-205: at most nine digits.
     const shift = typeof item === 'number' && Number.isInteger(item) && Math.abs(item) <= MAX_SHIFT
     if (item !== 'auto' && !shift) fail(path, 'not an integer of nine digits or auto')
-  } else if (name === 'code') {
+  }],
+  ['code', (item: Value, path: string) => {
     // C2-A-181: `code` is a syntax string, a language word (C2-B-117), or `true`.
     if (item !== true && (typeof item !== 'string' || !isFenceWord(item, false))) fail(path, 'not a syntax string or true')
-  } else fail(path, 'not an include option')
+  }],
+])
+
+function checkOption(name: string, item: Value, path: string): void {
+  const check = OPTION_CHECKS.get(name)
+  if (check === undefined) fail(path, 'not an include option')
+  check(item, path)
+}
+
+/** C2-A-181, C2-B-205: a range string, two numbers with the first not greater than the second. */
+function checkRange(item: Value, path: string): void {
+  if (!isRange(requireString(item, path))) fail(path, 'not a range of two numbers, the first not greater than the second')
 }
 
 /** C2-A-181: a non-empty list of options as written, each starting with `@`. */

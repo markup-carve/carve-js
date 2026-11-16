@@ -254,10 +254,10 @@ describe('the other clauses of the two commits', () => {
     expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:"a,,b" }}</p>')
     const document: DocumentNode = {
       type: 'document', astVersion: '2.0',
-      // C2-A-181: `code` is a syntax string, so the closing brace stands in an out-of-shape `cols` value.
-      children: [{ type: 'include', path: 'a.crv', options: { region: 'x y', shift: 1, cols: 'c}d', code: 'js', lines: '1-2' } }],
+      // C2-A-181: a reader refuses a range or a syntax outside its shape, so the space and the brace stand in `region`.
+      children: [{ type: 'include', path: 'a.crv', options: { region: 'x }y', shift: 1, cols: '2-3', code: 'js', lines: '1-2' } }],
     }
-    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:"x y" @cols:"c}d" @shift:1 @code:js }}</p>')
+    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:"x }y" @cols:2-3 @shift:1 @code:js }}</p>')
   })
 
   it('C2-W-002: the gate holds for a document the writer does not refuse', () => {

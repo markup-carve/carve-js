@@ -233,7 +233,7 @@ function numberEnd(value: string, pos: number): number {
 }
 
 /** C2-B-205: `N-M`, two decimal numbers without a leading zero, the first at least 1 and not greater than the second. */
-function isRange(value: string): boolean {
+export function isRange(value: string): boolean {
   const dash = numberEnd(value, 0)
   if (dash === NONE || value.charCodeAt(dash) !== HYPHEN || numberEnd(value, dash + 1) !== value.length) return false
   const first = value.slice(0, dash)
