@@ -44,11 +44,18 @@ function options(args: ParsedArgs, names: readonly string[]): Record<string, unk
   return result
 }
 
-function read(path: string, upgradeInput = false): string {
+function readBytes(path: string): Uint8Array {
+  try { return path === '-' ? readFileSync(0) : readFileSync(path) }
+  catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
+}
+
+/** C2-B-218: a Carve source is never refused for its encoding; a tree in JSON is read as strict UTF-8. */
+function decode(path: string, bytes: Uint8Array, command: string): string {
   try {
-    const bytes = path === '-' ? readFileSync(0) : readFileSync(path)
-    return upgradeInput ? decodeUpgradeBytes(bytes) : new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-  } catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
+    if (command === 'upgrade') return decodeUpgradeBytes(bytes)
+    return new TextDecoder('utf-8', { fatal: command === 'migrate-ast', ignoreBOM: true }).decode(bytes)
+  }
+  catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
 }
 
 function writeFile(path: string, source: string): void {
@@ -177,7 +184,8 @@ function formatFile(path: string, display: string, source: string, args: ParsedA
 }
 
 function executeFile(path: string, args: ParsedArgs): { status: number, record?: object, escapedRawHtml?: boolean } {
-  const source = read(path, args.command === 'upgrade')
+  const bytes = readBytes(path)
+  const source = decode(path, bytes, args.command)
   const display = path === '-' ? '<stdin>' : path
   switch (args.command) {
     case 'render': {
@@ -186,13 +194,13 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
       return { status: 0, escapedRawHtml: result.escapedRawHtml }
     }
     case 'ast': {
-      const tree = parse(source, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
+      const tree = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
       process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(tree) : encodeTree(tree)}\n`)
       return { status: 0 }
     }
     case 'fmt': return { status: formatFile(path, display, source, args) }
     case 'diagnostics': {
-      const entries = parseWithDiagnostics(source, includesOf(path, args)).diagnostics.filter((entry) => entry.channel === 'parse')
+      const entries = parseWithDiagnostics(bytes, includesOf(path, args)).diagnostics.filter((entry) => entry.channel === 'parse')
       if (args.values['json'] === true) return { status: 0, record: { file: display, diagnostics: entries.map((entry) => ({
         ...entry, file: display, ...location(source, entry),
       })) } }

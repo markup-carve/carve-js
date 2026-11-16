@@ -222,4 +222,12 @@ describe('carve2 process', () => {
     expect(cli(['import', '--from=other'], 'Hi').status).toBe(2)
     expect(cli(['import', '--from=markdown', '/path/that/does/not/exist']).status).toBe(2)
   })
+
+  it('C2-B-218: a file that is not well-formed UTF-8 is read, and the tree counts its bytes', () => {
+    const path = join(temp(), 'bad.crv')
+    writeFileSync(path, Uint8Array.from([0x61, 0xff, 0x0a]))
+    const tree = JSON.parse(cli(['ast', path]).stdout) as { srcByteLength: number, children: [{ pos: { endOffset: number } }] }
+    expect([tree.srcByteLength, tree.children[0].pos.endOffset]).toEqual([3, 2])
+    expect(cli(['render', path]).stdout).toBe('<p>a\ufffd</p>\n')
+  })
 })
