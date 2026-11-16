@@ -68,8 +68,9 @@ function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
   return attributes(r, node, { ...parts, block: true })
 }
 
+/** C2-H-019: comments and the line breaks between them, which hold no text. */
 function onlyComments(nodes: readonly Node[]): boolean {
-  for (const child of nodes) if (child.type !== 'comment') return false
+  for (const child of nodes) if (child.type !== 'comment' && child.type !== 'soft_break' && child.type !== 'hard_break') return false
   return true
 }
 

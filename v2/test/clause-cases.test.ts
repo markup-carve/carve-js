@@ -19,8 +19,8 @@ const { cases } = JSON.parse(readFileSync(FILE, 'utf8')) as { cases: ClauseCase[
 const withoutPositions = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, field: unknown) => key === 'pos' ? undefined : field))
 
 describe('the clause cases of fixtures/clause-cases.json', () => {
-  it('holds the 41 decided cases, each with a clause', () => {
-    expect(cases).toHaveLength(41)
+  it('holds the 45 decided cases, each with a clause', () => {
+    expect(cases).toHaveLength(45)
     for (const entry of cases) expect(entry.clauses.length).toBeGreaterThan(0)
   })
 

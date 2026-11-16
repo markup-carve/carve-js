@@ -281,8 +281,8 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     writeEvent(state, eventTag(EXIT, kind, 0), end, 0)
     leaf.kind = NO_LEAF
     above.blankCount = 0
-    // C2-B-147: a code block takes a caption.
-    above.captionDepth = kind === CODE ? state.containers.depth : NO_DEPTH
+    // C2-B-147: a code block takes a caption; a raw block is no code block (C2-B-116).
+    above.captionDepth = kind === CODE && !leaf.raw ? state.containers.depth : NO_DEPTH
     return
   }
   writeEvent(state, SPAN_TAG, opaqueContentStart(state, end), end)
@@ -750,6 +750,7 @@ function openFence(state: BlockState, end: number): boolean {
   }
   writeEvent(state, enterTag(state, CODE, flags), cursor.pos, length)
   openOpaqueLeaf(state, CODE, BACKTICK, length)
+  state.leaf.raw = flags === FLAG_RAW
   return true
 }
 

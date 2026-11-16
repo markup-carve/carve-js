@@ -101,8 +101,12 @@ function readLabel(src: string, p: number, end: number, info: OpenerInfo): numbe
  */
 function partEnd(src: string, start: number, after: number, end: number): number {
   if (after === start) return start
-  const next = skipSpaces(src, after, end)
-  return next > after || after === end ? next : -after - 1
+  // C2-B-117, `space` of data/line-shapes.json: spaces separate the parts; a tab is no separator, and spaces and tabs
+  // at the end of the line are no further words.
+  if (skipSpaces(src, after, end) === end) return end
+  let next = after
+  while (next < end && src.charCodeAt(next) === SPACE) next++
+  return next > after ? next : -after - 1
 }
 
 /**

@@ -219,6 +219,7 @@ function visitInclude(node: IncludeNode, walk: Walk): void {
   }
   const outer = walk.scope
   walk.scope = fileScope(walk, node, outer)
+  walk.scopes.set(node, walk.scope)
   for (const child of children) visit(walk, child, node)
   walk.scope = outer
 }
@@ -626,6 +627,7 @@ export function resolve(
     walk.scope = walk.scopes.get(body) ?? top
     for (const child of body.children) visit(walk, child, body)
   }
+  visitUnwritten(walk, document.children, top)
   const kept = keptReferences(document, walk, facts)
   const targets = findTargets(walk, mode)
   const taken = reserveIds(walk)
@@ -637,6 +639,23 @@ export function resolve(
   document.stages = document.stages?.[0] === 'includeExpansion'
     ? ['includeExpansion', 'referenceResolution', 'tableAlignment'] : ['referenceResolution', 'tableAlignment']
   return resolution
+}
+
+/**
+ * C2-A-109: a reference in a footnote definition that no reference uses, or that a duplicate lost to (C2-B-085), still
+ * resolves, although the note is not written. Only its references are read: it takes no number and no id.
+ */
+function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): void {
+  for (const child of children) {
+    if (child.type === 'include') visitUnwritten(walk, child.children ?? [], walk.scopes.get(child) ?? scope)
+    if (child.type !== 'footnote' || walk.resolution.noteOf.has(child)) continue
+    walk.scope = walk.scopes.get(child) ?? scope
+    const pending: Node[] = [...child.children]
+    for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+      if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+      forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+    }
+  }
 }
 
 function newWalk(document: DocumentNode, facts: ParseFacts | null, symbols: Readonly<Record<string, string>>): Walk {

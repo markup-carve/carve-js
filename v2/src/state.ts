@@ -42,6 +42,8 @@ export interface OpenLeaf {
   fenceChar: number
   fenceLength: number
   fenceColumn: number
+  /** C2-B-116, C2-B-147: the open code fence is a raw block, which takes no caption. */
+  raw: boolean
   // The open table: its head rows, whether the head is still open, and per column the width of the cell
   // that covers it in the row above (C2-B-174).
   tableHeadRows: number
@@ -114,7 +116,7 @@ function createState(): BlockState {
       depth: 0,
     },
     leaf: {
-      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0,
+      kind: NO_LEAF, start: 0, end: 0, lines: 0, column: 0, fenceChar: 0, fenceLength: 0, fenceColumn: 0, raw: false,
       tableHeadRows: 0, tableHeadOpen: false, tableWidths: [],
     },
     above: {
