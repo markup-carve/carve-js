@@ -1,21 +1,17 @@
 // C2-W-078, C2-W-095: a smart punctuation node of a planned leaf is written as its source. It reads
-// back as itself where its neighbors do not lengthen its run and, for a quote, where they give the
-// direction its kind names (C2-I-104 to C2-I-117). Every other place is left to the repair.
+// back as itself where its neighbors do not lengthen its run and, for a quote, where the neighbor before
+// it gives the direction its kind names (C2-I-104, C2-I-105, C2-I-111 to C2-I-117). Every other place is
+// left to the repair.
 import { type Node } from './ast.ts'
-import { APOSTROPHE_WORDS, CHARACTER_CLASSES, CLASS_QUOTE_CLOSES_BEFORE, CLASS_QUOTE_OPENS_AFTER } from './inline-tables.ts'
-import { isBoundarySpace, isWordCharacter, NO_CHARACTER } from './unicode.ts'
+import { CHARACTER_CLASSES, CLASS_QUOTE_OPENS_AFTER } from './inline-tables.ts'
+import { isAsciiDigit, isBoundarySpace, NO_CHARACTER } from './unicode.ts'
 import { ATOM, CLOSE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
-const EN_DASH = 0x2013
-const EM_DASH = 0x2014
 const LEFT_SINGLE = 0x2018
 const LEFT_DOUBLE = 0x201c
-const HYPHEN = 45
-const SLASH = 47
 const LF = 10
 const LOWER_A = 97
 const NO_BREAK_SPACE = 0xa0
-const LONGEST_WORD = 6
 // The characters that a run of smart punctuation can continue with (data/smart-punctuation.json).
 const RUN_CHARACTERS = '!+-.<=>()'
 
@@ -23,16 +19,9 @@ function inClass(code: number, mask: number): boolean {
   return code >= 0 && code < 128 && (CHARACTER_CLASSES[code]! & mask) !== 0
 }
 
-function isDash(code: number): boolean {
-  return code === HYPHEN || code === EN_DASH || code === EM_DASH
-}
-
-/** C2-I-104, C2-I-106: the reader's test of `quoteOpens` in typography.ts. */
-function quoteOpens(previous: number, next: number): boolean {
-  if (isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE) return true
-  if (!isDash(previous) && !inClass(previous, CLASS_QUOTE_OPENS_AFTER)) return false
-  if (!isDash(previous) && previous !== SLASH) return true
-  return !isBoundarySpace(next) && !inClass(next, CLASS_QUOTE_CLOSES_BEFORE)
+/** C2-I-104: the reader's test of `quoteOpens` in typography.ts, from the neighbor before alone. */
+function quoteOpens(previous: number): boolean {
+  return isBoundarySpace(previous) || previous === LEFT_SINGLE || previous === LEFT_DOUBLE || inClass(previous, CLASS_QUOTE_OPENS_AFTER)
 }
 
 function isSurrogate(code: number): boolean {
@@ -92,28 +81,11 @@ function nextOf(leaf: Leaf, from: number): number | null {
   return (code - 0xd800) * 0x400 + low - 0xdc00 + 0x10000
 }
 
-/** C2-I-107: whether an apostrophe word may start at `at`; the leaf is left to the repair there. */
-function mayStartWord(leaf: Leaf, at: number): boolean {
-  let end = at
-  while (end - at <= LONGEST_WORD && isAsciiLetter(leaf.codes[end] ?? -1)) end++
-  return end > at && APOSTROPHE_WORDS.includes(String.fromCharCode(...leaf.codes.slice(at, end)).toLowerCase())
-}
-
-function isAsciiLetter(code: number): boolean {
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
-}
-
-/** C2-I-105 to C2-I-109: the kind a single quote at `at` reads as, with the open state of the leaf, or null. */
-function singleKind(leaf: Leaf, at: number, previous: number, next: number): string | null {
-  if (next >= 48 && next <= 57) return 'right_single_quote'
-  if (!quoteOpens(previous, next)) {
-    if (!isWordCharacter(previous) || !isWordCharacter(next)) leaf.singleQuoteOpen = false
-    return 'right_single_quote'
-  }
-  if (mayStartWord(leaf, at + 1)) return null
-  if (leaf.singleQuoteOpen && isWordCharacter(next)) return 'right_single_quote'
-  leaf.singleQuoteOpen = true
-  return 'left_single_quote'
+/** C2-I-105: before an ASCII digit a single quote is the apostrophe; a digit written by a node is left to the repair. */
+function singleKind(leaf: Leaf, end: number, previous: number, next: number): string | null {
+  const digit = isAsciiDigit(next)
+  if (digit && end < leaf.kinds.length && leaf.kinds[end] !== TEXT) return null
+  return quoteOpens(previous) && !digit ? 'left_single_quote' : 'right_single_quote'
 }
 
 function isRunCharacter(code: number): boolean {
@@ -127,8 +99,8 @@ function readsBack(leaf: Leaf, at: number, end: number, node: Node): boolean {
   const next = nextOf(leaf, end)
   if (previous === null || next === null) return false
   const source = node.source
-  if (source === '"') return (quoteOpens(previous, next) ? 'left_double_quote' : 'right_double_quote') === node.kind
-  if (source === '\'') return singleKind(leaf, at, previous, next) === node.kind
+  if (source === '"') return (quoteOpens(previous) ? 'left_double_quote' : 'right_double_quote') === node.kind
+  if (source === '\'') return singleKind(leaf, end, previous, next) === node.kind
   return !isRunCharacter(previous) && !isRunCharacter(next)
 }
 

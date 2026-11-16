@@ -217,9 +217,10 @@ describe('the escapes the procedure cannot reach', () => {
     canonical('x(/u){*\\{/')
   })
 
-  it('C2-W-125: the right neighbor that decides the direction of a smart quote of the tree gets it', () => {
-    canonical('x/"\\]')
-    canonical("x/'\\]")
+  it('C2-W-125, C2-I-104: a quote behind a slash closes, so the bracket behind it takes no backslash', () => {
+    // C2-I-104: behind a slash the quote closes whatever stands after it, so the bracket needs no backslash.
+    expect(format('x/"\\]')).toBe('x/"]\n')
+    expect(format("x/'\\]")).toBe("x/']\n")
   })
 
   it('C2-W-125: a sigil before the bracket of a footnote reference of the tree gets it', () => {

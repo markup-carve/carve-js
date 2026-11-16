@@ -35,9 +35,6 @@ export interface Leaf {
   where: number
   /** C2-I-005: the units inside an attribute block of text, which the reader takes whole; null where there is none. */
   opaque: Uint8Array | null
-  /** C2-I-109: the reader's single quote state at the unit being decided, and the states the open inline footnotes saved. */
-  singleQuoteOpen: boolean
-  footnoteQuotes: boolean[]
   /** The end of the last cross-reference scan that found no `>`. */
   angleFailEnd: number
   /** The end of the last attribute block scan that found no `}` on its line. */
@@ -69,8 +66,8 @@ export interface Leaf {
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, footnoteQuotes: [], angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, ticks: null,
-    closes: null, opens: null, extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, ticks: null, closes: null, opens: null, extensions: new Map(),
+    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
 

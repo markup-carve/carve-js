@@ -256,8 +256,9 @@ describe('the escapes of a text as one procedure', () => {
   })
 
   it('C2-W-125, case seven: where the escape of a sigil would turn the quote before it, the bracket takes the backslash', () => {
+    // C2-I-104: behind a hyphen the quote closes, so the sigil takes the backslash as it does behind a letter.
     const form = format("-':n[\\]")
-    expect(form).toBe("-':n\\[]\n")
+    expect(form).toBe("-'\\:n[]\n")
     expect(referenceForm(form, parse(form))).toEqual({ form })
     expect(format("x':n[\\]")).toBe("x'\\:n[]\n")
   })
