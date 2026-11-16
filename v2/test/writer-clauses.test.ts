@@ -727,8 +727,8 @@ describe('canonical forms: tables', () => {
     expect(write(parse(src))).toBe('| a c d | b e |\n')
   })
 
-  it('C2-W-067: a break inside a label is not kept, and that cell is written on one line', () => {
-    expect(format('| [x][a |\n+ b] |\n\n[a b]: /u')).toBe('| [x][a b] |\n+ |\n\n[a b]: /u\n')
+  it('C2-B-184, C2-W-067: a label that a continuation row breaks is text, and the rows stand where the record puts them', () => {
+    expect(format('| [x][a |\n+ b] |\n\n[a b]: /u')).toBe('| [x][a |\n+ b] |\n\n[a b]: /u\n')
   })
 
   it('C2-W-068: alignTables is off by default and does not change the tree', () => {

@@ -1,7 +1,7 @@
 // Edges of the block writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
 import { CarveWriteError, decodeTree, encodeTree, format, parse, treesEqual, write } from '../src/index.ts'
-import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
+import { childrenOf, inlinesOf } from './support/nodes.ts'
 
 const TICK = '`'
 const FENCE = TICK.repeat(3)
@@ -124,12 +124,11 @@ describe('continuation rows', () => {
     stays('| *a |\n+ b* c |')
   })
 
-  it('C2-W-005: a code span that crossed rows holds the line break, so its rows are kept with and without the record', () => {
+  it('C2-B-184, C2-L-035: backticks that crossed rows are text, kept on their rows with the record and on one line without it', () => {
     const src = `| ${TICK}a |\n+ b${TICK} |`
     stays(src)
-    const plain = write(parse(src))
-    expect(plain).toBe(`${src}\n`)
+    expect(write(parse(src))).toBe(`| \\${TICK}a b${TICK} |\n`)
     const cell = childrenOf(childrenOf(childrenOf(childrenOf(parse(src))[0])[0])[0])[0]
-    expect(ofType(inlinesOf(childrenOf(cell)[0])[0], 'code').value).toBe('a\nb')
+    expect(inlinesOf(childrenOf(cell)[0]).map((node) => node.type)).toEqual(['text'])
   })
 })

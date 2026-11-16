@@ -2,7 +2,7 @@
 // added or changed, one test per clause id.
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, format, type Inline, type NodeLayout, parseWithLayout, formatWithDiagnostics, parse, render, renderWithDiagnostics, write, writeWithDiagnostics } from '../src/index.ts'
-import { documentOf, paragraph, text } from './support/tree.ts'
+import { at, documentOf, paragraph, text } from './support/tree.ts'
 import { referenceForm } from './support/writer-checks.ts'
 
 const CONTROLS = '‪‮⁦⁩'
@@ -170,15 +170,28 @@ describe('a line comment behind a list', () => {
 describe('continuation rows with no layout record', () => {
   const fence = TICK.repeat(3)
 
-  it('C2-W-067: a pipe-table cell whose code span holds a line feed is written with a continuation row there', () => {
-    const document = parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false })
-    const out = writeWithDiagnostics(document)
-    expect(out.source).toBe(`| ${TICK}a | b c |\n+ b${TICK} | |\n`)
-    expect(out.diagnostics).toEqual([])
+  /** The tree of `src` with the `value` of the first inline node of its first cell set to `value`, as a supplied tree. */
+  const suppliedCell = (src: string, value: string): DocumentNode => {
+    const document = parse(src, { positions: false })
+    Object.assign(Object(at(document, 'children.0.children.0.children.0.children.0.children.0.children.0')), { value })
+    return document
+  }
+
+  it('C2-W-067, C2-I-120: a code span in a pipe-table cell whose value holds a line feed is written with a space there', () => {
+    const out = writeWithDiagnostics(suppliedCell(`| ${TICK}a${TICK} | c |`, 'a\nb'), { check: false })
+    expect(out.source).toBe(`| ${TICK}a b${TICK} | c |\n`)
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
   })
 
-  it('C2-W-067: a braced comment that holds a line feed is broken the same way', () => {
-    expect(write(parse('| {%a | b |\n+ x%} | c |', { positions: false }))).toBe('| {% a | b c |\n+ x %} | |\n')
+  it('C2-W-067, C2-I-120: a braced comment that holds a line feed is written the same way', () => {
+    const out = writeWithDiagnostics(suppliedCell('| {% a %} | c |', 'a\nx'), { check: false })
+    expect(out.source).toBe('| {% a x %} | c |\n')
+    expect(out.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
+  })
+
+  it('C2-B-184: a code span opened in a row and closed in its continuation row is text in each fragment', () => {
+    expect(format(`| ${TICK}a | b |\n+ b${TICK} | c |`)).toBe(`| ${TICK}a | b |\n+ b${TICK} | c |\n`)
+    expect(write(parse(`| ${TICK}a | b |\n+ b${TICK} | c |`, { positions: false }))).toBe(`| \\${TICK}a b${TICK} | b c |\n`)
   })
 
   it('C2-W-067: a delimited table writes a cell that holds a line feed in double quotes', () => {
@@ -186,8 +199,8 @@ describe('continuation rows with no layout record', () => {
     expect(write(document)).toBe(`{table}\n${fence}csv\n"a\nb",c\n${fence}\n`)
   })
 
-  it('C2-W-067: a rawRef that holds a line feed is written in its cell with one space in its place', () => {
-    expect(format('| [x][a | b |\n+ b] | c |\n\n[a b]: /u')).toBe('| [x][a b] | b |\n+ | c |\n\n[a b]: /u\n')
+  it('C2-B-184: a reference label that a continuation row breaks is text in each fragment', () => {
+    expect(format('| [x][a | b |\n+ b] | c |\n\n[a b]: /u')).toBe('| [x][a | b |\n+ b] | c |\n\n[a b]: /u\n')
   })
 })
 

@@ -227,9 +227,20 @@ export function codeSpan(value: string): string {
  * C2-W-077, C2-W-117: a value that starts with a line break and ends with a backtick loses the pad before the line
  * break (C2-I-002), so it has no spelling; the padded form is written and reported.
  */
-function spanValue(w: Writer, node: Node, value: string): string {
-  if (value.startsWith('\n') && value.endsWith('`')) lose(w, node, 'value')
-  return codeSpan(value)
+function spanValue(w: Writer, node: Node, value: string, flags: number): string {
+  const spelled = cellValue(w, node, value, flags)
+  if (spelled.startsWith('\n') && spelled.endsWith('`')) lose(w, node, 'value')
+  return codeSpan(spelled)
+}
+
+/**
+ * C2-W-067, C2-I-120: no form crosses a row of a pipe table, so a value with a line feed has no spelling in a cell;
+ * a space stands in place of each line feed, and the loss is reported (C2-W-117).
+ */
+function cellValue(w: Writer, node: Node, value: string, flags: number): string {
+  if ((flags & IN_CELL) === 0 || !value.includes('\n')) return value
+  lose(w, node, 'value')
+  return value.replaceAll('\n', ' ')
 }
 
 /** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
@@ -330,8 +341,8 @@ function mentionNode(w: Writer, node: MentionNode): string {
 }
 
 /** C2-W-059: the comment forms that inline content holds. */
-function commentNode(w: Writer, node: CommentNode): string {
-  const value = node.value
+function commentNode(w: Writer, node: CommentNode, flags: number): string {
+  const value = cellValue(w, node, node.value, flags)
   // C2-W-005, C2-A-074: where a padded line reads as a block opener, the value stands glued to the marks,
   // which read the same value where it does not start or end with a space.
   const glued = (w.forms.get(node) ?? 0) > 0 && !value.startsWith(' ') && !value.endsWith(' ')
@@ -401,17 +412,17 @@ const WRITERS: InlineWriters = {
   subscript: braced(',', ','),
   insert: braced('+', '+'),
   delete: braced('-', '-'),
-  critic_comment: (_w, node) => `{#${node.value}#}`,
+  critic_comment: (w, node, flags) => `{#${cellValue(w, node, node.value, flags)}#}`,
   span: (w, node, flags) => `[${writeInlines(w, node.children, flags)}]`,
   link: linkNode,
   image: imageNode,
   inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
   inline_extension: inlineExtension,
   footnote_ref: (_w, node) => `[^${labelText(node.key)}]`,
-  code: (w, node) => spanValue(w, node, node.value),
-  literal_inline: (w, node) => `!${spanValue(w, node, node.value)}`,
-  math: (w, node) => `${node.display ? '$$' : '$'}${spanValue(w, node, node.value)}`,
-  raw_inline: (w, node) => `${spanValue(w, node, node.value)}{=${node.format}}`,
+  code: (w, node, flags) => spanValue(w, node, node.value, flags),
+  literal_inline: (w, node, flags) => `!${spanValue(w, node, node.value, flags)}`,
+  math: (w, node, flags) => `${node.display ? '$$' : '$'}${spanValue(w, node, node.value, flags)}`,
+  raw_inline: (w, node, flags) => `${spanValue(w, node, node.value, flags)}{=${node.format}}`,
   symbol: (_w, node) => `:${node.name}:`,
   mention: mentionNode,
   tag: (_w, node) => `#${node.name}`,

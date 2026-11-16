@@ -141,15 +141,11 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
   const parts = cellContent(w, cell, flags).split('\n')
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
   if (recorded !== null) return { prefix: cellPrefix(cell), parts, places: recorded }
-  // C2-L-035: without a record that fits, the row is one line.
+  // C2-L-035: without a record that fits, the row is one line. C2-L-021: a fragment that starts an empty cell came
+  // without a joining space, so it is joined without one.
   const wraps = w.facts?.get(cell)?.wraps?.length ?? 0
-  // C2-L-021: a fragment that starts an empty cell came without a joining space, so it is joined without one.
-  if (wraps === parts.length - 1) {
-    const joined = (parts[0] === '' ? parts.slice(1) : parts).join(' ')
-    return { prefix: cellPrefix(cell), parts: [joined], places: [] }
-  }
-  // A line break that the content itself holds, as in a code span that crossed rows, is a continuation row in any case (C2-W-005).
-  return { prefix: cellPrefix(cell), parts, places: parts.slice(1).map((_part, at) => at + 1) }
+  const joined = (wraps === parts.length - 1 && parts[0] === '' ? parts.slice(1) : parts).join(' ')
+  return { prefix: cellPrefix(cell), parts: [joined], places: [] }
 }
 
 function writtenRow(w: Writer, row: TableRowNode, flags: number): WrittenRow {
