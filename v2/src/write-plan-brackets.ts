@@ -77,7 +77,14 @@ function pairReading(leaf: Leaf, opener: number, closer: number, hasKeys: boolea
   // C2-B-081, C2-B-084: a definition or an abbreviation opens only at the start of a paragraph's first line, which the
   // line rules decide with the reader's shapes.
   if (next === ':') return LITERAL
+  if (next === '(') return closesOnLine(leaf, closer + 2, 41) ? NO_DECISION : LITERAL
   return next === '' || !FOLLOWERS.includes(next) ? LITERAL : NO_DECISION
+}
+
+/** C2-I-069: whether `value` follows on the line from `at` on, in any unit; a link tail stands on one line. */
+function closesOnLine(leaf: Leaf, at: number, value: number): boolean {
+  for (let unit = at; unit < leaf.codes.length && leaf.codes[unit] !== 10; unit++) if (leaf.codes[unit] === value) return true
+  return false
 }
 
 interface Scan {

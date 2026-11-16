@@ -383,6 +383,15 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-I-069: a text bracket pair before a parenthesis with no closing one on its line forms no link and is planned bare', () => {
+    for (const source of ['[a](b c\n', '![a](b c\n', 'x [a](b\nc\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')
