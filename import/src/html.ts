@@ -630,7 +630,7 @@ function tableColumns(children: TableChildren, node: Html.Element): TableColumnN
   return Array.from({ length: width }, (_, index) => {
     const value = widths[index]
     return value === undefined ? { type: 'table_column' as const }
-      : { type: 'table_column' as const, width: value, authored: true as const }
+      : { type: 'table_column' as const, width: value }
   })
 }
 

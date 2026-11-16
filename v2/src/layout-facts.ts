@@ -1,6 +1,7 @@
 // The facts of the source-layout record that one block states about itself (C2-L-016 to C2-L-018,
 // C2-L-023 to C2-L-028, C2-L-045), read from the block tree and the source.
-import { type Node } from './ast.ts'
+import { type Node, type TableNode } from './ast.ts'
+import { readDelimitedTable } from './delimited.ts'
 import { readInclude } from './include.ts'
 import { COLON, GREATER, HYPHEN, STAR } from './chars.ts'
 import {
@@ -190,10 +191,20 @@ const divFacts: Measure = (src, node, origin, _quotes, facts) => {
   facts.closerRaw = divCloser(src, origin)
 }
 
+function headRowCount(table: TableNode): number {
+  let count = 0
+  for (const group of table.children) {
+    if (group.type === 'table_head') count += group.children.filter((row) => row.type === 'table_row').length
+  }
+  return count
+}
+
 const codeFacts: Measure = (src, node, origin, _quotes, facts) => {
   if (node.type !== 'table') return setFence(src, origin, origin.aux, facts)
   // C2-L-023: a delimited table.
   facts.sourceFormat = openerWord(src, origin.start + origin.aux) === 'tsv' ? 'tsv' : 'csv'
+  // C2-L-057: a valid `header-rows` the source gave, by its effective count, which the head of the tree holds.
+  if (readDelimitedTable(src, origin).declared) facts.headerRows = headRowCount(node)
 }
 
 const MEASURES = new Map<number, Measure>([

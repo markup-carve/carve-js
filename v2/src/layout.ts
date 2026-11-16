@@ -34,6 +34,8 @@ export interface NodeLayout {
   rawRef?: string
   optionSpelling?: Record<string, string>
   sourceFormat?: 'pipe' | 'csv' | 'tsv'
+  /** C2-L-057: the effective count of the `header-rows` attribute of a delimited table. */
+  headerRows?: number
   markerRaw?: string
   markerColumn?: number
   contentColumn?: number

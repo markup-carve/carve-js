@@ -203,7 +203,7 @@ describe('the other clauses of the two commits', () => {
 
   it('C2-A-089: resolvedAlign is the mark of the last head cell before the aligns entry', () => {
     const table = ofType(parse('{aligns="right"}\n|={<} a |\n| b |', { positions: false }).children[0], 'table')
-    expect(table.columns).toEqual([{ type: 'table_column', align: 'right', authored: true, resolvedAlign: 'left' }])
+    expect(table.columns).toEqual([{ type: 'table_column', align: 'right', resolvedAlign: 'left' }])
   })
 
   it('C2-A-187: the bracket label of a div is the string groupLabel, not parsed', () => {
@@ -254,10 +254,10 @@ describe('the other clauses of the two commits', () => {
     expect(render('{{ a.crv @cols:"a,,b" }}')).toBe('<p>{{ a.crv @cols:"a,,b" }}</p>')
     const document: DocumentNode = {
       type: 'document', astVersion: '2.0',
-      // C2-A-181: a reader refuses a range or a syntax outside its shape, so the space and the brace stand in `region`.
-      children: [{ type: 'include', path: 'a.crv', options: { region: 'x }y', shift: 1, cols: '2-3', code: 'js', lines: '1-2' } }],
+      // C2-A-181: a reader refuses a range, a region or a syntax outside its shape, so the space and the brace stand in a name.
+      children: [{ type: 'include', path: 'a.crv', options: { region: 'r', shift: 1, cols: ['x }y'], code: 'js', lines: '1-2' } }],
     }
-    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:"x }y" @cols:2-3 @shift:1 @code:js }}</p>')
+    expect(render(document)).toBe('<p>{{ a.crv @lines:1-2 @region:r @cols:"x }y" @shift:1 @code:js }}</p>')
   })
 
   it('C2-W-002: the gate holds for a document the writer does not refuse', () => {

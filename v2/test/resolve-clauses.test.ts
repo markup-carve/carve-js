@@ -120,8 +120,8 @@ describe('resolution results', () => {
       { type: 'table_column', resolvedAlign: 'center' }, { type: 'table_column' },
     ])
     expect(ofType(resolved('{aligns="left,center"}\n|={>} a |= b |').document.children[0], 'table').columns).toEqual([
-      { type: 'table_column', align: 'left', authored: true, resolvedAlign: 'right' },
-      { type: 'table_column', align: 'center', authored: true, resolvedAlign: 'center' },
+      { type: 'table_column', align: 'left', resolvedAlign: 'right' },
+      { type: 'table_column', align: 'center', resolvedAlign: 'center' },
     ])
   })
 

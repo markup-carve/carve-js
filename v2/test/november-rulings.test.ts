@@ -99,3 +99,14 @@ describe('shortcut references', () => {
     expect(parse(write(parse(source)))).toEqual(parse(source))
   })
 })
+
+describe('C2-A-136, C2-A-184: a paragraph role needs its children (specification 2e9336e6)', () => {
+  it('C2-A-184: a reader refuses role image without one image, and role math without one display math', async () => {
+    const { validateTree: check } = await import('../src/index.ts')
+    const tree = (paragraph: object): unknown => ({ type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', ...paragraph }] })
+    expect(() => check(tree({ role: 'image', children: [] }))).toThrow('does not have its shape')
+    expect(() => check(tree({ role: 'math', children: [{ type: 'math', display: false, value: 'x' }] }))).toThrow('does not have its shape')
+    expect(() => check(tree({ role: 'image', children: [{ type: 'image', src: 'a', alt: 'b' }, { type: 'soft_break' },
+      { type: 'comment', form: 'line', value: '' }] }))).not.toThrow()
+  })
+})

@@ -31,7 +31,7 @@ function declaredHeadRows(old: Fields): number | undefined {
   return Array.isArray(pair) && typeof pair[1] === 'string' ? integer(Number(pair[1])) : undefined
 }
 
-function explicitGroups(rows: Fields[], old: Fields, declared: number | undefined): Fields[] | undefined {
+function explicitGroups(rows: Fields[], old: Fields): Fields[] | undefined {
   const groups = record(old['rowGroups'])
   if (groups === undefined) return undefined
   const output: Fields[] = []
@@ -44,9 +44,8 @@ function explicitGroups(rows: Fields[], old: Fields, declared: number | undefine
     const headRows = integer(body['headRows']) ?? 0
     const bodyRows = integer(body['bodyRows']) ?? 0
     const taken = takeRows(rows, at, headRows + bodyRows)
-    const value = group('table_body', taken, { headRows: declared === undefined && headRows === 0 ? undefined :
-      headRows === 0 ? heads : headRows,
-      rowHeadColumns: body['rowHeadColumns'], attrs: body['attrs'] })
+    // T-053, C2-A-088: the groups hold the partition; a body carries no count of head rows.
+    const value = group('table_body', taken, { rowHeadColumns: body['rowHeadColumns'], attrs: body['attrs'] })
     pushGroup(output, value)
     at += headRows + bodyRows
   }
@@ -131,7 +130,6 @@ function column(value: unknown): Fields {
   if (!object(value)) return { type: 'table_column' }
   const result: Fields = { type: 'table_column' }
   for (const name of ['align', 'valign', 'width']) if (value[name] !== undefined) result[name] = value[name]
-  if (Object.keys(result).length > 1) result['authored'] = true
   return result
 }
 
@@ -141,9 +139,10 @@ export function migrateTable(node: Fields, old: Fields, state: MigrationState): 
   const width = rows.reduce((largest, row) => Math.max(largest, nodeList(row['children']).length), 0)
   node['columns'] = Array.from({ length: Math.max(width, columns.length) }, (_, index) => column(columns[index]))
   const declared = declaredHeadRows(old)
-  node['children'] = explicitGroups(rows, old, declared) ??
-    (declared !== undefined && (declared === 0 || declared >= rows.length) && rows.length > 0 ?
-      [{ type: 'table_body', children: rows, headRows: declared }] : implicitGroups(rows))
+  // T-053, C2-A-088: the groups hold the partition, and a declared count goes to the sidecar (C2-L-057).
+  node['children'] = explicitGroups(rows, old) ??
+    (declared === 0 && rows.length > 0 ? [{ type: 'table_body', children: rows }] : implicitGroups(rows))
+  if (declared !== undefined) fact(state, node, 'headerRows', declared)
   const groups = nodeList(node['children'])
   normalizeSpans(groups)
   recountRowspans(groups)

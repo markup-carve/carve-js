@@ -703,11 +703,12 @@ describe('canonical forms: tables', () => {
     expect(write(parse('{table}\n```csv\na,b\t\n```'))).toBe('{table}\n```csv\na,b\t\n```\n')
   })
 
-  it('C2-W-066: a table whose body carries headRows is a delimited table with its header-rows attribute', () => {
+  it('C2-W-066, C2-L-057: header-rows is written where the head is not exactly the first row, or where the sidecar records it', () => {
     const src = '{table header-rows=2}\n```csv\na,b\nc,d\ne,f\n```'
-    expect(ofType(ofType(parse(src).children[0], 'table').children[1], 'table_body').headRows).toBe(2)
-    expect(write(parse(src))).toBe(`${src}\n`)
-    expect(write(parse('{table header-rows=0}\n```tsv\na\tb\n```'))).toBe('{table header-rows=0}\n```csv\na,b\n```\n')
+    expect(write(parse(src))).toBe('|= a |= b |\n|= c |= d |\n| e | f |\n')
+    expect(format(src)).toBe(`${src}\n`)
+    expect(format('{table header-rows=1}\n```csv\na,b\nc,d\n```')).toBe('{table header-rows=1}\n```csv\na,b\nc,d\n```\n')
+    expect(format('{table header-rows=0}\n```tsv\na\tb\n```')).toBe('{table header-rows=0}\n```tsv\na\tb\n```\n')
   })
 
   it('C2-W-066: a delimited cell that holds the separator, a double quote or a line break is quoted', () => {

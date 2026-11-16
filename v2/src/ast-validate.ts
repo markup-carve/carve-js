@@ -1,8 +1,8 @@
 // The reader side of contract 2.0 (C2-A-167 to C2-A-171): a tree that the tree document refuses
 // fails with a typed error that names what was wrong and the path of the node.
-import { AST_VERSION, type DocumentNode, isRecord, pointerKey } from './ast.ts'
+import { AST_VERSION, type DocumentNode, INLINE_PARENTS, isRecord, pointerKey } from './ast.ts'
 import { isFenceWord } from './opener.ts'
-import { isRange } from './include.ts'
+import { isIncludeIdentifier, isRange } from './include.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
@@ -117,9 +117,9 @@ const RULES = new Map<string, Rule>([
   ['superscript', ['inlines', [], []]],
   ['symbol', ['none', ['name'], []]],
   ['table', [[...TABLE_GROUPS, 'comment'], ['columns'], ['caption']]],
-  ['table_body', [['table_row', 'comment'], [], ['headRows', 'rowHeadColumns']]],
+  ['table_body', [['table_row', 'comment'], [], ['rowHeadColumns']]],
   ['table_cell', [[...BLOCKS, 'cell_paragraph'], ['header'], ['span', 'colspan', 'rowspan', 'align', 'valign', 'scope', 'headerIds']]],
-  ['table_column', ['none', [], ['align', 'valign', 'width', 'resolvedAlign', 'authored']]],
+  ['table_column', ['none', [], ['align', 'valign', 'width', 'resolvedAlign']]],
   ['table_foot', [['table_row', 'comment'], [], []]],
   ['table_head', [['table_row', 'comment'], [], []]],
   ['table_row', [['table_cell'], [], []]],
@@ -136,9 +136,9 @@ const STRINGS = [
   'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
   'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope', 'file',
 ]
-const INTEGERS = ['n', 'number', 'level', 'headRows', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
+const INTEGERS = ['n', 'number', 'level', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
 const BOOLEANS = ['display', 'header', 'decorative', 'useIndex']
-const TRUE_ONLY = ['authored']
+const TRUE_ONLY: string[] = []
 const INLINE_SLOTS = ['short', 'prefix', 'suffix', 'base', 'annotation']
 const POSITION_FIELDS = ['startLine', 'endLine', 'startColumn', 'endColumn', 'startOffset', 'endOffset']
 
@@ -214,7 +214,10 @@ const MAX_SHIFT = 999_999_999
 
 /** C2-A-181: decoded values under the six include option names. */
 const OPTION_CHECKS: ReadonlyMap<string, (item: Value, path: string) => void> = new Map([
-  ['region', (item: Value, path: string) => void requireString(item, path)],
+  // C2-A-181: an identifier, as C2-B-205 shapes the value.
+  ['region', (item: Value, path: string) => {
+    if (!isIncludeIdentifier(requireString(item, path))) fail(path, 'not an identifier')
+  }],
   ['lines', checkRange],
   ['rows', checkRange],
   ['cols', (item: Value, path: string) => {
@@ -269,7 +272,11 @@ function checkAttrs(value: Value, path: string): void {
   }
   if (value['keyValues'] === undefined) return
   checkPairs(value['keyValues'], `${path}/keyValues`)
+  const seen = new Set<string>()
   for (const [key] of value['keyValues'] as [string, string][]) {
+    // C2-A-035: a key occurs once, compared without ASCII letter case.
+    if (seen.has(key.toLowerCase())) fail(`${path}/keyValues`, `the key ${key} occurs twice`)
+    seen.add(key.toLowerCase())
     const name = key.toLowerCase()
     if (name === 'id' || name === 'class') fail(`${path}/keyValues`, `the key ${key} folds into the id or the classes`)
   }
@@ -503,6 +510,35 @@ interface Walk {
   coreFallback?: boolean
   tree: TreeFacts
   parent?: { name: string, slot: string }
+  /** C2-A-171: the open blocks and the inline levels of the current inline content above the node, within its file. */
+  blocks?: number
+  inlines?: number
+}
+
+// C2-B-190, C2-I-118: the containers a block pass opens one each, and the inline nodes that each take an inline level.
+const BLOCK_LEVELS: ReadonlySet<string> = new Set([
+  'block_quote', 'list_item', 'div', 'admonition', 'directive', 'footnote', 'definition_description', 'figure_group',
+  'block_extension',
+])
+const CONTENT_HOLDERS: ReadonlySet<string> = new Set([
+  'paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line', 'citation_definition',
+])
+const INLINE_LEVELS: ReadonlySet<string> = new Set(
+  INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type) && type !== 'inline_footnote'),
+)
+
+/** C2-A-171: refuses a node deeper than the parser makes, by the levels of each kind, counted within its file. */
+function levels(walk: Walk, type: string, path: string): Walk {
+  if (BLOCK_LEVELS.has(type)) {
+    const blocks = (walk.blocks ?? 0) + 1
+    if (blocks > MAX_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
+    return { ...walk, blocks, inlines: 0 }
+  }
+  if (CONTENT_HOLDERS.has(type)) return { ...walk, inlines: 0 }
+  if (!INLINE_LEVELS.has(type)) return walk
+  const inlines = (walk.inlines ?? 0) + 1
+  if (inlines > DEPTH_CAP) fail(path, 'the tree is nested deeper than a parser can produce')
+  return { ...walk, inlines }
 }
 
 type FieldCheck = (value: Value, path: string, walk: Walk, node: Fields) => void
@@ -834,15 +870,29 @@ function allowedTypes(content: Content): readonly string[] {
 
 function checkList(value: Value, path: string, content: Content, walk: Walk, parent?: Walk['parent']): void {
   const allowed = allowedTypes(content)
-  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, tree: walk.tree,
-    ...(walk.coreFallback === undefined ? {} : { coreFallback: walk.coreFallback }),
+  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, tree: walk.tree, blocks: walk.blocks ?? 0,
+    inlines: walk.inlines ?? 0, ...(walk.coreFallback === undefined ? {} : { coreFallback: walk.coreFallback }),
     ...(parent === undefined ? {} : { parent }) }
   requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
+}
+
+/** C2-A-136, C2-A-184: the one node a paragraph role names, with only soft breaks and comments beside it. */
+function checkRole(node: Fields, path: string): void {
+  const role = node['role']
+  if (role === undefined) return
+  let found = 0
+  for (const child of node['children'] as Fields[]) {
+    const kind = child['type']
+    if (role === 'image' ? kind === 'image' : kind === 'math' && child['display'] === true) found++
+    else if (kind !== 'soft_break' && kind !== 'comment') found = 2
+  }
+  if (found !== 1) fail(`${path}/children`, `a paragraph with the role ${String(role)} does not have its shape`)
 }
 
 /** C2-A-105, C2-A-120 and the other rules that tie two fields of one node together. */
 function checkDependencies(node: Fields, type: string, path: string, walk: Walk): void {
   if (type === 'link' || type === 'image') checkLinkFields(node, type, path)
+  if (type === 'paragraph') checkRole(node, path)
   if (type === 'math' && (node['number'] === undefined) !== (node['numberPrefix'] === undefined)) {
     fail(path, 'number and numberPrefix stand together')
   }
@@ -985,7 +1035,7 @@ function checkOptionalChildren(node: Fields, type: string, path: string, walk: W
   const content = OPTIONAL_CONTENT.get(type)
   if (content === undefined) fail(`${path}/children`, `${type} holds no children`)
   if (node['file'] === undefined) fail(`${path}/file`, 'an expanded include names its file')
-  checkList(node['children'], `${path}/children`, content, { ...walk, depth: -1 })
+  checkList(node['children'], `${path}/children`, content, { ...walk, depth: -1, blocks: 0, inlines: 0 })
   const children = node['children'] as Fields[]
   children.forEach((child, index) => {
     if (child['type'] === 'frontmatter' && index > 0) fail(`${path}/children/${index}`, 'frontmatter is not the first child')
@@ -1005,7 +1055,7 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   if (walk.coreFallback && (type === 'inline_extension' || type === 'block_extension')) {
     fail(path, 'qualified fallback contains an extension node')
   }
-  const current: Walk = walk
+  const current: Walk = levels(walk, type, path)
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
   if (type === 'table') checkSpanCounts(value, path)

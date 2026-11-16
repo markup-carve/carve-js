@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { generateRenderTables } from '../scripts/generate-render-tables.ts'
 import {
   type CaptionNode, CarveInputError, CarveRenderError, type FigureGroupNode, type Inline, type MathNode, type ParagraphNode, parse,
-  parseWithDiagnostics, render, type RenderOptions, renderWithDiagnostics, type RubyNode, type SpanNode, type TableBodyNode,
+  parseWithDiagnostics, parseWithLayout, render, type RenderOptions, renderWithDiagnostics, type RubyNode, type SpanNode,
   type TableCellNode, type TableNode,
 } from '../src/index.ts'
 import { type Diagnostic, locateFindings } from '../src/diagnostics.ts'
@@ -275,21 +275,22 @@ describe('the table attributes', () => {
     expect(rows(csv('{table footer-rows=1}', 'a', 'b', 'c'))).toBe('<thead><tr><th scope="col">a</th></tr></thead><tbody><tr><td>b</td></tr></tbody><tfoot><tr><td>c</td></tr></tfoot>')
   })
 
-  it('C2-A-088: a body whose partition the source declared carries headRows, and a value that is no count declares none', () => {
-    const body = (attributes: string): TableBodyNode => ofType(ofType(block(csv(attributes, 'a', 'b')), 'table').children.find((group) => group.type === 'table_body'), 'table_body')
-    expect(body('{table}').headRows).toBeUndefined()
-    expect(body('{table header-rows=x}').headRows).toBeUndefined()
-    expect(body('{table header-rows=1}').headRows).toBe(1)
-    expect(body('{table header-rows=0}').headRows).toBe(0)
-    // C2-B-221: the effective count; past the last row there is no body to carry it.
-    expect(ofType(ofType(block(csv('{table header-rows=1 footer-rows=1}', 'a', 'b', 'c')), 'table').children[1], 'table_body').headRows).toBe(1)
+  it('C2-A-088, C2-L-057: the groups hold the partition; a declared count is the sidecar fact headerRows of the table', () => {
+    const facts = (attributes: string): unknown => parseWithLayout(csv(attributes, 'a', 'b')).layout.nodes.find((entry) => entry.path === '/children/0')?.headerRows
+    expect(facts('{table}')).toBeUndefined()
+    expect(facts('{table header-rows=x}')).toBeUndefined()
+    expect(facts('{table header-rows=1}')).toBe(1)
+    expect(facts('{table header-rows=0}')).toBe(0)
+    // C2-B-221: the effective count, past the last row the number of rows.
+    expect(facts('{table header-rows=5}')).toBe(2)
     expect(ofType(block(csv('{table header-rows=5}', 'a', 'b')), 'table').children.map((group) => group.type)).toEqual(['table_head'])
+    expect(JSON.stringify(block(csv('{table header-rows=1}', 'a', 'b')))).not.toContain('headRows')
   })
 
   it('C2-B-211: an entry of `aligns` that is left, right or center sets the column, and any other leaves every column unset', () => {
     expect(ofType(block('{aligns=" left ,right,center,right,left"}\n| a | b | c | d |'), 'table').columns).toEqual([
-      { type: 'table_column', align: 'left', authored: true }, { type: 'table_column', align: 'right', authored: true },
-      { type: 'table_column', align: 'center', authored: true }, { type: 'table_column', align: 'right', authored: true },
+      { type: 'table_column', align: 'left' }, { type: 'table_column', align: 'right' },
+      { type: 'table_column', align: 'center' }, { type: 'table_column', align: 'right' },
     ])
     const unset = [{ type: 'table_column' }, { type: 'table_column' }]
     for (const value of ['left,x', 'left,,right', 'RIGHT,left', 'left,right,']) {

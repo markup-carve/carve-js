@@ -433,15 +433,16 @@ describe('tables', () => {
     expect(types(childrenOf(childrenOf(block('|= h |\n%% c\n| a |'))[0]))).toEqual(['table_row', 'comment'])
   })
 
-  it('C2-A-088: a body whose partition the source declared carries headRows', () => {
-    expect(at(block('{table header-rows=0}\n```csv\na\n```'), 'children.0.headRows')).toBe(0)
+  it('C2-A-088: the groups hold the partition, and no group carries a count of head rows', () => {
+    expect(at(block('{table header-rows=0}\n```csv\na\n```'), 'children.0.type')).toBe('table_body')
+    expect(at(block('{table header-rows=0}\n```csv\na\n```'), 'children.0.headRows')).toBeUndefined()
     expect(at(block('{table}\n```csv\na\nb\n```'), 'children.1.headRows')).toBeUndefined()
   })
 
-  it('C2-A-089, C2-A-090: one column per position up to the widest row; a column the source spelled is authored', () => {
+  it('C2-A-089, C2-A-090: one column per position up to the widest row; the column fields carry what the source spelled (C2-A-095)', () => {
     expect(ofType(block('| a | b |\n| c |'), 'table').columns).toEqual([{ type: 'table_column' }, { type: 'table_column' }])
     expect(ofType(block('{aligns="left,center" widths="30,70"}\n| a | b |'), 'table').columns).toEqual([
-      { type: 'table_column', align: 'left', width: 0.3, authored: true }, { type: 'table_column', align: 'center', width: 0.7, authored: true },
+      { type: 'table_column', align: 'left', width: 0.3 }, { type: 'table_column', align: 'center', width: 0.7 },
     ])
   })
 

@@ -447,7 +447,6 @@ export interface TableNode extends NodeBase {
 export interface TableBodyNode extends NodeBase {
   type: "table_body"
   children: (TableRowNode | CommentNode)[]
-  headRows?: number
   rowHeadColumns?: number
 }
 
@@ -470,7 +469,6 @@ export interface TableColumnNode extends NodeBase {
   valign?: "top" | "middle" | "bottom" | "baseline"
   width?: number
   resolvedAlign?: "left" | "right" | "center"
-  authored?: true
 }
 
 export interface TableFootNode extends NodeBase {

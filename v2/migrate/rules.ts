@@ -40,6 +40,7 @@ const FIELDS: readonly FieldRule[] = [
   { id: 'T-039', types: ['mention'], from: 'user', to: 'target' },
   { id: 'T-040', types: ['inline_footnote'], from: 'inline', to: 'children' },
   { id: 'T-041', types: ['inline_extension'], from: 'content', to: 'children' },
+  { id: 'T-053', types: ['table_body'], from: 'headRows' },
 ]
 
 const NODE_TYPES = new Map<string, string>([

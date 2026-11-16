@@ -147,6 +147,9 @@ const cases: Record<string, Case> = {
   'T-052': { children: [{ type: 'figure', children: [paragraph(text('a')), paragraph(text('b'))],
     caption: { type: 'caption', children: [paragraph(text('cap'))] } }],
     path: 'document.children.0.type', expected: 'figure_group', also: { 'document.children.0.caption.type': 'caption' } },
+  'T-053': { children: [{ type: 'table', attrs: { keyValues: [['header-rows', '0']] },
+    rows: [{ type: 'table_row', cells: [{ type: 'table_cell', header: false, children: [paragraph(text('a'))] }] }] }],
+    path: 'document.children.0.children.0.headRows', expected: undefined, also: { 'document.children.0.children.0.type': 'table_body' } },
 }
 
 const map = JSON.parse(readFileSync(join(import.meta.dirname, '../data/upgrade-map.json'), 'utf8')) as

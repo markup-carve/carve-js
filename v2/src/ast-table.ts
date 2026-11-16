@@ -294,7 +294,6 @@ function columnNodes(width: number, aligns: string[] | null, widths: number[] | 
     const fraction = widths?.[at]
     if (align !== undefined && isFieldValue('table_column.align', align)) column.align = align
     if (fraction !== undefined) column.width = fraction
-    if (column.align !== undefined || fraction !== undefined) column.authored = true
     columns.push(column)
   }
   return columns
@@ -376,8 +375,6 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
     group.push(delimitedRow(cells, index < head))
   })
   const table = tableOf(ctx, groups, attributes, true)
-  // C2-A-088, C2-B-221: a body whose partition the source declared carries the effective count.
-  if (source.declared) for (const group of table.children) if (group.type === 'table_body') group.headRows = head
   // C2-B-181: a quote that never closes is reported, and the block stays a table.
   if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node, from: 0 })
   return table

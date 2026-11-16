@@ -134,13 +134,15 @@ describe('table form', () => {
 
   it('C2-W-086, C2-L-006: a delimited format recorded on a table that a delimited table cannot hold is ignored', () => {
     expect(withFact('|= *a* |= b |\n| c | d |', '/children/0', { sourceFormat: 'csv' })).toBe('|= *a* |= b |\n| c | d |\n')
-    expect(withFact('| a | b |', '/children/0', { sourceFormat: 'csv' })).toBe('| a | b |\n')
+    // C2-L-023, C2-W-066: a table with no head is a delimited table with header-rows=0, so the recorded form holds.
+    expect(withFact('| a | b |', '/children/0', { sourceFormat: 'csv' })).toBe('{table header-rows=0}\n```csv\na,b\n```\n')
     expect(withFact('|= a |= b |\n| c | d |{.r}', '/children/0', { sourceFormat: 'tsv' })).toBe('|= a |= b |\n| c | d |{.r}\n')
   })
 
   it('C2-W-086, C2-L-006: the pipe form recorded on a table that needs the delimited form is ignored', () => {
+    // C2-L-023: two head rows are a pipe table too, so the recorded form holds there.
     const src = '{table header-rows=2}\n```csv\na,b\nc,d\ne,f\n```'
-    expect(withFact(src, '/children/0', { sourceFormat: 'pipe' })).toBe(`${src}\n`)
+    expect(withFact(src, '/children/0', { sourceFormat: 'pipe' })).toBe('|= a |= b |\n|= c |= d |\n| e | f |\n')
     expect(withFact('{table}\n```csv\n```', '/children/0', { sourceFormat: 'pipe' })).toBe('{table}\n```csv\n```\n')
   })
 })

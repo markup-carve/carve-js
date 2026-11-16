@@ -176,6 +176,11 @@ function readShape(src: string, pos: number, end: number): Shape | null {
   return null
 }
 
+/** C2-B-205: an identifier, the shape of a region name. */
+export function isIncludeIdentifier(value: string): boolean {
+  return isIdentifier(value)
+}
+
 function isIdentifier(value: string): boolean {
   return nameEnd(value, 0, value.length, startsKey) === value.length
 }

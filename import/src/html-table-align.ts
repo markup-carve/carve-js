@@ -60,7 +60,6 @@ export function resolveAlignments(table: TableNode): void {
     const align = hasHead ? undefined : sharedAlign(entries)
     if (column === undefined || align === undefined) continue
     column.align = align
-    column.authored = true
     for (const entry of entries) delete entry.cell.align
   }
 }

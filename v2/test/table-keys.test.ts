@@ -51,7 +51,8 @@ describe('table keys', () => {
     expect(format('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')).toBe('{header-rows=2 footer-rows=x}\n| a | b |\n| c | d |\n')
     const csv = table('{table header-rows=0}\n```csv\na\n```\n')
     expect(csv.attrs).toBeUndefined()
-    expect(csv.children[0]).toMatchObject({ type: 'table_body', headRows: 0 })
+    expect(csv.children[0]).toEqual(expect.objectContaining({ type: 'table_body' }))
+    expect(csv.children[0]).not.toHaveProperty('headRows')
     expect(table('{footer-rows=1}\n| a |\n| b |\n').attrs).toBeUndefined()
   })
 
@@ -66,7 +67,7 @@ describe('table keys', () => {
 
   it('C2-W-136: a key is written once, from the fields where attrs holds it too, and the key in attrs is reported', () => {
     const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [{
-      type: 'table', columns: [{ type: 'table_column', align: 'left', authored: true }], attrs: { keyValues: [['aligns', 'x']] },
+      type: 'table', columns: [{ type: 'table_column', align: 'left' }], attrs: { keyValues: [['aligns', 'x']] },
       children: [cell('a')],
     }] }
     const output = writeWithDiagnostics(document)

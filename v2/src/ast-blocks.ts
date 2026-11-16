@@ -173,7 +173,8 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
     const children = lineInlines(ctx, spans, at)
     if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
     const line: LineNode = noteLeaf(ctx, { type: 'line', children })
-    lines.push(place(ctx, line, spans[at]!, spans[at + 1]!))
+    // C2-A-158: a line with no children has no source character and omits `pos`.
+    lines.push(children.length === 0 ? line : place(ctx, line, spans[at]!, spans[at + 1]!))
   }
   const out: LineBlockNode = { type: 'line_block', children: lines }
   noteSigilWords(ctx, node, out)

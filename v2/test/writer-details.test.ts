@@ -1,7 +1,7 @@
 // Edges of the writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
 import { type DocumentNode, type Inline, type ParagraphNode, type TableCellNode } from '../src/ast.ts'
-import { CarveWriteError, format, parse, parseWithLayout, write, writeWithDiagnostics } from '../src/index.ts'
+import { format, parse, parseWithLayout, write, writeWithDiagnostics } from '../src/index.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 
 function paragraphWith(attrs: ParagraphNode['attrs']): DocumentNode {
@@ -13,9 +13,10 @@ function paragraphWith(attrs: ParagraphNode['attrs']): DocumentNode {
 describe('the brace block', () => {
   it('C2-W-048: a name holds the first and the last letter and digit', () => {
     expect(write(paragraphWith({ id: 'AZaz09', classes: ['Z', 'A', 'z', 'a', '0', '9'] }))).toBe('{#AZaz09 .Z .A .z .a .0 .9}\na\n')
+    // C2-A-035: a key occurs once in keyValues, compared without ASCII case, so a reader refuses the repeated one.
     const duplicateKeys = paragraphWith({ keyValues: [['Zk', 'v'], ['Ak', 'v'], ['zk', 'v'], ['ak', 'v']] })
-    expect(writeWithDiagnostics(duplicateKeys).source).toBe('{Zk=v Ak=v zk=v ak=v}\na\n')
-    expect(() => write(duplicateKeys)).toThrow(CarveWriteError)
+    expect(() => writeWithDiagnostics(duplicateKeys)).toThrow('the key zk occurs twice')
+    expect(write(paragraphWith({ keyValues: [['Zk', 'v'], ['Ak', 'v']] }))).toBe('{Zk=v Ak=v}\na\n')
   })
 
   it('C2-W-048: a class and an id that are no name are written as quoted keys', () => {

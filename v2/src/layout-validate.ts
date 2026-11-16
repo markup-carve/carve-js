@@ -92,6 +92,7 @@ const FACTS = new Map<string, Check>([
   ['rawRef', checkString],
   ['optionSpelling', checkOptionSpelling],
   ['sourceFormat', oneOf(['pipe', 'csv', 'tsv'])],
+  ['headerRows', (value, path) => void checkCount(value, path)],
   ['markerRaw', checkString],
   ['markerColumn', (value, path) => void checkCount(value, path)],
   ['contentColumn', (value, path) => void checkCount(value, path)],

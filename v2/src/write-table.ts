@@ -1,7 +1,7 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
 import {
-  childNodes, type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
+  childNodes, type CommentNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, writeInlines } from './write-inline.ts'
@@ -253,7 +253,7 @@ function fitsDelimited(table: TableNode): boolean {
   const head = groups.filter((group) => group.type === 'table_head')
   const body = groups.filter((group) => group.type === 'table_body')
   if (head.length + body.length !== groups.length || head.length > 1 || body.length > 1) return false
-  return fitsPartition(groups, head[0]?.children.length ?? 0, body[0])
+  return fitsPartition(groups)
 }
 
 /**
@@ -261,10 +261,8 @@ function fitsDelimited(table: TableNode): boolean {
  * `header-rows` it has one head row; with it the body says so, and a table with no body takes the count of its
  * head (C2-B-221).
  */
-function fitsPartition(groups: readonly TableEntry[], headRows: number, body: TableBodyNode | undefined): boolean {
-  if (body === undefined) return hasPlainGroups(groups)
-  const declared = body.headRows
-  return (declared === undefined ? headRows === 1 : declared === headRows) && hasPlainGroups(groups)
+function fitsPartition(groups: readonly TableEntry[]): boolean {
+  return hasPlainGroups(groups)
 }
 
 /** Whether every cell of `groups` is plain, a header cell in the head. */
@@ -299,32 +297,26 @@ function needsDelimited(table: TableNode): boolean {
   ))
 }
 
-/** The head rows a group of `table` declares (C2-A-088). */
-function declaredHeadRows(table: TableNode): number | undefined {
-  for (const group of table.children) if (group.type === 'table_body' && group.headRows !== undefined) return group.headRows
-  return undefined
-}
-
-/** C2-W-066, C2-B-221: the `header-rows` of a delimited table: what its body declares, or the head rows of a table with no body. */
-function headerRows(table: TableNode): number | undefined {
-  const declared = declaredHeadRows(table)
-  if (declared !== undefined || table.children.some((group) => group.type === 'table_body')) return declared
+/**
+ * C2-W-066, C2-L-057: the `header-rows` of a delimited table: the number of its head rows where that is not exactly
+ * the first row, or where the sidecar records the count.
+ */
+function headerRows(w: Writer | null, table: TableNode): number | undefined {
   const head = rowsOf(table, 'table_head').length
-  return head <= 1 ? undefined : head
+  // With no rows there is no first row, and the default of the form holds.
+  const first = rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length + head === 0 ? 0 : 1
+  if (head !== first) return head
+  return w?.facts?.get(table)?.headerRows === head ? head : undefined
 }
 
 /** C2-W-066: the form of the table, `pipe`, `csv` or `tsv`. */
 function tableFormat(w: Writer, table: TableNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
-  const declares = declaredHeadRows(table) !== undefined
   const rows = rowsOf(table, 'table_head').length + rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length
-  if (!fitsDelimited(table)) {
-    // A pipe table needs a row (C2-L-036) and cannot declare its head rows (C2-A-088).
-    for (const group of table.children) if (group.type === 'table_body' && group.headRows !== undefined) lose(w, group, 'headRows')
-    return 'pipe'
-  }
+  // A pipe table needs a row (C2-L-036).
+  if (!fitsDelimited(table)) return 'pipe'
   if (recorded === 'csv' || recorded === 'tsv') return recorded
-  return declares || rows === 0 || needsDelimited(table) ? 'csv' : 'pipe'
+  return rows === 0 || needsDelimited(table) ? 'csv' : 'pipe'
 }
 
 /** C2-W-066: a cell that holds the separator, a double quote or a line break stands in double quotes. */
@@ -341,7 +333,7 @@ function delimitedRow(row: TableRowNode, separator: string): string {
 function delimitedTable(w: Writer, table: TableNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = headerRows(table)
+  const declared = headerRows(w, table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   const block = braceBlock(table, tableKeys(w, table, first))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
@@ -369,7 +361,7 @@ export function tableAttribute(w: Writer, table: TableNode): string {
   const format = tableFormat(w, table)
   if (format === 'pipe') return braceBlock(table, tableKeys(null, table, []))
   const first: (readonly [string, string])[] = [['table', '']]
-  const declared = headerRows(table)
+  const declared = headerRows(w, table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
   return braceBlock(table, tableKeys(null, table, first))
 }

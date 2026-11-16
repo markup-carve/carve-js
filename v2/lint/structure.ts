@@ -672,7 +672,9 @@ function tableColumnOverlap(node: Node, path: string, context: LintContext): voi
   const first = head?.type === 'table_head' ? head.children.find((child) => child.type === 'table_row') : undefined
   if (first?.type !== 'table_row') return
   for (let at = 0; at < node.columns.length; at++) {
-    if (node.columns[at]?.authored === true && first.children[at]?.align !== undefined) {
+    // C2-A-095: the column fields carry the fact that `aligns` or `widths` wrote them.
+    const column = node.columns[at]
+    if ((column?.align !== undefined || column?.width !== undefined) && first.children[at]?.align !== undefined) {
       reportNode('table-column-overlap', node, path, context, { n: String(at + 1) })
     }
   }

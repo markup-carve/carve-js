@@ -175,9 +175,9 @@ describe('the reader at its bounds', () => {
     return documentOf(node)
   }
 
-  it('C2-A-171: accepts a tree at the depth bound and refuses the next level', () => {
-    expect(refusal(nest(MAX_TREE_DEPTH - 2))).toBeNull()
-    expect(refusal(nest(MAX_TREE_DEPTH - 1))).not.toBeNull()
+  it('C2-A-171: accepts 200 nested quotes, the block limit, and refuses 201 (trees/refused.json, block-depth)', () => {
+    expect(refusal(nest(200))).toBeNull()
+    expect(refusal(nest(201))).toBe(`${'/children/0'.repeat(201)}: the tree is nested deeper than a parser can produce`)
     expect(MAX_TREE_DEPTH).toBe(616)
   })
 
@@ -336,9 +336,9 @@ describe('one-line blocks in detail', () => {
     expect(ofType(block('$`x`'), 'paragraph').role).toBeUndefined()
   })
 
-  it('a column is authored when the source spells its alignment or its width', () => {
-    expect(ofType(block('{aligns="left"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', align: 'left', authored: true }, { type: 'table_column' }])
-    expect(ofType(block('{widths="40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', width: 0.4, authored: true }, { type: 'table_column' }])
+  it('a column carries the alignment or the width the source spells (C2-A-095)', () => {
+    expect(ofType(block('{aligns="left"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', align: 'left' }, { type: 'table_column' }])
+    expect(ofType(block('{widths="40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', width: 0.4 }, { type: 'table_column' }])
   })
 
   it('C2-A-158: an inline footnote in a joined cell keeps its content and its position, and text joined from two lines has none', () => {
