@@ -268,3 +268,15 @@ describe('C2-B-043: a bare dot whose content starts with a dot and a space is no
     for (const src of ['.  a', '.  .a', '. .', '1.  . a']) expect(first(src)['type']).toBe('list')
   })
 })
+
+describe('C2-H-024: authored ids are reserved first, also that of an unresolved reference', () => {
+  it('C2-H-024: the heading takes the suffix, and the reference writes its block as text (C2-I-085)', () => {
+    expect(render('[x][y]{#i}\n\n# i')).toBe('<p>[x][y]{#i}</p>\n<section id="i-2">\n  <h1>i</h1>\n</section>')
+    expect(render('![x][y]{#i}\n\n# i')).toContain('<section id="i-2">')
+    expect(render('[x][]{#i}\n\n# i')).toContain('<section id="i-2">')
+  })
+
+  it('C2-A-039: a later node with the same id is reported, whatever the node type', () => {
+    expect(findings('[x][y]{#i}\n\n{#i}\nb')).toContain('duplicate-id')
+  })
+})

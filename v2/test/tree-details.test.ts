@@ -345,10 +345,10 @@ describe('one-line blocks in detail', () => {
 })
 
 describe('resolution and rendering in detail', () => {
-  it('the id of a footnote reference is an id of the document, and that of an unresolved image is not', () => {
+  it('C2-H-024: the id of a footnote reference and that of an unresolved image are ids of the document', () => {
     const ids = (src: string): unknown[] => resolved(src).document.children!.filter((node) => node.type === 'heading').map((node) => node.generatedId)
     expect(ids('a[^n]{#T}\n\n# T\n\n[^n]: x')).toEqual(['T-2'])
-    expect(ids('x ![i][nope]{#T}\n\n# T')).toEqual(['T'])
+    expect(ids('x ![i][nope]{#T}\n\n# T')).toEqual(['T-2'])
     expect(ids('x [i](u){#T}\n\n# T')).toEqual(['T-2'])
   })
 

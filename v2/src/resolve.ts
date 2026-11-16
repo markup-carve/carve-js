@@ -373,21 +373,19 @@ function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
   return targets
 }
 
-/** An unresolved reference renders its attribute block as text, so its id is no id of the document. */
-function isUnresolvedReference(node: Node, targets: Map<Reference, Target>, kept: Set<Reference>): boolean {
-  return (node.type === 'link' || node.type === 'image') && node.key !== undefined && !targets.has(node) && !kept.has(node)
-}
-
 function duplicateIdMessage(id: string): string {
   return `Duplicate id "${id}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`
 }
 
-/** C2-H-024: authored ids are reserved first, in document order. C2-A-039: the first node of an id wins. */
-function reserveIds(walk: Walk, targets: Map<Reference, Target>, kept: Set<Reference>): Set<string> {
+/**
+ * C2-H-024: authored ids are reserved first, in document order, also that of an unresolved reference,
+ * which writes its block as text (C2-I-085). C2-A-039: the first node of an id wins, whatever its type.
+ */
+function reserveIds(walk: Walk): Set<string> {
   const taken = new Set<string>()
   for (const node of walk.identified) {
     const id = node.attrs?.id
-    if (id === undefined || isUnresolvedReference(node, targets, kept)) continue
+    if (id === undefined) continue
     if (taken.has(id)) report(walk.resolution, node, 'duplicate-id', duplicateIdMessage(id))
     else taken.add(id)
   }
@@ -553,7 +551,7 @@ export function resolve(
   }
   const kept = keptReferences(document, walk, facts)
   const targets = findTargets(walk, mode)
-  const taken = reserveIds(walk, targets, kept)
+  const taken = reserveIds(walk)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)
   setDestinations(walk, targets, kept)
