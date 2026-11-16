@@ -191,6 +191,16 @@ describe('the planned writer', () => {
     }
   })
 
+  it('C2-B-133, C2-W-016: a `%%` line inside a span or a comment that runs over the line end is planned bare', () => {
+    const sources = ['x `a\n%% b` y\n', 'x {% a\n%% b %} y\n', 'x {#a\n%% b#} y\n', 'x $`a\n%%b` y\n', '- x `a\n  %%b` y\n', '> x !`a\n> %% b` y\n']
+    for (const source of sources) {
+      const result = formatBy(source, 'both')
+      expect(result.output.source, source).toBe(source)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')

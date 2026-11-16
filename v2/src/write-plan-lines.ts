@@ -286,19 +286,37 @@ function letterMarker(leaf: Leaf, at: number): boolean {
   return [...letters].every((char) => ROMAN_LOWER.includes(char)) || [...letters].every((char) => ROMAN_UPPER.includes(char))
 }
 
-/**
- * The escape the line that starts at `at` needs, NO_ESCAPE, or UNDECIDED. `first` says that the line is the first
- * line of a paragraph. The unit that takes the backslash must be text.
- */
-export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {
+// C2-W-016: the atoms whose value the reader takes as it stands over a line end, `%%` lines included.
+const RAW_VALUES: ReadonlySet<string> = new Set(['code', 'literal_inline', 'math', 'raw_inline', 'critic_comment'])
+
+/** Whether the unit `at` continues the value of a span, a braced or an editorial comment from the line before. */
+function insideRawValue(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at]
+  if (owner === undefined || leaf.kinds[at] !== ATOM || leaf.owners[at - 1] !== owner) return false
+  return RAW_VALUES.has(owner.type) || (owner.type === 'comment' && owner.form === 'braced')
+}
+
+/** What a line start decides before its first character is read as an opener, or null. */
+function lineStartRule(leaf: Leaf, at: number, first: boolean): number | null {
   const owner = leaf.kinds[at] === ATOM && leaf.owners[at - 1] !== leaf.owners[at] ? leaf.owners[at] : undefined
   // C2-B-138, C2-B-139: a comment of the tree at a line start stays a comment of the paragraph, except that a
   // line comment would make the first line a comment-only line.
   if (owner?.type === 'comment') return first && owner.form === 'line' ? UNDECIDED : NO_ESCAPE
   const value = code(leaf, at)
+  // C2-B-133, C2-I-014: a `%%` line inside the value of a span that runs over the line end is a line of that value.
+  if (value === 37 && insideRawValue(leaf, at)) return NO_ESCAPE
   // C2-B-165: a byte-order mark at the start of the source is skipped.
   if (value === 0xfeff && first) return UNDECIDED
-  if (value < 0 || value >= 128) return NO_ESCAPE
+  return value < 0 || value >= 128 ? NO_ESCAPE : null
+}
+
+/**
+ * The escape the line that starts at `at` needs, NO_ESCAPE, or UNDECIDED. `first` says that the line is the first
+ * line of a paragraph. The unit that takes the backslash must be text.
+ */
+export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {
+  const start = lineStartRule(leaf, at, first)
+  if (start !== null) return start
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape
   return leaf.kinds[escape] === TEXT && leaf.kinds[escape - 1] !== ESCAPE ? escape : UNDECIDED
