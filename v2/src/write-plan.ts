@@ -546,7 +546,7 @@ function checkAtomEnd(leaf: Leaf, end: number, node: Node): void {
 }
 
 function isLineEndAfterCr(codes: readonly number[], at: number): boolean {
-  return at === codes.length || codes[at] === LF || codes[at] === CR
+  return at === codes.length || codes[at] === LF
 }
 
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
