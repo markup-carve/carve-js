@@ -99,10 +99,16 @@ function bullet(leaf: Leaf, at: number): number {
 function anyLine(leaf: Leaf, at: number, value: number): number {
   const end = runEnd(leaf, at, value)
   if (value === 96) return end - at >= 3 ? at : NO_ESCAPE
-  if (value === 58 || value === 37) return end - at < 3 ? NO_ESCAPE : fence(leaf, at, end)
+  if (value === 58) return end - at < 3 ? NO_ESCAPE : divLine(leaf, at, end)
+  if (value === 37) return end - at < 3 ? NO_ESCAPE : fence(leaf, at, end)
   if (value === 42) return end - at >= 3 && restIsBlank(leaf, end) ? at : NO_ESCAPE
   if (value === 124) return pipeLine(leaf, at)
   return NO_ESCAPE
+}
+
+/** C2-B-119, C2-B-196: a colon run is a div line where a space, a tab or the line end follows it; glued to a name, it is text. */
+function divLine(leaf: Leaf, at: number, end: number): number {
+  return isBlank(code(leaf, end)) || isLineEnd(code(leaf, end)) ? at : NO_ESCAPE
 }
 
 /** C2-B-014, C2-B-006: a div or a comment fence opens where a blank or the end of the line follows its run. */
@@ -174,7 +180,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
 /** C2-B-016, C2-W-121: a term mark opens a description list; a description mark opens below one. */
 function colon(leaf: Leaf, at: number, place: LeafPlace): number {
   const end = runEnd(leaf, at, 58)
-  if (end - at >= 3) return fence(leaf, at, end)
+  if (end - at >= 3) return divLine(leaf, at, end)
   if (end - at === 2) return code(leaf, end) === SPACE ? at : decidedIf(code(leaf, end) === TAB)
   if (!isBlank(code(leaf, end)) && !isLineEnd(code(leaf, end))) return NO_ESCAPE
   return place.before === 'definition_list' || place.inDescriptionList ? UNDECIDED : NO_ESCAPE
