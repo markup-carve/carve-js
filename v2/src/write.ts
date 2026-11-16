@@ -538,12 +538,19 @@ function uncovered(nodes: readonly Node[], plan: Plan): boolean {
   }
 }
 
+/** Whether only spaces and tabs follow the last CR of `line`; a lone CR before other content is no line end (C2-B-010). */
+function endsWithCr(line: string): boolean {
+  let at = line.length - 1
+  while (at >= 0 && (line.charCodeAt(at) === 32 || line.charCodeAt(at) === 9)) at--
+  return at >= 0 && line.charCodeAt(at) === 13
+}
+
 /** The reason the plan of a group has no decision, or null. */
 function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: number): string | null {
   if (plan.undecided !== null) return plan.undecided
   if (w.losses.entries.length !== reported) return 'loss'
-  // C2-W-016: a CR in any written value, of a block as of an inline, may join a line end.
-  if (w.lines.some((line) => line.includes('\r'))) return 'control'
+  // C2-W-016, C2-B-010: a CR that only spaces and tabs follow on its line, in a block value as in an inline, joins the line end.
+  if (w.lines.some(endsWithCr)) return 'control'
   return uncovered(group, plan) ? 'coverage' : null
 }
 

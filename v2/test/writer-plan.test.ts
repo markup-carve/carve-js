@@ -92,6 +92,16 @@ describe('the planned writer', () => {
     expect(writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false).stats.planned).toBe(0)
   })
 
+  it('C2-B-010: a CR that other content follows on its line is no line end, and the plan writes it', () => {
+    for (const source of ['a\rb\n', '`a\rb`\n', '```\na\rb\n```\n', 'x %% c\rd\n']) {
+      const result = formatBy(source, 'both')
+      expect(result.stats.planned, source).toBe(1)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.differences, source).toEqual([])
+    }
+    for (const source of ['a\r \nb\n', 'x %% c\r\t\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
+  })
+
   it('C2-I-025: an unclosed brace of text behind a braced comment is text, and the plan writes it bare', () => {
     const result = formatBy('x/{%*%}\\{%<a:b>\n', 'both')
     expect(result.output.source).toBe('x/{% * %}{%<a:b>\n')
