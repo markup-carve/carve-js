@@ -549,6 +549,23 @@ function isLineEndAfterCr(codes: readonly number[], at: number): boolean {
   return at === codes.length || codes[at] === LF
 }
 
+function firstOfMarks(leaf: Leaf, at: number): boolean {
+  return leaf.kinds[at - 1] !== leaf.kinds[at] || leaf.owners[at - 1] !== leaf.owners[at]
+}
+
+/** C2-I-109: an inline footnote has its own run of single quotes, and its close restores the run around it. */
+function enterMark(leaf: Leaf, at: number): void {
+  leaf.openDepth++
+  if (leaf.owners[at]?.type !== 'inline_footnote' || !firstOfMarks(leaf, at)) return
+  leaf.footnoteQuotes.push(leaf.singleQuoteOpen)
+  leaf.singleQuoteOpen = false
+}
+
+function leaveMark(leaf: Leaf, at: number): void {
+  leaf.openDepth--
+  if (leaf.owners[at]?.type === 'inline_footnote' && firstOfMarks(leaf, at)) leaf.singleQuoteOpen = leaf.footnoteQuotes.pop() ?? false
+}
+
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   const codes = leaf.codes
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
@@ -562,8 +579,8 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
       checkAtomEnd(leaf, atomEnd(leaf, at), node)
       continue
     }
-    if (kind === OPEN) leaf.openDepth++
-    else if (kind === CLOSE) leaf.openDepth--
+    if (kind === OPEN) enterMark(leaf, at)
+    else if (kind === CLOSE) leaveMark(leaf, at)
     else if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
   }
 }

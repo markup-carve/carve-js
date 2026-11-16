@@ -35,9 +35,9 @@ export interface Leaf {
   where: number
   /** C2-I-005: the units inside an attribute block of text, which the reader takes whole; null where there is none. */
   opaque: Uint8Array | null
-  /** C2-I-109: the reader's single quote state at the unit being decided; an inline footnote saves it. */
+  /** C2-I-109: the reader's single quote state at the unit being decided, and the states the open inline footnotes saved. */
   singleQuoteOpen: boolean
-  inlineFootnote: boolean
+  footnoteQuotes: boolean[]
   /** The end of the last cross-reference scan that found no `>`. */
   angleFailEnd: number
   /** The end of the last attribute block scan that found no `}` on its line. */
@@ -65,7 +65,7 @@ export interface Leaf {
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    singleQuoteOpen: false, inlineFootnote: false, angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, closes: null,
+    singleQuoteOpen: false, footnoteQuotes: [], angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, closes: null,
     extensions: new Map(), textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }
@@ -187,7 +187,6 @@ const CONTAINERS: { [T in keyof NodeOfType]?: ContainerModel<T> } = {
     return true
   },
   inline_footnote: (w, leaf, node, flags) => {
-    leaf.inlineFootnote = true
     around(w, leaf, node, node.children, '^[', ']', flags)
     return true
   },

@@ -128,7 +128,7 @@ function readsBack(leaf: Leaf, at: number, end: number, node: Node): boolean {
   if (previous === null || next === null) return false
   const source = node.source
   if (source === '"') return (quoteOpens(previous, next) ? 'left_double_quote' : 'right_double_quote') === node.kind
-  if (source === '\'') return !leaf.inlineFootnote && singleKind(leaf, at, previous, next) === node.kind
+  if (source === '\'') return singleKind(leaf, at, previous, next) === node.kind
   return !isRunCharacter(previous) && !isRunCharacter(next)
 }
 
