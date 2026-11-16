@@ -56,6 +56,10 @@ export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } 
 export { CarveWriteError, type LayoutEntry, write, type WriteOptions, type WriteOutput, writeWithDiagnostics } from './write.ts'
 export { displayWidth } from './width.ts'
 export { type Diagnostic } from './diagnostics.ts'
+export {
+  type IncludeAnswer, type IncludeConfig, type IncludeError, type IncludeRequest, type IncludeResolver,
+} from './include-settings.ts'
+export { type IncludeDependency, includeDependencies } from './include-dependencies.ts'
 export { lint, type LintOptions } from "../lint/lint.ts"
 /** C2-H-173: shared scheme test and default policy data for consumers of URL sinks. */
 export { isUrlAllowed, urlScheme } from './html-attributes.ts'

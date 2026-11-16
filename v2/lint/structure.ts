@@ -981,11 +981,28 @@ export function finishStructure(context: LintContext): void {
   finishFootnotes(context)
 }
 
+/** C2-N-072: the attribute line above an include without `code` applies to nothing. */
+function includeAttributesUnused(node: Node, path: string, context: LintContext): void {
+  if (node.type === 'include' && node.attrs !== undefined && node.options?.code === undefined) {
+    reportNode('include-attributes-unused', node, path, context)
+  }
+}
+
+/** C2-N-088: `lines` on a delimited table include counts physical lines, where `rows` counts records. */
+function includeLinesTableRows(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'include' || node.options?.lines === undefined) return
+  const code = node.options.code
+  const table = node.attrs?.keyValues?.some(([key]) => key === 'table') === true
+  if (table && (code === 'csv' || code === 'tsv')) reportNode('include-lines-table-rows-hint', node, path, context)
+}
+
 function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: NonNullable<Rule['checkNode']>): Rule {
   return { id, nodes, checkNode }
 }
 
 export const NODE_RULES: readonly Rule[] = [
+  nodeRule('include-attributes-unused', ['include'], includeAttributesUnused),
+  nodeRule('include-lines-table-rows-hint', ['include'], includeLinesTableRows),
   nodeRule('deprecated-bare-underline', ['text'], textPair('_', 'deprecated-bare-underline')),
   nodeRule('deprecated-bare-strike', ['text'], textPair('~', 'deprecated-bare-strike')),
   nodeRule('deprecated-bare-highlight', ['text'], textPair('=', 'deprecated-bare-highlight')),

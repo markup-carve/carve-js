@@ -5,6 +5,7 @@ import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
 import { LINE_RULES } from './spelling.ts'
 import { finishStructure, NODE_RULES } from './structure.ts'
+import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
 
@@ -23,7 +24,7 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
 function validateOptions(options: unknown): asserts options is LintOptions {
   if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
   for (const name of Object.keys(options)) {
-    if (name !== 'rules' && name !== 'platforms') throw new CarveOptionError(name, 'unknown option')
+    if (name !== 'rules' && name !== 'platforms' && name !== 'includes') throw new CarveOptionError(name, 'unknown option')
   }
   const platforms = options['platforms']
   if (platforms !== undefined && (!Array.isArray(platforms) || !platforms.every((item) => item === 'github'))) {
@@ -217,9 +218,20 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
   return output
 }
 
-/** C2-W-103, C2-W-109: lint a 0.2 source with catalog messages and byte ranges. */
+/**
+ * C2-W-103, C2-W-109: lint a 0.2 source with catalog messages and byte ranges. C2-N-085: with `includes` the files it
+ * includes are linted too, each finding of one with its `file` and a range in that file.
+ */
 export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   validateOptions(options)
+  const own = lintSource(source, options)
+  if (options.includes === undefined) return own
+  const rest: LintOptions = { ...options }
+  delete rest.includes
+  return [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest))]
+}
+
+function lintSource(source: string, options: LintOptions): Diagnostic[] {
   const parsed = parseWithLayout(source)
   const position = sourceLines(source)
   const context: LintContext = {

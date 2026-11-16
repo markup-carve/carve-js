@@ -1,5 +1,5 @@
 export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import'
-export type ValueKind = 'boolean' | 'enum' | 'json'
+export type ValueKind = 'boolean' | 'enum' | 'json' | 'string'
 export interface Flag {
   name: string
   commands: readonly Command[]
@@ -12,6 +12,8 @@ const render = ['render'] as const
 const fmt = ['fmt'] as const
 const ast = ['ast'] as const
 const upgrade = ['upgrade'] as const
+// C2-N-004: every command whose product is not Carve source expands includes.
+const expanding = ['render', 'ast', 'diagnostics'] as const
 
 // C2-H-137, C2-W-100: the option table drives both parsing and help.
 export const FLAGS: readonly Flag[] = [
@@ -30,7 +32,8 @@ export const FLAGS: readonly Flag[] = [
   { name: 'url-policy', commands: render, kind: 'json', description: 'URL policy as JSON' },
   { name: 'renderers', commands: render, kind: 'json', description: 'Renderer map as JSON' },
   { name: 'extensions', commands: render, kind: 'json', description: 'Extension list as JSON' },
-  { name: 'includes', commands: render, kind: 'json', description: 'Include configuration as JSON' },
+  { name: 'includes', commands: expanding, kind: 'boolean', description: 'Expand includes (default on; --no-includes turns it off)' },
+  { name: 'include-root', commands: expanding, kind: 'string', description: 'Containment root of includes (default: the directory of FILE)' },
   { name: 'from-ast', commands: ['render', 'fmt'], kind: 'boolean', description: 'Read AST JSON' },
   { name: 'positions', commands: ast, kind: 'boolean', description: 'Include source positions' },
   { name: 'envelope', commands: ast, kind: 'boolean', description: 'Wrap the tree in an envelope' },
@@ -58,6 +61,7 @@ function flagFor(command: Command, spelling: string): Flag | undefined {
 }
 
 function readValue(flag: Flag, input: string): unknown {
+  if (flag.kind === 'string') return input
   if (flag.kind === 'enum') {
     if (!flag.values?.includes(input)) throw new Error(`bad value for --${flag.name}: ${input}`)
     return input
@@ -123,7 +127,7 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
 export function help(command: Command): string {
   const lines = [`Usage: carve2 ${command} [options] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Options:']
   for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) {
-    const suffix = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? ` <${flag.values?.join('|')}>` : ' <json>'
+    const suffix = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? ` <${flag.values?.join('|')}>` : ` <${flag.kind}>`
     lines.push(`  --${flag.name}${suffix}  ${flag.description}`)
   }
   lines.push('  --help  Show this help', '  --version  Show version', '',

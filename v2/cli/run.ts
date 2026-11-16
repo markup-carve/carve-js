@@ -9,6 +9,8 @@ import { decodeUpgradeBytes } from '../../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
 import { migrateTree } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
+import { cliIncludes } from './include-fs.ts'
+import { type IncludeConfig } from '../src/include-settings.ts'
 
 export class CliError extends Error {
   readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid' | 'import-tree-invalid'
@@ -109,11 +111,22 @@ function unified(path: string, before: string, after: string): string {
     ...left.map((line) => `-${line}`), ...right.map((line) => `+${line}`), ''].join('\n')
 }
 
-function renderOne(source: string, args: ParsedArgs): { html: string, escapedRawHtml: boolean } {
+/** C2-N-004: the includes of an entry, unless `--no-includes` turns expansion off. */
+function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig } {
+  if (args.values['includes'] === false) return {}
+  const root = args.values['include-root']
+  let config: IncludeConfig | null
+  try { config = cliIncludes(path, typeof root === 'string' ? root : undefined) }
+  catch (error) { throw new CliError('usage', `the include root cannot be read: ${String(error)}`) }
+  return config === null ? {} : { includes: config }
+}
+
+function renderOne(source: string, path: string, args: ParsedArgs): { html: string, escapedRawHtml: boolean } {
   const names = ['heading-ids', 'mode', 'profile', 'raw-html', 'roundtrip', 'sections', 'smart-typography',
-    'source-lines', 'strict-losses', 'labels', 'symbols', 'social', 'url-policy', 'renderers', 'extensions', 'includes']
-  const settings = options(args, names) as RenderOptions
-  const input = args.values['from-ast'] === true ? ast(source) : source
+    'source-lines', 'strict-losses', 'labels', 'symbols', 'social', 'url-policy', 'renderers', 'extensions']
+  const fromAst = args.values['from-ast'] === true
+  const settings = { ...options(args, names), ...(fromAst ? {} : includesOf(path, args)) } as RenderOptions
+  const input = fromAst ? ast(source) : source
   const escapedRawHtml = args.values['raw-html'] !== true && hasRawHtml(typeof input === 'string' ? parse(input) : input)
   return { html: render(input, settings), escapedRawHtml }
 }
@@ -168,18 +181,18 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
   const display = path === '-' ? '<stdin>' : path
   switch (args.command) {
     case 'render': {
-      const result = renderOne(source, args)
+      const result = renderOne(source, path, args)
       process.stdout.write(`${result.html}\n`)
       return { status: 0, escapedRawHtml: result.escapedRawHtml }
     }
     case 'ast': {
-      const tree = parse(source, { positions: args.values['positions'] !== false })
+      const tree = parse(source, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
       process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(tree) : encodeTree(tree)}\n`)
       return { status: 0 }
     }
     case 'fmt': return { status: formatFile(path, display, source, args) }
     case 'diagnostics': {
-      const entries = parseWithDiagnostics(source).diagnostics.filter((entry) => entry.channel === 'parse')
+      const entries = parseWithDiagnostics(source, includesOf(path, args)).diagnostics.filter((entry) => entry.channel === 'parse')
       if (args.values['json'] === true) return { status: 0, record: { file: display, diagnostics: entries.map((entry) => ({
         ...entry, file: display, ...location(source, entry),
       })) } }

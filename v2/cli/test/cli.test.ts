@@ -136,7 +136,7 @@ describe('carve2 process', () => {
   it('C2-H-137: all render option values pass through the command line', () => {
     const flags = ['--heading-ids=ascii', '--mode=static', '--profile=full', '--raw-html', '--roundtrip',
       '--sections', '--smart-typography', '--source-lines', '--strict-losses', '--labels={}', '--symbols={}',
-      '--social={}', '--url-policy={"deny":["javascript"]}', '--renderers={}', '--extensions=[]', '--includes=null']
+      '--social={}', '--url-policy={"deny":["javascript"]}', '--renderers={}', '--extensions=[]', '--includes']
     const result = cli(['render', ...flags], 'a `<b>`{=html}')
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('<p data-source-line="1">')

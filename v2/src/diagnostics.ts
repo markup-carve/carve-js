@@ -11,6 +11,8 @@ export interface Diagnostic {
   path?: string
   /** The range of that node in UTF-8 bytes of the source, where the tree carries positions. */
   range?: { startOffset: number, endOffset: number }
+  /** C2-N-063, C2-N-087: the id of the included file the range is counted in; absent for the top-level document. */
+  file?: string
 }
 
 /** Entries, each with the node it is about, or null for the document. The positions are filled in once, at the end. */
@@ -83,6 +85,7 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
     entry.path = (path ?? '') + (findings.steps?.get(entry) ?? '')
     const pos = path === undefined || node === null ? undefined : node.pos
     if (pos !== undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
+    if (pos?.file !== undefined) entry.file = pos.file
   })
   return entries
 }

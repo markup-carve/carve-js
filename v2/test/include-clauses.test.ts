@@ -513,3 +513,22 @@ describe('14. shift', () => {
     expect(codes('{{ a @shift:3 @code }}', { a: '= x\n' })).toEqual([])
   })
 })
+
+describe('16. dependencies', () => {
+  it('C2-N-083: Example 31, four include nodes in tree order with their including files', async () => {
+    const { includeDependencies } = await import('../src/index.ts')
+    const example = includeExample(31)
+    expect(render(example.input, { includes: includes(example.files) })).toBe(example.html)
+    expect(includeDependencies(parse(example.input, { includes: includes(example.files) }))).toEqual([
+      { path: 'a.crv', file: 'a.crv', read: true },
+      { path: 'b.crv', from: 'a.crv', file: 'b.crv', read: true },
+      { path: 'gone.crv', from: 'a.crv', read: false },
+      { path: 'b.crv', file: 'b.crv', read: true },
+    ])
+  })
+
+  it('C2-N-083: with no resolver every directive is a dependency that was not read', async () => {
+    const { includeDependencies } = await import('../src/index.ts')
+    expect(includeDependencies(parse('{{ a }}\n\n> {{ b }}'))).toEqual([{ path: 'a', read: false }, { path: 'b', read: false }])
+  })
+})

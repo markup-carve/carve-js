@@ -6,6 +6,8 @@ import { type RuleId } from './catalog.ts'
 export interface LintOptions {
   rules?: Partial<Record<RuleId, 'on' | 'off'>>
   platforms?: readonly 'github'[]
+  /** C2-N-085: a resolver, or the `includes` option of a parse, through which the included files are linted too. */
+  includes?: unknown
 }
 
 export interface Line {
