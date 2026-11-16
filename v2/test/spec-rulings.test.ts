@@ -195,3 +195,42 @@ describe('heading lookup by plain text', () => {
     expect(render("# It's a*b\n\n[go][It\\'s a\\*b]\n")).toContain('<p>[go][It\\\'s a\\*b]</p>')
   })
 })
+
+describe('spaces at the end of a line', () => {
+  it('C2-I-002, C2-I-015: the spaces at a line end are removed inside code, math, literal, raw spans and comments', () => {
+    const tree = parse('`a  \n  b` x $`m  \nn` !`l  \nk` ``r  \ns``{=html} {%c  \nd%}')
+    const paragraph = tree.children[0]
+    const values = paragraph?.type === 'paragraph'
+      ? paragraph.children.flatMap((node) => ('value' in node && node.type !== 'text' ? [node.value] : []))
+      : []
+    expect(values).toEqual(['a\nb', 'm\nn', 'l\nk', 'r\ns', 'c\nd'])
+  })
+
+  it('C2-A-151: a line comment at the end of a line owns the spaces after it, and the soft break starts at the line ending', () => {
+    const paragraph = parse('a %% x  \nb').children[0]
+    expect(paragraph).toMatchObject({ pos: { startOffset: 0, endOffset: 10 } })
+    const spans = paragraph?.type === 'paragraph' ? paragraph.children.map((node) => [node.type, node.pos?.startOffset, node.pos?.endOffset]) : []
+    expect(spans).toEqual([['text', 0, 1], ['comment', 1, 8], ['soft_break', 8, 9], ['text', 9, 10]])
+  })
+
+  it('C2-A-151: on the last line of a content the line comment ends at the end of the spaces', () => {
+    const paragraph = parse('c %% z  ').children[0]
+    expect(paragraph).toMatchObject({ pos: { startOffset: 0, endOffset: 8 } })
+    expect(paragraph?.type === 'paragraph' ? paragraph.children[1]?.pos : null).toMatchObject({ startOffset: 1, endOffset: 8 })
+    const quote = parse('> a %% x  \n> b').children[0]
+    const inner = quote?.type === 'block_quote' && quote.children[0]?.type === 'paragraph' ? quote.children[0].children : []
+    expect(inner.map((node) => [node.type, node.pos?.startOffset, node.pos?.endOffset]))
+      .toEqual([['text', 2, 3], ['comment', 3, 10], ['soft_break', 10, 13], ['text', 13, 14]])
+  })
+
+  it('C2-A-151: an include and a heading end at the line ending, after their trailing spaces', () => {
+    expect(parse('{{ a.crv }}  \n').children[0]).toMatchObject({ type: 'include', pos: { startOffset: 0, endOffset: 13 } })
+    expect(parse('{{ a.crv }}  ').children[0]).toMatchObject({ type: 'include', pos: { startOffset: 0, endOffset: 13 } })
+    expect(parse('# H  \n').children[0]).toMatchObject({ type: 'heading', pos: { startOffset: 0, endOffset: 5 } })
+  })
+
+  it('C2-A-153: a soft break spans the dropped spaces and the line ending', () => {
+    const paragraph = parse('a  \nb').children[0]
+    expect(paragraph?.type === 'paragraph' ? paragraph.children[1] : null).toMatchObject({ type: 'soft_break', pos: { startOffset: 1, endOffset: 4 } })
+  })
+})

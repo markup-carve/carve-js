@@ -4,6 +4,7 @@ import {
   type InsertNode, type LinkNode, type Node, type SpanNode, type StrikeNode, type StrongNode, type SubscriptNode,
   type SuperscriptNode, type TextNode, type UnderlineNode,
 } from './ast.ts'
+import { CR, LF } from './chars.ts'
 import { type Attributes, attributeSink, emptyAttributes, foldLabel } from './ast-attributes.ts'
 import { emptyMemo, readAttributeBlock, unescape } from './attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
@@ -17,6 +18,7 @@ import { isPlainText, scanInline } from './inline-scan.ts'
 import { type InlineState } from './inline-state.ts'
 import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 import { type ParseNote } from './parse-findings.ts'
+import { isSpaceOrTab } from './source.ts'
 import type { BlockNode } from './tree.ts'
 
 /**
@@ -232,7 +234,20 @@ function addBreak(ctx: TreeContext, list: Inline[], node: InlineFrame, flow: num
     return
   }
   const out: Inline = kind === FLOW_HARD_BREAKS ? { type: 'hard_break' } : { type: 'soft_break' }
-  list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, node.end))
+  if ((flow & FLOW_UNPLACED) !== 0) return void list.push(out)
+  // C2-A-151: the spaces that a line comment before the break owns are not the break's.
+  const last = list.length > 0 ? list[list.length - 1]! : null
+  const start = last?.type === 'comment' && last.pos !== undefined ? Math.max(node.start, last.pos.endOffset) : node.start
+  list.push(place(ctx, out, start, node.end))
+}
+
+/** C2-A-151: a line comment ends at the line ending, after the spaces and tabs that end its line. */
+function lineCommentEnd(src: string, node: InlineFrame): number {
+  if ((node.flags & FLAG_BRACED) !== 0) return node.end
+  let end = node.end
+  while (end < src.length && isSpaceOrTab(src.charCodeAt(end))) end++
+  // A cell's padding is the cell's (C2-A-149): only spaces up to a line ending are taken.
+  return end === src.length || src.charCodeAt(end) === LF || src.charCodeAt(end) === CR ? end : node.end
 }
 
 /** True for a node that resolution reads: it carries an id, or it is a reference, a note or a cross-reference. */
@@ -248,7 +263,8 @@ function addNode(ctx: TreeContext, list: Inline[], node: InlineFrame, flow: numb
   const out = node.children !== null ? parentNode(ctx, node, node.children) : LEAVES.get(node.kind)!(ctx, node)
   setAttributes(out, node.attributes)
   if (ctx.trace !== null) ctx.trace.inlines.set(out, node)
-  list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, node.end))
+  const end = node.kind === INLINE_COMMENT ? lineCommentEnd(ctx.src, node) : node.end
+  list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, end))
 }
 
 function isPart(kind: number): boolean {

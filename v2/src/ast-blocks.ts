@@ -22,7 +22,7 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   DOCUMENT, HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
+import { braceBlocksEnd, orderedDelimiter } from './lines.ts'
 import { lineFeedAt, trimSpaces } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
@@ -376,8 +376,7 @@ function buildBlock<N extends Node>(
 /** Places the block `out`, built from `node`, unless its builder placed it already. */
 function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): N {
   if (out.pos !== undefined) return out
-  // C2-A-182: an include directive ends at its closing braces, before the spaces behind them.
-  const end = node.kind === INCLUDE ? trimEnd(ctx.src, node.start, node.end) : node.end
+  const end = node.end
   // C2-A-148: a block that took attribute lines starts at the first of them.
   const first = node.attributes?.[0]
   if (first === undefined || !ctx.positions) return place(ctx, out, node.start, end)

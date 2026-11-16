@@ -167,9 +167,9 @@ describe('the include directive', () => {
     expect(cols("'a,b'")).toEqual({ cols: 'a,b' })
   })
 
-  it('C2-A-182: an include node spans the directive from its opening braces to its closing braces', () => {
+  it('C2-A-182, C2-A-151: an include node starts at its opening braces and owns the spaces at the end of its line', () => {
     const node = parse('  {{ a.crv }}  ').children![0]!
-    expect([node.type, node.pos!.startOffset, node.pos!.endOffset]).toEqual(['include', 2, 13])
+    expect([node.type, node.pos!.startOffset, node.pos!.endOffset]).toEqual(['include', 2, 15])
   })
 
   check([
