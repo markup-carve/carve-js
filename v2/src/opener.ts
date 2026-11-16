@@ -6,7 +6,6 @@ import {
   STAR,
 } from './chars.ts'
 import { quotedEnd, skipSpaces } from './lines.ts'
-import { isSpaceOrTab } from './source.ts'
 import { isAsciiLetter, isAsciiNameCharacter } from './unicode.ts'
 
 export interface OpenerInfo {
@@ -34,11 +33,10 @@ function isLanguageCharacter(code: number): boolean {
   return isAsciiNameCharacter(code) || code === HASH || code === PLUS || code === DOT || code === SLASH
 }
 
-/** The end of the sigil at `p`, or `p` (C2-B-196): `>`, a backslash or `|`, then a space, a tab or the line end. */
-function sigilEnd(src: string, p: number, end: number): number {
+/** The end of the sigil at `p`, or `p`: `>`, a backslash or `|`; what is glued to it is further words (C2-B-119, C2-B-122). */
+function sigilEnd(src: string, p: number): number {
   const code = src.charCodeAt(p)
-  if (code !== GREATER && code !== BACKSLASH && code !== PIPE) return p
-  return p + 1 === end || isSpaceOrTab(src.charCodeAt(p + 1)) ? p + 1 : p
+  return code === GREATER || code === BACKSLASH || code === PIPE ? p + 1 : p
 }
 
 /**
@@ -47,7 +45,7 @@ function sigilEnd(src: string, p: number, end: number): number {
  */
 function wordEnd(src: string, p: number, end: number, fence: boolean): number {
   if (!fence) {
-    const sigil = sigilEnd(src, p, end)
+    const sigil = sigilEnd(src, p)
     if (sigil > p) return sigil
   } else if (src.charCodeAt(p) === EQUALS && isAsciiLetter(src.charCodeAt(p + 1))) {
     // C2-B-116 names no character set for the format; this is the name of raw inline (C2-I-021).

@@ -1034,10 +1034,10 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('- ax] b')).toBe('ul(-)[li[p"ax] b"]]')
   })
 
-  it('C2-B-123, C2-B-124: a sigil stands alone, one space or more after the run', () => {
-    expect(blocks('::: |x', 'a', ':::')).toBe('div[p"a"]')
-    expect(blocks('::: |x y', 'a', ':::')).toBe('div[p"a"]')
-    expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div[p"a"] p"^ c"')
+  it('C2-B-119, C2-B-196: a sigil stands one space or more after the run, and words glued to it are further words', () => {
+    expect(blocks('::: |x', 'a', ':::')).toBe('lines"a"')
+    expect(blocks('::: |x y', 'a', ':::')).toBe('lines"a"')
+    expect(blocks('::: >x', 'a', ':::', '^ c')).toBe('div(>)[p"a"] cap"c"')
   })
 
   it('C2-B-082, C2-B-083, C2-B-084: the colon stands directly behind the label', () => {

@@ -313,10 +313,9 @@ export function divRunLength(src: string, pos: number, end: number): number {
   return skipSpaces(src, after, end) === end ? length : 0
 }
 
-function isSigil(src: string, pos: number, end: number): boolean {
-  const code = src.charCodeAt(pos)
-  if (code !== PIPE && code !== BACKSLASH && code !== GREATER) return false
-  return pos + 1 === end || isSpaceOrTab(src.charCodeAt(pos + 1))
+// C2-B-119: a sigil starts a sigil div also when further words are glued to it.
+function isSigil(code: number): boolean {
+  return code === PIPE || code === BACKSLASH || code === GREATER
 }
 
 /** C2-B-109, C2-B-110: a bare run of `code`, at least `minLength` long. */
@@ -328,7 +327,8 @@ export function isBareRun(src: string, pos: number, end: number, code: number, m
 /** The sigil of a div opener whose colon run ends at `pos`, or 0 for a name or nothing (C2-B-123, C2-B-124). */
 export function divSigil(src: string, pos: number, end: number): number {
   const at = skipSpaces(src, pos, end)
-  return at < end && isSigil(src, at, end) ? src.charCodeAt(at) : 0
+  const code = src.charCodeAt(at)
+  return at < end && isSigil(code) ? code : 0
 }
 
 /** True when the colon run that ends at `pos` is followed by `figure` and nothing else (C2-B-127). */

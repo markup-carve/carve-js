@@ -40,8 +40,8 @@ describe('C2-B-117/119: an opener word is the longest run of its characters', ()
     expect(first('::: toc{x}\n:::\n')).toMatchObject({ type: 'directive', kind: 'toc' })
   })
 
-  it('C2-B-119/196: a character that is no name and no lone sigil gives no name', () => {
-    for (const word of ['>a', '|n', '\\x', '{', '{.x}', ')']) {
+  it('C2-B-119/196: a character that is no name and no sigil gives no name', () => {
+    for (const word of ['{', '{.x}', ')', '*', '%% c']) {
       const div = first(`::: ${word}\nq\n:::\n`)
       expect(div).toMatchObject({ type: 'div' })
       expect(div).not.toHaveProperty('attrs')

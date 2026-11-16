@@ -124,15 +124,18 @@ function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: Op
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
-/** C2-B-122: a raw fence takes no title and no label, so each is further words; C2-B-225: so is what is glued to the format. */
-function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo): void {
+/**
+ * C2-B-122: a raw fence and a sigil div take no title and no label, so each is further words; C2-B-225:
+ * so is what is glued to the format, where a brace block is an attribute block. A sigil is no name.
+ */
+function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named = true): void {
   const title = info.titleStart >= 0 ? info.titleStart - 1 : -1
   const label = info.labelStart >= 0 ? info.labelStart - 1 : -1
   const from = [info.extra ? info.extraStart : -1, title, label].filter((at) => at >= 0)
   if (from.length === 0) return
   const at = Math.min(...from)
   const lineEnd = lineFeedAt(ctx.src, node.start)
-  const attribute = at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
+  const attribute = named && at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
@@ -172,7 +175,14 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
     const line: LineNode = noteLeaf(ctx, { type: 'line', children })
     lines.push(place(ctx, line, spans[at]!, spans[at + 1]!))
   }
-  return { type: 'line_block', children: lines }
+  const out: LineBlockNode = { type: 'line_block', children: lines }
+  noteSigilWords(ctx, node, out)
+  return out
+}
+
+/** C2-B-122: what follows the sigil of a sigil div is further words and reported. */
+function noteSigilWords(ctx: TreeContext, node: BlockNode, out: Node): void {
+  noteRawWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux), false)
 }
 
 function abbreviationNode(ctx: TreeContext, node: BlockNode): DocumentChild {
@@ -308,12 +318,14 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
   let out: Block
   if ((node.flags & FLAG_QUOTE_FENCE) !== 0) {
     out = { type: 'block_quote', children: blockChildren(ctx, node.children!, flow) }
+    noteSigilWords(ctx, node, out)
   } else if ((node.flags & FLAG_FIGURE) !== 0) {
     out = { type: 'figure_group', children: blockChildren(ctx, node.children!, flow) }
   } else if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
     // C2-A-068: the opener form adds the class after the classes the author wrote.
     attributes.classes.push(HARD_BREAKS_CLASS)
     out = { type: 'div', children: blockChildren(ctx, node.children!, FLOW_HARD_BREAKS) }
+    noteSigilWords(ctx, node, out)
   } else {
     out = namedDiv(ctx, node, flow, attributes)
   }
