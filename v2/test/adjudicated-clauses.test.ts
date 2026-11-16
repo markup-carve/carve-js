@@ -1,6 +1,6 @@
 // The cases of the three-way check of the 0.2 engines where the clause decides against this engine.
 import { describe, expect, it } from 'vitest'
-import { parse, parseWithDiagnostics, render } from '../src/index.ts'
+import { parse, parseWithDiagnostics, render, renderWithDiagnostics } from '../src/index.ts'
 
 const first = (src: string): Record<string, unknown> => {
   const { pos: _pos, ...rest } = parse(src).children[0] as unknown as Record<string, unknown>
@@ -304,5 +304,17 @@ describe('C2-H-016, C2-H-166: a kept `<li>` carries `data-source-line`', () => {
     )
     expect(render('- a\n- - # h\n  - b', options)).toContain('<li data-source-line="3">b</li>')
     expect(render('- - a', { profile: 'minimal' })).toContain('<li>a</li>')
+  })
+})
+
+describe('C2-H-051: the carrier of a raw span stands only around the escaped payload', () => {
+  it('C2-H-051, C2-H-053, C2-H-054: verbatim with `rawHtml`, escaped in the carrier without it, nothing for another format', () => {
+    const src = '`<b>x</b>`{=html}'
+    expect(render(src, { roundtrip: true })).toBe('<p><span data-carve-raw="html">&lt;b&gt;x&lt;/b&gt;</span></p>')
+    expect(render(src, { roundtrip: true, rawHtml: true })).toBe('<p><b>x</b></p>')
+    expect(render(src, { rawHtml: true })).toBe('<p><b>x</b></p>')
+    expect(render(src)).toBe('<p>&lt;b&gt;x&lt;/b&gt;</p>')
+    expect(render('`x`{=latex}', { roundtrip: true })).toBe('<p></p>')
+    expect(renderWithDiagnostics('`x`{=latex}', { roundtrip: true }).diagnostics.map((d) => d.code)).toEqual(['raw-format-dropped'])
   })
 })
