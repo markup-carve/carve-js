@@ -336,10 +336,10 @@ describe('one-line blocks in detail', () => {
     expect(ofType(block('{widths="40"}\n| a | b |'), 'table').columns).toEqual([{ type: 'table_column', width: 0.4, authored: true }, { type: 'table_column' }])
   })
 
-  it('an inline footnote in a joined cell keeps its content, and text joined from two lines has no position', () => {
+  it('C2-A-158: an inline footnote in a joined cell keeps its content and its position, and text joined from two lines has none', () => {
     const cell = asNode(at(placedTree('| a^[b *c*] |\n+ d |'), 'children.0.children.0.children.0.children.0'))
-    expect(JSON.stringify(cell)).not.toContain('"pos"')
-    expect(inlinesOf(childrenOf(cell)[0]).map((node) => node.type)).toEqual(['text', 'inline_footnote', 'text'])
+    expect(cell.pos).toBeUndefined()
+    expect(inlinesOf(childrenOf(cell)[0]).map((node) => [node.type, node.pos?.startOffset])).toEqual([['text', 2], ['inline_footnote', 3], ['text', undefined]])
     expect(inlines('a {.x}\nb')[0]).toEqual(text('a {.x}'))
   })
 })

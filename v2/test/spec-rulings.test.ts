@@ -234,3 +234,35 @@ describe('spaces at the end of a line', () => {
     expect(paragraph?.type === 'paragraph' ? paragraph.children[1] : null).toMatchObject({ type: 'soft_break', pos: { startOffset: 1, endOffset: 4 } })
   })
 })
+
+describe('the nodes that omit pos', () => {
+  function spanOf(node: { pos?: { startOffset: number, endOffset: number } } | undefined): number[] | null {
+    return node?.pos === undefined ? null : [node.pos.startOffset, node.pos.endOffset]
+  }
+
+  it('C2-A-158, C2-A-149: an empty cell and a span mark cell span the text between their pipes; an empty cell paragraph has none', () => {
+    const table = parse('| a | |\n| b | < |').children[0]
+    const rows = table?.type === 'table' && table.children[0]?.type === 'table_body' ? table.children[0].children : []
+    const cells = rows.flatMap((row) => (row.type === 'table_row' ? row.children : []))
+    expect(cells.map(spanOf)).toEqual([[1, 4], [5, 6], [9, 12], [13, 16]])
+    expect(cells[1]?.children[0]).toMatchObject({ type: 'cell_paragraph' })
+    expect(cells[1]?.children[0]?.pos).toBeUndefined()
+  })
+
+  it('C2-A-158: a caption number spans its mark, and the text on each side spans its own characters', () => {
+    const figure = parse('![i](a.png)\n^ Figure #: cap').children[0]
+    const first = figure?.type === 'figure' ? figure.caption?.children[0] : undefined
+    const parts = first?.type === 'paragraph' ? first.children : []
+    expect(parts.map((node) => [node.type, spanOf(node)])).toEqual([['text', [14, 21]], ['caption_number', [21, 22]], ['text', [22, 27]]])
+  })
+
+  it('C2-A-158: in a joined cell an inline node inside one piece keeps its pos; the joined row, cell and text omit it', () => {
+    const table = parse('| a *b* | c |\n+ d `x` | e |').children[0]
+    const row = table?.type === 'table' && table.children[0]?.type === 'table_body' ? table.children[0].children[0] : undefined
+    const cell = row?.type === 'table_row' ? row.children[0] : undefined
+    expect(spanOf(row)).toBeNull()
+    expect(spanOf(cell)).toBeNull()
+    const inlines = cell?.children[0]?.type === 'cell_paragraph' ? cell.children[0].children : []
+    expect(inlines.map((node) => [node.type, spanOf(node)])).toEqual([['text', [2, 4]], ['strong', [4, 7]], ['text', null], ['code', [18, 21]]])
+  })
+})

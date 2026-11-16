@@ -257,14 +257,14 @@ function isResolvable(node: InlineFrame): boolean {
 }
 
 /** Adds the public node of the closed frame `node` to `list`. */
-function addNode(ctx: TreeContext, list: Inline[], node: InlineFrame, flow: number): void {
+function addNode(ctx: TreeContext, spans: number[], list: Inline[], node: InlineFrame, flow: number): void {
   if (node.kind === SOFT_BREAK) return addBreak(ctx, list, node, flow)
   if (!ctx.resolvable && isResolvable(node)) ctx.resolvable = true
   const out = node.children !== null ? parentNode(ctx, node, node.children) : LEAVES.get(node.kind)!(ctx, node)
   setAttributes(out, node.attributes)
   if (ctx.trace !== null) ctx.trace.inlines.set(out, node)
   const end = node.kind === INLINE_COMMENT ? lineCommentEnd(ctx.src, node) : node.end
-  list.push((flow & FLOW_UNPLACED) !== 0 ? out : place(ctx, out, node.start, end))
+  list.push(isPlaced(spans, flow, node.start, node.end) ? place(ctx, out, node.start, end) : out)
 }
 
 function isPart(kind: number): boolean {
@@ -316,24 +316,37 @@ function openFrame(kind: number, start: number, flags: number, aux: number): Inl
   }
 }
 
-/** The start of a run of text in `flow`: none for a content joined from pieces (C2-A-158). */
-function runStart(flow: number, start: number): number {
-  return (flow & FLOW_UNPLACED) !== 0 ? -1 : start
+/** True when `[start, end)` lies in one piece of `spans`. */
+function inPiece(spans: number[], start: number, end: number): boolean {
+  for (let at = 0; at + 1 < spans.length; at += 2) if (start >= spans[at]! && end <= spans[at + 1]!) return true
+  return false
+}
+
+/** C2-A-158: in a content joined from pieces, only a node that takes its characters from one piece has a place. */
+function isPlaced(spans: number[], flow: number, start: number, end: number): boolean {
+  return (flow & FLOW_UNPLACED) === 0 || inPiece(spans, start, end)
+}
+
+/** The start of a run of text in `flow`, or -1 where the run has no place in the source. */
+function runStart(spans: number[], flow: number, start: number, end: number): number {
+  return isPlaced(spans, flow, start, end) ? start : -1
 }
 
 /** Closes the frame `node` at `end` into `list`, the children of its parent `host` or the root. */
 function closeFrame(ctx: TreeContext, spans: number[], node: InlineFrame, host: InlineFrame | null, list: Inline[], flow: number): void {
   // C2-A-041: an escape is no node. Its character is text.
-  if (node.kind === ESCAPE) addRun(ctx, list, node.value, runStart(flow, node.start), node.end)
+  if (node.kind === ESCAPE) addRun(ctx, list, node.value, runStart(spans, flow, node.start, node.end), node.end)
   else if (isPart(node.kind)) closePart(ctx, spans, node, host!)
-  else addNode(ctx, list, node, flow)
+  else addNode(ctx, spans, list, node, flow)
 }
 
 /** Adds the source `[start, end)` to the open leaf `top`, or as a run of text to the list it belongs to. */
-function addSpan(ctx: TreeContext, root: Inline[], top: InlineFrame | null, start: number, end: number, flow: number): void {
+function addSpan(
+  ctx: TreeContext, spans: number[], root: Inline[], top: InlineFrame | null, start: number, end: number, flow: number,
+): void {
   const text = ctx.src.slice(start, end)
-  if (top === null) return addRun(ctx, root, text, runStart(flow, start), end)
-  if (top.children !== null) return addRun(ctx, top.children, text, runStart(flow, start), end)
+  if (top === null) return addRun(ctx, root, text, runStart(spans, flow, start, end), end)
+  if (top.children !== null) return addRun(ctx, top.children, text, runStart(spans, flow, start, end), end)
   top.value = top.spanned ? `${top.value}\n${text}` : text
   top.spanned = true
 }
@@ -350,7 +363,7 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): Inlin
       top = openFrame(event.kind(), event.start(), event.flags(), event.aux())
       open.push(top)
     } else if (type === SPAN) {
-      addSpan(ctx, root, top, event.start(), event.end(), flow)
+      addSpan(ctx, spans, root, top, event.start(), event.end(), flow)
     } else {
       const node = open.pop()!
       node.end = event.end()
@@ -369,7 +382,7 @@ export function contentNodes(ctx: TreeContext, spans: number[], from: number, to
   // One line of plain text is one text node, with no pass over it.
   if (to - from === 2 && isPlainText(ctx.src, spans[from]!, spans[from + 1]!)) {
     const list: Inline[] = []
-    addText(ctx, list, ctx.src.slice(spans[from], spans[from + 1]), runStart(flow, spans[from]!), spans[from + 1]!)
+    addText(ctx, list, ctx.src.slice(spans[from], spans[from + 1]), spans[from]!, spans[from + 1]!)
     return list
   }
   scanInline(ctx.inline, ctx.src, spans, from, to, ctx.depth, lineComments, (flow & FLOW_KIND_MASK) === FLOW_CELL)

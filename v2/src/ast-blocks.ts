@@ -439,7 +439,7 @@ function numberMarkOffset(src: string, start: number, value: string, found: { at
 
 /**
  * Splits the first top-level text node that holds the mark around a `caption_number` node. The text
- * on either side is one slice of the source, so it keeps a position (C2-A-138); the mark has none (C2-A-158).
+ * on either side is one slice of the source, so it keeps a position (C2-A-138); the number spans its mark (C2-A-158).
  */
 function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
   for (let at = 0; at < children.length; at++) {
@@ -453,7 +453,7 @@ function markCaptionNumber(ctx: TreeContext, children: Inline[]): void {
     if (pos === undefined || mark < 0) continue
     const parts: Inline[] = []
     if (index.at > 0) addText(ctx, parts, value.slice(0, index.at), pos.startOffset, mark)
-    parts.push({ type: 'caption_number' })
+    parts.push(place(ctx, { type: 'caption_number' }, mark, mark + 1))
     if (index.at + 1 < value.length) addText(ctx, parts, value.slice(index.at + 1), mark + 1, pos.endOffset)
     children.splice(at, 1, ...parts)
     return

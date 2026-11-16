@@ -379,7 +379,7 @@ describe('C2-A-138: the text beside a caption number keeps its position', () => 
     for (const src of sources) {
       const [before, mark, after] = captionText(src)
       const line = src.split('\n').findIndex((text) => text.startsWith('^ ')) + 1
-      expect(mark).toEqual({ type: 'caption_number' })
+      expect(mark, src).toMatchObject({ type: 'caption_number', pos: { startLine: line, startColumn: (before!.value as string).length + 3 } })
       expect(before!.pos, src).toMatchObject({ startLine: line, startColumn: 3 })
       expect(after!.pos, src).toMatchObject({ startLine: line, endColumn: (before!.value as string).length + 3 + 6 })
     }

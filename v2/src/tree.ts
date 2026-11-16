@@ -22,6 +22,7 @@ export interface BlockNode {
   /** The footer rows of a table, the rows a cell spans. */
   rowFacts: number
   children: BlockNode[] | null
+  /** The content of a leaf; for a table row, the text between the pipes of each span mark it merged (C2-A-149). */
   spans: number[] | null
   attributes: number[] | null
 }
@@ -163,6 +164,11 @@ function joinContinuation(row: BlockNode, above: BlockNode, owners: (BlockNode |
   above.end = row.end
 }
 
+function markSpan(row: BlockNode, cell: BlockNode): void {
+  row.spans ??= []
+  row.spans.push(cell.start + 1, cell.end)
+}
+
 /** Resolves one row against the cells that own each column of the row above, and returns its own owners. */
 function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | null)[] {
   const owners: (BlockNode | null)[] = []
@@ -175,8 +181,10 @@ function resolveRow(row: BlockNode, above: (BlockNode | null)[]): (BlockNode | n
     if ((cell.flags & FLAG_SPAN_LEFT) !== 0 && left !== null) {
       left.facts++
       owners.push(left)
+      markSpan(row, cell)
     } else if ((cell.flags & FLAG_SPAN_UP) !== 0 && up !== null && up.facts === 1) {
       up.rowFacts++
+      markSpan(row, cell)
       // A cell joined upward has no cell of this row to its left to extend.
       owners.push(up)
       left = null

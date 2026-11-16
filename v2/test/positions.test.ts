@@ -144,13 +144,14 @@ describe('invariants', () => {
     expect(show(asNode(at(row, 'children.1')).pos)).toBe('1:6-1:9@5-8')
     // C2-B-176: a fragment past the last column forms a cell, which stands on the line of the continuation row.
     const formed = asNode(at(placedTree('| a |\n+ b | c |'), 'children.0.children.0.children.0.children.1'))
-    expect([childrenOf(asNode(at(formed, 'children.0'))), formed.pos]).toEqual([[{ type: 'text', value: 'c' }], undefined])
+    // C2-A-158: its text lies in one piece and keeps its position.
+    expect([childrenOf(asNode(at(formed, 'children.0'))).map((node) => show(node.pos)), formed.pos]).toEqual([['2:7-2:8@12-13'], undefined])
   })
 
-  it('C2-A-158: a table column, a caption number and the cells of a delimited table have no position', () => {
+  it('C2-A-158: a table column and the cells of a delimited table have no position; a caption number spans its mark', () => {
     const table = block('x').type === 'paragraph' ? ofType(placedTree('| a |\n^ T #').children[0], 'table') : null
     expect(show(table!.columns[0]!.pos)).toBe('none')
-    expect(show(asNode(at(table, 'caption.children.0.children.1')).pos)).toBe('none')
+    expect(show(asNode(at(table, 'caption.children.0.children.1')).pos)).toBe('2:5-2:6@10-11')
     expect(show(asNode(at(placedTree('{table}\n```csv\na\n```'), 'children.0.children.0.children.0.children.0')).pos)).toBe('none')
   })
 

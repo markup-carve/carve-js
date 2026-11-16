@@ -54,8 +54,21 @@ function alignmentOf(mark: number): 'left' | 'right' | 'center' {
 }
 
 /** C2-A-092: the cell a span mark stood in. It has no content of its own and a covering cell holds the counts. */
-function coveredCell(span: 'rowspan' | 'colspan'): TableCellNode {
-  return { type: 'table_cell', header: false, span, children: [] }
+function coveredCell(ctx: TreeContext, span: 'rowspan' | 'colspan', marks: Marks): TableCellNode {
+  const cell: TableCellNode = { type: 'table_cell', header: false, span, children: [] }
+  const spans = marks.row.spans
+  if (spans === null || marks.next + 1 >= spans.length) return cell
+  const start = spans[marks.next]!
+  const end = spans[marks.next + 1]!
+  marks.next += 2
+  // C2-A-149, C2-A-158: a span mark cell spans the text between its pipes.
+  return place(ctx, cell, start, end)
+}
+
+/** The span marks of a row, in column order, and the next one a covered cell takes. */
+interface Marks {
+  row: BlockNode
+  next: number
 }
 
 /** C2-B-171: the brace blocks glued to the pipe or to the header cell mark of a cell. */
@@ -69,7 +82,7 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
 
 function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellNode {
   // C2-A-158: a cell that a continuation row joined or formed has no position, and neither has its content.
-  const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![0]! >= node.end) || node.start >= rowEnd
+  const joined = node.spans!.length > 2 || (node.spans!.length === 2 && node.spans![1]! > node.end) || node.start >= rowEnd
   const flow = joined ? FLOW_CELL | FLOW_UNPLACED : FLOW_CELL
   const children = leafInlines(ctx, node.spans!, flow)
   // C2-I-098: a cell is inline flow like any other leaf.
@@ -83,7 +96,8 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
   if (ctx.trace !== null) ctx.trace.blocks.set(cell, node)
   if (joined) return cell
   const spans = node.spans!
-  if (spans.length === 2) place(ctx, paragraph, spans[0]!, spans[1]!)
+  // C2-A-158: the paragraph of an empty cell has no source character.
+  if (spans.length === 2 && spans[0]! < spans[1]!) place(ctx, paragraph, spans[0]!, spans[1]!)
   // C2-A-149: a cell spans the text between its pipes.
   return place(ctx, cell, node.start + 1, node.end)
 }
@@ -94,10 +108,11 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
  */
 function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: number): TableCellNode[] {
   const cells: TableCellNode[] = []
+  const marks: Marks = { row, next: 0 }
   const takeCovered = (): void => {
     while (cells.length < covered.length && covered[cells.length]! > 0) {
       covered[cells.length]!--
-      cells.push(coveredCell('rowspan'))
+      cells.push(coveredCell(ctx, 'rowspan', marks))
     }
   }
   for (const node of row.children!) {
@@ -105,7 +120,7 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
     const cell = cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
-    for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell('colspan'))
+    for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell(ctx, 'colspan', marks))
     covered[column] = (cell.rowspan ?? 1) - 1
   }
   takeCovered()
@@ -139,7 +154,7 @@ interface RowCursor {
   trailingEnd: number
 }
 
-/** The end of the range a row adds to its group: its first line, since a continuation row is no part of it (C2-B-175). */
+/** The end of the first line of a row: the lines below it are continuation rows (C2-B-175). */
 function rowRangeEnd(src: string, row: BlockNode): number {
   const lineEnd = src.indexOf('\n', row.start)
   return lineEnd >= 0 && lineEnd < row.end ? lineEnd : row.end
@@ -162,7 +177,8 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   const row = rowNode(ctx, child, cursor.covered)
   groups.width = Math.max(groups.width, row.children.length)
   cursor.group.push(row)
-  extend(groups, cursor.group, child.start, rowRangeEnd(ctx.src, child))
+  // C2-A-144, C2-A-151: the group owns the continuation rows of its rows.
+  extend(groups, cursor.group, child.start, child.end)
   cursor.index++
 }
 
