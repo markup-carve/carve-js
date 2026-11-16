@@ -316,10 +316,16 @@ function openFrame(kind: number, start: number, flags: number, aux: number): Inl
   }
 }
 
-/** True when `[start, end)` lies in one piece of `spans`. */
+/** True when `[start, end)` lies in one piece of `spans`, which are in source order: a binary search, as a cell may have many. */
 function inPiece(spans: number[], start: number, end: number): boolean {
-  for (let at = 0; at + 1 < spans.length; at += 2) if (start >= spans[at]! && end <= spans[at + 1]!) return true
-  return false
+  let low = 0
+  let high = (spans.length >> 1) - 1
+  while (low < high) {
+    const middle = (low + high + 1) >> 1
+    if (spans[middle * 2]! <= start) low = middle
+    else high = middle - 1
+  }
+  return spans.length >= 2 && start >= spans[low * 2]! && end <= spans[low * 2 + 1]!
 }
 
 /** C2-A-158: in a content joined from pieces, only a node that takes its characters from one piece has a place. */
