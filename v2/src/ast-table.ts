@@ -76,7 +76,8 @@ function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   if ((node.flags & FLAG_CELL_ATTRIBUTES) === 0) return null
   const attributes = emptyAttributes()
   const start = node.start + (ctx.src.charCodeAt(node.start + 1) === EQUALS ? 2 : 1)
-  readGluedBlocks(ctx.src, start, node.end, attributes)
+  // C2-I-034: the prefix ends before a glued block that is no valid attribute block.
+  readGluedBlocks(ctx.src, start, attributeBlocksEnd(ctx.src, start, node.end, true), attributes)
   return attributes
 }
 

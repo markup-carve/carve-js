@@ -81,16 +81,15 @@ function isValidBlock(src: string, pos: number, blockEnd: number, memo: Attribut
 }
 
 /**
- * Offset after the glued attribute blocks at `pos`, or `pos` when there are none. One block that is no
- * valid attribute block makes the whole run none (C2-I-034), and so does an empty one (C2-I-040).
+ * Offset after the glued attribute blocks at `pos`, or `pos` when there are none. A brace block that is
+ * no valid attribute block (C2-I-034), or an empty one (C2-I-040), ends the run: the blocks before it stand.
  */
 export function attributeBlocksEnd(src: string, pos: number, end: number, cell = false): number {
   const memo = emptyMemo()
   let p = pos
   for (;;) {
     const blockEnd = braceBlockEnd(src, p, end)
-    if (blockEnd < 0) return p
-    if (!isValidBlock(src, p, blockEnd, memo, cell)) return pos
+    if (blockEnd < 0 || !isValidBlock(src, p, blockEnd, memo, cell)) return p
     p = blockEnd
   }
 }

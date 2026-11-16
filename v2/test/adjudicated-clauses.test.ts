@@ -235,3 +235,26 @@ describe('C2-A-049, C2-B-113: an unclosed frontmatter block keeps its trailing b
     expect(render('---\nx\n  ')).toBe('')
   })
 })
+
+describe('C2-B-171, C2-I-034: a cell prefix is the valid brace block, and an invalid glued block is content', () => {
+  const cell = (row: string): Record<string, unknown> => {
+    const table = parse(row).children[0] as unknown as { children: { children: { children: Record<string, unknown>[] }[] }[] }
+    const { pos: _pos, ...rest } = table.children[0]!.children[0]!.children[0]!
+    return JSON.parse(JSON.stringify(rest, (key, value: unknown) => key === 'pos' ? undefined : value)) as Record<string, unknown>
+  }
+  const text = (node: Record<string, unknown>): string => JSON.stringify(node['children']).replace(/.*"value":"([^"]*)".*/u, '$1')
+
+  it('C2-I-034: the invalid block does not void the valid one before it', () => {
+    expect(cell('|{c}{-}|')).toMatchObject({ attrs: { keyValues: [['c', '']] } })
+    expect(text(cell('|{c}{-}|'))).toBe('{-}')
+    expect(cell('|={.a}{-} x|')).toMatchObject({ header: true, attrs: { classes: ['a'] } })
+    expect(text(cell('|={.a}{-} x|'))).toBe('{-} x')
+    expect(cell('|{<}{-}|')).toMatchObject({})
+    expect(render('|{c}{-}|')).toBe('<table>\n  <tbody>\n    <tr><td c="">{-}</td></tr>\n  </tbody>\n</table>')
+  })
+
+  it('C2-B-093: two valid glued blocks still merge, and an invalid first block leaves the cell without a prefix', () => {
+    expect(cell('|{c}{.d} x|')).toMatchObject({ attrs: { classes: ['d'], keyValues: [['c', '']] } })
+    expect(cell('|{-}{.d} x|')).not.toHaveProperty('attrs')
+  })
+})

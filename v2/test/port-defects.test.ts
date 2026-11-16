@@ -120,7 +120,9 @@ describe('C2-I-034/040: an invalid or empty brace block in a block prefix is tex
   const INVALID = ['{2}', '{ }', '{.}', '{0}', '{x<}', '{k<}', '{#/$x}', '{*}', '{##}', '{=/}', '{.a}{x<}', '{x<}{.a}', '{-i}', '{.i#}', '{+}']
 
   it('C2-B-171: the braces stay cell text, after the pipe and after the header mark', () => {
-    for (const block of INVALID) {
+    // C2-I-034: an invalid block glued behind a valid one leaves the valid one the prefix.
+    expect(render('|{.a}{x<} 1 |\n')).toContain('<tr><td class="a">{x&lt;} 1</td></tr>')
+    for (const block of INVALID.filter((block) => block !== '{.a}{x<}')) {
       expect(render(`|${block} 1 |\n`)).toContain(`<tr><td>${block.replaceAll('<', '&lt;')} 1</td></tr>`)
       expect(render(`|=${block} 1 |\n`)).toContain(`<th scope="col">${block.replaceAll('<', '&lt;')} 1</th>`)
     }
