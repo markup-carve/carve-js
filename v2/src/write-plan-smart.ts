@@ -109,7 +109,10 @@ function readsBack(leaf: Leaf, at: number, end: number, node: Node): boolean {
 export function checkSmart(leaf: Leaf, at: number, node: Node): void {
   let end = at
   while (end < leaf.codes.length && leaf.kinds[end] === ATOM && leaf.owners[end] === node) end++
-  if (!readsBack(leaf, at, end, node) && !dashRunReadsBack(leaf, at, end)) undecide(leaf, 'smart punctuation')
+  if (readsBack(leaf, at, end, node)) return
+  // The first dash of a run decides the whole run, so a later one is not checked again.
+  if (at > 0 && isDashUnit(leaf, at) && isDashUnit(leaf, at - 1)) return
+  if (!dashRunReadsBack(leaf, at, end)) undecide(leaf, 'smart punctuation')
 }
 
 function isDashUnit(leaf: Leaf, at: number): boolean {
@@ -137,8 +140,7 @@ function dashKinds(length: number): string[] {
 /** C2-I-111: the dashes written side by side make one hyphen run, which splits into the same dashes. */
 function dashRunReadsBack(leaf: Leaf, at: number, end: number): boolean {
   if (!isDashUnit(leaf, at)) return false
-  let start = at
-  while (start > 0 && isDashUnit(leaf, start - 1)) start--
+  const start = at
   let stop = end
   while (stop < leaf.codes.length && isDashUnit(leaf, stop)) stop++
   const previous = previousOf(leaf, start - 1)
