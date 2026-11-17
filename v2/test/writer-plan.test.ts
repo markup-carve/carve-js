@@ -388,6 +388,13 @@ describe('the planned writer', () => {
     expect(result.output.source).toBe(`${'> '.repeat(200)}>\n`)
   })
 
+  it('C2-B-190, C2-B-125: past the block cap a run of three colons may still close an outer div, so the plan does not take it', () => {
+    const source = `:: \\\none\ntwo\n${'::::: \\\none\ntwo\n'.repeat(200)}:::`
+    const parsed = parseWithLayout(source, { extensions: [] })
+    const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
+    expect(result.stats.reasons.get('check') ?? 0).toBe(0)
+  })
+
   it('C2-I-118: the open delimiters and brackets of a content count together, so a link behind 199 of them is planned', () => {
     const source = `${'*a '.repeat(199)}[x](u)\n`
     const result = formatBy(source, 'both')

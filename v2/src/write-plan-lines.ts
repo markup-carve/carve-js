@@ -497,8 +497,9 @@ function lineStartRule(leaf: Leaf, at: number, first: boolean): number | null {
  */
 function opensContainer(leaf: Leaf, at: number): boolean {
   const value = code(leaf, at)
-  if (value === 42) return runEnd(leaf, at, 42) - at < 3
-  return value === 62 || value === 45 || value === 46 || value === 58 || (value >= 48 && value <= 57) || isLetter(value)
+  // A run of three marks may close an outer div or break a line, which the depth cap does not stop.
+  if (value === 42 || value === 58) return runEnd(leaf, at, value) - at < 3
+  return value === 62 || value === 45 || value === 46 || (value >= 48 && value <= 57) || isLetter(value)
 }
 
 /**
