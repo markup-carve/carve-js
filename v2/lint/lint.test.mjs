@@ -31,6 +31,12 @@ it('C2-B-207: an escaped number mark in a figure caption is literal', () => {
   const source = '::: figure\n![a](a.png)\n^ A \\#\n:::\n'
   expect(lint(source).map((entry) => entry.code)).not.toContain('figure-group-panel-number')
 })
+
+it('C2-A-086: a trailing table comment starts at its preceding space', () => {
+  const entries = lint('| a | %% x\n+ b |\n').filter((entry) => entry.code === 'comment-splits-table-row')
+  expect(entries).toHaveLength(1)
+  expect(entries[0].range).toEqual({ startOffset: 5, endOffset: 10 })
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 

@@ -23,7 +23,7 @@ describe('C2-W-137: comment-splits-table-row', () => {
 
   it('C2-W-137: a trailing comment of the row directly above the continuation is reported too', () => {
     expect(findings('| a | %% x\n+ b |\n', 'comment-splits-table-row').map((entry) => entry.range))
-      .toEqual([{ startOffset: 6, endOffset: 10 }])
+      .toEqual([{ startOffset: 5, endOffset: 10 }])
   })
 
   it('C2-W-137: no report between two separate rows or after the last continuation row', () => {

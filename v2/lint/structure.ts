@@ -128,7 +128,7 @@ function walkRowLine(walk: RowWalk, start: number, text: string, path: string, c
   walk.pending = []
   walk.afterRow = row
   const comment = row ? trailingComment(text) : -1
-  if (comment >= 0) walk.pending.push([start + comment, end])
+  if (comment >= 0) walk.pending.push([start + comment - 1, end])
 }
 
 /**
