@@ -109,5 +109,46 @@ function readsBack(leaf: Leaf, at: number, end: number, node: Node): boolean {
 export function checkSmart(leaf: Leaf, at: number, node: Node): void {
   let end = at
   while (end < leaf.codes.length && leaf.kinds[end] === ATOM && leaf.owners[end] === node) end++
-  if (!readsBack(leaf, at, end, node)) undecide(leaf, 'smart punctuation')
+  if (!readsBack(leaf, at, end, node) && !dashRunReadsBack(leaf, at, end)) undecide(leaf, 'smart punctuation')
+}
+
+function isDashUnit(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at]
+  return leaf.kinds[at] === ATOM && leaf.codes[at] === 45 && owner?.type === 'smart_punctuation'
+    && (owner.kind === 'en_dash' || owner.kind === 'em_dash')
+}
+
+/**
+ * C2-I-111: the dashes that a run of `length` hyphens becomes: em dashes for a length divisible by three, otherwise en
+ * dashes for one divisible by two, otherwise one em dash and the rest by the same rule.
+ */
+function dashKinds(length: number): string[] {
+  const kinds: string[] = []
+  let rest = length
+  while (rest % 3 !== 0 && rest % 2 !== 0) {
+    kinds.push('em_dash')
+    rest -= 3
+  }
+  const kind = rest % 3 === 0 ? 'em_dash' : 'en_dash'
+  for (let count = rest / (kind === 'em_dash' ? 3 : 2); count > 0; count--) kinds.push(kind)
+  return kinds
+}
+
+/** C2-I-111: the dashes written side by side make one hyphen run, which splits into the same dashes. */
+function dashRunReadsBack(leaf: Leaf, at: number, end: number): boolean {
+  if (!isDashUnit(leaf, at)) return false
+  let start = at
+  while (start > 0 && isDashUnit(leaf, start - 1)) start--
+  let stop = end
+  while (stop < leaf.codes.length && isDashUnit(leaf, stop)) stop++
+  const previous = previousOf(leaf, start - 1)
+  const next = nextOf(leaf, stop)
+  if (previous === null || next === null || isRunCharacter(previous) || isRunCharacter(next)) return false
+  const kinds: string[] = []
+  for (let unit = start; unit < stop; unit++) {
+    const owner = leaf.owners[unit]
+    if (owner !== leaf.owners[unit - 1] && owner?.type === 'smart_punctuation') kinds.push(owner.kind)
+  }
+  const expected = dashKinds(stop - start)
+  return kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index])
 }
