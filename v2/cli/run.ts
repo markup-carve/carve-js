@@ -327,12 +327,14 @@ function migrateFile(path: string, display: string, bytes: Uint8Array): FileResu
   return { status: 0 }
 }
 
+function upgradeSource(display: string, bytes: Uint8Array): string {
+  try { return decodeUpgradeBytes(bytes) }
+  catch (error) { throw new CliError('input-unreadable', `${display}: ${error instanceof Error ? error.message : String(error)}`) }
+}
+
 /** The upgrade command of the reference engine (C2-T-003, UPGRADING.md). */
 function upgradeFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
-  let source: string
-  try { source = decodeUpgradeBytes(bytes) }
-  catch (error) { throw new CliError('input-unreadable', `${display}: ${error instanceof Error ? error.message : String(error)}`) }
-  const result = upgrade(source)
+  const result = upgrade(upgradeSource(display, bytes))
   const blocked = !canWriteUpgrade(result)
   if (blocked && args.values['force'] === true && args.values['check'] !== true) {
     process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
