@@ -43,7 +43,7 @@ export interface Options {
   alignTables?: boolean
   /** C2-W-127: `format` writes as if the parse had no sidecar. */
   normalize?: boolean
-  rules?: Readonly<Record<string, boolean>>
+  rules?: Readonly<Record<string, 'on' | 'off'>>
   platforms?: readonly string[]
 }
 
@@ -119,14 +119,15 @@ function isPlainObject(value: unknown): value is Readonly<Record<string, unknown
 }
 
 // The type of the items of each list and map option (spec/0.2/data/options.json).
-const ITEM_TYPES = new Map([['labels', 'string'], ['symbols', 'string'], ['rules', 'boolean'], ['platforms', 'string']])
+const ITEM_TYPES = new Map([['labels', 'string'], ['symbols', 'string'], ['rules', 'rule-state'], ['platforms', 'string']])
 const STRUCTURE_NAMES = new Map([
   ['includes', 'an include root or resolver'], ['social', 'an object'], ['urlPolicy', 'an object with a deny list or an allow list'],
 ])
 
 function checkItems(name: string, items: readonly unknown[], what: string): void {
   const type = ITEM_TYPES.get(name)
-  if (type !== undefined && !items.every((item) => typeof item === type)) throw new CarveOptionError(name, `not ${what} of ${type}s`)
+  const valid = items.every((item) => type === 'rule-state' ? item === 'on' || item === 'off' : typeof item === type)
+  if (type !== undefined && !valid) throw new CarveOptionError(name, `not ${what} of ${type}s`)
 }
 
 /** The test of each declared type: the reason a value of the option `name` is refused, or null. */

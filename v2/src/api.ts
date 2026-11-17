@@ -24,6 +24,8 @@ export interface ParseResult {
   document: DocumentNode
   /** C2-A-172: the diagnostics record, beside the tree. */
   diagnostics: Diagnostic[]
+  /** The include diagnostics past the cap of `includes.maxDiagnostics` that were counted, not kept; absent when none. */
+  suppressedIncludeDiagnostics?: number
 }
 
 export interface LayoutResult extends ParseResult {
@@ -46,6 +48,8 @@ export interface ResolvedTree {
 export interface RenderOutput {
   html: string
   diagnostics: Diagnostic[]
+  /** The include diagnostics past the cap of `includes.maxDiagnostics` that were counted, not kept; absent when none. */
+  suppressedIncludeDiagnostics?: number
 }
 
 /** C2-H-130: a render under `strictLosses` that lost something returns no output. */
@@ -221,12 +225,35 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
   return locateFindings(resolved.document, { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] })
 }
 
+/** As the 0.1 `maxWarnings`: past `max` include diagnostics a code already kept is counted, and a new code still kept. */
+function capIncludeDiagnostics(diagnostics: Diagnostic[], max: number): {
+  diagnostics: Diagnostic[], suppressedIncludeDiagnostics?: number
+} {
+  const retained: Diagnostic[] = []
+  const codes = new Set<string>()
+  let suppressedIncludeDiagnostics = 0
+  let retainedIncludes = 0
+  for (const entry of diagnostics) {
+    if (entry.channel === 'parse' && entry.code.startsWith('include-')) {
+      if (retainedIncludes >= max && codes.has(entry.code)) {
+        suppressedIncludeDiagnostics++
+        continue
+      }
+      codes.add(entry.code)
+      retainedIncludes++
+    }
+    retained.push(entry)
+  }
+  return suppressedIncludeDiagnostics === 0 ? { diagnostics: retained } : { diagnostics: retained, suppressedIncludeDiagnostics }
+}
+
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */
 export function parseWithDiagnostics(src: string | Uint8Array, options?: ParseOptions): ParseResult {
   const settings = readOptions(options, 'parse')
   const parsed = parseInput(sourceText(src), settings, options?.positions !== false)
   const resolved = resolveStage(parsed, settings)
-  return { document: resolved.document, diagnostics: parseDiagnostics(resolved, parsed) }
+  return { document: resolved.document, ...capIncludeDiagnostics(parseDiagnostics(resolved, parsed),
+    settings.includes?.maxDiagnostics ?? 100) }
 }
 
 /** The resolved tree of `src` (spec/0.2/ast.md). The diagnostics are not asked for, so none is given a position. */
@@ -246,7 +273,9 @@ export function parseWithLayout(src: string | Uint8Array, options?: ParseOptions
   const parsed = parseInput(source, settings, true, trace)
   const resolved = resolveStage(parsed, settings)
   const diagnostics = parseDiagnostics(resolved, parsed)
-  return { document: resolved.document, diagnostics, layout: sourceLayout(source, resolved.document, trace) }
+  return { document: resolved.document,
+    ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100),
+    layout: sourceLayout(source, resolved.document, trace) }
 }
 
 /** C2-L-056: the layout of bytes that are not well-formed UTF-8 keeps them in base64, and its ranges count them. */
@@ -267,7 +296,11 @@ export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode,
   const resolved = resolveStage(parsed, settings)
   const rendered = renderStage(resolved)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]
-  return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html, diagnostics }
+  if (settings.strictLosses) for (const entry of diagnostics) {
+    if (entry.channel === 'render-loss') entry.severity = 'error'
+  }
+  return { html: settings.strictLosses && rendered.losses.entries.length > 0 ? '' : rendered.html,
+    ...capIncludeDiagnostics(diagnostics, settings.includes?.maxDiagnostics ?? 100) }
 }
 
 /**

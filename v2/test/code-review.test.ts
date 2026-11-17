@@ -26,9 +26,10 @@ describe('the review of commit ee68ffaa', () => {
     expect(include?.type === 'include' ? include.children : []).toHaveLength(150000)
   })
 
-  it('C2-N-003, C2-A-173: 150,000 includes without a resolver are each reported (F5)', () => {
+  it('C2-N-003, C2-A-173: repeated no-resolver diagnostics are capped (F5)', () => {
     const result = parseWithDiagnostics('{{ x }}\n\n'.repeat(150000), { positions: false })
-    expect(result.diagnostics.filter(entry => entry.code === 'include-no-resolver')).toHaveLength(150000)
+    expect(result.diagnostics.filter(entry => entry.code === 'include-no-resolver')).toHaveLength(100)
+    expect(result.suppressedIncludeDiagnostics).toBe(149900)
   })
 
   it('C2-N-083: a document of 150,000 headings has no include dependencies (F5)', () => {

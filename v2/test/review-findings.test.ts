@@ -5,7 +5,7 @@ import {
   CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length,
   writeWithDiagnostics,
 } from '../src/index.ts'
-import { CarveOptionError } from '../src/options.ts'
+import { CarveOptionError, checkType } from '../src/options.ts'
 import { type DocumentNode, pointerKey, pointerToken } from '../src/ast.ts'
 import { documentOf } from './support/tree.ts'
 import { referenceForm } from './support/writer-checks.ts'
@@ -603,7 +603,7 @@ describe('every option is checked against its declared type first', () => {
 
   const VALID: Readonly<Record<string, unknown>> = {
     alignTables: true, extensions: [], headingIds: 'lower', includes: null, labels: { tocNav: 'T' }, mode: 'static', normalize: true, platforms: ['github'],
-    profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: true }, sections: false, smartTypography: false,
+    profile: 'minimal', rawHtml: true, renderers: {}, roundtrip: true, rules: { r: 'on' }, sections: false, smartTypography: false,
     social: { mentionUrl: '/{name}' }, sourceLines: true, strictLosses: true, symbols: { a: 'b' }, urlPolicy: { allow: ['https'] },
   }
   // Values of the right type that this engine does not offer, or that no stage of it reads.
@@ -740,5 +740,14 @@ describe('fourth review: a quoted value stays on its line', () => {
   it('C2-I-028: a backslash at the end of a line does not carry a quoted attribute value over the line break', () => {
     expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}\nb"}`)).not.toContain('<code title')
     expect(render(`${BACKTICK}x${BACKTICK}{title="a${BACKSLASH}"b"}`)).toBe('<p><code title="a&quot;b">x</code></p>')
+  })
+})
+
+
+describe('rule-state option type', () => {
+  it('C2-W-109: rules accepts on and off and refuses booleans', () => {
+    expect(() => checkType('rules', { a: 'on', b: 'off' })).not.toThrow()
+    expect(() => checkType('rules', { a: true })).toThrow(CarveOptionError)
+    expect(() => checkType('rules', { a: 'enabled' })).toThrow(CarveOptionError)
   })
 })

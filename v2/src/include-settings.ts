@@ -26,6 +26,7 @@ export interface IncludeConfig {
   file?: string
   depth?: number
   bytes?: number
+  maxDiagnostics?: number
 }
 
 export interface IncludeSettings {
@@ -33,9 +34,10 @@ export interface IncludeSettings {
   file: string | undefined
   depth: number
   bytes: number
+  maxDiagnostics: number
 }
 
-const FIELDS = ['resolver', 'file', 'depth', 'bytes']
+const FIELDS = ['resolver', 'file', 'depth', 'bytes', 'maxDiagnostics']
 
 function limit(value: unknown, name: string, ceiling: number, refuse: (reason: string) => Error): number {
   if (value === undefined) return ceiling
@@ -52,7 +54,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 export function includeSettings(value: unknown, refuse: (reason: string) => Error): IncludeSettings | null {
   if (value === undefined || value === null) return null
   if (typeof value === 'function') {
-    return { resolver: value as IncludeResolver, file: undefined, depth: INCLUDE_DEPTH, bytes: INCLUDE_BYTES }
+    return { resolver: value as IncludeResolver, file: undefined, depth: INCLUDE_DEPTH, bytes: INCLUDE_BYTES, maxDiagnostics: 100 }
   }
   if (!isRecord(value)) throw refuse('a root is read by the command line; a library call gives a resolver')
   for (const name of Object.keys(value)) if (!FIELDS.includes(name)) throw refuse(`unknown field ${name}`)
@@ -65,5 +67,6 @@ export function includeSettings(value: unknown, refuse: (reason: string) => Erro
     file,
     depth: limit(value['depth'], 'depth', INCLUDE_DEPTH, refuse),
     bytes: limit(value['bytes'], 'bytes', INCLUDE_BYTES, refuse),
+    maxDiagnostics: limit(value['maxDiagnostics'], 'maxDiagnostics', 100, refuse),
   }
 }

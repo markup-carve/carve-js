@@ -281,3 +281,14 @@ describe('diagnostics', () => {
       message: expect.any(String) as unknown, foreignType: 'wbr', range: { startOffset: 2, endOffset: 7 } }])
   })
 })
+
+describe('strict import losses', () => {
+  it('C2-M-082, C2-H-130: strictLosses promotes all render-loss diagnostics', () => {
+    const input = '<p><a href="javascript:x">t</a></p>'
+    const ordinary = importDocument(input, { from: 'html' })
+    const strict = importDocument(input, { from: 'html', strictLosses: true })
+    expect(strict.source).toBe(ordinary.source)
+    expect(strict.diagnostics.filter(entry => entry.channel === 'render-loss').every(entry => entry.severity === 'error')).toBe(true)
+    expect(strict.diagnostics.some(entry => entry.code === 'import-destination-denied')).toBe(true)
+  })
+})

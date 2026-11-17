@@ -600,3 +600,22 @@ describe('16. dependencies', () => {
     expect(includeDependencies(parse('{{ a }}\n\n> {{ b }}'))).toEqual([{ path: 'a', read: false }, { path: 'b', read: false }])
   })
 })
+
+describe('diagnostic cap', () => {
+  it('C2-N-061: repeated include causes are counted after the cap while new causes survive', () => {
+    const source = '{{ a }}\n\n{{ b }}\n\n{{ c }}'
+    const result = parseWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 1 }) })
+    expect(result.diagnostics.filter(entry => entry.code === 'include-not-found')).toHaveLength(1)
+    expect(result.suppressedIncludeDiagnostics).toBe(2)
+    expect(renderWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 1 }) }).suppressedIncludeDiagnostics).toBe(2)
+    expect(() => parseWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 101 }) })).toThrow(CarveOptionError)
+  })
+})
+
+describe('strict render loss severity', () => {
+  it('C2-H-130: strictLosses gives each render loss error severity', () => {
+    const result = renderWithDiagnostics('{{ e }}', { strictLosses: true })
+    expect(result.html).toBe('')
+    expect(result.diagnostics.filter(entry => entry.channel === 'render-loss').every(entry => entry.severity === 'error')).toBe(true)
+  })
+})
