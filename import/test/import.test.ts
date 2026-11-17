@@ -39,7 +39,7 @@ describe('Carve 0.2 importers', () => {
   })
 
   it('C2-W-134 returns writer refusal diagnostics with a valid imported tree', () => {
-    const result = importDocument('[^f]: - :::', { from: 'djot' })
+    const result = importDocument('``` \na\r\nb\n```', { from: 'djot' })
     expect(() => validateTree(result.document)).not.toThrow()
     expect(result.diagnostics.some((entry) => ['field-unspellable', 'structure-unspellable', 'writer-refused']
       .includes(entry.code))).toBe(true)

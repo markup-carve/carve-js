@@ -64,16 +64,56 @@ interface Linted {
   shift: number
   /** C2-N-086: for a section, the lines whose findings are kept. */
   kept: LineRange | null
+  /** C2-N-087: for a section, the path of each selected block in the file's own tree, to its path under the include. */
+  paths: ReadonlyMap<string, string> | null
+}
+
+function placeKey(node: Node): string | null {
+  const pos = node.pos
+  return pos === undefined ? null : `${node.type}\u0000${pos.startOffset}\u0000${pos.endOffset}`
+}
+
+function eachPath(node: Node, path: string, visit: (node: Node, path: string) => void): void {
+  visit(node, path)
+  forEachSlot(node, (nodes, step, single) => {
+    if (single) eachPath(nodes[0]!, `${path}/${step}`, visit)
+    else nodes.forEach((child, index) => eachPath(child, `${path}/${step}/${index}`, visit))
+  })
+}
+
+/** C2-N-087: a selected block keeps its place in the file, so its path in the file's tree is found by that place. */
+function sectionPaths(node: IncludeNode, text: string): Map<string, string> {
+  const places = new Map<string, string>()
+  eachPath(parse(text), '', (block, path) => {
+    const key = placeKey(block)
+    if (key !== null && !places.has(key)) places.set(key, path)
+  })
+  const paths = new Map<string, string>()
+  ;(node.children ?? []).forEach((child, index) => {
+    const key = placeKey(child)
+    const path = key === null ? undefined : places.get(key)
+    if (path !== undefined) paths.set(path, `/children/${index}`)
+  })
+  return paths
+}
+
+/** The path under the include of a finding at `path` in the file's own tree, by the longest selected block around it. */
+function pathUnder(paths: ReadonlyMap<string, string>, path: string): string | null {
+  for (let end = path.length; end > 0; end = path.lastIndexOf('/', end - 1)) {
+    const under = paths.get(path.slice(0, end))
+    if (under !== undefined) return under + path.slice(end)
+  }
+  return null
 }
 
 function lintedPart(node: IncludeNode, text: string): Linted {
   const lines = fileLines(text)
-  if (node.section !== undefined) return { source: text, shift: 0, kept: sectionLines(node) }
+  if (node.section !== undefined) return { source: text, shift: 0, kept: sectionLines(node), paths: sectionPaths(node, text) }
   const range = parsedLines(node, text)
-  if (range.from === 0 && range.to === lines.starts.length) return { source: text, shift: 0, kept: null }
-  if (range.from >= range.to) return { source: '', shift: 0, kept: null }
+  if (range.from === 0 && range.to === lines.starts.length) return { source: text, shift: 0, kept: null, paths: null }
+  if (range.from >= range.to) return { source: '', shift: 0, kept: null, paths: null }
   const start = lines.starts[range.from]!
-  return { source: text.slice(start, lines.nexts[range.to - 1]), shift: utf8Length(text.slice(0, start)), kept: null }
+  return { source: text.slice(start, lines.nexts[range.to - 1]), shift: utf8Length(text.slice(0, start)), kept: null, paths: null }
 }
 
 /** C2-N-087: one finding of an included file, or null where it is outside a section or reported already. */
@@ -89,8 +129,10 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
   if (visit.seen.has(key)) return null
   visit.seen.add(key)
   const range = { startOffset, endOffset: (entry.range?.endOffset ?? 0) + part.shift }
-  // A section is not the whole parse of its file, so its findings point at the include.
-  return { ...entry, path: `${path}${kept === null ? (entry.path ?? '') : ''}`, range, file }
+  // A finding of a section outside every selected block, such as one on the file as a whole, points at the include.
+  const own = entry.path ?? ''
+  const under = part.paths === null ? own : pathUnder(part.paths, own) ?? ''
+  return { ...entry, path: `${path}${under}`, range, file }
 }
 
 /** C2-N-086, C2-N-087: lints the source of one expanded Carve include and keeps each distinct finding once. */
@@ -110,7 +152,7 @@ function lintInclude(visit: Visit, node: IncludeNode, path: string): void {
 
 /** C2-N-086: a rule that reads the payload of a block also runs on the child of a code include, in its file. */
 function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: string): void {
-  const whole: Linted = { source: text, shift: 0, kept: null }
+  const whole: Linted = { source: text, shift: 0, kept: null, paths: null }
   ;(node.children ?? []).forEach((child, index) => {
     for (const entry of visit.lintPayload(text, child, `/children/${index}`)) {
       const found = located(visit, node, text, whole, entry, path)

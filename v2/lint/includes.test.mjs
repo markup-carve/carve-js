@@ -31,6 +31,15 @@ describe('lint and includes', () => {
     expect(found.filter((entry) => entry.code === 'empty-link-destination').map((entry) => entry.range)).toEqual([{ startOffset: 12, endOffset: 17 }])
   })
 
+  it('C2-N-087: a finding inside a section points at its node under the include', () => {
+    const files = { 'child.crv': '[x]()\n\n{#s}\n[y]()\n\n[z]()\n' }
+    const found = lint('Top.\n\n{{ child.crv #s }}', { includes: resolver(files) }).filter((entry) => entry.code === 'empty-link-destination')
+    expect(found.map((entry) => [entry.range, entry.path])).toEqual([[{ startOffset: 12, endOffset: 17 }, '/children/1/children/0/children/0']])
+    const nested = { 'child.crv': '> a\n>\n> {#h}\n> # H\n>\n> [y]()\n' }
+    const inner = lint('{{ child.crv #h }}', { includes: resolver(nested) }).filter((entry) => entry.code === 'empty-link-destination')
+    expect(inner.map((entry) => entry.path)).toEqual(['/children/0/children/1/children/0'])
+  })
+
   it('C2-N-088: lines on a delimited table include gets the rows hint', () => {
     expect(lint('{table}\n{{ d.csv @lines:1-2 @code:csv }}').map((entry) => entry.code)).toContain('include-lines-table-rows-hint')
     expect(lint('{table}\n{{ d.csv @rows:1-2 @code:csv }}').map((entry) => entry.code)).not.toContain('include-lines-table-rows-hint')

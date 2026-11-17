@@ -73,10 +73,11 @@ describe('carve2 process', () => {
   })
 
   it('C2-W-134: importing a writer refusal exits with a named category', () => {
-    const result = cli(['import', '--from=djot'], '[^f]: - :::')
+    // C2-W-016: a CR directly before a line feed in a code value has no spelling.
+    const result = cli(['import', '--from=djot'], '``` \na\r\nb\n```')
     expect(result.status).toBe(1)
     expect(result.stderr).toMatch(/^carve\[writer-refused\]:/)
-    expect(result.stderr).toMatch(/structure-unspellable/)
+    expect(result.stderr).toMatch(/field-unspellable/)
   })
 
   it('C2-W-011, C2-M-083: an image-only paragraph and a denied destination import with output and status 0', () => {
