@@ -52,6 +52,14 @@ describe('bodies opened behind a task box or attributes', () => {
   })
 })
 
+describe('a comment between a code block and its caption', () => {
+  it('C2-W-059: a line comment after a code block with a caption stands between the closer and the caption line', () => {
+    expect(format('```\nx\n```\n%% c\n^ cap')).toBe('```\nx\n```\n%% c\n^ cap\n')
+    expect(format('```\nx\n```\n%% c\n%% d\n^ cap\n\npara')).toBe('```\nx\n```\n%% c\n%% d\n^ cap\n\npara\n')
+    expect(format('- ```\n  x\n  ```\n  %% c\n  ^ cap')).toBe('- ```\n  x\n  ```\n  %% c\n  ^ cap\n')
+  })
+})
+
 describe('lists around a comment', () => {
   it('C2-W-122: the attribute line of the second list follows the first after one blank line (writer Example 12)', () => {
     expect(format('- a\n\n\n{.c}\n%% x\n- b')).toBe('- a\n\n{.c}\n%% x\n- b\n')

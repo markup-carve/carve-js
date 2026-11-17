@@ -619,6 +619,8 @@ export function afterComments(nodes: readonly Node[], at: number): Node | undefi
 
 /** C2-W-059: the blank lines before the comment `node`, which follows `before`. */
 function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
+  // C2-W-059: a line comment after a code block with a caption stands between its closer and the caption line.
+  if (before.type === 'code_block' && before.caption !== undefined && node.type === 'comment' && node.form === 'line') return 0
   if (isCommentLine(node) && isOpenContainer(w, before)) {
     // C2-B-138: the line stays in the container, unless it ends a fence that the container ends with.
     if (lastFence(w, before) !== null) return 0
