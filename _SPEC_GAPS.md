@@ -2,6 +2,38 @@
 
 Ranked by the cost of changing the contract after a freeze. The `carve` checkout was read only.
 
+## Freeze candidate 6 session (spec `068552fc`)
+
+Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.
+
+### G-G1. Example 231 keeps a region marker inside a paragraph
+
+The stored tree of syntax-blocks Example 231 (corpus and `trees/examples-syntax-blocks.json`) holds `%% #endregion intro` as an inline comment of the paragraph `See [c]().`. C2-B-137 says a region marker line "ends every open paragraph", and C2-B-024 excludes it from the lazy lines. The engine follows the clause; the tree field is held (`_EXAMPLE_FIXES.md` F9).
+
+### G-G2. Examples 278 and 282 list an `includeExpansion` stage
+
+Both stored trees state `stages: ["includeExpansion", "referenceResolution", "tableAlignment"]`, though neither input holds an include and no option is set; the other 500 such examples state two stages (C2-N-006). The engine writes two stages; the field is held (`_EXAMPLE_FIXES.md` F10).
+
+### G-G3. No carrier keeps a cross-reference key typed in another normal form
+
+C2-I-097 matches a cross-reference key under NFC and keeps the key as typed, so `</#Café>` with a decomposed `é` resolves to the id `Café` and the `href` names the id. The `data-carve-xref` carrier (C2-H-011) reads the key back from the `href`, so the typed form is lost on import. Inline Example 126 is the case. Reading one: the carrier should take the key as its value where it differs from the id. Reading two: the difference is an accepted loss and the import table should list it. The roundtrip test holds this one source by name.
+
+### G-G4. No carrier spells the bodies of `body-rows` or `rowHeadColumns`
+
+C2-B-230 splits a body into several `table_body` nodes and sets `rowHeadColumns`; HTML writes one `<tbody>` per nonempty body and the first columns as `<th scope="row">` (C2-H-056), and never writes the keys (C2-H-153). The import of a `roundtrip` render cannot tell an empty body, nor a row header column from a header cell. The roundtrip test holds blocks Example 277 by name. A carrier on `<tbody>` (for example `data-carve-row-heads`) would close it.
+
+### G-G5. U-224 is withdrawn, but three of its contract inputs still differ
+
+The upgrade map at `068552fc` drops U-224 (TODO: "drop U-224") after C2-B-109 closes a comment block at a bare closer line. Two of the five contract inputs now read the same in 0.1 and 0.2, but `- ::: box` / `%%%%` / `%% j`, the description list one and the footnote one (`U-224#1` to `#3`) still render differently. The tool keeps reporting U-224 for them so that no difference goes unexplained.
+
+### G-G6. C2-W-034 and the blank line before a region marker
+
+At candidate 6 a region marker line ends the paragraph above it (C2-B-137), so `a` / `%% #endregion` is a paragraph and a comment node. C2-W-034 says the writer "moves no marker and opens no new line beside one". The tree is the same whether the source had a blank line between them or not, so the writer cannot keep both layouts. The writer separates the two blocks with a blank line (C2-W-017), the same as with any other block pair, and the include vector `i01b` now expects that form.
+
+### G-G7. No machine-readable list of render-loss codes
+
+`carve2 render --allow-loss CODE` must refuse an unknown code, but neither `spec/0.2` nor its data lists the codes of the `render-loss` channel. The command line keeps a hand-written list (`RENDER_LOSS_CODES` in `v2/cli/run.ts`) that has to follow the spec by hand.
+
 ## Freeze candidate 5 session (spec `7db33836`)
 
 Cases found while following freeze candidate 5, revision 1. The engine choice is named in each.
