@@ -329,6 +329,23 @@ function delimitedRow(row: TableRowNode, separator: string): string {
   return row.children.map((cell) => delimitedCell(cell, separator)).join(separator)
 }
 
+function lastRowIsOneCell(table: TableNode): boolean {
+  const group = table.children[table.children.length - 1]
+  const row = group?.type === 'comment' ? undefined : group?.children[group.children.length - 1]
+  return row?.type === 'table_row' && row.children.length === 1
+}
+
+function delimitedBody(table: TableNode, separator: string): string[] {
+  const body: string[] = []
+  for (const group of table.children) {
+    if (group.type === 'comment') continue
+    for (const row of group.children) body.push(row.type === 'table_row' ? delimitedRow(row, separator) : '')
+  }
+  // C2-B-226, C2-W-005: an empty last line is dropped, so a last row of one empty cell takes the quoted spelling.
+  if (body.length > 0 && body[body.length - 1] === '' && lastRowIsOneCell(table)) body[body.length - 1] = '""'
+  return body
+}
+
 function delimitedTable(w: Writer, table: TableNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
   const first: (readonly [string, string])[] = [['table', '']]
@@ -337,11 +354,7 @@ function delimitedTable(w: Writer, table: TableNode, prefix: string, format: str
   const block = braceBlock(table, tableKeys(w, table, first))
   if (w.prewrittenAttributes === table) w.prewrittenAttributes = null
   else emit(w, prefix, block)
-  const body: string[] = []
-  for (const group of table.children) {
-    if (group.type === 'comment') continue
-    for (const row of group.children) body.push(row.type === 'table_row' ? delimitedRow(row, separator) : '')
-  }
+  const body = delimitedBody(table, separator)
   const lines = body.join('\n').split('\n')
   const run = '`'.repeat(Math.max(MIN_RUN, longestBareRun(lines, 96) + 1))
   emit(w, prefix, run + format)

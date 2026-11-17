@@ -60,6 +60,14 @@ describe('a comment between a code block and its caption', () => {
   })
 })
 
+describe('delimited tables', () => {
+  it('C2-W-005, C2-B-226: a last row of one empty cell is written quoted, since an empty last line is dropped', () => {
+    const source = '{table}\n```csv\na\n""\n```'
+    expect(format(source)).toBe('{table}\n```csv\na\n""\n```\n')
+    expect(format('{table}\n```csv\na\n\nb\n```')).toBe('{table}\n```csv\na\n\nb\n```\n')
+  })
+})
+
 describe('lists around a comment', () => {
   it('C2-W-122: the attribute line of the second list follows the first after one blank line (writer Example 12)', () => {
     expect(format('- a\n\n\n{.c}\n%% x\n- b')).toBe('- a\n\n{.c}\n%% x\n- b\n')
