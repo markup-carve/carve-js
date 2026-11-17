@@ -85,6 +85,14 @@ describe('the planned writer', () => {
     )
   })
 
+  it('C2-W-075: nested brackets in an image label enter repair during formatting', () => {
+    const source = '![[[%%[\n]][]]()~'
+    for (const normalize of [false, true]) {
+      const result = formatWithDiagnostics(source, { normalize })
+      expect(result.diagnostics.some((entry) => entry.channel === 'render-loss')).toBe(true)
+    }
+  })
+
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
     const source = [
       '= Title', '', 'A paragraph with *strong*, /emphasis/, `code` and a [link](https://example.org "T").',
