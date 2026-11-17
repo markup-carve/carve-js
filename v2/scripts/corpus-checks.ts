@@ -116,9 +116,10 @@ export function clauseCaseMismatches(entry: ClauseCase): Mismatch[] {
   const html = outcome(() => renderWithDiagnostics(entry.input, entry.options).html)
   if (html !== entry.expected.html) out.push({ field: 'html', actual: html, expected: entry.expected.html })
   const document = outcome(() => resolveTree(parseTree(entry.input), entry.options).document)
-  const children = typeof document === 'string'
-    ? document
-    : (withoutPositions(JSON.parse(encodeTree(document))) as { children: unknown }).children
+  // A case about positions states them (C2-A-151 to C2-A-154); every other case compares without them.
+  const positioned = JSON.stringify(entry.expected.children).includes('"pos":')
+  const tree = typeof document === 'string' ? document : JSON.parse(encodeTree(document)) as unknown
+  const children = typeof tree === 'string' ? tree : ((positioned ? tree : withoutPositions(tree)) as { children: unknown }).children
   if (!same(children, entry.expected.children)) out.push({ field: 'children', actual: children, expected: entry.expected.children })
   return out
 }
