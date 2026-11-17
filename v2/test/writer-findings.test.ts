@@ -13,17 +13,17 @@ function written(children: unknown[]): { source: string, codes: string[] } {
 
 describe('line comments', () => {
   it('C2-W-022, C2-W-117: a line comment value that ends with spaces or tabs is written without them, and the loss is reported', () => {
-    expect(written([comment])).toEqual({ source: '%% x\n', codes: ['field-unspellable /children/0'] })
-    expect(written([{ type: 'comment', form: 'line', value: '  ' }])).toEqual({ source: '%%\n', codes: ['field-unspellable /children/0'] })
+    expect(written([comment])).toEqual({ source: '%% x\n', codes: ['field-unspellable /children/0/value'] })
+    expect(written([{ type: 'comment', form: 'line', value: '  ' }])).toEqual({ source: '%%\n', codes: ['field-unspellable /children/0/value'] })
   })
 
   it('C2-W-022, C2-W-117: so is the value of an inline line comment and of a comment between table rows', () => {
     expect(written([{ type: 'paragraph', children: [{ type: 'text', value: 'a' }, comment] }]))
-      .toEqual({ source: 'a %% x\n', codes: ['field-unspellable /children/0/children/1'] })
+      .toEqual({ source: 'a %% x\n', codes: ['field-unspellable /children/0/children/1/value'] })
     const table = written([{ type: 'table', columns: [{ type: 'table_column' }],
       children: [{ type: 'table_body', children: [{ type: 'table_row', children: [cell] }, comment] }] }])
     expect(table.source.split('\n').every((line) => !line.endsWith(' ') && !line.endsWith('\t'))).toBe(true)
-    expect(table.codes).toEqual(['field-unspellable /children/0/children/0/children/1'])
+    expect(table.codes).toEqual(['field-unspellable /children/0/children/0/children/1/value'])
   })
 })
 
@@ -37,6 +37,17 @@ it('C2-A-193: source metadata does not make the writer report a loss', () => {
   const result = writeWithDiagnostics(document)
   expect(result.source).toBe('a\n')
   expect(result.diagnostics).toEqual([])
+})
+
+it('C2-W-011: field losses name the field path', () => {
+  const image = written([{ type: 'paragraph', role: 'image', children: [
+    { type: 'image', src: 'x.png', decorative: true },
+  ] }])
+  expect(image.codes).toContain('field-unspellable /children/0/children/0/decorative')
+  const xref = written([{ type: 'paragraph', children: [
+    { type: 'text', value: 'see ' }, { type: 'xref', key: 'h', namespace: 'heading', display: 'number' },
+  ] }])
+  expect(xref.codes).toContain('field-unspellable /children/0/children/1/display')
 })
 
 describe('bodies opened behind a task box or attributes', () => {

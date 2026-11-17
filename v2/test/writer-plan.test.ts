@@ -94,8 +94,9 @@ describe('the planned writer', () => {
   }
 
   it('C2-W-016: a CR before a line end, in text or in the value of an atom, is planned as a reported loss', () => {
-    for (const [source, path] of [['x %% c\r', '/children/0/children/1'], ['a\r \nb\n', '/children/0/children/0'],
-      ['x %% c\r\t\n', '/children/0/children/1'], ['a\r\r\nb\n', '/children/0/children/0'], ["x'}/\\*\r", '/children/0/children/2']]) {
+    for (const [source, path] of [['x %% c\r', '/children/0/children/1/value'], ['a\r \nb\n', '/children/0/children/0/value'],
+      ['x %% c\r\t\n', '/children/0/children/1/value'], ['a\r\r\nb\n', '/children/0/children/0/value'],
+      ["x'}/\\*\r", '/children/0/children/2/value']]) {
       const result = formatBy(source!, 'plan')
       expect(result.stats.planned, source).toBe(1)
       expect(result.stats.repaired, source).toBe(0)

@@ -166,5 +166,10 @@ export function lose(w: Writer, node: Node, field: string | null): void {
     ? `a ${node.type} node has no spelling in Carve source here`
     : `the field ${field} of a ${node.type} node has no spelling in Carve source here`
   const code = field === null ? 'structure-unspellable' : 'field-unspellable'
-  addFinding(w.losses, node, { code, severity: 'warning', channel: 'render-loss', message })
+  const entry: Diagnostic = { code, severity: 'warning', channel: 'render-loss', message }
+  addFinding(w.losses, node, entry)
+  if (field !== null) {
+    w.losses.steps ??= new Map()
+    w.losses.steps.set(entry, `/${field}`)
+  }
 }

@@ -565,8 +565,8 @@ describe('what the third code review found', () => {
   })
 
   it('C2-W-016: a lone CR at the end of a line is refused with field-unspellable; inside a line it is text', () => {
-    expect(writerLosses('a\r')).toEqual(['field-unspellable /children/0/children/0'])
-    expect(writerLosses('a\r\r\nb')).toEqual(['field-unspellable /children/0/children/0'])
+    expect(writerLosses('a\r')).toEqual(['field-unspellable /children/0/children/0/value'])
+    expect(writerLosses('a\r\r\nb')).toEqual(['field-unspellable /children/0/children/0/value'])
     expect(faithful('a\rb')).toBe('a\rb\n')
   })
 

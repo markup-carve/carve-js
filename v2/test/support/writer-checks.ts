@@ -9,10 +9,10 @@ import { isNode } from './nodes.ts'
 // C2-W-016: the inline leaves whose later lines are lines of the leaf.
 const VERBATIM_SPANS = ['code', 'literal_inline', 'math', 'raw_inline', 'comment', 'critic_comment']
 
-function nodeAt(tree: DocumentNode, path: string): Node | undefined {
+function nodeAt(tree: DocumentNode, path: string): unknown {
   let at: unknown = tree
   for (const part of path.split('/').slice(1)) at = (at as Record<string, unknown> | undefined)?.[part]
-  return at as Node | undefined
+  return at
 }
 
 /** C2-W-016: whether `value` holds a CR at the end of a line, which the line ending takes. */
@@ -29,12 +29,20 @@ function endsLineWithCr(value: string): boolean {
 export function isRefusal(tree: DocumentNode, diagnostics: readonly Diagnostic[]): boolean {
   return diagnostics.some((entry) => {
     if (entry.code === 'writer-refused') return true
-    const node = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
-    const value = node !== undefined && 'value' in node && typeof node.value === 'string' ? node.value : ''
+    const found = entry.path === undefined ? undefined : nodeAt(tree, entry.path)
+    const parentPath = entry.path?.slice(0, entry.path.lastIndexOf('/')) ?? ''
+    const parent = nodeAt(tree, parentPath)
+    const node = isNode(found) ? found : isNode(parent) ? parent : undefined
+    const value = refusalValue(found, node)
     const multiline = node !== undefined && VERBATIM_SPANS.includes(node.type) && value.includes('\n')
     const fields = node === undefined ? [] : Object.values(node).filter((field): field is string => typeof field === 'string')
     return entry.code === 'field-unspellable' && (multiline || fields.some(endsLineWithCr))
   })
+}
+
+function refusalValue(found: unknown, node: Node | undefined): string {
+  if (typeof found === 'string') return found
+  return node !== undefined && 'value' in node && typeof node.value === 'string' ? node.value : ''
 }
 
 function isAsciiAlphanumeric(code: number): boolean {
