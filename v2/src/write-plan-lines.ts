@@ -184,8 +184,7 @@ function pipeLine(leaf: Leaf, at: number): number {
   let last = at
   for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) if (leaf.codes[unit] === 124) last = unit
   if (last === at) return NO_ESCAPE
-  if (leaf.kinds[last] !== TEXT) return UNDECIDED
-  return mayCloseRow(leaf, last + 1) ? at : NO_ESCAPE
+  return leaf.kinds[last] !== TEXT || mayCloseRow(leaf, last + 1) ? UNDECIDED : NO_ESCAPE
 }
 
 /**

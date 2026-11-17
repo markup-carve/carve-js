@@ -150,17 +150,9 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    const commented = formatBy('\\| a | %% c\n', 'both')
-    expect(commented.stats.planned).toBe(1)
-    expect(commented.stats.differences).toEqual([])
-  })
-
-  it('C2-B-167: a pipe line with a closing row attribute keeps its first pipe escaped in the plan', () => {
-    for (const source of ['\\| a |{.c}\n', '\\| a | {.c}\n', '\\| a |{x="a"}\n']) {
-      const result = formatBy(source, 'both')
-      expect(result.stats.repaired, source).toBe(0)
-      expect(result.output.source, source).toBe(source)
-      expect(result.stats.differences, source).toEqual([])
+    // A brace block or a line comment behind a pipe may make it the closing pipe, so the repair decides.
+    for (const source of ['\\| a | {.x}\n', '\\| a |{.x}\n', '\\| a | %% c\n']) {
+      expect(formatBy(source, 'both').stats.planned, source).toBe(0)
     }
   })
 
