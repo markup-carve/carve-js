@@ -5,7 +5,7 @@ import {
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 import { includeSettings, type IncludeSettings } from './include-settings.ts'
 
-export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii'
+export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii' | 'ascii-lower' | 'ascii-strict' | 'ascii-strict-lower'
 export type Mode = 'interactive' | 'static'
 export type Profile = 'full' | 'article' | 'comment' | 'minimal'
 

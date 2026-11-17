@@ -168,7 +168,7 @@ describe('heading ids', () => {
 
   it('C2-H-022, C2-H-131: lower folds the case and ascii also transliterates', () => {
     expect(slugify('Café Straße', 'lower')).toBe('café-straße')
-    expect(slugify('Café Straße', 'ascii')).toBe('cafe-strasse')
+    expect(slugify('Café Straße', 'ascii-strict-lower')).toBe('cafe-strasse')
     expect(ids('# Café', 'lower')).toEqual(['café'])
     expect(() => readOptions({ headingIds: 'upper' }, 'parse')).toThrow(CarveOptionError)
   })

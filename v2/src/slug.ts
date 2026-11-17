@@ -74,8 +74,9 @@ function isAscii(text: string): boolean {
 export function slugify(text: string, mode: HeadingIds): string {
   // ASCII text is in NFC and holds no character of C2-H-144 and C2-H-145.
   let slug = slugRun(isAscii(text) ? text : withoutPresentation(text.normalize('NFC')), true)
-  if (mode === 'ascii') slug = slugRun(transliterate(slug), false)
-  if (mode === 'lower' || mode === 'ascii') {
+  // C2-H-147: `ascii` keeps what the table cannot map; `ascii-strict` makes it a separator.
+  if (mode.startsWith('ascii')) slug = slugRun(transliterate(slug), !mode.startsWith('ascii-strict'))
+  if (mode === 'lower' || mode.endsWith('-lower')) {
     // C2-H-147: per code point, so no mapping that depends on context applies.
     let lower = ''
     for (const char of slug) lower += char.toLowerCase()

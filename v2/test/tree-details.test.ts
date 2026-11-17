@@ -51,8 +51,8 @@ describe('character ranges', () => {
   })
 
   it('the ascii slug drops the first and the last combining mark and keeps the characters around the range', () => {
-    expect(slugify('a\u0300b\u036fc', 'ascii')).toBe('abc')
-    expect(slugify('x\u02ffy\u0370z', 'ascii')).toBe('x-y-z')
+    expect(slugify('a\u0300b\u036fc', 'ascii-strict-lower')).toBe('abc')
+    expect(slugify('x\u02ffy\u0370z', 'ascii-strict-lower')).toBe('x-y-z')
   })
 
   it('a term of the first and last digits and letters is an abbreviation, as a whole word', () => {

@@ -137,7 +137,7 @@ export function refusalPath(entry: RefusedTree): string | null {
 /** A positive fixture tree: the engine's own tree of its source, and the reader accepts it with its source. */
 export function exampleTreeMismatches(entry: ExampleTree): Mismatch[] {
   const options: ParseOptions = {}
-  if (entry.options?.headingIds === 'lower') options.headingIds = 'lower'
+  if (entry.options?.headingIds !== undefined) options.headingIds = entry.options.headingIds
   if (entry.files !== undefined) options.includes = { resolver: corpusResolver(entry.files), ...entry.options?.includes }
   const out: Mismatch[] = []
   const tree = treeOf(entry.source, options)

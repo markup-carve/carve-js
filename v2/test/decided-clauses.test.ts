@@ -208,8 +208,8 @@ describe('the other clauses of the two commits', () => {
     expect(parse('::: tip [Tab *x*]\nbody\n:::', { positions: false }).children![0]).toMatchObject({ type: 'admonition', groupLabel: 'Tab *x*' })
   })
 
-  it('C2-H-147: with ascii the result is lowered as with lower', () => {
-    expect(render('# AB', { headingIds: 'ascii' })).toBe('<section id="ab">\n  <h1>AB</h1>\n</section>')
+  it('C2-H-147: with ascii-strict-lower the result is lowered as with lower', () => {
+    expect(render('# AB', { headingIds: 'ascii-strict-lower' })).toBe('<section id="ab">\n  <h1>AB</h1>\n</section>')
   })
 
   it('C2-H-165: a degraded block is one paragraph of its plain text behind the mark of its kind', () => {

@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type IncludeAnswer, type IncludeRequest } from '../src/include-settings.ts'
-import { type RenderOptions } from '../src/options.ts'
+import { type HeadingIds, type RenderOptions } from '../src/options.ts'
 
 export const DATA = join(import.meta.dirname, '../data')
 
@@ -61,7 +61,7 @@ export interface RefusedTree {
 export interface ExampleTree {
   id: string
   source: string
-  options?: { includes?: Record<string, unknown>, headingIds?: string }
+  options?: { includes?: Record<string, unknown>, headingIds?: HeadingIds }
   files?: Record<string, string>
   tree: unknown
 }

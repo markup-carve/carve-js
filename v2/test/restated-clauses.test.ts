@@ -79,10 +79,15 @@ describe('the heading slug', () => {
     expect(slugify('Ärger § 日本  x', 'keep-case')).toBe('Ärger-§-日本- x')
   })
 
-  it('C2-H-147: `lower` maps each character on its own, and `ascii` transliterates and trims again', () => {
+  it('C2-H-147: `lower` maps each character on its own, and the four `ascii` values transliterate and trim again', () => {
     expect(slugify('ΣΑΣ', 'lower')).toBe('σασ')
     expect(slugify('İstanbul', 'lower')).toBe('i̇stanbul')
-    expect(slugify('Ärger § Straße', 'ascii')).toBe('arger-strasse')
+    expect(slugify('Ärger § Straße', 'ascii-strict-lower')).toBe('arger-strasse')
+    expect(slugify('Café 日本語', 'ascii')).toBe('Cafe-日本語')
+    expect(slugify('Café 日本語', 'ascii-strict')).toBe('Cafe')
+    expect(slugify('Café 日本語', 'ascii-lower')).toBe('cafe-日本語')
+    expect(slugify('Hello World', 'ascii')).toBe('Hello-World')
+    expect(slugify('Hello World', 'ascii-lower')).toBe('hello-world')
     expect(slugify('ABC', 'keep-case')).toBe('ABC')
   })
 
