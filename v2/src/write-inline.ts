@@ -406,7 +406,33 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return `!${raw}`
   const pipes = (flags & IN_CELL) !== 0
-  return `![${pipes ? escapePipes(node.alt ?? '') : node.alt ?? ''}]${target(node, node.src, pipes)}`
+  const alt = altSource(node.alt ?? '')
+  return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
+}
+
+/** The brackets of `alt` that have no partner in it. */
+function unpartnered(alt: string): Set<number> {
+  const open: number[] = []
+  const lone = new Set<number>()
+  for (let at = 0; at < alt.length; at++) {
+    if (alt[at] === '[') open.push(at)
+    else if (alt[at] === ']' && open.pop() === undefined) lone.add(at)
+  }
+  for (const at of open) lone.add(at)
+  return lone
+}
+
+/** C2-W-097: alt text doubles a backslash before ASCII punctuation or at its end, and escapes a bracket with no partner. */
+function altSource(alt: string): string {
+  const lone = unpartnered(alt)
+  let out = ''
+  for (let at = 0; at < alt.length; at++) {
+    const char = alt[at]!
+    if (char === '\\' && (at + 1 === alt.length || isAsciiPunctuation(alt.charCodeAt(at + 1)))) out += '\\'
+    else if (lone.has(at)) out += '\\'
+    out += char
+  }
+  return out
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */

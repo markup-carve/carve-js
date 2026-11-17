@@ -123,9 +123,14 @@ function referenceForm(node: InlineFrame): 'collapsed' | 'full' | 'shortcut' {
   return (node.flags & FLAG_COLLAPSED) !== 0 ? 'collapsed' : 'full'
 }
 
+/** C2-I-074: the alt text is the bracket content as written, less each backslash before ASCII punctuation. */
+function altText(value: string): string {
+  return value.replace(/\\([!-/:-@[-`{-~])/gu, '$1')
+}
+
 /** C2-A-105, C2-A-107: an image, its target direct or by reference. */
-function imageNode(node: InlineFrame, cell: boolean): ImageNode {
-  const alt = cell ? node.value.replaceAll('\\|', '|') : node.value
+function imageNode(node: InlineFrame): ImageNode {
+  const alt = altText(node.value)
   if ((node.flags & FLAG_REFERENCE) !== 0) {
     return { type: 'image', key: node.key ?? '', namespace: 'link', refForm: referenceForm(node), alt }
   }
@@ -174,7 +179,7 @@ const LEAVES = new Map<number, LeafBuilder>([
     type: 'smart_punctuation', kind: SMART_KIND_NAMES[node.aux]!, glyph: SMART_GLYPHS[node.aux]!,
     source: ctx.src.slice(node.start, node.end),
   })],
-  [IMAGE, (ctx, node) => imageNode(node, ctx.inline.cell)],
+  [IMAGE, (_ctx, node) => imageNode(node)],
 ])
 
 type PlainParent =
