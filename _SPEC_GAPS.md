@@ -295,3 +295,997 @@ C2-A-203 and C2-A-206 require checking annotation ids against a separate range s
 ### 6. Other pre-existing schema differences
 
 The AST schema accepts a position with its start behind its end and an extension name without a declaration; the engine refuses both under C2-A-140 and C2-A-123. It does not encode the tree nesting bound. The schema rejects an unqualified inline extension whose name starts with underscore, although C2-I-094 permits it. It also rejects an out-of-shape include `lines` range retained for expansion under C2-B-206. These were already present before the extension work. The remaining 17 mutant disagreements in the CI-sized run fall into these categories.
+
+## Candidate 8 clause readings still unresolved at the pinned engine
+
+These inputs are from the current clause cases. Reading A is the case expectation; reading B is the pinned engine result. The alternatives remain open because the cited clause does not settle the difference.
+
+### CC-468: tree
+
+Input:
+
+```json
+{
+  "type": "document",
+  "astVersion": "2.0",
+  "extensions": [
+    {
+      "name": "carve.tab",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "title",
+        "body"
+      ]
+    },
+    {
+      "name": "carve.tabs",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "tabs"
+      ]
+    }
+  ],
+  "children": [
+    {
+      "type": "block_extension",
+      "name": "carve.tab",
+      "version": "1",
+      "children": [],
+      "slots": {
+        "title": [
+          {
+            "type": "text",
+            "value": "A"
+          }
+        ],
+        "body": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "value": "x"
+              }
+            ]
+          }
+        ]
+      },
+      "fallback": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "strong",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ]
+        }
+      ],
+      "source": {
+        "form": "div",
+        "name": "tab",
+        "title": "A",
+        "body": "x\n"
+      }
+    }
+  ]
+}
+```
+
+Reading A (case): `{"refusal":{"error":"CarveTreeError","path":"/children/0"}}`.
+
+Reading B (engine): `"accepted"`. C2-X-046 is unconditional but C2-X-039 makes tabs optional; the engine refuses only with `carve.tabs` enabled, and the runner passes no options to `decodeTree`. Finding added.
+
+### CC-469: tree
+
+Input:
+
+```json
+{
+  "type": "document",
+  "astVersion": "2.0",
+  "extensions": [
+    {
+      "name": "carve.tab",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "title",
+        "body"
+      ]
+    },
+    {
+      "name": "carve.tabs",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "tabs"
+      ]
+    },
+    {
+      "name": "ex.box",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "s"
+      ]
+    }
+  ],
+  "children": [
+    {
+      "type": "block_extension",
+      "name": "carve.tabs",
+      "version": "1",
+      "children": [],
+      "slots": {
+        "tabs": [
+          {
+            "type": "block_extension",
+            "name": "ex.box",
+            "version": "1",
+            "children": [],
+            "fallback": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "f"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "fallback": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "strong",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ]
+        }
+      ],
+      "source": {
+        "form": "div",
+        "name": "tabs",
+        "body": "::: tab \"A\"\nx\n:::\n"
+      }
+    }
+  ]
+}
+```
+
+Reading A (case): `{"refusal":{"error":"CarveTreeError","path":"/children/0/slots/tabs/0"}}`.
+
+Reading B (engine): `"accepted"`. Same question as CC-468 (C2-X-046); with tabs enabled the engine refuses at the slot `/children/0/slots/tabs`, not the item. Finding added.
+
+### CC-470: tree
+
+Input:
+
+```json
+{
+  "type": "document",
+  "astVersion": "2.0",
+  "extensions": [
+    {
+      "name": "carve.tab",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "title",
+        "body"
+      ]
+    },
+    {
+      "name": "carve.tabs",
+      "version": "1",
+      "required": false,
+      "slots": [
+        "tabs"
+      ]
+    }
+  ],
+  "children": [
+    {
+      "type": "block_extension",
+      "name": "carve.tabs",
+      "version": "1",
+      "children": [],
+      "slots": {
+        "tabs": [
+          {
+            "type": "block_extension",
+            "name": "carve.tab",
+            "version": "1",
+            "children": [],
+            "slots": {
+              "title": [
+                {
+                  "type": "text",
+                  "value": "A"
+                }
+              ]
+            },
+            "fallback": [
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "strong",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "A"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "children": [
+                  {
+                    "type": "text",
+                    "value": "x"
+                  }
+                ]
+              }
+            ],
+            "source": {
+              "form": "div",
+              "name": "tab",
+              "title": "A",
+              "body": "x\n"
+            }
+          }
+        ]
+      },
+      "fallback": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "strong",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ]
+        }
+      ],
+      "source": {
+        "form": "div",
+        "name": "tabs",
+        "body": "::: tab \"A\"\nx\n:::\n"
+      }
+    }
+  ]
+}
+```
+
+Reading A (case): `{"refusal":{"error":"CarveTreeError","path":"/children/0/slots/tabs/0"}}`.
+
+Reading B (engine): `"accepted"`. Same question as CC-468 (C2-X-046); with tabs enabled the engine refuses at the missing slot, inside the expected path. Finding added.
+
+### CC-477: lint
+
+Input:
+
+```json
+"a **b** c\n\n```\nx\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"markdown-strong-double-star","line":1,"column":3,"severity":"warning","channel":"lint"},{"code":"unclosed-code-fence","line":3,"column":1,"severity":"error","channel":"parse"}]}`.
+
+Reading B (engine): `[{"code":"markdown-strong-double-star","channel":"lint","severity":"warning","path":"/children/0/children/0"}]`. C2-W-103 puts a lint run's findings in one record, but no text says whether the call `lint` returns the parse entries of its parse; the engine returns lint entries only. Finding added.
+
+### CC-500: write
+
+Input:
+
+```json
+{
+  "type": "document",
+  "astVersion": "2.0",
+  "metadata": {
+    "keywords": [
+      "k"
+    ],
+    "headers": [
+      {
+        "placement": "default",
+        "children": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "text",
+                "value": "Report"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
+    {
+      "type": "paragraph",
+      "children": [
+        {
+          "type": "text",
+          "value": "a"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Reading A (case): `{"carve":"a\n","diagnostics":[{"code":"field-unspellable","path":"/metadata/keywords","channel":"render-loss"},{"code":"field-unspellable","path":"/metadata/headers","channel":"render-loss"}]}`.
+
+Reading B (engine): `[{"code":"structure-unspellable","channel":"render-loss","severity":"warning","path":"/metadata/headers/0"},{"code":"field-unspellable","channel":"render-loss","severity":"warning","path":"/metadata/keywords"}]`. Already a finding: C2-A-193 and C2-W-117 do not fix the code for `headers` (the engine gives `structure-unspellable` at `/metadata/headers/0`).
+
+### CC-653: render
+
+Input:
+
+```json
+"`x`{=latex}"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"raw-format-dropped","channel":"render-loss","severity":"warning","line":1,"column":1}]}`.
+
+Reading B (engine): `[{"code":"raw-format-dropped","channel":"render-loss","severity":"warning","path":"/children/0/children/0"}]`. engine gives a path and no range; C2-A-173 makes both the range and the path optional and C2-H-054 names no place (shared position finding)
+
+### CC-655: render
+
+Input:
+
+```json
+"> a"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"profile-construct-degraded","channel":"render-loss","severity":"warning","line":1,"column":1}]}`.
+
+Reading B (engine): `[{"code":"profile-construct-degraded","channel":"render-loss","severity":"warning","path":"/children/0"}]`. engine gives a path and no range; C2-A-173 makes the range optional and C2-H-129 names no place (shared position finding)
+
+### CC-657: render
+
+Input:
+
+```json
+"{{ b.crv }}"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"include-unresolved","channel":"render-loss","severity":"warning","line":1,"column":1}]}`.
+
+Reading B (engine): `[{"code":"include-no-resolver","channel":"parse","severity":"warning","path":"/children/0"},{"code":"include-unresolved","channel":"render-loss","severity":"warning","path":"/children/0"}]`. engine gives a path and no range; C2-N-070 names no place, C2-A-173 makes the range optional (shared position finding); the extra `include-no-resolver` entry is allowed, the case is not complete
+
+### CC-659: render
+
+Input:
+
+```json
+"{{ a.crv }}"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"include-expanded-roundtrip","channel":"render-loss","severity":"warning","line":1,"column":1}]}`.
+
+Reading B (engine): `[{"code":"include-no-resolver","channel":"parse","severity":"warning","path":"/children/0"},{"code":"include-unresolved","channel":"render-loss","severity":"warning","path":"/children/0"}]`. engine gives a path and no range; C2-N-079 names no place, C2-A-173 makes the range optional (shared position finding)
+
+### CC-681: import
+
+Input:
+
+```json
+"<p> a</p>"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"import-whitespace-normalized","channel":"render-loss","severity":"hint","line":1,"column":4}]}`.
+
+Reading B (engine): `[{"code":"import-whitespace-normalized","channel":"render-loss","severity":"hint"}]`. C2-M-081 says the element or text node "the entry is about", and C2-M-018 frames the removal on the inline content of a block, so both the block element and the text node fit (shared position finding)
+
+### CC-689: lint
+
+Input:
+
+```json
+"[x][a %% b]\n\n[x]: /u\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"comment-in-reference-label","line":1,"column":6,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"comment-in-reference-label","channel":"lint","severity":"warning","path":"/children/0/children/2"}]`. C2-I-077 and the row name both the label and the comment, and no clause fixes the place (shared position finding)
+
+### CC-697: lint
+
+Input:
+
+```json
+":: > a\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"definition-term-block-folded","line":1,"column":4,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[]`. C2-B-075 makes the same-line opener term text, while the row has no `reports` and its 0.1 message describes an opener on the next line; already recorded in open-lint1.md ("same line or next line")
+
+### CC-721: lint
+
+Input:
+
+```json
+":: a\nb\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"description-term-multi-line","line":2,"column":1,"channel":"lint","severity":"hint"}]}`.
+
+Reading B (engine): `[{"code":"description-term-multi-line","channel":"lint","severity":"hint","path":"/children/0/children/0"}]`. `reports` names the term, the message names the continuing line, and no clause fixes the place (shared position finding; also in the existing finding of this code)
+
+### CC-755: lint
+
+Input:
+
+```json
+"::: figure\n![a](a.png)\n^ A #\n:::\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"figure-group-panel-number","line":2,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"figure-group-single-panel","channel":"lint","severity":"warning","path":"/children/0"},{"code":"figure-group-panel-number","channel":"lint","severity":"warning","path":"/children/0/children/0/caption"}]`. C2-H-066 and the row name no place (shared position finding)
+
+### CC-773: lint
+
+Input:
+
+```json
+"= a\n# b\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"heading-marker-mixed","line":1,"column":1,"channel":"lint","severity":"hint"}]}`.
+
+Reading B (engine): `[{"code":"heading-marker-mixed","channel":"lint","severity":"hint","path":"/children/1"}]`. C2-B-155 and the row ("a document ... once") name no place (shared position finding)
+
+### CC-781: lint
+
+Input:
+
+```json
+"{table}\n{{ a.csv @code:csv @lines:2-2 }}\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"include-lines-table-rows-hint","line":2,"column":20,"channel":"lint","severity":"hint"}]}`.
+
+Reading B (engine): `[{"code":"include-lines-table-rows-hint","channel":"lint","severity":"hint","path":"/children/0"},{"code":"include-no-resolver","channel":"parse","severity":"warning","path":"/children/0"}]`. C2-N-088 names no place (shared position finding)
+
+### CC-785: lint
+
+Input:
+
+```json
+"[a] (b)\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"link-gap-before-destination","line":1,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"link-gap-before-destination","channel":"lint","severity":"warning","path":"/children/0"}]`. C2-I-069 and the row name no place (shared position finding)
+
+### CC-813: lint
+
+Input:
+
+```json
+"[x]{kbd=a}\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"semantic-attribute-value-ignored","line":1,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"semantic-attribute-value-ignored","channel":"lint","severity":"warning","path":"/children/0/children/0"}]`. C2-H-075 and the row name no place (shared position finding)
+
+### CC-819: lint
+
+Input:
+
+```json
+"{aligns=x}\n| a |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-attribute-invalid","line":1,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-attribute-invalid","channel":"lint","severity":"warning","path":"/children/0"}]`. no clause fixes the place (shared position finding)
+
+### CC-821: lint
+
+Input:
+
+```json
+"{aligns=left}\n| a | b |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-column-arity","line":1,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-column-arity","channel":"lint","severity":"warning","path":"/children/0"}]`. no clause fixes the place (shared position finding)
+
+### CC-823: lint
+
+Input:
+
+```json
+"{aligns=left}\n|={>} A |\n| a |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-column-overlap","line":1,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-column-overlap","channel":"lint","severity":"warning","path":"/children/0"}]`. no clause fixes the place (shared position finding)
+
+### CC-833: lint
+
+Input:
+
+```json
+"| a |\n|= ^ |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-span-marker-attribute","line":2,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-span-marker-attribute","channel":"lint","severity":"warning","path":"/children/0/children/0/children/1/children/0"}]`. C2-B-174 and the row name no place (shared position finding)
+
+### CC-835: lint
+
+Input:
+
+```json
+"| < |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-span-marker-blocked","line":1,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-span-marker-blocked","channel":"lint","severity":"warning","path":"/children/0/children/0/children/0/children/0"}]`. C2-B-173 names no place (shared position finding)
+
+### CC-837: lint
+
+Input:
+
+```json
+"{widths=60,50}\n| a | b |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"table-width-total","line":1,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"table-width-total","channel":"lint","severity":"warning","path":"/children/0"}]`. no clause fixes the place (shared position finding)
+
+### CC-841: lint
+
+Input:
+
+```json
+"- a\n\n  b\n- c\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"tight-list-item-with-blank-line","line":1,"column":1,"channel":"lint","severity":"hint"}]}`.
+
+Reading B (engine): `[]`. the row names "a tight list in which an item ...", no clause fixes the place (shared position finding)
+
+### CC-881: lint
+
+Input:
+
+```json
+"![a](a.png)\n\nFigure 1: A cat\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"caption-looking-paragraph","line":3,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[]`. trigger taken from the message; no clause states it (row cites only C2-W-106)
+
+### CC-883: lint
+
+Input:
+
+```json
+"---\ncarve: 9.9\n---\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"carve-version-unsupported","line":2,"column":8,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"carve-version-unsupported","channel":"lint","severity":"warning","path":"/children/0"}]`. no clause fixes the position
+
+### CC-885: lint
+
+Input:
+
+```json
+"::: a\n:::: b\nx\n:::\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"colon-fence-length-mismatch","line":4,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[]`. trigger taken from the message; no clause states it
+
+### CC-889: lint
+
+Input:
+
+```json
+"{tabel}\n```csv\na,b\n```\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"consumed-key-near-miss","line":2,"column":1,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[]`. trigger taken from the message; no clause states it
+
+### CC-893: lint
+
+Input:
+
+```json
+"|=< a |\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"deprecated-cell-alignment","line":1,"column":3,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"deprecated-cell-alignment","channel":"lint","severity":"warning","path":"/children/0/children/0/children/0/children/0"}]`. no clause fixes the position
+
+### CC-895: lint
+
+Input:
+
+```json
+"- a\n\n  :: t\n  : d\n : e\n"
+```
+
+Reading A (case): `{"diagnostics":[{"code":"description-separator-below-content-column","line":5,"column":2,"channel":"lint","severity":"warning"}]}`.
+
+Reading B (engine): `[{"code":"block-opener-without-blank-line","channel":"lint","severity":"warning","path":"/children/0/children/0/children/1/children/1/children/0"}]`. trigger taken from the message; no clause states it
+
+### CC-811: semantic attribute position at the later lint pin
+
+Input: `"{kbd}\n# H\n"`. Reading A: the corpus places the finding at line 1, column 2. Reading B: the pinned engine reports the same code from byte offset 0, column 1. The later C2-W-138 position rule belongs to the skipped lint pin move.
+
+
+## Upgrade behaviors without an exact source map row
+
+These minimal inputs from the earlier parity audit still render differently with the current pinned engine. Each had no exact `from` entry in the upgrade map. Broader row coverage remains to be adjudicated.
+
+### N-definition-in-note: A nested definition in a footnote body stops registering (70 blocks, 35 primary)
+
+Input:
+
+~~~carve
+x[^a] [^b]
+
+[^a]: first
+  [^b]: second
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> <a id="fnref2" href="#fn2" role="doc-noteref"><sup>2</sup></a></p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <p>first<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+    <li id="fn2">
+      <p>second<a href="#fnref2" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p>x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> [^b]</p>
+<section role="doc-endnotes" aria-label="Footnotes">
+  <hr>
+  <ol>
+    <li id="fn1">
+      <p>first
+[^b]: second<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>
+    </li>
+  </ol>
+</section>
+~~~
+
+### N-definition-in-term: A definition below a description term stops registering (60 blocks, 30 primary)
+
+Input:
+
+~~~carve
+[x][r]
+
+:: t
+  [r]: /u
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p><a href="/u">x</a></p>
+<dl>
+  <dt>t</dt>
+</dl>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p>[x][r]</p>
+<dl>
+  <dt>t
+[r]: /u</dt>
+</dl>
+~~~
+
+### N-comment-list-boundary: A comment-only line changes ownership after a list or div (12 blocks, 6 primary)
+
+Input:
+
+~~~carve
+- a
+ %% c
+
+ b
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<ul>
+  <li>a</li>
+</ul>
+<p>b</p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<ul>
+  <li>a
+    <p>b</p>
+  </li>
+</ul>
+~~~
+
+### N-comment-fence-container-boundary: A comment fence changes which container owns the next block (10 blocks, 5 primary)
+
+Input:
+
+~~~carve
+:: t
+: d
+%%%
+%%%
+ : d2
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<dl>
+  <dt>t</dt>
+  <dd>d</dd>
+  <dd>d2</dd>
+</dl>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<dl>
+  <dt>t</dt>
+  <dd>d</dd>
+</dl>
+<p>: d2</p>
+~~~
+
+### N-tag-trailing-hyphen: A trailing hyphen leaves a tag name (6 blocks, 3 primary)
+
+Input:
+
+~~~carve
+#x-
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p><span class="tag"><strong>#x-</strong></span></p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p><span class="tag"><strong>#x</strong></span>-</p>
+~~~
+
+### N-unattached-attr-quotes: An unattached attribute atom keeps straight quotes (4 blocks, 2 primary)
+
+Input:
+
+~~~carve
+{k=""}x
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p>{k=““}x</p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p>{k=""}x</p>
+~~~
+
+### N-quoted-attribute-brackets: A quoted attribute value stops pairing its bracket as link syntax (4 blocks, 2 primary)
+
+Input:
+
+~~~carve
+{title="[a"}](u)
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p>{title=“<a href="u">a”}</a></p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p>{title="[a"}](u)</p>
+~~~
+
+### N-heading-tab-key: A heading tab and a space-spelled reference become the same key (2 blocks, 1 primary)
+
+Input:
+
+~~~carve
+# A	B
+
+[A B][]
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<section id="A-B">
+  <h1>A	B</h1>
+  <p>[A B][]</p>
+</section>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<section id="A-B">
+  <h1>A	B</h1>
+  <p><a href="#A-B">A B</a></p>
+</section>
+~~~
+
+### N-adjacent-includes-split: Two unexpanded includes split a paragraph (2 blocks, 2 primary)
+
+Input:
+
+~~~carve
+{{ a.crv }}
+{{ b.crv }}
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p>{{ a.crv }}
+{{ b.crv }}</p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p>{{ a.crv }}</p>
+<p>{{ b.crv }}</p>
+~~~
+
+### N-code-include-caption: A caption mark attaches to an unresolved code include (2 blocks, 1 primary)
+
+Input:
+
+~~~carve
+- {{ a.crv @code:js }}
+  ^ cap
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<ul>
+  <li><p>{{ a.crv @code:js }}</p>
+    <p>^ cap</p>
+  </li>
+</ul>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<ul>
+  <li>
+    <p>{{ a.crv @code:js }}</p>
+    <p>cap</p>
+  </li>
+</ul>
+~~~
+
+### N-arbitrary-attr-scheme-filter: An arbitrary authored attribute loses an obfuscated scheme value (2 blocks, 1 primary)
+
+Input:
+
+~~~carve
+*x*{k="‮javascript:x"}
+~~~
+
+Reading A (0.1 HTML):
+
+~~~html
+<p><strong k="‮javascript:x">x</strong></p>
+~~~
+
+Reading B (0.2 HTML):
+
+~~~html
+<p><strong k="">x</strong></p>
+~~~

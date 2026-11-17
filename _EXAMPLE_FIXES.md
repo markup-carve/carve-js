@@ -1,5 +1,13 @@
 # Example fixes for the specification
 
+## F16. Upgrade contract U-206 and U-366 share an input with different actions
+
+Input: `# A </#A>` followed by a line feed. U-206 lists it as a kept display change with no rewrite;
+U-366 promises `{#A}` followed by `# A [A A ](#A)` and a line feed. The latter reproduces the 0.1
+HTML under the pinned engines. The U-206 example should cite U-366 as its preserving rewrite, or be
+replaced by a cross-reference input that has no preserving spelling. The tool takes U-366 and the
+contract test records this overlap.
+
 **Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, F11 (clause case `CC-287`, field `children`), F12 (`html-81`, field `tree`), F13 (`html-80`, field `html`), F14 (`html-34`, field `html`) and F15 (clause case `CC-005`, field `html`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
