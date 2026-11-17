@@ -47,7 +47,7 @@
     "C2-B-007",
     "C2-B-123"
    ],
-   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content (carried over from 0.1). C2-B-123: The body of a line block is one leaf that recognizes only prefixes and the closer: every other line is a line of text.",
+   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content (carried over from 0.1). C2-B-123: The body of a line block is one leaf that recognizes only prefixes, the closer and a comment block (C2-B-108): every other line is a line of text.",
    "summary": "line block in quote in item keeps tab",
    "input": "- > a\n  > \t::: |\n  > \tx\n  > \t:::",
    "options": {},
@@ -6879,7 +6879,7 @@
     "C2-H-007",
     "C2-H-062"
    ],
-   "why": "C2-H-007: A list item whose only block is one paragraph without a caption, bare or wrapped, is written on one line. C2-H-062: An image paragraph, a code block, a quote or a math block that carries a caption (C2-A-082) is written as `<figure>` around the block and then `<figcaption>` with the caption.",
+   "why": "C2-H-007: A list item whose only visible block is one paragraph without a caption, bare or wrapped, is written on one line. C2-H-062: An image paragraph, a code block, a quote or a math block that carries a caption (C2-A-082) is written as `<figure>` around the block and then `<figcaption>` with the caption.",
    "summary": "captioned math paragraph alone in a list item renders its figure on its own lines",
    "input": "- $$`x`\n  ^ cap",
    "options": {},
@@ -8221,6 +8221,6823 @@
           ]
          }
         ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-097",
+   "clauses": [
+    "C2-B-083",
+    "C2-B-089"
+   ],
+   "why": "C2-B-089: Anything but spaces and tabs after the URL, the title or the attribute block of a link definition makes the line text, and so does a brace block that is no valid attribute block.",
+   "summary": "two spaces before the attribute block of a link definition make the line text",
+   "input": "[x][a]\n\n[a]: /u  {.c}",
+   "options": {},
+   "expected": {
+    "html": "<p>[x][a]</p>\n<p>[a]: /u  {.c}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[a]: /u  {.c}"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-098",
+   "clauses": [
+    "C2-B-083",
+    "C2-B-089"
+   ],
+   "why": "C2-B-089: Anything but spaces and tabs after the URL, the title or the attribute block of a link definition makes the line text, and so does a brace block that is no valid attribute block.",
+   "summary": "a second glued block after a link definition makes the line text",
+   "input": "[x][a]\n\n[a]: /u {.c}{.d}",
+   "options": {},
+   "expected": {
+    "html": "<p>[x][a]</p>\n<p>[a]: /u {.c}{.d}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[a]: /u {.c}{.d}"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-099",
+   "clauses": [
+    "C2-B-089"
+   ],
+   "why": "C2-B-089: Anything but spaces and tabs after the URL, the title or the attribute block of a link definition makes the line text, and so does a brace block that is no valid attribute block.",
+   "summary": "an invalid block after a link definition makes the line text",
+   "input": "[x][a]\n\n[a]: /u {#}",
+   "options": {},
+   "expected": {
+    "html": "<p>[x][a]</p>\n<p>[a]: /u {#}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[a]: /u {#}"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-100",
+   "clauses": [
+    "C2-B-089"
+   ],
+   "why": "C2-B-089: A brace block glued to the URL is part of it: `[a]: /u{.c}` has the destination `/u{.c}`.",
+   "summary": "a brace block glued to the destination is part of the URL",
+   "input": "[x][a]\n\n[a]: /u{.c}",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/u{.c}\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "/u{.c}"
+       }
+      ]
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "a",
+      "namespace": "link",
+      "href": "/u{.c}"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-101",
+   "clauses": [
+    "C2-B-106",
+    "C2-B-093"
+   ],
+   "why": "C2-B-106: The attributes of a link definition, from its attribute line and from the block at the end of its line, merged in that order as glued blocks are (C2-B-093), are merged into every link and image that uses it, and the link's own values win.",
+   "summary": "an attribute line and the block at the end of a link definition merge, the line first",
+   "input": "[x][a]{#own}\n\n{#d .p}\n[a]: /u {.c k=1}",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/u\" id=\"own\" class=\"p c\" k=\"1\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "attrs": {
+         "id": "own"
+        },
+        "href": "/u"
+       }
+      ]
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "a",
+      "namespace": "link",
+      "href": "/u",
+      "attrs": {
+       "id": "d",
+       "classes": [
+        "p",
+        "c"
+       ],
+       "keyValues": [
+        [
+         "k",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-102",
+   "clauses": [
+    "C2-B-083",
+    "C2-B-089"
+   ],
+   "why": "C2-B-089: Anything but spaces and tabs after the URL, the title or the attribute block of a link definition makes the line text, and so does a brace block that is no valid attribute block.",
+   "summary": "spaces and a tab after the attribute block of a link definition are allowed",
+   "input": "[x][a]\n\n[a]: /u 'T' {.c} \t",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/u\" title=\"T\" class=\"c\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "/u"
+       }
+      ]
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "a",
+      "namespace": "link",
+      "href": "/u",
+      "tooltip": "T",
+      "attrs": {
+       "classes": [
+        "c"
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-103",
+   "clauses": [
+    "C2-B-230"
+   ],
+   "why": "C2-B-230: Its value is a list of entries separated by commas, spaces around an entry ignored, one entry per body giving its data rows.",
+   "summary": "body-rows in a quote makes two bodies; spaces around an entry are ignored",
+   "input": "> {body-rows=\"1, 1\"}\n> | a |\n> | b |",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <table>\n    <tbody>\n      <tr><td>a</td></tr>\n    </tbody>\n    <tbody>\n      <tr><td>b</td></tr>\n    </tbody>\n  </table>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "table",
+        "columns": [
+         {
+          "type": "table_column"
+         }
+        ],
+        "children": [
+         {
+          "type": "table_body",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_body",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-104",
+   "clauses": [
+    "C2-B-230",
+    "C2-B-178"
+   ],
+   "why": "C2-B-230: The head stays that of C2-B-178 or C2-B-209, so a pipe table writes its head with header marks, not `header-rows` (C2-B-186).",
+   "summary": "header marks keep the head, and body-rows splits the rows below it",
+   "input": "{body-rows=1,1}\n|= H |\n| a |\n| b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">H</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n  <tbody>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "H"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-105",
+   "clauses": [
+    "C2-B-230",
+    "C2-B-227",
+    "C2-H-153"
+   ],
+   "why": "C2-B-230: The two header lists need `body-rows` and exactly one entry per body, and the header and data rows of the bodies must be exactly the rows between the head and the foot; where a value breaks one of these rules, none of the three keys has an effect.",
+   "summary": "body counts that miss rows have no effect and stay in attrs",
+   "input": "{body-rows=1}\n| a |\n| b |\n| c |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "c"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "body-rows",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-106",
+   "clauses": [
+    "C2-B-230"
+   ],
+   "why": "C2-B-230: The two header lists need `body-rows` and exactly one entry per body, and the header and data rows of the bodies must be exactly the rows between the head and the foot; where a value breaks one of these rules, none of the three keys has an effect.",
+   "summary": "a header list with fewer entries than bodies makes all three keys void",
+   "input": "{body-rows=1,1 body-header-cols=1}\n| a | b |\n| c | d |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n    <tr><td>c</td><td>d</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "c"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "d"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "body-rows",
+         "1,1"
+        ],
+        [
+         "body-header-cols",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-107",
+   "clauses": [
+    "C2-B-230"
+   ],
+   "why": "C2-B-230: The two header lists need `body-rows` and exactly one entry per body, and the header and data rows of the bodies must be exactly the rows between the head and the foot; where a value breaks one of these rules, none of the three keys has an effect.",
+   "summary": "a body header list without body-rows has no effect",
+   "input": "{body-header-rows=1}\n| a |\n| b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "body-header-rows",
+         "1"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-108",
+   "clauses": [
+    "C2-B-230",
+    "C2-B-187"
+   ],
+   "why": "C2-B-230: `0` is an empty body, and an empty value gives no body.",
+   "summary": "an empty body-rows value gives a head and a foot and no body",
+   "input": "{body-rows=\"\" footer-rows=1}\n|= H |\n| F |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">H</th></tr>\n  </thead>\n  <tfoot>\n    <tr><td>F</td></tr>\n  </tfoot>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "H"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_foot",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "F"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-109",
+   "clauses": [
+    "C2-B-230",
+    "C2-H-055"
+   ],
+   "why": "C2-B-230: `0` is an empty body, and an empty value gives no body.",
+   "summary": "a zero entry is an empty body, which HTML does not write",
+   "input": "{body-rows=0,1}\n| a |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": []
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-110",
+   "clauses": [
+    "C2-B-230",
+    "C2-B-174",
+    "C2-B-172"
+   ],
+   "why": "C2-B-174: The head, each body and the foot are the groups of a table, and no span crosses from one into another.",
+   "summary": "a row span mark in the first row of a body joins nothing",
+   "input": "{body-rows=1,1}\n| a |\n| ^ |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n  <tbody>\n    <tr><td>^</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "^"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-111",
+   "clauses": [
+    "C2-B-230",
+    "C2-H-056"
+   ],
+   "why": "C2-H-056: In a body with `rowHeadColumns` N, a cell that starts in one of the first N columns is written as a header cell.",
+   "summary": "an empty body-header-cols entry sets no row header column",
+   "input": "- {body-rows=1,1 body-header-cols=,1}\n  | a | b |\n  | c | d |",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <table>\n      <tbody>\n        <tr><td>a</td><td>b</td></tr>\n      </tbody>\n      <tbody>\n        <tr><th scope=\"row\">c</th><td>d</td></tr>\n      </tbody>\n    </table>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "table",
+          "columns": [
+           {
+            "type": "table_column"
+           },
+           {
+            "type": "table_column"
+           }
+          ],
+          "children": [
+           {
+            "type": "table_body",
+            "children": [
+             {
+              "type": "table_row",
+              "children": [
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "a"
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "b"
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_body",
+            "children": [
+             {
+              "type": "table_row",
+              "children": [
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "c"
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "d"
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ],
+            "rowHeadColumns": 1
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-112",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-217"
+   ],
+   "why": "C2-B-137: So it closes every container that does not own it and ends every open paragraph, heading and table, and no lazy line, continuation row or caption reaches across it; a pending attribute line waits across it, and it is not a blank line.",
+   "summary": "a region marker ends a paragraph",
+   "input": "a\n%% #region x\nb",
+   "options": {},
+   "expected": {
+    "html": "<p>a</p>\n<p>b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a"
+       }
+      ]
+     },
+     {
+      "type": "comment",
+      "form": "line",
+      "value": "#region x"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-113",
+   "clauses": [
+    "C2-B-137"
+   ],
+   "why": "C2-B-137: A region marker line (C2-B-217) is no comment-only line: it is a line of the innermost container that owns it (C2-B-025), and it opens no block.",
+   "summary": "a region marker inside a quote ends the paragraph and keeps the quote",
+   "input": "> a\n> %% #region x\n> b",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <p>a</p>\n  <p>b</p>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "comment",
+        "form": "line",
+        "value": "#region x"
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-114",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-025"
+   ],
+   "why": "C2-B-137: A region marker line (C2-B-217) is no comment-only line: it is a line of the innermost container that owns it (C2-B-025), and it opens no block.",
+   "summary": "a region marker at an item's content column ends the paragraph inside the item",
+   "input": "- a\n  %% #region x\n  b",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>a\n    <p>b</p>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "#region x"
+         },
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-115",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-175"
+   ],
+   "why": "C2-B-137: So it closes every container that does not own it and ends every open paragraph, heading and table, and no lazy line, continuation row or caption reaches across it; a pending attribute line waits across it, and it is not a blank line.",
+   "summary": "a continuation row does not reach across a region marker",
+   "input": "| a |\n%% #region x\n+ b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p>+ b |</p>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "comment",
+      "form": "line",
+      "value": "#region x"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "+ b |"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-116",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-149"
+   ],
+   "why": "C2-B-137: So it closes every container that does not own it and ends every open paragraph, heading and table, and no lazy line, continuation row or caption reaches across it; a pending attribute line waits across it, and it is not a blank line.",
+   "summary": "a caption below a region marker is unattached",
+   "input": "![a](i.png)\n%% #region x\n^ cap",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"i.png\" alt=\"a\">\n<p>^ cap</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "i.png",
+        "alt": "a"
+       }
+      ],
+      "role": "image"
+     },
+     {
+      "type": "comment",
+      "form": "line",
+      "value": "#region x"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "^ cap"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-117",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-092"
+   ],
+   "why": "C2-B-137: So it closes every container that does not own it and ends every open paragraph, heading and table, and no lazy line, continuation row or caption reaches across it; a pending attribute line waits across it, and it is not a blank line.",
+   "summary": "a pending attribute line waits across a region marker",
+   "input": "{.c}\n%% #region x\npara",
+   "options": {},
+   "expected": {
+    "html": "<p class=\"c\">para</p>",
+    "children": [
+     {
+      "type": "comment",
+      "form": "line",
+      "value": "#region x"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "para"
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "c"
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-118",
+   "clauses": [
+    "C2-B-137",
+    "C2-B-154"
+   ],
+   "why": "C2-B-137: So it closes every container that does not own it and ends every open paragraph, heading and table, and no lazy line, continuation row or caption reaches across it; a pending attribute line waits across it, and it is not a blank line.",
+   "summary": "a region marker ends a heading, so an indented line below it is a paragraph",
+   "input": "# H\n%% #region x\n  more",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"H\">\n  <h1>H</h1>\n  <p>more</p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "H"
+       }
+      ],
+      "generatedId": "H"
+     },
+     {
+      "type": "comment",
+      "form": "line",
+      "value": "#region x"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "more"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-119",
+   "clauses": [
+    "C2-H-058"
+   ],
+   "why": "C2-H-058: `rowspan` and `colspan` are written only from the counts of the cell and only for a count above 1, so an authored key of either name on a cell is never written: the span marks alone shape the grid, as in 0.1.",
+   "summary": "an authored colspan on a header cell in a quote is not written",
+   "input": "> |={colspan=2} H |\n> | a | b |",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">H</th></tr>\n    </thead>\n    <tbody>\n      <tr><td>a</td><td>b</td></tr>\n    </tbody>\n  </table>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "table",
+        "columns": [
+         {
+          "type": "table_column"
+         },
+         {
+          "type": "table_column"
+         }
+        ],
+        "children": [
+         {
+          "type": "table_head",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": true,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "H"
+                 }
+                ]
+               }
+              ],
+              "attrs": {
+               "keyValues": [
+                [
+                 "colspan",
+                 "2"
+                ]
+               ]
+              }
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_body",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-120",
+   "clauses": [
+    "C2-H-058",
+    "C2-B-172"
+   ],
+   "why": "C2-H-058: `rowspan` and `colspan` are written only from the counts of the cell and only for a count above 1, so an authored key of either name on a cell is never written: the span marks alone shape the grid, as in 0.1.",
+   "summary": "a row span mark gives the count, and the authored rowspan beside it is not written",
+   "input": "| a |{rowspan=5 .x} b |\n| c | ^ |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td><td rowspan=\"2\" class=\"x\">b</td></tr>\n    <tr><td>c</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ],
+            "rowspan": 2,
+            "attrs": {
+             "classes": [
+              "x"
+             ],
+             "keyValues": [
+              [
+               "rowspan",
+               "5"
+              ]
+             ]
+            }
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "c"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "span": "rowspan",
+            "children": []
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-121",
+   "clauses": [
+    "C2-H-058"
+   ],
+   "why": "C2-H-058: `rowspan` and `colspan` are written only from the counts of the cell and only for a count above 1, so an authored key of either name on a cell is never written: the span marks alone shape the grid, as in 0.1.",
+   "summary": "a rowspan key on a row is no cell key and is written",
+   "input": "- | a | b |{rowspan=2}",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <table>\n      <tbody>\n        <tr rowspan=\"2\"><td>a</td><td>b</td></tr>\n      </tbody>\n    </table>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "table",
+          "columns": [
+           {
+            "type": "table_column"
+           },
+           {
+            "type": "table_column"
+           }
+          ],
+          "children": [
+           {
+            "type": "table_body",
+            "children": [
+             {
+              "type": "table_row",
+              "children": [
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "a"
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "b"
+                   }
+                  ]
+                 }
+                ]
+               }
+              ],
+              "attrs": {
+               "keyValues": [
+                [
+                 "rowspan",
+                 "2"
+                ]
+               ]
+              }
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-122",
+   "clauses": [
+    "C2-I-011",
+    "C2-I-102"
+   ],
+   "why": "C2-I-011: A backslash before a space is a no-break space, except at the end of a line, where the two are a hard break (C2-I-102).",
+   "summary": "a backslash and a space at the end of an item line are a hard break",
+   "input": "- a\\ \n  b",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>a<br>\nb</li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           },
+           {
+            "type": "hard_break"
+           },
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-123",
+   "clauses": [
+    "C2-I-011",
+    "C2-I-102"
+   ],
+   "why": "C2-I-011: A backslash before a space is a no-break space, except at the end of a line, where the two are a hard break (C2-I-102).",
+   "summary": "a backslash and a space at the end of a description line are a hard break",
+   "input": ":: t\n: a\\ \n  b",
+   "options": {},
+   "expected": {
+    "html": "<dl>\n  <dt>t</dt>\n  <dd>a<br>\nb</dd>\n</dl>",
+    "children": [
+     {
+      "type": "definition_list",
+      "children": [
+       {
+        "type": "definition_term",
+        "children": [
+         {
+          "type": "text",
+          "value": "t"
+         }
+        ]
+       },
+       {
+        "type": "definition_description",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           },
+           {
+            "type": "hard_break"
+           },
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-124",
+   "clauses": [
+    "C2-I-102"
+   ],
+   "why": "C2-I-102: A backslash at the end of a line is a hard break, also where the space behind it that C2-I-002 keeps ends the line.",
+   "summary": "a backslash and a space at the end of a caption line are a hard break",
+   "input": "![x](i.png)\n^ c\\ \n  d",
+   "options": {},
+   "expected": {
+    "html": "<figure>\n  <img src=\"i.png\" alt=\"x\">\n  <figcaption>c<br>\nd</figcaption>\n</figure>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "i.png",
+        "alt": "x"
+       }
+      ],
+      "role": "image",
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "c"
+          },
+          {
+           "type": "hard_break"
+          },
+          {
+           "type": "text",
+           "value": "d"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-125",
+   "clauses": [
+    "C2-I-102"
+   ],
+   "why": "C2-I-102: So is a backslash at the end of the content, which includes the end of a table cell.",
+   "summary": "a backslash and a space at the end of the content are a hard break",
+   "input": "a\\ ",
+   "options": {},
+   "expected": {
+    "html": "<p>a<br>\n</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a"
+       },
+       {
+        "type": "hard_break"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-126",
+   "clauses": [
+    "C2-I-002",
+    "C2-I-015"
+   ],
+   "why": "C2-I-002: The test is lexical: a space behind an odd run of backslashes is kept, also inside a form that reads no escapes (C2-I-013).",
+   "summary": "inside a code span the escaped space at the end of a line stays in the value",
+   "input": "`a\\ \nb`",
+   "options": {},
+   "expected": {
+    "html": "<p><code>a\\ \nb</code></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "code",
+        "value": "a\\ \nb"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-127",
+   "clauses": [
+    "C2-I-002",
+    "C2-I-010"
+   ],
+   "why": "C2-I-002: The test is lexical: a space behind an odd run of backslashes is kept, also inside a form that reads no escapes (C2-I-013).",
+   "summary": "an escaped backslash before a trailing space leaves a soft break",
+   "input": "a\\\\ \nb",
+   "options": {},
+   "expected": {
+    "html": "<p>a\\\nb</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a\\"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "text",
+        "value": "b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-128",
+   "clauses": [
+    "C2-I-097",
+    "C2-H-095"
+   ],
+   "why": "C2-I-097: The id is matched exactly, without case folding, once it and the ids it is matched against are normalized to NFC, so a precomposed and a decomposed character match and `ﬁ` and `fi` do not.",
+   "summary": "a decomposed cross-reference in a quote matches a precomposed heading",
+   "input": "# Café\n\n> See </#Café>.",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"Café\">\n  <h1>Café</h1>\n  <blockquote><p>See <a href=\"#Café\">Café</a>.</p></blockquote>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Café"
+       }
+      ],
+      "generatedId": "Café"
+     },
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "See "
+         },
+         {
+          "type": "xref",
+          "key": "Café",
+          "namespace": "heading",
+          "href": "#Café"
+         },
+         {
+          "type": "text",
+          "value": "."
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-129",
+   "clauses": [
+    "C2-I-097",
+    "C2-H-095"
+   ],
+   "why": "C2-I-097: The id is matched exactly, without case folding, once it and the ids it is matched against are normalized to NFC, so a precomposed and a decomposed character match and `ﬁ` and `fi` do not.",
+   "summary": "a decomposed cross-reference in a table cell matches a precomposed heading",
+   "input": "# Café\n\n| </#Café> |",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"Café\">\n  <h1>Café</h1>\n  <table>\n    <tbody>\n      <tr><td><a href=\"#Café\">Café</a></td></tr>\n    </tbody>\n  </table>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Café"
+       }
+      ],
+      "generatedId": "Café"
+     },
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "xref",
+                "key": "Café",
+                "namespace": "heading",
+                "href": "#Café"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-130",
+   "clauses": [
+    "C2-I-097",
+    "C2-H-144"
+   ],
+   "why": "C2-I-097: The id is matched exactly, without case folding, once it and the ids it is matched against are normalized to NFC, so a precomposed and a decomposed character match and `ﬁ` and `fi` do not.",
+   "summary": "a precomposed cross-reference matches a decomposed heading",
+   "input": "# Café\n\nSee </#Café>.",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"Café\">\n  <h1>Café</h1>\n  <p>See <a href=\"#Café\">Café</a>.</p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Café"
+       }
+      ],
+      "generatedId": "Café"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "Café",
+        "namespace": "heading",
+        "href": "#Café"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-131",
+   "clauses": [
+    "C2-I-097"
+   ],
+   "why": "C2-I-097: The id is matched exactly, without case folding, once it and the ids it is matched against are normalized to NFC, so a precomposed and a decomposed character match and `ﬁ` and `fi` do not.",
+   "summary": "compatibility characters do not fold, so the reference stays text",
+   "input": "# ﬁle\n\nSee </#file>.",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"ﬁle\">\n  <h1>ﬁle</h1>\n  <p>See &lt;/#file&gt;.</p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "ﬁle"
+       }
+      ],
+      "generatedId": "ﬁle"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "file",
+        "namespace": "heading"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-132",
+   "clauses": [
+    "C2-I-089",
+    "C2-H-087"
+   ],
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference at any depth: a footnote reference there is text.",
+   "summary": "a footnote reference inside an inline footnote takes no number, so later notes keep theirs",
+   "input": "a ^[b [^2] c] and [^1]\n\n[^1]: one\n[^2]: two",
+   "options": {},
+   "expected": {
+    "html": "<p>a <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> and <a id=\"fnref2\" href=\"#fn2\" role=\"doc-noteref\"><sup>2</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>b [^2] c<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\">\n      <p>one<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "b [^2] c"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " and "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "1",
+        "namespace": "footnote",
+        "number": 2
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "2",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-133",
+   "clauses": [
+    "C2-I-089"
+   ],
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference at any depth: a footnote reference there is text.",
+   "summary": "a footnote reference inside an inline footnote in a table cell is text",
+   "input": "| a ^[b [^1]] |\n\n[^1]: note",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></td></tr>\n  </tbody>\n</table>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>b [^1]<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a "
+               },
+               {
+                "type": "inline_footnote",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b [^1]"
+                 }
+                ],
+                "number": 1
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "note"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-134",
+   "clauses": [
+    "C2-B-109",
+    "C2-B-111"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer at column 0 closes the comment of an item, and the next line is a paragraph",
+   "input": "- %%%\n%%%\nx",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li></li>\n</ul>\n<p>x</p>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "comment",
+          "form": "block",
+          "value": ""
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-135",
+   "clauses": [
+    "C2-B-109"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer without the quote mark closes the comment and keeps the quote open",
+   "input": "> %%%\n%%%\n> x",
+   "options": {},
+   "expected": {
+    "html": "<blockquote><p>x</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "comment",
+        "form": "block",
+        "value": ""
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-136",
+   "clauses": [
+    "C2-B-109"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer at column 0 closes the comment of a nested item",
+   "input": "- a\n  - %%%\n%%%\nx",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>a\n    <ul>\n      <li></li>\n    </ul>\n  </li>\n</ul>\n<p>x</p>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         },
+         {
+          "type": "list",
+          "marker": {
+           "kind": "bullet",
+           "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
+           {
+            "type": "list_item",
+            "children": [
+             {
+              "type": "comment",
+              "form": "block",
+              "value": ""
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-137",
+   "clauses": [
+    "C2-B-109"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer at column 0 closes the comment of a description",
+   "input": ":: t\n: %%%\n%%%\nx",
+   "options": {},
+   "expected": {
+    "html": "<dl>\n  <dt>t</dt>\n  <dd></dd>\n</dl>\n<p>x</p>",
+    "children": [
+     {
+      "type": "definition_list",
+      "children": [
+       {
+        "type": "definition_term",
+        "children": [
+         {
+          "type": "text",
+          "value": "t"
+         }
+        ]
+       },
+       {
+        "type": "definition_description",
+        "children": [
+         {
+          "type": "comment",
+          "form": "block",
+          "value": ""
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-138",
+   "clauses": [
+    "C2-B-109",
+    "C2-B-087"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer at column 0 closes the comment of a footnote body",
+   "input": "[^n]: %%%\n%%%\nx\n\ny[^n]",
+   "options": {},
+   "expected": {
+    "html": "<p>x</p>\n<p>y<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "footnote",
+      "key": "n",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "comment",
+        "form": "block",
+        "value": ""
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "y"
+       },
+       {
+        "type": "footnote_ref",
+        "key": "n",
+        "namespace": "footnote",
+        "number": 1
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-139",
+   "clauses": [
+    "C2-B-109"
+   ],
+   "why": "C2-B-109: A comment block closes at a bare run of `%` of at least the opener's length (C2-B-110) on any line, whatever its indent and also where the line lacks the marks of the quotes around the block, and that line closes no container, as in 0.1.",
+   "summary": "a closer below the quote's column closes the comment, and a later unmarked line leaves the quote",
+   "input": "> %%%\n> secret\n  %%%\nafter",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n\n</blockquote>\n<p>after</p>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "comment",
+        "form": "block",
+        "value": "secret"
+       }
+      ]
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "after"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-140",
+   "clauses": [
+    "C2-B-123",
+    "C2-H-043"
+   ],
+   "why": "C2-B-123: A comment block there is hidden (C2-B-112), adds no line and ends no stanza, as in 0.1.",
+   "summary": "a line block that holds only a comment block writes no stanza",
+   "input": "::: |\n%%%\nx\n%%%\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "comment",
+        "form": "block",
+        "value": "x"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-141",
+   "clauses": [
+    "C2-B-123"
+   ],
+   "why": "C2-B-123: A comment block there is hidden (C2-B-112), adds no line and ends no stanza, as in 0.1.",
+   "summary": "a comment block in a quoted line block hides its lines",
+   "input": "> ::: |\n> a\n> %%%\n> h\n> %%%\n> b\n> :::",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <div class=\"line-block\">\n    <p>a<br>\nb</p>\n  </div>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "line_block",
+        "children": [
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         },
+         {
+          "type": "comment",
+          "form": "block",
+          "value": "h"
+         },
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-142",
+   "clauses": [
+    "C2-B-123"
+   ],
+   "why": "C2-B-123: A comment block there is hidden (C2-B-112), adds no line and ends no stanza, as in 0.1.",
+   "summary": "an indented comment block in a line block is a comment too",
+   "input": "::: |\na\n  %%%\nhidden\n  %%%\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a<br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "comment",
+        "form": "block",
+        "value": "hidden"
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-143",
+   "clauses": [
+    "C2-B-123",
+    "C2-B-111"
+   ],
+   "why": "C2-B-123: A comment block there is hidden (C2-B-112), adds no line and ends no stanza, as in 0.1.",
+   "summary": "an unclosed comment block in a line block ends with the line block",
+   "input": "::: |\na\n%%%\nhidden\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "comment",
+        "form": "block",
+        "value": "hidden"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-144",
+   "clauses": [
+    "C2-B-123",
+    "C2-B-131"
+   ],
+   "why": "C2-B-123: A comment block there is hidden (C2-B-112), adds no line and ends no stanza, as in 0.1.",
+   "summary": "a comment block between two stanzas adds none",
+   "input": "::: |\na\n\n%%%\nh\n%%%\n\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a</p>\n  <p>b</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": []
+       },
+       {
+        "type": "comment",
+        "form": "block",
+        "value": "h"
+       },
+       {
+        "type": "line",
+        "children": []
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-145",
+   "clauses": [
+    "C2-I-023",
+    "C2-I-089"
+   ],
+   "why": "C2-I-023: `%%` at the start of a line of the content, at the start of the content of an inline footnote, or after whitespace starts a line comment.",
+   "summary": "a line comment at the start of an inline footnote hides the whole note body",
+   "input": "^[%% c] d",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p><a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-146",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "a bracket pair inside the comment does not close the note",
+   "input": "^[a %% [x] c] d",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "[x] c"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-147",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "a bracket inside a code span in the comment does not close the note",
+   "input": "^[a %% `]` c] d",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "`]` c"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-148",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "the comment ends before the note bracket inside a quote",
+   "input": "> ^[a %% c] d",
+   "options": {},
+   "expected": {
+    "html": "<blockquote><p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p></blockquote>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "inline_footnote",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           },
+           {
+            "type": "comment",
+            "form": "line",
+            "value": "c"
+           }
+          ],
+          "number": 1
+         },
+         {
+          "type": "text",
+          "value": " d"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-149",
+   "clauses": [
+    "C2-I-024",
+    "C2-B-169"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "the comment ends before the note bracket inside a table cell",
+   "input": "| ^[a %% c] d | e |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</td><td>e</td></tr>\n  </tbody>\n</table>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "inline_footnote",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 },
+                 {
+                  "type": "comment",
+                  "form": "line",
+                  "value": "c"
+                 }
+                ],
+                "number": 1
+               },
+               {
+                "type": "text",
+                "value": " d"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "e"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-150",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "the comment ends before the note bracket in a heading, so the heading text goes on",
+   "input": "# h ^[a %% c] d",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"h-d\">\n  <h1>h <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</h1>\n</section>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "h "
+       },
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ],
+      "generatedId": "h-d"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-151",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "a delimiter opened before the comment inside the note stays text",
+   "input": "^[*a %% c*] d",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> d</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>*a<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "*a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c*"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-152",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "a comment in an inner note ends before the inner note's bracket",
+   "input": "^[a ^[b %% c] d] e",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> e</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a <a id=\"fnref2\" href=\"#fn2\" role=\"doc-noteref\"><sup>2</sup></a> d<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\">\n      <p>b<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a "
+         },
+         {
+          "type": "inline_footnote",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           },
+           {
+            "type": "comment",
+            "form": "line",
+            "value": "c"
+           }
+          ],
+          "number": 2
+         },
+         {
+          "type": "text",
+          "value": " d"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " e"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-153",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "summary": "where the note closes on a later line the comment takes the rest of its line",
+   "input": "^[a %% c\nd] e",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> e</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a\nd<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c"
+         },
+         {
+          "type": "soft_break"
+         },
+         {
+          "type": "text",
+          "value": "d"
+         }
+        ],
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " e"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-154",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "a hard break at a line end inside a quoted line block writes one break",
+   "input": "> ::: |\n> a\\\n> b\n> :::",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <div class=\"line-block\">\n    <p>a<br>\nb</p>\n  </div>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "line_block",
+        "children": [
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           },
+           {
+            "type": "hard_break"
+           }
+          ]
+         },
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-155",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "a hard break at a line end inside a line block in an item writes one break",
+   "input": "- ::: |\n  a\\\n  b\n  :::",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>a<br>\nb</p>\n    </div>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "line_block",
+          "children": [
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "a"
+             },
+             {
+              "type": "hard_break"
+             }
+            ]
+           },
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "b"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-156",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "the space before the backslash stays and the break is still one",
+   "input": "::: |\na \\\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a <br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a "
+         },
+         {
+          "type": "hard_break"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-157",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "a backslash alone on a line gives one empty line",
+   "input": "::: |\na\n\\\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a<br>\n<br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "hard_break"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-158",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "an escaped backslash before the line end is no hard break",
+   "input": "::: |\na\\\\\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a\\<br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a\\"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-159",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "an escaped backslash and then a hard break write one break",
+   "input": "::: |\na\\\\\\\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a\\<br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a\\"
+         },
+         {
+          "type": "hard_break"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-160",
+   "clauses": [
+    "C2-H-043"
+   ],
+   "why": "C2-H-043: A hard break that ends a line which another line of its stanza follows writes nothing: the `<br>` of that line end stands for it, as in 0.1.",
+   "summary": "the hard break of the last line of a stanza is still written",
+   "input": "::: |\na\\\n\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a<br>\n</p>\n  <p>b</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "hard_break"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": []
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-161",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: An authored `align` key with the value `left`, `right` or `center` on an element `<p>`, `<div>` or `<h1>` to `<h6>` is written as `style=\"text-align: VALUE;\"`: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "summary": "align on a line block inside a quote writes the style",
+   "input": "> {align=center}\n> ::: |\n> a\n> :::",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <div class=\"line-block\" style=\"text-align: center;\">\n    <p>a</p>\n  </div>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "line_block",
+        "children": [
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         }
+        ],
+        "attrs": {
+         "keyValues": [
+          [
+           "align",
+           "center"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-162",
+   "clauses": [
+    "C2-H-015",
+    "C2-H-009"
+   ],
+   "why": "C2-H-015: An authored `style` on the same element keeps its value and takes the declaration after it.",
+   "summary": "a line block merges the declaration into its authored style",
+   "input": "{style=\"color:red\" align=right}\n::: |\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\" style=\"color:red; text-align: right;\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "style",
+         "color:red"
+        ],
+        [
+         "align",
+         "right"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-163",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: On every other element `align` stays an ordinary attribute.",
+   "summary": "a value outside the three stays an attribute on a line block",
+   "input": "{align=justify}\n::: |\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\" align=\"justify\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         "justify"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-164",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: On every other element `align` stays an ordinary attribute.",
+   "summary": "align on a quote stays an attribute",
+   "input": "{align=left}\n> a",
+   "options": {},
+   "expected": {
+    "html": "<blockquote align=\"left\"><p>a</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         "left"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-165",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: On every other element `align` stays an ordinary attribute.",
+   "summary": "align on an admonition stays an attribute",
+   "input": "{align=center}\n::: note\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<aside class=\"admonition note\" align=\"center\" aria-label=\"Note\">\n  <p>a</p>\n</aside>",
+    "children": [
+     {
+      "type": "admonition",
+      "kind": "note",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         "center"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-166",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: An authored `align` key with the value `left`, `right` or `center` on an element `<p>`, `<div>` or `<h1>` to `<h6>` is written as `style=\"text-align: VALUE;\"`: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "summary": "align on a hard-break block writes the style",
+   "input": "{align=right}\n::: \\\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"hardbreaks\" style=\"text-align: right;\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "hardbreaks"
+       ],
+       "keyValues": [
+        [
+         "align",
+         "right"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-167",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: A fragment past the last column forms a new cell, and each column it skips an empty cell. Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a skipped column of a header row gets an empty header cell",
+   "input": "|= a |\n+ | | b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th><th scope=\"col\"></th><th scope=\"col\">b</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": []
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-168",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a span mark that extends a header cell counts as that cell",
+   "input": "|= a | < |\n+ | | | c |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th colspan=\"2\" scope=\"col\">a</th><th scope=\"col\"></th><th scope=\"col\">c</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ],
+            "colspan": 2
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "span": "colspan",
+            "children": []
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": []
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "c"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-169",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a second head row takes a header cell from its continuation",
+   "input": "|= a |\n|= x |\n+ | y |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n    <tr><th scope=\"col\">x</th><th scope=\"col\">y</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "y"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-170",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a header row in a quote takes a header cell from its continuation",
+   "input": "> |= a |\n> + | b |",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <table>\n    <thead>\n      <tr><th scope=\"col\">a</th><th scope=\"col\">b</th></tr>\n    </thead>\n  </table>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "table",
+        "columns": [
+         {
+          "type": "table_column"
+         },
+         {
+          "type": "table_column"
+         }
+        ],
+        "children": [
+         {
+          "type": "table_head",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": true,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "type": "table_cell",
+              "header": true,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "b"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-171",
+   "clauses": [
+    "C2-B-176",
+    "C2-H-056"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a row of header cells below the body takes a header cell with the row scope",
+   "input": "|= a |\n| 1 |\n|= x |\n+ | y |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>1</td></tr>\n    <tr><th scope=\"row\">x</th><th scope=\"row\">y</th></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "1"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "y"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-172",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a row with a data cell takes a data cell",
+   "input": "|= a | b |\n+ | | c |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><th scope=\"row\">a</th><td>b</td><td>c</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "c"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-173",
+   "clauses": [
+    "C2-B-176",
+    "C2-B-184"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a later continuation row joins the new header cell and adds another",
+   "input": "|= a |\n+ | b |\n+ | c | d |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th><th scope=\"col\">b c</th><th scope=\"col\">d</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b c"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "d"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-174",
+   "clauses": [
+    "C2-B-176",
+    "C2-B-185"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a caret in the new cell is text in a header cell",
+   "input": "|= a |\n+ | ^ |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th><th scope=\"col\">^</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "^"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-175",
+   "clauses": [
+    "C2-B-176"
+   ],
+   "why": "C2-B-176: Such a cell is a header cell when every other cell of its row is one, where a `<` mark counts as the cell it extends and a `^` mark as a data cell.",
+   "summary": "a row attribute does not change the new header cell",
+   "input": "|= a |{.r}\n+ | b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr class=\"r\"><th scope=\"col\">a</th><th scope=\"col\">b</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ],
+          "attrs": {
+           "classes": [
+            "r"
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-176",
+   "clauses": [
+    "C2-B-166"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "a single-quoted value with several pipes",
+   "input": "| a | b |{a='x|y|z' .c}",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr class=\"c\" a=\"x|y|z\"><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ],
+          "attrs": {
+           "classes": [
+            "c"
+           ],
+           "keyValues": [
+            [
+             "a",
+             "x|y|z"
+            ]
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-177",
+   "clauses": [
+    "C2-B-166"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "a value that is only a pipe on a header row",
+   "input": "|= a |{a=\"|\"}",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr a=\"|\"><th scope=\"col\">a</th></tr>\n  </thead>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ],
+          "attrs": {
+           "keyValues": [
+            [
+             "a",
+             "|"
+            ]
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-178",
+   "clauses": [
+    "C2-B-166"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "a quoted pipe in a row attribute inside a quote",
+   "input": "> | a |{a=\"x|y\"}",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <table>\n    <tbody>\n      <tr a=\"x|y\"><td>a</td></tr>\n    </tbody>\n  </table>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "table",
+        "columns": [
+         {
+          "type": "table_column"
+         }
+        ],
+        "children": [
+         {
+          "type": "table_body",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 }
+                ]
+               }
+              ]
+             }
+            ],
+            "attrs": {
+             "keyValues": [
+              [
+               "a",
+               "x|y"
+              ]
+             ]
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-179",
+   "clauses": [
+    "C2-B-166"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "a quoted pipe in a row attribute inside a list item",
+   "input": "- | a |{a=\"x|y\"}",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <table>\n      <tbody>\n        <tr a=\"x|y\"><td>a</td></tr>\n      </tbody>\n    </table>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "table",
+          "columns": [
+           {
+            "type": "table_column"
+           }
+          ],
+          "children": [
+           {
+            "type": "table_body",
+            "children": [
+             {
+              "type": "table_row",
+              "children": [
+               {
+                "type": "table_cell",
+                "header": false,
+                "children": [
+                 {
+                  "type": "cell_paragraph",
+                  "children": [
+                   {
+                    "type": "text",
+                    "value": "a"
+                   }
+                  ]
+                 }
+                ]
+               }
+              ],
+              "attrs": {
+               "keyValues": [
+                [
+                 "a",
+                 "x|y"
+                ]
+               ]
+              }
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-180",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-167"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "a quoted pipe and a trailing line comment",
+   "input": "| a |{a=\"x|y\"} %% c",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr a=\"x|y\"><td>a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ],
+          "attrs": {
+           "keyValues": [
+            [
+             "a",
+             "x|y"
+            ]
+           ]
+          }
+         }
+        ]
+       },
+       {
+        "type": "comment",
+        "form": "line",
+        "value": "c"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-181",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-170"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "the next row continues the table",
+   "input": "| a |{a=\"x|y\"}\n| b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr a=\"x|y\"><td>a</td></tr>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ],
+          "attrs": {
+           "keyValues": [
+            [
+             "a",
+             "x|y"
+            ]
+           ]
+          }
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-182",
+   "clauses": [
+    "C2-B-166",
+    "C2-I-032"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "an unquoted pipe is no value, so the line is text",
+   "input": "| a |{a=x|y}",
+   "options": {},
+   "expected": {
+    "html": "<p>| a |{a=x|y}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "| a |{a=x|y}"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-183",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-168"
+   ],
+   "why": "C2-B-166: The closing pipe is the last pipe of the line, not counting a pipe inside a quoted value (C2-I-033) of a brace block that follows a pipe as a row attribute does (C2-B-167), as in 0.1, and also where a line comment stands before it:",
+   "summary": "an unclosed quote is no row attribute, so its pipes split cells",
+   "input": "| a |{a=\"x|y\" | b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td><td>{a=“x</td><td>y”</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "{a="
+               },
+               {
+                "type": "smart_punctuation",
+                "kind": "left_double_quote",
+                "glyph": "“",
+                "source": "\""
+               },
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "y"
+               },
+               {
+                "type": "smart_punctuation",
+                "kind": "right_double_quote",
+                "glyph": "”",
+                "source": "\""
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-184",
+   "clauses": [
+    "C2-H-168"
+   ],
+   "why": "C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "static mode keeps inline math as a math span",
+   "input": "a $`x<y` b",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<p>a <span class=\"math inline\" role=\"math\">\\(x&lt;y\\)</span> b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "math",
+        "display": false,
+        "value": "x<y"
+       },
+       {
+        "type": "text",
+        "value": " b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-185",
+   "clauses": [
+    "C2-H-168",
+    "C2-H-077"
+   ],
+   "why": "C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "static mode keeps a math block as a paragraph with a display span",
+   "input": "{.m}\n$$`x`",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<p class=\"m\"><span class=\"math display\" role=\"math\">\\[x\\]</span></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "math",
+        "display": true,
+        "value": "x"
+       }
+      ],
+      "role": "math",
+      "attrs": {
+       "classes": [
+        "m"
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-186",
+   "clauses": [
+    "C2-H-168"
+   ],
+   "why": "C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "static mode keeps inline math in a quote",
+   "input": "> $`x`",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<blockquote><p><span class=\"math inline\" role=\"math\">\\(x\\)</span></p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "math",
+          "display": false,
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-187",
+   "clauses": [
+    "C2-H-168"
+   ],
+   "why": "C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "static mode keeps inline math in a table cell",
+   "input": "| $`x` |",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td><span class=\"math inline\" role=\"math\">\\(x\\)</span></td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "math",
+                "display": false,
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-188",
+   "clauses": [
+    "C2-H-168"
+   ],
+   "why": "C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "static mode keeps the attributes on the math span",
+   "input": "$`x`{.c}",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<p><span class=\"math inline c\" role=\"math\">\\(x\\)</span></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "math",
+        "display": false,
+        "value": "x",
+        "attrs": {
+         "classes": [
+          "c"
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-189",
+   "clauses": [
+    "C2-H-122",
+    "C2-H-168"
+   ],
+   "why": "C2-H-122: Static output is self-contained: an extension renders through its static path, and a diagram without a build-time renderer falls back to its source as a code block. C2-H-168: Static mode writes core math as interactive mode does: an inline math node and a math block keep the `math` span with the TeX delimiters (C2-H-072, C2-H-077), as in 0.1.",
+   "summary": "a code block of the language math is a code block in both modes",
+   "input": "``` math\nx^2\n```",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<pre><code class=\"language-math\">x^2\n</code></pre>",
+    "children": [
+     {
+      "type": "code_block",
+      "value": "x^2\n",
+      "syntax": "math"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-190",
+   "clauses": [
+    "C2-H-094"
+   ],
+   "why": "C2-H-094: A note whose every reference is degraded (C2-H-165) or stands in a note that is not written is not written, and with no note left no section is written, as in 0.1.",
+   "summary": "under minimal a note reached only through a degraded note writes no section",
+   "input": "a [^1] b\n\n[^1]: see [^2]\n\n[^2]: two",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "<p>a [^1] b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "1",
+        "namespace": "footnote",
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " b"
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "see "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "2",
+          "namespace": "footnote",
+          "number": 2
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "2",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-191",
+   "clauses": [
+    "C2-H-094"
+   ],
+   "why": "C2-H-094: A note whose every reference is degraded (C2-H-165) or stands in a note that is not written is not written, and with no note left no section is written, as in 0.1.",
+   "summary": "a note referenced from the body and from a note that is not written, both degraded",
+   "input": "a [^1] b [^2]\n\n[^1]: see [^2]\n\n[^2]: two",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p>a [^1] b [^2]</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "1",
+        "namespace": "footnote",
+        "number": 1
+       },
+       {
+        "type": "text",
+        "value": " b "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "2",
+        "namespace": "footnote",
+        "number": 2
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "see "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "2",
+          "namespace": "footnote",
+          "number": 2
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "2",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-192",
+   "clauses": [
+    "C2-H-094"
+   ],
+   "why": "C2-H-094: A note whose every reference is degraded (C2-H-165) or stands in a note that is not written is not written, and with no note left no section is written, as in 0.1.",
+   "summary": "a chain of three notes writes none",
+   "input": "a [^1]\n\n[^1]: see [^2]\n\n[^2]: two [^3]\n\n[^3]: three",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p>a [^1]</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "1",
+        "namespace": "footnote",
+        "number": 1
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "see "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "2",
+          "namespace": "footnote",
+          "number": 2
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "2",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "two "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "3",
+          "namespace": "footnote",
+          "number": 3
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "3",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "three"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-193",
+   "clauses": [
+    "C2-H-094"
+   ],
+   "why": "C2-H-094: A note whose every reference is degraded (C2-H-165) or stands in a note that is not written is not written, and with no note left no section is written, as in 0.1.",
+   "summary": "an inline footnote inside a note that is not written is not written",
+   "input": "a [^1]\n\n[^1]: see ^[inner]",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p>a [^1]</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "1",
+        "namespace": "footnote",
+        "number": 1
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "see "
+         },
+         {
+          "type": "inline_footnote",
+          "children": [
+           {
+            "type": "text",
+            "value": "inner"
+           }
+          ],
+          "number": 2
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-194",
+   "clauses": [
+    "C2-H-094"
+   ],
+   "why": "C2-H-094: A note whose every reference is degraded (C2-H-165) or stands in a note that is not written is not written, and with no note left no section is written, as in 0.1.",
+   "summary": "a degraded reference in a quote reaches no nested note",
+   "input": "> a [^1]\n\n[^1]: see [^2]\n\n[^2]: two",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<blockquote><p>a [^1]</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "1",
+          "namespace": "footnote",
+          "number": 1
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "1",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "see "
+         },
+         {
+          "type": "footnote_ref",
+          "key": "2",
+          "namespace": "footnote",
+          "number": 2
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "key": "2",
+      "namespace": "footnote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-195",
+   "clauses": [
+    "C2-H-163",
+    "C2-H-165"
+   ],
+   "why": "C2-H-163: Under `comment` a link or an autolink whose destination fails (C2-H-160) is written as its text with no `<a>`, as in 0.1: a link as the plain text of its children (C2-H-165), an autolink as its visible text.",
+   "summary": "a denied link with attributes and strong text is its plain text",
+   "input": "[x *y*](javascript:a){.c}",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p>x y</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "javascript:a",
+        "children": [
+         {
+          "type": "text",
+          "value": "x "
+         },
+         {
+          "type": "strong",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ],
+        "attrs": {
+         "classes": [
+          "c"
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-196",
+   "clauses": [
+    "C2-H-163"
+   ],
+   "why": "C2-H-163: Under `comment` a link or an autolink whose destination fails (C2-H-160) is written as its text with no `<a>`, as in 0.1: a link as the plain text of its children (C2-H-165), an autolink as its visible text.",
+   "summary": "a denied reference link is its text",
+   "input": "[x][r]\n\n[r]: javascript:a",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p>x</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "r",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "javascript:a"
+       }
+      ]
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "r",
+      "namespace": "link",
+      "href": "javascript:a"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-197",
+   "clauses": [
+    "C2-H-163"
+   ],
+   "why": "C2-H-163: Under `comment` a link or an autolink whose destination fails (C2-H-160) is written as its text with no `<a>`, as in 0.1: a link as the plain text of its children (C2-H-165), an autolink as its visible text.",
+   "summary": "a denied link in a quote is its text",
+   "input": "> [x](javascript:a) b",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<blockquote><p>x b</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "link",
+          "href": "javascript:a",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         },
+         {
+          "type": "text",
+          "value": " b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-198",
+   "clauses": [
+    "C2-H-163"
+   ],
+   "why": "C2-H-163: Under `comment` a link or an autolink whose destination fails (C2-H-160) is written as its text with no `<a>`, as in 0.1: a link as the plain text of its children (C2-H-165), an autolink as its visible text.",
+   "summary": "an allowed link keeps its anchor and rel",
+   "input": "[x](https://ok.org)",
+   "options": {
+    "profile": "comment"
+   },
+   "expected": {
+    "html": "<p><a href=\"https://ok.org\" rel=\"nofollow ugc\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "https://ok.org",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-199",
+   "clauses": [
+    "C2-H-160"
+   ],
+   "why": "C2-H-160: A failed destination is written as the empty value, `href=\"\"` or `src=\"\"` (under `comment` a link or an autolink has no `<a>`, C2-H-163), and is reported with `destination-denied` once per destination.",
+   "summary": "under article a denied link keeps its inert anchor",
+   "input": "[x](javascript:a)",
+   "options": {
+    "profile": "article"
+   },
+   "expected": {
+    "html": "<p><a href=\"\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "javascript:a",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-200",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "an escaped backslash in alt text gives one backslash",
+   "input": "![a\\\\b](/i.png)",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"/i.png\" alt=\"a\\b\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "/i.png",
+        "alt": "a\\b"
+       }
+      ],
+      "role": "image"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-201",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "a backslash before a letter in alt text stays",
+   "input": "![a\\q](/i.png)",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"/i.png\" alt=\"a\\q\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "/i.png",
+        "alt": "a\\q"
+       }
+      ],
+      "role": "image"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-202",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "a backslash before a space in alt text stays",
+   "input": "![a\\ b](/i.png)",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"/i.png\" alt=\"a\\ b\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "/i.png",
+        "alt": "a\\ b"
+       }
+      ],
+      "role": "image"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-203",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "markup in alt text is not parsed",
+   "input": "![*a* `c`](/i.png)",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"/i.png\" alt=\"*a* `c`\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "/i.png",
+        "alt": "*a* `c`"
+       }
+      ],
+      "role": "image"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-204",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "a reference image removes the escapes from its alt text",
+   "input": "![a \\*b\\*][r]\n\n[r]: /i.png",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"/i.png\" alt=\"a *b*\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "key": "r",
+        "namespace": "link",
+        "refForm": "full",
+        "alt": "a *b*",
+        "src": "/i.png"
+       }
+      ],
+      "role": "image"
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "r",
+      "namespace": "link",
+      "href": "/i.png"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-205",
+   "clauses": [
+    "C2-I-074"
+   ],
+   "why": "C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "an image in a list item with attributes removes the escape",
+   "input": "- ![x\\!y](/i.png){.c}",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <img src=\"/i.png\" alt=\"x!y\" class=\"c\">\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "image",
+            "src": "/i.png",
+            "alt": "x!y",
+            "attrs": {
+             "classes": [
+              "c"
+             ]
+            }
+           }
+          ],
+          "role": "image"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-206",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "the panel number follows the group's place in its sequence",
+   "input": "{#fig-y}\n![y](y.png)\n^ Figure #: Y\n\n{#fig-x}\n::: figure\n{#fig-x-a}\n![a](a.png)\n^ (a) One\n\n{#fig-x-b}\n![b](b.png)\n^ (b) Two\n:::\n^ Figure #: Both\n\nSee </#fig-x-b>.",
+   "options": {},
+   "expected": {
+    "html": "<figure id=\"fig-y\">\n  <img src=\"y.png\" alt=\"y\">\n  <figcaption>Figure 1: Y</figcaption>\n</figure>\n<figure id=\"fig-x\" class=\"carve-figure-group\">\n  <figure id=\"fig-x-a\" class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(a) One</figcaption>\n  </figure>\n  <figure id=\"fig-x-b\" class=\"carve-figure-panel\">\n    <img src=\"b.png\" alt=\"b\">\n    <figcaption>(b) Two</figcaption>\n  </figure>\n  <figcaption>Figure 2: Both</figcaption>\n</figure>\n<p>See <a href=\"#fig-x-b\">Figure 2b</a>.</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "y.png",
+        "alt": "y"
+       }
+      ],
+      "role": "image",
+      "attrs": {
+       "id": "fig-y"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Figure "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Y"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "a.png",
+          "alt": "a"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-a"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(a) One"
+            }
+           ]
+          }
+         ]
+        }
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "b.png",
+          "alt": "b"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-b"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(b) Two"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "fig-x"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Figure "
+          },
+          {
+           "type": "caption_number",
+           "n": 2
+          },
+          {
+           "type": "text",
+           "value": ": Both"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "fig-x-b",
+        "namespace": "heading",
+        "href": "#fig-x-b"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-207",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "the letter is the panel order, not the caption text",
+   "input": "{#fig-x}\n::: figure\n{#fig-x-a}\n![a](a.png)\n^ (i) One\n:::\n^ Figure #: Both\n\nSee </#fig-x-a>.",
+   "options": {},
+   "expected": {
+    "html": "<figure id=\"fig-x\" class=\"carve-figure-group\">\n  <figure id=\"fig-x-a\" class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(i) One</figcaption>\n  </figure>\n  <figcaption>Figure 1: Both</figcaption>\n</figure>\n<p>See <a href=\"#fig-x-a\">Figure 1a</a>.</p>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "a.png",
+          "alt": "a"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-a"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(i) One"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "fig-x"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Figure "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Both"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "fig-x-a",
+        "namespace": "heading",
+        "href": "#fig-x-a"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-208",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "a panel without an id still takes its letter",
+   "input": "{#fig-x}\n::: figure\n![a](a.png)\n^ (a) One\n\n{#fig-x-b}\n![b](b.png)\n^ (b) Two\n:::\n^ Figure #: Both\n\nSee </#fig-x-b>.",
+   "options": {},
+   "expected": {
+    "html": "<figure id=\"fig-x\" class=\"carve-figure-group\">\n  <figure class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(a) One</figcaption>\n  </figure>\n  <figure id=\"fig-x-b\" class=\"carve-figure-panel\">\n    <img src=\"b.png\" alt=\"b\">\n    <figcaption>(b) Two</figcaption>\n  </figure>\n  <figcaption>Figure 1: Both</figcaption>\n</figure>\n<p>See <a href=\"#fig-x-b\">Figure 1b</a>.</p>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "a.png",
+          "alt": "a"
+         }
+        ],
+        "role": "image",
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(a) One"
+            }
+           ]
+          }
+         ]
+        }
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "b.png",
+          "alt": "b"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-b"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(b) Two"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "fig-x"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Figure "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Both"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "fig-x-b",
+        "namespace": "heading",
+        "href": "#fig-x-b"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-209",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "a table panel takes the label of the group",
+   "input": "{#t}\n::: figure\n{#t-a}\n| a |\n^ (a) One\n:::\n^ Table #: Both\n\nSee </#t-a>.",
+   "options": {},
+   "expected": {
+    "html": "<figure id=\"t\" class=\"carve-figure-group\">\n  <figure class=\"carve-figure-panel\">\n    <table id=\"t-a\">\n      <caption>(a) One</caption>\n      <tbody>\n        <tr><td>a</td></tr>\n      </tbody>\n    </table>\n  </figure>\n  <figcaption>Table 1: Both</figcaption>\n</figure>\n<p>See <a href=\"#t-a\">Table 1a</a>.</p>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "table",
+        "columns": [
+         {
+          "type": "table_column"
+         }
+        ],
+        "children": [
+         {
+          "type": "table_body",
+          "children": [
+           {
+            "type": "table_row",
+            "children": [
+             {
+              "type": "table_cell",
+              "header": false,
+              "children": [
+               {
+                "type": "cell_paragraph",
+                "children": [
+                 {
+                  "type": "text",
+                  "value": "a"
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ],
+        "attrs": {
+         "id": "t-a"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(a) One"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "t"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Table "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Both"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "t-a",
+        "namespace": "heading",
+        "href": "#t-a"
+       },
+       {
+        "type": "text",
+        "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-210",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "a reference before the group resolves too",
+   "input": "See </#fig-x-a> first.\n\n{#fig-x}\n::: figure\n{#fig-x-a}\n![a](a.png)\n^ (a) One\n:::\n^ Figure #: Both",
+   "options": {},
+   "expected": {
+    "html": "<p>See <a href=\"#fig-x-a\">Figure 1a</a> first.</p>\n<figure id=\"fig-x\" class=\"carve-figure-group\">\n  <figure id=\"fig-x-a\" class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(a) One</figcaption>\n  </figure>\n  <figcaption>Figure 1: Both</figcaption>\n</figure>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "fig-x-a",
+        "namespace": "heading",
+        "href": "#fig-x-a"
+       },
+       {
+        "type": "text",
+        "value": " first."
+       }
+      ]
+     },
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "a.png",
+          "alt": "a"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-a"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(a) One"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "fig-x"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Figure "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Both"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-211",
+   "clauses": [
+    "C2-H-095",
+    "C2-H-096"
+   ],
+   "why": "C2-H-095: A cross-reference resolves against the ids of headings, of numbered captions and of the panels of a figure group whose caption is numbered (C2-A-084) C2-H-096: For a panel it is the label word and the number of its group and the letter of the panel in panel order, `a` to `z`, then `aa`, `ab` and so on, such as `Figure 1a`, as in 0.1.",
+   "summary": "the label word of the group caption is used",
+   "input": "{#fig-x}\n::: figure\n{#fig-x-a}\n![a](a.png)\n^ (a) One\n:::\n^ Abbildung #: Beide\n\nSee </#fig-x-a>.",
+   "options": {},
+   "expected": {
+    "html": "<figure id=\"fig-x\" class=\"carve-figure-group\">\n  <figure id=\"fig-x-a\" class=\"carve-figure-panel\">\n    <img src=\"a.png\" alt=\"a\">\n    <figcaption>(a) One</figcaption>\n  </figure>\n  <figcaption>Abbildung 1: Beide</figcaption>\n</figure>\n<p>See <a href=\"#fig-x-a\">Abbildung 1a</a>.</p>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "image",
+          "src": "a.png",
+          "alt": "a"
+         }
+        ],
+        "role": "image",
+        "attrs": {
+         "id": "fig-x-a"
+        },
+        "caption": {
+         "type": "caption",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "(a) One"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      ],
+      "attrs": {
+       "id": "fig-x"
+      },
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "Abbildung "
+          },
+          {
+           "type": "caption_number",
+           "n": 1
+          },
+          {
+           "type": "text",
+           "value": ": Beide"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "See "
+       },
+       {
+        "type": "xref",
+        "key": "fig-x-a",
+        "namespace": "heading",
+        "href": "#fig-x-a"
+       },
+       {
+        "type": "text",
+        "value": "."
        }
       ]
      }
