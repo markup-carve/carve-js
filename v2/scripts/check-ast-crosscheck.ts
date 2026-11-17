@@ -67,6 +67,12 @@ const BEYOND_SCHEMA = [
   'a count contradicts its authored span mark',
   // C2-N-017: an include with children names its file; the schema states the two fields apart.
   'an expanded include names its file',
+  // C2-A-091: a cell with no children is refused unless a span mark fills it; the schema cannot read the span.
+  'a cell with no children',
+  // C2-A-098: the glyph and the source of a smart punctuation node follow its kind; the schema lists each field apart.
+  'not the glyph of its kind', 'not the source of its kind',
+  // C2-A-124: an unqualified extension has no version, so no field that a declaration gives; the schema cannot tie them.
+  'not a field of an unqualified extension',
 ]
 
 function explained(finding: Failure & { classification?: string }): string | null {
