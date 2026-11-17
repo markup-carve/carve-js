@@ -433,9 +433,18 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-023: a line comment starts only on a line of content, which a title is not.
   if (leaf.inTitle || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
   const before = code(leaf, at - 1)
-  if (before === 37 || before === 123) return undecide(leaf, 'mark %')
+  if (before === 37 || before === 123) return undecidedIf(!percentBehindText(leaf, at, before, escaped), leaf, 'mark %')
   // C2-B-144: in the body of a line block `%%` is text.
   if (isSpace(before) && !leaf.inLine) escaped[at] = 1
+}
+
+/**
+ * C2-B-133: behind a `%` of text, or behind a `{` that opens no braced comment (C2-I-025), `%%` stands after no
+ * whitespace and is text.
+ */
+function percentBehindText(leaf: Leaf, at: number, before: number, escaped: Uint8Array): boolean {
+  if (leaf.kinds[at - 1] !== TEXT) return false
+  return before === 37 || isLiteral(leaf, at - 1, escaped) || lastClose(leaf, 37) < at + 2
 }
 
 const RESOLVERS: Readonly<Record<string, Resolver>> = {
