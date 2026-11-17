@@ -118,6 +118,13 @@ describe('carve2 and includes', () => {
     expect(result.status).toBe(0)
   })
 
+  it('C2-N-010: the includes of an entry from standard input with a named root resolve against the root', () => {
+    const root = tree({ 'sub/a.crv': 'A.\n', 'a.crv': 'Root A.\n' })
+    const result = cli(['render', '--include-root', root, '-'], join(root, 'sub'), '{{ a.crv }}\n')
+    expect(result.stdout).toBe('<p>Root A.</p>\n')
+    expect(result.status).toBe(0)
+  })
+
   it('C2-N-004: --no-includes turns expansion off, and fmt never expands', () => {
     const root = tree({ 'main.crv': '{{ a.crv }}\n', 'a.crv': 'A.\n' })
     expect(cli(['render', '--no-includes', 'main.crv'], root).stdout).toBe('<p>{{ a.crv }}</p>\n')

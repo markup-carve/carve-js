@@ -27,6 +27,12 @@ describe('line comments', () => {
   })
 })
 
+describe('lists around a comment', () => {
+  it('C2-W-122: the attribute line of the second list follows the first after one blank line (writer Example 12)', () => {
+    expect(format('- a\n\n\n{.c}\n%% x\n- b')).toBe('- a\n\n{.c}\n%% x\n- b\n')
+  })
+})
+
 describe('the slow reference of the escapes', () => {
   it('C2-W-125: where no case gives the tree alone, the backslash of case six is kept and the brace stays bare', () => {
     for (const mark of ['.c}', '', '*', '/', '-', '=', '%', '#']) {

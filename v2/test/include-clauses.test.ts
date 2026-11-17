@@ -1,8 +1,8 @@
 // Include expansion (spec/0.2/includes.md), in the order of the engine work list: each test names the clause it proves.
 import { describe, expect, it } from 'vitest'
 import {
-  CarveOptionError, CarveRenderError, format, parse, parseWithDiagnostics, parseWithLayout, render, renderWithDiagnostics,
-  treesEqual, validateTree,
+  CarveOptionError, CarveRenderError, format, formatWithDiagnostics, parse, parseWithDiagnostics, parseWithLayout, render,
+  renderWithDiagnostics, treesEqual, validateTree,
 } from '../src/index.ts'
 import { type IncludeNode, type Node } from '../src/ast.ts'
 import { type IncludeRequest } from '../src/include-settings.ts'
@@ -284,6 +284,10 @@ describe('8. writer, fmt and the Carve target', () => {
     expect(format('{.c}\n{{ a.crv @code }}\n^ cap')).toBe('{.c}\n{{ a.crv @code }}\n^ cap\n')
   })
 
+  it('C2-N-005: the formatter reports no include-no-resolver', () => {
+    expect(formatWithDiagnostics('{{ a.crv }}')).toEqual({ source: '{{ a.crv }}\n', diagnostics: [] })
+  })
+
   it('C2-N-080: the writer writes an expanded tree as its directives', async () => {
     const { write } = await import('../src/index.ts')
     const document = parse('Top.\n\n{{ a.crv }}', { includes: includes({ 'a.crv': 'A says hello.\n' }) })
@@ -499,6 +503,12 @@ describe('13. code mode, attributes, captions and tables', () => {
       `<table>\n  <thead>\n    <tr><th scope="col">Price</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>${cell}</td></tr>\n  </tbody>\n</table>`
     expect(html('@lines:2-2')).toBe(table('1'))
     expect(html('@region:r')).toBe(table('2'))
+  })
+
+  it('C2-N-021: with code the frontmatter lines of the file are content of the payload', () => {
+    const files = { 'a.md': '---\nt: 1\n---\nbody\n' }
+    expect(render('{{ a.md @code }}', { includes: includes(files) })).toBe('<pre><code>---\nt: 1\n---\nbody\n</code></pre>')
+    expect(includeAt('{{ a.md }}', files).children?.[0]).toMatchObject({ type: 'frontmatter', value: 't: 1\n' })
   })
 
   it('C2-N-073, C2-N-074: the caption of an unexpanded code include is numbered and written after the directive', () => {
