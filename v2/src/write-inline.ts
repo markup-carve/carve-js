@@ -1,7 +1,7 @@
 // The inline nodes as Carve source (C2-W-069 to C2-W-080, C2-W-116). A line break of the
 // content is a line feed in the string; the block that holds the content places the lines.
 import {
-  type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type InlineParent, type LinkNode,
+  type AutolinkNode, childNodes, type CitationGroupNode, type CommentNode, type ImageNode, type Inline, type InlineParent, type LinkNode,
   type MentionNode, type Node, type NodeOfType, type ParagraphNode, type RubyNode, type TextNode, type InlineExtensionNode,
 } from './ast.ts'
 import { treesEqual } from './ast-json.ts'
@@ -317,15 +317,19 @@ function trimLineEnds(raw: string): string {
   return out + raw.slice(from)
 }
 
-function linkNode(w: Writer, node: LinkNode, flags: number): string {
-  const raw = rawReference(w, node, flags)
-  if (raw !== null) return raw
-  // C2-W-125: an unescaped leading caret reads as a footnote reference instead of this link.
-  const first = node.children[0]
+/** C2-W-125 case five: an unescaped leading caret of link or span text reads as a footnote reference instead. */
+function escapeLeadingCaret(w: Writer, children: readonly Inline[]): void {
+  const first = children[0]
   if (first?.type === 'text' && first.value.startsWith('^')) {
     const escapes = w.escapes.get(first) ?? []
     if (escapes[0] !== 0) w.escapes.set(first, [0, ...escapes])
   }
+}
+
+function linkNode(w: Writer, node: LinkNode, flags: number): string {
+  const raw = rawReference(w, node, flags)
+  if (raw !== null) return raw
+  escapeLeadingCaret(w, node.children)
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
@@ -499,7 +503,10 @@ const WRITERS: InlineWriters = {
   insert: braced('+', '+'),
   delete: braced('-', '-'),
   critic_comment: (w, node, flags) => `{#${cellValue(w, node, node.value, flags)}#}`,
-  span: (w, node, flags) => `[${writeInlines(w, node.children, flags)}]`,
+  span: (w, node, flags) => {
+    escapeLeadingCaret(w, node.children)
+    return `[${writeInlines(w, node.children, flags)}]`
+  },
   link: linkNode,
   image: imageNode,
   inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
