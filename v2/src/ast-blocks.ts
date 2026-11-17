@@ -22,7 +22,7 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { braceBlocksEnd, fenceRunLength, isBareRun, orderedDelimiter, skipSpaces, trimEnd } from './lines.ts'
+import { attributeBlocksEnd, fenceRunLength, isBareRun, orderedDelimiter, skipSpaces, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
@@ -120,7 +120,7 @@ function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: Op
   const lineEnd = lineFeedAt(src, node.start)
   const at = info.extraStart
   const glued = info.wordStart >= 0 && at === info.wordEnd
-  const attribute = (named || glued) && src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(src, at, lineEnd) > at
+  const attribute = (named || glued) && src.charCodeAt(at) === BRACE_OPEN && attributeBlocksEnd(src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
@@ -135,7 +135,7 @@ function noteRawWords(ctx: TreeContext, node: BlockNode, out: Node, info: Opener
   if (from.length === 0) return
   const at = Math.min(...from)
   const lineEnd = lineFeedAt(ctx.src, node.start)
-  const attribute = named && at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && braceBlocksEnd(ctx.src, at, lineEnd) > at
+  const attribute = named && at === info.wordEnd && ctx.src.charCodeAt(at) === BRACE_OPEN && attributeBlocksEnd(ctx.src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
