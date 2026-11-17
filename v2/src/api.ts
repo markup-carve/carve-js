@@ -11,6 +11,7 @@ import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
+import { noteSource } from './derived-text.ts'
 import { applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
@@ -146,6 +147,7 @@ function parseInput(source: SourceText, settings: Settings, positions: boolean, 
     mapPositions(source, parsed.document)
     parsed.document.srcByteLength = bytes.length
   }
+  noteSource(parsed.document, bytes?.length ?? source.text)
   return parsed
 }
 

@@ -1,0 +1,44 @@
+// C2-H-201: the budget for derived text, `derived_text_bytes` and `derived_text_factor` of data/limits.json.
+import { type DocumentNode, type Node } from './ast.ts'
+import { loss, type Render } from './html-attributes.ts'
+import { utf8Length } from './positions.ts'
+
+export const DERIVED_TEXT_BYTES = 1_000_000
+export const DERIVED_TEXT_FACTOR = 8
+
+// The source each parsed tree was read from, or its byte length, which a parse without positions does not record.
+const SOURCES = new WeakMap<Node, string | number>()
+
+export function noteSource(document: Node, source: string | number): void {
+  SOURCES.set(document, source)
+}
+
+/** The budget of one render; a supplied tree without `srcByteLength` has the fixed one. */
+export function derivedTextBudget(document: DocumentNode): number {
+  const source = SOURCES.get(document)
+  const bytes = typeof source === 'string' ? utf8Length(source) : source ?? document.srcByteLength ?? 0
+  return Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * bytes)
+}
+
+/**
+ * Draws `text` on the budget of the render and returns true, or returns false where it does not fit what remains; the
+ * first node that does not fit is reported, once per render.
+ */
+export function drawDerivedText(r: Render, node: Node, text: string): boolean {
+  if (r.derivedBudget < 0) {
+    r.derivedBudget = derivedTextBudget(r.document)
+    r.derivedLeft = r.derivedBudget
+  }
+  const cost = utf8Length(text)
+  if (cost <= r.derivedLeft) {
+    r.derivedLeft -= cost
+    return true
+  }
+  if (!r.derivedReported) {
+    r.derivedReported = true
+    const message = `Wrote an abbreviation or a cross-reference in its plain form: the derived text of this render reached its budget of ${
+      r.derivedBudget} bytes`
+    loss(r, node, 'derived-text-budget', message)
+  }
+  return false
+}

@@ -1,5 +1,5 @@
 // Escaping, the attribute order of C2-H-009 and the filter of C2-H-128.
-import { type Block, type BlockExtensionNode, type InlineExtensionNode, type Node, type ParagraphNode } from './ast.ts'
+import { type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
 import { type Settings, type UrlPolicy } from './options.ts'
@@ -36,6 +36,11 @@ export interface Render {
   bidi: boolean
   /** C2-H-080: descriptions awaiting the end of the containing block. */
   longDescriptions: Block[][]
+  /** C2-H-201: the tree, its budget for derived text (-1 until a node draws), what remains, and whether one did not fit. */
+  document: DocumentNode
+  derivedBudget: number
+  derivedLeft: number
+  derivedReported: boolean
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */
