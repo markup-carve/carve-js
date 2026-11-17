@@ -34,6 +34,10 @@ At candidate 6 a region marker line ends the paragraph above it (C2-B-137), so `
 
 `carve2 render --allow-loss CODE` must refuse an unknown code, but neither `spec/0.2` nor its data lists the codes of the `render-loss` channel. The command line keeps a hand-written list (`RENDER_LOSS_CODES` in `v2/cli/run.ts`) that has to follow the spec by hand.
 
+### G-G8. C2-W-097 pairs `[^]` in alt text
+
+C2-W-097 escapes only a bracket "that has no partner in the alt text". In the alt text `[^]]` every bracket has a partner, yet `![[^]]]()` does not read back as an image: `[^]` reads as an empty footnote label and ends the image text early. The engine also escapes a `]` that directly follows `[^`, so the writer gives `![[^\]]]()`, which is what the reader takes as that alt text.
+
 ## Freeze candidate 5 session (spec `7db33836`)
 
 Cases found while following freeze candidate 5, revision 1. The engine choice is named in each.

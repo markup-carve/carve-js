@@ -33,6 +33,10 @@ describe('freeze candidate 6', () => {
     }
   })
 
+  it('C2-W-097: a bracket right behind `[^` in alt text keeps its backslash', () => {
+    for (const source of ['![[^\\]]]()\n', '![a[^\\]]]()\n']) expect(write(parse(source))).toBe(source)
+  })
+
   it('C2-B-230: an entry that is no decimal number leaves all three keys in attrs', () => {
     const table = parse('{body-rows=1,x body-header-cols=1,}\n| a |\n| b |').children[0]
     expect(table?.type === 'table' ? table.attrs?.keyValues : undefined).toEqual([['body-rows', '1,x'], ['body-header-cols', '1,']])

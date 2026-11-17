@@ -410,13 +410,18 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
 }
 
-/** The brackets of `alt` that have no partner in it. */
+/**
+ * The brackets of `alt` that have no partner in it. A `]` right behind `[^` counts as one too: unescaped, `[^]` would
+ * read as an empty footnote label and end the image text early.
+ */
 function unpartnered(alt: string): Set<number> {
   const open: number[] = []
   const lone = new Set<number>()
   for (let at = 0; at < alt.length; at++) {
     if (alt[at] === '[') open.push(at)
-    else if (alt[at] === ']' && open.pop() === undefined) lone.add(at)
+    else if (alt[at] !== ']') continue
+    else if (at >= 2 && alt[at - 1] === '^' && open.at(-1) === at - 2) lone.add(at)
+    else if (open.pop() === undefined) lone.add(at)
   }
   for (const at of open) lone.add(at)
   return lone
