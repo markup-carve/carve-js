@@ -186,9 +186,10 @@ function openedBefore(leaf: Leaf, at: number, escaped: Uint8Array): number {
  * backslash escapes and holds more than blanks. A label that holds a node or a `%` is left to the repair (C2-I-077).
  */
 function footnoteReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  // With no `]` behind it the bracket opens nothing, behind a sigil or not.
+  if (leaf.lastBracket <= at + 2) return NO_REFERENCE
   const opened = openedBefore(leaf, at, escaped)
   if (opened >= 0) return opened
-  if (leaf.lastBracket <= at + 2) return NO_REFERENCE
   let blank = true
   for (let unit = at + 2; unit < leaf.codes.length; unit++) {
     const value = leaf.codes[unit]!
