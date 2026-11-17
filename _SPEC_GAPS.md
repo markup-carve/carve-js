@@ -26,6 +26,30 @@ z
 
 Reading A (the engine): a selection chooses the records of the whole file that start on a selected line, so line 2 chooses the record `x` / `y` whole, and the cell holds both lines. Reading B: the selected lines are read as records on their own, so the quoted field is cut, malformed, and its cell holds `x` with `delimited-table-malformed`. Reading A follows "chooses records", and the head and foot of C2-N-046 are records of the whole file in both readings.
 
+### G-D2. A supplied `keyValues` key that is no key (security)
+
+C2-A-032: "Each pair is a list of two strings, the key and its value". C2-I-030 defines a key for the parser only, the schema refuses only `id` and `class`, and no reader check of C2-A-188 tests the characters of a key. C2-H-003 escapes values, not names; C2-H-161 drops names that start with `on`.
+
+```json
+{"type":"document","astVersion":"2.0","children":[{"type":"paragraph","attrs":{"keyValues":[["x onclick","alert(1)"]]},"children":[{"type":"text","value":"x"}]}]}
+```
+
+Reading A (the engine, unchanged): `validateTree` accepts it and the render writes the key as it stands, `<p x onclick="alert(1)">x</p>`; the key `a><script>alert(1)</script` writes a script element with `rawHtml` off. The empty key writes `<p ="v">`. The writer already leaves such a key out. Reading B: a reader refuses a key that is not a key by C2-I-030, or the render drops it. Third review F5 proposes B with a row in `trees/refused.json`. Not changed, since no clause decides it; this one is the most urgent of the list.
+
+### G-D3. A note reference whose `href` has no fragment
+
+C2-M-062: an `<a>` with `role="doc-noteref"` "is a `footnote_ref` whose key is that of the note its `href` names, or else its fragment without the prefixes of C2-M-061".
+
+```carve
+[x](/u){role=doc-noteref}
+```
+
+The render writes `<p><a href="/u" role="doc-noteref">x</a></p>`. `/u` names no note and has no fragment, so the clause gives no key. Reading A (the engine, unchanged): the key is the whole `href`, and the import writes `[^/u]`. Reading B: without a note and a fragment the element is no note reference and takes the mapping of any `<a>`, a link that keeps `role`. Reading B keeps the tree of the source.
+
+### G-D4. `dir` outside a figure (third review F4)
+
+C2-A-031 makes `dir` a field of every node that carries `lang`; html.md writes it only on the `<figure>` of a captioned block (C2-H-063). `<p dir="rtl">x</p>` imports with `dir` and renders `<p>x</p>`. The engine is unchanged until F4 is ruled; the defect list names it a defect only under a ruling toward writing the field.
+
 ## Corpus session (spec `0d422808`)
 
 Cases where neither clause decides, found while running the conformance corpus. The engine choice is named in each.
