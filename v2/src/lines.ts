@@ -649,10 +649,18 @@ function rowTailValid(src: string, pipe: number, end: number): boolean {
 export function rowClosingPipe(src: string, pos: number, end: number): number {
   if (src.charCodeAt(pos) !== PIPE) return -1
   const last = lastPipe(src, pos + 1, end)
+  if (last < 0) return -1
   // C2-B-166: the closing pipe is the last pipe of the line, so an escaped pipe in a row attribute's value ends no row.
-  if (last < 0 || !rowTailValid(src, last, end)) return -1
-  const later = src.indexOf('|', last + 1)
-  return later < 0 || later >= end ? last : -1
+  if (rowTailValid(src, last, end)) return src.indexOf('|', last + 1) < 0 || src.indexOf('|', last + 1) >= end ? last : -1
+  return quotedPipeRowEnd(src, pos + 1, last, end)
+}
+
+/** C2-B-166: the pipe before a row attribute whose quoted values hold the later pipes of the line, or -1. */
+function quotedPipeRowEnd(src: string, from: number, last: number, end: number): number {
+  for (let p = src.indexOf('|', from); p >= 0 && p < last; p = src.indexOf('|', p + 1)) {
+    if (rowAttributeStart(src, p, end) >= 0 && rowTailValid(src, p, end)) return p
+  }
+  return -1
 }
 
 /** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-170). */

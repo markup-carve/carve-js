@@ -1027,13 +1027,13 @@ describe('escaping', () => {
     expect(treesEqual(parse(written), parse(source))).toBe(true)
   })
 
-  it('C2-W-098: a row attribute that holds a pipe reports field-unspellable', () => {
+  it('C2-W-098: a row attribute value that holds a pipe is written in quotes with the pipe bare', () => {
     const tree = parse('| a |\n')
     const row = ofType(childrenOf(ofType(tree.children[0], 'table'))[0], 'table_body').children[0]!
     row.attrs = { keyValues: [['k', 'a|b']] }
     const result = writeWithDiagnostics(tree)
-    expect(result.source).toBe('| a |\n')
-    expect(result.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['field-unspellable', '/children/0/children/0/children/0']])
+    expect(result.source).toBe('| a |{k="a|b"}\n')
+    expect(result.diagnostics).toEqual([])
   })
 
   it('C2-W-099: a line of underscores or of one hyphen needs no escape', () => {

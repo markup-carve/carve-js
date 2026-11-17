@@ -176,15 +176,7 @@ function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean):
     lines[0]![column] = segment(cell.prefix, cell.parts[0]!)
     cell.places.forEach((line, at) => (lines[line]![column] = segment('', cell.parts[at + 1]!)))
   })
-  return { lines, attribute: rowAttribute(w, row) }
-}
-
-/** C2-W-098: a row attribute that holds a pipe has no spelling, since the closing pipe is the last of the line (C2-B-166). */
-function rowAttribute(w: Writer, row: TableRowNode): string {
-  const block = braceBlock(row)
-  if (!block.includes('|')) return block
-  lose(w, row, 'attrs')
-  return ''
+  return { lines, attribute: braceBlock(row) }
 }
 
 /** C2-W-118: pads the segments of each column to its widest. */

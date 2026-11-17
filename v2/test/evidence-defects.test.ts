@@ -9,9 +9,9 @@ it('C2-I-049 C45: a repeated closing slash remains text under the current clause
   expect(render('/a//')).toContain('/a//')
 })
 
-it('C2-B-166, C2-B-169: the closing pipe is the last pipe of the line, also one quoted or escaped in a row attribute', () => {
-  expect(render('||{d="|"}')).toMatch(/^<p>/)
-  expect(render('| a |{title="x|y"}')).toBe('<p>| a |{title="x|y"}</p>')
+it('C2-B-166, C2-B-169: the closing pipe is the last pipe of the line, not one quoted in a row attribute, and an escaped one is no closer', () => {
+  expect(render('||{d="|"}')).toMatch(/^<table>/)
+  expect(render('| a |{title="x|y"}')).toContain('<tr title="x|y">')
   expect(render('||{d="\\|"}')).toMatch(/^<p>/)
   expect(render('| a |{title="x\\|y"}')).toMatch(/^<p>/)
   expect(render('| a |{title="x"}')).toMatch(/^<table>/)
@@ -35,12 +35,13 @@ it('C2-B-169, C2-W-098: a pipe in the attribute value of a cell is written escap
   expect(treesEqual(parse(out.source), tree)).toBe(true)
 })
 
-it('C2-W-098, C2-B-166: a row attribute value that holds a pipe has no spelling', () => {
+it('C2-W-098, C2-B-166: a row attribute value that holds a pipe is written in quotes with the pipe bare', () => {
   const tree = parse('| a |{title=z}')
   firstRow(tree).attrs = { keyValues: [['title', 'x|y']] }
   const out = writeWithDiagnostics(tree)
-  expect(out.diagnostics.map((d) => d.code)).toEqual(['field-unspellable'])
-  expect(out.source).not.toContain('x\\|y')
+  expect(out.diagnostics).toEqual([])
+  expect(out.source).toBe('| a |{title="x|y"}\n')
+  expect(firstRow(parse(out.source)).attrs).toEqual({ keyValues: [['title', 'x|y']] })
 })
 
 it('C2-B-222 C82: an unclosed fence retains the final content line feed', () => {
