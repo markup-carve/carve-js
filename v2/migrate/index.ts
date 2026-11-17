@@ -8,6 +8,9 @@ import { fieldRules, renamedType, ruleExists } from './rules.ts'
 import { coalesceText, fact, list, loss, makeLayout, nodeList, object, record, string, type Fields,
   type MigrationState } from './shared.ts'
 import { shape } from './shapes.ts'
+import { envelopeDeclarations, extension, oldDeclarations, outputVocabulary, rootDeclarations } from './extensions.ts'
+import { byteOffsetPositions } from './positions.ts'
+import { type ExtensionDefinition } from '../src/extensions/types.ts'
 
 export interface MigrateOptions {
   source?: string
@@ -33,7 +36,7 @@ function envelopeExtensions(value: unknown): ExtensionDeclaration[] | undefined 
 }
 
 function outputEnvelope(input: Fields, document: DocumentNode): Envelope {
-  const vocabulary = string(input['vocabulary'])
+  const vocabulary = outputVocabulary(input['vocabulary'])
   const extensions = document.extensions ?? envelopeExtensions(input['extensions'])
   return { astVersion: '2.0', document,
     ...(vocabulary === undefined ? {} : { vocabulary }),
@@ -55,8 +58,13 @@ function migrateList(values: unknown, path: string, state: MigrationState): Fiel
 function migrateSlots(node: Fields, old: Fields, path: string, state: MigrationState): void {
   for (const name of SLOTS) {
     if (!Array.isArray(old[name])) continue
-    node[name] = migrateList(old[name], `${path}/${name}`, state)
+    // T-019: a 0.1 ruby pair is a record without a type.
+    const entries: unknown[] = old[name]
+    const values = name === 'pairs' ? entries.map((pair) => object(pair) && pair['type'] === undefined ?
+      { ...pair, type: 'ruby_pair' } : pair) : entries
+    node[name] = migrateList(values, `${path}/${name}`, state)
   }
+  if (Array.isArray(old['blocks'])) node['blocks'] = migrateList(old['blocks'], `${path}/blocks`, state)
   if (object(old['caption'])) {
     const migrated = migrateNode(old['caption'], `${path}/caption`, state)[0]
     if (migrated !== undefined) node['caption'] = migrated
@@ -129,11 +137,21 @@ function migrateNode(old: Fields, path: string, state: MigrationState): Fields[]
   if (oldType === 'escaped_text') node['type'] = 'text'
   mechanical(node, oldType)
   before(node, old, state)
-  shape(node, old, state)
+  shape(node, old, state, path)
   coalesceText(node)
   promoteImages(node)
   arrangeDefinitions(node)
+  if (node['type'] === 'block_extension' || node['type'] === 'inline_extension') {
+    return extension(node, extensionFallback(node, old, path, state), path, state)
+  }
   return node['type'] === 'figure' ? unwrapFigure(node) : [node]
+}
+
+function extensionFallback(node: Fields, old: Fields, path: string, state: MigrationState): Fields[] {
+  if (node['type'] === 'inline_extension') return structuredClone(nodeList(node['children']))
+  const fallback = old['fallback']
+  return Array.isArray(fallback) ? migrateList(fallback, `${path}/fallback`, state) :
+    object(fallback) ? migrateNode(fallback, `${path}/fallback`, state) : []
 }
 
 /** Whether `node` can carry a caption in its own slot (C2-A-082). */
@@ -174,6 +192,12 @@ function version(value: Fields, envelope: Fields | undefined): void {
   }
 }
 
+/** A required declaration names an extension this tool cannot know; the migration still emits the tree. */
+function stubs(state: MigrationState): ExtensionDefinition[] {
+  return [...state.declared.values()].filter((entry) => entry.required)
+    .map((entry) => ({ name: entry.name, version: entry.version, props: {}, slots: {} }))
+}
+
 export function migrateTree(json: unknown, options: MigrateOptions = {}): MigrationResult {
   const input: unknown = typeof json === 'string' ? JSON.parse(json) : json
   const envelope = object(input) && input['type'] === undefined ? input : undefined
@@ -182,7 +206,7 @@ export function migrateTree(json: unknown, options: MigrateOptions = {}): Migrat
   if (old === undefined || old['type'] !== 'document') throw new Error('migration input is not a document')
   version(old, envelope)
   const state: MigrationState = { source: options.source, draft: old['astVersion'] === '2.0' || old['astVersion'] === '0.2',
-    diagnostics: [], facts: new Map() }
+    diagnostics: [], facts: new Map(), declared: new Map(), used: new Map() }
   const layout = (document: unknown): SourceLayout => options.source === undefined ? makeLayout(state, document) :
     parseWithLayout(options.source).layout
   if (old['astVersion'] === '2.0') {
@@ -192,8 +216,27 @@ export function migrateTree(json: unknown, options: MigrateOptions = {}): Migrat
         layout: layout(value), diagnostics: [] }
     } catch { /* C2-A-177: an earlier draft also claimed 2.0. */ }
   }
-  const document = migrateNode(old, envelope === undefined ? '' : '/document', state)[0]
-  validateTree(document)
-  return { document, ...(envelope === undefined ? {} : { envelope: outputEnvelope(envelope, document) }),
+  const document = migrateDocument(old, envelope, state)
+  return { document, ...(envelope === undefined ? {} : { envelope: migratedEnvelope(envelope, document, state) }),
     layout: layout(document), diagnostics: state.diagnostics }
+}
+
+function migratedEnvelope(input: Fields, document: DocumentNode, state: MigrationState): Envelope {
+  const vocabulary = outputVocabulary(input['vocabulary'])
+  const extensions = envelopeDeclarations(state) ?? document.extensions
+  return { astVersion: '2.0', document, ...(vocabulary === undefined ? {} : { vocabulary }),
+    ...(extensions === undefined ? {} : { extensions }) }
+}
+
+function migrateDocument(old: Fields, envelope: Fields | undefined, state: MigrationState): DocumentNode {
+  oldDeclarations(envelope, state)
+  const document = migrateNode(old, envelope === undefined ? '' : '/document', state)[0]
+  if (document === undefined) throw new Error('migration input is not a document')
+  const declarations = rootDeclarations(state)
+  if (declarations !== undefined && document['extensions'] === undefined) document['extensions'] = declarations
+  if (!state.draft) byteOffsetPositions(document, state)
+  const extensions = envelopeDeclarations(state)
+  validateTree(document, envelope === undefined ? undefined : { astVersion: '2.0', document,
+    ...(extensions === undefined ? {} : { extensions }) }, undefined, stubs(state))
+  return document
 }

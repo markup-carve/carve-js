@@ -7,7 +7,7 @@ import { forEachSlot, type Node } from '../src/ast.ts'
 import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../../upgrade/src/index.ts'
 import { decodeUpgradeBytes } from '../../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
-import { migrateTree } from '../migrate/index.ts'
+import { migrateTree, type MigrationResult } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
 import { type IncludeConfig } from '../src/include-settings.ts'
@@ -69,9 +69,15 @@ function ast(text: string): DocumentNode {
   catch (error) { throw new CliError('ast-json-invalid', String(error)) }
 }
 
-function migrateAst(text: string): DocumentNode {
-  try { return migrateTree(JSON.parse(text) as unknown).document }
+/** C2-A-012, C2-A-180: an envelope stays an envelope, and each loss the migration reports is printed. */
+function migrateAst(text: string): string {
+  let result: MigrationResult
+  try { result = migrateTree(JSON.parse(text) as unknown) }
   catch (error) { throw new CliError('ast-json-invalid', String(error)) }
+  for (const diagnostic of result.diagnostics) {
+    process.stderr.write(`carve[${diagnostic.code}]: ${diagnostic.path ?? ''}: ${diagnostic.message}\n`)
+  }
+  return result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)
 }
 
 function importSource(text: string, format: Format): string {
@@ -212,7 +218,7 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
       return { status: result.status, record: result.record }
     }
     case 'migrate-ast': {
-      process.stdout.write(`${encodeTree(migrateAst(source))}\n`)
+      process.stdout.write(`${migrateAst(source)}\n`)
       return { status: 0 }
     }
     case 'import': {

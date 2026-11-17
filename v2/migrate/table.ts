@@ -190,6 +190,13 @@ export function migrateCell(node: Fields, old: Fields, state: MigrationState): v
   while (original[leading]?.['type'] === 'cell_wrap') leading++
   if (leading > 0) node['children'] = nodeList(node['children']).slice(leading)
   wrapInlineCell(node)
+  // T-037: the blocks of a 0.1 cell are block children; inline content beside them takes a paragraph.
+  const blocks = nodeList(node['blocks'])
+  delete node['blocks']
+  if (blocks.length === 0) return
+  const inline = nodeList(node['children']).filter((child) => child['type'] !== 'cell_paragraph' || nodeList(child['children']).length > 0)
+  node['children'] = [...inline.map((child) => child['type'] === 'cell_paragraph' ? { ...child, type: 'paragraph' } : child), ...blocks]
+  delete node['span']
   delete node['sourceContent']
 }
 

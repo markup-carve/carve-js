@@ -1,4 +1,5 @@
 import { foldLabel } from '../src/ast-attributes.ts'
+import { type ExtensionDeclaration } from '../src/ast.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type NodeLayout, type SourceLayout } from '../src/layout.ts'
 
@@ -9,6 +10,8 @@ export interface MigrationState {
   draft: boolean
   diagnostics: Diagnostic[]
   facts: Map<Fields, Partial<NodeLayout>>
+  declared: Map<string, ExtensionDeclaration>
+  used: Map<string, ExtensionDeclaration>
 }
 
 export function record(value: unknown): Fields | undefined {

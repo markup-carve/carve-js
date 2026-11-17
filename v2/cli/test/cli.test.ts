@@ -212,6 +212,16 @@ describe('carve2 process', () => {
     expect(invalid.stderr).toMatch(/^carve\[ast-json-invalid\]:/)
   })
 
+  it('C2-A-180, C2-A-012: migrate-ast keeps an input envelope and prints each migration loss', () => {
+    const old = JSON.stringify({ astVersion: '1.2', vocabulary: 'https://example.org/v', extensions: [{ id: 'acme.x', version: '1' }],
+      document: { type: 'document', children: [] } })
+    const result = cli(['migrate-ast'], old)
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout) as unknown).toEqual({ astVersion: '2.0', document: { type: 'document', astVersion: '2.0',
+      children: [] }, extensions: [{ name: 'acme.x', version: '1', required: true, slots: [] }] })
+    expect(result.stderr).toBe('carve[migration-loss]: /vocabulary: 0.2 has no vocabulary other than the core one in this form\n')
+  })
+
   it('C2-W-101: import accepts all four formats and rejects a missing or bad format', () => {
     for (const format of ['markdown', 'gfm', 'djot', 'html']) {
       const input = format === 'html' ? '<p>Hi</p>' : 'Hi\n'

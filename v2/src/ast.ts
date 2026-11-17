@@ -110,7 +110,7 @@ export interface Resource {
 export interface Envelope {
   astVersion: string
   document: DocumentNode
-  vocabulary?: string
+  vocabulary?: Record<string, unknown>
   extensions?: ExtensionDeclaration[]
 }
 

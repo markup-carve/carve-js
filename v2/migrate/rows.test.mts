@@ -183,11 +183,11 @@ test('T-034: an authored start attribute of zero remains zero', () => {
 
 test('T-028: an input envelope receives the migrated document and matching version', () => {
   const extensions = [{ name: 'test.note', version: '1', required: false, slots: [] }]
-  const input = { astVersion: '1.2', vocabulary: 'custom', extensions,
+  const input = { astVersion: '1.2', vocabulary: { name: 'custom' }, extensions,
     document: { type: 'document', children: [paragraph(text('x'))] } }
   const output = migrateTree(input)
   assert.equal(at(output, 'envelope.astVersion'), '2.0')
   assert.equal(at(output, 'envelope.document'), output.document)
-  assert.equal(at(output, 'envelope.vocabulary'), 'custom')
+  assert.deepEqual(at(output, 'envelope.vocabulary'), { name: 'custom' })
   assert.deepEqual(at(output, 'envelope.extensions'), extensions)
 })

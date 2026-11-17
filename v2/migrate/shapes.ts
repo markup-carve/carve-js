@@ -1,5 +1,5 @@
 import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../src/inline-tables.ts'
-import { fact, folded, integer, list, object, string, type Fields, type MigrationState } from './shared.ts'
+import { fact, folded, integer, list, loss, object, string, type Fields, type MigrationState } from './shared.ts'
 import { migrateCell, migrateRow, migrateTable } from './table.ts'
 
 // C2-A-058: a start is 0 to 999999999 and omitted when it is 1; any other number leaves the list starting at 1 (U-025).
@@ -62,6 +62,13 @@ function rawReference(node: Fields, old: Fields): string | undefined {
   return node['type'] === 'image' && sourceRaw?.startsWith('!') ? sourceRaw.slice(1) : sourceRaw
 }
 
+/** C2-A-107: 0.1 marked an empty destination with `resolved`; 2.0 reads an absent one as unresolved. */
+function emptyDestination(node: Fields, old: Fields): void {
+  if (old['resolved'] === true) return
+  if (node['src'] === '') delete node['src']
+  if (node['href'] === '') delete node['href']
+}
+
 function linkReference(node: Fields, old: Fields, state: MigrationState): void {
   const raw = rawReference(node, old)
   const collapsed = raw?.endsWith('][]') ?? false
@@ -73,7 +80,7 @@ function linkReference(node: Fields, old: Fields, state: MigrationState): void {
     if (node['refForm'] === undefined) node['refForm'] = collapsed ? 'collapsed' : 'full'
     fact(state, node, 'rawRef', raw)
     delete node['tooltip']
-    if (node['src'] === '') delete node['src']
+    emptyDestination(node, old)
   }
   delete node['ref']
   delete node['rawRef']
@@ -126,24 +133,31 @@ function lineNode(children: Fields[]): Fields {
   return node
 }
 
-function lineBlock(node: Fields): void {
+function lineBlock(node: Fields, path: string, state: MigrationState): void {
   const result: Fields[] = []
-  for (const block of list(node['children'])) {
-    if (!object(block) || block['type'] !== 'paragraph') continue
+  for (const [index, block] of list(node['children']).entries()) {
+    if (!object(block)) continue
+    if (block['type'] === 'comment') { result.push(lineNode([block])); continue }
+    if (block['type'] !== 'paragraph') { loss(state, `${path}/children/${index}`, 'a line block holds only lines'); continue }
     if (result.length > 0) result.push({ type: 'line', children: [] })
-    let current: Fields[] = []
-    const contents = list(block['children'])
-    for (let at = 0; at < contents.length; at++) {
-      const child = contents[at]
-      if (!object(child)) continue
-      if ((child['type'] === 'hard_break' || child['type'] === 'soft_break') && at < contents.length - 1) {
-        result.push(lineNode(current))
-        current = []
-      } else current.push(child)
-    }
-    result.push(lineNode(current))
+    result.push(...paragraphLines(list(block['children'])))
   }
   node['children'] = result
+}
+
+function paragraphLines(contents: unknown[]): Fields[] {
+  const result: Fields[] = []
+  let current: Fields[] = []
+  for (let at = 0; at < contents.length; at++) {
+    const child = contents[at]
+    if (!object(child)) continue
+    if ((child['type'] === 'hard_break' || child['type'] === 'soft_break') && at < contents.length - 1) {
+      result.push(lineNode(current))
+      current = []
+    } else current.push(child)
+  }
+  result.push(lineNode(current))
+  return result
 }
 
 function shorthandLanguage(node: Fields, value: string, state: MigrationState): boolean {
@@ -323,13 +337,13 @@ function includeOptions(node: Fields, old: Fields, state: MigrationState): void 
   fact(state, node, 'optionSpelling', spelling)
 }
 
-function blockShape(node: Fields, old: Fields, state: MigrationState): void {
+function blockShape(node: Fields, old: Fields, state: MigrationState, path: string): void {
   switch (node['type']) {
     case 'list': listMarker(node, old, state); break
     case 'list_item': task(node, old); break
     case 'paragraph': paragraph(node, old); break
     case 'comment': comment(node, old); break
-    case 'line_block': lineBlock(node); break
+    case 'line_block': lineBlock(node, path, state); break
     case 'admonition': if (node['label'] !== undefined) { node['groupLabel'] = node['label']; delete node['label'] }
       admonition(node); inlineTitle(node); break
     case 'code_block': codeBlock(node, state); break
@@ -352,21 +366,33 @@ function tableShape(node: Fields, old: Fields, state: MigrationState): void {
   }
 }
 
-function inlineShape(node: Fields, old: Fields): void {
+/** C2-A-102: the 0.1 label of a display equation is its number prefix; inline math carries neither field. */
+function math(node: Fields, old: Fields, path: string, state: MigrationState): void {
+  node['display'] = old['display'] === true
+  const label = string(old['label'])
+  delete node['label']
+  if (label !== undefined && node['display'] === true) node['numberPrefix'] = label
+  else {
+    if (label !== undefined) loss(state, `${path}/label`, 'inline math has no number prefix')
+    delete node['number']
+  }
+}
+
+function inlineShape(node: Fields, old: Fields, path: string, state: MigrationState): void {
   switch (node['type']) {
     case 'smart_punctuation': punctuation(node, old); break
     case 'mention': node['kind'] = string(old['kind']) ?? 'user'; break
-    case 'math': node['display'] = old['display'] === true; break
+    case 'math': math(node, old, path, state); break
     case 'citation': citation(node, old); break
     case 'autolink': if (node['text'] === node['href']) delete node['text']; break
     default: break
   }
 }
 
-export function shape(node: Fields, old: Fields, state: MigrationState): void {
+export function shape(node: Fields, old: Fields, state: MigrationState, path: string): void {
   attrs(node, state)
   reference(node, old, state)
-  blockShape(node, old, state)
+  blockShape(node, old, state, path)
   tableShape(node, old, state)
-  inlineShape(node, old)
+  inlineShape(node, old, path, state)
 }
