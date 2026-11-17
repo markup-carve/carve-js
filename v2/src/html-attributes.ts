@@ -487,18 +487,25 @@ function sourceLine(r: Render, node: Node | null, parts: TagParts): string | nul
   return String(node.pos.startLine)
 }
 
+/** C2-H-018: a node whose element carries attributes, a language or a direction (C2-A-031). */
+export function carriesAttributes(node: Node): boolean {
+  return node.attrs !== undefined || node.lang !== undefined || node.dir !== undefined
+}
+
 /** The authored parts behind the id: the classes, the language and the keys. */
 function addAuthored(r: Render, list: AttributeList, node: Node | null, parts: TagParts): void {
   const authored = parts.bare === true ? null : node
   addClasses(list, node, parts)
   if (authored?.lang !== undefined) list.add('lang', keyValue('lang', authored.lang))
+  // C2-H-009, C2-H-013: the direction follows the language, and the field replaces an authored `dir` key.
+  if (authored?.dir !== undefined) list.add('dir', authored.dir)
   const keyValues = authored?.attrs?.keyValues
   if (keyValues !== undefined || parts.style !== undefined) addKeyValues(r, list, keyValues ?? [], parts, parts.origin ?? node)
 }
 
 /** True when an element writes its structural attributes and nothing else, which holds for most links and images. */
 function isStructuralOnly(r: Render, node: Node | null, parts: TagParts): boolean {
-  if (node !== null && parts.bare !== true && (node.attrs !== undefined || node.lang !== undefined)) return false
+  if (node !== null && parts.bare !== true && carriesAttributes(node)) return false
   if (parts.id !== undefined && parts.id !== null) return false
   if (parts.base !== undefined || parts.last !== undefined || parts.generated !== undefined || parts.style !== undefined) return false
   if (parts.derived !== undefined && parts.derived.length > 0) return false

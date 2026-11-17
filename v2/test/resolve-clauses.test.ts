@@ -138,16 +138,21 @@ describe('resolution results', () => {
     expect(resolution.diagnostics.map((entry) => entry.code)).toEqual(['duplicate-link-reference-definition', 'duplicate-footnote-definition'])
   })
 
-  it('a supplied tree resolves by the plain text of its headings, and keeps a destination an earlier resolution published', () => {
+  it('C2-A-135: a supplied tree resolves by the plain text of its headings, and no stage keeps a destination it holds', () => {
     const link: LinkNode = { type: 'link', key: 'T', namespace: 'link', refForm: 'collapsed', children: [text('T')] }
     const supplied = documentOf({ type: 'heading', level: 1, children: [text('T')] }, paragraph(link))
     resolve(supplied, 'keep-case', null)
     expect(link.href).toBe('#T')
-    const kept: LinkNode = { type: 'link', key: 'gone', namespace: 'link', refForm: 'full', href: '#x', children: [] }
-    resolve({ ...documentOf(paragraph(kept)), stages: ['referenceResolution'] }, 'keep-case', null)
-    expect(kept.href).toBe('#x')
-    resolve(documentOf(paragraph(kept)), 'keep-case', null)
-    expect(kept.href).toBeUndefined()
+    const stale: LinkNode = { type: 'link', key: 'gone', namespace: 'link', refForm: 'full', href: '#x', children: [] }
+    resolve({ ...documentOf(paragraph(stale)), stages: ['referenceResolution'] }, 'keep-case', null)
+    expect(stale.href).toBeUndefined()
+  })
+
+  it('C2-A-115, C2-A-135: a reference use takes its tooltip from its definition, never from the tree', () => {
+    const use: LinkNode = { type: 'link', key: 'k', namespace: 'link', refForm: 'full', tooltip: 'X', children: [text('t')] }
+    const definition = { type: 'link_reference_definition', key: 'k', namespace: 'link', href: '/u', tooltip: 'T' } as const
+    resolve(documentOf(paragraph(use), definition), 'keep-case', null)
+    expect([use.href, use.tooltip]).toEqual(['/u', undefined])
   })
 })
 

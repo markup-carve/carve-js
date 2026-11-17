@@ -11,7 +11,7 @@ import {
 import { blockText, plainText } from './ast-text.ts'
 import { type Findings } from './diagnostics.ts'
 import {
-  attributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
+  attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
 import { inlineHtml } from './html-inline.ts'
 import { type Settings } from './options.ts'
@@ -59,12 +59,12 @@ const NO_PARTS: TagParts = {}
 
 /** True for a node whose element takes nothing from it: no attribute, no language and no source line. */
 function isPlain(r: Render, node: Node): boolean {
-  return node.attrs === undefined && node.lang === undefined && !r.settings.sourceLines
+  return !carriesAttributes(node) && !r.settings.sourceLines
 }
 
 function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
   // Most blocks carry no attribute and add none.
-  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || (node.attrs === undefined && node.lang === undefined))) return ''
+  if (parts === NO_PARTS && !r.settings.sourceLines && (node === null || !carriesAttributes(node))) return ''
   return attributes(r, node, { ...parts, block: true })
 }
 
@@ -109,7 +109,7 @@ function isVisible(node: Node): boolean {
  * and so does one whose paragraph carries attributes or a `lang`, which the `<p>` carries.
  */
 function isBareImage(node: ParagraphNode): boolean {
-  if (node.role !== 'image' || node.lang !== undefined || hasAttributes(node.attrs)) return false
+  if (node.role !== 'image' || node.lang !== undefined || node.dir !== undefined || hasAttributes(node.attrs)) return false
   // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
   for (const child of node.children) if (child.type === 'image') return child.key === undefined || child.src !== undefined
   return false
@@ -262,7 +262,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   let rest = blocks
   if (isTextParagraph(first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
-    const bare = tight && first.attrs === undefined && first.lang === undefined
+    const bare = tight && !carriesAttributes(first)
     open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     rest = blocks.slice(1)
   } else if (isIncludeParagraph(first)) {
@@ -288,7 +288,7 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
   }
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
-    const bare = first !== undefined && first.attrs === undefined && first.lang === undefined
+    const bare = first !== undefined && !carriesAttributes(first)
     if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     line(r, level, `<dd${tag(r, node)}>${text}</dd>`)
     return
@@ -595,18 +595,28 @@ function isCellParagraph(block: Block | CellParagraphNode): block is CellParagra
   return block.type === 'cell_paragraph'
 }
 
-function cellContent(r: Render, cell: TableCellNode): string {
+/**
+ * C2-H-200: a cell of blocks, which only an imported or supplied tree holds, writes each paragraph with `<p>`. One
+ * paragraph stays on the row line; any other cell is laid out as an item with more blocks (C2-H-007), its blocks one
+ * level deeper than the row at `level` and the closing tag at the indent of the row.
+ */
+function cellContent(r: Render, cell: TableCellNode, level: number): string {
   const blocks = cell.children
   if (blocks.every(isCellParagraph)) return blocks.map((block) => inlineHtml(r, block.children)).join(' ')
-  // C2-A-175: blocks in a cell, which only a supplied tree holds.
+  const visible = visibleBlocks(blocks)
+  const first = visible[0]
+  const open = isTextParagraph(first) ? paragraphHtml(r, first) : ''
+  const rest = open === '' ? visible : visible.slice(1)
+  if (rest.length === 0) return open
   const inner: Render = { ...r, out: '', count: 0 }
-  writeBlocks(inner, blocks, 0)
-  return inner.out.slice(1)
+  writeBlocks(inner, rest, level + 1)
+  return `${open}${inner.out}\n${'  '.repeat(level)}`
 }
 
 /** C2-H-056 to C2-H-058. */
 function cellHtml(
   r: Render, cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined, inHead: boolean,
+  level: number,
 ): string {
   const name = cell.header ? 'th' : 'td'
   const structural: Pair[] = []
@@ -617,7 +627,8 @@ function cellHtml(
   if (cell.header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
   else if (cell.scope !== undefined) structural.push(['scope', cell.scope])
   if (cell.headerIds !== undefined) structural.push(['headers', cell.headerIds.join(' ')])
-  return `<${name}${attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })}>${cellContent(r, cell)}</${name}>`
+  const written = attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })
+  return `<${name}${written}>${cellContent(r, cell, level)}</${name}>`
 }
 
 /** The columns of a table, and the vertical mark each takes from the head (C2-B-213). */
@@ -637,7 +648,7 @@ function skipCovered(covered: number[], column: number): number {
  * The cells of one row with their columns. A row with span marks holds one cell per column
  * (C2-A-092); a row with counts alone covers the positions its counts give (C2-A-093).
  */
-function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: number[], inHead: boolean): string {
+function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: number[], inHead: boolean, level: number): string {
   const cells = row.children
   const marked = cells.some((cell) => cell.span !== undefined)
   let html = ''
@@ -646,7 +657,7 @@ function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: num
     if (!marked) column = skipCovered(covered, column)
     const colspan = cell.colspan ?? 1
     if (cell.span === undefined) {
-      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead)
+      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead, level)
       const below = (cell.rowspan ?? 1) - 1
       if (!marked) for (let more = 0; more < colspan; more++) covered[column + more] = below
     }
@@ -657,7 +668,7 @@ function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: num
 
 function writeRows(r: Render, layout: TableLayout, group: TableGroup, level: number, covered: number[]): void {
   for (const row of group.children) {
-    if (row.type === 'table_row') line(r, level, rowHtml(r, row, layout, covered, group.type === 'table_head'))
+    if (row.type === 'table_row') line(r, level, rowHtml(r, row, layout, covered, group.type === 'table_head', level))
   }
 }
 

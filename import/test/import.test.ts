@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { format, validateTree } from '../../v2/src/index.ts'
+import { format, render, validateTree } from '../../v2/src/index.ts'
 import { ImportInputError, importDocument } from '../src/index.ts'
 
 interface Fixture { name: string, html: string }
@@ -186,6 +186,10 @@ describe('Carve 0.2 importers', () => {
     expect(first?.type).toBe('list')
     if (first?.type === 'list') expect(first.marker.kind === 'ordered' ? first.marker.start : undefined).toBe(expected)
     expect(result.source).toBe(source)
+  })
+
+  it('C2-H-009, C2-H-013: an imported direction is rendered beside the language', () => {
+    expect(render(importDocument('<p dir="rtl" lang="ar">x</p>', { from: 'html' }).document)).toBe('<p lang="ar" dir="rtl">x</p>')
   })
 
   it('C2-A-098 gives a Djot smart punctuation node the glyph and the source of its kind', () => {

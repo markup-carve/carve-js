@@ -3,8 +3,8 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import {
-  type AbbreviationDefNode, type AdmonitionNode, type BlockQuoteNode, type CaptionNode, type CodeBlockNode, type DirectiveNode,
-  type DivNode,
+  type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
+  type DirectiveNode, type DivNode,
   type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type IncludeNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
   CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
@@ -68,6 +68,7 @@ interface Scope {
   outer: Scope | null
   definitions: Map<string, LinkReferenceDefinitionNode>
   footnotes: Map<string, FootnoteNode>
+  abbreviations: Map<string, AbbreviationDefNode>
 }
 
 interface Walk {
@@ -130,6 +131,14 @@ function lookUp<T>(scope: Scope, key: string, table: (scope: Scope) => Map<strin
 
 const FOOTNOTES = (scope: Scope): Map<string, FootnoteNode> => scope.footnotes
 const DEFINITIONS = (scope: Scope): Map<string, LinkReferenceDefinitionNode> => scope.definitions
+const ABBREVIATIONS = (scope: Scope): Map<string, AbbreviationDefNode> => scope.abbreviations
+
+/** C2-A-135: the expansion of an abbreviation is its definition's, never the one the tree holds. */
+function visitAbbreviation(node: AbbreviationNode, walk: Walk): void {
+  const expansion = lookUp(walk.scope, node.key, ABBREVIATIONS)?.expansion
+  if (expansion === undefined) delete node.expansion
+  else node.expansion = expansion
+}
 
 function visitFootnoteRef(node: FootnoteRefNode, walk: Walk): void {
   const scope = walk.scope
@@ -200,10 +209,11 @@ function visitReference(node: Reference, walk: Walk): void {
 
 /** C2-N-053: the scope of an included file, with its own definitions; the first of a key wins within the file (C2-N-060). */
 function fileScope(walk: Walk, node: IncludeNode, outer: Scope): Scope {
-  const scope: Scope = { outer, definitions: new Map(), footnotes: new Map() }
-  const abbreviations = new Map<string, AbbreviationDefNode>()
+  const scope: Scope = { outer, definitions: new Map(), footnotes: new Map(), abbreviations: new Map() }
   for (const child of node.children ?? []) {
-    if (child.type === 'abbreviation_def') define(walk, abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
+    if (child.type === 'abbreviation_def') {
+      define(walk, scope.abbreviations, child, 'duplicate-abbreviation-definition', ABBREVIATION_DUPLICATE)
+    }
     if (child.type === 'link_reference_definition') {
       define(walk, scope.definitions, child, 'duplicate-link-reference-definition', LINK_DUPLICATE)
     } else if (child.type === 'footnote') {
@@ -268,6 +278,7 @@ const STEPS = new Map<string, Step>([
   on('link', CHILDREN, visitReference),
   on('image', NOTHING, visitReference),
   on('xref', NOTHING, (node, walk) => void walk.xrefs.push(node)),
+  on('abbreviation', NOTHING, visitAbbreviation),
   on('figure_group', NOTHING, visitHost),
   on('table', NOTHING, visitHost),
   on('math', NOTHING, visitMath),
@@ -402,7 +413,7 @@ function footnoteDuplicate(facts: ParseFacts | null): (node: FootnoteNode) => st
 
 /** C2-B-085: the first definition of a key wins, and each later one is reported. */
 function collectDefinitions(document: DocumentNode, walk: Walk, facts: ParseFacts | null): void {
-  const abbreviations = new Map<string, AbbreviationDefNode>()
+  const abbreviations = walk.scope.abbreviations
   const definitions = walk.resolution.definitions
   for (const child of document.children) {
     if (child.type === 'link_reference_definition') define(walk, definitions, child, 'duplicate-link-reference-definition', LINK_DUPLICATE)
@@ -524,12 +535,14 @@ function setDestination(reference: Reference, destination: string | undefined): 
   }
 }
 
-function setDestinations(walk: Walk, targets: Map<Reference, Target>, kept: Set<Reference>): void {
+/** C2-A-135: no result field is read from the tree; C2-A-115: the tooltip of a use is its definition's, at render. */
+function setDestinations(walk: Walk, targets: Map<Reference, Target>): void {
   for (const reference of walk.references) {
     const target = targets.get(reference)
+    delete reference.tooltip
     if (target === undefined) {
       // C2-A-107: an absent destination means unresolved.
-      if (!kept.has(reference)) setDestination(reference, undefined)
+      setDestination(reference, undefined)
     } else if (target.type === 'heading') {
       setDestination(reference, `#${headingId(target) ?? ''}`)
     } else {
@@ -600,16 +613,6 @@ function resolveXrefs(walk: Walk): void {
   }
 }
 
-/** The references whose destination an earlier resolution published and this one cannot look up again. */
-function keptReferences(document: DocumentNode, walk: Walk, facts: ParseFacts | null): Set<Reference> {
-  const kept = new Set<Reference>()
-  if (facts !== null || document.stages?.includes('referenceResolution') !== true) return kept
-  for (const reference of walk.references) {
-    if ((reference.type === 'link' ? reference.href : reference.src) !== undefined) kept.add(reference)
-  }
-  return kept
-}
-
 /**
  * Resolves `document` in place. `facts` is what the parse knows of a tree it built from source;
  * without it a heading matches by its plain text alone (C2-I-084), and every node is walked.
@@ -632,12 +635,11 @@ export function resolve(
     for (const child of body.children) visit(walk, child, body)
   }
   visitUnwritten(walk, document.children, top)
-  const kept = keptReferences(document, walk, facts)
   const targets = findTargets(walk, mode)
   const taken = reserveIds(walk)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)
-  setDestinations(walk, targets, kept)
+  setDestinations(walk, targets)
   resolveXrefs(walk)
   // C2-N-006: a tree in which expansion ran keeps it among its stages.
   document.stages = document.stages?.[0] === 'includeExpansion'
@@ -671,7 +673,7 @@ function newWalk(document: DocumentNode, facts: ParseFacts | null, symbols: Read
   const footnotes = new Map<string, FootnoteNode>()
   return {
     declarations: document.extensions ?? [], resolution, footnotes,
-    scope: { outer: null, definitions: resolution.definitions, footnotes }, scopes: new Map(),
+    scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
     headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
     markupLine: facts?.markupLine ?? null,

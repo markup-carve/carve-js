@@ -318,6 +318,8 @@ describe('footnotes', () => {
     ['C2-H-088: an id the author wrote on the reference replaces the generated one, and the backlink points to it', 'a[^n]{#mine}\n\n[^n]: N', `<p>a<a id="mine" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n${section(`    <li id="fn1">\n      <p>N${back('mine')}</p>\n    </li>`)}`],
     ['C2-H-089, C2-H-125: the label of the section and of a backlink come from labels and are escaped', 'a[^n]\n\n[^n]: N', '<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Notes &amp; &quot;more&quot;">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>N<a href="#fnref1" role="doc-backlink" aria-label="Zurück">↩</a></p>\n    </li>\n  </ol>\n</section>', { labels: { endnotes: 'Notes & "more"', footnoteBacklink: 'Zurück' } }],
     ['C2-H-090, C2-H-091: every paragraph of a note gets p, and the backlink stands in a paragraph of its own when the note does not end with one', 'a[^n]\n\n[^n]: N\n\n    - l', `<p>a${ref(1)}</p>\n${section(`    <li id="fn1">\n      <p>N</p>\n      <ul>\n        <li>l</li>\n      </ul>\n      <p>${back('fnref1')}</p>\n    </li>`)}`],
+    ['C2-H-091: a comment after the last paragraph does not move the backlink', 'a[^n]\n\n[^n]: b\n\n  {% c %}', '<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>b<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
+    ['C2-H-090, C2-H-091: a block image of a note is bare, so the backlink takes a paragraph of its own', 'a[^n]\n\n[^n]: ![i](i.png)', '<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <img src="i.png" alt="i">\n      <p><a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
     ['C2-H-092, C2-H-094: a definition that no reference uses is not written, and with no numbered footnote there is no section', 'a\n\n[^n]: N', '<p>a</p>'],
     ['C2-H-093: a top-level footnotes directive moves the section to its place; inside a container it places nothing', '> ::: footnotes\n> :::\n\na[^n]\n\n::: footnotes\n:::\n\nb\n\n[^n]: N', `<blockquote>\n  <div class="footnotes">\n\n  </div>\n</blockquote>\n<p>a${ref(1)}</p>\n${section(`    <li id="fn1">\n      <p>N${back('fnref1')}</p>\n    </li>`)}\n<p>b</p>`],
   ])
@@ -386,6 +388,57 @@ describe('roundtrip carriers', () => {
     for (const name of ['data-carve-ref-shortcut', 'data-carve-ref-collapsed', 'data-carve-src']) {
       expect(lossCodes(`[t]{${name}=x}`, { roundtrip: true }), name).toEqual(['carrier-attribute-dropped'])
     }
+  })
+})
+
+describe('a supplied tree', () => {
+  it('C2-H-009, C2-H-013: the direction follows the language, and the field replaces a dir key', () => {
+    const node = { ...paragraph(text('x')), lang: 'ar', dir: 'rtl' as const, attrs: { keyValues: [['dir', 'ltr'], ['k', 'v']] as [string, string][] } }
+    expect(render(documentOf(node))).toBe('<p lang="ar" dir="rtl" k="v">x</p>')
+    expect(render(documentOf({ ...paragraph(text('x')), dir: 'auto' }))).toBe('<p dir="auto">x</p>')
+  })
+
+  it('C2-H-018, C2-H-034: a paragraph with a direction keeps its p in a tight item', () => {
+    const item: ListItemNode = { type: 'list_item', children: [{ ...paragraph(text('x')), dir: 'rtl' }] }
+    const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [item] }
+    expect(render(documentOf(list))).toBe('<ul>\n  <li><p dir="rtl">x</p></li>\n</ul>')
+  })
+
+  it('C2-H-200: a cell of one paragraph stays on its row line; a cell of more blocks is laid out as an item', () => {
+    const cell = (...children: Block[]): TableCellNode => ({ type: 'table_cell', header: false, children })
+    const bullets: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight',
+      children: [{ type: 'list_item', children: [paragraph(text('a'))] }] }
+    const table = (...cells: TableCellNode[]) => documentOf({ type: 'table', columns: cells.map(() => ({ type: 'table_column' as const })),
+      children: [{ type: 'table_body', children: [{ type: 'table_row', children: cells }] }] })
+    expect(render(table(cell(bullets, paragraph(text('b'))), cell(paragraph(text('c')))))).toBe(
+      '<table>\n  <tbody>\n    <tr><td>\n      <ul>\n        <li>a</li>\n      </ul>\n      <p>b</p>\n    </td><td><p>c</p></td></tr>\n  </tbody>\n</table>')
+    expect(render(table(cell(paragraph(text('a')), paragraph(text('b')))))).toBe(
+      '<table>\n  <tbody>\n    <tr><td><p>a</p>\n      <p>b</p>\n    </td></tr>\n  </tbody>\n</table>')
+  })
+
+  it('C2-A-135, C2-H-023: the renderer resolves again and reads no result field from the tree', () => {
+    const tree: DocumentNode = { type: 'document', astVersion: '2.0', stages: ['referenceResolution', 'tableAlignment'], children: [
+      { type: 'heading', level: 1, generatedId: 'custom', children: [text('Title')] },
+      paragraph(text('a'), { type: 'footnote_ref', key: 'n', namespace: 'footnote', number: 5 },
+        { type: 'link', key: 'zz', namespace: 'link', refForm: 'full', href: '/stale', children: [text('t')] }),
+      { type: 'footnote', key: 'n', namespace: 'footnote', children: [paragraph(text('N'))] },
+    ] }
+    const html = render(tree)
+    expect(html).toContain('<section id="Title">')
+    expect(html).toContain('<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>[t][zz]</p>')
+  })
+
+  it('C2-A-135: an abbreviation takes the expansion of its definition, and none without one', () => {
+    const term = { type: 'abbreviation', key: 'HTML', namespace: 'abbr', expansion: 'stale' } as const
+    expect(render(documentOf(paragraph(term)))).toBe('<p>HTML</p>')
+    const defined = documentOf(paragraph(term), { type: 'abbreviation_def', key: 'HTML', namespace: 'abbr', expansion: 'Markup' })
+    expect(render(defined)).toBe('<p><abbr title="Markup">HTML</abbr></p>')
+  })
+
+  it('C2-A-115, C2-A-135: a reference use is written with the tooltip of its definition', () => {
+    const tree = documentOf(paragraph({ type: 'link', key: 'k', namespace: 'link', refForm: 'full', tooltip: 'X', children: [text('t')] }),
+      { type: 'link_reference_definition', key: 'k', namespace: 'link', href: '/u', tooltip: 'T' })
+    expect(render(tree)).toBe('<p><a href="/u" title="T">t</a></p>')
   })
 })
 
