@@ -168,7 +168,8 @@ describe('references to degraded headings', () => {
   const source = '## Sub *em* `code`\n\n[Sub em code][] and </#Sub-em-code>\n'
 
   it('C2-H-177: a reference to a heading the profile degrades is written in its unresolved form', () => {
-    expect(render(source, { profile: 'comment' })).toBe('<p>## Sub em code</p>\n<p>[Sub em code][] and &lt;/#Sub-em-code&gt;</p>')
+    // C2-H-165: a degraded cross-reference that resolved writes its link text.
+    expect(render(source, { profile: 'comment' })).toBe('<p>## Sub em code</p>\n<p>[Sub em code][] and Sub em code</p>')
     expect(render('{#h}\n## Sub\n\n[x][Sub]{.c} and </#h>\n', { profile: 'article' })).toContain('<a href="#h" class="c">x</a>')
   })
 

@@ -179,7 +179,7 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
   const rule = profileRule(settings)
   if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi)
-  const run = applyProfile(document, settings.profile, rule, losses)
+  const run = applyProfile(document, settings.profile, rule, losses, resolved.resolution.xrefText)
   try {
     return renderDocument(document, settings, liveResolution(resolved.resolution, run.gone, run.goneTargets), losses, resolved.bidi)
   } finally {

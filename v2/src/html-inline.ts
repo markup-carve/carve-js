@@ -188,7 +188,7 @@ function link(node: LinkNode, r: Render): string {
   const href = node.href
   const definition = definitionFor(r, node, key)
   if (key !== undefined && isUnresolvedLink(r, href, definition)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
-  if (isDroppedLink(r, href ?? '', node)) return escapeText(inlinesText(node.children))
+  if (isDroppedLink(r, href ?? '', node)) return escapeText(inlinesText(node.children, r.resolution.xrefText))
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
   if (title !== undefined) structural.push(['title', title])

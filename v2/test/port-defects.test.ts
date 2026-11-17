@@ -435,14 +435,14 @@ describe('C2-I-118: an image and a link meet the depth cap alike', () => {
   })
 })
 
-describe('C2-H-165: a degraded inline node with no children is written as its source text', () => {
-  it('C2-H-165: math, an autolink, raw content, code and a literal span keep their marks', () => {
-    expect(render('a $`m` b <https://a.b> c {#cc#}', { profile: 'minimal' })).toBe('<p>a $`m` b &lt;https://a.b&gt; c </p>')
-    expect(render('$$`m`', { profile: 'minimal' })).toBe('<p>$$`m`</p>')
-    expect(render('a <x@y.z>', { profile: 'minimal' })).toBe('<p>a &lt;x@y.z&gt;</p>')
-    expect(render('`<b>`{=html}', { profile: 'article' })).toBe('<p>`&lt;b&gt;`{=html}</p>')
-    expect(render('a $``b`c`` d', { profile: 'minimal' })).toBe('<p>a $``b`c`` d</p>')
-    expect(render('a $```` `b ```` d', { profile: 'minimal' })).toBe('<p>a $`` `b `` d</p>')
+describe('C2-H-165: a degraded inline node with no children is written as its plain text', () => {
+  it('C2-H-165: math, an autolink, raw content, code and a literal span give their value', () => {
+    expect(render('a $`m` b <https://a.b> c {#cc#}', { profile: 'minimal' })).toBe('<p>a m b https://a.b c </p>')
+    expect(render('$$`m`', { profile: 'minimal' })).toBe('<p>m</p>')
+    expect(render('a <x@y.z>', { profile: 'minimal' })).toBe('<p>a x@y.z</p>')
+    expect(render('`<b>`{=html}', { profile: 'article' })).toBe('<p>&lt;b&gt;</p>')
+    expect(render('a $``b`c`` d', { profile: 'minimal' })).toBe('<p>a b`c d</p>')
+    expect(render(':s: and </#nope>', { profile: 'minimal' })).toBe('<p>:s: and &lt;/#nope&gt;</p>')
   })
 
   it('C2-H-165: a comment and an editorial comment give no text', () => {

@@ -156,6 +156,8 @@ function paragraphHtml(r: Render, node: ParagraphNode): string {
 
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
   if (onlyComments(node.children)) return
+  // C2-H-019: a paragraph whose content the profile degraded to nothing renders nothing.
+  if (node.children.length === 0 && PROFILES.get(r.settings.profile) !== undefined) return
   if (!isBareImage(node)) return line(r, level, paragraphHtml(r, node))
   line(r, level, inlineHtml(r, node.children.map((child) => withParagraphAttributes(node, child))))
 }
