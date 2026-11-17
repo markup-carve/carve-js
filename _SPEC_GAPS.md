@@ -48,6 +48,20 @@ Input (html.md Example 80):
 
 C2-H-013 and C2-H-075 make `KBD` an ordinary attribute, `<span KBD="">x</span>`. An HTML parser lowers attribute names, so the importer reads `kbd`, which C2-M reads as the key that makes `<kbd>`: the roundtrip of C2-H-186 gives another tree. Reading one: accept it as a listed loss of C2-H-195. Reading two: a carrier keeps the case of such a key. The engine follows reading one in its roundtrip test, which holds the source by name.
 
+### G-H4. Withdrawn U-201 covered nested braced boundaries that still differ
+
+The map at candidate 8 withdraws U-201 with U-146 and U-149, since C2-I-024 now ends a line comment before the closer of a braced form, so `{_a %% b_} y` reads alike in 0.1 and 0.2. The row also covered nested braced forms with no comment, and those still render differently:
+
+```carve
+{-{_a-}_} b-}
+```
+
+```carve
+{-a-}{+{+b~}+}+}
+```
+
+No other row names them. Reading one: they are a report row of their own (as U-201 was, without the comment shapes). Reading two: the difference is meant to stay unexplained. The tool reports `upgrade-mismatch` for them; `upgrade/test/braced-boundary-report.test.ts` pins it.
+
 ## Freeze candidate 6 session (spec `068552fc`)
 
 Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.
