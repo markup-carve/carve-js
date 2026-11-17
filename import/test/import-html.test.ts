@@ -1,6 +1,6 @@
 // The clauses of spec/0.2/import-html.md, each test named by the clause it proves.
 import { describe, expect, it } from 'vitest'
-import { encodeTree, validateTree } from '../../v2/src/index.ts'
+import { encodeTree, parse, render, validateTree } from '../../v2/src/index.ts'
 import { importDocument } from '../src/index.ts'
 
 const children = (html: string, rawHtml?: boolean): unknown => {
@@ -149,6 +149,12 @@ describe('figures', () => {
     expect(codes(html)).toEqual(['import-element-dropped'])
   })
 })
+
+  it('C2-M-068: the render of a div of the class footnotes imports to a directive whose list reads back', () => {
+    const imported = importDocument(render('{.footnotes}\n:::\n1. a\n:::'), { from: 'html' })
+    expect(imported.source).toBe('::: footnotes\n. a\n:::\n')
+    expect(parse(imported.source).children[0]).toMatchObject({ type: 'directive', kind: 'footnotes', children: [{ type: 'list' }] })
+  })
 
 describe('inline elements', () => {
   it('C2-M-047: a time without datetime and an abbr without title are spans with an empty value', () => {
