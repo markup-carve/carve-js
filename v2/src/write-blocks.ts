@@ -464,10 +464,27 @@ function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number
   attributeLine(w, node, prefix)
   fenced(w, node, prefix, ' |', false, () => {
     for (const line of node.children) {
-      if (line.type === 'comment') comment(w, line, prefix)
-      else emit(w, prefix, lineContent(w, line.children, flags | BARE_BREAKS))
+      if (line.type === 'comment') {
+        comment(w, line, prefix)
+        continue
+      }
+      const last = line.children[line.children.length - 1]
+      const lazy = last?.type === 'comment' && last.form === 'line' ? last : null
+      const children = lazy === null ? line.children : line.children.slice(0, -1)
+      emit(w, prefix, lineContent(w, children, flags | BARE_BREAKS))
+      if (lazy !== null) lazyComment(w, lazy, prefix)
     }
   })
+}
+
+/**
+ * C2-B-024: a line comment at the end of a line of a stanza is a lazy comment-only line, which its containers do not
+ * own. At the top level every line is owned, so it has no spelling there.
+ */
+function lazyComment(w: Writer, node: CommentNode, prefix: string): void {
+  if (prefix === '') return lose(w, node, null)
+  if (node.value.includes('\n')) lose(w, node, 'value')
+  emit(w, '', lineCommentText(w, node, node.value.replaceAll('\n', ' ')))
 }
 
 /** A line of a line block. A hard break at its end is the backslash that ends its source line, behind the text as it is. */

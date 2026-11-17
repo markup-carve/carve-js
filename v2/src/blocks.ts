@@ -12,7 +12,7 @@ import {
   SHAPE_INCLUDE, SHAPE_LINK_DEFINITION, SHAPE_ORDERED, SHAPE_QUOTE, SHAPE_TABLE_ROW, SHAPE_TERM,
   SHAPE_THEMATIC_BREAK,
 } from './dispatch.ts'
-import { ENTER, eventTag, EXIT, SPAN } from './events.ts'
+import { ENTER, EVENT_WIDTH, eventTag, eventType, EXIT, SPAN } from './events.ts'
 import {
   ABBREVIATION, ATTRIBUTES, BULLET_LIST, CAPTION, CELL, CODE, COMMENT, COMMENT_BLOCK, DESCRIPTION, DESCRIPTION_LIST,
   DIV, DOCUMENT, FLAG_ALPHA, FLAG_ATTRIBUTES, FLAG_AUTO, FLAG_CELL_ATTRIBUTES, FLAG_CONTINUATION, FLAG_DELIMITED,
@@ -192,7 +192,7 @@ function bodyLine(state: BlockState, matched: number, lineStart: number, end: nu
   }
   if (state.leaf.kind !== TABLE) {
     if (owned) opaqueLine(state, lineStart, end, blank)
-    return owned
+    return owned || (!blank && state.leaf.kind === LINE_BLOCK && lazyStanzaLine(state, matched, lineStart, end))
   }
   return !blank && owned && tableLine(state, end)
 }
@@ -249,6 +249,34 @@ function matchContainers(state: BlockState, lineStart: number, end: number): num
     }
   }
   return index
+}
+
+/**
+ * C2-B-024: an open stanza takes a line its containers do not own as a lazy line, unless the line interrupts a
+ * paragraph with no list marker counted, is a region marker line, or is a heading, a quote, an attribute line or a
+ * definition. A lazy comment-only line is no line of the stanza: its comment ends the line above.
+ */
+function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, end: number): boolean {
+  const src = state.src
+  const pos = state.cursor.pos
+  const last = state.eventLength - EVENT_WIDTH
+  if (state.above.heldBlankLine !== NO_LINE || last < 0 || eventType(state.events[last]!) !== SPAN) return false
+  if (isRegionMarkerLine(src, pos, end) || interruptsStanza(state, matched, lineStart, end)) return false
+  if (isLineComment(src, pos, end)) {
+    writeEvent(state, eventTag(SPAN, COMMENT, 0), pos, end)
+    state.contentEnd = end
+    return true
+  }
+  if (headingLevel(src, pos, end) > 0 || isQuoteMark(src, pos, end) || isAttributeLine(src, pos, end)) return false
+  if (isDefinition(src, pos, end)) return false
+  writeEvent(state, SPAN_TAG, pos, end)
+  state.contentEnd = end
+  return true
+}
+
+function interruptsStanza(state: BlockState, matched: number, lineStart: number, end: number): boolean {
+  return (shapesAt(state) & MARKER_SHAPES) === 0 || !isListMarker(state.src, state.cursor.pos, end)
+    ? interruptsLeaf(state, matched, lineStart, end) : false
 }
 
 /** Moves the cursor past a quote mark. Columns count from behind it (C2-B-003). */

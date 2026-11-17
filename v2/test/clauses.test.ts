@@ -745,7 +745,9 @@ describe('divs, sigil divs and comment blocks', () => {
     expect(blocks('::: |', '- a', '  = b', '', '%% c', ':::', 'x')).toBe('lines"- a|  = b||%% c" p"x"')
     expect(blocks('> ::: |', '>  a', '> :::')).toBe('quote[lines" a"]')
     expect(blocks(':::: |', ':::', '::::')).toBe('lines":::"')
-    expect(blocks('- ::: |', '  a', 'b')).toBe('ul(-)[li[lines!"a"]] p"b"')
+    // C2-B-024: an open stanza takes a lazy line.
+    expect(blocks('- ::: |', '  a', 'b')).toBe('ul(-)[li[lines!"a|b"]]')
+    expect(blocks('- ::: |', '  a', '', 'b')).toBe('ul(-)[li[lines!"a"]] p"b"')
   })
 
   it('C2-B-124: a hard-break block and a quote fence are containers', () => {
@@ -789,7 +791,7 @@ describe('divs, sigil divs and comment blocks', () => {
   it('C2-B-114, C2-B-144: in a line block and in a comment block a `%%` line is body text', () => {
     expect(blocks('- ::: |', '  a', '  %% c', '  b', '  :::')).toBe('ul(-)[li[lines"a|%% c|b"]]')
     expect(blocks('- %%%', '  a', '  %% c', '  %%%')).toBe('ul(-)[li[%%%"a|%% c"]]')
-    expect(blocks('- ::: |', '  a', '%% c')).toBe('ul(-)[li[lines!"a"]] %"%% c"')
+    expect(blocks('- ::: |', '  a', '%% c')).toBe('ul(-)[li[lines!"a|%% c"]]')
   })
 
   it('C2-B-190: a div counts toward the depth cap', () => {
@@ -858,12 +860,12 @@ describe('captions', () => {
     expect(blocks('--- toml', 'a = 1', '---', 'x')).toBe('fm"a = 1" p"x"')
     expect(blocks('--- notes', 'a', '---', 'x')).toBe('fm"a" p"x"')
     expect(blocks('--- two words', 'a')).toBe('p"--- two words|a"')
-    expect(blocks('--- Notes', 'a')).toBe('p"--- Notes|a"')
+    expect(blocks('--- Notes', 'a')).toBe('fm!"a"')
     expect(blocks('x', '--- toml', 'a', '---')).toBe('p"x|--- toml|a|---"')
     expect(blocks('', '---', 'a', '---')).toBe('p"---|a|---"')
     expect(blocks('---  toml', 'a')).toBe('p"---  toml|a"')
-    expect(blocks('---Foo', 'a')).toBe('p"---Foo|a"')
-    expect(blocks('---x-2', 'a', '---')).toBe('fm"a"')
+    expect(blocks('---Foo', 'a')).toBe('fm!"a"')
+    expect(blocks('---x-2', 'a', '---')).toBe('p"---x-2|a|---"')
     expect(blocks('--- ', 'a: 1', '---')).toBe('fm"a: 1"')
     // C2-B-151: spaces and tabs alone are no content, so the marker is text.
     expect(blocks('= \t', 'following')).toBe('p"= 	|following"')

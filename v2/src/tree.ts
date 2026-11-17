@@ -27,6 +27,8 @@ export interface BlockNode {
   /** The content of a leaf; for a table row, the text between the pipes of each span mark it merged (C2-A-149). */
   spans: number[] | null
   attributes: number[] | null
+  /** C2-B-024: the indexes in `spans` of the lazy comment-only lines of a line block. */
+  lazyComments?: number[]
 }
 
 /** Builds the block tree from the first `length` ints of an event array. */
@@ -37,6 +39,7 @@ export function buildTree(events: Int32Array, length: number, src = ''): BlockNo
   for (const event = new EventCursor(events, length); event.more(); event.next()) {
     const type = event.type()
     if (type === SPAN) {
+      if (event.kind() === COMMENT) (top!.lazyComments ??= []).push(top!.spans!.length)
       top!.spans!.push(event.start(), event.end())
     } else if (type === ENTER) {
       const node = enterNode(event.kind(), event.flags(), event.start(), event.aux(), top)
