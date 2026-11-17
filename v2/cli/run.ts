@@ -1,3 +1,4 @@
+// The program of spec/0.2/tooling.md ("Commands" to "Exit codes"), and the engine's upgrade command (C2-T-003).
 import { readFileSync, writeFileSync } from 'node:fs'
 import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError, CarveWriteError,
   decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, renderWithDiagnostics, includeDependencies, type Diagnostic,
@@ -8,371 +9,404 @@ import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, upgra
 import { decodeUpgradeBytes } from '../../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Format } from '../../import/src/index.ts'
 import { migrateTree, type MigrationResult } from '../migrate/index.ts'
-import { type ParsedArgs } from './flags.ts'
+import cli from '../data/cli.json' with { type: 'json' }
+import lintRules from '../data/lint-rules.json' with { type: 'json' }
+import { FLAGS, type ParsedArgs, UsageError } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
 import { lint } from '../lint/lint.ts'
-import { CATALOG } from '../lint/catalog.ts'
-import { type IncludeConfig } from '../src/include-settings.ts'
+import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
+/** C2-T-040: the failure categories and their status. */
+const STATUS: ReadonlyMap<string, number> = new Map(cli.categories.map((row) => [row.name, row.status]))
+
+/** A failure of the program with its category (C2-T-039, C2-T-040). */
 export class CliError extends Error {
-  readonly category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid' | 'import-tree-invalid'
-  constructor(category: 'usage' | 'input-unreadable' | 'ast-json-invalid' | 'import-input-invalid' | 'import-tree-invalid',
-    message: string) {
+  readonly category: string
+  constructor(category: string, message: string) {
     super(message)
     this.category = category
   }
 }
 
-export interface CliFailure { category: string, status: 1 | 2 }
+export interface CliFailure { category: string, status: number }
 
-/** C2-W-101, C2-W-134: give each public engine error a command line category. */
+/** C2-W-101, C2-T-006: each public engine error gives the category of its row. */
 export function classifyCliError(error: unknown): CliFailure {
-  if (error instanceof CliError) return { category: error.category, status: error.category === 'import-tree-invalid' ? 1 : 2 }
-  if (error instanceof CarveOptionError) return { category: 'usage', status: 2 }
-  if (error instanceof CarveInputError) return { category: 'input-invalid', status: 2 }
-  if (error instanceof CarveTreeError || error instanceof CarveLayoutError) {
-    return { category: 'ast-json-invalid', status: 2 }
-  }
-  if (error instanceof CarveWriteError) return { category: 'writer-refused', status: 1 }
-  if (error instanceof CarveRenderError) return { category: 'render-loss', status: 1 }
-  return { category: 'usage', status: 2 }
+  const category = categoryOf(error)
+  return { category, status: STATUS.get(category) ?? 2 }
 }
 
-function camel(name: string): string { return name.replaceAll(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase()) }
+function categoryOf(error: unknown): string {
+  if (error instanceof CliError) return error.category
+  if (error instanceof UsageError || error instanceof CarveOptionError) return 'usage'
+  if (error instanceof CarveInputError) return 'input-invalid'
+  if (error instanceof CarveTreeError || error instanceof CarveLayoutError) return 'ast-json-invalid'
+  if (error instanceof ImportInputError) return 'import-input-invalid'
+  if (error instanceof CarveWriteError) return 'writer-refused'
+  return error instanceof CarveRenderError ? 'render-loss' : 'usage'
+}
 
-function options(args: ParsedArgs, names: readonly string[]): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const name of names) if (args.values[name] !== undefined) result[camel(name)] = args.values[name]
-  return result
+/** C2-T-027: the codes of the render-loss channel, which `--allow-loss` takes. */
+const LOSS_CODES: ReadonlySet<string> = new Set(lintRules.rules.filter((rule) => rule.channel === 'render-loss').map((rule) => rule.id))
+
+/** C2-T-013: a file by its path as given, standard input as `<stdin>`. */
+function nameOf(path: string): string {
+  return path === '-' ? '<stdin>' : path
 }
 
 function readBytes(path: string): Uint8Array {
   try { return path === '-' ? readFileSync(0) : readFileSync(path) }
-  catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
+  catch (error) { throw new CliError('input-unreadable', `${nameOf(path)}: ${String(error)}`) }
 }
 
-/** C2-B-218: a Carve source is never refused for its encoding; a tree in JSON is read as strict UTF-8. */
-function decode(path: string, bytes: Uint8Array, command: string): string {
-  try {
-    if (command === 'upgrade') return decodeUpgradeBytes(bytes)
-    return new TextDecoder('utf-8', { fatal: command === 'migrate-ast', ignoreBOM: true }).decode(bytes)
-  }
-  catch (error) { throw new CliError('input-unreadable', `${path === '-' ? '<stdin>' : path}: ${String(error)}`) }
+/** C2-T-012: Carve source is never refused for its encoding; a tree in JSON is strict UTF-8. */
+function strictText(path: string, bytes: Uint8Array): string {
+  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) }
+  catch { throw new CliError('input-unreadable', `${nameOf(path)}: a tree in JSON is not UTF-8`) }
 }
 
-function writeFile(path: string, source: string): void {
-  if (path === '-') throw new CliError('usage', 'cannot write standard input in place')
-  try { writeFileSync(path, Buffer.from(source, 'utf8')) }
-  catch (error) { throw new CliError('input-unreadable', `${path}: ${String(error)}`) }
+function lenientText(bytes: Uint8Array): string {
+  return new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
 }
 
-function ast(text: string): DocumentNode {
+/** C2-T-040: a file of `--write` or a report that cannot be written is `output-unwritable`. */
+function writeOut(path: string, text: string): void {
+  try { writeFileSync(path, Buffer.from(text, 'utf8')) }
+  catch (error) { throw new CliError('output-unwritable', `${path}: ${String(error)}`) }
+}
+
+function tree(text: string): DocumentNode {
   try { return decodeTree(text) }
-  catch (error) { throw new CliError('ast-json-invalid', String(error)) }
+  catch (error) { throw new CliError('ast-json-invalid', error instanceof Error ? error.message : String(error)) }
 }
 
-/** C2-A-012, C2-A-180: an envelope stays an envelope, and each loss the migration reports is printed. */
-function migrateAst(text: string): string {
-  let result: MigrationResult
-  try { result = migrateTree(JSON.parse(text) as unknown) }
-  catch (error) { throw new CliError('ast-json-invalid', String(error)) }
-  for (const diagnostic of result.diagnostics) {
-    process.stderr.write(`carve[${diagnostic.code}]: ${diagnostic.path ?? ''}: ${diagnostic.message}\n`)
+/** The texts of the included files the run read, by id, so that an entry of one counts its line there (C2-T-019). */
+const includedTexts = new Map<string, string>()
+
+/** C2-T-018: the includes of an entry, unless `--no-includes` turns expansion off. */
+function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig } {
+  if (args.values['includes'] === false) return {}
+  const root = args.values['include-root']
+  let config: ReturnType<typeof cliIncludes>
+  try { config = cliIncludes(path, typeof root === 'string' ? root : undefined) }
+  catch (error) { throw new CliError('usage', `the include root cannot be read: ${String(error)}`) }
+  if (config === null) return {}
+  const resolver = config.resolver
+  const recorded = (request: IncludeRequest): IncludeAnswer => {
+    const answer = resolver(request)
+    if ('text' in answer) includedTexts.set(answer.id, typeof answer.text === 'string' ? answer.text : lenientText(answer.text))
+    return answer
   }
-  return result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)
+  return { includes: { ...config, resolver: recorded } }
 }
 
-function importSource(text: string, path: string, args: ParsedArgs): number {
-  try {
-    const result = importDocument(text, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true })
-    if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
-    for (const entry of result.diagnostics) process.stderr.write(`carve[${entry.code}]: ${entry.message}\n`)
-    if (args.values['report'] !== undefined) report(args.values['report'], {
-      file: path, from: args.values['from'], diagnostics: result.diagnostics,
-    })
-    process.stdout.write(result.source)
-    return args.values['check-loss'] === true && result.diagnostics.some((entry) => entry.channel === 'render-loss') ? 1 : 0
-  } catch (error) {
-    if (error instanceof ImportInputError) throw new CliError('import-input-invalid', error.message)
-    if (error instanceof CarveTreeError) throw new CliError('import-tree-invalid', error.message)
-    throw error
+/** C2-T-019: LINE and COLUMN of the start of the range, counted in the text the range is counted in. */
+function location(text: string, entry: Diagnostic): { line: number, column: number } | null {
+  if (entry.range === undefined) return null
+  const prefix = Buffer.from(text, 'utf8').subarray(0, entry.range.startOffset).toString('utf8')
+  const lines = prefix.split('\n')
+  return { line: lines.length, column: Array.from(lines[lines.length - 1] ?? '').length + 1 }
+}
+
+function textOf(entry: Diagnostic, input: string): string {
+  return entry.file === undefined ? input : includedTexts.get(entry.file) ?? ''
+}
+
+/** C2-T-019: `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` with no range. */
+function diagnosticLine(display: string, input: string, entry: Diagnostic): string {
+  const place = location(textOf(entry, input), entry)
+  const head = `${entry.file ?? display}${place === null ? '' : `:${place.line}:${place.column}`}`
+  return `${head}: ${entry.severity} ${entry.code} ${entry.message}\n`
+}
+
+function lines(display: string, input: string, entries: readonly Diagnostic[]): string {
+  return entries.map((entry) => diagnosticLine(display, input, entry)).join('')
+}
+
+/** C2-T-020: an entry with `line` and `column` added where it has a range. */
+function located(input: string, entries: readonly Diagnostic[]): object[] {
+  return entries.map((entry) => {
+    const place = location(textOf(entry, input), entry)
+    return place === null ? { ...entry } : { ...entry, ...place }
+  })
+}
+
+/** What one file adds to the reports of the run (C2-T-021, C2-T-022). */
+interface FileResult {
+  status: number
+  diagnostics?: object
+  losses?: object
+  includes?: object
+}
+
+/** A failure of status 1 ends its file and the run goes on (C2-T-017). */
+class FileFailure extends Error {
+  readonly category: string
+  readonly result: FileResult
+  constructor(category: string, message: string, result: FileResult) {
+    super(message)
+    this.category = category
+    this.result = result
   }
 }
 
-function report(destination: unknown, value: unknown): void {
-  if (typeof destination !== 'string') return
-  const json = `${JSON.stringify(value, null, 2)}\n`
-  if (destination === '-') { process.stderr.write(json); return }
-  try { writeFileSync(destination, json) }
-  catch (error) { throw new CliError('input-unreadable', `${destination}: ${String(error)}`) }
-}
-
-function reportIncludes(args: ParsedArgs, path: string, document: DocumentNode): void {
-  if (args.values['report-includes'] === undefined) return
-  return void includeReports.push({ file: path, dependencies: includeDependencies(document) })
-}
-const includeReports: object[] = []
-
-function lintRules(args: ParsedArgs): Record<string, 'on' | 'off'> {
-  const result: Record<string, 'on' | 'off'> = {}
-  for (const [flag, state] of [['rule', 'on'], ['ignore', 'off']] as const) {
-    for (const id of (args.values[flag] as string[] | undefined) ?? []) {
-      if (!Object.hasOwn(CATALOG, id)) throw new CliError('usage', `unknown rule ${id}`)
-      result[id] = state
-    }
+/** C2-T-010: the options the flags of the command set. */
+function options(args: ParsedArgs): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const flag of FLAGS) {
+    const value = args.values[flag.name]
+    if (flag.option !== undefined && flag.commands.includes(args.command) && value !== undefined) result[flag.option] = value
   }
   return result
 }
 
-function lintPlatforms(args: ParsedArgs): 'github'[] {
-  const names = (args.values['platform'] as string[] | undefined) ?? []
-  for (const name of names) if (name !== 'github') throw new CliError('usage', `unknown platform ${name}`)
-  return names as 'github'[]
-}
-
-const RENDER_LOSS_CODES = new Set([
-  'carrier-attribute-dropped', 'destination-denied', 'extension-fallback-rendered', 'extension-renderer-failed',
-  'extension-transform-failed', 'include-expanded-roundtrip', 'include-unresolved', 'profile-construct-degraded',
-  'raw-format-dropped', 'field-unspellable', 'structure-unspellable', 'writer-refused',
-])
-
 function allowedLosses(args: ParsedArgs): ReadonlySet<string> {
   const names = (args.values['allow-loss'] as string[] | undefined) ?? []
-  for (const name of names) if (!RENDER_LOSS_CODES.has(name)) throw new CliError('usage', `unknown loss code ${name}`)
+  for (const name of names) if (!LOSS_CODES.has(name)) throw new UsageError(`${name} is no code of the render-loss channel`)
   return new Set(names)
 }
 
-function lossLimit(args: ParsedArgs): number {
-  const raw = args.values['max-render-losses']
-  if (raw === undefined) return 100
-  const count = Number(raw)
-  if (!Number.isSafeInteger(count) || count < 0 || !/^\d+$/.test(String(raw))) {
-    throw new CliError('usage', '--max-render-losses must be a non-negative safe integer')
-  }
-  return count
+/** C2-T-025, C2-T-027, C2-T-029: the losses of a file, its retained ones and the number held back. */
+function lossesOf(args: ParsedArgs, entries: readonly Diagnostic[]): { losses: Diagnostic[], retained: Diagnostic[], suppressed: number } {
+  const allowed = allowedLosses(args)
+  const losses = entries.filter((entry) => entry.channel === 'render-loss' && !allowed.has(entry.code))
+  const limit = (args.values['max-render-losses'] as number | undefined) ?? 100
+  return { losses, retained: losses.slice(0, limit), suppressed: Math.max(0, losses.length - limit) }
 }
 
 function hasRawHtml(document: DocumentNode): boolean {
   const pending: Node[] = [document]
-  while (pending.length > 0) {
-    const node = pending.pop()
-    if (node === undefined) continue
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     if ((node.type === 'raw_block' || node.type === 'raw_inline') && node.format === 'html') return true
     forEachSlot(node, (nodes) => { for (const child of nodes) pending.push(child) })
   }
   return false
 }
 
-function firstChange(before: string, after: string): { line: number, oldLine: string, newLine: string } {
-  const oldLines = before.split('\n')
-  const newLines = after.split('\n')
-  let at = 0
-  while (at < oldLines.length && oldLines[at] === newLines[at]) at++
-  return { line: at + 1, oldLine: oldLines[at] ?? '', newLine: newLines[at] ?? '' }
+let rawHtmlEscaped = false
+
+function includeEntry(display: string, document: DocumentNode): object {
+  return { file: display, dependencies: includeDependencies(document) }
 }
 
-function unified(path: string, before: string, after: string): string {
+function renderFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const fromAst = args.values['from-ast'] === true
+  const settings = { ...options(args), ...(fromAst ? {} : includesOf(path, args)) } as RenderOptions
+  const input = fromAst ? tree(strictText(path, bytes)) : bytes
+  const source = fromAst ? '' : lenientText(bytes)
+  // C2-T-026: the allow list is applied before strictLosses, so the gate is the command's.
+  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false })
+  const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
+  const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(source, retained), suppressed } }
+  if (args.values['report-includes'] !== undefined) {
+    const document = fromAst ? input as DocumentNode : parseWithDiagnostics(bytes, includesOf(path, args)).document
+    file.includes = includeEntry(display, document)
+  }
+  const strict = settings.strictLosses === true && losses.length > 0
+  if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
+  process.stderr.write(lines(display, source, retained))
+  if (strict) return { ...file, status: 1 }
+  rawHtmlEscaped ||= settings.rawHtml !== true && hasRawHtml(fromAst ? input as DocumentNode : parse(bytes))
+  process.stdout.write(`${result.html}\n`)
+  return file
+}
+
+function astFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
+  process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(document) : encodeTree(document)}\n`)
+  return { status: 0, includes: includeEntry(display, document) }
+}
+
+/** C2-W-100: the first line that changes, and its old and new text; a missing line is its prefix alone. */
+function firstChange(display: string, before: string, after: string): string {
+  const oldLines = linesOf(before)
+  const newLines = linesOf(after)
+  let at = 0
+  while (at < oldLines.length && oldLines[at] === newLines[at]) at++
+  const side = (prefix: string, line: string | undefined): string => (line === undefined ? prefix : `${prefix} ${line}`)
+  return `${display}:${at + 1}\n${side('-', oldLines[at])}\n${side('+', newLines[at])}\n`
+}
+
+function linesOf(text: string): string[] {
+  const out = text.split('\n')
+  if (text.endsWith('\n')) out.pop()
+  return out
+}
+
+function unified(display: string, before: string, after: string): string {
   const left = before.split('\n')
   const right = after.split('\n')
   if (before.endsWith('\n')) left.pop()
   if (after.endsWith('\n')) right.pop()
-  return [`--- a/${path}`, `+++ b/${path}`, `@@ -1,${left.length} +1,${right.length} @@`,
+  return [`--- a/${display}`, `+++ b/${display}`, `@@ -1,${left.length} +1,${right.length} @@`,
     ...left.map((line) => `-${line}`), ...right.map((line) => `+${line}`), ''].join('\n')
 }
 
-/** C2-N-004: the includes of an entry, unless `--no-includes` turns expansion off. */
-function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig } {
-  if (args.values['includes'] === false) return {}
-  const root = args.values['include-root']
-  let config: IncludeConfig | null
-  try { config = cliIncludes(path, typeof root === 'string' ? root : undefined) }
-  catch (error) { throw new CliError('usage', `the include root cannot be read: ${String(error)}`) }
-  return config === null ? {} : { includes: config }
-}
-
-function renderOne(source: string, path: string, args: ParsedArgs): {
-  html: string, escapedRawHtml: boolean, status: number, losses: Diagnostic[], suppressed: number
-} {
-  const names = ['heading-ids', 'mode', 'profile', 'raw-html', 'roundtrip', 'sections', 'smart-typography',
-    'source-lines', 'strict-losses', 'labels', 'symbols', 'social', 'url-policy', 'renderers', 'extensions']
-  const fromAst = args.values['from-ast'] === true
-  const settings = { ...options(args, names), ...(fromAst ? {} : includesOf(path, args)) } as RenderOptions
-  const input = fromAst ? ast(source) : source
-  const escapedRawHtml = args.values['raw-html'] !== true && hasRawHtml(typeof input === 'string' ? parse(input) : input)
-  // The gate of --strict-losses is applied here, so that --allow-loss can exempt codes from it, as in 0.1.
-  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false })
-  const losses = result.diagnostics.filter((entry) => entry.channel === 'render-loss')
-  const allowed = allowedLosses(args)
-  lossLimit(args)
-  if (args.values['report-includes'] !== undefined) {
-    const document = fromAst ? input as DocumentNode : parseWithDiagnostics(source, includesOf(path, args)).document
-    reportIncludes(args, path === '-' ? '<stdin>' : path, document)
+function formatted(path: string, bytes: Uint8Array, args: ParsedArgs): { before: string, after: string } {
+  const settings = options(args) as FormatOptions
+  if (args.values['from-ast'] === true) {
+    const text = strictText(path, bytes)
+    return { before: text, after: write(tree(text), { alignTables: settings.alignTables === true }) }
   }
-  const refused = losses.filter((entry) => !allowed.has(entry.code))
-  if (settings.strictLosses === true && refused.length > 0) throw new CarveRenderError(refused)
-  return { html: result.html, escapedRawHtml, status: 0, losses, suppressed: result.suppressedIncludeDiagnostics ?? 0 }
+  const before = lenientText(bytes)
+  return { before, after: format(before, settings) }
 }
 
-function formatOne(source: string, args: ParsedArgs): string {
-  const settings = options(args, ['normalize', 'align-tables']) as FormatOptions
-  return args.values['from-ast'] === true ? write(ast(source), { alignTables: settings.alignTables === true }) : format(source, settings)
+function fmtFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  let result: { before: string, after: string }
+  try { result = formatted(path, bytes, args) }
+  catch (error) {
+    if (!(error instanceof CarveWriteError)) throw error
+    const losses = error.diagnostics.filter((entry) => writerHasLoss([entry])).map((entry) => `${entry.code} at ${entry.path || '/'}`)
+    throw new FileFailure('writer-refused', `${display}: ${losses.join(', ')}`, { status: 1 })
+  }
+  return { status: fmtOutput(path, display, result.before, result.after, args) }
 }
 
-function location(source: string, diagnostic: Diagnostic): { line: number, column: number } {
-  const offset = diagnostic.range?.startOffset ?? 0
-  const prefix = Buffer.from(source, 'utf8').subarray(0, offset).toString('utf8')
-  const lines = prefix.split('\n')
-  return { line: lines.length, column: Array.from(lines[lines.length - 1] ?? '').length + 1 }
+function fmtOutput(path: string, display: string, before: string, after: string, args: ParsedArgs): number {
+  const changed = before !== after
+  const check = args.values['check'] === true
+  const diff = args.values['diff'] === true
+  if (check && changed && !diff) process.stdout.write(firstChange(display, before, after))
+  if (diff && changed) process.stdout.write(unified(display, before, after))
+  if (args.values['write'] === true && changed) writeOut(path, after)
+  if (!check && !diff && args.values['write'] !== true) process.stdout.write(after)
+  return (check || diff) && changed ? 1 : 0
 }
 
-function diagnosticLines(path: string, source: string, diagnostics: readonly Diagnostic[]): string {
-  return diagnostics.map((entry) => {
-    const place = location(source, entry)
-    return `${entry.file ?? path}:${place.line}:${place.column}: ${entry.severity} ${entry.code} ${entry.message}\n`
-  }).join('')
+/** C2-T-031: status 1 for an entry of severity warning or error. */
+function lintFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const source = lenientText(bytes)
+  const settings = options(args) as { rules?: Record<string, 'on' | 'off'>, platforms?: string[] }
+  const entries = lint(source, { ...settings, ...includesOf(path, args) } as Parameters<typeof lint>[1])
+  const status = entries.some((entry) => entry.severity === 'warning' || entry.severity === 'error') ? 1 : 0
+  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries))
+  return { status, diagnostics: { file: display, diagnostics: located(source, entries), suppressed: 0 } }
 }
 
-function upgradeOne(path: string, source: string, args: ParsedArgs): { status: number, record: object } {
-  const result = upgrade(source)
+/** C2-T-032: the entries of the parse channel, status 0 whatever they report. */
+function diagnosticsFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const source = lenientText(bytes)
+  const result = parseWithDiagnostics(bytes, includesOf(path, args))
+  const entries = result.diagnostics.filter((entry) => entry.channel === 'parse')
+  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries))
+  const report = { file: display, diagnostics: located(source, entries), suppressed: result.suppressedDiagnostics }
+  return { status: 0, diagnostics: report, includes: includeEntry(display, result.document) }
+}
+
+/** C2-T-033 to C2-T-035: the importer, with the loss gate of `render`. */
+function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const html = lenientText(bytes)
+  const strict = args.values['strict-losses'] === true
+  let result: ReturnType<typeof importDocument>
+  try {
+    result = importDocument(html, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true, strictLosses: strict })
+  } catch (error) {
+    if (error instanceof CarveTreeError) throw new FileFailure('import-tree-invalid', `${display}: ${error.message}`, { status: 1 })
+    throw error
+  }
+  const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
+  const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(html, retained), suppressed } }
+  const others = result.diagnostics.filter((entry) => entry.channel !== 'render-loss')
+  const failure = strict && losses.length > 0 ? 'render-loss' : writerHasLoss(result.diagnostics) ? 'writer-refused' : null
+  if (failure !== null) process.stderr.write(`carve[${failure}]: ${display}: the import lost content\n`)
+  process.stderr.write(lines(display, html, [...others, ...retained]))
+  if (failure !== null) return { ...file, status: 1 }
+  process.stdout.write(result.source)
+  return file
+}
+
+/** C2-T-036: the migrated tree, and each entry of the record as a line on standard error. */
+function migrateFile(path: string, display: string, bytes: Uint8Array): FileResult {
+  const text = strictText(path, bytes)
+  let result: MigrationResult
+  try { result = migrateTree(JSON.parse(text) as unknown) }
+  catch (error) { throw new CliError('ast-json-invalid', error instanceof Error ? error.message : String(error)) }
+  process.stderr.write(lines(display, text, result.diagnostics))
+  process.stdout.write(`${result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)}\n`)
+  return { status: 0 }
+}
+
+/** The upgrade command of the reference engine (C2-T-003, UPGRADING.md). */
+function upgradeFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const result = upgrade(decodeUpgradeBytes(bytes))
   const blocked = !canWriteUpgrade(result)
   if (blocked && args.values['force'] === true && args.values['check'] !== true) {
     process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
   }
-  if (args.values['write'] === true && result.changed && !blocked) writeFile(path, result.output)
+  if (args.values['write'] === true && result.changed && !blocked) writeOut(path, result.output)
   else if (args.values['write'] !== true && args.values['check'] !== true && args.values['json'] !== true) process.stdout.write(result.output)
-  if (args.values['json'] !== true) for (const entry of result.records) process.stderr.write(`${formatRecord(path, entry)}\n`)
+  if (args.values['json'] !== true) for (const entry of result.records) process.stderr.write(`${formatRecord(display, entry)}\n`)
   return { status: needsAttention(result) || (args.values['check'] === true && result.changed) ? 1 : 0,
-    record: { file: path, changed: result.changed, check: result.check, records: result.records } }
-}
-
-function formatFile(path: string, display: string, source: string, args: ParsedArgs): number {
-  const output = formatOne(source, args)
-  const changed = source !== output
-  if (args.values['check'] === true && changed && args.values['diff'] !== true) {
-    const change = firstChange(source, output)
-    process.stdout.write(`${display}:${change.line}\n- ${change.oldLine}\n+ ${change.newLine}\n`)
-  }
-  if (args.values['diff'] === true && changed) process.stdout.write(unified(display, source, output))
-  if (args.values['write'] === true && changed) writeFile(path, output)
-  if (args.values['check'] !== true && args.values['diff'] !== true && args.values['write'] !== true) process.stdout.write(output)
-  return (args.values['check'] === true || args.values['diff'] === true) && changed ? 1 : 0
-}
-
-interface FileResult {
-  status: number
-  record?: object
-  escapedRawHtml?: boolean
-  suppressed?: number
-  losses?: Diagnostic[]
-}
-
-function located(display: string, source: string, entries: readonly Diagnostic[]): object[] {
-  return entries.map((entry) => ({ ...entry, file: entry.file ?? display, ...location(source, entry) }))
-}
-
-function diagnosticsFile(path: string, display: string, source: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
-  const result = parseWithDiagnostics(bytes, includesOf(path, args))
-  const entries = result.diagnostics.filter((entry) => entry.channel === 'parse')
-  const suppressed = result.suppressedIncludeDiagnostics ?? 0
-  reportIncludes(args, display, result.document)
-  if (args.values['json'] === true) {
-    const diagnostics = located(display, source, entries)
-    return { status: 0, suppressed, record: { file: display, suppressedIncludeDiagnostics: suppressed, diagnostics } }
-  }
-  process.stdout.write(diagnosticLines(display, source, entries))
-  return { status: 0, suppressed }
-}
-
-/** As in 0.1, any finding makes lint exit 1. */
-function lintFile(path: string, display: string, source: string, args: ParsedArgs): FileResult {
-  const entries = lint(source, { rules: lintRules(args), platforms: lintPlatforms(args), ...includesOf(path, args) })
-  const status = entries.length > 0 ? 1 : 0
-  if (args.values['json'] === true) return { status, record: { file: display, diagnostics: located(display, source, entries) } }
-  process.stdout.write(diagnosticLines(display, source, entries))
-  return { status }
+    diagnostics: { file: display, changed: result.changed, check: result.check, records: result.records } }
 }
 
 function executeFile(path: string, args: ParsedArgs): FileResult {
   const bytes = readBytes(path)
-  const source = decode(path, bytes, args.command)
-  const display = path === '-' ? '<stdin>' : path
+  const display = nameOf(path)
   switch (args.command) {
-    case 'render': {
-      const result = renderOne(source, path, args)
-      process.stdout.write(`${result.html}\n`)
-      return { status: result.status, escapedRawHtml: result.escapedRawHtml, suppressed: result.suppressed, losses: result.losses }
-    }
-    case 'ast': {
-      const tree = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
-      reportIncludes(args, display, tree)
-      process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(tree) : encodeTree(tree)}\n`)
-      return { status: 0 }
-    }
-    case 'fmt': return { status: formatFile(path, display, source, args) }
-    case 'diagnostics': return diagnosticsFile(path, display, source, bytes, args)
-    case 'lint': return lintFile(path, display, source, args)
-    case 'upgrade': {
-      const result = upgradeOne(display, source, args)
-      return { status: result.status, record: result.record }
-    }
-    case 'migrate-ast': {
-      process.stdout.write(`${migrateAst(source)}\n`)
-      return { status: 0 }
-    }
-    case 'import': {
-      return { status: importSource(source, display, args) }
-    }
+    case 'render': return renderFile(path, display, bytes, args)
+    case 'ast': return astFile(path, display, bytes, args)
+    case 'fmt': return fmtFile(path, display, bytes, args)
+    case 'diagnostics': return diagnosticsFile(path, display, bytes, args)
+    case 'lint': return lintFile(path, display, bytes, args)
+    case 'upgrade': return upgradeFile(path, display, bytes, args)
+    case 'migrate-ast': return migrateFile(path, display, bytes)
+    case 'import': return importFile(display, bytes, args)
   }
 }
 
-function processFiles(files: string[], args: ParsedArgs): {
-  status: number, records: object[], escapedRawHtml: boolean, suppressed: number,
-  losses: { file: string, diagnostics: Diagnostic[] }[]
-} {
-  const records: object[] = []
-  const losses: { file: string, diagnostics: Diagnostic[] }[] = []
-  let status = 0
-  let escapedRawHtml = false
-  let suppressed = 0
-  for (const file of files) {
-    const result = executeFile(file, args)
-    status = Math.max(status, result.status)
-    escapedRawHtml ||= result.escapedRawHtml === true
-    suppressed += result.suppressed ?? 0
-    if (result.losses !== undefined) losses.push({ file: file === '-' ? '<stdin>' : file, diagnostics: result.losses })
-    if (result.record !== undefined) records.push(result.record)
-  }
-  return { status, records, escapedRawHtml, suppressed, losses }
+/** C2-T-015, C2-T-023: one JSON document for the run, on standard error for `-`. */
+function report(destination: unknown, value: unknown): void {
+  if (typeof destination !== 'string') return
+  const json = `${JSON.stringify(value, null, 2)}\n`
+  if (destination === '-') process.stderr.write(json)
+  else writeOut(destination, json)
 }
 
-/** As in 0.1, the report keeps at most `--max-render-losses` rows of each file and still carries the whole total. */
-function lossReport(args: ParsedArgs, files: readonly { file: string, diagnostics: Diagnostic[] }[]): object[] {
-  const limit = lossLimit(args)
-  return files.map((entry) => ({ file: entry.file, total: entry.diagnostics.length, diagnostics: entry.diagnostics.slice(0, limit) }))
+interface Collected {
+  diagnostics: object[]
+  losses: object[]
+  includes: object[]
 }
 
-function finishRun(args: ParsedArgs, result: ReturnType<typeof processFiles>): void {
-  if (result.suppressed > 0 && (args.command === 'render' || args.command === 'diagnostics')) {
-    process.stderr.write(`carve2: ${result.suppressed} include diagnostics suppressed\n`)
-  }
-  if (args.values['report-includes'] !== undefined) report(args.values['report-includes'], includeReports)
-  if (args.values['report-losses'] !== undefined) report(args.values['report-losses'], lossReport(args, result.losses))
-  if (result.escapedRawHtml) process.stderr.write('carve2: raw HTML escaped; pass --raw-html to allow it\n')
+function collect(into: Collected, result: FileResult): void {
+  if (result.diagnostics !== undefined) into.diagnostics.push(result.diagnostics)
+  if (result.losses !== undefined) into.losses.push(result.losses)
+  if (result.includes !== undefined) into.includes.push(result.includes)
+}
+
+function finishRun(args: ParsedArgs, collected: Collected): void {
+  report(args.values['report-includes'], { files: collected.includes })
+  report(args.values['report-losses'], { files: collected.losses })
+  if (rawHtmlEscaped) process.stderr.write('carve2: raw HTML escaped; pass --raw-html to allow it\n')
   if (args.command === 'upgrade') {
     process.stderr.write('U-079 report: review host render options; rawHtml is off by default (pass --raw-html to keep raw HTML).\n')
     process.stderr.write(`read with the 0.1 engine ${ENGINE_01_VERSION}\n`)
   }
-  if (args.values['json'] === true) {
-    const output = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: result.records } : { files: result.records }
-    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
-  }
+  if (args.values['json'] !== true) return
+  const output = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: collected.diagnostics } : { files: collected.diagnostics }
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
 }
 
+/** C2-T-011, C2-T-017: the files in order; a failure of status 2 stops the run, one of status 1 ends its file. */
 export function run(args: ParsedArgs): number {
   const files = args.files.length === 0 ? ['-'] : args.files
-  if (args.values['write'] === true && files.includes('-')) throw new CliError('usage', 'cannot write standard input in place')
-  includeReports.length = 0
-  const result = processFiles(files, args)
-  finishRun(args, result)
-  return result.status
+  includedTexts.clear()
+  rawHtmlEscaped = false
+  const collected: Collected = { diagnostics: [], losses: [], includes: [] }
+  let status = 0
+  for (const file of files) {
+    let result: FileResult
+    try { result = executeFile(file, args) }
+    catch (error) {
+      if (!(error instanceof FileFailure)) throw error
+      process.stderr.write(`carve[${error.category}]: ${error.message}\n`)
+      result = error.result
+    }
+    collect(collected, result)
+    status = Math.max(status, result.status)
+  }
+  finishRun(args, collected)
+  return status
 }

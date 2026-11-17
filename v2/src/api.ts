@@ -11,6 +11,7 @@ import { type Diagnostic, type Findings, locateFindings } from './diagnostics.ts
 import { type ParseOptions, readOptions, type RenderOptions, type Settings } from './options.ts'
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
+import { INCLUDE_CAUSES } from './include-tables.ts'
 import { noteSource } from './derived-text.ts'
 import { admitsType, applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
@@ -25,8 +26,8 @@ export interface ParseResult {
   document: DocumentNode
   /** C2-A-172: the diagnostics record, beside the tree. */
   diagnostics: Diagnostic[]
-  /** The include diagnostics past the cap of `includes.maxDiagnostics` that were counted, not kept; absent when none. */
-  suppressedIncludeDiagnostics?: number
+  /** C2-T-024: the include diagnostics past the cap that were counted, not kept. */
+  suppressedDiagnostics: number
 }
 
 export interface LayoutResult extends ParseResult {
@@ -49,8 +50,8 @@ export interface ResolvedTree {
 export interface RenderOutput {
   html: string
   diagnostics: Diagnostic[]
-  /** The include diagnostics past the cap of `includes.maxDiagnostics` that were counted, not kept; absent when none. */
-  suppressedIncludeDiagnostics?: number
+  /** C2-T-024: the include diagnostics past the cap that were counted, not kept. */
+  suppressedDiagnostics: number
 }
 
 /** C2-H-130: a render under `strictLosses` that lost something returns no output. */
@@ -229,26 +230,18 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
   return locateFindings(resolved.document, { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] })
 }
 
-/** As the 0.1 `maxWarnings`: past `max` include diagnostics a code already kept is counted, and a new code still kept. */
-function capIncludeDiagnostics(diagnostics: Diagnostic[], max: number): {
-  diagnostics: Diagnostic[], suppressedIncludeDiagnostics?: number
-} {
+const CAUSE_CODES: ReadonlySet<string> = new Set([...INCLUDE_CAUSES.values()].map((cause) => cause.code))
+
+/** C2-T-024: the first `max` entries whose code is that of an include cause are kept, and the others counted. */
+function capIncludeDiagnostics(diagnostics: Diagnostic[], max: number): { diagnostics: Diagnostic[], suppressedDiagnostics: number } {
   const retained: Diagnostic[] = []
-  const codes = new Set<string>()
-  let suppressedIncludeDiagnostics = 0
-  let retainedIncludes = 0
+  let suppressedDiagnostics = 0
+  let kept = 0
   for (const entry of diagnostics) {
-    if (entry.channel === 'parse' && entry.code.startsWith('include-')) {
-      if (retainedIncludes >= max && codes.has(entry.code)) {
-        suppressedIncludeDiagnostics++
-        continue
-      }
-      codes.add(entry.code)
-      retainedIncludes++
-    }
-    retained.push(entry)
+    if (CAUSE_CODES.has(entry.code) && kept++ >= max) suppressedDiagnostics++
+    else retained.push(entry)
   }
-  return suppressedIncludeDiagnostics === 0 ? { diagnostics: retained } : { diagnostics: retained, suppressedIncludeDiagnostics }
+  return { diagnostics: retained, suppressedDiagnostics }
 }
 
 /** The resolved tree of `src` with its diagnostics. Positions are on unless `positions` is false (C2-A-138). */

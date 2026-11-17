@@ -602,12 +602,14 @@ describe('16. dependencies', () => {
 })
 
 describe('diagnostic cap', () => {
-  it('C2-N-061: repeated include causes are counted after the cap while new causes survive', () => {
-    const source = '{{ a }}\n\n{{ b }}\n\n{{ c }}'
+  it('C2-T-024: the first entries of include causes up to the cap are kept, and the others counted', () => {
+    const source = '{{ a }}\n\n{{ b }}\n\n{{ c }}\n\n{{ d @lines:x }}'
     const result = parseWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 1 }) })
     expect(result.diagnostics.filter(entry => entry.code === 'include-not-found')).toHaveLength(1)
-    expect(result.suppressedIncludeDiagnostics).toBe(2)
-    expect(renderWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 1 }) }).suppressedIncludeDiagnostics).toBe(2)
+    expect(result.diagnostics.some(entry => entry.code === 'include-option-invalid')).toBe(false)
+    expect(result.suppressedDiagnostics).toBe(3)
+    expect(renderWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 1 }) }).suppressedDiagnostics).toBe(3)
+    expect(parseWithDiagnostics('x').suppressedDiagnostics).toBe(0)
     expect(() => parseWithDiagnostics(source, { includes: includes({}, { maxDiagnostics: 101 }) })).toThrow(CarveOptionError)
   })
 })

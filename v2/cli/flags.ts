@@ -1,61 +1,39 @@
+// The commands and flags of spec/0.2/tooling.md, read from data/cli.json, and the engine's own (C2-T-003).
+import cli from '../data/cli.json' with { type: 'json' }
+
 export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint'
-export type ValueKind = 'boolean' | 'enum' | 'json' | 'string' | 'repeatable-string'
+export type ValueKind = 'switch' | 'enum' | 'json' | 'path' | 'code' | 'count'
 export interface Flag {
   name: string
   commands: readonly Command[]
   kind: ValueKind
   values?: readonly string[]
-  description: string
+  /** The option of the library the flag sets (C2-T-010). */
+  option?: string
 }
 
-const render = ['render'] as const
-const fmt = ['fmt'] as const
-const ast = ['ast'] as const
-const upgrade = ['upgrade'] as const
-// C2-N-004: every command whose product is not Carve source expands includes.
-const expanding = ['render', 'ast', 'diagnostics', 'lint'] as const
+export const COMMANDS: readonly Command[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint']
 
-// C2-H-137, C2-W-100: the option table drives both parsing and help.
+// C2-T-003: the reference engine also imports Markdown, GFM and Djot, and offers the upgrade command.
+const EXTRA_FROM = ['markdown', 'gfm', 'djot']
+const UPGRADE_FLAGS: readonly Flag[] = [
+  { name: 'check', commands: ['upgrade'], kind: 'switch' },
+  { name: 'write', commands: ['upgrade'], kind: 'switch' },
+  { name: 'json', commands: ['upgrade'], kind: 'switch' },
+  { name: 'force', commands: ['upgrade'], kind: 'switch' },
+]
+
+function specified(row: (typeof cli.flags)[number]): Flag {
+  const flag: Flag = { name: row.name, commands: row.commands as Command[], kind: row.kind as ValueKind }
+  if ('values' in row) flag.values = row.name === 'from' ? [...row.values, ...EXTRA_FROM] : row.values
+  if ('option' in row) flag.option = row.option
+  return flag
+}
+
+/** C2-T-007 to C2-T-010: every flag of every command; `help` and `version` are read before the others. */
 export const FLAGS: readonly Flag[] = [
-  { name: 'heading-ids', commands: render, kind: 'enum', values: ['off', 'keep-case', 'lower', 'ascii'], description: 'Heading ID policy' },
-  { name: 'mode', commands: render, kind: 'enum', values: ['interactive', 'static'], description: 'HTML mode' },
-  { name: 'profile', commands: render, kind: 'enum', values: ['full', 'article', 'comment', 'minimal'], description: 'Render profile' },
-  { name: 'raw-html', commands: render, kind: 'boolean', description: 'Allow raw HTML' },
-  { name: 'roundtrip', commands: render, kind: 'boolean', description: 'Keep roundtrip carriers' },
-  { name: 'sections', commands: render, kind: 'boolean', description: 'Wrap headings in sections' },
-  { name: 'smart-typography', commands: render, kind: 'boolean', description: 'Apply smart typography' },
-  { name: 'source-lines', commands: render, kind: 'boolean', description: 'Add source line attributes' },
-  { name: 'strict-losses', commands: render, kind: 'boolean', description: 'Refuse render losses' },
-  { name: 'labels', commands: render, kind: 'json', description: 'Label map as JSON' },
-  { name: 'symbols', commands: render, kind: 'json', description: 'Symbol map as JSON' },
-  { name: 'social', commands: render, kind: 'json', description: 'Social URL templates as JSON' },
-  { name: 'url-policy', commands: render, kind: 'json', description: 'URL policy as JSON' },
-  { name: 'renderers', commands: render, kind: 'json', description: 'Renderer map as JSON' },
-  { name: 'extensions', commands: render, kind: 'json', description: 'Extension list as JSON' },
-  { name: 'report-includes', commands: ['render', 'ast', 'diagnostics'], kind: 'string', description: 'Write include dependencies as JSON' },
-  { name: 'report-losses', commands: render, kind: 'string', description: 'Write render losses as JSON' },
-  { name: 'allow-loss', commands: render, kind: 'repeatable-string', description: 'Exclude a loss code from the gate' },
-  { name: 'max-render-losses', commands: render, kind: 'string', description: 'Maximum counted render losses' },
-  { name: 'rule', commands: ['lint'], kind: 'repeatable-string', description: 'Enable a lint rule' },
-  { name: 'ignore', commands: ['lint'], kind: 'repeatable-string', description: 'Disable a lint rule' },
-  { name: 'platform', commands: ['lint'], kind: 'repeatable-string', description: 'Enable platform rules (github)' },
-  { name: 'raw-html', commands: ['import'], kind: 'boolean', description: 'Preserve raw HTML' },
-  { name: 'check-loss', commands: ['import'], kind: 'boolean', description: 'Fail when import loses content' },
-  { name: 'report', commands: ['import'], kind: 'string', description: 'Write import diagnostics as JSON' },
-  { name: 'includes', commands: expanding, kind: 'boolean', description: 'Expand includes (default on; --no-includes turns it off)' },
-  { name: 'include-root', commands: expanding, kind: 'string', description: 'Containment root of includes (default: the directory of FILE)' },
-  { name: 'from-ast', commands: ['render', 'fmt'], kind: 'boolean', description: 'Read AST JSON' },
-  { name: 'positions', commands: ast, kind: 'boolean', description: 'Include source positions' },
-  { name: 'envelope', commands: ast, kind: 'boolean', description: 'Wrap the tree in an envelope' },
-  { name: 'check', commands: ['fmt', 'upgrade'], kind: 'boolean', description: 'Check without writing' },
-  { name: 'diff', commands: fmt, kind: 'boolean', description: 'Print a unified diff' },
-  { name: 'normalize', commands: fmt, kind: 'boolean', description: 'Normalize source spelling' },
-  { name: 'align-tables', commands: fmt, kind: 'boolean', description: 'Align pipe table cells' },
-  { name: 'write', commands: ['fmt', 'upgrade'], kind: 'boolean', description: 'Write files in place (-w for fmt)' },
-  { name: 'json', commands: ['diagnostics', 'upgrade', 'lint'], kind: 'boolean', description: 'Print JSON' },
-  { name: 'force', commands: upgrade, kind: 'boolean', description: 'Write even with an unexplained difference' },
-  { name: 'from', commands: ['import'], kind: 'enum', values: ['markdown', 'gfm', 'djot', 'html'],
-    description: 'Input format for import' },
+  ...cli.flags.filter((row) => row.name !== 'help' && row.name !== 'version').map(specified),
+  ...UPGRADE_FLAGS,
 ]
 
 export interface ParsedArgs {
@@ -66,28 +44,37 @@ export interface ParsedArgs {
   version: boolean
 }
 
+/** A command line the specification refuses: the category `usage` (C2-T-040). */
+export class UsageError extends Error {}
+
 function flagFor(command: Command, spelling: string): Flag | undefined {
   return FLAGS.find((flag) => flag.name === spelling && flag.commands.includes(command))
 }
 
+/** C2-T-010, C2-T-029: the value of a flag, refused with `usage` where it is not one the flag takes. */
 function readValue(flag: Flag, input: string): unknown {
-  if (flag.kind === 'string' || flag.kind === 'repeatable-string') return input
+  if (flag.kind === 'path' || flag.kind === 'code') return input
+  if (flag.kind === 'count') {
+    if (!/^\d+$/.test(input) || !Number.isSafeInteger(Number(input))) throw new UsageError(`--${flag.name} takes a count, not ${input}`)
+    return Number(input)
+  }
   if (flag.kind === 'enum') {
-    if (!flag.values?.includes(input)) throw new Error(`bad value for --${flag.name}: ${input}`)
+    if (!flag.values?.includes(input)) throw new UsageError(`bad value for --${flag.name}: ${input}`)
     return input
   }
-  try { return JSON.parse(input) as unknown } catch { throw new Error(`bad JSON for --${flag.name}`) }
+  try { return JSON.parse(input) as unknown } catch { throw new UsageError(`bad JSON for --${flag.name}`) }
 }
 
-function booleanOption(flag: Flag, negated: boolean, equals: number, parsed: ParsedArgs): boolean {
-  if (flag.kind !== 'boolean') return false
-  if (equals >= 0) throw new Error(`bad value for --${flag.name}`)
+function switchOption(flag: Flag, negated: boolean, equals: number, parsed: ParsedArgs): boolean {
+  if (flag.kind !== 'switch') return false
+  if (equals >= 0) throw new UsageError(`--${flag.name} takes no value`)
   parsed.values[flag.name] = !negated
   return true
 }
 
+/** C2-T-009: a flag given twice takes its last value, and `--allow-loss` collects every value. */
 function setValue(parsed: ParsedArgs, flag: Flag, value: string): void {
-  if (flag.kind === 'repeatable-string') {
+  if (flag.name === 'allow-loss') {
     const collected = parsed.values[flag.name] as string[] | undefined
     parsed.values[flag.name] = [...(collected ?? []), value]
   } else parsed.values[flag.name] = readValue(flag, value)
@@ -95,59 +82,71 @@ function setValue(parsed: ParsedArgs, flag: Flag, value: string): void {
 
 function option(args: readonly string[], index: number, parsed: ParsedArgs): number {
   const arg = args[index] ?? ''
-  if (arg === '-w' && (parsed.command === 'fmt' || parsed.command === 'upgrade')) { parsed.values['write'] = true; return index }
-  if (!arg.startsWith('--')) throw new Error(`unknown option ${arg}`)
+  if (shortWrite(arg, parsed)) return index
+  if (!arg.startsWith('--')) throw new UsageError(`unknown flag ${arg}`)
   const equals = arg.indexOf('=')
   const name = arg.slice(2, equals < 0 ? undefined : equals)
   const negated = name.startsWith('no-')
-  const flag = flagFor(parsed.command, negated ? name.slice(3) : name)
-  if (flag === undefined) throw new Error(`unknown option --${name}`)
-  if (booleanOption(flag, negated, equals, parsed)) return index
-  if (negated) throw new Error(`unknown option --${name}`)
+  const flag = flagFor(parsed.command, negated ? name.slice(3) : name) ?? flagFor(parsed.command, name)
+  if (flag === undefined) throw new UsageError(`unknown flag --${name} for ${parsed.command}`)
+  const turnedOff = negated && flag.name !== name
+  if (switchOption(flag, turnedOff, equals, parsed)) return index
+  if (turnedOff) throw new UsageError(`unknown flag --${name} for ${parsed.command}`)
   const value = equals >= 0 ? arg.slice(equals + 1) : args[index + 1]
-  if (value === undefined) throw new Error(`missing value for --${name}`)
+  if (value === undefined) throw new UsageError(`missing value for --${name}`)
   setValue(parsed, flag, value)
   return equals >= 0 ? index : index + 1
 }
 
+/** C2-T-030: `-w` is `--write`. */
+function shortWrite(arg: string, parsed: ParsedArgs): boolean {
+  if (arg !== '-w' || (parsed.command !== 'fmt' && parsed.command !== 'upgrade')) return false
+  parsed.values['write'] = true
+  return true
+}
+
 function commandAt(arg: string | undefined): Command | undefined {
-  if (arg === 'render' || arg === 'ast' || arg === 'fmt' || arg === 'diagnostics' || arg === 'upgrade' ||
-    arg === 'migrate-ast' || arg === 'import' || arg === 'lint') return arg
-  return undefined
+  return COMMANDS.find((command) => command === arg)
 }
 
-function checkCombinations(parsed: ParsedArgs): void {
-  if (parsed.values['write'] === true && parsed.values['check'] === true) throw new Error('--write and --check cannot be combined')
-  if (parsed.values['write'] === true && parsed.values['diff'] === true) throw new Error('--write and --diff cannot be combined')
-  if (parsed.values['from-ast'] === true && parsed.values['normalize'] === true) throw new Error('--normalize needs source input')
+/** C2-T-016, C2-T-030, C2-T-033: the combinations a command refuses. */
+function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
+  const values = parsed.values
+  if (values['write'] === true && (values['check'] === true || values['diff'] === true) && parsed.command === 'fmt') {
+    throw new UsageError('--write cannot be combined with --check or --diff')
+  }
+  if (values['from-ast'] === true && values['normalize'] === true) throw new UsageError('--normalize needs source input')
+  if (values['write'] === true && files.includes('-')) throw new UsageError('--write cannot replace standard input')
+  if (parsed.command === 'import' && values['from'] === undefined) throw new UsageError('import requires --from')
 }
 
+/** C2-T-007, C2-T-008: `carve [COMMAND] [FLAG...] [FILE...]`, `render` without a command, `--` before files only. */
 export function parseArgs(args: readonly string[]): ParsedArgs {
   const command = commandAt(args[0]) ?? 'render'
   const start = commandAt(args[0]) === undefined ? 0 : 1
   const parsed: ParsedArgs = { command, files: [], values: {}, help: false, version: false }
   for (let index = start; index < args.length; index++) {
     const arg = args[index] ?? ''
-    if (arg === '--help') { parsed.help = true; continue }
-    if (arg === '--version') { parsed.version = true; continue }
-    if (arg === '--') { parsed.files.push(...args.slice(index + 1)); break }
-    if (arg !== '-' && arg.startsWith('-')) index = option(args, index, parsed)
+    if (arg === '--help') parsed.help = true
+    else if (arg === '--version') parsed.version = true
+    else if (arg === '--') {
+      parsed.files.push(...args.slice(index + 1))
+      break
+    } else if (arg !== '-' && arg.startsWith('-')) index = option(args, index, parsed)
     else parsed.files.push(arg)
   }
-  checkCombinations(parsed)
-  if (command === 'import' && parsed.values['from'] === undefined && !parsed.help && !parsed.version) {
-    throw new Error('import requires --from=markdown|gfm|djot|html')
-  }
+  if (!parsed.help && !parsed.version) checkCombinations(parsed, parsed.files.length === 0 ? ['-'] : parsed.files)
   return parsed
 }
 
+function usageOf(flag: Flag): string {
+  if (flag.kind === 'switch') return ''
+  return flag.kind === 'enum' ? ` <${flag.values?.join('|')}>` : ` <${flag.kind}>`
+}
+
 export function help(command: Command): string {
-  const lines = [`Usage: carve2 ${command} [options] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Options:']
-  for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) {
-    const suffix = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? ` <${flag.values?.join('|')}>` : ` <${flag.kind}>`
-    lines.push(`  --${flag.name}${suffix}  ${flag.description}`)
-  }
-  lines.push('  --help  Show this help', '  --version  Show version', '',
-    'Commands: render, ast, fmt, diagnostics, upgrade, migrate-ast, import, lint')
+  const lines = [`Usage: carve2 ${command} [FLAG...] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Flags:']
+  for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) lines.push(`  --${flag.name}${usageOf(flag)}`)
+  lines.push('  --help', '  --version', '', `Commands: ${COMMANDS.join(', ')}`)
   return `${lines.join('\n')}\n`
 }

@@ -39,9 +39,10 @@ describe('carve2 process', () => {
       expect(classifyCliError(error)).toEqual({ category, status })
     }
   })
-  it('C2-H-137: every flag is shown in its command help and the parser accepts its value', () => {
+  it('C2-T-004, C2-T-008: every flag of data/cli.json is shown in its command help and the parser accepts its value', () => {
+    const sample: Record<string, string> = { switch: '', path: '=x', code: '=include-unresolved', count: '=1', json: '={}' }
     for (const flag of FLAGS) {
-      const value = flag.kind === 'boolean' ? '' : flag.kind === 'enum' ? `=${flag.values?.[0]}` : '={}'
+      const value = flag.kind === 'enum' ? `=${flag.values?.[0]}` : sample[flag.kind] ?? ''
       for (const command of flag.commands) {
         expect(cli([command, '--help']).stdout).toContain(`--${flag.name}`)
         if (flag.name === 'from-ast' || flag.name === 'write') continue
@@ -85,7 +86,7 @@ describe('carve2 process', () => {
     expect([image.status, image.stdout]).toEqual([0, '![i](a.png)\n'])
     const denied = cli(['import', '--from=html'], '<p><a href="javascript:x">t</a></p>\n')
     expect([denied.status, denied.stdout]).toEqual([0, 't\n'])
-    expect(denied.stderr).toMatch(/^carve\[import-destination-denied\]:/)
+    expect(denied.stderr).toMatch(/^<stdin>:1:4: warning import-destination-denied /)
   })
 
   it('C2-W-011: normalized Markdown imports return source and report degradation', () => {
@@ -102,7 +103,7 @@ describe('carve2 process', () => {
       const result = cli(['import', '--from=html'], source)
       expect(result.status).toBe(0)
       expect(result.stdout).toBe(expected)
-      expect(result.stderr).toMatch(/^carve\[import-whitespace-normalized\]:/)
+      expect(result.stderr).toMatch(/^<stdin>:\d+:\d+: \w+ import-whitespace-normalized /)
     }
   })
 
@@ -113,7 +114,7 @@ describe('carve2 process', () => {
     const normalized = cli(['import', '--from=html'], '\n- a\n b')
     expect(normalized.status).toBe(0)
     expect(normalized.stdout).toBe('\\- a\nb\n')
-    expect(normalized.stderr).toMatch(/^carve\[import-whitespace-normalized\]:/)
+    expect(normalized.stderr).toMatch(/^<stdin>:\d+:\d+: \w+ import-whitespace-normalized /)
   })
 
   it('C2-H-052: render uses stdin, explicit stdin, files, options and one raw HTML notice', () => {
@@ -137,10 +138,18 @@ describe('carve2 process', () => {
   it('C2-H-137: all render option values pass through the command line', () => {
     const flags = ['--heading-ids=ascii', '--mode=static', '--profile=full', '--raw-html', '--roundtrip',
       '--sections', '--smart-typography', '--source-lines', '--strict-losses', '--labels={}', '--symbols={}',
-      '--social={}', '--url-policy={"deny":["javascript"]}', '--renderers={}', '--extensions=[]', '--includes']
+      '--social={}', '--url-policy={"deny":["javascript"]}', '--includes']
     const result = cli(['render', ...flags], 'a `<b>`{=html}')
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('<p data-source-line="1">')
+  })
+
+  it('C2-T-010: extensions and renderers are options of the library calls only, with no flag', () => {
+    for (const flag of ['--extensions=[]', '--renderers={}']) {
+      const result = cli(['render', flag], 'x')
+      expect(result.status, flag).toBe(2)
+      expect(result.stderr).toMatch(/^carve\[usage\]:/)
+    }
   })
 
   it('C2-A-012 and C2-W-102: AST JSON round trips through render and fmt', () => {
@@ -219,7 +228,7 @@ describe('carve2 process', () => {
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout) as unknown).toEqual({ astVersion: '2.0', document: { type: 'document', astVersion: '2.0',
       children: [] }, extensions: [{ name: 'acme.x', version: '1', required: true, slots: [] }] })
-    expect(result.stderr).toBe('carve[migration-loss]: /vocabulary: 0.2 has no vocabulary other than the core one in this form\n')
+    expect(result.stderr).toBe('<stdin>: warning migration-loss 0.2 has no vocabulary other than the core one in this form\n')
   })
 
   it('C2-W-101: import accepts all four formats and rejects a missing or bad format', () => {
@@ -244,14 +253,18 @@ describe('carve2 process', () => {
 })
 
 describe('new command line reports', () => {
-  it('C2-W-109: lint reports every finding and rejects unknown rules', () => {
+  it('C2-T-021, C2-T-031: lint writes a diagnostics report, takes rules and platforms as JSON, and refuses an unknown rule', () => {
     const result = cli(['lint', '--json'], '[x]()')
     expect(result.status).toBe(1)
-    expect((JSON.parse(result.stdout) as { files: { diagnostics: unknown[] }[] }).files[0]?.diagnostics).toEqual(expect.arrayContaining([
+    const report = JSON.parse(result.stdout) as { files: { file: string, diagnostics: unknown[], suppressed: number }[] }
+    expect(report.files[0]).toMatchObject({ file: '<stdin>', suppressed: 0 })
+    expect(report.files[0]?.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'empty-link-destination', line: 1, column: 1 }),
     ]))
-    expect(cli(['lint', '--ignore', 'empty-link-destination'], '[x]()').status).toBe(0)
-    expect(cli(['lint', '--rule', 'bogus'], 'x').status).toBe(2)
+    expect(cli(['lint', '--rules={"empty-link-destination":"off"}'], '[x]()').status).toBe(0)
+    expect(cli(['lint', '--rules={"bogus":"on"}'], 'x').status).toBe(2)
+    expect(cli(['lint', '--platforms=["github"]'], 'See @bob.').stdout).toContain('platform-mention-token')
+    expect(cli(['lint', '--rule', 'x'], 'x').stderr).toMatch(/^carve\[usage\]:/)
   })
 
   it('C2-M-065: import raw HTML is preserved when requested', () => {
@@ -260,25 +273,36 @@ describe('new command line reports', () => {
     expect(result.stdout).toContain('<script>hi</script>')
   })
 
-  it('C2-M-082: import writes source while check-loss gates and report records losses', () => {
+  it('C2-T-034: import applies the loss gate, and --report-losses writes the losses as a diagnostics report', () => {
     const path = join(temp(), 'import.json')
-    const result = cli(['import', '--from=html', '--check-loss', '--report', path], '<p><a href="javascript:x">t</a></p>')
-    expect(result.status).toBe(1)
-    expect(result.stdout).toBe('t\n')
-    expect((JSON.parse(readFileSync(path, 'utf8')) as { diagnostics: unknown[] }).diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'import-destination-denied' }),
-    ]))
+    const html = '<p><a href="javascript:x">t</a></p>'
+    const result = cli(['import', '--from=html', '--report-losses', path], html)
+    expect([result.status, result.stdout]).toEqual([0, 't\n'])
+    const report = JSON.parse(readFileSync(path, 'utf8')) as { files: { file: string, diagnostics: unknown[], suppressed: number }[] }
+    expect(report.files[0]?.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'import-destination-denied' })]))
+    const strict = cli(['import', '--from=html', '--strict-losses'], html)
+    expect([strict.status, strict.stdout]).toEqual([1, ''])
+    expect(strict.stderr).toMatch(/^carve\[render-loss\]:/)
+    expect(cli(['import', '--from=html', '--strict-losses', '--allow-loss', 'import-destination-denied'], html).status).toBe(0)
+    expect(cli(['import', '--from=html', '--check-loss'], html).status).toBe(2)
   })
 
   it('C2-H-130: the render loss report keeps its total, and --allow-loss exempts a code from --strict-losses', () => {
     const path = join(temp(), 'losses.json')
-    expect(cli(['render', '--report-losses', path], '{{ e }}').status).toBe(0)
-    const losses = JSON.parse(readFileSync(path, 'utf8')) as { total: number, diagnostics: unknown[] }[]
-    expect(losses[0]?.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'include-unresolved' })]))
+    const lossy = cli(['render', '--report-losses', path], '{{ e }}')
+    expect(lossy.status).toBe(0)
+    expect(lossy.stderr).toMatch(/^<stdin>(:1:1)?: warning include-unresolved /)
+    type Report = { files: { file: string, diagnostics: unknown[], suppressed: number }[] }
+    const losses = JSON.parse(readFileSync(path, 'utf8')) as Report
+    expect(losses.files[0]?.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'include-unresolved' })]))
     expect(cli(['render', '--max-render-losses', '0', '--report-losses', path], '{{ e }}').status).toBe(0)
-    const capped = JSON.parse(readFileSync(path, 'utf8')) as { total: number, diagnostics: unknown[] }[]
-    expect([capped[0]?.total, capped[0]?.diagnostics.length]).toEqual([losses[0]?.total, 0])
-    expect(cli(['render', '--strict-losses'], '{{ e }}').status).toBe(1)
+    const capped = JSON.parse(readFileSync(path, 'utf8')) as Report
+    expect([capped.files[0]?.suppressed, capped.files[0]?.diagnostics.length]).toEqual([losses.files[0]?.diagnostics.length, 0])
+    expect(cli(['render', '--report-losses', path], 'x').status).toBe(0)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ files: [{ file: '<stdin>', diagnostics: [], suppressed: 0 }] })
+    const strict = cli(['render', '--strict-losses'], '{{ e }}')
+    expect([strict.status, strict.stdout]).toEqual([1, ''])
+    expect(strict.stderr).toMatch(/^carve\[render-loss\]:/)
     expect(cli(['render', '--strict-losses', '--allow-loss', 'include-unresolved'], '{{ e }}').status).toBe(0)
     expect(cli(['render', '--allow-loss', 'not-a-loss'], '{{ e }}').status).toBe(2)
     expect(cli(['render', '--max-render-losses', 'x'], '{{ e }}').status).toBe(2)
@@ -288,8 +312,72 @@ describe('new command line reports', () => {
     const path = join(temp(), 'includes.json')
     const result = cli(['diagnostics', '--no-includes', '--report-includes', path], '{{ e }}')
     expect(result.status).toBe(0)
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual([
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ files: [
       { file: '<stdin>', dependencies: [{ path: 'e', read: false }] },
-    ])
+    ] })
+  })
+})
+
+describe('tooling.md', () => {
+  it('C2-W-100, C2-T-014: fmt --check writes the path and line, and a missing line as its prefix alone', () => {
+    const result = cli(['fmt', '--check'], 'a\n\n\n\n\nb')
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('<stdin>:3\n- \n+ b\n')
+    const short = cli(['fmt', '--check'], '# a')
+    expect(short.stdout).toBe('<stdin>:1\n- # a\n+ = a\n')
+    const longer = cli(['fmt', '--check'], 'x\n\n\n\n')
+    expect(longer.stdout).toBe('<stdin>:2\n- \n+\n')
+  })
+
+  it('C2-T-012: a tree in JSON that is not UTF-8 is refused as input-unreadable', () => {
+    const path = join(temp(), 'tree.json')
+    writeFileSync(path, Uint8Array.from([0x7b, 0xff, 0x7d]))
+    for (const command of [['render', '--from-ast'], ['fmt', '--from-ast'], ['migrate-ast']]) {
+      const result = cli([...command, path])
+      expect(result.status, command.join(' ')).toBe(2)
+      expect(result.stderr).toMatch(/^carve\[input-unreadable\]:/)
+    }
+  })
+
+  it('C2-T-040: a report or a --write target that cannot be written is output-unwritable', () => {
+    const result = cli(['render', '--report-losses', join(temp(), 'missing/dir/r.json')], 'x')
+    expect(result.status).toBe(2)
+    expect(result.stderr).toMatch(/^carve\[output-unwritable\]:/)
+  })
+
+  it('C2-T-016, C2-T-008: --write on standard input and an unknown flag are usage errors', () => {
+    expect(cli(['fmt', '--write'], 'x').stderr).toMatch(/^carve\[usage\]:/)
+    expect(cli(['fmt', '--json'], 'x').stderr).toMatch(/^carve\[usage\]:/)
+    expect(cli(['render', '--no-profile'], 'x').stderr).toMatch(/^carve\[usage\]:/)
+  })
+
+  it('C2-T-019, C2-T-021: a diagnostic line without a range names its file only, and the report counts suppressed entries', () => {
+    const lines = cli(['diagnostics', '--no-includes'], '{{ e }}')
+    expect(lines.status).toBe(0)
+    expect(lines.stdout).toMatch(/^<stdin>:1:1: \w+ include-no-resolver /)
+    const report = JSON.parse(cli(['diagnostics', '--json', '--no-includes'], '{{ e }}').stdout) as {
+      files: { file: string, diagnostics: { line?: number }[], suppressed: number }[]
+    }
+    expect(report.files[0]).toMatchObject({ file: '<stdin>', suppressed: 0 })
+    expect(report.files[0]?.diagnostics[0]?.line).toBe(1)
+  })
+
+  it('C2-T-017: a failure of status 1 ends its file and the run goes on; the highest status wins', () => {
+    const dir = temp()
+    const good = join(dir, 'good.crv')
+    const lossy = join(dir, 'lossy.crv')
+    writeFileSync(good, 'x')
+    writeFileSync(lossy, '{{ e }}')
+    const result = cli(['render', '--strict-losses', '--no-includes', lossy, good])
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('<p>x</p>\n')
+    const stopped = cli(['render', join(dir, 'missing.crv'), good])
+    expect([stopped.status, stopped.stdout]).toEqual([2, ''])
+  })
+
+  it('C2-T-007: the commands of data/cli.json are the commands of the program', async () => {
+    const data = JSON.parse(readFileSync(join(root, 'v2/data/cli.json'), 'utf8')) as { commands: { name: string }[] }
+    const { COMMANDS } = await import('../flags.ts')
+    expect([...COMMANDS].sort()).toEqual(data.commands.map((row) => row.name).sort())
   })
 })

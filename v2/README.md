@@ -38,23 +38,22 @@ A resolver receives the decoded `path`, the `section`, the valid `options` and `
 
 ## Command line
 
-Run the source entry point with Node, or use the package bin `carve2`. Omit a file or use `-` for standard input. `--help` lists options for each command; `--version` prints the package version.
+The program follows `spec/0.2/tooling.md`; its commands and flags are the rows of `data/cli.json`. Run the source entry point with Node, or use the package bin `carve2`. Omit a file or use `-` for standard input. `--help` lists the flags of each command; `--version` prints the package version.
 
 ```sh
 carve2 render --heading-ids lower article.crv
 carve2 ast --envelope article.crv
 carve2 fmt --check article.crv
 carve2 diagnostics --json article.crv
-carve2 lint --rule empty-link-destination article.crv
+carve2 lint --rules '{"empty-link-destination":"off"}' article.crv
+carve2 import --from html page.html
 carve2 upgrade --check legacy.crv
 ```
 
-`render`, `ast`, `diagnostics` and `lint` expand includes by default, reading files below the directory of the entry file (the containment root, with every symbolic link resolved). `--include-root DIR` names another root, and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt` never expands. `render`, `ast` and `diagnostics` accept `--report-includes FILE` to write include dependencies as JSON; `-` writes the report to standard error.
+`carve2 FILE...` is `carve2 render FILE...`. `render`, `ast`, `diagnostics` and `lint` expand includes, reading files below the directory of the entry file; `--include-root DIR` names another root and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt`, `import` and `migrate-ast` expand nothing. `extensions` and `renderers` are options of the library calls only.
 
-`carve2 FILE...` is shorthand for `carve2 render FILE...`. `render` and `fmt` accept `--from-ast` for AST JSON. `fmt --diff` prints a unified diff, and `fmt -w` writes files in place. `upgrade` uses the separate rewrite engine in `upgrade/`; its report may require manual review. All commands accept `--help`.
+Standard output carries the product of a command and nothing else; diagnostics, notes and failures go to standard error. A diagnostic line is `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` for an entry with no range. `diagnostics --json`, `lint --json` and `--report-losses PATH` write a diagnostics report, `{"files": [{file, diagnostics, suppressed}]}`; `--report-includes PATH` writes the include dependencies, `{"files": [{file, dependencies}]}`. A report path of `-` is standard error.
 
-`lint` prints each finding with its file, line, column, severity and code. `--json` writes one diagnostics array per file. Repeat `--rule ID` to enable rules, `--ignore ID` to disable rules, and `--platform github` to enable GitHub checks. Any finding makes lint exit 1.
+`render` and `import` write each render loss as a line on standard error. `--strict-losses` fails a file that has a loss, after the codes of `--allow-loss CODE` (repeatable) are taken out, and `--max-render-losses N` (default 100) keeps the first N losses of each file. `lint` exits 1 for an entry of severity warning or error, takes `--rules` and `--platforms` as JSON, and `fmt --check` prints the first changed line as `PATH:LINE`, `- old` and `+ new`.
 
-`import --from FORMAT` accepts markdown, gfm, djot or html. `--raw-html` preserves HTML raw nodes. `--check-loss` exits 1 for any render loss while still writing source. `--report FILE` writes import diagnostics as JSON; `-` writes to standard error.
-
-`render --report-losses FILE` writes the render losses of each file as JSON, with their total. `--max-render-losses N` keeps at most N of them per file in the report (default 100). Repeat `--allow-loss CODE` to let `--strict-losses` pass a loss of that code. A report destination of `-` writes to standard error. Render and diagnostics report suppressed include diagnostics on standard error; diagnostics JSON records the count per file.
+A failure writes `carve[CATEGORY]: MESSAGE` as its first line on standard error. Status 1 is `render-loss`, `writer-refused` or `import-tree-invalid` and ends its file; status 2 is `usage`, `input-unreadable`, `input-invalid`, `ast-json-invalid`, `import-input-invalid` or `output-unwritable` and stops the run. `upgrade` uses the separate rewrite engine in `upgrade/`; its report may require manual review.

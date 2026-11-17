@@ -29,7 +29,7 @@ describe('the review of commit ee68ffaa', () => {
   it('C2-N-003, C2-A-173: repeated no-resolver diagnostics are capped (F5)', () => {
     const result = parseWithDiagnostics('{{ x }}\n\n'.repeat(150000), { positions: false })
     expect(result.diagnostics.filter(entry => entry.code === 'include-no-resolver')).toHaveLength(100)
-    expect(result.suppressedIncludeDiagnostics).toBe(149900)
+    expect(result.suppressedDiagnostics).toBe(149900)
   })
 
   it('C2-N-083: a document of 150,000 headings has no include dependencies (F5)', () => {
