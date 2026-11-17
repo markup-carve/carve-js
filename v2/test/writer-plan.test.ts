@@ -74,6 +74,7 @@ describe('the planned writer', () => {
     ['C2-I-074: an image sigil before a link of the tree, and before an open bracket', '\\![a](/u) and ![a\n'],
     ['C2-B-123: a line of a line block opens no block', '::: |\n- a\n# b\n  > c\n:::\n'],
     ['C2-B-144: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
+    ['C2-B-125: in a line block only a bare colon run closes', '::: |\n:: t\n::: x\n:::\n'],
     ['C2-B-069: a later line of a term continues like paragraph text', ':: t\n   - a\n   :: e\n   \\::: x\n: d\n'],
   ]
   for (const [clause, source] of PLANNED) {

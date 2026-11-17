@@ -630,15 +630,20 @@ function definitionShape(leaf: Leaf, at: number): boolean {
 }
 
 /**
- * C2-B-123: a line of a line block opens nothing but the closer, a colon run; the spaces that lead it are content
- * (C2-B-130). A tab meets the strip of C2-B-027, and a line of spaces alone is the blank line between two stanzas
- * (C2-B-131): those the plan leaves.
+ * C2-B-123, C2-B-125: a line of a line block opens nothing but the closer, a bare run of three or more colons; the
+ * spaces that lead it are content (C2-B-130). A tab meets the strip of C2-B-027, and a line of spaces alone is the
+ * blank line between two stanzas (C2-B-131): those the plan leaves.
  */
 function mayCloseLineBlock(leaf: Leaf): boolean {
   let at = 0
   while (code(leaf, at) === SPACE) at++
   const first = code(leaf, at)
-  return first < 0 || first === LF || first === TAB || first === 58
+  if (first < 0 || first === LF || first === TAB) return true
+  if (first !== 58) return false
+  const end = runLength(leaf, at, 58) + at
+  let rest = end
+  while (code(leaf, rest) === SPACE || code(leaf, rest) === TAB) rest++
+  return end - at >= 3 && (code(leaf, rest) < 0 || code(leaf, rest) === LF)
 }
 
 /** C2-W-092: the line starts of a paragraph by the rules of write-plan-lines.ts; of any other leaf, none may open a block. */
