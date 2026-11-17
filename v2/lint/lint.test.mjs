@@ -96,6 +96,9 @@ const CASES = [
   { id: 'braced-comment-in-a-template-source', trigger: '{% if x %}', near: '{% note %}', fragment: '{% if x %}' },
   { id: 'caption-looking-paragraph', trigger: '| a |\nTable: cap', near: '| a |\n^ cap', fragment: 'Table: cap' },
   { id: 'carve-version-unsupported', trigger: '---\ncarve: 0.3\n---', near: '---\ncarve: 0.2\n---', fragment: 'carve: 0.3' },
+  { id: 'carve-version-unsupported', trigger: '---\ncarve-version: 0.3\n---', near: '---\ncarve-version: 0.2\n---',
+    fragment: 'carve-version: 0.3' },
+  { id: 'unclosed-inline-emphasis', trigger: 'a /b c', near: 'a /b/ c', fragment: '/' },
   { id: 'consumed-key-near-miss', trigger: '{align=left}\n| a |', near: '{aligns=left}\n| a |', fragment: 'align=left' },
   { id: 'delimited-table-wide-row', trigger: '{table}\n```csv\na,b\nc,d,e\n```',
     near: '{table}\n```csv\na,b\nc,d\n```', fragment: 'c,d,e' },
@@ -125,8 +128,12 @@ const CASES = [
   { id: 'quote-fence-ends-the-quote-above', trigger: '> a\n::: >\nb\n:::',
     near: '> a\n> ::: >\nb\n:::', fragment: '::: >' },
   { id: 'region-marker-renders-as-text', trigger: '#region x', near: '%% #region x', fragment: '#region x' },
-  { id: 'semantic-attribute-outside-span', trigger: '{mark=foo}\n# H', near: '[x]{mark=foo}',
-    fragment: 'mark=foo' },
+  { id: 'semantic-attribute-outside-span', trigger: '{kbd=Ctrl}\n# H', near: '[x]{kbd=Ctrl}',
+    fragment: 'kbd=Ctrl' },
+  { id: 'semantic-attribute-outside-span', trigger: '{mark=foo}\n{time=2024}\n# H', near: '{mark=foo}\n# H',
+    fragment: 'time=2024' },
+  { id: 'blank-reference-label', trigger: '[^ ]: x\n\na[^ ]', near: '[^n]: x\n\na[^n]', fragment: '[^ ]' },
+  { id: 'blank-reference-label', trigger: '[t][ ]\n\n[ ]: /u', near: '[t][]\n\n[t]: /u', fragment: '[ ]' },
   { id: 'semantic-attribute-value-ignored', trigger: '[x]{mark=foo}', near: '[x]{mark}', fragment: 'mark=foo' },
   { id: 'table-column-arity', trigger: '{widths=10}\n| a | b |', near: '{widths=10,20}\n| a | b |',
     fragment: 'widths=10' },
@@ -217,6 +224,21 @@ describe('C2-W-106 catalog rules', () => {
       expect(bytes.subarray(finding.range.startOffset, finding.range.endOffset).toString('utf8')).toContain(testCase.fragment)
     })
   }
+})
+
+describe('lint messages of the candidate 8 catalog', () => {
+  const message = (source, code) => lint(source).find((entry) => entry.code === code)?.message
+  it('quotes and escapes a version and a normalized key as JSON string text', () => {
+    expect(message('---\ncarve: "9"\n---', 'carve-version-unsupported')).toContain('version "\\"9\\""')
+    expect(message('[^a b]: one\n\n[^a  b]: two', 'footnote-labels-differ-only-in-whitespace')).toContain('Normalized key: "a b".')
+  })
+
+  it('names the span of an unclosed opener and counts one column in the singular', () => {
+    expect(message('a /b c', 'unclosed-inline-emphasis')).toBe('This emphasis opener is unclosed in its paragraph; add a closer.')
+    expect(message('a *b c', 'unclosed-inline-emphasis')).toBe('This strong opener is unclosed in its paragraph; add a closer.')
+    expect(message('- a\n   - b\n', 'block-opener-overindented')).toContain('indented 1 column past')
+    expect(message('- a\n    - b\n', 'block-opener-overindented')).toContain('indented 2 columns past')
+  })
 })
 
 describe('C2-W-109 lint options and ordering', () => {

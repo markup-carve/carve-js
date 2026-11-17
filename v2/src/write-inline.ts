@@ -20,6 +20,8 @@ export const IN_STRONG = 4
 /** C2-W-080: a hard break is the bare line ending. */
 export const BARE_BREAKS = 8
 export const IN_BRACKET = 16
+/** C2-W-117: a block written inside the body of a figure group, which a nested figure group cannot be. */
+export const IN_FIGURE_GROUP = 32
 
 const BACKSLASH = 92
 const EXCLAMATION = 33

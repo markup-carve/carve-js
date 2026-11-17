@@ -187,6 +187,15 @@ describe('what the writer cannot spell', () => {
     expect(losses(abbreviation)).toEqual(['structure-unspellable /children/0/children/0'])
   })
 
+  it('C2-W-117, C2-B-127: a figure group inside a figure group is written as its opener and reported', () => {
+    const nested = edited('::: figure\n![a](a.png)\n^ (a) A\n\n![b](b.png)\n^ (b) B\n:::', (blocks) => {
+      const group = ofType(blocks[0], 'figure_group')
+      group.children = [{ ...group, children: [...group.children] }]
+    })
+    expect(losses(nested)[0]).toBe('structure-unspellable /children/0/children/0')
+    expect(nearest(nested)).toContain('::: figure\n![a](a.png)')
+  })
+
   it('C2-W-117: a frontmatter format and a definition key with no spelling are reported at their node', () => {
     const format = documentOf({ type: 'frontmatter', format: 'a b', value: 'a: b\n' }, paragraph('x'))
     const key = edited('[a]: /u', (blocks) => { ofType(blocks[0], 'link_reference_definition').key = 'a]b' })

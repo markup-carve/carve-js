@@ -1109,8 +1109,17 @@ function openDiv(state: BlockState, end: number): boolean {
   let style = 0
   if (sigil === BACKSLASH) style = FLAG_HARD_BREAKS
   else if (sigil === GREATER) style = FLAG_QUOTE_FENCE
-  else if (isFigureOpener(src, runEnd)) style = FLAG_FIGURE
+  else if (isFigureOpener(src, runEnd) && !insideFigureGroup(state)) style = FLAG_FIGURE
   return pushDiv(state, style, length)
+}
+
+/** C2-B-127: a figure group does not nest; a bare figure opener anywhere in its body opens a plain div. */
+function insideFigureGroup(state: BlockState): boolean {
+  const containers = state.containers
+  for (let index = 1; index < containers.depth; index++) {
+    if (containers.kind[index] === DIV && (containers.style[index]! & FLAG_FIGURE) !== 0) return true
+  }
+  return false
 }
 
 /** Opens a div. Its run length stands in the column slot of the stack. Returns false at the depth cap. */

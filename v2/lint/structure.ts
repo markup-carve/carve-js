@@ -1,4 +1,5 @@
 import { type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
+import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
@@ -353,11 +354,11 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   if (indent > width) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
+/** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
 function figureNested(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'figure_group') return
-  const split = path.lastIndexOf('/children/')
-  if (split >= 0 && context.nodeTypes.get(path.slice(0, split)) === 'figure_group') {
-    reportNode('figure-group-nested', node, path, context)
+  if (node.type !== 'div' || !/^\s*:{3,}\s*figure\s*$/.test(raw(node, context).split('\n', 1)[0] ?? '')) return
+  for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
+    if (context.nodeTypes.get(path.slice(0, split)) === 'figure_group') return reportNode('figure-group-nested', node, path, context)
   }
 }
 
@@ -385,7 +386,7 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
 function semanticOutside(node: Node, path: string, context: LintContext): void {
   if (node.type === 'span') return
   for (const [name, value] of node.attrs?.keyValues ?? []) {
-    if (name === 'abbr' || name === 'dfn' || name === 'time' || name === 'mark') {
+    if (name === 'abbr' || name === 'time' || name === 'kbd') {
       reportNode('semantic-attribute-outside-span', node, path, context, { name, type: node.type, value })
     }
   }
@@ -557,7 +558,7 @@ function isDigit(ch: string | undefined): boolean {
 function platformMention(node: Node, path: string, context: LintContext): void {
   if (node.type === 'mention') {
     reportNode('platform-mention-token', node, path, context,
-      { host: 'GitHub', what: 'a mention token', text: raw(node, context) })
+      { host: 'GitHub', text: raw(node, context) })
     return
   }
   if (node.type !== 'text') return
@@ -569,7 +570,7 @@ function platformMention(node: Node, path: string, context: LintContext): void {
     let end = at + 1
     while (isWord(source[end]) || source[end] === '-') end++
     context.report('platform-mention-token', range[0] + at, range[0] + end, path,
-      { host: 'GitHub', what: 'a mention token', text: source.slice(at, end) })
+      { host: 'GitHub', text: source.slice(at, end) })
     at = end - 1
   }
 }
@@ -634,10 +635,11 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
 function carveVersion(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'frontmatter') return
   for (const line of node.value.split('\n')) {
-    if (!line.startsWith('carve:')) continue
-    const version = line.slice(6).trim()
+    const key = /^(carve|carve-version):/.exec(line)
+    if (key === null) continue
+    const version = line.slice(key[0].length).trim()
     if (version === '' || version === '0.2' || version === '0.2.0') return
-    reportNode('carve-version-unsupported', node, path, context, { version, SPEC_VERSION: '0.2' },
+    reportNode('carve-version-unsupported', node, path, context, { version: jsonText(version), SPEC_VERSION: '0.2' },
       version.startsWith('0.') ? 0 : 1)
     return
   }
@@ -674,6 +676,11 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
   context.report('comment-in-reference-label', line.start + open, range[1], path)
 }
 
+/** A value as it stands inside a JSON string, its quotes and backslashes escaped. */
+function jsonText(value: string): string {
+  return JSON.stringify(value).slice(1, -1)
+}
+
 function footnoteWhitespace(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'footnote') return
   const source = raw(node, context)
@@ -683,7 +690,7 @@ function footnoteWhitespace(node: Node, path: string, context: LintContext): voi
   const twin = context.state.footnoteLabels.get(node.key)
   if (twin !== undefined && twin !== label) {
     reportNode('footnote-labels-differ-only-in-whitespace', node, path, context,
-      { label, twin, key: node.key })
+      { label, twin, key: jsonText(node.key) })
   } else if (twin === undefined) context.state.footnoteLabels.set(node.key, label)
 }
 
@@ -739,16 +746,34 @@ function unclosedBracedComment(node: Node, path: string, context: LintContext): 
   if (context.source.indexOf('%}', range[1]) >= 0) context.report('unclosed-braced-comment', range[0] + at, range[1], path)
 }
 
+const OPENER_BEFORE = /[\s([{]/
+
 function unclosedEmphasis(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
   const range = bounds(node, context)
   if (range === null) return
   for (let at = 0; at < source.length - 1; at++) {
-    if (source[at] !== '*' || !isWord(source[at + 1]) || isWord(source[at - 1])) continue
-    if (source.indexOf('*', at + 1) >= 0) continue
-    context.report('unclosed-inline-emphasis', range[0] + at, range[0] + at + 1, path)
+    const ch = source[at]!
+    if ((ch !== '*' && ch !== '/') || !isWord(source[at + 1]) || !OPENER_BEFORE.test(source[at - 1] ?? ' ')) continue
+    if (source.indexOf(ch, at + 1) >= 0) continue
+    context.report('unclosed-inline-emphasis', range[0] + at, range[0] + at + 1, path, { span: ch === '*' ? 'strong' : 'emphasis' })
     return
+  }
+}
+
+const NOT_SPAN = [...NODE_SLOTS.keys()].filter((type) => type !== 'span') as Node['type'][]
+// C2-I-079: a footnote label, a full reference's label or a definition label of only whitespace.
+const BLANK_LABEL = /\[\^[ \t\n]+\]|(?<=\])\[[ \t\n]+\]|^\[[ \t]+\]:/gm
+
+function blankReferenceLabel(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'text') return
+  const source = raw(node, context)
+  const range = bounds(node, context)
+  if (range === null) return
+  for (const match of source.matchAll(BLANK_LABEL)) {
+    const end = match.index + match[0].length
+    context.report('blank-reference-label', range[0] + match.index, range[0] + end, path, { text: match[0] })
   }
 }
 
@@ -870,7 +895,9 @@ function listMarkerBelowColumn(node: Node, path: string, context: LintContext): 
 
 function blockOverindent(node: Node, path: string, context: LintContext): void {
   overindentedBlocks(node, path, context, (at, child, start, end, past) => context.report('block-opener-overindented', start, end,
-    `${path}/children/${at}`, { kind: child.type.replaceAll('_', ' '), past: String(past), owner: 'list item' }))
+    `${path}/children/${at}`, {
+      kind: child.type.replaceAll('_', ' '), past: String(past), columns: past === 1 ? 'column' : 'columns', owner: 'list item',
+    }))
 }
 
 function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
@@ -1093,11 +1120,11 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block'], bidiControl),
   nodeRule('description-term-multi-line', ['definition_term'], multilineTerm),
   nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
-  nodeRule('figure-group-nested', ['figure_group'], figureNested),
+  nodeRule('figure-group-nested', ['div'], figureNested),
   nodeRule('figure-group-panel-number', ['figure_group'], figurePanelNumber),
   nodeRule('footnotes-placement-in-container', ['directive'], footnotePlacement),
   nodeRule('references-placement-in-container', ['directive'], referencesPlacement),
-  nodeRule('semantic-attribute-outside-span', ['paragraph', 'heading', 'link', 'image', 'strong'], semanticOutside),
+  nodeRule('semantic-attribute-outside-span', NOT_SPAN, semanticOutside),
   nodeRule('semantic-attribute-value-ignored', ['span'], semanticValue),
   nodeRule('table-column-arity', ['table'], tableColumnArity),
   nodeRule('table-attribute-invalid', ['table'], invalidTableAttribute),
@@ -1124,6 +1151,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('djot-intraword-underscore', ['text'], intrawordUnderscore),
   nodeRule('emphasis-marker-before-attributes', ['text'], emphasisBeforeAttrs),
   nodeRule('carve-version-unsupported', ['frontmatter'], carveVersion),
+  nodeRule('blank-reference-label', ['text'], blankReferenceLabel),
   nodeRule('comment-fence-closer-with-text', ['comment'], commentFenceCloserText),
   nodeRule('comment-in-reference-label', ['comment'], commentInLabel),
   nodeRule('footnote-labels-differ-only-in-whitespace', ['footnote'], footnoteWhitespace),

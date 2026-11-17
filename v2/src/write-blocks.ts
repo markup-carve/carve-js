@@ -15,7 +15,7 @@ import { isRegionMarkerLine } from './include-source.ts'
 import { isFenceWord } from './opener.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
-import { BARE_BREAKS, bracedComment, lineCommentText, writeContent, writeInlines } from './write-inline.ts'
+import { BARE_BREAKS, bracedComment, IN_FIGURE_GROUP, lineCommentText, writeContent, writeInlines } from './write-inline.ts'
 import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { AFTER_MARK, AS_CONTENT, AS_INLINES, AS_LINE, IN_TITLE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
@@ -430,12 +430,14 @@ function trailingComments(nodes: readonly Node[]): number {
 
 /** C2-W-059: the comments between a figure group and its caption stand between the closer and the caption line. */
 function figureGroup(w: Writer, node: FigureGroupNode, prefix: string, flags: number): void {
+  // C2-B-127: the nested group is written as its opener, which reads back as a div.
+  if ((flags & IN_FIGURE_GROUP) !== 0) lose(w, node, null)
   attributeLine(w, node, prefix)
   const children = node.children
   const captionNode = node.caption
   const after = captionNode === undefined ? 0 : trailingComments(children)
   const inside = children.slice(0, children.length - after)
-  fenced(w, node, prefix, ' figure', true, () => writeBlocks(w, inside, prefix, flags, false))
+  fenced(w, node, prefix, ' figure', true, () => writeBlocks(w, inside, prefix, flags | IN_FIGURE_GROUP, false))
   for (const late of children.slice(children.length - after)) if (late.type === 'comment') comment(w, late, prefix)
   caption(w, captionNode, prefix, flags)
 }

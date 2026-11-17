@@ -55,9 +55,10 @@ describe('lint difference classes', () => {
     }
   })
 
-  it('C2-B-127: a nested figure group is no panel of the outer group', () => {
+  it('C2-B-127: a figure opener inside a figure group is a plain div and no panel of the group', () => {
     expect(codes('::: figure\n::: figure\n![]()\n^ (\n:::\n^ F')).toEqual(
-      ['figure-group-empty', 'figure-group-single-panel', 'figure-group-nested', 'a11y/image-alt'])
-    expect(codes('::: figure\n::: figure\n:::\n^ #')).toEqual(['figure-group-empty', 'figure-group-empty', 'figure-group-nested'])
+      ['figure-group-empty', 'figure-group-nested', 'a11y/image-alt', 'unattached-caption'])
+    expect(codes('::: figure\n::: figure\n:::\n^ #')).toEqual(['figure-group-empty', 'figure-group-nested', 'unattached-caption'])
+    expect(codes('::: figure\n> ::: figure\n> ![a](a.png)\n> :::\n:::')).toContain('figure-group-nested')
   })
 })
