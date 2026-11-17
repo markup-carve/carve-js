@@ -1,6 +1,6 @@
 # Example fixes for the specification
 
-**Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, F11 (clause case `CC-287`, field `children`), F12 (`html-81`, field `tree`) and F13 (`html-80`, field `html`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
+**Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, F11 (clause case `CC-287`, field `children`), F12 (`html-81`, field `tree`), F13 (`html-80`, field `html`), F14 (`html-34`, field `html`) and F15 (clause case `CC-005`, field `html`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
@@ -165,3 +165,33 @@ Stated in the corpus: the HTML `<abbr title="a" ABBR="b">y</abbr>`, while the tr
 C2-A-035 decides the tree: names that agree without regard to ASCII case are one key, written in the first spelling with the last value. From that tree no render gives `ABBR="b"` beside `title="a"`. The two readings are `_SPEC_GAPS.md` G-H1.
 
 Clause-correct under C2-A-035: `<p><span KBD="">x</span> and <abbr title="b">y</abbr></p>`, which the engine writes; the hold is on `html` only.
+
+## F14. `html.md` Example 34: `expected.html`
+
+Input, with `--profile comment`:
+
+```carve
+## Sub *em* `code`
+
+[Sub em code][] and </#Sub-em-code>
+```
+
+Stated in the corpus: the second paragraph is `<p>[Sub em code][] and &lt;/#Sub-em-code&gt;</p>`.
+
+The cross-reference is outside the `comment` profile and resolved, so C2-H-165 writes it "as the text it writes in its link (C2-H-096)"; CC-358 states the same for `minimal`. The two readings are `_SPEC_GAPS.md` G-H2.
+
+Clause-correct under C2-H-165: `<p>[Sub em code][] and Sub em code</p>`; the heading paragraph is as stated.
+
+## F15. Clause case CC-005: `expected.html`
+
+Input, with profile `comment`:
+
+```carve
+> > > > `x`
+```
+
+Stated in the corpus: the code span past the nesting bound is written `` `x` ``, its source spelling.
+
+C2-H-165, as changed by the P1-a ruling: "a `code`, a `literal_inline` and a `math` node give their value", and C2-H-166 makes the span a degraded node. CC-006 was changed by the same ruling for math; CC-005 was not.
+
+Clause-correct: `<blockquote><p>x</p></blockquote>` as the innermost quote, the rest as stated.

@@ -20,6 +20,24 @@ Reading two, C2-H-013: the keys `abbr`, `time` and `kbd` "are no attribute names
 
 The engine follows C2-A-035 for the tree; its HTML follows from that tree. The HTML field is held (`_EXAMPLE_FIXES.md` F13). One sentence in C2-A-035 naming the three keys as an exception, or a different example input, closes it.
 
+### G-H2. A degraded cross-reference to a degraded heading
+
+Input (html.md Example 34, profile `comment`; CC-358 is the same shape under `minimal`):
+
+```carve
+## Sub *em* `code`
+
+[Sub em code][] and </#Sub-em-code>
+```
+
+Both profiles degrade the heading and the cross-reference.
+
+Reading one, C2-H-177: a cross-reference "that resolved to it [is] written in [its] unresolved form [...] as if the heading did not exist", so the text is `</#Sub-em-code>`. Example 34 states this.
+
+Reading two, C2-H-165 (the P1-a ruling of lane 30): a degraded "resolved `xref` [is written] as the text it writes in its link (C2-H-096) and an unresolved one as typed", so the text is `Sub em code`. CC-358 states this for `# H` and `</#H>`. Resolution does not read the profile (C2-H-177, first sentence), so the cross-reference is resolved.
+
+No built-in profile keeps headings and degrades cross-references, so under reading one the C2-H-165 sentence would never apply. The engine follows reading two, the newer ruling: a degraded cross-reference writes its link text, and one the profile keeps writes its typed form when its heading is degraded. Example 34 is held on `html` (`_EXAMPLE_FIXES.md` F14).
+
 ## Freeze candidate 6 session (spec `068552fc`)
 
 Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.
