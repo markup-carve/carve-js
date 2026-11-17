@@ -88,9 +88,15 @@ describe('the planned writer', () => {
     })
   }
 
-  it('C2-W-016: a CR before a line end in the value of an atom leaves the group to the repair', () => {
-    const parsed = parseWithLayout('x %% c\r', { extensions: [] })
-    expect(writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false).stats.planned).toBe(0)
+  it('C2-W-016: a CR before a line end, in text or in the value of an atom, is planned as a reported loss', () => {
+    for (const [source, path] of [['x %% c\r', '/children/0/children/1'], ['a\r \nb\n', '/children/0/children/0'],
+      ['x %% c\r\t\n', '/children/0/children/1'], ['a\r\r\nb\n', '/children/0/children/0'], ["x'}/\\*\r", '/children/0/children/2']]) {
+      const result = formatBy(source!, 'plan')
+      expect(result.stats.planned, source).toBe(1)
+      expect(result.stats.repaired, source).toBe(0)
+      expect(result.stats.parses, source).toBe(0)
+      expect(result.output.diagnostics.map((entry) => [entry.code, entry.path]), source).toEqual([['field-unspellable', path]])
+    }
   })
 
   it('C2-B-010: a CR that other content follows on its line is no line end, and the plan writes it', () => {
@@ -100,7 +106,6 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    for (const source of ['a\r \nb\n', 'x %% c\r\t\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
   it('C2-B-146, C2-B-149: a caption mark below a line of text or after a blank line is text, and the plan writes it bare', () => {
@@ -411,7 +416,6 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    expect(formatBy('a\r\r\nb\n', 'both').stats.reasons.has('control')).toBe(true)
   })
 
   it('C2-I-109: an inline footnote has its own run of single quotes, and the quotes around it are planned', () => {

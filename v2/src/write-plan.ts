@@ -33,11 +33,13 @@ export interface Plan {
   /** Where each list of nodes of the group stands, for the rules of its line starts. */
   places: Map<readonly Node[], LeafPlace>
   leaves: number
+  /** C2-W-016: the nodes whose value no spelling keeps, which the write reports. */
+  lost: Node[]
 }
 
 export function createPlan(): Plan {
   return {
-    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], places: new Map(), leaves: 0,
+    undecided: null, detail: '', covered: new Set(), escapes: new Map(), respell: [], places: new Map(), leaves: 0, lost: [],
   }
 }
 
@@ -705,13 +707,18 @@ function isLineEndAfterCr(codes: readonly number[], at: number): boolean {
   return at === codes.length || codes[at] === LF
 }
 
+// One entry per CR, so the writer can tell that every line it ends with a CR is one the plan reported.
+function loseValue(leaf: Leaf, node: Node): void {
+  leaf.lostValues.push(node)
+}
+
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   const codes = leaf.codes
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
     leaf.cursor = at
     const kind = leaf.kinds[at]
     // C2-W-016: a CR before a line end joins it, in text and in the value of an atom alike.
-    if (codes[at] === CR && isLineEndAfterCr(codes, at + 1)) return undecide(leaf, 'control')
+    if (codes[at] === CR && isLineEndAfterCr(codes, at + 1)) loseValue(leaf, leaf.owners[at]!)
     if (kind === ATOM && !continuesAtom(leaf, at)) {
       const node = leaf.owners[at]!
       checkAtom(leaf, at, node)
@@ -929,7 +936,10 @@ export function planLeaf(w: Writer, nodes: readonly Node[], flags: number, conte
     const text = leafText(leaf)
     const before = JSON.stringify(text.slice(Math.max(0, leaf.where - 16), leaf.where))
     plan.detail = `${before} | ${JSON.stringify(text.slice(leaf.where, leaf.where + 16))}`
-  } else record(plan, leaf, escaped)
+  } else {
+    record(plan, leaf, escaped)
+    plan.lost.push(...leaf.lostValues)
+  }
   plan.respell.push(...leaf.respell)
   return content
 }

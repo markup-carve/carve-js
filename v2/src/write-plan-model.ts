@@ -64,6 +64,8 @@ export interface Leaf {
   textOpener: boolean
   /** The number of marks of the tree open at the unit in the scan. */
   openDepth: number
+  /** C2-W-016: the nodes whose value holds a CR at a line end, which no spelling keeps. */
+  lostValues: Node[]
 }
 
 export function createLeaf(): Leaf {
@@ -71,7 +73,7 @@ export function createLeaf(): Leaf {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
     extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
+    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1, lostValues: [],
   }
 }
 

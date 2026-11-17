@@ -560,7 +560,7 @@ function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: num
   if (plan.undecided !== null) return plan.undecided
   if (w.losses.entries.length !== reported) return 'loss'
   // C2-W-016, C2-B-010: a CR that only spaces and tabs follow on its line, in a block value as in an inline, joins the line end.
-  if (w.lines.some(endsWithCr)) return 'control'
+  if (w.lines.filter(endsWithCr).length > plan.lost.length) return 'control'
   return uncovered(group, plan) ? 'coverage' : null
 }
 
@@ -618,7 +618,9 @@ function planGroup(w: Writer, run: WriterRun, group: readonly Node[], first: boo
     resetLines(w)
     writeBlocks(w, group, '', 0, false)
   }
-  if (run.check && w.lines.length > 0 && !readsBack(w, group, first)) {
+  // C2-W-016: a CR at a line end has no spelling; the group is reported and does not read back.
+  for (const node of plan.lost) lose(w, node, 'value')
+  if (run.check && plan.lost.length === 0 && w.lines.length > 0 && !readsBack(w, group, first)) {
     restoreEscapes(w, replaced)
     noteReason(run, 'check', '')
     return false
