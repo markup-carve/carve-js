@@ -896,7 +896,7 @@ type Pending = [readonly Node[], number, number, LeafPlace]
 
 /** C2-W-075: comment-held image brackets can reframe a reference, and label escapes can change a collapsed key. */
 function referenceNeedsCheck(node: Node): boolean {
-  if (node.type === 'image') return node.alt?.includes('%%[') === true
+  if (node.type === 'image') return node.alt !== undefined && /%%[^\r\n]*\[/u.test(node.alt)
   return node.type === 'link' && node.refForm === 'collapsed' && node.children.some((child) => child.type === 'comment')
 }
 
