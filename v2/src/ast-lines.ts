@@ -4,7 +4,7 @@ import { type IncludeNode, type LinkReferenceDefinitionNode } from './ast.ts'
 import { unescape } from './attributes.ts'
 import { APOSTROPHE, BACKSLASH, PAREN_CLOSE, PAREN_OPEN, QUOTE_MARK } from './chars.ts'
 import { readInclude } from './include.ts'
-import { definitionDestinationEnd, quotedEnd, skipSpaces } from './lines.ts'
+import { definitionDestinationEnd, quotedEnd, skipSpaceRun } from './lines.ts'
 
 /** The quoted title of a code fence, without its escapes (C2-B-120). */
 export function openerTitle(src: string, start: number, end: number): string {
@@ -13,7 +13,7 @@ export function openerTitle(src: string, start: number, end: number): string {
 
 /** C2-B-083: the link definition of `key`, with the destination and the optional quoted title behind its colon. */
 export function linkDefinitionFields(src: string, pos: number, end: number, key: string): LinkReferenceDefinitionNode {
-  const start = skipSpaces(src, pos, end)
+  const start = skipSpaceRun(src, pos, end)
   const p = definitionDestinationEnd(src, start, end)
   const out: LinkReferenceDefinitionNode = { type: 'link_reference_definition', key, namespace: 'link', href: destination(src, start, p) }
   const quote = p + 1 < end ? src.charCodeAt(p + 1) : 0

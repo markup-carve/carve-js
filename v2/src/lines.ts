@@ -415,7 +415,13 @@ export function isLinkDefinition(src: string, pos: number, end: number): boolean
   if (pos + 1 >= end || src.charCodeAt(pos) !== BRACKET_OPEN || src.charCodeAt(pos + 1) === CARET) return false
   const marker = labelEnd(src, pos, end, 1, true)
   if (marker < 0 || marker >= end || src.charCodeAt(marker) !== SPACE) return false
-  return definitionDestinationEnd(src, skipSpaces(src, marker + 1, end), end) >= 0
+  return definitionDestinationEnd(src, skipSpaceRun(src, marker + 1, end), end) >= 0
+}
+
+/** C2-B-083: the spaces between the colon of a definition and its destination; a tab is whitespace of no destination. */
+export function skipSpaceRun(src: string, pos: number, end: number): number {
+  while (pos < end && src.charCodeAt(pos) === SPACE) pos++
+  return pos
 }
 
 /** Offset after the quoted string at `pos`, or -1. */

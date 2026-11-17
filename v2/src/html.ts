@@ -798,9 +798,14 @@ function noteBlocks(note: Note): Block[] {
   return note.inline === null ? [] : [{ type: 'paragraph', children: [...note.inline.children] }]
 }
 
+/** C2-H-091: a raw block of another format writes nothing (C2-H-054), so it is not the last block that renders. */
+function rendersInNote(node: Node): boolean {
+  return isVisible(node) && (node.type !== 'raw_block' || node.format === 'html')
+}
+
 function writeNote(r: Render, note: Note, level: number): void {
   const blocks = noteBlocks(note)
-  const visible = blocks.filter(isVisible)
+  const visible = blocks.filter(rendersInNote)
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
   r.backlinkHost = isTextParagraph(r, last) ? last : null

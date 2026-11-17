@@ -4,9 +4,9 @@ import { render } from '../src/index.ts'
 
 describe('parity defects', () => {
   it('C2-B-083: a tab after the space behind the colon starts no destination, so the line is text', () => {
-    expect(render('[a]: \t/u\n\n[a][]\n')).toBe('<p>[a]: \t/u</p>\n<p>[a][]</p>\n')
-    expect(render('[a]:\t/u\n')).toBe('<p>[a]:\t/u</p>\n')
-    expect(render('[a]:  /u\n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>\n')
+    expect(render('[a]: \t/u\n\n[a][]\n')).toBe('<p>[a]: \t/u</p>\n<p>[a][]</p>')
+    expect(render('[a]:\t/u\n')).toBe('<p>[a]:\t/u</p>')
+    expect(render('[a]:  /u\n\n[a][]\n')).toBe('<p><a href="/u">a</a></p>')
   })
 
   it('C2-B-190, C2-B-024: two openers refused at the depth limit stay lazy lines of one paragraph', () => {
