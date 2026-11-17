@@ -20,6 +20,8 @@ describe('the PHP differential', () => {
       expect(result.source, source).toBe(`${source}\n`)
       expect(result.diagnostics, source).toEqual([])
     }
+    // Behind an unescaped `!` the bracket is span text, so the procedure places no backslash.
+    for (const source of ['x![\\^]{.c}', 'x![\\^a]{.c}']) expect(formatWithDiagnostics(source).source, source).toBe(`${source.replace('\\', '')}\n`)
   })
 
   it('C2-W-011, C2-M-074: a document lang or dir, which no source spells, is reported', () => {

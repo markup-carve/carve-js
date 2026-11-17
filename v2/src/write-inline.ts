@@ -22,6 +22,7 @@ export const BARE_BREAKS = 8
 export const IN_BRACKET = 16
 
 const BACKSLASH = 92
+const EXCLAMATION = 33
 const PIPE = 124
 const SPACE = 32
 const BACKTICK = 96
@@ -503,10 +504,7 @@ const WRITERS: InlineWriters = {
   insert: braced('+', '+'),
   delete: braced('-', '-'),
   critic_comment: (w, node, flags) => `{#${cellValue(w, node, node.value, flags)}#}`,
-  span: (w, node, flags) => {
-    escapeLeadingCaret(w, node.children)
-    return `[${writeInlines(w, node.children, flags)}]`
-  },
+  span: (w, node, flags) => `[${writeInlines(w, node.children, flags)}]`,
   link: linkNode,
   image: imageNode,
   inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
@@ -583,6 +581,17 @@ export function lineStartBreak(node: Node, lineStart: boolean): string | null {
   return node.type === 'hard_break' && lineStart ? '\\\n' : null
 }
 
+/** The escapes a node takes from its neighbors before it is written. */
+function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, afterBang: boolean): void {
+  const node = nodes[at]!
+  if (node.type === 'text') {
+    doubleLastBackslash(w, node, nodes, end, flags)
+    escapeGluedBacktick(w, node, nodes[at - 1])
+  }
+  // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
+  if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children)
+}
+
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
@@ -603,10 +612,7 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
       last = 10
     }
     const end = partEnd(w, nodes, at)
-    if (node.type === 'text') {
-      doubleLastBackslash(w, node, nodes, end, flags)
-      escapeGluedBacktick(w, node, nodes[at - 1])
-    }
+    placeEscapes(w, nodes, at, end, flags, last === EXCLAMATION && out.charCodeAt(out.length - 2) !== BACKSLASH)
     const part: string = lineStartBreak(node, lineStart) ?? gluedPart(w, nodes, at, end, flags, last)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
