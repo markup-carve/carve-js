@@ -43,11 +43,11 @@ function convert(pos: Fields, offsets: readonly number[]): boolean {
  * With the source each offset is converted; without it an offset is kept only when no string of the tree holds a
  * character past ASCII, and otherwise every `pos` is dropped with one loss at the first.
  */
-export function byteOffsetPositions(document: Fields, state: MigrationState): void {
+export function byteOffsetPositions(document: Fields, state: MigrationState, base: string): void {
   const offsets = state.source === undefined ? undefined : byteOffsets(state.source)
   if (offsets === undefined && !nonAscii(document)) return
   let reported = false
-  walk(document, '', (node, path) => {
+  walk(document, base, (node, path) => {
     if (!object(node['pos'])) return
     const pos = { ...node['pos'] }
     if (offsets !== undefined && convert(pos, offsets)) { node['pos'] = pos; return }

@@ -234,7 +234,7 @@ function migrateDocument(old: Fields, envelope: Fields | undefined, state: Migra
   if (document === undefined) throw new Error('migration input is not a document')
   const declarations = rootDeclarations(state)
   if (declarations !== undefined && document['extensions'] === undefined) document['extensions'] = declarations
-  if (!state.draft) byteOffsetPositions(document, state)
+  if (!state.draft) byteOffsetPositions(document, state, envelope === undefined ? '' : '/document')
   const extensions = envelopeDeclarations(state)
   validateTree(document, envelope === undefined ? undefined : { astVersion: '2.0', document,
     ...(extensions === undefined ? {} : { extensions }) }, undefined, stubs(state))

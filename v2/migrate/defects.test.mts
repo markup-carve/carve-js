@@ -114,5 +114,6 @@ describe('migration defects', () => {
       endColumn: 2, startOffset: 0, endOffset: 1 } }]))
     assert.deepEqual(ascii.diagnostics, [])
     assert.equal(JSON.stringify(ascii.document).includes('"pos"'), true)
+    assert.deepEqual(codes(migrateTree({ astVersion: '1.2', document: old })), ['migration-loss /document/children/0/children/0/pos'])
   })
 })
