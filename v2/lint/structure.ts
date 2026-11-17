@@ -950,7 +950,7 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
   const second = context.layouts.get(`${path}/children/1`)
   if (first?.markerColumn === undefined || second?.markerColumn === undefined) return
   if (first.markerColumn > second.markerColumn && first.contentColumn === second.contentColumn) {
-    reportNode('ordered-marker-right-aligned', node.children[0]!, `${path}/children/0`, context)
+    reportNode('ordered-marker-right-aligned', node.children[1]!, `${path}/children/1`, context)
   }
 }
 

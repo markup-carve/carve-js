@@ -14,6 +14,12 @@ it('C2-B-081: a definition shaped line in a quote is reported', () => {
   expect(entries).toHaveLength(1)
   expect(entries[0].range.startOffset).toBe(2)
 })
+
+it('C2-B-030: the right aligned ordered marker is reported at that marker', () => {
+  const entries = lint(' 9. a\n10. b\n').filter((entry) => entry.code === 'ordered-marker-right-aligned')
+  expect(entries).toHaveLength(1)
+  expect(entries[0].range.startOffset).toBe(6)
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 
