@@ -197,6 +197,12 @@ describe('attributes', () => {
     expect(first?.attrs).toEqual({ keyValues: [['align', 'center']] })
   })
 
+  it('C2-A-035, C2-H-075: an attribute named like the key of its semantic element is dropped and reported', () => {
+    const [first] = children('<p><abbr title="a" ABBR="b">y</abbr></p>') as { children: { attrs: unknown }[] }[]
+    expect(first?.children[0]?.attrs).toEqual({ keyValues: [['abbr', 'a']] })
+    expect(codes('<p><abbr title="a" ABBR="b">y</abbr></p>')).toContain('import-attribute-dropped')
+  })
+
   it('C2-M-075, C2-H-015: the declared value is trimmed and folded to lower case', () => {
     const [first] = children('<p style="text-align:  Right ;">x</p>') as { attrs: unknown }[]
     expect(first?.attrs).toEqual({ keyValues: [['align', 'right']] })
