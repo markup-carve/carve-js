@@ -283,9 +283,10 @@ function brace(leaf: Leaf, at: number, escaped: Uint8Array): void {
     if (reading === UNDECIDED) return undecide(leaf, 'attribute block')
     if (reading === ESCAPED) return void (escaped[at] = 1)
   }
-  // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content.
+  // C2-I-025, C2-I-043: `{%` and `{#` open a comment only where a `%}` or a `#}` follows in the content, behind the
+  // mark of the opener and, for `{#`, one character more.
   const next = code(leaf, at + 1)
-  undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) > at, leaf, 'brace')
+  undecidedIf((next === 37 || next === 35) && lastClose(leaf, next) >= at + (next === 35 ? 4 : 3), leaf, 'brace')
   // C2-W-096: the source of an atom may start a braced mark that the pairs of text do not see.
   // C2-I-060: with no closer of that mark later in the leaf, the opener is text and the atom keeps its source.
   const opens = leaf.kinds[at + 1] === ATOM && nextIs(leaf, at, BRACED_CLOSER_MARKS)
@@ -309,7 +310,9 @@ function lastClose(leaf: Leaf, value: number): number {
 function closingBrace(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isLiteral(leaf, at, escaped) || leaf.kinds[at - 1] !== ATOM) return
   const before = code(leaf, at - 1)
-  undecidedIf(before >= 0 && BRACED_CLOSER_MARKS.includes(String.fromCharCode(before)), leaf, 'brace')
+  // C2-I-060: with no opener of that mark earlier in the leaf, the closer is text.
+  const marked = before >= 0 && BRACED_CLOSER_MARKS.includes(String.fromCharCode(before))
+  undecidedIf(marked && firstOpen(leaf, before) < at - 1, leaf, 'brace')
 }
 
 /** Whether the bare text before `at` is one of `chars`, so that a run that starts there may take `at` in. */
