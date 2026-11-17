@@ -403,6 +403,14 @@ describe('layout', () => {
 })
 
 describe('canonical forms: blocks', () => {
+  it('C2-W-126, C2-B-015: a nested ordered list that starts past 1 below a paragraph of its item follows a blank line', () => {
+    const tree = parse('- a\n\n  3. b\n')
+    const source = write(tree)
+    expect(source).toBe('- a\n\n  {start=3}\n  . b\n')
+    expect(treesEqual(parse(source), tree)).toBe(true)
+    expect(write(parse('- a\n\n  1. b\n'))).toBe('- a\n  . b\n')
+  })
+
   it('C2-W-035: a heading is written with =, one per level, and one space', () => {
     expect(format('## T')).toBe('== T\n')
     expect(format('=   T')).toBe('= T\n')
