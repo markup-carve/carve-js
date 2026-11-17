@@ -336,8 +336,9 @@ function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): numb
 const UNMARKED: ReadonlySet<string> = new Set(['comment', 'soft_break', 'hard_break'])
 
 /**
- * C2-B-147, C2-B-157: whether the paragraph before `end` may still be a block image, which alone takes a caption: it
- * holds no text but blanks and no node but one image, comments and breaks.
+ * C2-B-147, C2-B-157, C2-B-158: whether the paragraph before `end` may still be a block image or a math block, which
+ * alone among paragraphs take a caption: it holds no text but blanks and no node but images, display math, comments
+ * and breaks.
  */
 function mayBeBlockImage(leaf: Leaf, end: number): boolean {
   let depth = 0
@@ -356,6 +357,7 @@ function blankOrImage(leaf: Leaf, unit: number): boolean {
   const value = leaf.codes[unit]!
   if (kind === TEXT) return isBlank(value) || value === LF
   const owner = leaf.owners[unit]
+  if (owner?.type === 'math') return owner.display
   return kind !== ATOM || owner === undefined || owner.type === 'image' || UNMARKED.has(owner.type)
 }
 
