@@ -169,7 +169,7 @@ function linkUnits(w: Writer, leaf: Leaf, node: LinkNode, flags: number): boolea
   pushString(leaf, '[', OPEN, node)
   modelInlines(w, leaf, node.children, flags | IN_BRACKET)
   pushString(leaf, ']', CLOSE, node)
-  pushString(leaf, target(node, node.href), ATOM, node)
+  pushString(leaf, target(node, node.href, (flags & IN_CELL) !== 0), ATOM, node)
   return true
 }
 
@@ -216,7 +216,7 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
   if (node.type === 'inline_extension' && node.name.includes('.')) return undecide(leaf, 'extension')
   if (!containerUnits(w, leaf, node.type, node, flags)) return pushString(leaf, writeInline(w, node, flags), ATOM, node)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
-  const block = braceBlock(node)
+  const block = braceBlock(node, (flags & IN_CELL) !== 0 ? { pipes: true } : undefined)
   pushString(leaf, node.type === 'span' && block === '' ? '{}' : block, ATOM, node)
 }
 

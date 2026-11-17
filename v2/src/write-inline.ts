@@ -243,8 +243,8 @@ function cellValue(w: Writer, node: Node, value: string, flags: number): string 
   return value.replaceAll('\n', ' ')
 }
 
-/** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash. */
-function destination(value: string): string {
+/** C2-I-013: a destination reads only the escaped parenthesis and the escaped backslash; C2-W-098: in a cell a pipe too. */
+function destination(value: string, pipes: boolean): string {
   const unmatched = new Set<number>()
   const open: number[] = []
   for (let at = 0; at < value.length; at++) {
@@ -256,18 +256,24 @@ function destination(value: string): string {
   for (let at = 0; at < value.length; at++) {
     const char = value[at]!
     const next = at + 1 < value.length ? value[at + 1]! : ')'
-    if (unmatched.has(at) || (char === '\\' && '()\\'.includes(next))) out += '\\'
+    if (unmatched.has(at) || (char === '\\' && '()\\'.includes(next)) || (pipes && char === '|')) out += '\\'
     out += char
   }
   return out
 }
 
 /** C2-W-075: the label of a reference, from the tree. */
-function referenceLabel(node: LinkNode | ImageNode, key: string): string {
+function referenceLabel(node: LinkNode | ImageNode, key: string, pipes: boolean): string {
   if (node.refForm === 'collapsed') return '[]'
   if (node.refForm === 'shortcut') return ''
+  const label = pipes ? escapePipes(key) : key
   // C2-I-078: a label that starts with a caret or an at-sign is no reference label; the space folds away.
-  return key.startsWith('^') || key.startsWith('@') ? `[ ${labelText(key)}]` : `[${labelText(key)}]`
+  return key.startsWith('^') || key.startsWith('@') ? `[ ${labelText(label)}]` : `[${labelText(label)}]`
+}
+
+/** C2-W-098: in a table cell every pipe is written with a backslash (C2-B-169). */
+function escapePipes(value: string): string {
+  return value.includes('|') ? value.replaceAll('|', '\\|') : value
 }
 
 /** C2-I-076, C2-I-079: a backslash at the end of a label would take its closing bracket; a space behind it folds away. */
@@ -276,12 +282,12 @@ function labelText(key: string): string {
 }
 
 /** C2-W-073, C2-W-074: the link tail, or the label of a reference. */
-export function target(node: LinkNode | ImageNode, href: string | undefined): string {
+export function target(node: LinkNode | ImageNode, href: string | undefined, pipes = false): string {
   const key = node.key
-  if (key !== undefined) return referenceLabel(node, key)
+  if (key !== undefined) return referenceLabel(node, key, pipes)
   const tooltip = node.tooltip
-  const title = tooltip === undefined ? '' : ` ${quoted(tooltip)}`
-  return `(${destination(href ?? '')}${title})`
+  const title = tooltip === undefined ? '' : ` ${quoted(tooltip, pipes)}`
+  return `(${destination(href ?? '', pipes)}${title})`
 }
 
 /** C2-W-075, C2-W-084: the verbatim text of a reference, where the sidecar holds it and the reparse did not refuse it. */
@@ -321,7 +327,7 @@ function linkNode(w: Writer, node: LinkNode, flags: number): string {
     if (escapes[0] !== 0) w.escapes.set(first, [0, ...escapes])
   }
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
-  return `[${collapsedContent(node, content, flags)}]${target(node, node.href)}`
+  return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
 
 /**
@@ -386,7 +392,9 @@ function isLabelSpace(char: string): boolean {
 
 function imageNode(w: Writer, node: ImageNode, flags: number): string {
   const raw = rawReference(w, node, flags)
-  return raw === null ? `![${node.alt ?? ''}]${target(node, node.src)}` : `!${raw}`
+  if (raw !== null) return `!${raw}`
+  const pipes = (flags & IN_CELL) !== 0
+  return `![${pipes ? escapePipes(node.alt ?? '') : node.alt ?? ''}]${target(node, node.src, pipes)}`
 }
 
 /** C2-W-116: an autolink is its target in angle brackets; the text of an email address is the address. */
@@ -520,7 +528,7 @@ export function writeInline(w: Writer, node: Node, flags: number): string {
   const out = writeOwn(w, node.type, node, flags)
   if (out === null) return childrenOnly(w, node, flags)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
-  const block = braceBlock(node)
+  const block = braceBlock(node, (flags & IN_CELL) !== 0 ? { pipes: true } : undefined)
   return node.type === 'span' && block === '' ? `${out}{}` : out + block
 }
 

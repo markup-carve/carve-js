@@ -1003,6 +1003,22 @@ describe('escaping', () => {
     expect(format('| a \\| b | `c|d` |')).toBe('| a \\| b | `c|d` |\n')
   })
 
+  it('C2-W-098: a pipe in a cell takes a backslash in a value, a destination, a title, an alt and a label', () => {
+    const source = '| [x]{title="a\\|b"} [y](/c\\|d "t\\|u") ![i\\|j](/k) [z][k\\|l] |\n\n[k|l]: /m\n'
+    const written = format(source)
+    expect(written).toBe(source)
+    expect(treesEqual(parse(written), parse(source))).toBe(true)
+  })
+
+  it('C2-W-098: a row attribute that holds a pipe reports field-unspellable', () => {
+    const tree = parse('| a |\n')
+    const row = ofType(childrenOf(ofType(tree.children[0], 'table'))[0], 'table_body').children[0]!
+    row.attrs = { keyValues: [['k', 'a|b']] }
+    const result = writeWithDiagnostics(tree)
+    expect(result.source).toBe('| a |\n')
+    expect(result.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['field-unspellable', '/children/0/children/0/children/0']])
+  })
+
   it('C2-W-099: a line of underscores or of one hyphen needs no escape', () => {
     expect(write(documentOf(paragraph('___'), paragraph('-')))).toBe('___\n\n-\n')
   })
