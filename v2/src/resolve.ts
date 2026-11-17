@@ -8,7 +8,7 @@ import {
   type DirectiveNode, type DivNode, type InlineExtensionNode,
   type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type IncludeNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
-  CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
+  captionOf, CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
   type NodeOfType, type ParagraphNode,
   type TableCellNode, type TableNode,
   type TableRowNode, type XrefNode,
@@ -624,8 +624,32 @@ function numberCaptions(walk: Walk, anchors: Map<string, string>): void {
     const label = captionKey(walk, children, mark)
     const n = nextNumber(sequences, label)
     number.n = n
-    const id = attributesAct(use.host) ? use.host.attrs?.id : undefined
-    if (id !== undefined && !anchors.has(id)) anchors.set(id, label === '' ? String(n) : `${label} ${n}`)
+    captionAnchors(use.host, label === '' ? String(n) : `${label} ${n}`, anchors)
+  }
+}
+
+/** C2-H-095: the id of a numbered caption's host is a target, and so is each panel of a group. */
+function captionAnchors(host: CaptionHost, text: string, anchors: Map<string, string>): void {
+  const id = attributesAct(host) ? host.attrs?.id : undefined
+  if (id !== undefined && !anchors.has(id)) anchors.set(id, text)
+  if (host.type === 'figure_group') panelAnchors(host, text, anchors)
+}
+
+/** C2-H-096: `a` to `z`, then `aa`, `ab` and so on. */
+function panelLetter(index: number): string {
+  let out = ''
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(97 + ((n - 1) % 26)) + out
+  return out
+}
+
+/** C2-H-095, C2-A-084: each panel of a numbered group is a target, its text the group's and its letter in panel order. */
+function panelAnchors(group: FigureGroupNode, text: string, anchors: Map<string, string>): void {
+  let index = 0
+  for (const child of group.children) {
+    if (child.type === 'figure_group' || (child.type !== 'table' && captionOf(child) === undefined)) continue
+    const id = attributesAct(child) ? child.attrs?.id : undefined
+    if (id !== undefined && !anchors.has(id)) anchors.set(id, `${text}${panelLetter(index)}`)
+    index++
   }
 }
 
