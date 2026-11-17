@@ -123,7 +123,7 @@ function closePair(scan: Scan, at: number): void {
   const reading = pairReading(scan, opener, at)
   // With an opener left below it, the closing bracket would pair with that one once this opener is escaped.
   if (reading === NO_DECISION || (reading === ESCAPE_OPENER && openers.length > 0)) return undecide(leaf, 'bracket pair')
-  if (reading === ESCAPE_OPENER) scan.escaped[opener] = 1
+  if (reading === ESCAPE_OPENER) scan.escaped[keepsBracket(scan, opener, at) ? opener - 1 : opener] = 1
   // C2-I-094: a closed inline extension forms whatever follows it; its colon takes the backslash (C2-W-090), and
   // the pair it leaves is read as any other.
   const colon = leaf.extensions.get(opener)
@@ -131,6 +131,18 @@ function closePair(scan: Scan, at: number): void {
   // C2-W-125: the backslash may turn a quote before the colon; the procedure then escapes the bracket.
   if (colon > 0 && leaf.kinds[colon - 1] !== TEXT) return undecide(leaf, 'extension')
   scan.escaped[colon] = 1
+}
+
+/**
+ * C2-I-023, C2-I-024: a line comment at the start of a note's content, or one that its closer ends, needs the bracket;
+ * there the caret takes the backslash and the pair stays an ordinary bracket.
+ */
+function keepsBracket(scan: Scan, opener: number, closer: number): boolean {
+  const leaf = scan.leaf
+  if (!isFootnoteCaret(leaf, opener - 1, scan.escaped)) return false
+  const first = leaf.owners[opener + 1]
+  const last = leaf.owners[closer - 1]
+  return (first?.type === 'comment' && first.form === 'line') || (last?.type === 'comment' && last.form === 'line')
 }
 
 export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean): void {

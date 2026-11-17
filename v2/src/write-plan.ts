@@ -470,9 +470,11 @@ function percentsBehindOpeners(leaf: Leaf, escaped: Uint8Array): void {
 function opensContentBefore(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   const value = code(leaf, at)
   if (leaf.kinds[at] === OPEN) return value === 91 || (code(leaf, at - 1) === 123 && BRACED_MARKS.includes(String.fromCharCode(value)))
-  if (isLiteral(leaf, at, escaped)) return false
+  if (leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped)) return false
   if (value === 91) return true
-  return BRACED_MARKS.includes(String.fromCharCode(value)) && code(leaf, at - 1) === 123 && !isLiteral(leaf, at - 1, escaped)
+  // A `{` of text before a mark of the tree is escaped for that mark, so it opens nothing.
+  return BRACED_MARKS.includes(String.fromCharCode(value)) && code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === TEXT
+    && !isLiteral(leaf, at - 1, escaped)
 }
 
 /**
@@ -956,7 +958,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
   if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
-  if (leaf.undecided === null) commentsBeforeClosers(leaf)
+  if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
   return escaped
 }
 
@@ -964,12 +966,41 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
  * C2-I-024: a line comment directly followed by the closer of a node of the tree ends before it only where that node
  * is a bracket or a braced form, which the spelling of the node decides; the plan leaves such a group to the repair.
  */
-function commentsBeforeClosers(leaf: Leaf): void {
+function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
   for (let at = 1; at < leaf.codes.length; at++) {
     const before = leaf.owners[at - 1]
-    if (leaf.kinds[at] !== CLOSE || before?.type !== 'comment' || before.form !== 'line' || leaf.owners[at] === before) continue
-    return undecide(leaf, 'comment before a closer')
+    if (before?.type !== 'comment' || before.form !== 'line' || leaf.owners[at] === before) continue
+    if (leaf.kinds[at] === CLOSE ? !closesBracketOrBrace(leaf, at) : endsAComment(leaf, at, escaped)) {
+      return undecide(leaf, 'comment before a closer')
+    }
   }
+}
+
+/** The `[` before `at` that the reader reads as brackets and that no `]` before `at` closes. */
+function openBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  let depth = 0
+  for (let unit = 0; unit < at; unit++) {
+    const kind = leaf.kinds[unit]
+    if (kind !== OPEN && kind !== CLOSE && (kind !== TEXT || isLiteral(leaf, unit, escaped))) continue
+    if (leaf.codes[unit] === 91) depth++
+    else if (leaf.codes[unit] === 93 && depth > 0) depth--
+  }
+  return depth
+}
+
+/** Whether the closing mark at `at` is a bracket or the closer of a braced form, before which a comment ends. */
+function closesBracketOrBrace(leaf: Leaf, at: number): boolean {
+  return leaf.codes[at] === 93 || leaf.codes[at] === 125 || leaf.codes[at + 1] === 125
+}
+
+/**
+ * Whether text behind a comment starts with a braced closer, or with a bracket that the comment would take: one no
+ * bracket the reader reads is open at.
+ */
+function endsAComment(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  if (leaf.kinds[at] !== TEXT || leaf.codes[at] === LF) return false
+  if (leaf.codes[at] === 93) return openBrackets(leaf, at, escaped) === 0
+  return BRACED_MARKS.includes(String.fromCharCode(leaf.codes[at]!)) && leaf.codes[at + 1] === 125
 }
 
 function record(plan: Plan, leaf: Leaf, escaped: Uint8Array): void {

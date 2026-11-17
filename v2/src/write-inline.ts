@@ -153,6 +153,16 @@ function textNode(w: Writer, node: TextNode, flags: number): string {
   return out + escaped(w, node, value, from, value.length, flags)
 }
 
+/**
+ * C2-I-023, C2-I-024: a line comment that starts the content of a span or ends before its closer does so only in the
+ * braced form, whose opener is a content start and whose closer ends the comment.
+ */
+export function edgeComment(node: InlineParent): boolean {
+  const first = node.children[0]
+  const last = node.children[node.children.length - 1]
+  return (first?.type === 'comment' && first.form === 'line') || (last?.type === 'comment' && last.form === 'line')
+}
+
 /** Whether emphasis (bit 1) and strong (bit 2) occur below `node` (C2-W-070). */
 export function kindsBelow(w: Writer, node: Node): number {
   const known = w.kindsBelow.get(node)
@@ -179,7 +189,7 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
   return (w, node, flags) => {
     const content = contentOf(w, node, flags | inside)
     if (content === null) return ''
-    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0
+    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
     return braced ? `{${mark}${content}${mark}}` : `${mark}${content}${mark}`
   }
 }
