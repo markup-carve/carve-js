@@ -543,6 +543,8 @@ function tickPlan(leaf: Leaf): Uint8Array {
   let end = codes.length
   while (end > 0) {
     if (codes[end - 1] !== 96) {
+      // C2-B-138: no code span reaches across a comment-only line, so the runs behind it close none before it.
+      if (startsCommentLine(leaf, end - 1)) later.clear()
       end--
       continue
     }
@@ -552,6 +554,15 @@ function tickPlan(leaf: Leaf): Uint8Array {
     end = start
   }
   return ticks
+}
+
+/** Whether the unit `at` starts the comment of a comment-only line: a line comment of the tree behind a line feed. */
+function startsCommentLine(leaf: Leaf, at: number): boolean {
+  if (leaf.kinds[at] === TEXT || leaf.owners[at]?.type !== 'comment' || leaf.codes[at] !== 37) return false
+  if (leaf.owners[at - 1] === leaf.owners[at]) return false
+  let before = at - 1
+  while (leaf.codes[before] === 32 || leaf.codes[before] === 9) before--
+  return before < 0 || leaf.codes[before] === LF
 }
 
 function tickRun(leaf: Leaf, ticks: Uint8Array, start: number, end: number, later: Set<number>): void {

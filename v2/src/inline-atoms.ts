@@ -12,7 +12,8 @@ import {
   HARD_BREAK, INLINE_COMMENT, LITERAL, MATH, MENTION, NBSP, RAW_INLINE, SOFT_BREAK, SYMBOL, TAG, XREF,
 } from './inline-kinds.ts'
 import {
-  closerMissing, type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START, TOKEN_WIDTH,
+  atomLimit, closerMissing, type InlineState, NONE, OPEN_EXTENSION, pushToken, TOKEN_BRACED_OPEN, TOKEN_C, TOKEN_END, TOKEN_START,
+  TOKEN_WIDTH,
 } from './inline-state.ts'
 import {
   BRACED_MARKS, CHARACTER_CLASSES, CLASS_BRACED_MARK, CLASS_EMAIL_DOMAIN, CLASS_EMAIL_LAST, CLASS_EMAIL_LOCAL,
@@ -165,7 +166,8 @@ function codeSpan(state: InlineState, start: number, run: number, kind: number, 
   let close = state.codeRuns === null ? closingRun(text, open, state.end, length) : indexedClosingRun(state, open, length)
   if (close === NONE && state.codeRuns === null) close = indexedClosingRun(state, open, length)
   // C2-I-017, C2-I-119: with no closing run the opener is text, the prefix with it, and the scan goes on behind the run.
-  if (close === NONE) return open
+  // C2-B-138: a closing run behind a comment-only line closes nothing.
+  if (close === NONE || close >= atomLimit(state, open)) return open
   const padded = hasSpacePadding(text, open, close)
   const contentStart = padded ? open + 1 : open
   const contentEnd = padded ? close - 1 : close
@@ -279,8 +281,9 @@ function bracedComment(state: InlineState, pos: number, kind: number): number {
     else state.commentCloserMissingFrom = pos
     return pos + 1
   }
-  // C2-I-063: an editorial comment holds at least one character before the first closer.
-  if (editorial && close === pos + 2) return pos + 1
+  // C2-I-063: an editorial comment holds at least one character before the first closer. C2-B-138: none spans a
+  // comment-only line.
+  if ((editorial && close === pos + 2) || close >= atomLimit(state, pos)) return pos + 1
   pushToken(state, kind, pos, close + 2, pos + 2, close, editorial ? 0 : FLAG_BRACED, NONE)
   return close + 2
 }

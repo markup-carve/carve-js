@@ -87,6 +87,8 @@ export interface InlineState {
   unclosedNotes: number[]
   /** Whether the pass read a caret pair as text inside an open note. */
   demotedInNote: boolean
+  /** C2-B-138: the content offsets of the comment-only lines, which no atom spans, once an atom asked. */
+  commentLines: number[] | null
 
   // Memos that let an opener fail in bounded work. Each holds the offset up to which a search
   // has already found nothing, or NONE. The three closer memos hold the offset from which on no
@@ -164,6 +166,7 @@ function createState(): InlineState {
     definitions: null,
     unclosedNotes: [],
     demotedInNote: false,
+    commentLines: null,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,
     tokenEnd: 0,
@@ -300,6 +303,31 @@ export function closerMissing(from: number, pos: number): boolean {
 }
 
 /** Sets the content of a pass: the source spans `spans[from..to)`, as start and end pairs. */
+/** C2-B-138: where the content of an atom that opens at `pos` must close: the next comment-only line, or the end. */
+export function atomLimit(state: InlineState, pos: number): number {
+  if (!state.lineComments) return state.end
+  const lines = state.commentLines ??= commentOnlyLines(state)
+  let low = 0
+  let high = lines.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (lines[middle]! <= pos) low = middle + 1
+    else high = middle
+  }
+  return lines[low] ?? state.end
+}
+
+function commentOnlyLines(state: InlineState): number[] {
+  const out: number[] = []
+  const text = state.text
+  for (let line = 1; line < state.lineCount; line++) {
+    let at = state.lineText[line]!
+    while (text.charCodeAt(at) === 32 || text.charCodeAt(at) === 9) at++
+    if (text.charCodeAt(at) === 37 && text.charCodeAt(at + 1) === 37 && text.charCodeAt(at + 2) !== 37) out.push(state.lineText[line]!)
+  }
+  return out
+}
+
 export function setContent(state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number): void {
   const lines = (to - from) >> 1
   if (lines > state.lineText.length) {

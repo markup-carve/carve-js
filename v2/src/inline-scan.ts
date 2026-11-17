@@ -161,6 +161,7 @@ export function scanInline(
   state.lineComments = lineComments
   state.cell = cell
   state.unclosedNotes = []
+  state.commentLines = null
   do scanPass(state)
   while (unclosedNoteDemoted(state))
   failOpenBrackets(state)
