@@ -3,7 +3,7 @@
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
 import { foldLabel } from './ast-attributes.ts'
 import {
-  APOSTROPHE, AT_SIGN, BACKSLASH, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT,
+  APOSTROPHE, AT_SIGN, BACKSLASH, BACKTICK, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT,
   QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
@@ -283,6 +283,53 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   // C2-I-072: the pair forms no construct. It is text and bounds nothing.
   if (!formed) state.tokens[open] = TOKEN_TEXT
   return pos + 1
+}
+
+/** C2-I-023: whether `pos` directly follows the `^[` of an inline footnote. */
+export function followsNoteOpener(state: InlineState, pos: number): boolean {
+  if (state.bracketDepth === 0) return false
+  const open = state.brackets[state.bracketDepth - 1]!
+  return state.tokens[open + TOKEN_A] === OPEN_FOOTNOTE && state.tokens[open + TOKEN_END] === pos
+}
+
+/** The number of brackets above the innermost open inline footnote, or NONE where no note is open. */
+function bracketsAboveNote(state: InlineState): number {
+  for (let at = state.bracketDepth - 1; at >= 0; at--) {
+    if (state.tokens[state.brackets[at]! + TOKEN_A] === OPEN_FOOTNOTE) return state.bracketDepth - 1 - at
+  }
+  return NONE
+}
+
+/** The end of a backtick run at `pos` read as a code span opener: past its closer on the line, or past the run. */
+function codeSpanEnd(text: string, pos: number, end: number): number {
+  let run = pos
+  while (run < end && text.charCodeAt(run) === BACKTICK) run++
+  const marks = text.slice(pos, run)
+  for (let p = text.indexOf(marks, run); p >= 0 && p < end; p = text.indexOf(marks, p + marks.length)) {
+    let after = p + marks.length
+    if (text.charCodeAt(after) !== BACKTICK && text.charCodeAt(p - 1) !== BACKTICK) return after
+    while (text.charCodeAt(after) === BACKTICK) after++
+    p = after - marks.length
+  }
+  return run
+}
+
+/**
+ * C2-I-024: where a line comment that starts at `from` while an inline footnote is open ends: directly before the
+ * bracket that closes the innermost open note on this line, read with code spans and the bracket stack, or `end`.
+ */
+export function noteCommentEnd(state: InlineState, from: number, end: number): number {
+  let depth = bracketsAboveNote(state)
+  if (depth === NONE) return end
+  const text = state.text
+  for (let p = from; p < end; p++) {
+    const code = text.charCodeAt(p)
+    if (code === BACKSLASH) p++
+    else if (code === BACKTICK) p = codeSpanEnd(text, p, end) - 1
+    else if (code === BRACKET_OPEN) depth++
+    else if (code === BRACKET_CLOSE && depth-- === 0) return p
+  }
+  return end
 }
 
 /** C2-I-119: at the end of the content every bracket that is still open is text. */
