@@ -38,6 +38,17 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('C2-X-031: a thirty-third qualified extension in slots is refused', () => {
+    let child: BlockExtensionNode | undefined
+    for (let depth = 0; depth < 33; depth++) {
+      child = { type: 'block_extension', name: 'ex.box', version: '1', children: [],
+        fallback: [paragraph('f')], ...(child === undefined ? {} : { slots: { s: [child] } }) }
+    }
+    const tree = { type: 'document', astVersion: '2.0',
+      extensions: [{ name: 'ex.box', version: '1', required: false, slots: ['s'] }], children: [child] }
+    expect(() => decodeTree(JSON.stringify(tree))).toThrow(/extension.*deeper than 32/u)
+  })
+
   it('C2-X-047: the tabs group uses the configured label', () => {
     const input = ':::: tabs\n::: tab "/A/ b"\nx\n:::\n::::\n'
     const html = render(input, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer },

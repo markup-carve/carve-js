@@ -534,6 +534,7 @@ function declaredNames(value: unknown): [string, { version: string, required: bo
 interface Walk {
   depth: number
   fallbacks: number
+  qualified?: number
   coreFallback?: boolean
   tree: TreeFacts
   parent?: { name: string, slot: string }
@@ -901,7 +902,9 @@ function allowedTypes(content: Content): readonly string[] {
 
 function checkList(value: Value, path: string, content: Content, walk: Walk, parent?: Walk['parent']): void {
   const allowed = allowedTypes(content)
-  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks, tree: walk.tree, blocks: walk.blocks ?? 0,
+  const inner: Walk = { depth: walk.depth + 1, fallbacks: walk.fallbacks,
+    ...(walk.qualified === undefined ? {} : { qualified: walk.qualified }), tree: walk.tree,
+    blocks: walk.blocks ?? 0,
     inlines: walk.inlines ?? 0, ...(walk.coreFallback === undefined ? {} : { coreFallback: walk.coreFallback }),
     ...(parent === undefined ? {} : { parent }) }
   requireArray(value, path).forEach((child, index) => checkNode(child, `${path}/${index}`, allowed, inner))
@@ -1174,6 +1177,13 @@ function checkOptionalChildren(node: Fields, type: string, path: string, walk: W
   })
 }
 
+function checkQualifiedDepth(current: Walk, value: Fields, type: string, path: string): void {
+  if ((type !== 'block_extension' && type !== 'inline_extension') ||
+    typeof value['name'] !== 'string' || !value['name'].includes('.')) return
+  current.qualified = (current.qualified ?? 0) + 1
+  if (current.qualified > 32) fail(path, 'qualified extensions are nested deeper than 32 nodes')
+}
+
 function checkNode(value: Value, path: string, allowed: readonly string[], walk: Walk): void {
   if (walk.depth > MAX_TREE_DEPTH) fail(path, 'the tree is nested deeper than a parser can produce')
   if (!isRecord(value)) fail(path, 'not a node')
@@ -1188,6 +1198,7 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
     fail(path, 'qualified fallback contains an extension node')
   }
   const current: Walk = levels(walk, type, path)
+  checkQualifiedDepth(current, value, type, path)
   // C2-X-030: an unqualified inline extension is its own fallback, so its children are the nesting path.
   if (type === 'inline_extension' && typeof value['name'] === 'string' && !value['name'].includes('.')) {
     if (++current.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 unqualified inline extension nodes')
