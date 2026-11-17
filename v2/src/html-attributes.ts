@@ -438,12 +438,17 @@ function addClasses(list: AttributeList, node: Node | null, parts: TagParts): vo
   if (classes.size > 0) list.add('class', [...classes].join(' '))
 }
 
+/** C2-H-015: an `align` value with ASCII whitespace trimmed and ASCII letters lowered. */
+function foldedAlign(value: string): string {
+  return value.replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '').replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+}
+
 /** The declarations that follow the authored style: the alignment of C2-H-015 and those the element gives. */
 function styleDeclarations(keyValues: [string, string][], parts: TagParts): string {
   let declarations = parts.style ?? ''
   if (parts.alignStyle !== true) return declarations
   for (const [key, value] of keyValues) {
-    if (key.toLowerCase() === 'align' && ALIGN_VALUES.includes(value)) declarations = `text-align: ${value};`
+    if (key.toLowerCase() === 'align' && ALIGN_VALUES.includes(foldedAlign(value))) declarations = `text-align: ${foldedAlign(value)};`
   }
   return declarations
 }
@@ -470,7 +475,7 @@ function addKeyValue(
     return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
   }
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
-  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) {
+  if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(foldedAlign(value))) {
     return list.add(key, urlListValue(r, name, keyValue(name, value), origin))
   }
   if (!style.hasStyle) list.add('style', style.declarations)

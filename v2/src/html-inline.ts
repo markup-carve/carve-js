@@ -86,9 +86,9 @@ function authoredKey(node: Node, name: string): string | undefined {
   return node.attrs?.keyValues?.find(([key]) => key.toLowerCase() === name)?.[1]
 }
 
-/** A copy of `node` without the keys `names`, which an element takes as its name. */
+/** A copy of `node` without the keys `names`, which an element takes as its name; they match in lower case only (C2-H-075). */
 function withoutKeys<N extends Node>(node: N, names: string[]): N {
-  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(key.toLowerCase()))
+  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(key))
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
@@ -96,7 +96,7 @@ function withoutKeys<N extends Node>(node: N, names: string[]): N {
 function span(node: SpanNode, r: Render): string {
   const found: (readonly [string, string | null, string])[] = []
   for (const [key, target] of SEMANTIC_KEYS) {
-    const value = authoredKey(node, key)
+    const value = node.attrs?.keyValues?.find(([name]) => name === key)?.[1]
     if (value !== undefined) found.push([key, target, value])
   }
   const first = found[0]
@@ -109,7 +109,7 @@ function span(node: SpanNode, r: Render): string {
   found.forEach(([key, target, value], index) => {
     const outermost = index === found.length - 1
     // An authored `title` or `datetime` wins over the derived one.
-    const derived: [string, string][] = target === null || (key === 'abbr' && value === '') ||
+    const derived: [string, string][] = target === null || value === '' ||
       (outermost && authoredKey(node, target) !== undefined) ? [] : [[target, value]]
     html = `<${key}${attributes(r, outermost ? rest : null, { derived, origin: node })}>${html}</${key}>`
   })
