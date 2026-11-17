@@ -98,7 +98,7 @@ const RULES = new Map<string, Rule>([
   ['inline_footnote', ['inlines', [], ['number']]],
   ['insert', ['inlines', [], []]],
   ['line', ['inlines', [], []]],
-  ['line_block', [['line'], [], []]],
+  ['line_block', [['line', 'comment'], [], []]],
   ['link', ['inlines', [], ['href', 'tooltip', 'targetKind', 'key', 'namespace', 'refForm']]],
   ['link_reference_definition', ['none', ['href', ...REFERENCE], ['tooltip']]],
   ['list', [['list_item'], ['marker', 'spacing'], []]],

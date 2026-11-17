@@ -406,9 +406,20 @@ export function definitionDestinationEnd(src: string, p: number, end: number): n
   const quote = p + 1 < end && src.charCodeAt(p) === SPACE ? src.charCodeAt(p + 1) : 0
   if (quote === QUOTE_MARK || quote === APOSTROPHE) {
     const after = quotedEnd(src, p + 1, end, quote)
-    if (after >= 0 && skipSpaces(src, after, end) === end) return destination
+    if (after >= 0 && definitionTailEnd(src, after, end) >= 0) return destination
   }
-  return skipSpaces(src, p, end) === end ? destination : -1
+  return definitionTailEnd(src, p, end) >= 0 ? destination : -1
+}
+
+/**
+ * C2-B-083, C2-B-089: behind the destination or the title, optionally exactly one space and one valid attribute
+ * block, then only spaces. Returns the start of that block, `end` where there is none, or -1 where the rest is text.
+ */
+export function definitionTailEnd(src: string, p: number, end: number): number {
+  if (skipSpaces(src, p, end) === end) return end
+  if (src.charCodeAt(p) !== SPACE || src.charCodeAt(p + 1) !== BRACE_OPEN) return -1
+  const block = readAttributeBlock(src, p + 1, end, emptyMemo(), null)
+  return block >= 0 && skipSpaces(src, block, end) === end ? p + 1 : -1
 }
 
 export function isLinkDefinition(src: string, pos: number, end: number): boolean {

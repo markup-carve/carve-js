@@ -4,7 +4,8 @@ import { type IncludeNode, type LinkReferenceDefinitionNode } from './ast.ts'
 import { unescape } from './attributes.ts'
 import { APOSTROPHE, BACKSLASH, PAREN_CLOSE, PAREN_OPEN, QUOTE_MARK } from './chars.ts'
 import { readInclude } from './include.ts'
-import { definitionDestinationEnd, quotedEnd, skipSpaceRun } from './lines.ts'
+import { definitionDestinationEnd, definitionTailEnd, quotedEnd, skipSpaceRun } from './lines.ts'
+import { type Attributes, readGluedBlocks } from './ast-attributes.ts'
 
 /** The quoted title of a code fence, without its escapes (C2-B-120). */
 export function openerTitle(src: string, start: number, end: number): string {
@@ -12,14 +13,18 @@ export function openerTitle(src: string, start: number, end: number): string {
 }
 
 /** C2-B-083: the link definition of `key`, with the destination and the optional quoted title behind its colon. */
-export function linkDefinitionFields(src: string, pos: number, end: number, key: string): LinkReferenceDefinitionNode {
+export function linkDefinitionFields(
+  src: string, pos: number, end: number, key: string, attributes: Attributes,
+): LinkReferenceDefinitionNode {
   const start = skipSpaceRun(src, pos, end)
   const p = definitionDestinationEnd(src, start, end)
   const out: LinkReferenceDefinitionNode = { type: 'link_reference_definition', key, namespace: 'link', href: destination(src, start, p) }
   const quote = p + 1 < end ? src.charCodeAt(p + 1) : 0
-  if (quote !== QUOTE_MARK && quote !== APOSTROPHE) return out
-  const after = quotedEnd(src, p + 1, end, quote)
-  if (after >= 0) out.tooltip = unescape(src, p + 2, after - 1)
+  const after = quote === QUOTE_MARK || quote === APOSTROPHE ? quotedEnd(src, p + 1, end, quote) : -1
+  if (after >= 0 && definitionTailEnd(src, after, end) >= 0) out.tooltip = unescape(src, p + 2, after - 1)
+  // C2-B-106: the block at the end of the line merges behind the attribute lines above it, as a glued block does.
+  const block = definitionTailEnd(src, out.tooltip === undefined ? p : after, end)
+  if (block < end) readGluedBlocks(src, block, end, attributes)
   return out
 }
 

@@ -69,6 +69,8 @@ export interface TagParts {
   block?: boolean
   /** The node of the tree a loss is reported on, where the node given is a copy of it. */
   origin?: Node
+  /** Authored keys that are never written, whatever their letter case (C2-H-058). */
+  withheld?: readonly string[]
 }
 
 // C2-H-115: the reserved names of the carriers; C2-H-116 drops an authored one on every render.
@@ -537,6 +539,7 @@ export function attributes(r: Render, node: Node | null, parts: TagParts): strin
   // The source line is structural, so it replaces an authored key, and it is written last.
   const line = sourceLine(r, node, parts)
   if (line !== null) list.claim('data-source-line')
+  for (const name of parts.withheld ?? []) list.claim(name)
   if (id !== undefined) list.add('id', id)
   addAuthored(r, list, node, parts)
   for (const [name, value] of parts.generated ?? []) list.add(name, value)

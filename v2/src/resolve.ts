@@ -638,13 +638,20 @@ function resolveXrefs(walk: Walk): void {
     if (id !== undefined && !anchors.has(id)) anchors.set(id, plainText(heading.children))
   }
   numberCaptions(walk, anchors)
+  // C2-I-097: the ids match under NFC; the href names the target's own id, and the key stays as typed.
+  const normalized = new Map<string, string>()
+  for (const id of anchors.keys()) {
+    const form = id.normalize('NFC')
+    if (!normalized.has(form)) normalized.set(form, id)
+  }
   for (const xref of walk.xrefs) {
-    const text = anchors.get(xref.key)
-    if (text === undefined) {
+    const id = normalized.get(xref.key.normalize('NFC'))
+    const text = id === undefined ? undefined : anchors.get(id)
+    if (id === undefined || text === undefined) {
       delete xref.href
       continue
     }
-    xref.href = `#${xref.key}`
+    xref.href = `#${id}`
     walk.resolution.xrefText.set(xref, text)
   }
 }

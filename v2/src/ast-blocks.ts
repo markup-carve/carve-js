@@ -13,7 +13,7 @@ import {
 } from './ast-inline.ts'
 import { includeNode, linkDefinitionFields, openerTitle } from './ast-lines.ts'
 import { delimitedTableNode, tableNode } from './ast-table.ts'
-import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, SPACE, STAR } from './chars.ts'
+import { BRACE_OPEN, DIGIT_0, DIGIT_9, LF, PERCENT, SPACE, STAR } from './chars.ts'
 import { scanBlocks } from './blocks.ts'
 import { acquireInlineState, releaseInlineState } from './inline-state.ts'
 import {
@@ -22,7 +22,7 @@ import {
   FLAG_PAREN, FLAG_QUOTE_FENCE, FLAG_RAW, FLAG_ROMAN, FLAG_STAR, FLAG_TIGHT, FLAG_UNCLOSED, FLAG_UPPER, FOOTNOTE, FRONTMATTER,
   HEADING, INCLUDE, isOpaqueLeaf, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
-import { braceBlocksEnd, orderedDelimiter, trimEnd } from './lines.ts'
+import { braceBlocksEnd, fenceRunLength, isBareRun, orderedDelimiter, skipSpaces, trimEnd } from './lines.ts'
 import { lineFeedAt } from './source.ts'
 import { definitionLabel, type OpenerInfo, readOpenerInfo } from './opener.ts'
 import { addParseFindings, ATTRIBUTE_FALLBACK, TITLE_SYNTAX, UNCLOSED } from './parse-findings.ts'
@@ -168,8 +168,14 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
 /** C2-A-069: one `line` per line of the body; an empty line ends a stanza. */
 function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
   const spans = node.spans!
-  const lines: LineNode[] = []
+  const lines: (LineNode | CommentNode)[] = []
   for (let at = 0; at < spans.length; at += 2) {
+    const comment = lineBlockComment(ctx, spans, at)
+    if (comment !== null) {
+      lines.push(comment[0])
+      at = comment[1]
+      continue
+    }
     const children = lineInlines(ctx, spans, at)
     if (ctx.abbreviations.size > 0) applyAbbreviations(ctx, children)
     const line: LineNode = noteLeaf(ctx, { type: 'line', children })
@@ -179,6 +185,28 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
   const out: LineBlockNode = { type: 'line_block', children: lines }
   noteSigilWords(ctx, node, out)
   return out
+}
+
+/**
+ * C2-B-123, C2-B-108: a comment block in the body of a line block, which adds no line and ends no stanza: the node
+ * and the index of its last span, or null where the span at `at` opens none. Unclosed, it runs to the body's end.
+ */
+function lineBlockComment(ctx: TreeContext, spans: readonly number[], at: number): [CommentNode, number] | null {
+  const src = ctx.src
+  const start = skipSpaces(src, spans[at]!, spans[at + 1]!)
+  const length = fenceRunLength(src, start, spans[at + 1]!, PERCENT)
+  if (length === 0) return null
+  const lines: string[] = []
+  const tail = skipSpaces(src, start + length, spans[at + 1]!)
+  if (tail < spans[at + 1]!) lines.push(src.slice(tail, spans[at + 1]))
+  let last = at + 2
+  while (last < spans.length && !isBareRun(src, skipSpaces(src, spans[last]!, spans[last + 1]!), spans[last + 1]!, PERCENT, length)) {
+    lines.push(src.slice(spans[last], spans[last + 1]))
+    last += 2
+  }
+  const end = Math.min(last, spans.length - 2)
+  const out = place(ctx, { type: 'comment', form: 'block', value: lines.join('\n') } satisfies CommentNode, start, spans[end + 1]!)
+  return [out, end]
 }
 
 /** C2-B-122: what follows the sigil of a sigil div is further words and reported. */
@@ -201,9 +229,13 @@ function abbreviationParts(src: string, node: BlockNode): [string, string] {
   return [src.slice(start, end), src.slice(from, trimEnd(src, from, node.spans![1]!))]
 }
 
-function linkDefinitionNode(ctx: TreeContext, node: BlockNode): LinkReferenceDefinitionNode {
+function linkDefinitionNode(ctx: TreeContext, node: BlockNode, _flow: number, attributes: Attributes | null): LinkReferenceDefinitionNode {
   const [start, end] = definitionLabel(ctx.src, node.start)
-  return linkDefinitionFields(ctx.src, end + 2, node.spans![1]!, foldLabel(ctx.src.slice(start, end)))
+  // The caller applies `attributes` after the build; a definition without attribute lines applies its own block here.
+  const merged = attributes ?? emptyAttributes()
+  const out = linkDefinitionFields(ctx.src, end + 2, node.spans![1]!, foldLabel(ctx.src.slice(start, end)), merged)
+  if (attributes === null) setAttributes(out, merged)
+  return out
 }
 
 const MAX_START_DIGITS = 9

@@ -469,6 +469,7 @@ function lineBlock(r: Render, node: LineBlockNode, level: number): void {
     stanza = []
   }
   for (const child of node.children) {
+    if (child.type === 'comment') continue
     if (child.children.length === 0) flush()
     else stanza.push(lineHtml(r, child))
   }
@@ -629,6 +630,9 @@ function cellContent(r: Render, cell: TableCellNode, level: number): string {
   return `${open}${inner.out}\n${'  '.repeat(level)}`
 }
 
+// C2-H-058: the spans of a cell come from its counts alone; an authored key of either name is never written.
+const SPAN_KEYS: readonly string[] = ['rowspan', 'colspan']
+
 /** C2-H-056 to C2-H-058. */
 function cellHtml(
   r: Render, cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined, inHead: boolean,
@@ -643,7 +647,7 @@ function cellHtml(
   if (cell.header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
   else if (cell.scope !== undefined) structural.push(['scope', cell.scope])
   if (cell.headerIds !== undefined) structural.push(['headers', cell.headerIds.join(' ')])
-  const written = attributes(r, cell, { structural, style: cellStyle(cell, column, headValign) })
+  const written = attributes(r, cell, { structural, style: cellStyle(cell, column, headValign), withheld: SPAN_KEYS })
   return `<${name}${written}>${cellContent(r, cell, level)}</${name}>`
 }
 

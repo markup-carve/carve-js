@@ -72,10 +72,16 @@ function pushBreak(state: InlineState, kind: number, start: number, lineEnd: num
   return end
 }
 
+function isBreakAfter(code: number): boolean {
+  return code === NO_CHARACTER || code === LF
+}
+
 /** C2-I-010 to C2-I-012, C2-I-102. */
 export function scanBackslash(state: InlineState, pos: number): number {
   const next = codeAt(state, pos + 1)
   if (next === NO_CHARACTER || next === LF) return pushBreak(state, HARD_BREAK, pos, pos + 1)
+  // C2-I-011, C2-I-102: the one space the strip keeps behind a backslash at a line end makes a hard break too.
+  if (next === SPACE && isBreakAfter(codeAt(state, pos + 2))) return pushBreak(state, HARD_BREAK, pos, pos + 2)
   if (next === SPACE) pushToken(state, NBSP, pos, pos + 2, NONE, NONE, 0, NONE)
   else if (isAsciiPunctuation(next)) pushToken(state, ESCAPE, pos, pos + 2, pos + 1, pos + 2, 0, NONE)
   else return pos + 1

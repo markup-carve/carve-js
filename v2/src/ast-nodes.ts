@@ -278,7 +278,7 @@ export interface LineNode extends NodeBase {
 
 export interface LineBlockNode extends NodeBase {
   type: "line_block"
-  children: LineNode[]
+  children: (LineNode | CommentNode)[]
 }
 
 export interface LinkNode extends NodeBase {

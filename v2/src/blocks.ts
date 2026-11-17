@@ -31,6 +31,7 @@ import {
   termMarkEnd, trimEnd,
 } from './lines.ts'
 import { readInclude } from './include.ts'
+import { isRegionMarkerLine } from './include-source.ts'
 import { isImageOnly } from './image-line.ts'
 import { isFigureOpener, openerWord } from './opener.ts'
 import { advanceColumn, isSpaceOrTab, lineEndAt } from './source.ts'
@@ -137,12 +138,26 @@ function commentLine(state: BlockState, end: number): void {
   state.contentEnd = end
 }
 
+/**
+ * C2-B-137: a region marker line is a line of the innermost container that owns it and opens no block. It closes
+ * the containers that do not own it and the open leaf, and no caption reaches across it; a pending attribute line
+ * waits across it. Its comment is a node of that container.
+ */
+function regionLine(state: BlockState, matched: number, end: number): void {
+  if (state.leaf.kind !== NO_LEAF) closeLeaf(state)
+  closeUnowned(state, matched, end)
+  state.above.captionDepth = NO_DEPTH
+  writeComment(state, end)
+}
+
 function scanLine(state: BlockState, lineStart: number, end: number): void {
   const leaf = state.leaf
   const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
   const blank = cursor.pos >= end
-  if (!isOpaqueLeaf(leaf.kind) && isLineComment(state.src, cursor.pos, end)) return commentLine(state, end)
+  if (!isOpaqueLeaf(leaf.kind) && isLineComment(state.src, cursor.pos, end)) {
+    return isRegionMarkerLine(state.src, cursor.pos, end) ? regionLine(state, matched, end) : commentLine(state, end)
+  }
   if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
@@ -162,6 +177,12 @@ function scanLine(state: BlockState, lineStart: number, end: number): void {
 /** A line of the open opaque leaf or table. Returns false when the line ends that block. */
 function bodyLine(state: BlockState, matched: number, lineStart: number, end: number, blank: boolean): boolean {
   const owned = matched === state.containers.depth
+  if (!owned && isCommentCloserLine(state, lineStart, end)) {
+    // C2-B-109, C2-B-137: the closer is tested before ownership; it closes the comment and no container.
+    state.cursor.pos = skipSpaces(state.src, lineStart, end)
+    opaqueLine(state, lineStart, end, blank)
+    return true
+  }
   if (state.leaf.kind !== TABLE) {
     if (owned) opaqueLine(state, lineStart, end, blank)
     return owned
@@ -286,6 +307,12 @@ function opaqueLine(state: BlockState, lineStart: number, end: number, blank: bo
     return
   }
   writeEvent(state, SPAN_TAG, opaqueContentStart(state, end), end)
+}
+
+/** C2-B-109: a bare `%` run of at least the opener's length after spaces and tabs, with no quote mark before it. */
+function isCommentCloserLine(state: BlockState, lineStart: number, end: number): boolean {
+  const leaf = state.leaf
+  return leaf.kind === COMMENT_BLOCK && isBareRun(state.src, skipSpaces(state.src, lineStart, end), end, PERCENT, leaf.fenceLength)
 }
 
 function isCloser(state: BlockState, lineStart: number, end: number): boolean {

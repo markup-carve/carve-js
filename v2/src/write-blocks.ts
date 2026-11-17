@@ -460,7 +460,10 @@ function captionedCode(w: Writer, nodes: readonly Node[], at: number, prefix: st
 function lineBlock(w: Writer, node: LineBlockNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   fenced(w, node, prefix, ' |', false, () => {
-    for (const line of node.children) emit(w, prefix, lineContent(w, line.children, flags | BARE_BREAKS))
+    for (const line of node.children) {
+      if (line.type === 'comment') comment(w, line, prefix)
+      else emit(w, prefix, lineContent(w, line.children, flags | BARE_BREAKS))
+    }
   })
 }
 

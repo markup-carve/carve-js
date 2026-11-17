@@ -7,7 +7,8 @@ import {
   QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
-  ATTRIBUTE_BLOCK, BRACKET_SPAN, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL, LINK,
+  ATTRIBUTE_BLOCK, BRACKET_SPAN, ESCAPE, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL,
+  LINK,
 } from './inline-kinds.ts'
 import { atDepthCap, enterBracket, leaveBracket } from './inline-depth.ts'
 import {
@@ -196,6 +197,17 @@ function closePair(state: InlineState, open: number, pos: number, kind: number):
   // Read the array behind the push, which may have replaced it.
   state.tokens[open + TOKEN_B] = close
   state.tokens[open + TOKEN_C] = kind
+  if (kind === INLINE_FOOTNOTE) referencesToText(state.tokens, open, close)
+}
+
+/** C2-I-089: in the content of an inline footnote, at any depth, a footnote reference is text, as an escape keeps it. */
+function referencesToText(tokens: Int32Array, open: number, close: number): void {
+  for (let at = open + TOKEN_WIDTH; at < close; at += TOKEN_WIDTH) {
+    if (tokens[at] !== FOOTNOTE_REF) continue
+    tokens[at] = ESCAPE
+    tokens[at + TOKEN_A] = tokens[at + TOKEN_START]!
+    tokens[at + TOKEN_B] = tokens[at + TOKEN_END]!
+  }
 }
 
 /** What is glued to the closing bracket at `pos` decides the construct (C2-I-006). Returns the offset behind it, or NONE. */

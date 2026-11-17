@@ -114,6 +114,12 @@ export function readMarker(line: string, code: boolean): Marker {
   return markerTail(line, end, body.closer, end - at === 10 ? CLOSER : OPENER)
 }
 
+/** C2-B-137, C2-B-217: whether the source line `[start, end)` is a well-formed region marker line of a Carve file. */
+export function isRegionMarkerLine(src: string, start: number, end: number): boolean {
+  const kind = readMarker(src.slice(start, end), false).kind
+  return kind === OPENER || kind === CLOSER
+}
+
 /** True when line `index` is a well-formed region marker of a code include (C2-N-046). */
 export function isMarkerLine(text: string, lines: FileLines, index: number): boolean {
   const kind = readMarker(text.slice(lines.starts[index], lines.ends[index]), true).kind
