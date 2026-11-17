@@ -2,6 +2,7 @@
 // or an interrupter. A rule gives the unit that takes the backslash (C2-W-090), no escape, or no
 // decision. The first line of a paragraph and its later lines have rules of their own, and so do
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
+import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { isImageOnly } from './image-line.ts'
 import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
 import { ATOM, CLOSE, ESCAPE, type Leaf, OPEN, TEXT } from './write-plan-model.ts'
@@ -162,21 +163,53 @@ function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
   return bullet(leaf, at)
 }
 
-/** C2-B-166, C2-B-167: a table row ends with a pipe, a row attribute or a line comment may follow it. */
+/**
+ * C2-B-166, C2-B-167: a table row ends with a pipe, its last, behind which a row attribute or a line comment may
+ * follow. A last pipe that a node writes is left to the repair.
+ */
 function pipeLine(leaf: Leaf, at: number): number {
   if (lineEndsWith(leaf, at, 124)) return at
-  for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) {
-    if (leaf.codes[unit] === 124 && mayCloseRow(leaf, unit + 1)) return UNDECIDED
-  }
-  return NO_ESCAPE
+  let last = at
+  for (let unit = at + 1; unit < leaf.codes.length && leaf.codes[unit] !== LF; unit++) if (leaf.codes[unit] === 124) last = unit
+  if (last === at) return NO_ESCAPE
+  return leaf.kinds[last] !== TEXT || mayCloseRow(leaf, last + 1) ? UNDECIDED : NO_ESCAPE
 }
 
-/** C2-B-167: behind a closing pipe only a brace block, glued or after a space, or a line comment after whitespace may follow. */
+/**
+ * C2-B-167: behind a closing pipe only a brace block, glued or one space after it, or a line comment after whitespace
+ * may follow. Braces that a node writes are left to the repair.
+ */
 function mayCloseRow(leaf: Leaf, at: number): boolean {
-  let unit = at
+  const brace = code(leaf, at) === SPACE && code(leaf, at + 1) === BRACE_OPEN ? at + 1 : at
+  let unit = code(leaf, brace) === BRACE_OPEN ? rowAttributeEnd(leaf, brace) : at
+  if (unit < 0) return unit === UNDECIDED
+  const blanks = unit
   while (isBlank(code(leaf, unit))) unit++
   const value = code(leaf, unit)
-  return value === 123 || isLineEnd(value) || (unit > at && value === 37)
+  return isLineEnd(value) || (unit > blanks && value === 37 && code(leaf, unit + 1) === 37)
+}
+
+/**
+ * The end of the glued brace blocks at `at`, NO_ESCAPE where they are no valid blocks, or UNDECIDED where a node writes
+ * one. A braced mark of the tree opens no block (C2-I-043). A quote or a backslash may take an escape that makes a
+ * block of the text valid, so those are left to the repair too.
+ */
+function rowAttributeEnd(leaf: Leaf, at: number): number {
+  if (leaf.kinds[at] === OPEN) return NO_ESCAPE
+  let end = at
+  while (end < leaf.codes.length && leaf.codes[end] !== LF) {
+    const value = leaf.codes[end]
+    if (leaf.kinds[end] !== TEXT || value === 34 || value === 39 || value === 92) return UNDECIDED
+    end++
+  }
+  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  let block = 0
+  while (text.charCodeAt(block) === BRACE_OPEN) {
+    const next = readAttributeBlock(text, block, text.length, emptyMemo(), null)
+    if (next < 0) return block === 0 ? NO_ESCAPE : at + block
+    block = next
+  }
+  return at + block
 }
 
 /** C2-B-133: a line comment at the start of a line. */
