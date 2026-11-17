@@ -321,7 +321,7 @@ describe('the extension interface', () => {
   it('C2-A-192 and C2-A-193: page furniture is silent in HTML and a reported writer loss', () => {
     const document: DocumentNode = { type: 'document', astVersion: '2.0', children: [],
       metadata: { headers: [{ placement: 'default', children: [paragraph('Report')] }], footers: [] } }
-    expect(renderWithDiagnostics(document)).toEqual({ html: '', diagnostics: [] })
+    expect(renderWithDiagnostics(document)).toEqual({ html: '', diagnostics: [], suppressedDiagnostics: 0 })
     expect(writeWithDiagnostics(document).diagnostics).toMatchObject([
       { code: 'structure-unspellable', path: '/metadata/headers/0' },
     ])

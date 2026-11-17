@@ -52,8 +52,8 @@ const CELL = '/children/0/children/0/children/0/children/0'
 
 describe('what the sidecar is', () => {
   it('C2-A-003: the record is returned only on request, and the tree holds none of it', () => {
-    expect(Object.keys(parseWithDiagnostics('. a'))).toEqual(['document', 'diagnostics'])
-    expect(Object.keys(parseWithLayout('. a'))).toEqual(['document', 'diagnostics', 'layout'])
+    expect(Object.keys(parseWithDiagnostics('. a'))).toEqual(['document', 'diagnostics', 'suppressedDiagnostics'])
+    expect(Object.keys(parseWithLayout('. a'))).toEqual(['document', 'diagnostics', 'suppressedDiagnostics', 'layout'])
     const list = parseWithLayout('. a').document.children![0]!
     expect(Object.keys(list).sort()).toEqual(['children', 'marker', 'pos', 'spacing', 'type'])
   })
