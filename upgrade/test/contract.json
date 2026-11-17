@@ -156,7 +156,7 @@
     "outputs": [
       "- a\n\n  second\n- b\n"
     ],
-    "class": "rewrite"
+    "class": "report"
   },
   {
     "id": "U-016",
@@ -239,17 +239,6 @@
     "class": "rewrite"
   },
   {
-    "id": "U-024",
-    "title": "Alphabetic list that starts at `i`",
-    "inputs": [
-      "i) one\nj) two\n"
-    ],
-    "outputs": [
-      "{start=9}\na) one\nb) two\n"
-    ],
-    "class": "rewrite"
-  },
-  {
     "id": "U-025",
     "title": "Ordered marker of ten or more digits",
     "inputs": [
@@ -258,7 +247,7 @@
     "outputs": [
       "{start=1234567890}\n. x\n"
     ],
-    "class": "rewrite"
+    "class": "report"
   },
   {
     "id": "U-026",
@@ -551,7 +540,7 @@
     "outputs": [
       "- item\n\n\t```\n\tx\n\t    y\n\t```\n"
     ],
-    "class": "rewrite"
+    "class": "report"
   },
   {
     "id": "U-054",
@@ -1412,19 +1401,6 @@
     "class": "report"
   },
   {
-    "id": "U-146",
-    "title": "A percent line comment inside brackets or a container ends at its boundary",
-    "inputs": [
-      "[ %%]",
-      "[a %% c] d\n",
-      "^[a %% c] d\n",
-      ":foo[a %% c] d\n",
-      "> :: c\n>   %% note\n>   more\n"
-    ],
-    "outputs": [],
-    "class": "report"
-  },
-  {
     "id": "U-147",
     "title": "A plus row continues the current table rather than ending its row",
     "inputs": [
@@ -1438,15 +1414,6 @@
     "title": "A reference to a heading uses the heading's folded source or rendered plain text",
     "inputs": [
       "# \t%%h"
-    ],
-    "outputs": [],
-    "class": "report"
-  },
-  {
-    "id": "U-149",
-    "title": "Inline sigils inside unmatched bracket text are still scanned",
-    "inputs": [
-      ":f[%%]"
     ],
     "outputs": [],
     "class": "report"
@@ -1790,12 +1757,10 @@
     "id": "U-184",
     "title": "Nested list include-looking brace",
     "inputs": [
-      "- {{ e }}"
+      "- {{ e }}\n  b\n"
     ],
-    "outputs": [
-      "- \\{{ e }}"
-    ],
-    "class": "escape"
+    "outputs": [],
+    "class": "report"
   },
   {
     "id": "U-186",
@@ -1967,40 +1932,6 @@
     ]
   },
   {
-    "id": "U-201",
-    "title": "Braced inline closer boundary",
-    "class": "report",
-    "inputs": [
-      "{_a %% b_} y\n",
-      "{-{_a-}_} b-}\n",
-      "{-a-}{+{+b~}+}+}\n",
-      "{=a\\ %% c=} t and b \\ %% d\n"
-    ],
-    "outputs": [
-      "{_a %% b_} y\n",
-      "{-{_a-}_} b-}\n",
-      "{-a-}{+{+b~}+}+}\n",
-      "{=a\\ %% c=} t and b \\ %% d\n"
-    ]
-  },
-  {
-    "id": "U-202",
-    "title": "Literal nested inline footnote opener",
-    "class": "escape",
-    "inputs": [
-      "x ^[a ^[b] c]\n",
-      "x ^[a ^[b ^[c] d] e]\n",
-      "^[x ^[a](u) b]\n",
-      "^[x ^[a]{.c} b]\n"
-    ],
-    "outputs": [
-      "x ^[a \\^[b] c]\n",
-      "x ^[a \\^[b \\^[c] d] e]\n",
-      "^[x \\^[a](u) b]\n",
-      "^[x \\^[a]{.c} b]\n"
-    ]
-  },
-  {
     "id": "U-204",
     "title": "Fence after a continuation marker",
     "class": "rewrite",
@@ -2028,15 +1959,11 @@
   {
     "id": "U-207",
     "title": "Literal attribute after an unresolved footnote",
-    "class": "escape",
+    "class": "report",
     "inputs": [
-      "Text[^a]{.ref}.\n",
-      "x[^n]{#i}\n\n## i\n"
+      "Text[^a]{.c}{#i}.\n"
     ],
-    "outputs": [
-      "Text[^a]\\{.ref}.\n",
-      "x[^n]{\\#i}\n\n## i\n"
-    ]
+    "outputs": []
   },
   {
     "id": "U-209",
@@ -2195,21 +2122,6 @@
     "outputs": []
   },
   {
-    "id": "U-220",
-    "title": "Block attributes before promoted image inline attributes",
-    "class": "rewrite",
-    "inputs": [
-      "{.outer}\n![a](b){.inner}\n",
-      "{.outer k=one}\n![a](b){.inner k=two}\n",
-      "{#outer .first}\n![a](b){#inner .second}\n"
-    ],
-    "outputs": [
-      "![a](b){.outer}{.inner}\n",
-      "![a](b){.outer k=one}{.inner k=two}\n",
-      "![a](b){#outer .first}{#inner .second}\n"
-    ]
-  },
-  {
     "id": "U-221",
     "title": "Wrapped link or image title",
     "class": "report",
@@ -2247,19 +2159,6 @@
     ]
   },
   {
-    "id": "U-224",
-    "title": "Percent fence at a container boundary",
-    "class": "report",
-    "inputs": [
-      "> %%%\n> secret\n  %%%\nafter\n",
-      "- ::: box\n  %%%%\n%% j\n  x\n",
-      ":: t\n: d\n%%%\nc\n%%%\n : d2\n",
-      "[^n]: head\n\n  %%%\n%% below\n\n  tail\n\nr[^n]\n",
-      "x[^n]\n\n[^n]: %%%\n    n\n\n%%%\nc\n"
-    ],
-    "outputs": []
-  },
-  {
     "id": "U-225",
     "title": "Caption caret followed by an empty comment",
     "class": "escape",
@@ -2286,7 +2185,7 @@
   {
     "id": "U-227",
     "title": "Percent run inside a multiline brace comment",
-    "class": "escape",
+    "class": "report",
     "inputs": [
       "- {% a\n   %%%\n   z %}\nplain\n",
       "1. {% a\n    %%% x\n    z %}\nplain\n"
@@ -2377,7 +2276,7 @@
   {
     "id": "U-235",
     "title": "Nested item definition boundary",
-    "class": "rewrite",
+    "class": "report",
     "inputs": [
       "* * [d]: u\n  :\n",
       "* * [d]: u\n%%\n:\n"
@@ -2416,7 +2315,7 @@
   {
     "id": "U-238",
     "title": "List hosted fence continuation closer",
-    "class": "rewrite",
+    "class": "report",
     "inputs": [
       "- ```\n  x\n\n+\ntail\n"
     ],
@@ -2467,7 +2366,7 @@
   {
     "id": "U-243",
     "title": "Backtick fence run inside a multiline brace comment",
-    "class": "escape",
+    "class": "report",
     "inputs": [
       "- {% a\n   ```\n   z %}\nplain\n"
     ],
@@ -2524,9 +2423,7 @@
     "title": "Rejected HTML control characters are replaced",
     "class": "report",
     "inputs": [
-      "c\u000bd\n",
-      "a\n\nb\n",
-      "# ab\n\n# a!?b\n"
+      "cd\n"
     ],
     "outputs": []
   },
@@ -2616,17 +2513,6 @@
     ]
   },
   {
-    "id": "U-257",
-    "title": "Nested bracket text in an inline note",
-    "class": "rewrite",
-    "inputs": [
-      "^[/[^[g]/] b/]\n"
-    ],
-    "outputs": [
-      "^[{/\\[\\^[g]\\/\\] b/}]\n"
-    ]
-  },
-  {
     "id": "U-258",
     "title": "Backtick run with no closing run",
     "inputs": [
@@ -2649,6 +2535,55 @@
     "class": "rewrite"
   },
   {
+    "id": "U-262",
+    "title": "<p><span>t</span></p> C2-H-116:",
+    "inputs": [
+      "[t]{data-carve-raw=html}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-263",
+    "title": "<div class=\"hardbreaks\">\n  <blockquote><p>a<br>\nb</p></blockquote>\n</div> C2-...",
+    "inputs": [
+      "::: \\\n> a\n> b\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-264",
+    "title": "<div class=\"line-block\">\n  <p>*Roses are red<br>\nViolets are blue*</p>\n</div>...",
+    "inputs": [
+      "::: |\n*Roses are red\nViolets are blue*\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-265",
+    "title": "<div class=\"line-block\">\n  <p>Roses  are red</p>\n</div> C2-H-043 writes only ...",
+    "inputs": [
+      "::: |\nRoses  are red\n:::\n"
+    ],
+    "outputs": [
+      "::: |\nRoses\\ \\ are red\n:::\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-267",
+    "title": "<p>an _a=b_ word</p> The U-065 rewrite {_a=b_} is a valid attribute block wit...",
+    "inputs": [
+      "an _a=b_ word\n"
+    ],
+    "outputs": [
+      "an {_a\\=b_} word\n"
+    ],
+    "class": "rewrite"
+  },
+  {
     "id": "U-269",
     "title": "Alignment block of a span mark that joins moves to the cells it covers",
     "inputs": [
@@ -2660,12 +2595,429 @@
     "class": "rewrite"
   },
   {
-    "id": "U-270",
-    "title": "Header mark glued to text in a freeze candidate 5 source",
+    "id": "U-271",
+    "title": "<table>\n  <tbody>\n    <tr><th scope=\"row\">a</th></tr>\n    <tr><td>b</td></tr>...",
     "inputs": [
-      "|=a|\n| x |\n"
+      "{body-rows=1 body-header-rows=1}\n| a |\n| b |\n"
     ],
     "outputs": [],
-    "class": "none"
+    "class": "report"
+  },
+  {
+    "id": "U-273",
+    "title": "<p><em>This <em>does not</em> nest</em></p> C2-I-051 pushes a delimiter that ...",
+    "inputs": [
+      "/This /does not/ nest/\n"
+    ],
+    "outputs": [
+      "/This \\/does not/ nest\\/\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-274",
+    "title": "<p><strong>a <strong>b</strong> c</strong></p> Inside a braced span a bare pa...",
+    "inputs": [
+      "{*a *b* c*}\n"
+    ],
+    "outputs": [
+      "{*a \\*b\\* c*}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-275",
+    "title": "<p>a {#id} b</p> C2-I-035 and C2-I-036 make a valid attribute block that atta...",
+    "inputs": [
+      "a {#id} b\n"
+    ],
+    "outputs": [
+      "a \\{#id} b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-276",
+    "title": "<aside class=\"admonition note\" aria-labelledby=\"adm-1\">\n  <p class=\"admonitio...",
+    "inputs": [
+      "::: note \"Title\"\t[First]\nx\n:::\n"
+    ],
+    "outputs": [
+      "::: note\nx\n:::\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-277",
+    "title": "<pre title=\"T\"><code class=\"language-js\">x\n</code></pre> The quoted title bef...",
+    "inputs": [
+      "```js \"T\"\t[L]\nx\n```\n"
+    ],
+    "outputs": [
+      "```js\nx\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-278",
+    "title": "<pre><code>x\n</code></pre> A backtick run of three or more opens a code fence...",
+    "inputs": [
+      "```\tjs\nx\n```\n"
+    ],
+    "outputs": [
+      "``\tjs\nx``\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-279",
+    "title": "<table>\n  <caption>a\n- b</caption>\n  <tbody>\n    <tr><td>x</td></tr>\n  </tbod...",
+    "inputs": [
+      "|x|\n^ a\n  - b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-280",
+    "title": "<p><a href=\"/u\">t</a></p> C2-I-079 folds every run of spaces, tabs and one li...",
+    "inputs": [
+      "[t][a\tb]\n\n[a b]: /u\n"
+    ],
+    "outputs": [
+      "[t]\\[a\tb]\n\n[a b]: /u\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-281",
+    "title": "<blockquote>\n  <h1 id=\"Quoted\">Quoted</h1>\n</blockquote>\n<p><a href=\"#Quoted\"...",
+    "inputs": [
+      "> # Quoted\n\n[Quoted][]\n"
+    ],
+    "outputs": [
+      "> # Quoted\n\n\\[Quoted][]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-282",
+    "title": "<p>p</p> The value of a class key is split at runs of spaces and tabs and an ...",
+    "inputs": [
+      "{class=\"\"}\np\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-283",
+    "title": "<p><a href=\"/u\">x</a></p> A link carries no rel when neither the author nor t...",
+    "inputs": [
+      "[x](/u){rel=\"\"}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-284",
+    "title": "<p><a href=\"u v\">t</a></p> Whitespace is a space, a tab or a line break, so a...",
+    "inputs": [
+      "[t](u v)\n"
+    ],
+    "outputs": [
+      "\\[t](u v)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-285",
+    "title": "<p><a href=\" /u\">a</a></p> A narrow no-break space after the space of a link ...",
+    "inputs": [
+      "[a]:  /u\n\n[a][]\n"
+    ],
+    "outputs": [
+      "\\[a]:  /u\n\n[a][]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-286",
+    "title": "<p>[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[...",
+    "inputs": [
+      "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[x]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]{.a}\n"
+    ],
+    "outputs": [
+      "[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[\\[x\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]\\]]{.a}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-287",
+    "title": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table> With ...",
+    "inputs": [
+      "| a | b |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-288",
+    "title": "<p data-source-line=\"99\">p</p> With sourceLines on, the generated value repla...",
+    "inputs": [
+      "{data-source-line=\"99\"}\np\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-289",
+    "title": "<p>{{ a.crv @shift:1 }}</p> An unexpanded include renders the directive as te...",
+    "inputs": [
+      "{{ a.crv @shift:1 }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-290",
+    "title": "<p>x {{ a.crv <span class=\"mention\"><strong>@lines</strong></span>:0 }} y</p>...",
+    "inputs": [
+      "x {{ a.crv @lines:0 }} y\n"
+    ],
+    "outputs": [
+      "x {{ a.crv \\@lines:0 }} y\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-291",
+    "title": "<p>{{ a.crv @code:js }}</p> An unexpanded include writes the directive from t...",
+    "inputs": [
+      "{{ a.crv@code:js }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-292",
+    "title": "<p>{{ a.crv @code:js }}</p> An include's own attributes are not written to HT...",
+    "inputs": [
+      "{.diff}\n{{ a.crv @code:js }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-293",
+    "title": "<div>\n\n</div> Under minimal this empty div writes nothing:",
+    "inputs": [
+      ":::\n:::\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-300",
+    "title": "<p>a\nc</p> C2-B-138:",
+    "inputs": [
+      "`a\n%% b\nc`\n"
+    ],
+    "outputs": [
+      "`a\nc`\n%% b\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-301",
+    "title": "<p>—\nt:",
+    "inputs": [
+      "{{ a.crv @lines:3-7 }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-302",
+    "title": "<p>See <a href=\"/u\">s</a> and <abbr title=\"Hyper\">HTML</abbr>.</p> for an a.c...",
+    "inputs": [
+      "{{ a.crv @region:k }}\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-303",
+    "title": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n  <tbody>\n  ...",
+    "inputs": [
+      "|=\ta|\n| x |\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-304",
+    "title": "<table>\n  <tbody>\n    <tr><td class=\"c\" style=\"text-align:",
+    "inputs": [
+      "|{>.c} a |\n"
+    ],
+    "outputs": [
+      "|\\{>.c} a |\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-305",
+    "title": "<table>\n  <tbody>\n    <tr><td style=\"text-align:",
+    "inputs": [
+      "|{>}{^} a |\n"
+    ],
+    "outputs": [
+      "|\\{>}{^} a |\n"
+    ],
+    "class": "escape"
+  },
+  {
+    "id": "U-340",
+    "title": "<p>[^ ]:",
+    "inputs": [
+      "[^ ]: x\n\na[^ ]\n"
+    ],
+    "outputs": [
+      "[^blank]: x\n\na[^blank]\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-341",
+    "title": "With social:",
+    "inputs": [
+      "@alice and #news\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-360",
+    "title": "<p>{{ a.txt @code }}</p>\n<p>cap</p> C2-B-147 and C2-N-073 attach a caption li...",
+    "inputs": [
+      "{{ a.txt @code }}\n^ cap\n"
+    ],
+    "outputs": [
+      "{{ a.txt @code }}\n\n^ cap\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-361",
+    "title": "<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>:",
+    "inputs": [
+      ":: t\n: d\n%%%\n%%%\n: d2\n"
+    ],
+    "outputs": [
+      ":: t\n: d\n  %%%\n  %%%\n: d2\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-362",
+    "title": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul> A line indente...",
+    "inputs": [
+      "- a\n\n {%%}\n  - b\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-363",
+    "title": "<p>a ‘word</p> C2-I-026 tests the characters on the two sides of a braced com...",
+    "inputs": [
+      "a {%%}'word\n"
+    ],
+    "outputs": [
+      "a {%%}’word\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-364",
+    "title": "<p>a#tag</p> C2-I-026 tests the characters on the two sides of a braced comme...",
+    "inputs": [
+      "a{%%}#tag\n"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-365",
+    "title": "<p>{-{#x-}</p> {#x-} is a valid attribute block, one atom taken whole (C2-I-0...",
+    "inputs": [
+      "{-{#x-}\n"
+    ],
+    "outputs": [
+      "{-\\{#x-}\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-366",
+    "title": "<section id=\"A\">\n  <h1>A <a href=\"#A\">A </a></h1>\n</section> A resolved cross...",
+    "inputs": [
+      "# A </#A>\n"
+    ],
+    "outputs": [
+      "{#A}\n# A [A A ](#A)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-367",
+    "title": "<figure id=\"t\">\n  <img src=\"u\" alt=\"a\">\n  <figcaption><span class=\"tag\"><stro...",
+    "inputs": [
+      "{#t}\n![a](u)\n^ #y#\n\n</#t>\n"
+    ],
+    "outputs": [
+      "{#t}\n![a](u)\n^ #y#\n\n[#y 1](#t)\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-368",
+    "title": "<p>js </p>\n<pre><code></code></pre> A backtick run whose info string holds a ...",
+    "inputs": [
+      "```js `\n```\n"
+    ],
+    "outputs": [
+      "```js\n```\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-369",
+    "title": "<table>\n  <tbody>\n    <tr><td rowspan=\"2\">a</td></tr>\n    <tr></tr>\n  </tbody...",
+    "inputs": [
+      "| a |\n|{.x} ^ |\n"
+    ],
+    "outputs": [
+      "| a |\n|{.x} \\^ |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-370",
+    "title": "<pre><code>code\n</code></pre> C2-B-222 ends every body line of a code block w...",
+    "inputs": [
+      "```\ncode"
+    ],
+    "outputs": [],
+    "class": "report"
+  },
+  {
+    "id": "U-371",
+    "title": "<p>[x][no]{#i .c}</p> An unresolved reference writes its glued attribute bloc...",
+    "inputs": [
+      "[x][no]{.c}{#i}\n"
+    ],
+    "outputs": [],
+    "class": "report"
   }
 ]

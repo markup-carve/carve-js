@@ -1,7 +1,7 @@
 import { compareHtml } from './compare.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
-import { lineEnd, lineStart, lineText, readLines } from './source.ts'
+import { lineStart, lineText, readLines } from './source.ts'
 
 interface Candidate {
   entry: string
@@ -432,24 +432,6 @@ function noteItemFollower(output: string): Candidate[] {
   return found
 }
 
-function promotedImageAttributes(output: string): Candidate[] {
-  const lines = readLines(output)
-  const found: Candidate[] = []
-  for (let line = 1; line < lines.count; line++) {
-    const attribute = lineText(lines, line).trim()
-    const image = lineText(lines, line + 1)
-    if (!attribute.startsWith('{') || !attribute.endsWith('}') || !image.startsWith('![')) continue
-    const link = image.indexOf('){')
-    const reference = image.indexOf(']{')
-    const close = link >= 0 ? link : reference
-    if (close < 0) continue
-    const rewritten = image.slice(0, close + 1) + attribute + image.slice(close + 1)
-    found.push(candidate('U-220', output.slice(0, lineStart(lines, line)) + rewritten
-      + output.slice(lineEnd(lines, line + 1)), 'the block image attributes were moved before its inline attributes'))
-  }
-  return found
-}
-
 function divBoundary(output: string): Candidate[] {
   const lines = readLines(output)
   const found: Candidate[] = []
@@ -618,7 +600,6 @@ export function rescueMinor(
     ...percentRunInsideBraceComment(output),
     ...backtickRunInsideBraceComment(output),
     ...noteItemFollower(output),
-    ...promotedImageAttributes(output),
     ...divBoundary(output),
     ...smartQuoteCandidates(output, expected),
     ...unresolvedReferenceBackslashes(output),

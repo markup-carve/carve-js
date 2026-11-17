@@ -10,7 +10,6 @@ import { rescueDescription } from './description-rescue.ts'
 import { rescueEmptyDefinitionItem } from './definition-rescue.ts'
 import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
-import { rescueNestedNote } from './nested-note-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
@@ -336,7 +335,7 @@ function recordsAfterRescue(input: string, rescued: { output: string; record: Re
 /** The first rescue whose spelling keeps the 0.1 HTML, in the order of the rescues. */
 function rescueMismatch(input: string, output: string, mismatch: ReportRecord): { output: string; record: ReportRecord } | null {
   const rescues = [rescueFence, rescuePlus, rescueQuote, rescueEmptyDefinitionItem, rescueDescription, rescuePercent,
-    rescueCombinedInline, rescueHeadingBraceTag, rescueNestedNote, rescueTargeted, rescueMinor, rescueBacktick]
+    rescueCombinedInline, rescueHeadingBraceTag, rescueTargeted, rescueMinor, rescueBacktick]
   for (const rescue of rescues) {
     const rescued = rescue(input, output, mismatch)
     if (rescued !== null) return rescued

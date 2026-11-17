@@ -116,13 +116,6 @@ function substitutionAttributeCandidates(input: string, output: string): Candida
   return found
 }
 
-function nestedFootnoteCandidates(output: string): Candidate[] {
-  const first = output.indexOf('^[')
-  if (first < 0 || output.indexOf('^[', first + 2) < 0) return []
-  const prefix = output.slice(0, first + 2)
-  return [{ id: 'U-202', output: prefix + output.slice(first + 2).replaceAll('^[', '\\^[') }]
-}
-
 function floatingAttributeCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   const lines = readLines(output)
@@ -316,7 +309,6 @@ export function rescueTargeted(
     ...smartQuoteCandidates(output, expected).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190')),
     ...languageCandidates(output),
     ...substitutionAttributeCandidates(input, output),
-    ...nestedFootnoteCandidates(output),
     ...floatingAttributeCandidates(output),
     ...underlineBoundaryCandidates(output),
     ...unresolvedFootnoteAttributeCandidates(output)

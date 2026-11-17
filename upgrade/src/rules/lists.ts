@@ -342,30 +342,11 @@ function markerColumns(ctx: Context, visit: Visit): void {
   }
 }
 
-const ROMAN_LETTERS = 'ivxlcdm'
 const DIGITS_MAX = 9
 
 function attributeLineFor(ctx: Context, list: Node01, start: number): string {
   const text = lineText(ctx.lines, list.pos!.startLine)
   return `${text.slice(0, indentOf(text))}{start=${start}}\n`
-}
-
-/** U-024: a lone roman letter is a roman marker in 0.2 (C2-B-042), so the list is respelled from `a`. */
-function alphabeticFromRoman(ctx: Context, list: Node01): void {
-  const items = itemsOf(list)
-  const start = typeof list.start === 'number' ? list.start : 1
-  if (list.olType !== 'a' && list.olType !== 'A') return
-  if (items.length === 0 || items.length > 26) return
-  const [first] = markerSpan(ctx, items[0]!)
-  if (!ROMAN_LETTERS.includes(ctx.src[first]!.toLowerCase()) || ctx.src.charCodeAt(first + 1) > 0x40) return
-  const message = 'alphabetic list that starts at a roman letter respelled from a, with its start as an attribute'
-  const head = lineStart(ctx.lines, list.pos!.startLine)
-  change(ctx, 'U-024', head, head, attributeLineFor(ctx, list, start), message)
-  const base = list.olType === 'a' ? 0x61 : 0x41
-  items.forEach((item, index) => {
-    const [at] = markerSpan(ctx, item)
-    change(ctx, 'U-024', at, at + 1, String.fromCharCode(base + index), message)
-  })
 }
 
 /** U-025: an ordered marker has at most nine digits (C2-B-036); the bare dot numbers from `start`. */
@@ -404,7 +385,6 @@ function listNode(ctx: Context, visit: Visit, used: Set<number>): void {
     markerColumns(ctx, visit)
     taskBoundary(ctx, visit)
     if (node.ordered === true) {
-      alphabeticFromRoman(ctx, node)
       longNumber(ctx, node)
     }
   } else if (node.type === 'list_item') {

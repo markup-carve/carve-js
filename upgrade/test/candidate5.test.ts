@@ -29,6 +29,6 @@ it('C2-B-171, X-003: a bare header mark that 0.1 read as text is escaped, since 
   expect(entries('|=|\n')).toEqual(['X-003'])
 })
 
-it('U-270: a header mark glued to text applies to candidate 5 sources only, so 0.1 input is left alone', () => {
+it('a header mark glued to text reads alike in both versions, so the withdrawn U-270 has nothing to do', () => {
   expect(upgrade('|=a|\n| x |\n').records).toEqual([])
 })

@@ -37,7 +37,7 @@ describe('C2-W-100: upgrade command record and exit parity', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-parity-'))
     try {
       const file = join(dir, 'case.crv')
-      const bytes = Buffer.from('\ufeff```js{1,3}\r\na\r\n```\r\n')
+      const bytes = Buffer.from('\ufeffSome text\r\n# Heading\r\n')
       for (const integrated of [false, true]) {
         writeFileSync(file, bytes)
         const done = writeRun(file, integrated)

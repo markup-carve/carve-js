@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
+// C2-I-089 restores the 0.1 reading: inside a note a caret pair opens nothing, so U-202 is withdrawn.
 describe('C2-I-089 nested inline footnotes', () => {
   for (const source of [
     'x ^[a ^[b] c]\n',
@@ -8,10 +9,9 @@ describe('C2-I-089 nested inline footnotes', () => {
     '^[x ^[a](u) b]\n',
     '^[x ^[a]{.c} b]\n',
   ]) {
-    it(`U-202 escapes inner openers in ${source.trim()}`, () => {
+    it(`both versions read ${source.trim()} alike`, () => {
       const result = upgrade(source)
-      expect(result.check).toBe('pass')
-      expect(result.records.map((record) => record.entry)).toContain('U-202')
+      expect([result.check, result.output, result.records]).toEqual(['pass', source, []])
     })
   }
 })

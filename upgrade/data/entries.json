@@ -108,7 +108,7 @@
     {
       "id": "U-015",
       "name": "`+` before a paragraph",
-      "class": "rewrite",
+      "class": "report",
       "lint": [
         "deprecated-continuation-marker"
       ]
@@ -169,17 +169,9 @@
       ]
     },
     {
-      "id": "U-024",
-      "name": "alphabetic list from `i`",
-      "class": "rewrite",
-      "lint": [
-        "ordered-list-kind-split"
-      ]
-    },
-    {
       "id": "U-025",
       "name": "marker of ten or more digits",
-      "class": "rewrite",
+      "class": "report",
       "lint": []
     },
     {
@@ -378,7 +370,7 @@
     {
       "id": "U-053",
       "name": "tab in code under a container",
-      "class": "rewrite",
+      "class": "report",
       "lint": []
     },
     {
@@ -880,12 +872,6 @@
       "lint": []
     },
     {
-      "id": "U-146",
-      "name": "a percent line comment inside brackets or a container ends at its boundary",
-      "class": "report",
-      "lint": []
-    },
-    {
       "id": "U-147",
       "name": "a plus row continues the current table rather than ending its row",
       "class": "report",
@@ -894,12 +880,6 @@
     {
       "id": "U-148",
       "name": "a reference to a heading uses the heading's folded source or rendered plain text",
-      "class": "report",
-      "lint": []
-    },
-    {
-      "id": "U-149",
-      "name": "inline sigils inside unmatched bracket text are still scanned",
       "class": "report",
       "lint": []
     },
@@ -1102,7 +1082,7 @@
     {
       "id": "U-184",
       "name": "nested list include-looking brace",
-      "class": "escape",
+      "class": "report",
       "lint": []
     },
     {
@@ -1184,18 +1164,6 @@
       "lint": []
     },
     {
-      "id": "U-201",
-      "name": "nested braced inline closer boundary",
-      "class": "report",
-      "lint": []
-    },
-    {
-      "id": "U-202",
-      "name": "literal nested inline footnote opener",
-      "class": "escape",
-      "lint": []
-    },
-    {
       "id": "U-204",
       "name": "fence after a continuation marker",
       "class": "rewrite",
@@ -1210,7 +1178,7 @@
     {
       "id": "U-207",
       "name": "literal attribute after an unresolved footnote",
-      "class": "escape",
+      "class": "report",
       "lint": []
     },
     {
@@ -1274,12 +1242,6 @@
       "lint": []
     },
     {
-      "id": "U-220",
-      "name": "block attributes before promoted image inline attributes",
-      "class": "rewrite",
-      "lint": []
-    },
-    {
       "id": "U-221",
       "name": "wrapped link or image title",
       "class": "report",
@@ -1298,12 +1260,6 @@
       "lint": []
     },
     {
-      "id": "U-224",
-      "name": "percent fence at a container boundary",
-      "class": "report",
-      "lint": []
-    },
-    {
       "id": "U-225",
       "name": "caption caret followed by an empty comment",
       "class": "escape",
@@ -1318,7 +1274,7 @@
     {
       "id": "U-227",
       "name": "percent run inside a multiline brace comment",
-      "class": "escape",
+      "class": "report",
       "lint": []
     },
     {
@@ -1360,7 +1316,7 @@
     {
       "id": "U-235",
       "name": "nested item definition boundary",
-      "class": "rewrite",
+      "class": "report",
       "lint": []
     },
     {
@@ -1378,7 +1334,7 @@
     {
       "id": "U-238",
       "name": "list hosted fence continuation closer",
-      "class": "rewrite",
+      "class": "report",
       "lint": []
     },
     {
@@ -1408,7 +1364,7 @@
     {
       "id": "U-243",
       "name": "backtick fence run inside a multiline brace comment",
-      "class": "escape",
+      "class": "report",
       "lint": []
     },
     {
@@ -1490,12 +1446,6 @@
       "lint": []
     },
     {
-      "id": "U-257",
-      "name": "nested bracket text in an inline note",
-      "class": "rewrite",
-      "lint": []
-    },
-    {
       "id": "U-258",
       "name": "backtick run with no closing run of its length",
       "class": "rewrite",
@@ -1510,6 +1460,36 @@
       ]
     },
     {
+      "id": "U-262",
+      "name": "<p><span>t</span></p> C2-H-116:",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-263",
+      "name": "<div class=\"hardbreaks\">\n  <blockquote><p>a<br>\nb</p></blockquote>\n</div> C2-...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-264",
+      "name": "<div class=\"line-block\">\n  <p>*Roses are red<br>\nViolets are blue*</p>\n</div>...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-265",
+      "name": "<div class=\"line-block\">\n  <p>Roses  are red</p>\n</div> C2-H-043 writes only ...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-267",
+      "name": "<p>an _a=b_ word</p> The U-065 rewrite {_a=b_} is a valid attribute block wit...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
       "id": "U-269",
       "name": "alignment block of a joining span mark",
       "class": "rewrite",
@@ -1518,9 +1498,255 @@
       ]
     },
     {
-      "id": "U-270",
-      "name": "header mark glued to text, for a freeze candidate 5 source",
-      "class": "none",
+      "id": "U-271",
+      "name": "<table>\n  <tbody>\n    <tr><th scope=\"row\">a</th></tr>\n    <tr><td>b</td></tr>...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-273",
+      "name": "<p><em>This <em>does not</em> nest</em></p> C2-I-051 pushes a delimiter that ...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-274",
+      "name": "<p><strong>a <strong>b</strong> c</strong></p> Inside a braced span a bare pa...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-275",
+      "name": "<p>a {#id} b</p> C2-I-035 and C2-I-036 make a valid attribute block that atta...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-276",
+      "name": "<aside class=\"admonition note\" aria-labelledby=\"adm-1\">\n  <p class=\"admonitio...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-277",
+      "name": "<pre title=\"T\"><code class=\"language-js\">x\n</code></pre> The quoted title bef...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-278",
+      "name": "<pre><code>x\n</code></pre> A backtick run of three or more opens a code fence...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-279",
+      "name": "<table>\n  <caption>a\n- b</caption>\n  <tbody>\n    <tr><td>x</td></tr>\n  </tbod...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-280",
+      "name": "<p><a href=\"/u\">t</a></p> C2-I-079 folds every run of spaces, tabs and one li...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-281",
+      "name": "<blockquote>\n  <h1 id=\"Quoted\">Quoted</h1>\n</blockquote>\n<p><a href=\"#Quoted\"...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-282",
+      "name": "<p>p</p> The value of a class key is split at runs of spaces and tabs and an ...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-283",
+      "name": "<p><a href=\"/u\">x</a></p> A link carries no rel when neither the author nor t...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-284",
+      "name": "<p><a href=\"u v\">t</a></p> Whitespace is a space, a tab or a line break, so a...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-285",
+      "name": "<p><a href=\" /u\">a</a></p> A narrow no-break space after the space of a link ...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-286",
+      "name": "<p>[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-287",
+      "name": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table> With ...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-288",
+      "name": "<p data-source-line=\"99\">p</p> With sourceLines on, the generated value repla...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-289",
+      "name": "<p>{{ a.crv @shift:1 }}</p> An unexpanded include renders the directive as te...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-290",
+      "name": "<p>x {{ a.crv <span class=\"mention\"><strong>@lines</strong></span>:0 }} y</p>...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-291",
+      "name": "<p>{{ a.crv @code:js }}</p> An unexpanded include writes the directive from t...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-292",
+      "name": "<p>{{ a.crv @code:js }}</p> An include's own attributes are not written to HT...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-293",
+      "name": "<div>\n\n</div> Under minimal this empty div writes nothing:",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-300",
+      "name": "<p>a\nc</p> C2-B-138:",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-301",
+      "name": "<p>—\nt:",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-302",
+      "name": "<p>See <a href=\"/u\">s</a> and <abbr title=\"Hyper\">HTML</abbr>.</p> for an a.c...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-303",
+      "name": "<table>\n  <thead>\n    <tr><th scope=\"col\">a</th></tr>\n  </thead>\n  <tbody>\n  ...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-304",
+      "name": "<table>\n  <tbody>\n    <tr><td class=\"c\" style=\"text-align:",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-305",
+      "name": "<table>\n  <tbody>\n    <tr><td style=\"text-align:",
+      "class": "escape",
+      "lint": []
+    },
+    {
+      "id": "U-340",
+      "name": "<p>[^ ]:",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-341",
+      "name": "With social:",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-360",
+      "name": "<p>{{ a.txt @code }}</p>\n<p>cap</p> C2-B-147 and C2-N-073 attach a caption li...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-361",
+      "name": "<dl>\n  <dt>t</dt>\n  <dd>d</dd>\n</dl>\n<p>:",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-362",
+      "name": "<ul>\n  <li>a\n    <ul>\n      <li>b</li>\n    </ul>\n  </li>\n</ul> A line indente...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-363",
+      "name": "<p>a ‘word</p> C2-I-026 tests the characters on the two sides of a braced com...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-364",
+      "name": "<p>a#tag</p> C2-I-026 tests the characters on the two sides of a braced comme...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-365",
+      "name": "<p>{-{#x-}</p> {#x-} is a valid attribute block, one atom taken whole (C2-I-0...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-366",
+      "name": "<section id=\"A\">\n  <h1>A <a href=\"#A\">A </a></h1>\n</section> A resolved cross...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-367",
+      "name": "<figure id=\"t\">\n  <img src=\"u\" alt=\"a\">\n  <figcaption><span class=\"tag\"><stro...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-368",
+      "name": "<p>js </p>\n<pre><code></code></pre> A backtick run whose info string holds a ...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-369",
+      "name": "<table>\n  <tbody>\n    <tr><td rowspan=\"2\">a</td></tr>\n    <tr></tr>\n  </tbody...",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-370",
+      "name": "<pre><code>code\n</code></pre> C2-B-222 ends every body line of a code block w...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-371",
+      "name": "<p>[x][no]{#i .c}</p> An unresolved reference writes its glued attribute bloc...",
+      "class": "report",
       "lint": []
     }
   ],

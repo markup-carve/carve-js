@@ -124,8 +124,6 @@ function boundaryReport(input: string, expected: string, actual: string, line: n
     'C2-H-095 and C2-H-096 use plain heading text or the caption label and number for a resolved cross-reference')
   if (taskLabelBoundary(input, expected, actual)) return recordOf('U-133', line,
     TASK_PRESENTATION_MESSAGE)
-  if (input.startsWith('{-{#') && expected.includes('<del>') && actual.includes('{-{#')) return recordOf('U-201', line,
-    'C2-I-060, C2-I-062, and C2-I-119 close the nested braced inline form at its own boundary')
   return null
 }
 
@@ -151,15 +149,6 @@ function wrappedLinkTitle(input: string, expected: string): boolean {
   return false
 }
 
-function lineCommentInContainer(input: string): boolean {
-  if (input.includes('%%%')) return false
-  return input.split('\n').some((line) => {
-    let value = line.trimStart()
-    while (value.startsWith('>')) value = value.slice(1).trimStart()
-    return value.startsWith('%% ')
-  })
-}
-
 function unresolvedContinuation(input: string): boolean {
   for (const line of input.split('\n')) {
     const value = line.trimStart()
@@ -168,20 +157,9 @@ function unresolvedContinuation(input: string): boolean {
   return false
 }
 
-function percentFenceInContainer(input: string): boolean {
-  if (!input.includes('%%%')) return false
-  return input.split('\n').some((line) => {
-    const value = line.trimStart()
-    return value.startsWith('>') || value.startsWith(': ') || value.startsWith('- :::')
-      || value.startsWith('[^') && value.includes(']:')
-  })
-}
-
 function lateMeasuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
   const legacy = legacyMeasured(input, expected, actual, line)
   if (legacy !== null) return legacy
-  if (percentFenceInContainer(input)) return recordOf('U-224', line,
-    'C2-B-108, C2-B-110, and C2-B-111, C2-B-112 change the percent fence container extent; no preserving spelling was verified')
   if (unresolvedContinuation(input)) return recordOf('U-209', line,
     'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
   return null
@@ -197,8 +175,6 @@ export function measuredReport(input: string, expected: string, actual: string, 
   const boundary = boundaryReport(input, expected, actual, line)
   if (boundary !== null) return boundary
   if (unresolvedEngineShape(input, expected, actual)) return null
-  if (lineCommentInContainer(input)) return recordOf('U-146', line,
-    'C2-B-133 and C2-I-119 end the percent line comment at its container boundary')
   if (input.includes('{{') && input.includes('}}')) return recordOf('U-011', line,
     'C2-B-201 and C2-B-206 read the include-looking directive as an include')
   if (input.includes('{table') && input.includes('```csv')) return recordOf('U-061', line,

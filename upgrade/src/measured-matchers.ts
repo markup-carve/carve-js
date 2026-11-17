@@ -157,23 +157,8 @@ function referenceMatch(input: string, expected: string, actual: string): string
 function inlinePunctuationMatch(input: string, expected: string): string | null {
   if (hasTrailingSigil(input) && (expected.includes('class="mention"') || expected.includes('class="tag"')
     || expected.includes('<strong>#') || expected.includes('<strong>@'))) return 'U-170'
-  if (input.includes(':') && input.includes('[%%')) return 'U-149'
-  if (percentInsideBracket(input)) return 'U-146'
   if (input.includes('{^') || input.includes('\t%%')) return 'U-155'
   return null
-}
-
-function percentInsideBracket(input: string): boolean {
-  for (const line of input.split('\n')) {
-    let open = line.indexOf('[')
-    while (open >= 0) {
-      const close = line.indexOf(']', open + 1)
-      const percent = line.indexOf('%%', open + 1)
-      if (close > percent && percent > open) return true
-      open = line.indexOf('[', open + 1)
-    }
-  }
-  return false
 }
 
 function listMarkerTab(input: string, expected: string, actual: string): boolean {
@@ -194,13 +179,6 @@ function mixedDelimiterShape(input: string, expected: string, actual: string): b
   return expected.startsWith('<p><strong>') && actual.startsWith('<p>*')
 }
 
-function bracedBoundary(input: string): boolean {
-  const nested = ['{-{', '{+{', '{_{', '{~{', '{={', '{-a-}{+{', '{-a-}{-{']
-  if (nested.some((shape) => input.includes(shape))) return true
-  return input.split('\n').some((line) =>
-    ['{_', '{-', '{+', '{~', '{='].some((shape) => line.trimStart().startsWith(shape)) && line.includes('%%'))
-}
-
 function adjacentDelimiterMatch(input: string, expected: string, actual: string): string | null {
   if (adjacentBracedDelimiter(input) && (expected.includes('<em>') || expected.includes('<strong>'))) return 'U-143'
   if (actual.includes('<em>') && adjacentBracedDelimiter(input)) return 'U-143'
@@ -212,7 +190,6 @@ function adjacentDelimiterMatch(input: string, expected: string, actual: string)
 
 function inlineDelimiterMatch(input: string, expected: string, actual: string): string | null {
   if (mixedDelimiterShape(input, expected, actual)) return 'U-145'
-  if (bracedBoundary(input)) return 'U-201'
   if (!input.includes('`') && !input.includes('%%') && (input.includes('/*') || input.includes('*/'))) return 'U-145'
   if (input.includes('_{') || input.includes('~{')) return 'U-151'
   return adjacentDelimiterMatch(input, expected, actual)

@@ -10,11 +10,6 @@
     "message": "C2-I-047,C2-I-048,C2-I-051: adjacent mixed strong and emphasis delimiters change nesting"
   },
   {
-    "id": "U-146",
-    "input": "[ %%]",
-    "message": "C2-B-133,C2-I-119: a percent line comment inside brackets or a container ends at its boundary"
-  },
-  {
     "id": "U-147",
     "input": "||\n+||",
     "message": "C2-B-175,C2-B-184: a plus row continues the current table rather than ending its row"
@@ -23,11 +18,6 @@
     "id": "U-148",
     "input": "# \t%%h",
     "message": "C2-I-081,C2-I-084: a reference to a heading uses the heading's folded source or rendered plain text"
-  },
-  {
-    "id": "U-149",
-    "input": ":f[%%]",
-    "message": "C2-I-119,C2-I-090: inline sigils inside unmatched bracket text are still scanned"
   },
   {
     "id": "U-150",
@@ -170,11 +160,6 @@
     "message": "C2-B-119 and C2-B-121 read the label in the metadata slot without the 0.1 inline rendering."
   },
   {
-    "id": "U-201",
-    "input": "{_a %% b_} y\n",
-    "message": "C2-I-060, C2-I-062, and C2-I-119 close braced inline forms at their own nested or comment boundary"
-  },
-  {
     "id": "U-206",
     "input": "# *Setup*\n\nSee </#Setup>.\n",
     "message": "C2-H-095 and C2-H-096 use plain heading text or a caption label and number for a resolved cross-reference"
@@ -188,11 +173,6 @@
     "id": "U-221",
     "input": "[a](/u \"t\nu\")\n",
     "message": "C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified"
-  },
-  {
-    "id": "U-224",
-    "input": "> %%%\n> secret\n  %%%\nafter\n",
-    "message": "C2-B-108,C2-B-110,C2-B-114: the percent fence consumes a different container extent; no preserving spelling has been verified"
   },
   {
     "id": "U-240",

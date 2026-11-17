@@ -222,11 +222,11 @@ describe('C2-W-100: the upgrade self-check', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-bom-'))
     try {
       const file = join(dir, 'case.crv')
-      writeFileSync(file, Buffer.from('\ufeff\n```js{1,3}\na\n```\n'))
+      writeFileSync(file, Buffer.from('\ufeff\nSome text\n# Heading\n'))
       const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', file])
       expect(done.status).toBe(0)
       expect(readFileSync(file).subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
-      expect(readFileSync(file, 'utf8')).toContain('```js\na\n```')
+      expect(readFileSync(file, 'utf8')).toContain('Some text\n\n# Heading')
     } finally { rmSync(dir, { recursive: true }) }
   })
 
@@ -255,7 +255,7 @@ describe('C2-W-100: the upgrade self-check', () => {
     const dir = mkdtempSync(join(tmpdir(), 'carve-upgrade-readonly-'))
     try {
       const file = join(dir, 'case.crv')
-      const input = '```js{1,3}\na\n```\n'
+      const input = 'Some text\n# Heading\n'
       writeFileSync(file, input)
       chmodSync(file, 0o444)
       const done = spawnSync(process.execPath, [join(import.meta.dirname, '../src/cli.ts'), '--write', '--json', file])
