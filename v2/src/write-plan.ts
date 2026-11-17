@@ -278,7 +278,8 @@ const ESCAPED = 1
  * be a raw marker (C2-I-045).
  */
 function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
-  if (nextIs(leaf, at, '%#=')) return UNDECIDED
+  // C2-I-043: a valid block comes before a comment, so `{%` and `{#` are read as a block first.
+  if (nextIs(leaf, at, '=')) return UNDECIDED
   let end = at
   const codes = leaf.codes
   while (end < codes.length && end - at < LONGEST_BLOCK && codes[end] !== LF && leaf.kinds[end] === TEXT && escaped[end] === 0) end++
