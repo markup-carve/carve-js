@@ -33,10 +33,21 @@ const rendered = examples.map(source => ({ source, html: roundTrip(source).html 
 // The differences of a declared head row count, which is a sidecar fact (C2-A-088), and of the old column field.
 const GAPS = ['table_column.authored: lost', 'table_body.headRows: lost']
 
+/**
+ * Examples whose difference no carrier of C2-H-011 can carry, each in _SPEC_GAPS.md: a key typed in another normal
+ * form than the id it names (C2-I-097), and the bodies and row header columns of `body-rows` (C2-B-230).
+ */
+const HELD_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
+  ['# Caf\u00e9\n\nSee </#Cafe\u0301>.', ['xref.key']],
+  ['{body-rows=1,1 body-header-rows=0,1 body-header-cols=1,0 footer-rows=1}\n|= Item |= Qty |\n| tea | 2 |\n| Later | |\n'
+    + '| milk | 1 |\n| Total | 3 |', ['table_body.rowHeadColumns: lost', 'table_cell.header']],
+])
+
 /** Every example whose `roundtrip` render holds `marker` imports back to its tree, after the specified losses and gaps. */
 function examplesWith(marker: string): { count: number, failing: string[] } {
   const hits = rendered.filter(entry => entry.html.includes(marker))
-  const failing = hits.filter(entry => roundTrip(entry.source).classes.some(name => !GAPS.includes(name)))
+  const failing = hits.filter(entry => roundTrip(entry.source).classes.some(name => !GAPS.includes(name)
+    && !(HELD_SOURCES.get(entry.source)?.includes(name) ?? false)))
   return { count: hits.length, failing: failing.map(entry => entry.source) }
 }
 

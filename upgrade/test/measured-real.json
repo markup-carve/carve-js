@@ -660,9 +660,8 @@
     "line": 12,
     "input": ". - %%%\n%%%\nx\n%%%\n",
     "check": "pass",
-    "entries": [
-      "U-129"
-    ]
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was pass with U-129"
   },
   {
     "cause": "C25",
@@ -671,9 +670,8 @@
     "line": 32,
     "input": "- %%%\n\n%%%\n%% z\n- c\n",
     "check": "pass",
-    "entries": [
-      "U-129"
-    ]
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was pass with U-129"
   },
   {
     "cause": "C26",
@@ -1616,10 +1614,9 @@
     "path": "resources/examples/edge-cases/0309-a-note-s-content-recognizes-no-note.md",
     "line": 43,
     "input": "x ^[a [^1] c]\n\n[^1]: n\n",
-    "check": "mismatch",
-    "entries": [
-      "U-154"
-    ]
+    "check": "pass",
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was mismatch with U-154"
   },
   {
     "cause": "C54",
@@ -1815,10 +1812,9 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-2.crv",
     "line": 1,
     "input": "^[a %% c] d\n",
-    "check": "mismatch",
-    "entries": [
-      "U-146"
-    ]
+    "check": "pass",
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was mismatch with U-146"
   },
   {
     "cause": "C64",
@@ -2703,10 +2699,9 @@
     "path": "resources/examples/edge-cases/0888-a-comment-span-in-a-quote-closes-at-an-unmarked-closer.md",
     "line": 46,
     "input": "> %%%\n> secret\n  %%%\nafter\n",
-    "check": "mismatch",
-    "entries": [
-      "U-224"
-    ]
+    "check": "pass",
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was mismatch with U-224"
   },
   {
     "cause": "C25",
@@ -2835,10 +2830,9 @@
     "path": "resources/examples/edge-cases/0940-a-comment-span-on-a-description-or-note-marker-line-closes-below-its-column.md",
     "line": 105,
     "input": "x[^n]\n\n[^n]: %%%\n    n\n\n%%%\nc\n",
-    "check": "mismatch",
-    "entries": [
-      "U-224"
-    ]
+    "check": "pass",
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was mismatch with U-224"
   },
   {
     "cause": "C57",
@@ -2987,10 +2981,9 @@
     "path": "resources/examples/edge-cases/0923-an-authored-rowspan-or-colspan-on-a-cell-is-dropped.md",
     "line": 12,
     "input": "|{rowspan=2} a | b |\n| c | d |\n",
-    "check": "explained",
-    "entries": [
-      "U-165"
-    ]
+    "check": "pass",
+    "entries": [],
+    "restored": "candidate 6 restores the 0.1 reading; was explained with U-165"
   },
   {
     "cause": "C95",

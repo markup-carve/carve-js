@@ -43,6 +43,15 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-114#4': { entry: 'U-114', check: 'mismatch' },
   // C2-H-133 (html Example 64): 0.2 renders the unexpanded include of a tight item bare, as 0.1 does, so no escape is needed.
   'U-184#0': { check: 'pass' },
+  // Freeze candidate 6 restores the 0.1 reading of these inputs, so both engines agree and nothing is reported:
+  // C2-I-024 ends a comment before the note's bracket, C2-I-089 makes a reference in an inline note text,
+  // C2-H-058 withholds an authored rowspan, and C2-B-109 closes a comment block at a bare closer line.
+  'U-146#2': { check: 'pass' },
+  'U-154#0': { output: '^[ [^1]]\n\n[^1]: n', entry: 'U-005', check: 'pass' },
+  'U-165#2': { check: 'pass' },
+  'U-215#0': { check: 'pass' },
+  'U-224#0': { check: 'pass' },
+  'U-224#4': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
