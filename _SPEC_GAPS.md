@@ -62,6 +62,19 @@ The map at candidate 8 withdraws U-201 with U-146 and U-149, since C2-I-024 now 
 
 No other row names them. Reading one: they are a report row of their own (as U-201 was, without the comment shapes). Reading two: the difference is meant to stay unexplained. The tool reports `upgrade-mismatch` for them; `upgrade/test/braced-boundary-report.test.ts` pins it.
 
+### G-H5. A note whose closing depends on how a caret pair in it reads
+
+Input:
+
+```carve
+a^^[
+[^](u)
+```
+
+C2-I-089: inside an inline footnote `[^` opens no footnote reference, so its bracket is an ordinary one. Read that way, `[^]` pairs with the `]`, `[^](u)` is a link, and the note `^[` has no closer, so it is text and no note. Then `[^` stands outside every note, a blank label makes its bracket text (C2-I-087), and the `]` closes `^[`, which makes it a note again. Neither reading is consistent.
+
+Reading one: the note closes as it would with every caret pair read (what the engine does: the note is a note, and the caret pair inside reads as outside one). Reading two: the note is text. The engine takes the notes that close with every caret pair read, reads the caret pairs inside them as text, and drops a note that then stays unclosed, at most eight passes; for this input the note stays a note. A sentence on which reading wins closes it.
+
 ## Freeze candidate 6 session (spec `068552fc`)
 
 Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.
