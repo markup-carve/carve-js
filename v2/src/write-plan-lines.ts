@@ -366,11 +366,22 @@ function attributeLine(leaf: Leaf, at: number, _place: LeafPlace, first: boolean
   if (isBracedOpener(code(leaf, at + 1)) || !lineEndsWith(leaf, at, 125)) return NO_ESCAPE
   if (!first) return UNDECIDED
   const [line, whole] = textOfLine(leaf, at)
-  if (!whole || !isAttributeLine(line, 0, line.length)) return UNDECIDED
+  if (!whole) return UNDECIDED
+  // C2-B-090: a line of braces that is no valid block is text. An include shape (C2-B-156) and a quote or a backslash,
+  // whose escape may make the block valid, are left to the repair.
+  if (!isAttributeLine(line, 0, line.length)) return line.startsWith('{{') || mayTakeEscape(line) ? UNDECIDED : NO_ESCAPE
   const next = at + line.length + 1
   if (next > leaf.codes.length) return NO_ESCAPE
   const [after, afterWhole] = textOfLine(leaf, next)
   return afterWhole && isAttributeLine(after, 0, after.length) ? UNDECIDED : at
+}
+
+function mayTakeEscape(line: string): boolean {
+  for (let at = 0; at < line.length; at++) {
+    const value = line.charCodeAt(at)
+    if (value === 34 || value === 39 || value === 92) return true
+  }
+  return false
 }
 
 function isBracedOpener(value: number): boolean {
