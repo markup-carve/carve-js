@@ -8,11 +8,16 @@ import { addFinding, type Findings } from '../diagnostics.ts'
 import { write } from '../write.ts'
 import { type ExtensionClaim, type ExtensionDefinition, type ExtensionSource } from './types.ts'
 
+/** The link reference definitions of the document whose claims are being read. */
+let contextDefinitions: DocumentNode['children'] = []
+
+/** C2-X-026, C2-W-089: the body is written in its context, so a reference to a definition outside it keeps its form. */
 function sourceBody(node: DivNode): string {
-  const text = write({ type: 'document', astVersion: '2.0', children: [node] })
+  const text = write({ type: 'document', astVersion: '2.0', children: [node, ...contextDefinitions] })
   const lines = text.split('\n')
   const opener = lines.findIndex((line) => line.startsWith(':::'))
-  const body = lines.slice(opener + 1, -2).join('\n')
+  const run = /^:+/.exec(lines[opener] ?? '')?.[0] ?? ':::'
+  const body = lines.slice(opener + 1, lines.lastIndexOf(run)).join('\n')
   return body === '' ? '' : `${body}\n`
 }
 
@@ -178,8 +183,13 @@ export function applyExtensions(parsed: ParsedTree, definitions: readonly Extens
   const document = parsed.document
   const sourceNames = parsed.facts?.sourceNames ?? null
   const findings: Findings = { entries: [], nodes: [] }
-  for (const [at, child] of document.children.entries()) {
-    Reflect.set(document.children, at, replace(child, definitions, sourceNames, findings))
+  contextDefinitions = document.children.filter((node) => node.type === 'link_reference_definition')
+  try {
+    for (const [at, child] of document.children.entries()) {
+      Reflect.set(document.children, at, replace(child, definitions, sourceNames, findings))
+    }
+  } finally {
+    contextDefinitions = []
   }
   declareExtensions(document, definitions)
   if (findings.entries.length === 0 || parsed.facts === null) return parsed
