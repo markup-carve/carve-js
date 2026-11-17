@@ -17,6 +17,12 @@ const paragraphOf = (...inline: unknown[]): unknown => ({ type: 'paragraph', chi
 const text = (value: string): unknown => ({ type: 'text', value })
 
 describe('scope and input', () => {
+  it('C2-M-004: an explicit body in a fragment reports dropped attributes', () => {
+    const result = importDocument('<body class="page"><p>a</p></body>', { from: 'html' })
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'import-attribute-dropped',
+      range: { startOffset: 0, endOffset: 34 } }))
+  })
+
   it('C2-M-002: an input that starts with <header is a fragment read with a body context', () => {
     expect(children('<header class="top"><h1>Site</h1></header>')).toEqual([{ type: 'div', attrs: { classes: ['top'] },
       children: [{ type: 'heading', level: 1, children: [text('Site')] }] }])

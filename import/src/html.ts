@@ -964,11 +964,13 @@ function parseFragment(input: string): Html.DocumentFragment {
 }
 
 export function importHtml(input: string, rawHtml = false): ImportResult {
-  const foreign = isFullDocument(input) ? parse(input, { sourceCodeLocationInfo: true }) : parseFragment(input)
+  const full = isFullDocument(input)
+  const foreign = full ? parse(input, { sourceCodeLocationInfo: true }) : parseFragment(input)
   ensureForeignDepth(foreign, 'html')
   const context: HtmlContext = { format: 'html', input, rawHtml, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),
     anchorKeys: new Set() }
+  if (!full) fragmentBody(input, context)
   collectNotes(foreign.childNodes, context)
   rootLanguage(foreign.childNodes, context)
   for (const child of foreign.childNodes) auditElement(child, context)
@@ -976,6 +978,20 @@ export function importHtml(input: string, rawHtml = false): ImportResult {
   const first = foreign.childNodes[0]
   const children = first === undefined ? [] : flow(foreign.childNodes, first, context, documentChild)
   return complete(context, [...children, ...rebuiltDefinitions(context, children), ...context.footnotes, ...(context.deferred ?? [])])
+}
+
+function fragmentBody(input: string, context: HtmlContext): void {
+  if (!/<body(?:\s|>)/iu.test(input)) return
+  const document = parse(input, { sourceCodeLocationInfo: true })
+  const html = document.childNodes.find(node => isElement(node) && node.tagName === 'html')
+  if (!html || !isElement(html)) return
+  const body = elements(html).find(node => node.tagName === 'body')
+  if (body?.sourceCodeLocation === undefined) return
+  wrapperAttributes(body, context)
+  const lang = attr(body, 'lang')
+  const dir = directionOf(attr(body, 'dir'))
+  if (lang) context.rootLang = lang
+  if (dir !== undefined) context.rootDir = dir
 }
 
 /** The `href` of the first link of each key in `keys` below `node`, as resolution gave it. */
