@@ -397,7 +397,18 @@ function gluedSigil(leaf: Leaf, at: number, escaped: Uint8Array, opens: (leaf: L
     escaped[at] = 1
     return
   }
+  if (plannedTick(leaf, at + 1)) return
   undecidedIf(nextIs(leaf, at, rest), leaf, `sigil ${String.fromCharCode(code(leaf, at))}`)
+}
+
+/**
+ * A backtick of text whose run the tick plan writes escaped, or bare where no later run closes it: either way no span
+ * opens there, so a sigil glued to it opens none either.
+ */
+function plannedTick(leaf: Leaf, at: number): boolean {
+  if (code(leaf, at) !== 96 || leaf.kinds[at] !== TEXT || leaf.kinds[at - 1] === ESCAPE) return false
+  leaf.ticks ??= tickPlan(leaf)
+  return leaf.ticks[at] === TICK_BARE || leaf.ticks[at] === TICK_ESCAPED
 }
 
 /**
