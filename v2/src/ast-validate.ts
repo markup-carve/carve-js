@@ -877,8 +877,7 @@ const FIELD_CHECKS = new Map<string, FieldCheck>([
   }],
   ['fallback', (value, path, walk, node) => {
     const qualified = typeof node['name'] === 'string' && node['name'].includes('.')
-    const inner: Walk = { ...walk, coreFallback: walk.coreFallback || qualified,
-      fallbacks: walk.fallbacks + (node['type'] === 'inline_extension' && !qualified ? 1 : 0) }
+    const inner: Walk = { ...walk, coreFallback: walk.coreFallback || qualified }
     const role = node['type'] === 'block_extension' ? BLOCKS : INLINES
     const allowed = qualified
       ? role.filter((type) => type !== 'block_extension' && type !== 'inline_extension') : role
@@ -1189,6 +1188,10 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
     fail(path, 'qualified fallback contains an extension node')
   }
   const current: Walk = levels(walk, type, path)
+  // C2-X-030: an unqualified inline extension is its own fallback, so its children are the nesting path.
+  if (type === 'inline_extension' && typeof value['name'] === 'string' && !value['name'].includes('.')) {
+    if (++current.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 unqualified inline extension nodes')
+  }
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
   if (type === 'table_cell') checkCellReferences(value, path, walk)
@@ -1231,7 +1234,6 @@ function checkNodeBounds(node: Fields, path: string, walk: Walk): void {
   const tree = walk.tree
   tree.resourceReferences += (node['resourceId'] === undefined ? 0 : 1) + ((node['resourceIds'] as unknown[] | undefined)?.length ?? 0)
   if (tree.resourceReferences > MAX_RESOURCE_REFERENCES) fail(path, 'more than 4096 resource references')
-  if (walk.fallbacks > MAX_FALLBACK_DEPTH) fail(path, 'fallbacks are nested deeper than 32 unqualified inline extension nodes')
 }
 
 /** C2-A-131: every id a node names is that of an entry of the manifest. */

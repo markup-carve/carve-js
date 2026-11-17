@@ -590,10 +590,17 @@ describe('citations, extension nodes and resources', () => {
     }
     const declared = { ...documentOf(paragraph(extension)), extensions: [{ name: 'org.example.x', version: '1', required: false, slots: [] }] }
     expect(refusal(declared)).toBe('/children/0/children/0: more than 4096 resource references')
-    let nested: Inline = text('x')
-    for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'x', children: [], fallback: [nested] }
-    // C2-A-124 refuses a fallback on an unqualified node, so the bound of C2-A-132 is met first only at depth.
-    expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 unqualified inline extension nodes$/)
+  })
+
+  it('C2-X-030, C2-A-132: a reader takes 32 unqualified inline extensions nested along children and refuses 33', () => {
+    const nest = (levels: number): Inline => {
+      let nested: Inline = text('x')
+      for (let level = 0; level < levels; level++) nested = { type: 'inline_extension', name: 'kbd', children: [nested] }
+      return nested
+    }
+    expect(refusal(documentOf(paragraph(nest(32))))).toBeNull()
+    expect(refusal(documentOf(paragraph(nest(33)))))
+      .toBe(`/children/0${'/children/0'.repeat(33)}: fallbacks are nested deeper than 32 unqualified inline extension nodes`)
   })
 
   it('C2-A-131: a resource has an id, a media type and a digest, and no id occurs twice', () => {
