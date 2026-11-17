@@ -937,7 +937,7 @@ interface RenderResult {
  * false where its text nodes are known to hold no bidirectional control (C2-H-172).
  */
 export function renderDocument(
-  document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean,
+  document: DocumentNode, settings: Settings, resolution: Resolution, losses: Findings, bidi: boolean, source?: string | number,
 ): RenderResult {
   const rule = PROFILES.get(settings.profile)
   const linksAllowed = rule === undefined ||
@@ -946,7 +946,7 @@ export function renderDocument(
     settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, derivedBudget: -1, derivedLeft: 0, derivedReported: false,
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false,
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }

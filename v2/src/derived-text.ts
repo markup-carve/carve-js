@@ -6,16 +6,8 @@ import { utf8Length } from './positions.ts'
 export const DERIVED_TEXT_BYTES = 1_000_000
 export const DERIVED_TEXT_FACTOR = 8
 
-// The source each parsed tree was read from, or its byte length, which a parse without positions does not record.
-const SOURCES = new WeakMap<Node, string | number>()
-
-export function noteSource(document: Node, source: string | number): void {
-  SOURCES.set(document, source)
-}
-
 /** The budget of one render; a supplied tree without `srcByteLength` has the fixed one. */
-export function derivedTextBudget(document: DocumentNode): number {
-  const source = SOURCES.get(document)
+export function derivedTextBudget(document: DocumentNode, source: string | number | undefined): number {
   const bytes = typeof source === 'string' ? utf8Length(source) : source ?? document.srcByteLength ?? 0
   return Math.max(DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR * bytes)
 }
@@ -26,7 +18,7 @@ export function derivedTextBudget(document: DocumentNode): number {
  */
 export function drawDerivedText(r: Render, node: Node, text: string): boolean {
   if (r.derivedBudget < 0) {
-    r.derivedBudget = derivedTextBudget(r.document)
+    r.derivedBudget = derivedTextBudget(r.document, r.source)
     r.derivedLeft = r.derivedBudget
   }
   const cost = utf8Length(text)

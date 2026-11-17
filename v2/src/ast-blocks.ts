@@ -648,6 +648,8 @@ export interface ParsedTree {
   readonly document: DocumentNode
   /** Null for a supplied tree, of which nothing is known. */
   readonly facts: ParseFacts | null
+  /** C2-H-201: the source the tree was parsed from, or its byte length, which a parse without positions does not record. */
+  readonly source?: string | number
 }
 
 /** The number of lines from `start` to `end`. */

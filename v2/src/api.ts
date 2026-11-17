@@ -12,7 +12,6 @@ import { type ParseOptions, readOptions, type RenderOptions, type Settings } fro
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
 import { INCLUDE_CAUSES } from './include-tables.ts'
-import { noteSource } from './derived-text.ts'
 import { admitsType, applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
@@ -45,6 +44,8 @@ export interface ResolvedTree {
   readonly losses: Findings
   /** C2-H-172: false where the text nodes are known to hold no bidirectional control. */
   readonly bidi: boolean
+  /** C2-H-201: the source of a parsed tree, or its byte length. */
+  readonly source?: string | number
 }
 
 export interface RenderOutput {
@@ -148,8 +149,7 @@ function parseInput(source: SourceText, settings: Settings, positions: boolean, 
     mapPositions(source, parsed.document)
     parsed.document.srcByteLength = bytes.length
   }
-  noteSource(parsed.document, bytes?.length ?? source.text)
-  return parsed
+  return { ...parsed, source: bytes?.length ?? source.text }
 }
 
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
@@ -172,7 +172,8 @@ function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, settings.renderers, admitted)
   // A degraded node turns source that the inline scan did not read into text.
   const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
-  return { document: parsed.document, settings, resolution, losses, bidi }
+  const source = parsed.source
+  return { document: parsed.document, settings, resolution, losses, bidi, ...(source === undefined ? {} : { source }) }
 }
 
 /**
@@ -183,10 +184,11 @@ function renderStage(resolved: ResolvedTree): { html: string, losses: Findings }
   const { document, settings } = resolved
   const losses: Findings = { entries: [...resolved.losses.entries], nodes: [...resolved.losses.nodes] }
   const rule = profileRule(settings)
-  if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi)
+  if (rule === NO_PROFILE) return renderDocument(document, settings, resolved.resolution, losses, resolved.bidi, resolved.source)
   const run = applyProfile(document, settings.profile, rule, losses, resolved.resolution.xrefText)
   try {
-    return renderDocument(document, settings, liveResolution(resolved.resolution, run.gone, run.goneTargets), losses, resolved.bidi)
+    const resolution = liveResolution(resolved.resolution, run.gone, run.goneTargets)
+    return renderDocument(document, settings, resolution, losses, resolved.bidi, resolved.source)
   } finally {
     run.restore()
   }

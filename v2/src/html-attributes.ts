@@ -38,6 +38,7 @@ export interface Render {
   longDescriptions: Block[][]
   /** C2-H-201: the tree, its budget for derived text (-1 until a node draws), what remains, and whether one did not fit. */
   document: DocumentNode
+  source: string | number | undefined
   derivedBudget: number
   derivedLeft: number
   derivedReported: boolean
