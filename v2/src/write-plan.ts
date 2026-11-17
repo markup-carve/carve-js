@@ -93,10 +93,14 @@ function hyphen(leaf: Leaf, at: number, escaped: Uint8Array): void {
   // C2-I-115, C2-I-117: an arrow, a braced mark or `+-` that the run could make with its neighbors.
   // C2-I-057: `-}` closes only while a `{-` is open, so with none before the run it is text.
   const closer = after === 125 && firstOpen(leaf, 45) < at
-  if (before === 43 || (end - at > 1 && (before === 123 || before === 60 || closer || after === 62))) {
-    return undecide(leaf, 'hyphen neighbor')
-  }
+  if (before === 43) return plusHyphen(leaf, at, end, closer, escaped)
+  if (end - at > 1 && (before === 123 || before === 60 || closer || after === 62)) return undecide(leaf, 'hyphen neighbor')
   for (let unit = at + 1; unit < end; unit += 2) escaped[unit] = 1
+}
+
+function plusHyphen(leaf: Leaf, at: number, end: number, closer: boolean, escaped: Uint8Array): void {
+  if (!closer && plusMinus(leaf, at, end)) escaped[at - 1] = 1
+  else undecide(leaf, 'hyphen neighbor')
 }
 
 /** The first `{` of the leaf before the ASCII mark `value`, or the leaf's length; found once per leaf for every mark. */
@@ -110,6 +114,16 @@ function firstOpen(leaf: Leaf, value: number): number {
     leaf.opens = opens
   }
   return leaf.opens[value] ?? leaf.codes.length
+}
+
+/**
+ * C2-I-117: `+-` of text whose exact run stands alone in its text reads as the plus-minus sign, whose opener takes the
+ * backslash. A neighbor of another kind, or a brace that may make the `+` a mark, is left to the repair.
+ */
+function plusMinus(leaf: Leaf, at: number, end: number): boolean {
+  if (end - at !== 1 || leaf.kinds[at - 1] !== TEXT || code(leaf, end) === 43) return false
+  const outer = code(leaf, at - 2)
+  return outer < 0 || (leaf.kinds[at - 2] === TEXT && outer !== 43 && outer !== 45 && outer !== 123)
 }
 
 /** C2-W-095: a straight quote of text would read as a smart quote. */
