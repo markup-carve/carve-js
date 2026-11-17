@@ -33,8 +33,14 @@ describe('freeze candidate 6', () => {
     }
   })
 
-  it('C2-W-097: a bracket right behind `[^` in alt text keeps its backslash', () => {
-    for (const source of ['![[^\\]]]()\n', '![a[^\\]]]()\n']) expect(write(parse(source))).toBe(source)
+  it('C2-W-097: a `[^` in alt text never reads back as a footnote label', () => {
+    for (const source of ['![[^\\]]]()\n', '![a[^\\]]]()\n', '![[^}\\]\\{#]]()#}\n']) expect(write(parse(source))).toBe(source)
+  })
+
+  it('C2-W-097: alt text keeps raw content whole and escapes an opener of raw content with no closer', () => {
+    for (const source of ['![[`[`][]]()\n', '![a\\`b]()`\n', '![\\{#b]()#}\n', '![a`b`c]()\n']) {
+      expect(write(parse(source))).toBe(source)
+    }
   })
 
   it('C2-B-230: an entry that is no decimal number leaves all three keys in attrs', () => {

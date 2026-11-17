@@ -34,9 +34,9 @@ At candidate 6 a region marker line ends the paragraph above it (C2-B-137), so `
 
 `carve2 render --allow-loss CODE` must refuse an unknown code, but neither `spec/0.2` nor its data lists the codes of the `render-loss` channel. The command line keeps a hand-written list (`RENDER_LOSS_CODES` in `v2/cli/run.ts`) that has to follow the spec by hand.
 
-### G-G8. C2-W-097 pairs `[^]` in alt text
+### G-G8. C2-W-097 and inline syntax in alt text
 
-C2-W-097 escapes only a bracket "that has no partner in the alt text". In the alt text `[^]]` every bracket has a partner, yet `![[^]]]()` does not read back as an image: `[^]` reads as an empty footnote label and ends the image text early. The engine also escapes a `]` that directly follows `[^`, so the writer gives `![[^\]]]()`, which is what the reader takes as that alt text.
+C2-W-097 escapes only a bracket "that has no partner in the alt text". In the alt text `[^]]` every bracket has a partner, yet `![[^]]]()` does not read back as an image: `[^]` reads as an empty footnote label and ends the image text early. The same holds for `[^}]{#]`, where the pair `[^}]` and a later `{#` read as a footnote reference and a comment. The engine escapes a `]` that directly follows `[^`, and when a later `]` has no partner it escapes the `]` of the `[^` pair instead, so the `[` takes the later one: `![[^\]]]()` and `![[^}\]\{#]]()`, which are what the reader takes as those alt texts. A code span or braced comment in alt text is raw: its brackets take no part in the pairing, and an opener of one with no closer in the alt text takes a backslash, since the reader would otherwise close it behind the image (`a\`b` before a later backtick, `{#b` before a later `#}`).
 
 ## Freeze candidate 5 session (spec `7db33836`)
 

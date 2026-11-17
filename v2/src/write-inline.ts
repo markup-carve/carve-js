@@ -411,25 +411,69 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
 }
 
 /**
- * The brackets of `alt` that have no partner in it. A `]` right behind `[^` counts as one too: unescaped, `[^]` would
- * read as an empty footnote label and end the image text early.
+ * The brackets of `alt` outside raw content that have no partner in it. Unescaped, a `[^` and its partner read as a
+ * footnote label and end the image text early, so a `]` right behind `[^` counts as one, and a lone `]` after such a
+ * pair takes over its `[`.
  */
-function unpartnered(alt: string): Set<number> {
+function unpartnered(alt: string, raw: Uint8Array, lone: Set<number>): void {
   const open: number[] = []
-  const lone = new Set<number>()
+  const notes: number[] = []
   for (let at = 0; at < alt.length; at++) {
+    if (raw[at] === 1) continue
     if (alt[at] === '[') open.push(at)
     else if (alt[at] !== ']') continue
     else if (at >= 2 && alt[at - 1] === '^' && open.at(-1) === at - 2) lone.add(at)
-    else if (open.pop() === undefined) lone.add(at)
+    else if (open.length > 0) closeBracket(alt, open.pop()!, at, notes)
+    else lone.add(notes.pop() ?? at)
   }
   for (const at of open) lone.add(at)
-  return lone
 }
 
-/** C2-W-097: alt text doubles a backslash before ASCII punctuation or at its end, and escapes a bracket with no partner. */
+function closeBracket(alt: string, opener: number, at: number, notes: number[]): void {
+  if (alt[opener + 1] === '^') notes.push(at)
+}
+
+/** The end of the code span or braced comment that opens at `at` of `alt`, -1 if it has no closer, 0 if none opens. */
+function atomEnd(alt: string, at: number): number {
+  if (alt[at] === '{' && (alt[at + 1] === '#' || alt[at + 1] === '%')) {
+    const close = alt.indexOf(`${alt[at + 1]!}}`, at + 2)
+    return close < 0 ? -1 : close + 2
+  }
+  if (alt[at] !== '`' || alt[at - 1] === '`') return 0
+  let size = 1
+  while (alt[at + size] === '`') size++
+  for (let next = alt.indexOf('`', at + size); next >= 0; next = alt.indexOf('`', next + 1)) {
+    let length = 1
+    while (alt[next + length] === '`') length++
+    if (length === size) return next + size
+    next += length - 1
+  }
+  return -1
+}
+
+/**
+ * Marks the content of code spans and braced comments in `alt` as raw. An opener with no closer in `alt` counts as
+ * lone: its content is raw, so the reader would take a closer behind the image and end the image text early.
+ */
+function rawAtoms(alt: string, lone: Set<number>): Uint8Array {
+  const raw = new Uint8Array(alt.length)
+  for (let at = 0; at < alt.length; at++) {
+    const end = atomEnd(alt, at)
+    if (end > 0) raw.fill(1, at, end)
+    if (end > 0) at = end - 1
+    else if (end < 0) lone.add(at)
+    while (end < 0 && alt[at] === '`' && alt[at + 1] === '`') lone.add(++at)
+  }
+  return raw
+}
+
+/**
+ * C2-W-097: alt text doubles a backslash before ASCII punctuation or at its end, and escapes a bracket with no partner.
+ * An opener of raw content with no closer takes one for the same reason (G-G8 in _SPEC_GAPS.md).
+ */
 function altSource(alt: string): string {
-  const lone = unpartnered(alt)
+  const lone = new Set<number>()
+  unpartnered(alt, rawAtoms(alt, lone), lone)
   let out = ''
   for (let at = 0; at < alt.length; at++) {
     const char = alt[at]!
