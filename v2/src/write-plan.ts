@@ -898,6 +898,10 @@ function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, plac
   const node = list[at]!
   const shape = blockShape(node, containers)
   if (shape !== null && plan.undecided === null) plan.undecided = shape
+  // C2-W-075: escapes added around a comment can change the source-folded key of a collapsed reference.
+  if (node.type === 'link' && node.refForm === 'collapsed' && node.children.some((child) => child.type === 'comment')) {
+    plan.undecided ??= 'collapsed comment key'
+  }
   const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
   inner.documentStart = first && depth === 0 && at === 0
   const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)

@@ -69,6 +69,14 @@ describe('the planned writer', () => {
     expect(formatWithDiagnostics(source).diagnostics.some((entry) => entry.code === 'structure-unspellable')).toBe(true)
   })
 
+  it('C2-W-075: a comment in a collapsed reference checks its folded key without a sidecar', () => {
+    const source = '[[%%\n]][]'
+    const result = formatWithDiagnostics(source, { normalize: true })
+    expect(result.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
+      'field-unspellable /children/0/children/0/key',
+    )
+  })
+
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
     const source = [
       '= Title', '', 'A paragraph with *strong*, /emphasis/, `code` and a [link](https://example.org "T").',
