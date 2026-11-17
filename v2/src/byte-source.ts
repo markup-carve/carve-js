@@ -1,6 +1,7 @@
 // A source given as bytes (C2-B-218): decoded as UTF-8 by the WHATWG decoder, each maximal subpart of an ill-formed
 // sequence read as one U+FFFD, with every offset counted in the source bytes, and kept as bytes by a layout (C2-L-056).
 import { forEachSlot, type Node } from './ast.ts'
+import { append } from './append.ts'
 
 const STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const LENIENT = new TextDecoder('utf-8', { ignoreBOM: true })
@@ -63,27 +64,39 @@ export function sourceText(input: string | Uint8Array): SourceText {
   }
 }
 
-/** The source byte offset of the UTF-8 offset `offset` of the text. */
-export function sourceOffset(source: SourceText, offset: number): number {
+/** For each replaced subpart, how many more bytes the text holds than the source up to and including it. */
+function cumulativeShifts(replaced: readonly [number, number][]): number[] {
+  const shifts: number[] = []
   let shift = 0
-  for (const [at, length] of source.replaced) {
-    if (at >= offset) break
-    shift += REPLACEMENT_BYTES - length
+  for (const [, length] of replaced) shifts.push(shift += REPLACEMENT_BYTES - length)
+  return shifts
+}
+
+/** The source byte offset of the UTF-8 offset `offset` of the text; `shifts` comes from `cumulativeShifts`. */
+function sourceOffset(replaced: readonly [number, number][], shifts: readonly number[], offset: number): number {
+  let low = 0
+  let high = replaced.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (replaced[middle]![0] < offset) low = middle + 1
+    else high = middle
   }
-  return offset - shift
+  return low === 0 ? offset : offset - shifts[low - 1]!
 }
 
 /** C2-B-218: every position of the top-level source counts its bytes; positions in an included file are left as they are. */
 export function mapPositions(source: SourceText, document: Node): void {
   if (source.bytes === null) return
+  const { replaced } = source
+  const shifts = cumulativeShifts(replaced)
   const pending: Node[] = [document]
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     const pos = node.pos
     if (pos !== undefined && pos.file === undefined) {
-      pos.startOffset = sourceOffset(source, pos.startOffset)
-      pos.endOffset = sourceOffset(source, pos.endOffset)
+      pos.startOffset = sourceOffset(replaced, shifts, pos.startOffset)
+      pos.endOffset = sourceOffset(replaced, shifts, pos.endOffset)
     }
-    forEachSlot(node, (nodes) => pending.push(...nodes))
+    forEachSlot(node, (nodes) => { append(pending, nodes) })
   }
 }
 

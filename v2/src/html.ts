@@ -23,6 +23,7 @@ import { LINE_BLOCK_CLASS, TASK_CHECKED, TASK_NO_STATE } from './tree-tables.ts'
 import { NODE_TABLE } from './ast-validate.ts'
 import { writeTree } from './write.ts'
 import { type ExtensionRenderHost } from './extensions/types.ts'
+import { append } from './append.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
 type BlockWriters = { [T in keyof NodeOfType]?: (r: Render, node: NodeOfType[T], level: number) => void }
@@ -555,23 +556,34 @@ function rendererHost(r: Render): ExtensionRenderHost {
   }
 }
 
+function useId(used: Render['usedIds'], id: string): void {
+  const add = (set: Set<string>, value: string): void => {
+    if (set.has(value)) return
+    set.add(value)
+    used.log.push([set, value])
+  }
+  add(used.ids, id)
+  for (let at = id.indexOf('-'); at >= 0; at = id.indexOf('-', at + 1)) add(used.prefixes, id.slice(0, at))
+}
+
+/** C2-X-044: a generated id is neither an id in use nor the start of one followed by `-`. */
 function nextExtensionId(r: Render, prefix: string): string {
   let candidate = ''
   do { candidate = `${prefix}-${++r.extensionIds}` }
-  while ([...r.usedIds].some((id) => id === candidate || id.startsWith(`${candidate}-`)))
-  r.usedIds.add(candidate)
+  while (r.usedIds.ids.has(candidate) || r.usedIds.prefixes.has(candidate))
+  useId(r.usedIds, candidate)
   return candidate
 }
 
-function authoredIds(document: DocumentNode): Set<string> {
-  const ids = new Set<string>()
+function authoredIds(document: DocumentNode): Render['usedIds'] {
+  const used: Render['usedIds'] = { ids: new Set(), prefixes: new Set(), log: [] }
   const visit = (node: Node): void => {
-    if (node.attrs?.id !== undefined && attributesAct(node)) ids.add(node.attrs.id)
-    if (node.type === 'heading' && node.generatedId !== undefined) ids.add(node.generatedId)
+    if (node.attrs?.id !== undefined && attributesAct(node)) useId(used, node.attrs.id)
+    if (node.type === 'heading' && node.generatedId !== undefined) useId(used, node.generatedId)
     forEachSlot(node, (nodes) => { for (const child of nodes) visit(child) }, undefined, document.extensions)
   }
   visit(document)
-  return ids
+  return used
 }
 
 // ---- tables ----
@@ -903,7 +915,7 @@ function reportExpanded(r: Render, document: DocumentNode): void {
       continue
     }
     const below: Node[] = []
-    forEachSlot(node, (nodes) => { below.push(...nodes) }, undefined, document.extensions)
+    forEachSlot(node, (nodes) => { append(below, nodes) }, undefined, document.extensions)
     for (let at = below.length - 1; at >= 0; at--) pending.push(below[at]!)
   }
 }
@@ -927,14 +939,14 @@ export function renderDocument(
     settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    usedIds: Object.keys(settings.renderers).length === 0 ? new Set() : authoredIds(document),
+    usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }
   r.renderExtension = (node) => {
     const renderer = settings.renderers[node.name]
     if (renderer === undefined || renderer.version !== node.version) return null
     const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
-      usedIds: new Set(r.usedIds), lossCount: r.losses.entries.length, nodeCount: r.losses.nodes.length,
+      idCount: r.usedIds.log.length, lossCount: r.losses.entries.length, nodeCount: r.losses.nodes.length,
       linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
       backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
     try {
@@ -946,7 +958,7 @@ export function renderDocument(
       r.count = before.count
       r.bidi = before.bidi
       r.extensionIds = before.extensionIds
-      r.usedIds = before.usedIds
+      for (const [set, value] of r.usedIds.log.splice(before.idCount)) set.delete(value)
       r.losses.entries.length = before.lossCount
       r.losses.nodes.length = before.nodeCount
       r.linkDepth = before.linkDepth

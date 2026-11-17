@@ -1,4 +1,4 @@
-import { parse, parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import { defaultTreeAdapter, parse, Parser, type DefaultTreeAdapterMap, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type {
   Attrs, Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
   TableNode, TableRowNode,
@@ -16,6 +16,7 @@ import { collectNotes, isFootnoteSection } from './html-notes.ts'
 import { abbreviationTemplate, collectTemplates } from './html-template.ts'
 import { resolveAlignments } from './html-table-align.ts'
 import { cell, coalesce, complete, documentOf, ensureForeignDepth, paragraph, row, softText, type ImportResult } from './kit.ts'
+import { append } from '../../v2/src/append.ts'
 
 function htmlInteger(value: string | undefined): number | undefined {
   if (value === undefined) return undefined
@@ -78,7 +79,7 @@ function flow<T extends DocumentChild = Block>(nodes: Html.ChildNode[], host: Ht
     const solid = run.filter(node => !isBlank(node))
     // C2-M-013: a run of images, whitespace and comments is one image paragraph per image; C2-M-065: raw nodes alone are blocks.
     if (solid.length > 0 && (solid.every(isRaw) || (solid.some(isImage) && solid.every(node => isImage(node) || isComment(node))))) {
-      for (const node of solid) result.push(...reader(node, context))
+      for (const node of solid) append(result, reader(node, context))
     } else if (solid.length > 0) {
       const children = trimInlineEdges(normalizeBreaks(coalesce(run.flatMap(node => inline(node, context))), host, context),
         host, context)
@@ -90,7 +91,7 @@ function flow<T extends DocumentChild = Block>(nodes: Html.ChildNode[], host: Ht
     if (isPhrasing(node) || isImage(node) || isComment(node)) run.push(node)
     else {
       flush()
-      result.push(...reader(node, context))
+      append(result, reader(node, context))
     }
   }
   flush()
@@ -350,7 +351,7 @@ function footnoteSection(node: Html.Element, context: HtmlContext): Block[] {
     if (key === '') { report(context, item, 'import-structure-repaired', 'Footnote key is empty'); continue }
     notes.push({ type: 'footnote', key, namespace: 'footnote', children: blockChildren(item, context) })
   }
-  context.footnotes.push(...notes.filter(note => note.type === 'footnote'))
+  append(context.footnotes, notes.filter(note => note.type === 'footnote'))
   return notesDirective(node, context)
 }
 
@@ -888,7 +889,7 @@ function definitionEntries(nodes: Html.ChildNode[], context: HtmlContext, inGrou
       children.push({ type: 'definition_description', children: blockChildren(child, context), ...attrs(context, child) })
     } else if (isElement(child) && child.nodeName === 'div' && !inGroup) {
       // C2-M-036: the HTML Standard allows a div around a group of terms and descriptions.
-      children.push(...definitionEntries(content(child), context, true))
+      append(children, definitionEntries(content(child), context, true))
     } else if (!isBlank(child) && !isComment(child)) {
       report(context, child, 'import-structure-repaired', 'Non-entry child of a description list dropped')
     }
@@ -945,9 +946,21 @@ export function isFullDocument(input: string): boolean {
   return head === '<!doctype' || head.startsWith('<html')
 }
 
+/** parse5 `parseFragment`, but the children leave the fragment root at once: its own loop splices each off the front. */
+function parseFragment(input: string): Html.DocumentFragment {
+  const parser = Parser.getFragmentParser<DefaultTreeAdapterMap>(null, { sourceCodeLocationInfo: true })
+  parser.tokenizer.write(input, true)
+  const fragment = defaultTreeAdapter.createDocumentFragment()
+  const root = defaultTreeAdapter.getFirstChild(parser.document)
+  if (root === null || !('childNodes' in root)) return fragment
+  fragment.childNodes = root.childNodes
+  root.childNodes = []
+  for (const child of fragment.childNodes) child.parentNode = fragment
+  return fragment
+}
+
 export function importHtml(input: string, rawHtml = false): ImportResult {
-  const foreign = isFullDocument(input) ? parse(input, { sourceCodeLocationInfo: true }) :
-    parseFragment(input, { sourceCodeLocationInfo: true })
+  const foreign = isFullDocument(input) ? parse(input, { sourceCodeLocationInfo: true }) : parseFragment(input)
   ensureForeignDepth(foreign, 'html')
   const context: HtmlContext = { format: 'html', input, rawHtml, diagnostics: [], deferred: [],
     notes: new Map(), footnotes: [], abbreviations: new Map(), templates: new Map(), definitions: new Map(),

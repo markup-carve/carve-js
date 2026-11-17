@@ -10,7 +10,8 @@ import { BIDI_FIRST, isAsciiLetter, isBidiControl } from './unicode.ts'
 /** The state of one render. */
 export interface Render {
   extensionIds: number
-  usedIds: Set<string>
+  /** The ids in use, each hyphen-led prefix of them, and the order of additions, so a failed renderer can undo its own. */
+  usedIds: { ids: Set<string>, prefixes: Set<string>, log: [Set<string>, string][] }
   renderExtension: (node: BlockExtensionNode | InlineExtensionNode) => string | null
   settings: Settings
   resolution: Resolution
