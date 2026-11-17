@@ -10,7 +10,7 @@
     "C2-B-027",
     "C2-H-043"
    ],
-   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content (carried over from 0.1).",
+   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content.",
    "summary": "indented line block keeps leading space",
    "input": " ::: |\n x\n :::",
    "options": {},
@@ -47,7 +47,7 @@
     "C2-B-007",
     "C2-B-123"
    ],
-   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content (carried over from 0.1). C2-B-123: The body of a line block is one leaf that recognizes only prefixes, the closer and a comment block (C2-B-108): every other line is a line of text.",
+   "why": "C2-B-130: A line of a line block keeps the spaces that lead it after the strip (C2-B-027) as content. C2-B-123: The body of a line block is one leaf that recognizes only prefixes, the closer and a comment block (C2-B-108): every other line is a line of text.",
    "summary": "line block in quote in item keeps tab",
    "input": "- > a\n  > \t::: |\n  > \tx\n  > \t:::",
    "options": {},
@@ -137,7 +137,7 @@
     "C2-B-225",
     "C2-B-105"
    ],
-   "why": "C2-B-225: Where it is not a space, a brace block there is an attribute block (C2-B-105) and any other character starts further words (C2-B-122).",
+   "why": "C2-B-225: Where it is not a space, a valid attribute block there is an attribute block (C2-B-105), and any other character, a brace block that is no valid attribute block included (C2-I-028 to C2-I-034), starts further words (C2-B-122).",
    "summary": "attribute block glued to div name not applied",
    "input": "::: word{k=v}\ntext\n:::",
    "options": {},
@@ -226,17 +226,17 @@
    "id": "CC-006",
    "clauses": [
     "C2-H-165",
-    "C2-W-116",
+    "C2-H-143",
     "C2-H-163"
    ],
-   "why": "C2-H-165: every other inline node with no children as the writer spells that node on its own (C2-W-116), since a tree holds no source text.",
-   "summary": "comment profile degrades inline math to source spelling",
+   "why": "C2-H-165: every other inline node with no children as its plain text by C2-H-143, so a `code`, a `literal_inline` and a `math` node give their value and an autolink its visible text, a `raw_inline` as its value, a resolved `xref` as the text it writes in its link (C2-H-096) and an unresolved one as typed, and a `symbol` as `:name:`, as in 0.1.",
+   "summary": "comment profile degrades inline math to its value, as in 0.1",
    "input": "the sum $`a + b`",
    "options": {
     "profile": "comment"
    },
    "expected": {
-    "html": "<p>the sum $`a + b`</p>",
+    "html": "<p>the sum a + b</p>",
     "children": [
      {
       "type": "paragraph",
@@ -261,23 +261,21 @@
   {
    "id": "CC-007",
    "clauses": [
-    "C2-A-084",
-    "C2-H-064",
-    "C2-H-066",
-    "C2-H-149"
+    "C2-B-127",
+    "C2-A-066"
    ],
-   "why": "C2-A-084: Its panels are the tables among its children, and the image paragraphs, code blocks, quotes and math blocks among them that carry a caption; there is no separate panel list.",
-   "summary": "nested figure group is no panel, caption numbered",
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1). C2-A-066: The name of a div opener decides its node type as C2-B-127 and `data/div-names.json` say: an admonition name gives an `admonition` and a directive name a `directive`, each with the name as its `kind`, a figure group a `figure_group`, and every other name, or none, a `div`, with its classes in the order of C2-B-128.",
+   "summary": "a figure div inside a figure group is a plain div",
    "input": "::: figure\n::: figure\n![a](a.png)\n^ (a) First\n:::\n^ Figure #: Both",
    "options": {},
    "expected": {
-    "html": "<figure class=\"carve-figure-group\">\n  <figure class=\"carve-figure-group\">\n    <figure class=\"carve-figure-panel\">\n      <img src=\"a.png\" alt=\"a\">\n      <figcaption>(a) First</figcaption>\n    </figure>\n    <figcaption>Figure 1: Both</figcaption>\n  </figure>\n</figure>",
+    "html": "<figure class=\"carve-figure-group\">\n  <div class=\"figure\">\n    <figure>\n      <img src=\"a.png\" alt=\"a\">\n      <figcaption>(a) First</figcaption>\n    </figure>\n  </div>\n  <p>^ Figure #: Both</p>\n</figure>",
     "children": [
      {
       "type": "figure_group",
       "children": [
        {
-        "type": "figure_group",
+        "type": "div",
         "children": [
          {
           "type": "paragraph",
@@ -305,38 +303,26 @@
           }
          }
         ],
-        "caption": {
-         "type": "caption",
-         "children": [
-          {
-           "type": "paragraph",
-           "children": [
-            {
-             "type": "text",
-             "value": "Figure "
-            },
-            {
-             "type": "caption_number",
-             "n": 1
-            },
-            {
-             "type": "text",
-             "value": ": Both"
-            }
-           ]
-          }
+        "attrs": {
+         "classes": [
+          "figure"
          ]
         }
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "^ Figure #: Both"
+         }
+        ]
        }
       ]
      }
     ]
    },
-   "from": [
-    "js:R7",
-    "php:R7",
-    "rs:R7"
-   ]
+   "from": []
   },
   {
    "id": "CC-008",
@@ -730,35 +716,40 @@
    "clauses": [
     "C2-I-024",
     "C2-I-023",
+    "C2-I-074",
     "C2-B-197"
    ],
-   "why": "C2-I-024: A line comment takes the rest of its line with every closer on it.",
-   "summary": "line comment in image alt, no image",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment. C2-I-074: Its alt text is the source of the bracket content, not parsed, except that a backslash before an ASCII punctuation character is removed (C2-I-010).",
+   "summary": "line comment in image alt ends before the bracket, and the alt is the source",
    "input": "![a %% b](x)\n^ cap",
    "options": {},
    "expected": {
-    "html": "<p>![a\n^ cap</p>",
+    "html": "<figure>\n  <img src=\"x\" alt=\"a %% b\">\n  <figcaption>cap</figcaption>\n</figure>",
     "children": [
      {
       "type": "paragraph",
       "children": [
        {
-        "type": "text",
-        "value": "![a"
-       },
-       {
-        "type": "comment",
-        "form": "line",
-        "value": "b](x)"
-       },
-       {
-        "type": "soft_break"
-       },
-       {
-        "type": "text",
-        "value": "^ cap"
+        "type": "image",
+        "src": "x",
+        "alt": "a %% b"
        }
-      ]
+      ],
+      "role": "image",
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "cap"
+          }
+         ]
+        }
+       ]
+      }
      }
     ]
    },
@@ -1177,7 +1168,7 @@
     "C2-H-165",
     "C2-H-143"
    ],
-   "why": "C2-H-165: Inside a block that is degraded as a whole, the plain text is that of C2-H-143 for every node except an image, which keeps `[img: ALT]`, so a `code`, a `literal_inline` and a `math` node give their value.",
+   "why": "C2-H-165: Inside a block that is degraded as a whole, the plain text is that of C2-H-143 for every node except an image, which keeps `[img: ALT]`, and a `raw_inline`, an `xref` and a `symbol`, which give the text of the inline forms, so a node with no children writes the same text at both levels.",
    "summary": "minimal profile degrades quote to marked plain text",
    "input": "> a <b:c> {#x#} d",
    "options": {
@@ -4825,7 +4816,7 @@
     "C2-B-225",
     "C2-B-122"
    ],
-   "why": "C2-B-225: The first character behind the run that is not one of them ends the run; it is part of no name. Where it is not a space, a brace block there is an attribute block (C2-B-105) and any other character starts further words (C2-B-122).",
+   "why": "C2-B-225: The first character behind the run that is not one of them ends the run; it is part of no name. Where it is not a space, a valid attribute block there is an attribute block (C2-B-105), and any other character, a brace block that is no valid attribute block included (C2-I-028 to C2-I-034), starts further words (C2-B-122).",
    "summary": "div name ends at glued bracket, empty div",
    "input": "::: e[\n:::",
    "options": {},
@@ -6641,7 +6632,7 @@
     "C2-B-122",
     "C2-B-200"
    ],
-   "why": "C2-B-225: The first character behind the run that is not one of them ends the run; it is part of no name. Where it is not a space, a brace block there is an attribute block (C2-B-105) and any other character starts further words (C2-B-122).",
+   "why": "C2-B-225: The first character behind the run that is not one of them ends the run; it is part of no name. Where it is not a space, a valid attribute block there is an attribute block (C2-B-105), and any other character, a brace block that is no valid attribute block included (C2-I-028 to C2-I-034), starts further words (C2-B-122).",
    "summary": "tab after fence language starts further words",
    "input": "- ```s\t\"\"\n***",
    "options": {},
@@ -10398,7 +10389,7 @@
     "C2-I-089",
     "C2-H-087"
    ],
-   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference at any depth: a footnote reference there is text.",
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference and `^[` no inline footnote, at any depth: in both the caret is text and the bracket an ordinary bracket, so `[^1]` and `^[b]` there are text and `[^1](u)` is a link.",
    "summary": "a footnote reference inside an inline footnote takes no number, so later notes keep theirs",
    "input": "a ^[b [^2] c] and [^1]\n\n[^1]: one\n[^2]: two",
    "options": {},
@@ -10475,7 +10466,7 @@
    "clauses": [
     "C2-I-089"
    ],
-   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference at any depth: a footnote reference there is text.",
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference and `^[` no inline footnote, at any depth: in both the caret is text and the bracket an ordinary bracket, so `[^1]` and `^[b]` there are text and `[^1](u)` is a link.",
    "summary": "a footnote reference inside an inline footnote in a table cell is text",
    "input": "| a ^[b [^1]] |\n\n[^1]: note",
    "options": {},
@@ -11049,7 +11040,7 @@
     "C2-I-023",
     "C2-I-089"
    ],
-   "why": "C2-I-023: `%%` at the start of a line of the content, at the start of the content of an inline footnote, or after whitespace starts a line comment.",
+   "why": "C2-I-023: `%%` at the start of a line of the content, at the start of the content of a bracket or a braced opener (C2-I-024), or after whitespace starts a line comment.",
    "summary": "a line comment at the start of an inline footnote hides the whole note body",
    "input": "^[%% c] d",
    "options": {},
@@ -11085,7 +11076,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "a bracket pair inside the comment does not close the note",
    "input": "^[a %% [x] c] d",
    "options": {},
@@ -11125,7 +11116,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "a bracket inside a code span in the comment does not close the note",
    "input": "^[a %% `]` c] d",
    "options": {},
@@ -11165,7 +11156,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "the comment ends before the note bracket inside a quote",
    "input": "> ^[a %% c] d",
    "options": {},
@@ -11211,7 +11202,7 @@
     "C2-I-024",
     "C2-B-169"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "the comment ends before the note bracket inside a table cell",
    "input": "| ^[a %% c] d | e |",
    "options": {},
@@ -11295,7 +11286,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "the comment ends before the note bracket in a heading, so the heading text goes on",
    "input": "# h ^[a %% c] d",
    "options": {},
@@ -11341,7 +11332,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "a delimiter opened before the comment inside the note stays text",
    "input": "^[*a %% c*] d",
    "options": {},
@@ -11379,14 +11370,15 @@
   {
    "id": "CC-152",
    "clauses": [
-    "C2-I-024"
+    "C2-I-024",
+    "C2-I-089"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
-   "summary": "a comment in an inner note ends before the inner note's bracket",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
+   "summary": "a comment ends before the bracket of a caret pair inside a note, which opens no note",
    "input": "^[a ^[b %% c] d] e",
    "options": {},
    "expected": {
-    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> e</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a <a id=\"fnref2\" href=\"#fn2\" role=\"doc-noteref\"><sup>2</sup></a> d<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n    <li id=\"fn2\">\n      <p>b<a href=\"#fnref2\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a> e</p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a ^[b] d<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
     "children": [
      {
       "type": "paragraph",
@@ -11396,26 +11388,16 @@
         "children": [
          {
           "type": "text",
-          "value": "a "
+          "value": "a ^[b"
          },
          {
-          "type": "inline_footnote",
-          "children": [
-           {
-            "type": "text",
-            "value": "b"
-           },
-           {
-            "type": "comment",
-            "form": "line",
-            "value": "c"
-           }
-          ],
-          "number": 2
+          "type": "comment",
+          "form": "line",
+          "value": "c"
          },
          {
           "type": "text",
-          "value": " d"
+          "value": "] d"
          }
         ],
         "number": 1
@@ -11435,7 +11417,7 @@
    "clauses": [
     "C2-I-024"
    ],
-   "why": "C2-I-024: Inside an inline footnote the comment ends before the bracket that closes the innermost note open at it, where that bracket stands on the same line; the rest of the line is scanned as inline content only to find that bracket, and up to it the line stays comment (C2-I-089).",
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
    "summary": "where the note closes on a later line the comment takes the rest of its line",
    "input": "^[a %% c\nd] e",
    "options": {},
@@ -11802,7 +11784,7 @@
    "clauses": [
     "C2-H-015"
    ],
-   "why": "C2-H-015: An authored `align` key with the value `left`, `right` or `center` on an element `<p>`, `<div>` or `<h1>` to `<h6>` is written as `style=\"text-align: VALUE;\"`: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "why": "C2-H-015: An authored `align` key whose value is `left`, `right` or `center` once ASCII whitespace at its ends is removed and its ASCII letters are folded to lower case, on an element `<p>`, `<div>` or `<h1>` to `<h6>`, is written as `style=\"text-align: VALUE;\"` with that folded value: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
    "summary": "align on a line block inside a quote writes the style",
    "input": "> {align=center}\n> ::: |\n> a\n> :::",
    "options": {},
@@ -12003,7 +11985,7 @@
    "clauses": [
     "C2-H-015"
    ],
-   "why": "C2-H-015: An authored `align` key with the value `left`, `right` or `center` on an element `<p>`, `<div>` or `<h1>` to `<h6>` is written as `style=\"text-align: VALUE;\"`: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "why": "C2-H-015: An authored `align` key whose value is `left`, `right` or `center` once ASCII whitespace at its ends is removed and its ASCII letters are folded to lower case, on an element `<p>`, `<div>` or `<h1>` to `<h6>`, is written as `style=\"text-align: VALUE;\"` with that folded value: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
    "summary": "align on a hard-break block writes the style",
    "input": "{align=right}\n::: \\\na\n:::",
    "options": {},
@@ -15038,6 +15020,4544 @@
        {
         "type": "text",
         "value": "."
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-212",
+   "clauses": [
+    "C2-B-146"
+   ],
+   "why": "C2-B-146: The caption text starts at the first character behind those spaces that is not a space or a tab, and a continuation line of a caption loses its indent like every line of a content (C2-I-002).",
+   "summary": "a tab behind the caption mark and the indent of a continuation line are not caption text",
+   "input": "![a](i.png)\n^ \tsecond\n  - b",
+   "options": {},
+   "expected": {
+    "html": "<figure>\n  <img src=\"i.png\" alt=\"a\">\n  <figcaption>second\n- b</figcaption>\n</figure>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "i.png",
+        "alt": "a"
+       }
+      ],
+      "role": "image",
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "second"
+          },
+          {
+           "type": "soft_break"
+          },
+          {
+           "type": "text",
+           "value": "- b"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-213",
+   "clauses": [
+    "C2-H-075"
+   ],
+   "why": "C2-H-075: A value of `abbr` becomes `title` and a value of `time` becomes `datetime`, each only when it is not empty, so `[x]{time}` and `[x]{time=\"\"}` are `<time>x</time>`; a value of `kbd` is dropped.",
+   "summary": "a time key with no value writes no datetime",
+   "input": "[x]{time}",
+   "options": {},
+   "expected": {
+    "html": "<p><time>x</time></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "span",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "attrs": {
+         "keyValues": [
+          [
+           "time",
+           ""
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-214",
+   "clauses": [
+    "C2-I-067"
+   ],
+   "why": "C2-I-067: Whitespace is a space, a tab or a line break here as everywhere (Preliminaries), so a no-break space, U+00A0 or U+202F, before or inside the destination is part of it, where 0.1 ended the destination at any Unicode whitespace.",
+   "summary": "a narrow no-break space inside a destination is part of it",
+   "input": "[t](u v)",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"u v\">t</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "u v",
+        "children": [
+         {
+          "type": "text",
+          "value": "t"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-215",
+   "clauses": [
+    "C2-I-067",
+    "C2-B-083"
+   ],
+   "why": "C2-I-067: Whitespace is a space, a tab or a line break here as everywhere (Preliminaries), so a no-break space, U+00A0 or U+202F, before or inside the destination is part of it, where 0.1 ended the destination at any Unicode whitespace. C2-B-083: A link definition is one line: `[label]:`, one or more spaces, a destination and an optional title",
+   "summary": "a narrow no-break space after the space of a link definition starts its destination",
+   "input": "[a]:  /u\n\n[a][]",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\" /u\">a</a></p>",
+    "children": [
+     {
+      "type": "link_reference_definition",
+      "key": "a",
+      "namespace": "link",
+      "href": " /u"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "a",
+        "namespace": "link",
+        "refForm": "collapsed",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ],
+        "href": " /u"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-216",
+   "clauses": [
+    "C2-H-016"
+   ],
+   "why": "C2-H-016: A bare block image (C2-H-020) and the `<p>` of a stanza of a line block (C2-H-043) are the element of no block node and carry none.",
+   "summary": "a bare block image and a stanza paragraph carry no source line",
+   "input": "![x](a.png)\n\n::: |\na\n:::",
+   "options": {
+    "sourceLines": true
+   },
+   "expected": {
+    "html": "<img src=\"a.png\" alt=\"x\">\n<div class=\"line-block\" data-source-line=\"3\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "a.png",
+        "alt": "x"
+       }
+      ],
+      "role": "image"
+     },
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-217",
+   "clauses": [
+    "C2-H-165"
+   ],
+   "why": "C2-H-165: The degraded form of a node outside the profile is its plain text, and no placeholder word stands for it: a node writes the text it holds and, where this clause names one, the mark of its kind, and a node that holds no text and has no such mark writes nothing.",
+   "summary": "an empty div, quote and code block under minimal write no placeholder",
+   "input": ":::\n:::\n\n>\n\n```\n```",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "",
+    "children": [
+     {
+      "type": "div",
+      "children": []
+     },
+     {
+      "type": "block_quote",
+      "children": []
+     },
+     {
+      "type": "code_block",
+      "value": ""
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-240",
+   "clauses": [
+    "C2-B-138",
+    "C2-I-017",
+    "C2-H-069"
+   ],
+   "why": "C2-B-138: Inside the leaf it stands in the innermost inline node open at its place, and no inline atom spans the line: for an atom that opens before it, such as a code span, a math span, a braced comment or an editorial comment, the content ends at the line, so an opener whose closer stands only on or after it is text (C2-I-017, C2-I-043).",
+   "summary": "a comment-only line ends a code span's content; both backticks are text",
+   "input": "`a\n%% b\nc`",
+   "options": {},
+   "expected": {
+    "html": "<p>`a\nc`</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "`a"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "comment",
+        "form": "line",
+        "value": "b"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "text",
+        "value": "c`"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-241",
+   "clauses": [
+    "C2-B-138",
+    "C2-I-043"
+   ],
+   "why": "C2-B-138: Inside the leaf it stands in the innermost inline node open at its place, and no inline atom spans the line: for an atom that opens before it, such as a code span, a math span, a braced comment or an editorial comment, the content ends at the line, so an opener whose closer stands only on or after it is text (C2-I-017, C2-I-043).",
+   "summary": "a braced comment does not span a comment-only line",
+   "input": "{% a\n%% b\n%}c",
+   "options": {},
+   "expected": {
+    "html": "<p>{% a\n%}c</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "{% a"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "comment",
+        "form": "line",
+        "value": "b"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "text",
+        "value": "%}c"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-242",
+   "clauses": [
+    "C2-B-138"
+   ],
+   "why": "C2-B-138: Inside the leaf it stands in the innermost inline node open at its place, and no inline atom spans the line: for an atom that opens before it, such as a code span, a math span, a braced comment or an editorial comment, the content ends at the line, so an opener whose closer stands only on or after it is text (C2-I-017, C2-I-043).",
+   "summary": "the comment of a comment-only line inside a strong span is a child of the span",
+   "input": "*a\n%% c\nb*",
+   "options": {},
+   "expected": {
+    "html": "<p><strong>a\nb</strong></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "strong",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "soft_break"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c"
+         },
+         {
+          "type": "soft_break"
+         },
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-243",
+   "clauses": [
+    "C2-I-118",
+    "C2-I-051"
+   ],
+   "why": "C2-I-118: The limit counts openers only: a delimiter that can close is tested as a closer first (C2-I-051), also while 200 entries are open, and closes as it would below the limit, inside its bracket (C2-I-007); only a delimiter that closes nothing and can open is an opener the limit makes text.",
+   "summary": "a star read while 200 entries are open closes the strong span",
+   "input": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[*a*]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "options": {},
+   "expected": {
+    "html": "<p>[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[<strong>a</strong>]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[["
+       },
+       {
+        "type": "strong",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "value": "]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-244",
+   "clauses": [
+    "C2-B-182"
+   ],
+   "why": "C2-B-182: A part may follow the marks directly, with no space between: `|{>.c} a |` is right with the class `c`, and `|{>^.c} a |` right and top with the class `c`.",
+   "summary": "a class glued to the horizontal mark applies with the mark",
+   "input": "|{>.c} a |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td class=\"c\" style=\"text-align: right;\">a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ],
+            "align": "right",
+            "attrs": {
+             "classes": [
+              "c"
+             ]
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-245",
+   "clauses": [
+    "C2-B-182"
+   ],
+   "why": "C2-B-182: A bare key that starts with `v` stands after a space behind the marks: `{> vx}` is right with the bare key `vx`.",
+   "summary": "a space keeps a bare key that starts with v from being the vertical mark",
+   "input": "| a |{> vx} b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a</td><td vx=\"\" style=\"text-align: right;\">b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ],
+            "align": "right",
+            "attrs": {
+             "keyValues": [
+              [
+               "vx",
+               ""
+              ]
+             ]
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-246",
+   "clauses": [
+    "C2-B-213",
+    "C2-A-089"
+   ],
+   "why": "C2-B-213: Then comes the mark for that axis of the last header cell in the head that starts in the cell's column and carries a mark for that axis, then the entry of that column in `aligns` for the horizontal axis and in `valigns` for the vertical axis.",
+   "summary": "the last header cell of the head gives the column its marks on both axes",
+   "input": "|={>^} A |\n|={<v} B |\n| x |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: right; vertical-align: top;\">A</th></tr>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: bottom;\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: left; vertical-align: bottom;\">x</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column",
+        "resolvedAlign": "left",
+        "resolvedValign": "bottom"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "A"
+               }
+              ]
+             }
+            ],
+            "align": "right",
+            "valign": "top"
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "B"
+               }
+              ]
+             }
+            ],
+            "align": "left",
+            "valign": "bottom"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-247",
+   "clauses": [
+    "C2-B-213",
+    "C2-A-089"
+   ],
+   "why": "C2-B-213: Then comes the mark for that axis of the last header cell in the head that starts in the cell's column and carries a mark for that axis, then the entry of that column in `aligns` for the horizontal axis and in `valigns` for the vertical axis.",
+   "summary": "each axis takes the last header cell that carries a mark on it",
+   "input": "|={>^} A |\n|={?v} B |\n| x |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: right; vertical-align: top;\">A</th></tr>\n    <tr><th scope=\"col\" style=\"text-align: right; vertical-align: bottom;\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: right; vertical-align: bottom;\">x</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column",
+        "resolvedAlign": "right",
+        "resolvedValign": "bottom"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "A"
+               }
+              ]
+             }
+            ],
+            "align": "right",
+            "valign": "top"
+           }
+          ]
+         },
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "B"
+               }
+              ]
+             }
+            ],
+            "valign": "bottom"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-248",
+   "clauses": [
+    "C2-B-182",
+    "C2-B-171",
+    "C2-B-093"
+   ],
+   "why": "C2-B-182: The marks stand only at the start of the first block of the run of glued blocks (C2-B-171, C2-B-093); every later block is read by the attribute grammar alone, and the first one that is no valid attribute block ends the run, so it and what follows are the cell's text.",
+   "summary": "a vertical mark in the second glued block is no mark and starts the cell text",
+   "input": "|{>}{^} a |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td style=\"text-align: right;\">{^} a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "{^} a"
+               }
+              ]
+             }
+            ],
+            "align": "right"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-249",
+   "clauses": [
+    "C2-B-182",
+    "C2-B-171"
+   ],
+   "why": "C2-B-182: The marks stand only at the start of the first block of the run of glued blocks (C2-B-171, C2-B-093); every later block is read by the attribute grammar alone, and the first one that is no valid attribute block ends the run, so it and what follows are the cell's text.",
+   "summary": "a horizontal mark in a later glued block is no mark and starts the cell text",
+   "input": "|{.a}{>} a |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td class=\"a\">{&gt;} a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "{>} a"
+               }
+              ]
+             }
+            ],
+            "attrs": {
+             "classes": [
+              "a"
+             ]
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-280",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "x then xi is one roman list from 10",
+   "input": "x.  a\nxi.  b",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"10\">\n  <li>a</li>\n  <li>b</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 10
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-281",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "i then j is one alphabetic list from 9",
+   "input": "i.  x\nj.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"a\" start=\"9\">\n  <li>x</li>\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "a",
+       "delimiter": ".",
+       "start": 9
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-282",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "c then ci is one roman list from 100",
+   "input": "c.  x\nci.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"100\">\n  <li>x</li>\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 100
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-283",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The first marker fixes the style: digits and the bare dot are one style, decimal, two or more roman letters are roman, and a single letter is alphabetic, except one of the seven roman letters `i`, `v`, `x`, `l`, `c`, `d` and `m` in either case, which takes its style from the next marker. C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "uppercase V then VI is one roman list",
+   "input": "V.  x\nVI.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"I\" start=\"5\">\n  <li>x</li>\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "I",
+       "delimiter": ".",
+       "start": 5
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-284",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The next marker is the ordered marker that starts the first later line of the container that is neither blank nor indented past the column of the first marker, when that line starts with one, at that column or left of it as C2-B-030 allows, in the letter case of the first marker and with no run of three or more blank lines in between; its delimiter does not count. C2-B-042: With no next marker, or one that is neither, a lone `i` or `I` is roman and the other six letters are alphabetic.",
+   "summary": "a next marker in the other case settles nothing",
+   "input": "c.  x\n\nCI.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"a\" start=\"3\">\n  <li>x</li>\n</ol>\n<ol type=\"I\" start=\"101\">\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "a",
+       "delimiter": ".",
+       "start": 3
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "I",
+       "delimiter": ".",
+       "start": 101
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-285",
+   "clauses": [
+    "C2-B-042",
+    "C2-B-044"
+   ],
+   "why": "C2-B-042: The next marker is the ordered marker that starts the first later line of the container that is neither blank nor indented past the column of the first marker, when that line starts with one, at that column or left of it as C2-B-030 allows, in the letter case of the first marker and with no run of three or more blank lines in between; its delimiter does not count. C2-B-044: Three or more blank lines between the two items end the list on purpose (C2-B-052) and are not reported.",
+   "summary": "three blank lines keep v alphabetic and vi apart",
+   "input": "v.  x\n\n\n\nvi.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"a\" start=\"22\">\n  <li>x</li>\n</ol>\n<ol type=\"i\" start=\"6\">\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "a",
+       "delimiter": ".",
+       "start": 22
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 6
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-286",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The next marker is the ordered marker that starts the first later line of the container that is neither blank nor indented past the column of the first marker, when that line starts with one, at that column or left of it as C2-B-030 allows, in the letter case of the first marker and with no run of three or more blank lines in between; its delimiter does not count.",
+   "summary": "two blank lines still let vi settle v",
+   "input": "v.  x\n\n\nvi.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"5\">\n  <li><p>x</p></li>\n  <li><p>y</p></li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 5
+      },
+      "spacing": "loose",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-287",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: With no next marker, or one that is neither, a lone `i` or `I` is roman and the other six letters are alphabetic.",
+   "summary": "a lone i before three blank lines is roman",
+   "input": "i.  first 1\n\n\n\nc.  second 1\nd.  second 2",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\">\n  <li>first 1</li>\n</ol>\n<ol type=\"a\" start=\"3\">\n  <li>second 1</li>\n  <li>second 2</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": "."
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "first 1"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 100
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "second 1"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "second 2"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-288",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The next marker is the ordered marker that starts the first later line of the container that is neither blank nor indented past the column of the first marker, when that line starts with one, at that column or left of it as C2-B-030 allows, in the letter case of the first marker and with no run of three or more blank lines in between; its delimiter does not count.",
+   "summary": "lines indented past the marker are skipped",
+   "input": "v.  x\n    - n\nvi.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"5\">\n  <li>x\n    <ul>\n      <li>n</li>\n    </ul>\n  </li>\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 5
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         },
+         {
+          "type": "list",
+          "marker": {
+           "kind": "bullet",
+           "char": "-"
+          },
+          "spacing": "tight",
+          "children": [
+           {
+            "type": "list_item",
+            "children": [
+             {
+              "type": "paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "n"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-289",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The next marker is the ordered marker that starts the first later line of the container that is neither blank nor indented past the column of the first marker, when that line starts with one, at that column or left of it as C2-B-030 allows, in the letter case of the first marker and with no run of three or more blank lines in between; its delimiter does not count.",
+   "summary": "the delimiter of the next marker does not count",
+   "input": "v.  x\nvi)  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"5\">\n  <li>x</li>\n</ol>\n<ol type=\"i\" start=\"6\" data-delim=\")\">\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 5
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ")",
+       "start": 6
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-290",
+   "clauses": [
+    "C2-B-044"
+   ],
+   "why": "C2-B-044: Where the next marker does not settle a one-letter first marker (C2-B-042), a list meant as alphabetic that starts at `i` and a list meant as roman that starts at `v`, `x`, `l`, `c`, `d` or `m` split into two lists at the second item: `i.` then `k.` gives a roman list of one item and an alphabetic list, `v.` then `vii.` an alphabetic list of one item and a roman list, and so does `v.` then `vi.` with a lazy line of the first item between them (C2-B-024).",
+   "summary": "a lazy line before vi leaves v alphabetic",
+   "input": "v.  x\nlazy\nvi.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"a\" start=\"22\">\n  <li>x\nlazy</li>\n</ol>\n<ol type=\"i\" start=\"6\">\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "a",
+       "delimiter": ".",
+       "start": 22
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           },
+           {
+            "type": "soft_break"
+           },
+           {
+            "type": "text",
+            "value": "lazy"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 6
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-291",
+   "clauses": [
+    "C2-B-044"
+   ],
+   "why": "C2-B-044: Where the next marker does not settle a one-letter first marker (C2-B-042), a list meant as alphabetic that starts at `i` and a list meant as roman that starts at `v`, `x`, `l`, `c`, `d` or `m` split into two lists at the second item: `i.` then `k.` gives a roman list of one item and an alphabetic list, `v.` then `vii.` an alphabetic list of one item and a roman list, and so does `v.` then `vi.` with a lazy line of the first item between them (C2-B-024).",
+   "summary": "v then vii splits into two lists",
+   "input": "v.  x\nvii.  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"a\" start=\"22\">\n  <li>x</li>\n</ol>\n<ol type=\"i\" start=\"7\">\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "a",
+       "delimiter": ".",
+       "start": 22
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ".",
+       "start": 7
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-292",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "i then j inside a quote is one alphabetic list",
+   "input": "> i.  x\n> j.  y",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <ol type=\"a\" start=\"9\">\n    <li>x</li>\n    <li>y</li>\n  </ol>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "ordered",
+         "style": "a",
+         "delimiter": ".",
+         "start": 9
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "paragraph",
+            "children": [
+             {
+              "type": "text",
+              "value": "x"
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "paragraph",
+            "children": [
+             {
+              "type": "text",
+              "value": "y"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-293",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "v then vi inside a list item is one roman list",
+   "input": "- v.  x\n  vi.  y",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <ol type=\"i\" start=\"5\">\n      <li>x</li>\n      <li>y</li>\n    </ol>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "list",
+          "marker": {
+           "kind": "ordered",
+           "style": "i",
+           "delimiter": ".",
+           "start": 5
+          },
+          "spacing": "tight",
+          "children": [
+           {
+            "type": "list_item",
+            "children": [
+             {
+              "type": "paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "x"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "list_item",
+            "children": [
+             {
+              "type": "paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "y"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-294",
+   "clauses": [
+    "C2-B-042"
+   ],
+   "why": "C2-B-042: The letter is roman when the next marker is the roman numeral one higher, as `v.` then `vi.`, `x.` then `xi.` and `c.` then `ci.`, and alphabetic when it is the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`.",
+   "summary": "l then li with a paren is one roman list from 50",
+   "input": "l)  x\nli)  y",
+   "options": {},
+   "expected": {
+    "html": "<ol type=\"i\" start=\"50\" data-delim=\")\">\n  <li>x</li>\n  <li>y</li>\n</ol>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "ordered",
+       "style": "i",
+       "delimiter": ")",
+       "start": 50
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "x"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "y"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-295",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "an empty figure div inside a group is an empty plain div",
+   "input": "::: figure\n:::: figure\n::::\n:::",
+   "options": {},
+   "expected": {
+    "html": "<figure class=\"carve-figure-group\">\n  <div class=\"figure\">\n\n  </div>\n</figure>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "div",
+        "children": [],
+        "attrs": {
+         "classes": [
+          "figure"
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-296",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "a figure div in a quote inside a group is a plain div",
+   "input": "::: figure\n> ::: figure\n> ![a](a.png)\n> :::\n:::",
+   "options": {},
+   "expected": {
+    "html": "<figure class=\"carve-figure-group\">\n  <blockquote>\n    <div class=\"figure\">\n      <img src=\"a.png\" alt=\"a\">\n    </div>\n  </blockquote>\n</figure>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "block_quote",
+        "children": [
+         {
+          "type": "div",
+          "children": [
+           {
+            "type": "paragraph",
+            "children": [
+             {
+              "type": "image",
+              "src": "a.png",
+              "alt": "a"
+             }
+            ],
+            "role": "image"
+           }
+          ],
+          "attrs": {
+           "classes": [
+            "figure"
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-297",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "a figure div in a list item inside a group is a plain div",
+   "input": "::: figure\n- ::: figure\n  ![a](a.png)\n  :::\n:::",
+   "options": {},
+   "expected": {
+    "html": "<figure class=\"carve-figure-group\">\n  <ul>\n    <li>\n      <div class=\"figure\">\n        <img src=\"a.png\" alt=\"a\">\n      </div>\n    </li>\n  </ul>\n</figure>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "list",
+        "marker": {
+         "kind": "bullet",
+         "char": "-"
+        },
+        "spacing": "tight",
+        "children": [
+         {
+          "type": "list_item",
+          "children": [
+           {
+            "type": "div",
+            "children": [
+             {
+              "type": "paragraph",
+              "children": [
+               {
+                "type": "image",
+                "src": "a.png",
+                "alt": "a"
+               }
+              ],
+              "role": "image"
+             }
+            ],
+            "attrs": {
+             "classes": [
+              "figure"
+             ]
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-298",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "a figure div in an admonition inside a group is a plain div",
+   "input": "::: figure\n:::: note\n::::: figure\n![a](a.png)\n:::::\n::::\n:::",
+   "options": {},
+   "expected": {
+    "html": "<figure class=\"carve-figure-group\">\n  <aside class=\"admonition note\" aria-label=\"Note\">\n    <div class=\"figure\">\n      <img src=\"a.png\" alt=\"a\">\n    </div>\n  </aside>\n</figure>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": [
+       {
+        "type": "admonition",
+        "kind": "note",
+        "children": [
+         {
+          "type": "div",
+          "children": [
+           {
+            "type": "paragraph",
+            "children": [
+             {
+              "type": "image",
+              "src": "a.png",
+              "alt": "a"
+             }
+            ],
+            "role": "image"
+           }
+          ],
+          "attrs": {
+           "classes": [
+            "figure"
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-299",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "a group inside a quote demotes the figure div in it",
+   "input": "> ::: figure\n> :::: figure\n> ::::\n> :::",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <figure class=\"carve-figure-group\">\n    <div class=\"figure\">\n\n    </div>\n  </figure>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "figure_group",
+        "children": [
+         {
+          "type": "div",
+          "children": [],
+          "attrs": {
+           "classes": [
+            "figure"
+           ]
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-300",
+   "clauses": [
+    "C2-B-127"
+   ],
+   "why": "C2-B-127: Figure groups do not nest: anywhere inside a figure group, also in a quote, a list item or any other container of its body, `figure` with no title and no label gives a plain div with the class `figure` too, and `figure-group-nested` reports it (as in 0.1).",
+   "summary": "after the group closes a figure div is a group again",
+   "input": "::: figure\n:::\n\n::: figure\n:::",
+   "options": {},
+   "expected": {
+    "html": "<figure class=\"carve-figure-group\">\n\n</figure>\n<figure class=\"carve-figure-group\">\n\n</figure>",
+    "children": [
+     {
+      "type": "figure_group",
+      "children": []
+     },
+     {
+      "type": "figure_group",
+      "children": []
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-301",
+   "clauses": [
+    "C2-B-164"
+   ],
+   "why": "C2-B-164: The format name is one word of one or more ASCII letters and digits, in any case and in any order: `toml`, `JSON`, `Yaml` and `1` are format names, and `x-y`, `x_y` and `é` are none.",
+   "summary": "a digit is a format name",
+   "input": "---1\nx\n---\n\ntext",
+   "options": {},
+   "expected": {
+    "html": "<p>text</p>",
+    "children": [
+     {
+      "type": "frontmatter",
+      "format": "1",
+      "value": "x\n"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "text"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-302",
+   "clauses": [
+    "C2-B-164"
+   ],
+   "why": "C2-B-164: The format name is one word of one or more ASCII letters and digits, in any case and in any order: `toml`, `JSON`, `Yaml` and `1` are format names, and `x-y`, `x_y` and `é` are none. C2-B-164: The name is kept as written, so `---JSON` has the format `JSON`, which is not `json`.",
+   "summary": "a mixed-case name after a space is kept as written",
+   "input": "--- Yaml\nx: 1\n---\n\ntext",
+   "options": {},
+   "expected": {
+    "html": "<p>text</p>",
+    "children": [
+     {
+      "type": "frontmatter",
+      "format": "Yaml",
+      "value": "x: 1\n"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "text"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-303",
+   "clauses": [
+    "C2-B-164"
+   ],
+   "why": "C2-B-164: The format name is one word of one or more ASCII letters and digits, in any case and in any order: `toml`, `JSON`, `Yaml` and `1` are format names, and `x-y`, `x_y` and `é` are none.",
+   "summary": "a hyphen in the name leaves line 1 text",
+   "input": "---x-y\na: b\n---\nafter",
+   "options": {},
+   "expected": {
+    "html": "<p>—x-y\na: b\n—\nafter</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "smart_punctuation",
+        "kind": "em_dash",
+        "glyph": "—",
+        "source": "---"
+       },
+       {
+        "type": "text",
+        "value": "x-y"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "text",
+        "value": "a: b"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "smart_punctuation",
+        "kind": "em_dash",
+        "glyph": "—",
+        "source": "---"
+       },
+       {
+        "type": "soft_break"
+       },
+       {
+        "type": "text",
+        "value": "after"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-304",
+   "clauses": [
+    "C2-B-024"
+   ],
+   "why": "C2-B-024: An open stanza of a line block takes lazy lines as an open paragraph does, as in 0.1, except a heading, a quote, an attribute line and a definition, which end the stanza: `- ::: |`, `  a`, `b` is one stanza of two lines in the item. C2-B-024: A lazy include directive or list marker is a line of text of the stanza (C2-B-123).",
+   "summary": "lazy lines of a quoted stanza, a list marker among them",
+   "input": "> ::: |\n> a\nb\n- c",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <div class=\"line-block\">\n    <p>a<br>\nb<br>\n- c</p>\n  </div>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "line_block",
+        "children": [
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "a"
+           }
+          ]
+         },
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         },
+         {
+          "type": "line",
+          "children": [
+           {
+            "type": "text",
+            "value": "- c"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-305",
+   "clauses": [
+    "C2-B-024"
+   ],
+   "why": "C2-B-024: An open stanza of a line block takes lazy lines as an open paragraph does, as in 0.1, except a heading, a quote, an attribute line and a definition, which end the stanza: `- ::: |`, `  a`, `b` is one stanza of two lines in the item.",
+   "summary": "lazy lines keep the item open for the closer",
+   "input": "- ::: |\n  a\nb\nc\n  :::",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>a<br>\nb<br>\nc</p>\n    </div>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "line_block",
+          "children": [
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "a"
+             }
+            ]
+           },
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "b"
+             }
+            ]
+           },
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "c"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-306",
+   "clauses": [
+    "C2-B-024"
+   ],
+   "why": "C2-B-024: An open stanza of a line block takes lazy lines as an open paragraph does, as in 0.1, except a heading, a quote, an attribute line and a definition, which end the stanza: `- ::: |`, `  a`, `b` is one stanza of two lines in the item.",
+   "summary": "a heading ends the stanza and the item",
+   "input": "- ::: |\n  a\nb\n# h",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>a<br>\nb</p>\n    </div>\n  </li>\n</ul>\n<section id=\"h\">\n  <h1>h</h1>\n</section>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "line_block",
+          "children": [
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "a"
+             }
+            ]
+           },
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "b"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "h"
+       }
+      ],
+      "generatedId": "h"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-307",
+   "clauses": [
+    "C2-H-020"
+   ],
+   "why": "C2-H-020: The attributes and the `lang` of the paragraph, which its attribute line gives, are written on the `<img>`, merged before the image's own as if they were the first of its glued blocks (C2-I-039): the classes of the paragraph come first, and for an id or another key the image's value wins.",
+   "summary": "an attribute line merges before the image's own blocks",
+   "input": "{.outer k=one}\n![a](b){.inner k=two}",
+   "options": {},
+   "expected": {
+    "html": "<img src=\"b\" alt=\"a\" class=\"outer inner\" k=\"two\">",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "src": "b",
+        "alt": "a",
+        "attrs": {
+         "classes": [
+          "inner"
+         ],
+         "keyValues": [
+          [
+           "k",
+           "two"
+          ]
+         ]
+        }
+       }
+      ],
+      "role": "image",
+      "attrs": {
+       "classes": [
+        "outer"
+       ],
+       "keyValues": [
+        [
+         "k",
+         "one"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-308",
+   "clauses": [
+    "C2-I-085"
+   ],
+   "why": "C2-I-085: The attribute blocks glued to it are merged (C2-I-039) and written behind it as text, as one block in the fixed order (C2-H-139), so the HTML is a function of the tree: `[x][no]{.c}{#i}` gives `<p>[x][no]{#i .c}</p>`.",
+   "summary": "an unresolved image reference writes its attribute block in the fixed order",
+   "input": "![a][nope]{ .c  k='v' }",
+   "options": {},
+   "expected": {
+    "html": "<p>![a][nope]{.c k=v}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "image",
+        "key": "nope",
+        "namespace": "link",
+        "refForm": "full",
+        "alt": "a",
+        "attrs": {
+         "classes": [
+          "c"
+         ],
+         "keyValues": [
+          [
+           "k",
+           "v"
+          ]
+         ]
+        }
+       }
+      ],
+      "role": "image"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-309",
+   "clauses": [
+    "C2-I-084"
+   ],
+   "why": "C2-I-084: A key whose folded plain text is empty matches no heading, also none whose plain text is empty, so `[:smile:][]` below `# :smile:` stays text, as in 0.1.",
+   "summary": "an empty key passes over every heading, empty or not",
+   "input": "> # :a:\n>\n> # b\n>\n> [:a:][]",
+   "options": {},
+   "expected": {
+    "html": "<blockquote>\n  <h1 id=\"s\">:a:</h1>\n  <h1 id=\"b\">b</h1>\n  <p>[:a:][]</p>\n</blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "heading",
+        "level": 1,
+        "children": [
+         {
+          "type": "symbol",
+          "name": "a"
+         }
+        ],
+        "generatedId": "s"
+       },
+       {
+        "type": "heading",
+        "level": 1,
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ],
+        "generatedId": "b"
+       },
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "link",
+          "key": ":a:",
+          "namespace": "link",
+          "refForm": "collapsed",
+          "children": [
+           {
+            "type": "symbol",
+            "name": "a"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-310",
+   "clauses": [
+    "C2-H-100",
+    "C2-H-126"
+   ],
+   "why": "C2-H-100: When `social` gives a URL for it, the element is `<a class=\"mention\" href=\"URL\">@NAME</a>` or `<a class=\"tag\" href=\"URL\">#NAME</a>`, with no `<strong>`, as in 0.1.",
+   "summary": "a linked mention and a linked tag hold their text directly, with no strong child",
+   "input": "@alice and #news",
+   "options": {
+    "social": {
+     "mentionUrl": "/u/{name}",
+     "tagUrl": "/t/{name}"
+    }
+   },
+   "expected": {
+    "html": "<p><a class=\"mention\" href=\"/u/alice\">@alice</a> and <a class=\"tag\" href=\"/t/news\">#news</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "mention",
+        "target": "alice",
+        "kind": "user"
+       },
+       {
+        "type": "text",
+        "value": " and "
+       },
+       {
+        "type": "tag",
+        "name": "news"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-311",
+   "clauses": [
+    "C2-H-075",
+    "C2-H-013"
+   ],
+   "why": "C2-H-075: The three keys match in lower case only: a key in another case, `KBD` or `Abbr`, is an ordinary attribute, so `[x]{KBD}` is `<span KBD=\"\">x</span>` (C2-H-013).",
+   "summary": "a time key in another case is an ordinary attribute, and an abbr key in another case stays one beside kbd",
+   "input": "[x]{Time=12:00} and [y]{kbd Abbr=b}",
+   "options": {},
+   "expected": {
+    "html": "<p><span Time=\"12:00\">x</span> and <kbd Abbr=\"b\">y</kbd></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "span",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "attrs": {
+         "keyValues": [
+          [
+           "Time",
+           "12:00"
+          ]
+         ]
+        }
+       },
+       {
+        "type": "text",
+        "value": " and "
+       },
+       {
+        "type": "span",
+        "children": [
+         {
+          "type": "text",
+          "value": "y"
+         }
+        ],
+        "attrs": {
+         "keyValues": [
+          [
+           "kbd",
+           ""
+          ],
+          [
+           "Abbr",
+           "b"
+          ]
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-312",
+   "clauses": [
+    "C2-H-147",
+    "C2-H-022"
+   ],
+   "why": "C2-H-147: The transliteration table belongs to the host, so under these four values an id is outside conformance where the plain text holds a character at or above U+0080; an ASCII heading keeps its slug, `Hello-World` under `ascii` and `hello-world` under `ascii-lower`.",
+   "summary": "ascii-strict keeps the case of an ASCII heading, as 0.1 asciiHeadingIds strict did",
+   "input": "# Getting Started",
+   "options": {
+    "headingIds": "ascii-strict"
+   },
+   "expected": {
+    "html": "<section id=\"Getting-Started\">\n  <h1>Getting Started</h1>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Getting Started"
+       }
+      ],
+      "generatedId": "Getting-Started"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-313",
+   "clauses": [
+    "C2-H-147",
+    "C2-H-022"
+   ],
+   "why": "C2-H-147: `ascii-lower` and `ascii-strict-lower` are `ascii` and `ascii-strict` with the result then lowered as with `lower`.",
+   "summary": "ascii-strict-lower lowers the slug, as 0.1 asciiHeadingIds strict with lowercaseHeadingIds did",
+   "input": "# Getting Started",
+   "options": {
+    "headingIds": "ascii-strict-lower"
+   },
+   "expected": {
+    "html": "<section id=\"getting-started\">\n  <h1>Getting Started</h1>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Getting Started"
+       }
+      ],
+      "generatedId": "getting-started"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-262",
+   "clauses": [
+    "C2-I-088"
+   ],
+   "why": "C2-I-088: The attribute blocks glued to it follow as C2-I-085 says, in the fixed order: `[^x]{.c}{#i}` gives `<p>[^x]{#i .c}</p>`, where 0.1 wrote them as typed (U-207).",
+   "summary": "an unresolved footnote reference writes its attribute blocks in the fixed order",
+   "input": "a [^x]{ .c }{#i}",
+   "options": {},
+   "expected": {
+    "html": "<p>a [^x]{#i .c}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "footnote_ref",
+        "key": "x",
+        "namespace": "footnote",
+        "attrs": {
+         "id": "i",
+         "classes": [
+          "c"
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-314",
+   "clauses": [
+    "C2-I-084",
+    "C2-I-097"
+   ],
+   "why": "C2-I-084: It takes the plain text of each heading the same way, folds both by C2-I-079 and normalizes both to NFC, as a cross-reference is matched (C2-I-097).",
+   "summary": "a decomposed implicit heading reference matches a precomposed heading, as in 0.1",
+   "input": "# Café\n\n[Café][]",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"Café\">\n  <h1>Café</h1>\n  <p><a href=\"#Café\">Café</a></p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Café"
+       }
+      ],
+      "generatedId": "Café"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "Café",
+        "namespace": "link",
+        "refForm": "collapsed",
+        "children": [
+         {
+          "type": "text",
+          "value": "Café"
+         }
+        ],
+        "href": "#Café"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-315",
+   "clauses": [
+    "C2-I-084",
+    "C2-I-097"
+   ],
+   "why": "C2-I-084: It takes the plain text of each heading the same way, folds both by C2-I-079 and normalizes both to NFC, as a cross-reference is matched (C2-I-097).",
+   "summary": "a precomposed implicit heading reference matches a decomposed heading, as in 0.1",
+   "input": "# Café\n\n[Café][]",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"Café\">\n  <h1>Café</h1>\n  <p><a href=\"#Café\">Café</a></p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "Café"
+       }
+      ],
+      "generatedId": "Café"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "Café",
+        "namespace": "link",
+        "refForm": "collapsed",
+        "children": [
+         {
+          "type": "text",
+          "value": "Café"
+         }
+        ],
+        "href": "#Café"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-316",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: A line comment takes the rest of its line with every closer on it, except where a bracket or a braced opener is open at it: a bracket on the bracket stack (C2-I-006), `^[` and the bracket of an inline extension included, or a braced opener (C2-I-055). C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
+   "summary": "a comment in link text ends before the bracket, as in 0.1",
+   "input": "[a %% c] d",
+   "options": {},
+   "expected": {
+    "html": "<p>[a] d</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[a"
+       },
+       {
+        "type": "comment",
+        "form": "line",
+        "value": "c"
+       },
+       {
+        "type": "text",
+        "value": "] d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-317",
+   "clauses": [
+    "C2-I-024",
+    "C2-I-094"
+   ],
+   "why": "C2-I-024: A line comment takes the rest of its line with every closer on it, except where a bracket or a braced opener is open at it: a bracket on the bracket stack (C2-I-006), `^[` and the bracket of an inline extension included, or a braced opener (C2-I-055). C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
+   "summary": "a comment in extension content ends before the bracket, as in 0.1",
+   "input": ":foo[a %% c] d",
+   "options": {},
+   "expected": {
+    "html": "<p><span class=\"ext-foo\">a</span> d</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_extension",
+        "name": "foo",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "value": " d"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-318",
+   "clauses": [
+    "C2-I-024",
+    "C2-I-055"
+   ],
+   "why": "C2-I-024: A line comment takes the rest of its line with every closer on it, except where a bracket or a braced opener is open at it: a bracket on the bracket stack (C2-I-006), `^[` and the bracket of an inline extension included, or a braced opener (C2-I-055). C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
+   "summary": "a comment in a braced form ends before its closer, as in 0.1",
+   "input": "{_a %% b_} y",
+   "options": {},
+   "expected": {
+    "html": "<p><u>a</u> y</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "underline",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "b"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "value": " y"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-319",
+   "clauses": [
+    "C2-I-023",
+    "C2-I-024"
+   ],
+   "why": "C2-I-023: `%%` at the start of a line of the content, at the start of the content of a bracket or a braced opener (C2-I-024), or after whitespace starts a line comment.",
+   "summary": "the start of extension content counts as a line start, as in 0.1",
+   "input": ":f[%%]",
+   "options": {},
+   "expected": {
+    "html": "<p><span class=\"ext-f\"></span></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_extension",
+        "name": "f",
+        "children": [
+         {
+          "type": "comment",
+          "form": "line",
+          "value": ""
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-320",
+   "clauses": [
+    "C2-I-024"
+   ],
+   "why": "C2-I-024: There the comment ends before the closer of the innermost of them, the closing bracket that pairs with it or the braced closer of its mark, where that closer stands on the same line; the rest of the line is scanned as inline content only to find that closer, and up to it the line stays comment.",
+   "summary": "the innermost open form decides where the comment ends",
+   "input": "[a {_b %% c] d_} e",
+   "options": {},
+   "expected": {
+    "html": "<p>[a <u>b</u> e</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "[a "
+       },
+       {
+        "type": "underline",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "c] d"
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "value": " e"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-321",
+   "clauses": [
+    "C2-I-089"
+   ],
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference and `^[` no inline footnote, at any depth: in both the caret is text and the bracket an ordinary bracket, so `[^1]` and `^[b]` there are text and `[^1](u)` is a link.",
+   "summary": "an inline footnote inside an inline footnote is text, as in 0.1",
+   "input": "x ^[a ^[b] c]",
+   "options": {},
+   "expected": {
+    "html": "<p>x <a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a ^[b] c<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x "
+       },
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a ^[b] c"
+         }
+        ],
+        "number": 1
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-322",
+   "clauses": [
+    "C2-I-089",
+    "C2-I-006"
+   ],
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference and `^[` no inline footnote, at any depth: in both the caret is text and the bracket an ordinary bracket, so `[^1]` and `^[b]` there are text and `[^1](u)` is a link.",
+   "summary": "the bracket of a caret pair inside a note can still form a link, as in 0.1",
+   "input": "^[a ^[b](u) c]",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a ^<a href=\"u\">b</a> c<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a ^"
+         },
+         {
+          "type": "link",
+          "href": "u",
+          "children": [
+           {
+            "type": "text",
+            "value": "b"
+           }
+          ]
+         },
+         {
+          "type": "text",
+          "value": " c"
+         }
+        ],
+        "number": 1
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-323",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: An authored `align` key whose value is `left`, `right` or `center` once ASCII whitespace at its ends is removed and its ASCII letters are folded to lower case, on an element `<p>`, `<div>` or `<h1>` to `<h6>`, is written as `style=\"text-align: VALUE;\"` with that folded value: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "summary": "an align value in another case is folded, as in 0.1",
+   "input": "{align=Right}\npara",
+   "options": {},
+   "expected": {
+    "html": "<p style=\"text-align: right;\">para</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "para"
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         "Right"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-324",
+   "clauses": [
+    "C2-H-015"
+   ],
+   "why": "C2-H-015: An authored `align` key whose value is `left`, `right` or `center` once ASCII whitespace at its ends is removed and its ASCII letters are folded to lower case, on an element `<p>`, `<div>` or `<h1>` to `<h6>`, is written as `style=\"text-align: VALUE;\"` with that folded value: on a paragraph, a heading, a div, a line block, a hard-break block and a directive that writes a `<div>`.",
+   "summary": "an align value with spaces around it is trimmed, as in 0.1",
+   "input": "{align=\" CENTER \"}\npara",
+   "options": {},
+   "expected": {
+    "html": "<p style=\"text-align: center;\">para</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "para"
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         " CENTER "
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-325",
+   "clauses": [
+    "C2-I-021",
+    "C2-B-225"
+   ],
+   "why": "C2-I-021: A closed plain code span with `{=name}` glued to it, `name` a raw format name (C2-B-225), is raw inline; the marker is tried together with the attribute block, before the highlight opener. The content is written unescaped to the output format of that name and dropped for every other format.",
+   "summary": "a raw format name with a hyphen and a digit makes raw inline, dropped for HTML",
+   "input": "`x`{=tex-2}",
+   "options": {},
+   "expected": {
+    "html": "<p></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "raw_inline",
+        "format": "tex-2",
+        "value": "x"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-326",
+   "clauses": [
+    "C2-I-021",
+    "C2-I-043"
+   ],
+   "why": "C2-I-021: Anywhere else, after a literal-text span or a math span too, `{=` is read as a braced opener (C2-I-043).",
+   "summary": "a raw marker after a literal-text span is text",
+   "input": "!`x`{=html}",
+   "options": {},
+   "expected": {
+    "html": "<p>x{=html}</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "literal_inline",
+        "value": "x"
+       },
+       {
+        "type": "text",
+        "value": "{=html}"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-327",
+   "clauses": [
+    "C2-B-135"
+   ],
+   "why": "C2-B-135: In the body of a line block a line comment `%%` is text, and `comment-line-in-line-block` reports it.",
+   "summary": "a line comment after text inside a line block is text",
+   "input": "::: |\na %% b\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a %% b</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a %% b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-328",
+   "clauses": [
+    "C2-B-135",
+    "C2-B-111"
+   ],
+   "why": "C2-B-135: In every opaque body, which is the body of a code fence, a raw block or a comment block, a `%%` line is content and never a comment, also when the block is unclosed or sits in a list item.",
+   "summary": "a percent line in an unclosed code fence in a list item is code",
+   "input": "- ```\n  %% x",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <pre><code>%% x\n</code></pre>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "code_block",
+          "value": "%% x\n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-329",
+   "clauses": [
+    "C2-H-019",
+    "C2-H-165"
+   ],
+   "why": "C2-H-019: A paragraph whose content, after the breaks that C2-H-069 does not write, holds only comments renders nothing as well, and so does a paragraph whose content writes nothing once the profile has degraded it (C2-H-165).",
+   "summary": "a paragraph left empty by a degraded link renders nothing",
+   "input": "[](/u)",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "/u",
+        "children": []
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-330",
+   "clauses": [
+    "C2-H-019",
+    "C2-H-165"
+   ],
+   "why": "C2-H-019: A paragraph whose content, after the breaks that C2-H-069 does not write, holds only comments renders nothing as well, and so does a paragraph whose content writes nothing once the profile has degraded it (C2-H-165).",
+   "summary": "a paragraph with text beside a degraded empty link keeps its element",
+   "input": "x [](/u)",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "<p>x </p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x "
+       },
+       {
+        "type": "link",
+        "href": "/u",
+        "children": []
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-331",
+   "clauses": [
+    "C2-B-024",
+    "C2-B-135"
+   ],
+   "why": "C2-B-024: A `%%` line that the container owns is a line of the body and is text (C2-B-135).",
+   "summary": "a percent line inside the body of a line block is a line of text",
+   "input": "::: |\na\n%% x\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"line-block\">\n  <p>a<br>\n%% x<br>\nb</p>\n</div>",
+    "children": [
+     {
+      "type": "line_block",
+      "children": [
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "%% x"
+         }
+        ]
+       },
+       {
+        "type": "line",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-332",
+   "clauses": [
+    "C2-B-024",
+    "C2-B-137",
+    "C2-B-138"
+   ],
+   "why": "C2-B-024: A lazy `%%` line, one that the container of the line block does not own, is a comment-only line (C2-B-137) and no line of the stanza: its comment is an inline child at the end of the `line` above it, and the stanza goes on below it.",
+   "summary": "a lazy percent line below a stanza is a comment at the end of the line above",
+   "input": "- ::: |\n  a\n%% c\nb",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <div class=\"line-block\">\n      <p>a<br>\nb</p>\n    </div>\n  </li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "line_block",
+          "children": [
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "a"
+             },
+             {
+              "type": "comment",
+              "form": "line",
+              "value": "c"
+             }
+            ]
+           },
+           {
+            "type": "line",
+            "children": [
+             {
+              "type": "text",
+              "value": "b"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-333",
+   "clauses": [
+    "C2-A-040",
+    "C2-A-041"
+   ],
+   "why": "C2-A-040: A node list holds no two adjacent `text` nodes. Adjacent runs are joined in the tree that `parse` returns, not in the encoder. C2-A-041: A backslash escape is not a node. The escaped character is part of the surrounding `text` value, and a writer computes the escapes it needs.",
+   "summary": "escaped delimiter joins text",
+   "input": "a\\*b",
+   "options": {},
+   "expected": {
+    "html": "<p>a*b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a*b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-334",
+   "clauses": [
+    "C2-A-042"
+   ],
+   "why": "C2-A-042: An escaped space is a `non_breaking_space` node with no value. One node stands for one space.",
+   "summary": "escaped space is a node",
+   "input": "a\\ b",
+   "options": {},
+   "expected": {
+    "html": "<p>a&nbsp;b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a"
+       },
+       {
+        "type": "non_breaking_space"
+       },
+       {
+        "type": "text",
+        "value": "b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-335",
+   "clauses": [
+    "C2-A-043"
+   ],
+   "why": "C2-A-043: Every string field holds literal Unicode. No private-use character has a special meaning, and a temporary marker of a parser or writer is never published.",
+   "summary": "private-use character stays literal",
+   "input": "ab",
+   "options": {},
+   "expected": {
+    "html": "<p>ab</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "ab"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-336",
+   "clauses": [
+    "C2-A-045"
+   ],
+   "why": "C2-A-045: `code_block.value` holds every payload character, the final line break included. A closed fence with one line `a` has the value `\"a\\n\"`, and a closed fence with no line has `\"\"`. Container prefixes and fence delimiters are not payload.",
+   "summary": "code block keeps final break",
+   "input": "```\na\n```",
+   "options": {},
+   "expected": {
+    "html": "<pre><code>a\n</code></pre>",
+    "children": [
+     {
+      "type": "code_block",
+      "value": "a\n"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-337",
+   "clauses": [
+    "C2-A-112",
+    "C2-A-113"
+   ],
+   "why": "C2-A-112: `href`, `src` and every other destination hold what the author wrote. A producer does not blank or rewrite a destination on the way into the tree. C2-A-113: A consumer that puts a destination into a URL sink applies the URL policy itself. The tree may hold `javascript:alert(1)`.",
+   "summary": "unsafe destination stays in tree",
+   "input": "[x](javascript:alert(1))",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "javascript:alert(1)",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-338",
+   "clauses": [
+    "C2-B-035"
+   ],
+   "why": "C2-B-035: The bullet character is part of the list's kind, so an item with the other character starts another list (C2-B-049).",
+   "summary": "changing bullet character starts a new list",
+   "input": "- red\n* blue",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>red</li>\n</ul>\n<ul>\n  <li>blue</li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "red"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "*"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "blue"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-339",
+   "clauses": [
+    "C2-A-080"
+   ],
+   "why": "C2-A-080: Definitions are nodes with a position, so document order decides which of two definitions wins: the first one (C2-B-085).",
+   "summary": "first definition wins",
+   "input": "[x]: /a\n[x]: /b\n\n[x]",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/a\">x</a></p>",
+    "children": [
+     {
+      "type": "link_reference_definition",
+      "key": "x",
+      "namespace": "link",
+      "href": "/a"
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "x",
+      "namespace": "link",
+      "href": "/b"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "x",
+        "namespace": "link",
+        "refForm": "shortcut",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "/a"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-340",
+   "clauses": [
+    "C2-B-178"
+   ],
+   "why": "C2-B-178: Where the source declares no grouping, the rest of the rows form one body.",
+   "summary": "implicit table head ends before ordinary row",
+   "input": "|= H |\n| a |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">H</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "H"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-341",
+   "clauses": [
+    "C2-A-094"
+   ],
+   "why": "C2-A-094: A continuation row leaves no node and no field. Each fragment is read as inline content by itself, and the cell holds the nodes of its fragments in order with one space of ordinary text between two fragments (C2-B-184). Where the row broke is spelling and is in the sidecar.",
+   "summary": "continuation row adds a space and no node",
+   "input": "| a |\n+ b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>a b</td></tr>\n  </tbody>\n</table>",
+    "children": [
+     {
+      "type": "table",
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-342",
+   "clauses": [
+    "C2-A-108"
+   ],
+   "why": "C2-A-108: An unresolved full or collapsed reference remains a `link` or `image` with its `children` or `alt`, `key`, `refForm` and `attrs`; it never becomes text. HTML renders its brackets and label as literal text. A shortcut forms only for a defined key and is therefore never unresolved when parsed from source.",
+   "summary": "unresolved reference remains a link",
+   "input": "[a][missing]",
+   "options": {},
+   "expected": {
+    "html": "<p>[a][missing]</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "missing",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-343",
+   "clauses": [
+    "C2-A-107"
+   ],
+   "why": "C2-A-107: On a reference use an absent `href` or `src` means unresolved, and the empty string means a destination that is empty. There is no `resolved` field.",
+   "summary": "empty direct destination is distinct from absent",
+   "input": "[a]()",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"\">a</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "href": "",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-344",
+   "clauses": [
+    "C2-A-110",
+    "C2-B-083",
+    "C2-H-141"
+   ],
+   "why": "C2-A-110: A trailing attribute block on a reference is ordinary `attrs`, resolved or not. The reference node keeps only its own authored attributes. The merge with the attributes of its link definition (C2-I-082) is a resolution result: it is not written into `attrs` and takes no part in equality. C2-B-083: A link definition is one line: `[label]:`, one or more spaces, a destination and an optional title, so a label and a colon followed by nothing or only spaces is text. The destination and the title are those of an inline link tail (C2-I-067, C2-I-068), except that the destination holds at least one character: a run without whitespace, then optionally exactly one space and a title in double or in single quotes, then optionally exactly one space and one valid attribute block (C2-I-028), then only spaces. So `[a]: /u 'T'` has a title, `[a]: /u {.c}` carries the class `c` (C2-B-106), in `[a]: /u\"T\"` and in `[a]: \"T\"` the quotes are part of the destination, and `[a]: /u  \"T\"` with two spaces is text. The label does not start with `^`: that shape is tested first and is a footnote definition (C2-B-082). C2-H-141: The attributes of a link definition are merged into every link and image that resolves through it. The classes of the definition come first and the classes of the reference follow. An id and a key of the reference win over those of the definition. The keys of the definition that the reference does not carry come first, in the definition's order, then the keys of the reference in its order: a definition `{j=2 k=1}` and a reference `{m=4 j=3}` give `k=\"1\" m=\"4\" j=\"3\"`.",
+   "summary": "reference keeps own attributes; definition attributes merge only on render",
+   "input": "[x][r]{.use}\n\n[r]: /u {.def}",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/u\" class=\"def use\">x</a></p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "r",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "attrs": {
+         "classes": [
+          "use"
+         ]
+        },
+        "href": "/u"
+       }
+      ]
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "r",
+      "namespace": "link",
+      "href": "/u",
+      "attrs": {
+       "classes": [
+        "def"
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-345",
+   "clauses": [
+    "C2-A-036"
+   ],
+   "why": "C2-A-036: A reader never looks for nodes inside `keyValues`: `{type=widget}` is an ordinary attribute.",
+   "summary": "type attribute stays an ordinary key",
+   "input": "{type=widget}\na",
+   "options": {},
+   "expected": {
+    "html": "<p type=\"widget\">a</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a"
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "type",
+         "widget"
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-346",
+   "clauses": [
+    "C2-A-038",
+    "C2-A-134"
+   ],
+   "why": "C2-A-038: `attrs.id` holds only an id the author wrote. A generated heading id is not stored there (C2-A-134). C2-A-134: A generated heading id is a resolution result. It is published in the heading field `generatedId` and never in `attrs.id`.",
+   "summary": "generated id does not enter attrs",
+   "input": "# B",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"B\">\n  <h1>B</h1>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "B"
+       }
+      ],
+      "generatedId": "B"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-347",
+   "clauses": [
+    "C2-A-063"
+   ],
+   "why": "C2-A-063: The grouping of terms and descriptions is not published. A run of terms belongs to the descriptions that follow it.",
+   "summary": "terms and description have no grouping wrapper",
+   "input": ":: a\n:: b\n: c",
+   "options": {},
+   "expected": {
+    "html": "<dl>\n  <dt>a</dt>\n  <dt>b</dt>\n  <dd>c</dd>\n</dl>",
+    "children": [
+     {
+      "type": "definition_list",
+      "children": [
+       {
+        "type": "definition_term",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       },
+       {
+        "type": "definition_term",
+        "children": [
+         {
+          "type": "text",
+          "value": "b"
+         }
+        ]
+       },
+       {
+        "type": "definition_description",
+        "children": [
+         {
+          "type": "paragraph",
+          "children": [
+           {
+            "type": "text",
+            "value": "c"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-348",
+   "clauses": [
+    "C2-A-068"
+   ],
+   "why": "C2-A-068: A hard-break block is not a node type and not a field. It is a `div` with the class `hardbreaks` in which every line end is a `hard_break` node. The opener form adds the class after the classes the author wrote, so it comes last in `attrs.classes`; the class form has it where it was written. The two forms give the same tree when `hardbreaks` is the last class. Which form the author wrote is in the sidecar.",
+   "summary": "hard-break opener is a div",
+   "input": "::: \\\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<div class=\"hardbreaks\">\n  <p>a</p>\n</div>",
+    "children": [
+     {
+      "type": "div",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ],
+      "attrs": {
+       "classes": [
+        "hardbreaks"
+       ]
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-349",
+   "clauses": [
+    "C2-B-138"
+   ],
+   "why": "C2-B-138: The comment of a comment-only line, and a comment that stands alone after a marker or a quote mark, is a child of the open leaf when one is open, and otherwise a comment node of the innermost open container, whatever the line's indent.",
+   "summary": "comment-only line belongs to open leaf",
+   "input": "> a\n> %% note",
+   "options": {},
+   "expected": {
+    "html": "<blockquote><p>a</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         },
+         {
+          "type": "soft_break"
+         },
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "note"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-350",
+   "clauses": [
+    "C2-A-104"
+   ],
+   "why": "C2-A-104: `key` is the folded label: every run of spaces, tabs and line breaks becomes one space, the ends are trimmed, and case is kept (C2-I-079). Uses and definitions fold the same way, so two keys match when they are equal strings.",
+   "summary": "reference label folds spaces",
+   "input": "[A  B]: /u\n\n[x][A  B]",
+   "options": {},
+   "expected": {
+    "html": "<p><a href=\"/u\">x</a></p>",
+    "children": [
+     {
+      "type": "link_reference_definition",
+      "key": "A B",
+      "namespace": "link",
+      "href": "/u"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "A B",
+        "namespace": "link",
+        "refForm": "full",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "/u"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-351",
+   "clauses": [
+    "C2-A-109"
+   ],
+   "why": "C2-A-109: A link reference is looked up in the link definitions first and then in the headings (C2-I-081, C2-I-083, C2-I-084). The heading lookup applies to link references only, not to images and not to footnotes. It compares plain text that the tree alone gives, so it needs no source. Its result is an `href` on the link, like any other resolution.",
+   "summary": "link definition wins over heading lookup",
+   "input": "# x\n\n[x]: /u\n\n[x]",
+   "options": {},
+   "expected": {
+    "html": "<section id=\"x\">\n  <h1>x</h1>\n  <p><a href=\"/u\">x</a></p>\n</section>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ],
+      "generatedId": "x"
+     },
+     {
+      "type": "link_reference_definition",
+      "key": "x",
+      "namespace": "link",
+      "href": "/u"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "link",
+        "key": "x",
+        "namespace": "link",
+        "refForm": "shortcut",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "href": "/u"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-352",
+   "clauses": [
+    "C2-A-046"
+   ],
+   "why": "C2-A-046: The value of a parsed fence ends with a line break after its last line, also where the fence is unclosed and the source ends on that line without one: the end of the source counts as a line ending. A producer adds nothing else.",
+   "summary": "unclosed code fence keeps last line break",
+   "input": "```\nq",
+   "options": {},
+   "expected": {
+    "html": "<pre><code>q\n</code></pre>",
+    "children": [
+     {
+      "type": "code_block",
+      "value": "q\n"
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-353",
+   "clauses": [
+    "C2-A-187"
+   ],
+   "why": "C2-A-187: The bracket label of a div, an admonition, a directive and a code block is the string `groupLabel`, the text between the brackets as written, with no inline parsing: in `::: tip [Tab *x*]` it is `Tab *x*`. In 0.1 the label was inline content.",
+   "summary": "group label stays raw text",
+   "input": "::: tip [Tab *x*]\na\n:::",
+   "options": {},
+   "expected": {
+    "html": "<aside class=\"admonition tip\" aria-label=\"Tip\">\n  <p class=\"div-label\">Tab *x*</p>\n  <p>a</p>\n</aside>",
+    "children": [
+     {
+      "type": "admonition",
+      "kind": "tip",
+      "groupLabel": "Tab *x*",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-354",
+   "clauses": [
+    "C2-A-186"
+   ],
+   "why": "C2-A-186: A parsed item, description, term or heading is never empty: one with nothing else holds a comment node (C2-B-136, C2-B-145). A parsed div, admonition, line block, hard-break block or quote may have no children: a quote mark alone on its line is an empty quote (C2-B-031), as is a quote fence with no body (C2-W-032, C2-W-082). A tree that was not parsed from source may hold an item, description, term or heading with no children.",
+   "summary": "comment-only list item stays nonempty",
+   "input": "- %% note",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li></li>\n</ul>",
+    "children": [
+     {
+      "type": "list",
+      "marker": {
+       "kind": "bullet",
+       "char": "-"
+      },
+      "spacing": "tight",
+      "children": [
+       {
+        "type": "list_item",
+        "children": [
+         {
+          "type": "comment",
+          "form": "line",
+          "value": "note"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-355",
+   "clauses": [
+    "C2-A-153"
+   ],
+   "why": "C2-A-153: A break that a parser makes from a plain line ending, with no backslash in the source, has a span: the spaces and tabs that C2-I-002 drops before the line ending and no line comment owns (C2-A-151), and the line ending itself. It starts directly after the last kept character of its line, so for `a`, two spaces, a line feed and `b` the soft break spans offsets 1 to 4. A hard break spans the same and its backslash (C2-A-152). It is not among the nodes that omit `pos`.",
+   "summary": "soft break span includes the two dropped spaces and line feed",
+   "input": "a  \nb",
+   "options": {},
+   "expected": {
+    "html": "<p>a\nb</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a",
+        "pos": {
+         "startLine": 1,
+         "endLine": 1,
+         "startColumn": 1,
+         "endColumn": 2,
+         "startOffset": 0,
+         "endOffset": 1
+        }
+       },
+       {
+        "type": "soft_break",
+        "pos": {
+         "startLine": 1,
+         "endLine": 2,
+         "startColumn": 2,
+         "endColumn": 1,
+         "startOffset": 1,
+         "endOffset": 4
+        }
+       },
+       {
+        "type": "text",
+        "value": "b",
+        "pos": {
+         "startLine": 2,
+         "endLine": 2,
+         "startColumn": 1,
+         "endColumn": 2,
+         "startOffset": 4,
+         "endOffset": 5
+        }
+       }
+      ],
+      "pos": {
+       "startLine": 1,
+       "endLine": 2,
+       "startColumn": 1,
+       "endColumn": 2,
+       "startOffset": 0,
+       "endOffset": 5
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-356",
+   "clauses": [
+    "C2-A-154"
+   ],
+   "why": "C2-A-154: A container, a list, a description list and a table end after their closer when they have one, and otherwise after their last child that has a position. Each starts at its opening markup and ends at its closing markup also when its first or last child has no position. A block that carries a caption, a figure group and a table included, ends where its caption ends, and the caption spans from its caret to the end of its last line (C2-A-151).",
+   "summary": "fenced quote span reaches the closer after its last child",
+   "input": "::: >\nb\n:::",
+   "options": {},
+   "expected": {
+    "html": "<blockquote><p>b</p></blockquote>",
+    "children": [
+     {
+      "type": "block_quote",
+      "children": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "b",
+          "pos": {
+           "startLine": 2,
+           "endLine": 2,
+           "startColumn": 1,
+           "endColumn": 2,
+           "startOffset": 6,
+           "endOffset": 7
+          }
+         }
+        ],
+        "pos": {
+         "startLine": 2,
+         "endLine": 2,
+         "startColumn": 1,
+         "endColumn": 2,
+         "startOffset": 6,
+         "endOffset": 7
+        }
+       }
+      ],
+      "pos": {
+       "startLine": 1,
+       "endLine": 3,
+       "startColumn": 1,
+       "endColumn": 4,
+       "startOffset": 0,
+       "endOffset": 11
+      }
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-357",
+   "clauses": [
+    "C2-I-089",
+    "C2-I-006"
+   ],
+   "why": "C2-I-089: Its content is inline content, in which `[^` opens no footnote reference and `^[` no inline footnote, at any depth: in both the caret is text and the bracket an ordinary bracket, so `[^1]` and `^[b]` there are text and `[^1](u)` is a link.",
+   "summary": "the bracket of a footnote reference inside a note can form a link, as in 0.1",
+   "input": "^[a [^1](u) c]",
+   "options": {},
+   "expected": {
+    "html": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>a <a href=\"u\">^1</a> c<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "inline_footnote",
+        "children": [
+         {
+          "type": "text",
+          "value": "a "
+         },
+         {
+          "type": "link",
+          "href": "u",
+          "children": [
+           {
+            "type": "text",
+            "value": "^1"
+           }
+          ]
+         },
+         {
+          "type": "text",
+          "value": " c"
+         }
+        ],
+        "number": 1
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-358",
+   "clauses": [
+    "C2-H-165",
+    "C2-H-096"
+   ],
+   "why": "C2-H-165: every other inline node with no children as its plain text by C2-H-143, so a `code`, a `literal_inline` and a `math` node give their value and an autolink its visible text, a `raw_inline` as its value, a resolved `xref` as the text it writes in its link (C2-H-096) and an unresolved one as typed, and a `symbol` as `:name:`, as in 0.1.",
+   "summary": "a degraded resolved cross-reference writes its link text, as in 0.1",
+   "input": "# H\n\nsee </#H> b",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "<p># H</p>\n<p>see H b</p>",
+    "children": [
+     {
+      "type": "heading",
+      "level": 1,
+      "children": [
+       {
+        "type": "text",
+        "value": "H"
+       }
+      ],
+      "generatedId": "H"
+     },
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "see "
+       },
+       {
+        "type": "xref",
+        "key": "H",
+        "namespace": "heading",
+        "href": "#H"
+       },
+       {
+        "type": "text",
+        "value": " b"
+       }
+      ]
+     }
+    ]
+   },
+   "from": []
+  },
+  {
+   "id": "CC-359",
+   "clauses": [
+    "C2-H-165"
+   ],
+   "why": "C2-H-165: every other inline node with no children as its plain text by C2-H-143, so a `code`, a `literal_inline` and a `math` node give their value and an autolink its visible text, a `raw_inline` as its value, a resolved `xref` as the text it writes in its link (C2-H-096) and an unresolved one as typed, and a `symbol` as `:name:`, as in 0.1.",
+   "summary": "a degraded symbol writes its name between colons, as in 0.1",
+   "input": "a :smile: b",
+   "options": {
+    "profile": "minimal"
+   },
+   "expected": {
+    "html": "<p>a :smile: b</p>",
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "a "
+       },
+       {
+        "type": "symbol",
+        "name": "smile"
+       },
+       {
+        "type": "text",
+        "value": " b"
        }
       ]
      }

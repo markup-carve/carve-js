@@ -52,7 +52,7 @@ export const OPTION_TYPES: ReadonlyMap<string, string> = new Map([
 export const NULL_DEFAULTS: readonly string[] = ["includes","social"]
 
 export const ENUM_VALUES: ReadonlyMap<string, readonly string[]> = new Map([
-  ["headingIds", ["off","keep-case","lower","ascii"]],
+  ["headingIds", ["off","keep-case","lower","ascii","ascii-lower","ascii-strict","ascii-strict-lower"]],
   ["mode", ["interactive","static"]],
   ["profile", ["full","article","comment","minimal"]],
 ])

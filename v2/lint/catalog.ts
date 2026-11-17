@@ -16,6 +16,13 @@ export const CATALOG = {
       "ove it unless intentional.",
     ].join(''),
   ] },
+  "blank-reference-label": { severity: "warning", default: "on", messages: [
+    [
+      "This label holds only spaces, tabs or a line break, so it is no labe",
+      "l and \"${text}\" stays text; 0.1 read it as a label. Give the label a",
+      " character that is not whitespace.",
+    ].join(''),
+  ] },
   "block-marker-as-text": { severity: "warning", default: "on", messages: [
     [
       "This line begins like ${what} but parsed as plain text - the block d",
@@ -25,10 +32,10 @@ export const CATALOG = {
   ] },
   "block-opener-overindented": { severity: "warning", default: "on", messages: [
     [
-      "This ${kind} is indented ${past} column(s) past the content column o",
-      "f ${owner}, and it still opens a ${kind}, measured from its own line",
-      ". Remove the indentation to make the structure explicit, or escape t",
-      "he opener to keep the line as text.",
+      "This ${kind} is indented ${past} ${columns} past the content column ",
+      "of ${owner}, and it still opens a ${kind}, measured from its own lin",
+      "e. Remove the indentation to make the structure explicit, or escape ",
+      "the opener to keep the line as text.",
     ].join(''),
   ] },
   "block-opener-without-blank-line": { severity: "warning", default: "on", messages: [
@@ -97,8 +104,8 @@ export const CATALOG = {
       "tended",
     ].join(''),
     [
-      "document declares an unrecognized Carve version ${version}; this eng",
-      "ine implements ${SPEC_VERSION}",
+      "document declares an unrecognized Carve version \"${version}\"; this e",
+      "ngine implements ${SPEC_VERSION}",
     ].join(''),
   ] },
   "colon-fence-length-mismatch": { severity: "warning", default: "on", messages: [
@@ -336,9 +343,8 @@ export const CATALOG = {
   ] },
   "figure-group-nested": { severity: "warning", default: "on", messages: [
     [
-      "A \"::: figure\" inside a figure group is a figure group of its own an",
-      "d not a panel of the outer group. Move it out of the enclosing group",
-      ".",
+      "A \"::: figure\" inside a composite figure does not nest; it renders a",
+      "s a generic container. Move it out of the enclosing group.",
     ].join(''),
   ] },
   "figure-group-opener-metadata": { severity: "warning", default: "on", messages: [
@@ -365,7 +371,7 @@ export const CATALOG = {
   "footnote-labels-differ-only-in-whitespace": { severity: "warning", default: "on", messages: [
     [
       "Footnote definition [^${label}] normalizes to the same key as [^${tw",
-      "in}]; the first definition wins. Normalized key: ${key}.",
+      "in}]; the first definition wins. Normalized key: \"${key}\".",
     ].join(''),
   ] },
   "footnotes-placement-in-container": { severity: "warning", default: "on", messages: [
@@ -506,8 +512,9 @@ export const CATALOG = {
   ] },
   "ordered-list-kind-split": { severity: "warning", default: "on", messages: [
     [
-      "A lone i starts a roman list and any other single letter an alphabet",
-      "ic one, so this list splits after its first item.",
+      "Nothing after this one-letter marker settles its style, so a lone i ",
+      "reads as roman and any other letter as alphabetic, and the list spli",
+      "ts after its first item.",
     ].join(''),
   ] },
   "ordered-marker-right-aligned": { severity: "warning", default: "on", messages: [
@@ -522,14 +529,15 @@ export const CATALOG = {
       "${host} re-linkifies a hash-number in published output, so \"${text}\"",
       " becomes a link that notifies or references something unrelated; mov",
       "e the example into a fenced code block, or rewrite it as \"item 1\" / ",
-      "\"point 1\"",
+      "\"point 1\".",
     ].join(''),
   ] },
   "platform-mention-token": { severity: "warning", default: undefined, messages: [
     [
-      "${host} re-linkifies ${what} in published output, so \"${text}\" becom",
-      "es a link that notifies or references something unrelated; move the ",
-      "example into a fenced code block, or strip the sigil and rephrase",
+      "${host} re-linkifies an at-prefixed word in published output, so \"${",
+      "text}\" becomes a link that notifies or references something unrelate",
+      "d; move the example into a fenced code block, or strip the sigil and",
+      " rephrase.",
     ].join(''),
   ] },
   "quote-fence-ends-the-quote-above": { severity: "warning", default: "on", messages: [
@@ -705,10 +713,7 @@ export const CATALOG = {
     ].join(''),
   ] },
   "unclosed-inline-emphasis": { severity: "warning", default: "on", messages: [
-    [
-      "This strong (or: emphasis) opener is unclosed in its paragraph; add ",
-      "a closer.",
-    ].join(''),
+    "This ${span} opener is unclosed in its paragraph; add a closer.",
   ] },
   "uneven-list-indent": { severity: "warning", default: "on", messages: [
     [

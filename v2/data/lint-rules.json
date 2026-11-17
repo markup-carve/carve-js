@@ -35,6 +35,17 @@
       "clauses": ["C2-W-106"]
     },
     {
+      "id": "blank-reference-label",
+      "severity": "warning",
+      "channel": "lint",
+      "status": "new",
+      "default": "on",
+      "messages": ["This label holds only spaces, tabs or a line break, so it is no label and \"${text}\" stays text; 0.1 read it as a label. Give the label a character that is not whitespace."],
+      "message_origin": "data_file",
+      "reports": "a footnote or link reference or definition whose label is empty after folding, which is text in 0.2 and was a label in 0.1 (C2-I-079, U-340)",
+      "clauses": ["C2-I-079"]
+    },
+    {
       "id": "block-marker-as-text",
       "severity": "warning",
       "channel": "lint",
@@ -54,9 +65,10 @@
       "status": "kept",
       "default": "on",
       "messages": [
-        "This ${kind} is indented ${past} column(s) past the content column of ${owner}, and it still opens a ${kind}, measured from its own line. Remove the indentation to make the structure explicit, or escape the opener to keep the line as text."
+        "This ${kind} is indented ${past} ${columns} past the content column of ${owner}, and it still opens a ${kind}, measured from its own line. Remove the indentation to make the structure explicit, or escape the opener to keep the line as text."
       ],
       "message_origin": "engine_0_1",
+      "message_notes": ["`${columns}` is `column` when `${past}` is 1 and `columns` otherwise."],
       "clauses": ["C2-W-106"]
     },
     {
@@ -166,9 +178,11 @@
       "default": "on",
       "messages": [
         "document declares Carve ${version}; this engine implements ${SPEC_VERSION}, so constructs added after that version will not render as intended",
-        "document declares an unrecognized Carve version ${version}; this engine implements ${SPEC_VERSION}"
+        "document declares an unrecognized Carve version \"${version}\"; this engine implements ${SPEC_VERSION}"
       ],
       "message_origin": "engine_0_1",
+      "message_notes": ["A quote or a backslash in `${version}` of the second message is escaped as in a JSON string."],
+      "change": "it reads the frontmatter key `carve-version` of 0.1 and the key `carve`",
       "clauses": ["C2-W-106"]
     },
     {
@@ -218,7 +232,7 @@
       "messages": ["A line comment is text inside a line block. Use the braced comment."],
       "message_origin": "design",
       "reports": "a line of a line block that starts with `%%` and opens no comment block (C2-B-123)",
-      "clauses": ["C2-B-123", "C2-B-144"]
+      "clauses": ["C2-B-123", "C2-B-135"]
     },
     {
       "id": "comment-shaped-emphasis",
@@ -447,6 +461,16 @@
       "reports": "`header-rows` on a pipe table",
       "change": "only `header-rows`; `aligns`, `valigns`, `widths` and `footer-rows` stay as in 0.1, and `header-cols` has no effect in 0.2.0",
       "clauses": ["C2-B-186"]
+    },
+    {
+      "id": "derived-text-budget",
+      "severity": "warning",
+      "channel": "render-loss",
+      "status": "new",
+      "messages": ["Wrote an abbreviation or a cross-reference in its plain form: the derived text of this render reached its budget of ${budget} bytes"],
+      "message_origin": "data_file",
+      "reports": "the first abbreviation or cross-reference of a render whose derived text no longer fits the budget (C2-H-201)",
+      "clauses": ["C2-H-201"]
     },
     {
       "id": "description-separator-below-content-column",
@@ -784,10 +808,10 @@
       "status": "kept",
       "default": "on",
       "messages": [
-        "A \"::: figure\" inside a figure group is a figure group of its own and not a panel of the outer group. Move it out of the enclosing group."
+        "A \"::: figure\" inside a composite figure does not nest; it renders as a generic container. Move it out of the enclosing group."
       ],
       "message_origin": "engine_0_1",
-      "clauses": ["C2-W-106"]
+      "clauses": ["C2-B-127", "C2-W-106"]
     },
     {
       "id": "figure-group-opener-metadata",
@@ -832,9 +856,10 @@
       "status": "kept",
       "default": "on",
       "messages": [
-        "Footnote definition [^${label}] normalizes to the same key as [^${twin}]; the first definition wins. Normalized key: ${key}."
+        "Footnote definition [^${label}] normalizes to the same key as [^${twin}]; the first definition wins. Normalized key: \"${key}\"."
       ],
       "message_origin": "engine_0_1",
+      "message_notes": ["A quote or a backslash in `${key}` is escaped as in a JSON string."],
       "clauses": ["C2-W-106"]
     },
     {
@@ -1407,10 +1432,10 @@
       "status": "new",
       "default": "on",
       "messages": [
-        "A lone i starts a roman list and any other single letter an alphabetic one, so this list splits after its first item."
+        "Nothing after this one-letter marker settles its style, so a lone i reads as roman and any other letter as alphabetic, and the list splits after its first item."
       ],
       "message_origin": "design",
-      "reports": "a one-item letter list directly followed by a list of the other letter kind that continues it",
+      "reports": "a one-item list whose marker is one of the seven roman letters, directly followed by an ordered list of the other letter style in the same case, with fewer than three blank lines between them",
       "clauses": ["C2-B-044"]
     },
     {
@@ -1438,7 +1463,7 @@
       "status": "kept",
       "enabled_by": "platforms",
       "messages": [
-        "${host} re-linkifies a hash-number in published output, so \"${text}\" becomes a link that notifies or references something unrelated; move the example into a fenced code block, or rewrite it as \"item 1\" / \"point 1\""
+        "${host} re-linkifies a hash-number in published output, so \"${text}\" becomes a link that notifies or references something unrelated; move the example into a fenced code block, or rewrite it as \"item 1\" / \"point 1\"."
       ],
       "message_origin": "engine_0_1",
       "clauses": ["C2-W-106"]
@@ -1450,7 +1475,7 @@
       "status": "kept",
       "enabled_by": "platforms",
       "messages": [
-        "${host} re-linkifies ${what} in published output, so \"${text}\" becomes a link that notifies or references something unrelated; move the example into a fenced code block, or strip the sigil and rephrase"
+        "${host} re-linkifies an at-prefixed word in published output, so \"${text}\" becomes a link that notifies or references something unrelated; move the example into a fenced code block, or strip the sigil and rephrase."
       ],
       "message_origin": "engine_0_1",
       "clauses": ["C2-W-106"]
@@ -1526,7 +1551,8 @@
         "\"${name}\" is a semantic span attribute (PART 9 §10) and only applies to an ordinary [content]{attrs} span; on ${type} it stays a raw attribute and renders as ${name}=\"${value}\"."
       ],
       "message_origin": "engine_0_1",
-      "clauses": ["C2-W-106"]
+      "change": "it fires for each of the keys `abbr`, `time` and `kbd` (C2-H-075) on a node that is not a span",
+      "clauses": ["C2-W-106", "C2-H-075"]
     },
     {
       "id": "semantic-attribute-value-ignored",
@@ -1860,8 +1886,9 @@
       "channel": "lint",
       "status": "kept",
       "default": "on",
-      "messages": ["This strong (or: emphasis) opener is unclosed in its paragraph; add a closer."],
+      "messages": ["This ${span} opener is unclosed in its paragraph; add a closer."],
       "message_origin": "engine_0_1",
+      "message_notes": ["`${span}` is `strong` for `*` and `emphasis` for `/`."],
       "clauses": ["C2-W-106"]
     },
     {

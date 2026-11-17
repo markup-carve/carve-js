@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 
 import { join } from 'node:path'
 
 const NEW_DATA = [
-  'ast-results.json', 'ast-schema.json', 'extensions.json', 'includes.json', 'layout-schema.json', 'node-slots.json',
+  'ast-results.json', 'ast-schema.json', 'cli.json', 'extensions.json', 'includes.json', 'layout-schema.json', 'node-slots.json',
   'unicode-categories.json',
 ]
 const SCHEMAS = ['carve-source.schema.json', 'carve-style.schema.json', 'carve-annotation.schema.json']

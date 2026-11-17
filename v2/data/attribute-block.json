@@ -34,7 +34,7 @@
       "sigil": ":",
       "value": "language_tag",
       "target": "lang",
-      "clauses": ["C2-I-029", "C2-B-103", "C2-A-037"]
+      "clauses": ["C2-I-029", "C2-A-037"]
     }
   ],
   "shapes": [
@@ -69,20 +69,20 @@
     }
   ],
   "order": [
-    { "rank": 1, "name": "id", "clauses": ["C2-B-098", "C2-I-041", "C2-A-033"] },
-    { "rank": 2, "name": "classes", "within": "as_written", "clauses": ["C2-B-098", "C2-I-041", "C2-A-033"] },
-    { "rank": 3, "name": "language", "clauses": ["C2-B-098", "C2-I-041", "C2-A-033", "C2-A-037"] },
-    { "rank": 4, "name": "keys", "within": "as_written", "clauses": ["C2-B-098", "C2-I-041", "C2-A-033"] }
+    { "rank": 1, "name": "id", "clauses": ["C2-B-098", "C2-A-033"] },
+    { "rank": 2, "name": "classes", "within": "as_written", "clauses": ["C2-B-098", "C2-A-033"] },
+    { "rank": 3, "name": "language", "clauses": ["C2-B-098", "C2-A-033", "C2-A-037"] },
+    { "rank": 4, "name": "keys", "within": "as_written", "clauses": ["C2-B-098", "C2-A-033"] }
   ],
   "folds": [
-    { "key": "class", "letter_case": "any_ascii", "into": "classes", "clauses": ["C2-B-099", "C2-I-042", "C2-A-034"] },
-    { "key": "id", "letter_case": "any_ascii", "into": "id", "clauses": ["C2-B-099", "C2-I-042", "C2-A-034"] }
+    { "key": "class", "letter_case": "any_ascii", "into": "classes", "clauses": ["C2-I-042", "C2-A-034"] },
+    { "key": "id", "letter_case": "any_ascii", "into": "id", "clauses": ["C2-I-042", "C2-A-034"] }
   ],
   "merges": [
     {
       "name": "classes",
       "rule": "add_in_written_order",
-      "clauses": ["C2-B-093", "C2-B-094", "C2-B-102", "C2-I-039", "C2-A-035"]
+      "clauses": ["C2-B-093", "C2-I-039", "C2-B-102", "C2-A-035"]
     },
     { "name": "id", "rule": "last_written_wins", "clauses": ["C2-B-104", "C2-I-039", "C2-I-042", "C2-A-034"] },
     { "name": "keys", "rule": "later_value_replaces_at_first_position", "clauses": ["C2-I-039", "C2-A-035"] },
