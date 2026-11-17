@@ -104,8 +104,13 @@ export function directionOf(value: string | undefined): 'ltr' | 'rtl' | 'auto' |
 
 export interface MappedAttrs { attrs?: Attrs, lang?: string, dir?: 'ltr' | 'rtl' | 'auto' }
 
-const ALIGN_STYLES: Readonly<Record<string, string>> = {
-  'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
+const ALIGN_VALUES = ['left', 'right', 'center']
+
+/** C2-M-075: the value of `text-align: VALUE;` as C2-H-015 reads it, trimmed and folded, or undefined. */
+function alignStyle(style: string | undefined): string | undefined {
+  if (style === undefined || !style.startsWith('text-align: ') || !style.endsWith(';')) return undefined
+  const value = asciiLower(style.slice('text-align: '.length, -1).replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, ''))
+  return ALIGN_VALUES.includes(value) ? value : undefined
 }
 
 
@@ -127,8 +132,8 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
  * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align`, and an
  * `align` attribute beside it is dropped and reported, since the declaration wins in a browser (C2-M-075).
  */
-export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
-  const styled = alignStyle && ALIGN_STYLES[attr(node, 'style') ?? ''] !== undefined
+export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyled = false): MappedAttrs {
+  const styled = alignStyled && alignStyle(attr(node, 'style')) !== undefined
   const entries: [string, string][] = []
   for (const item of node.attrs) {
     if (!isAuthored(item, omit)) continue
@@ -136,7 +141,7 @@ export function attrs(context: HtmlContext, node: Html.Element, omit: readonly s
       report(context, node, 'import-attribute-dropped', 'An align attribute beside a text-align declaration dropped')
       continue
     }
-    const align = item.name === 'style' && alignStyle ? ALIGN_STYLES[item.value] : undefined
+    const align = item.name === 'style' && alignStyled ? alignStyle(item.value) : undefined
     entries.push(align === undefined ? [item.name, item.value] : ['align', align])
   }
   const result: MappedAttrs = languageOf(node)

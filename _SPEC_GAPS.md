@@ -38,6 +38,16 @@ Reading two, C2-H-165 (the P1-a ruling of lane 30): a degraded "resolved `xref` 
 
 No built-in profile keeps headings and degrades cross-references, so under reading one the C2-H-165 sentence would never apply. The engine follows reading two, the newer ruling: a degraded cross-reference writes its link text, and one the profile keeps writes its typed form when its heading is degraded. Example 34 is held on `html` (`_EXAMPLE_FIXES.md` F14).
 
+### G-H3. A semantic key in another case does not survive a roundtrip render
+
+Input (html.md Example 80):
+
+```carve
+[x]{KBD}
+```
+
+C2-H-013 and C2-H-075 make `KBD` an ordinary attribute, `<span KBD="">x</span>`. An HTML parser lowers attribute names, so the importer reads `kbd`, which C2-M reads as the key that makes `<kbd>`: the roundtrip of C2-H-186 gives another tree. Reading one: accept it as a listed loss of C2-H-195. Reading two: a carrier keeps the case of such a key. The engine follows reading one in its roundtrip test, which holds the source by name.
+
 ## Freeze candidate 6 session (spec `068552fc`)
 
 Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.

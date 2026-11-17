@@ -196,6 +196,11 @@ describe('attributes', () => {
     const [first] = children('<p style="text-align: center;">x</p>') as { attrs: unknown }[]
     expect(first?.attrs).toEqual({ keyValues: [['align', 'center']] })
   })
+
+  it('C2-M-075, C2-H-015: the declared value is trimmed and folded to lower case', () => {
+    const [first] = children('<p style="text-align:  Right ;">x</p>') as { attrs: unknown }[]
+    expect(first?.attrs).toEqual({ keyValues: [['align', 'right']] })
+  })
 })
 
 describe('elements without a counterpart', () => {

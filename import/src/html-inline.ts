@@ -238,6 +238,9 @@ function footnoteInline(node: Html.Element, context: HtmlContext): Inline[] | un
   if (attr(node, 'role') !== 'doc-noteref' && !has(node, 'data-footnote-ref')) return undefined
   const href = attr(node, 'href') ?? ''
   const note = context.notes.get(href.startsWith('#') ? href.slice(1) : href)
+  // C2-M-062: naming no note, with no fragment or one that is empty once the prefixes are cut, it is a link.
+  const hash = href.indexOf('#')
+  if (note === undefined && (hash < 0 || footnoteKey(href.slice(hash + 1)) === '')) return undefined
   const label = attr(node, 'data-carve-footnote-label')
   const mapped = attrs(context, node, [...(isGeneratedRefId(attr(node, 'id'), href) ? ['id'] : []), 'href', 'role', 'data-footnote-ref'])
   if (note?.inline === true && label === undefined) {
