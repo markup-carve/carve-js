@@ -243,12 +243,12 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
 
 /**
  * C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it. C2-I-024: a
- * bracket or a braced closer in it may close a bracket or a braced opener open before it, which the plan leaves to
- * the repair.
+ * bracket or a braced closer in it may close a bracket or a braced opener open before it. A trailing backslash can
+ * also change whether the following bracket closes, so the repair decides these cases.
  */
 function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean {
   if (!lineStart) push(leaf, SPACE, ATOM, node, -1)
-  const bracket = node.value.includes(']') && openDepth(leaf, 91, 93) > 0
+  const bracket = (node.value.includes(']') || node.value.endsWith('\\')) && openDepth(leaf, 91, 93) > 0
   if (!bracket && !(BRACED_CLOSER.test(node.value) && openDepth(leaf, 123, 125) > 0)) return false
   undecide(leaf, 'comment bracket')
   return true

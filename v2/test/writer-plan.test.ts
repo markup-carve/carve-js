@@ -54,6 +54,13 @@ describe('the planned writer', () => {
     expect(result.output.diagnostics.some((diagnostic) => diagnostic.code === 'structure-unspellable')).toBe(true)
   })
 
+  it('C2-I-024: a comment ending in backslash before a bracket closer enters repair', () => {
+    const parsed = parseWithLayout('[%%\\ ]', { extensions: [] })
+    const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
+    expect(result.stats.reasons.get('check') ?? 0).toBe(0)
+    expect(result.stats.repaired).toBeGreaterThan(0)
+  })
+
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
     const source = [
       '= Title', '', 'A paragraph with *strong*, /emphasis/, `code` and a [link](https://example.org "T").',
