@@ -215,7 +215,21 @@ export function codeChildren(
   if (positions) child.pos = payloadPosition(text, lines, range)
   // C2-N-073: the child carries a copy of the caption, which is numbered and written in place of the include's own.
   // The copy was not produced by the included file, so it carries no position of it (C2-N-019).
-  if (node.caption !== undefined) child.caption = withoutPositions(structuredClone(node.caption))
+  if (node.caption === undefined) return { children: [child], facts: fenced.facts }
+  const copy = withoutPositions(structuredClone(node.caption))
+  child.caption = copy
   // C2-B-181: the findings of the fence, such as malformed quoting, are those of the child.
-  return { children: [child], facts: fenced.facts }
+  return { children: [child], facts: withCaptionLeaves(fenced.facts, copy) }
+}
+
+/** The copied caption is read in the including file, so resolution enters its leaves as it does the original's. */
+function withCaptionLeaves(facts: ParseFacts | null, caption: Node): ParseFacts | null {
+  if (facts === null) return null
+  const leaves = new Set(facts.resolvableLeaves)
+  const pending: Node[] = [caption]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    leaves.add(node)
+    forEachSlot(node, (list) => { for (const below of list) pending.push(below) })
+  }
+  return { ...facts, resolvableLeaves: leaves }
 }

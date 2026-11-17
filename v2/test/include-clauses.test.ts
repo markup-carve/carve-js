@@ -511,6 +511,14 @@ describe('13. code mode, attributes, captions and tables', () => {
     expect(includeAt('{{ a.md }}', files).children?.[0]).toMatchObject({ type: 'frontmatter', value: 't: 1\n' })
   })
 
+  it('C2-N-073: the caption of an expanded code include is captioned as an authored code block, notes included', () => {
+    const files = { 'a.txt': 'code\n' }
+    const authored = render('```\ncode\n```\n^ Listing #: x^[note]')
+    expect(render('{{ a.txt @code }}\n^ Listing #: x^[note]', { includes: includes(files) })).toBe(authored)
+    const html = render('{{ a.txt @code }}\n^ Listing #: x[^n]\n\n[^n]: N', { includes: includes(files) })
+    expect(html).toContain('<figcaption>Listing 1: x<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></figcaption>')
+  })
+
   it('C2-N-073, C2-N-074: the caption of an unexpanded code include is numbered and written after the directive', () => {
     expect(render('{{ x.js @code }}\n^ Listing #: Code', { includes: includes({}) })).toBe('<p>{{ x.js @code }}</p>\n<p>Listing 1: Code</p>')
   })
