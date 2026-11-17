@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { acquireInlineState, FLAG_BRACED, MAX_DEPTH, releaseInlineState, scanInline } from '../src/index.ts'
 import { buildInlineTree, parseTree } from './support/inline-tree.ts'
 import { checkInlines } from './support/inline-checks.ts'
+import { expectPublicInlines } from './support/public-inline-shape.ts'
 import { inlineShapeOf } from './support/inline-shape.ts'
 import { shape, treeShape } from './support/shape.ts'
 
@@ -11,6 +12,7 @@ import { shape, treeShape } from './support/shape.ts'
 function tree(...lines: string[]): string {
   const src = lines.join('\n')
   expect(checkInlines(src)).toBeNull()
+  expectPublicInlines(src)
   return treeShape(src)
 }
 

@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkDocument } from './support/checks.ts'
 import { checkInlines } from './support/inline-checks.ts'
+import { expectPublicInlines } from './support/public-inline-shape.ts'
 import { treeShape } from './support/shape.ts'
 
 // [example number, input lines, tree shape]
@@ -134,6 +135,7 @@ describe('examples of the inline chapter', () => {
       expect(treeShape(src)).toBe(expected)
       expect(checkDocument(src)).toBeNull()
       expect(checkInlines(src)).toBeNull()
+      expectPublicInlines(src)
     })
   }
 })
