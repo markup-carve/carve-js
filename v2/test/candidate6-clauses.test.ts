@@ -43,6 +43,10 @@ describe('freeze candidate 6', () => {
     }
   })
 
+  it('C2-W-075: the alt text of a collapsed reference still folds to its key', () => {
+    for (const source of ['x![`*][]', 'x![a`b][]']) expect(write(parse(source))).toBe(`${source}\n`)
+  })
+
   it('C2-B-230: an entry that is no decimal number leaves all three keys in attrs', () => {
     const table = parse('{body-rows=1,x body-header-cols=1,}\n| a |\n| b |').children[0]
     expect(table?.type === 'table' ? table.attrs?.keyValues : undefined).toEqual([['body-rows', '1,x'], ['body-header-cols', '1,']])

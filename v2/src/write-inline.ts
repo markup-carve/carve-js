@@ -419,8 +419,17 @@ function imageNode(w: Writer, node: ImageNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return `!${raw}`
   const pipes = (flags & IN_CELL) !== 0
-  const alt = altSource(node.alt ?? '')
+  const alt = collapsedAlt(node, altSource(node.alt ?? ''))
   return `![${pipes ? escapePipes(alt) : alt}]${target(node, node.src, pipes)}`
+}
+
+/** C2-W-075: the alt text of a collapsed reference folds to its key (C2-I-079); where it does not, the key may serve. */
+function collapsedAlt(node: ImageNode, alt: string): string {
+  const key = node.key
+  if (node.refForm !== 'collapsed' || key === undefined || foldLabel(alt) === key) return alt
+  const read = inlineContent(`![${key}][]`)
+  const image = read.length === 1 ? read[0] : undefined
+  return image?.type === 'image' && image.key === key && image.alt === node.alt ? key : alt
 }
 
 /**
