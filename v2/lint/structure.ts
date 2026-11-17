@@ -347,11 +347,10 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   const second = next < node.pos.endLine ? context.lines[next] : undefined
   if (first === undefined || second === undefined) return
   const marker = first.text.trimStart()
-  let width = 0
-  while (marker[width] === '#' || marker[width] === '=') width++
+  const column = first.text.indexOf(marker[0]!)
   let indent = 0
   while (second.text[indent] === ' ') indent++
-  if (indent > width) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
+  if (indent > column) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
 /** C2-B-127: a bare `::: figure` in the body of a figure group, which opens a plain div. */
