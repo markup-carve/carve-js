@@ -28,10 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The schema and the reader of the pinned commit, not of the moving branch head.
+      - name: Pinned specification commit
+        id: pin
+        run: echo "commit=$(node -p "require('./v2/data/spec-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
         with:
           repository: markup-carve/carve
-          ref: next2
+          ref: ${{ steps.pin.outputs.commit }}
           path: carve
 
       - name: Setup Node
