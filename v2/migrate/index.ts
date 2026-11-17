@@ -148,8 +148,8 @@ function migrateNode(old: Fields, path: string, state: MigrationState): Fields[]
 }
 
 function extensionFallback(node: Fields, old: Fields, path: string, state: MigrationState): Fields[] {
-  if (node['type'] === 'inline_extension') return structuredClone(nodeList(node['children']))
   const fallback = old['fallback']
+  if (node['type'] === 'inline_extension' && !Array.isArray(fallback)) return structuredClone(nodeList(node['children']))
   return Array.isArray(fallback) ? migrateList(fallback, `${path}/fallback`, state) :
     object(fallback) ? migrateNode(fallback, `${path}/fallback`, state) : []
 }

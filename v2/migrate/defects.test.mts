@@ -81,6 +81,9 @@ describe('migration defects', () => {
     assert.deepEqual(inline(declared), { type: 'inline_extension', name: 'acme.x', version: '1',
       children: [{ type: 'text', value: 'x' }], fallback: [{ type: 'text', value: 'x' }] })
     assert.deepEqual(declared.document.extensions, [{ name: 'acme.x', version: '1', required: false, slots: [] }])
+    const own = migrateTree({ astVersion: '1.2', extensions: [{ id: 'acme.x', version: '1', required: false }],
+      document: paragraph([{ ...node, fallback: [{ type: 'text', value: 'f' }] }]) })
+    assert.deepEqual((inline(own) as { fallback?: unknown }).fallback, [{ type: 'text', value: 'f' }])
     const bare = migrateTree(paragraph([node]))
     assert.deepEqual(inline(bare), { type: 'text', value: 'x' })
     assert.deepEqual(codes(bare), ['migration-loss /children/0/children/0'])
