@@ -1,6 +1,6 @@
 // Writer defects of the engine TODO list, each fixed at its clause.
 import { describe, expect, it } from 'vitest'
-import { decodeTree, format, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
+import { decodeTree, format, formatWithDiagnostics, parse, treesEqual, writeWithDiagnostics } from '../src/index.ts'
 import { checkWriter } from './support/writer-checks.ts'
 
 const comment = { type: 'comment', form: 'line', value: 'x \t ' }
@@ -50,6 +50,13 @@ it('C2-W-011: field losses name the field path', () => {
     { type: 'text', value: 'see ' }, { type: 'xref', key: 'h', namespace: 'heading', display: 'number' },
   ] }])
   expect(xref.codes).toContain('field-unspellable /children/0/children/1/display')
+})
+
+it('C2-W-011: a field gained on readback reports the supplied node path', () => {
+  const output = formatWithDiagnostics('//</\\**{#}#}{/\\/{c}`*/')
+  expect(output.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
+    'field-unspellable /children/0/children/1',
+  )
 })
 
 describe('bodies opened behind a task box or attributes', () => {

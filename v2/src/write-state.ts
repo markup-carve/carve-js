@@ -168,7 +168,7 @@ export function lose(w: Writer, node: Node, field: string | null): void {
   const code = field === null ? 'structure-unspellable' : 'field-unspellable'
   const entry: Diagnostic = { code, severity: 'warning', channel: 'render-loss', message }
   addFinding(w.losses, node, entry)
-  if (field !== null) {
+  if (field !== null && Object.hasOwn(node, field)) {
     w.losses.steps ??= new Map()
     w.losses.steps.set(entry, `/${field}`)
   }
