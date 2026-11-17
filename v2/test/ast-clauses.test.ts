@@ -667,6 +667,16 @@ describe('equality', () => {
 })
 
 describe('reading a tree', () => {
+  it('C2-A-181: a reader refuses a cols list with no name or with an empty name', () => {
+    const include = (cols: unknown): unknown => ({
+      type: 'document', astVersion: '2.0',
+      children: [{ type: 'include', path: 'a.csv', options: { cols, code: 'csv' }, attrs: { keyValues: [['table', '']] } }],
+    })
+    expect(refusal(include([]))).toBe('/children/0/options/cols: a list of names with no name')
+    expect(refusal(include(['Price', '']))).toBe('/children/0/options/cols/1: an empty name')
+    expect(refusal(include(['Price']))).toBeNull()
+  })
+
   it('C2-A-167: a refusal is a typed error that names what was wrong and the path of the node', () => {
     const error = (() => {
       try {

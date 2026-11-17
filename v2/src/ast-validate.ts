@@ -222,8 +222,13 @@ const OPTION_CHECKS: ReadonlyMap<string, (item: Value, path: string) => void> = 
   ['lines', checkRange],
   ['rows', checkRange],
   ['cols', (item: Value, path: string) => {
-    if (typeof item === 'string') checkRange(item, path)
-    else checkStrings(item, path)
+    if (typeof item === 'string') return checkRange(item, path)
+    // C2-A-181: a list of names, at least one, none empty, as the schema shapes it.
+    const names = requireArray(item, path)
+    if (names.length === 0) fail(path, 'a list of names with no name')
+    names.forEach((name, index) => {
+      if (requireString(name, `${path}/${index}`) === '') fail(`${path}/${index}`, 'an empty name')
+    })
   }],
   ['shift', (item: Value, path: string) => {
     // C2-B-205: at most nine digits.
