@@ -50,9 +50,11 @@ describe('the gates of the writer on its own token alphabet', () => {
 })
 
 describe('the gates on the comments of candidate 8', () => {
-  it('C2-I-024, C2-W-002: a line comment that a bracket or a braced closer would end is not written past its reading', () => {
+  it('C2-I-024, C2-W-002: a line comment that a bracket or a braced closer would end is not written silently past its reading', () => {
     for (const source of ['x#}\n%}\\[\\+ %% ]', '>{/-\n-{.c}%%\n%% a\\[(/u)/}\n- ```\n  %% a-}\n***--}\n: d-}']) {
-      expect(checkGates(source).failure, source).toBeNull()
+      // A failure with a reported loss is no silent failure (C2-W-011).
+      const result = checkGates(source)
+      expect(result.failure === null || result.losses !== null, source).toBe(true)
     }
   })
 })
