@@ -9,10 +9,12 @@ it('C2-I-049 C45: a repeated closing slash remains text under the current clause
   expect(render('/a//')).toContain('/a//')
 })
 
-it('C2-B-166, C2-B-169: the closing pipe is the last pipe of the line, also one quoted in a row attribute', () => {
+it('C2-B-166, C2-B-169: the closing pipe is the last pipe of the line, also one quoted or escaped in a row attribute', () => {
   expect(render('||{d="|"}')).toMatch(/^<p>/)
   expect(render('| a |{title="x|y"}')).toBe('<p>| a |{title="x|y"}</p>')
-  expect(render('||{d="\\|"}')).toMatch(/^<table>/)
+  expect(render('||{d="\\|"}')).toMatch(/^<p>/)
+  expect(render('| a |{title="x\\|y"}')).toMatch(/^<p>/)
+  expect(render('| a |{title="x"}')).toMatch(/^<table>/)
   expect(render('||{!}')).toMatch(/^<p>/)
 })
 
