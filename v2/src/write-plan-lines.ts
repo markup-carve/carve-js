@@ -154,7 +154,8 @@ function bareDot(leaf: Leaf, at: number): number {
   let content = at + 1
   while (isBlank(code(leaf, content))) content++
   const next = code(leaf, content + 1)
-  return code(leaf, content) === 46 && (isBlank(next) || isLineEnd(next)) ? NO_ESCAPE : at
+  // A dot that ends the line has no space behind it, so the first dot stays a marker.
+  return code(leaf, content) === 46 && isBlank(next) ? NO_ESCAPE : at
 }
 
 /** C2-B-160, C2-B-161: a hyphen run is text, but on line 1 three hyphens open frontmatter. */

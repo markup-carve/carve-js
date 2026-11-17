@@ -62,6 +62,7 @@ describe('the planned writer', () => {
     ['C2-B-033: a marker before a tab is text', '-\ta\n'],
     ['C2-B-020: a list marker inside a quote of an item does not interrupt', '- > a\n  > - b\n'],
     ['C2-B-043: a bare dot before a dot and a space is no marker', '. . . and then silence\n'],
+    ['C2-B-043: a bare dot before a dot that ends the line is a marker, so the text takes a backslash', '\\. .\n'],
     ['C2-B-092: an attribute-shaped later line is text', 'a\n{.x}\n'],
     ['C2-B-138: a line comment on a later line stays in the paragraph', 'a\n%% c\nb\n'],
     ['C2-B-166: a pipe line without a closing pipe is text', 'a\n| b\n'],
