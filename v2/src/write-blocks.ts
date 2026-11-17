@@ -7,6 +7,7 @@ import {
   type LineBlockNode, type LinkReferenceDefinitionNode, type ListItemNode, type ListNode, type Node, type NodeOfType,
   type ParagraphNode, type RawBlockNode, type TableNode, type BlockExtensionNode,
 } from './ast.ts'
+import { isClaimableName } from './ast-validate.ts'
 import { treesEqual } from './ast-json.ts'
 import { plainText } from './ast-text.ts'
 import { includeSource, unreadField } from './include.ts'
@@ -484,6 +485,8 @@ function sourceLines(body: string): string[] {
 function extensionSpelling(node: BlockExtensionNode): string | null {
   const source = node.source
   if (source === undefined || source.form === 'inline') return null
+  // C2-X-023: a name no matcher claims reads back as another core node, so only the fallback is written.
+  if (!isClaimableName(source.form, source.name, source.title !== undefined || source.groupLabel !== undefined)) return null
   const lines = sourceLines(source.body)
   const mark = source.form === 'div' ? ':' : '`'
   const run = mark.repeat(Math.max(MIN_RUN, longestBareRun(lines, mark.charCodeAt(0)) + 1))

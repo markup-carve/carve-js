@@ -158,7 +158,7 @@ function inputStage(input: string | Uint8Array | DocumentNode, settings: Setting
 function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const rule = profileRule(settings)
   const losses: Findings = { entries: [], nodes: [] }
-  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols)
+  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, settings.renderers)
   // A degraded node turns source that the inline scan did not read into text.
   const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
   return { document: parsed.document, settings, resolution, losses, bidi }

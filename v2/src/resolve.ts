@@ -3,8 +3,9 @@
 // The results are written into the tree beside the authored constructs; what a renderer needs
 // besides them is returned.
 import {
-  type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
-  type DirectiveNode, type DivNode,
+  type AbbreviationDefNode, type AbbreviationNode, type AdmonitionNode, type BlockExtensionNode,
+  type BlockQuoteNode, type CaptionNode, type CodeBlockNode,
+  type DirectiveNode, type DivNode, type InlineExtensionNode,
   type DocumentNode, type ExtensionDeclaration, type FigureGroupNode, type FootnoteNode, type FootnoteRefNode,
   type HeadingNode, type ImageNode, type IncludeNode, type Inline, type InlineFootnoteNode, type LinkNode, type LinkReferenceDefinitionNode,
   CHILDREN_ONLY, childNodes, forEachSlot, NO_SLOTS, slotShape, SOURCE_ORDER, type MathNode, type Node, isNodeOfType,
@@ -96,6 +97,12 @@ interface Walk {
   /** The parent of the node whose visitor runs. A visitor reads it before it visits anything below. */
   parent: Node | null
   markupLine: ((node: Node) => number | undefined) | null
+  /** C2-X-032: the versions of the registered renderers, by extension name. */
+  renderers: Readonly<Record<string, { version: string }>>
+  /** Whether the walk is in the slots of an extension node that a renderer writes. */
+  rendered: boolean
+  /** The extension nodes around the visited node: a transform builds their nodes after the inline scan noted its leaves. */
+  extensionDepth: number
 }
 
 /** C2-W-113: a duplicate is a finding of the parse channel, reported on the later node. */
@@ -286,7 +293,29 @@ const STEPS = new Map<string, Step>([
   on('directive', NOTHING, visitDirective),
   on('div', NOTHING, (node, walk) => visitSlots(walk, node)),
   on('include', NOTHING, visitInclude),
+  on('block_extension', NOTHING, visitExtension),
+  on('inline_extension', NOTHING, visitExtension),
 ])
+
+type Renderers = Readonly<Record<string, { version: string }>>
+
+/**
+ * C2-X-032: one view of an extension node, its children and named slots when a renderer is registered for it or for an
+ * extension node whose slots hold it, and its fallback otherwise.
+ */
+function visitExtension(node: BlockExtensionNode | InlineExtensionNode, walk: Walk): void {
+  const renderer = walk.renderers[node.name]
+  const rendered = walk.rendered || (renderer !== undefined && renderer.version === node.version)
+  const outer = walk.rendered
+  walk.extensionDepth++
+  forEachSlot(node, (nodes, step) => {
+    if ((step === 'fallback') === rendered) return
+    walk.rendered = rendered
+    for (const child of nodes) if (child.type !== 'text') visit(walk, child, node)
+    walk.rendered = outer
+  }, SOURCE_ORDER, walk.declarations)
+  walk.extensionDepth--
+}
 
 /**
  * Visits the nodes of every slot of `node`, in document order: a title before the children, as
@@ -323,7 +352,7 @@ function isCaptionedBlock(node: Node): node is ParagraphNode | CodeBlockNode | B
 
 /** Whether the leaf `node` may hold a node that resolution reads: any leaf of a supplied tree, and the noted leaves of a parse. */
 function mayResolve(walk: Walk, node: Node): boolean {
-  return walk.resolvableLeaves === null || walk.resolvableLeaves.has(node)
+  return walk.resolvableLeaves === null || walk.extensionDepth > 0 || walk.resolvableLeaves.has(node)
 }
 
 /**
@@ -620,8 +649,9 @@ function resolveXrefs(walk: Walk): void {
  */
 export function resolve(
   document: DocumentNode, mode: HeadingIds, facts: ParseFacts | null, symbols: Readonly<Record<string, string>> = {},
+  renderers: Renderers = {},
 ): Resolution {
-  const walk = newWalk(document, facts, symbols)
+  const walk = newWalk(document, facts, symbols, renderers)
   const resolution = walk.resolution
   const top = walk.scope
   collectDefinitions(document, walk, facts)
@@ -664,7 +694,9 @@ function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): vo
   }
 }
 
-function newWalk(document: DocumentNode, facts: ParseFacts | null, symbols: Readonly<Record<string, string>>): Walk {
+function newWalk(
+  document: DocumentNode, facts: ParseFacts | null, symbols: Readonly<Record<string, string>>, renderers: Renderers = {},
+): Walk {
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
     definitions: new Map(), definitionOf: new Map(), notes: [], noteOf: new Map(), refIds: new Map(), xrefText: new Map(),
@@ -676,7 +708,7 @@ function newWalk(document: DocumentNode, facts: ParseFacts | null, symbols: Read
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
     headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
-    markupLine: facts?.markupLine ?? null,
+    markupLine: facts?.markupLine ?? null, renderers, rendered: false, extensionDepth: 0,
   }
 }
 

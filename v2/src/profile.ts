@@ -173,7 +173,9 @@ function degradedBlocks(node: Node): ParagraphNode[] {
   if (caption !== undefined) return [...textParagraph(ownText(node)), ...degradedBlocks(caption)]
   if (node.type in MARKED_TEXT || isInlineParent(node) || !('children' in node)) return textParagraph(blockText(node))
   const out: ParagraphNode[] = []
-  for (const child of node.children) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))
+  // C2-H-165: a block extension gives the blocks of its fallback.
+  const blocks: readonly Node[] = node.type === 'block_extension' ? node.fallback : node.children
+  for (const child of blocks) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))
   const groupCaption = captionOf(node)
   if (groupCaption !== undefined) out.push(...degradedBlocks(groupCaption))
   return out

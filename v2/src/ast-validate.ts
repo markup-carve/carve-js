@@ -1046,23 +1046,26 @@ function checkEmptyContainers(node: Fields, path: string): void {
 }
 
 function checkExtensionSource(node: Fields, type: string, path: string): void {
-  if (node['source'] !== undefined && isRecord(node['source'])) {
-    const form = node['source']['form']
+  const source = node['source']
+  if (source !== undefined && isRecord(source)) {
+    const form = source['form']
     if (form === 'inline' && type !== 'inline_extension') fail(`${path}/source/form`, 'inline source on a block extension')
     if (form !== 'inline' && type !== 'block_extension') fail(`${path}/source/form`, 'block source on an inline extension')
-    if (!isClaimableName(node['source'])) fail(`${path}/source/name`, `no ${String(form)} matcher can claim this name`)
+    const name = source['name']
+    const titled = source['title'] !== undefined || source['groupLabel'] !== undefined
+    if (typeof name === 'string' && !isClaimableName(form, name, titled)) {
+      fail(`${path}/source/name`, `no ${String(form)} matcher can claim this name`)
+    }
   }
 }
 
 /** C2-X-025: a div name makes a plain div (C2-B-127), a fence name opens a code block, an inline name is C2-I-094's. */
-function isClaimableName(source: Fields): boolean {
-  const name = source['name'] as string
-  if (source['form'] === 'inline') return isClassWord(name, CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST)
-  if (source['form'] === 'fence') return isFenceWord(name, false)
+export function isClaimableName(form: unknown, name: string, titled: boolean): boolean {
+  if (form === 'inline') return isClassWord(name, CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST)
+  if (form === 'fence') return isFenceWord(name, false)
   for (let at = 0; at < name.length; at++) if (!isAsciiNameCharacter(name.charCodeAt(at))) return false
   const kind = DIV_KINDS.get(name)
   // C2-B-127: `figure` with a title or a label is a plain div.
-  const titled = source['title'] !== undefined || source['groupLabel'] !== undefined
   return name !== '' && (kind === undefined || (kind === 'figure_group' && titled))
 }
 

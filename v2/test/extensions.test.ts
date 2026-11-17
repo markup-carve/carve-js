@@ -327,3 +327,39 @@ describe('the extension interface', () => {
     ])
   })
 })
+
+describe('one view of an extension node', () => {
+  const noted = ':::: tabs\n::: tab "A"\n# Head\n\nBody[^m] see </#Head>.\n:::\n::::\n\n[^m]: M note.\n'
+
+  it('C2-X-032: without a renderer resolution visits the fallback alone', () => {
+    const result = renderWithDiagnostics(noted, { extensions: tabsExtensions })
+    expect(result.html).toContain('<h1 id="Head">Head</h1>')
+    expect(result.html).toContain('<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a> see <a href="#Head">Head</a>')
+    expect(result.html.split('role="doc-backlink"')).toHaveLength(2)
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain('duplicate-id')
+  })
+
+  it('C2-X-032: with a renderer resolution visits the slots and not the fallback', () => {
+    const result = renderWithDiagnostics(noted, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer } })
+    expect(result.html).toContain('<h1 id="Head">Head</h1>')
+    expect(result.html).toContain('see <a href="#Head">Head</a>')
+    expect(result.html.split('role="doc-backlink"')).toHaveLength(2)
+    expect(result.diagnostics).toEqual([])
+  })
+
+  it('C2-H-165: a degraded block extension gives the degraded blocks of its fallback', () => {
+    const tabs = ':::: tabs\n::: tab "A"\n# Head\n\nBody\n:::\n::::\n'
+    expect(render(tabs, { extensions: tabsExtensions, profile: 'comment' })).toBe('<p>A</p>\n<p># Head</p>\n<p>Body</p>')
+  })
+
+  it('C2-A-058: the tabs transform writes no empty props, slots or payload', () => {
+    const tree = parse(':::: tabs\n::: tab "A"\n:::\n::::\n', { extensions: tabsExtensions })
+    expect(() => validateTree(tree, undefined, undefined, tabsExtensions)).not.toThrow()
+  })
+
+  it('C2-L-011: the layout of a tabs document is accepted by its own reader', () => {
+    const { layout } = parseWithLayout(`${noted}[x]: /u\n`, { extensions: tabsExtensions })
+    expect(layout.nodes.some((entry) => entry.path.includes('/fallback'))).toBe(false)
+    expect(() => validateLayout(layout)).not.toThrow()
+  })
+})

@@ -3,13 +3,15 @@
 // writer-layout.test.ts, the gates on the enumerations in writer-gates.test.ts.
 import { describe, expect, it } from 'vitest'
 import {
-  CarveWriteError, type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type IncludeOptions,
+  type BlockExtensionNode, CarveWriteError,
+  type CodeNode, decodeTree, type DocumentNode, encodeTree, format, formatWithDiagnostics, type IncludeOptions,
   type Inline, type LinkNode, parse,
   parseWithLayout, render, treesEqual, write, writeWithDiagnostics,
 } from '../src/index.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 import { type DocumentChild, documentOf, paragraph, text } from './support/tree.ts'
 import { checkWriter } from './support/writer-checks.ts'
+import { writeTree } from '../src/write.ts'
 
 /** The tree of `src` after `change` edited its blocks. */
 function edited(src: string, change: (blocks: DocumentChild[]) => void): DocumentNode {
@@ -1064,5 +1066,18 @@ describe('diagnostics', () => {
     const tree = documentOf({ type: 'heading', level: 7, children: [text('T')] }, { type: 'paragraph', children: [] })
     const found = writeWithDiagnostics(tree).diagnostics
     expect(found.map((entry) => [entry.code, entry.channel])).toEqual([['field-unspellable', 'render-loss'], ['structure-unspellable', 'render-loss']])
+  })
+})
+
+describe('a writer without the extension', () => {
+  it('C2-X-023: a source name no matcher claims writes the fallback and reports structure-unspellable', () => {
+    const extension: BlockExtensionNode = {
+      type: 'block_extension', name: 'x.raw', version: '1', children: [], fallback: [paragraph('safe')],
+      source: { form: 'fence', name: '=html', body: '<b>x</b>\n' },
+    }
+    const tree = documentOf(extension)
+    const result = writeTree(tree, undefined)
+    expect(result.source).toBe('safe\n')
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['structure-unspellable'])
   })
 })
