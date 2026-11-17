@@ -48,3 +48,12 @@ describe('the four-token gate', () => {
     }
   })
 })
+
+describe('hard-break blocks', () => {
+  it('C2-W-022, C2-I-102: a hard break at the start of a line of a hard-break block keeps its backslash, so no blank line splits the paragraph', () => {
+    const slash = String.fromCharCode(92)
+    for (const source of [`::: ${slash}\none\ntwo\n:\n\n ${slash}\none\ntwo\n:::`, `::: ${slash}\na\n${slash}\nb\n:::`]) {
+      expect(checkWriter(source), source).toBeNull()
+    }
+  })
+})

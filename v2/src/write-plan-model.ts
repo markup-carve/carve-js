@@ -4,7 +4,7 @@
 import { forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
-  BARE_BREAKS, escapeOffsets, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference,
+  BARE_BREAKS, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference,
   target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
@@ -204,10 +204,12 @@ function containerUnits<T extends keyof NodeOfType>(w: Writer, leaf: Leaf, type:
   return model !== undefined && model(w, leaf, node, flags)
 }
 
-function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number): void {
+function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: boolean): void {
   if (node.type === 'text') return textUnits(w, leaf, node, flags)
   if (node.type === 'soft_break') return push(leaf, LF, ATOM, node, -1)
-  if (node.type === 'hard_break') return pushString(leaf, (flags & BARE_BREAKS) !== 0 ? '\n' : '\\\n', ATOM, node)
+  if (node.type === 'hard_break') {
+    return pushString(leaf, lineStartBreak(node, lineStart) ?? ((flags & BARE_BREAKS) !== 0 ? '\n' : '\\\n'), ATOM, node)
+  }
   if (node.type === 'inline_extension' && node.name.includes('.')) return undecide(leaf, 'extension')
   if (!containerUnits(w, leaf, node.type, node, flags)) return pushString(leaf, writeInline(w, node, flags), ATOM, node)
   // C2-W-076: the attribute block is glued to its host. C2-I-040: a span takes the block with no part.
@@ -225,7 +227,7 @@ export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
     if (node.type === 'comment' && node.form !== 'braced' && !lineStart) push(leaf, SPACE, ATOM, node, -1)
     if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) return undecide(leaf, 'continuation row')
     if (joinsNextCode(nodes, at)) return undecide(leaf, 'code run')
-    nodeUnits(w, leaf, node, flags)
+    nodeUnits(w, leaf, node, flags, lineStart)
     if (node.type === 'text' && nodes[at + 1]?.type === 'soft_break') trimText(leaf, size)
   }
 }
@@ -237,7 +239,8 @@ export function modelContent(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
   if (last?.type === 'text') trimText(leaf, 0)
   else if (last?.type === 'hard_break' && leaf.codes[leaf.codes.length - 1] === LF) {
     trimLast(leaf)
-    if ((flags & BARE_BREAKS) !== 0) push(leaf, BACKSLASH, ATOM, last, -1)
+    const spelled = leaf.owners[leaf.codes.length - 1] === last
+    if ((flags & BARE_BREAKS) !== 0 && !spelled) push(leaf, BACKSLASH, ATOM, last, -1)
   }
 }
 

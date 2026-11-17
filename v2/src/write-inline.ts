@@ -556,6 +556,11 @@ function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, f
   return writePart(w, nodes, at, end, flags)
 }
 
+/** C2-I-102: in a hard-break block a line ending alone at the start of a line is a blank line, so the break keeps its backslash. */
+export function lineStartBreak(node: Node, lineStart: boolean): string | null {
+  return node.type === 'hard_break' && lineStart ? '\\\n' : null
+}
+
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
@@ -580,7 +585,7 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
       doubleLastBackslash(w, node, nodes, end, flags)
       escapeGluedBacktick(w, node, nodes[at - 1])
     }
-    const part = gluedPart(w, nodes, at, end, flags, last)
+    const part: string = lineStartBreak(node, lineStart) ?? gluedPart(w, nodes, at, end, flags, last)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
     lineStart = last === 10 || (lineStart && part === '')
@@ -629,7 +634,9 @@ export function writeContent(w: Writer, nodes: readonly Node[], flags: number): 
   // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022). In a hard-break
   // block that line ending alone is no break at the end of the content, so the backslash stays (C2-I-102).
   if (last?.type !== 'hard_break' || !out.endsWith('\n')) return out
-  return (flags & BARE_BREAKS) !== 0 ? `${out.slice(0, -1)}\\` : out.slice(0, -1)
+  // A break that starts a line was written with its backslash (lineStartBreak).
+  const spelled = out.endsWith('\\\n') && (out.length === 2 || out[out.length - 3] === '\n')
+  return (flags & BARE_BREAKS) !== 0 && !spelled ? `${out.slice(0, -1)}\\` : out.slice(0, -1)
 }
 
 /** C2-W-112: the end of the run of code spans that starts at `from`. Each span behind the first is reported. */
