@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DERIVED_TEXT_BYTES, DERIVED_TEXT_FACTOR } from '../src/derived-text.ts'
-import { parse, renderWithDiagnostics } from '../src/index.ts'
+import { decodeTree, parse, renderWithDiagnostics } from '../src/index.ts'
 
 const limits = JSON.parse(readFileSync(join(import.meta.dirname, '../data/limits.json'), 'utf8')) as {
   limits: { name: string, value: number }[]
@@ -41,5 +41,16 @@ describe('the derived text budget', () => {
     expect(renderWithDiagnostics(tree).html.match(/<abbr /g)).toHaveLength(2)
     tree.srcByteLength = 200_000
     expect(renderWithDiagnostics(tree).html.match(/<abbr /g)).toHaveLength(3)
+  })
+
+  it('C2-H-201: JSON bounds the source length of a decoded tree', () => {
+    const tree = parse(`{#h}\n# ${'T'.repeat(100_000)}\n\n${'</#h> '.repeat(12)}\n`)
+    tree.srcByteLength = 2_000_000
+    const json = JSON.stringify(tree)
+    expect(json.length).toBeLessThan(500_000)
+    expect(renderWithDiagnostics(tree).html.match(/<a href="#h">h<\/a>/g)).toBeNull()
+    const decoded = decodeTree(json)
+    expect(decoded.srcByteLength).toBeLessThanOrEqual(Buffer.byteLength(json))
+    expect(renderWithDiagnostics(decoded).html.match(/<a href="#h">h<\/a>/g)?.length).toBe(2)
   })
 })
