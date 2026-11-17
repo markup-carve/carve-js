@@ -1,5 +1,7 @@
 # Example fixes for the specification
 
+**Status at `e1f3c5a2` (freeze candidate 2, revision 1):** the corpus corrects F1 to F6, every hold is gone, and no example of the pinned corpus departs from its clause. F7 is prose under examples, which the runner does not check.
+
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
 ## F1. `syntax-blocks.md` Example 52: `expected.diagnostics`
