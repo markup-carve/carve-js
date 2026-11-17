@@ -24,11 +24,7 @@ const examples = (JSON.parse(readFileSync(path, 'utf8')) as { examples: ImportEx
  * The fields of the examples whose stated result departs from its own clause, written up with the clause-correct
  * result in _EXAMPLE_FIXES.md. A held field must keep failing until the corpus is corrected.
  */
-const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['import-html-2', { fields: ['children', 'carve'], fix: '_EXAMPLE_FIXES.md, F3' }],
-  ['import-html-34', { fields: ['diagnostics'], fix: '_EXAMPLE_FIXES.md, F4' }],
-  ['import-html-36', { fields: ['diagnostics'], fix: '_EXAMPLE_FIXES.md, F5' }],
-])
+const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
 
 function mismatches(example: ImportExample): string[] {
   const result = importDocument(example.html ?? '', { from: 'html', ...example.options })
@@ -36,7 +32,7 @@ function mismatches(example: ImportExample): string[] {
   const expected = example.expected
   const out: string[] = []
   if (!isDeepStrictEqual(tree.children, expected.children)) out.push('children')
-  if (expected.carve !== undefined && result.source !== `${expected.carve}\n`) out.push('carve')
+  if (expected.carve !== undefined && result.source !== expected.carve) out.push('carve')
   const reported = result.diagnostics.map(entry => entry.code)
   // The codes the text says are reported; the list need not be complete.
   if ((expected.diagnostics ?? []).some(code => !reported.includes(code))) out.push('diagnostics')
@@ -44,8 +40,8 @@ function mismatches(example: ImportExample): string[] {
 }
 
 describe('the HTML import examples of the specification', () => {
-  it('holds the 42 examples of import-html.md', () => {
-    expect(examples).toHaveLength(42)
+  it('holds the 48 examples of import-html.md', () => {
+    expect(examples).toHaveLength(48)
   })
 
   for (const example of examples) {

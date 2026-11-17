@@ -82,9 +82,9 @@ function writeMismatches(example: CorpusExample, input: string, out: Mismatch[])
   const carve = example.expected.carve
   if (carve === undefined) return
   const written = outcome(() => format(input, example.options))
-  if (written !== `${carve}\n`) out.push({ field: 'carve', actual: written, expected: carve })
+  if (written !== carve) out.push({ field: 'carve', actual: written, expected: carve })
   // C2-W-002: the written source reads back as the tree of the input.
-  if (!treesEqual(parse(`${carve}\n`), parse(input))) out.push({ field: 'carve reads back', actual: carve, expected: input })
+  if (!treesEqual(parse(carve), parse(input))) out.push({ field: 'carve reads back', actual: carve, expected: input })
 }
 
 /** The fields of a Carve example (render, write, lint, include) that this engine does not reproduce. */

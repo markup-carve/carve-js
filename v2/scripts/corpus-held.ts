@@ -6,10 +6,7 @@
  * clause-correct result, in _EXAMPLE_FIXES.md for the specification; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['syntax-blocks-52', { fields: ['diagnostics'], fix: '_EXAMPLE_FIXES.md, F1' }],
-  ['syntax-blocks-90', { fields: ['diagnostics'], fix: '_EXAMPLE_FIXES.md, F2' }],
-])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
