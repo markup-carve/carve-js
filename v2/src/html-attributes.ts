@@ -285,9 +285,14 @@ function schemePasses(r: Render, url: string): boolean {
 
 /** C2-H-160: a destination the policy denies is written as the empty string, and the denial is reported on `node`. */
 export function destination(r: Render, url: string, node: Node): string {
-  if (schemePasses(r, url)) return url
+  return isDenied(r, url, node) ? '' : url
+}
+
+/** C2-H-160: whether the policy denies `url`, which is then reported on `node`. */
+export function isDenied(r: Render, url: string, node: Node): boolean {
+  if (schemePasses(r, url)) return false
   loss(r, node, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
-  return ''
+  return true
 }
 
 /** C2-H-161: true when the text of `value[start, end)` before its first colon is a scheme of the default deny list. */

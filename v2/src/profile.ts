@@ -63,7 +63,7 @@ function inlineText(node: Inline): string {
   return isInlineParent(node) ? inlinesText(node.children) : plainText([node])
 }
 
-function inlinesText(nodes: readonly Inline[]): string {
+export function inlinesText(nodes: readonly Inline[]): string {
   let out = ''
   for (const node of nodes) out += inlineText(node)
   return out
@@ -366,6 +366,56 @@ export function applyProfile(document: DocumentNode, name: string, rule: Profile
   }
 }
 
+/** The references that stand in the note `note` itself, each inline footnote taken as a reference and not entered. */
+function referencesIn(node: Node, out: Node[]): void {
+  forEachSlot(node, (nodes) => {
+    for (const child of nodes) {
+      if (child.type === 'footnote_ref' || child.type === 'inline_footnote') out.push(child)
+      if (child.type !== 'inline_footnote') referencesIn(child, out)
+    }
+  })
+}
+
+/** The note that each reference id stands in; a reference in the body has none. */
+function referenceOwners(resolution: Resolution): Map<string, Note> {
+  const owners = new Map<string, Note>()
+  for (const note of resolution.notes) {
+    const references: Node[] = []
+    const body = note.definition ?? note.inline
+    if (body !== null) referencesIn(body, references)
+    for (const reference of references) {
+      const id = resolution.refIds.get(reference)
+      if (id !== undefined) owners.set(id, note)
+    }
+  }
+  return owners
+}
+
+/**
+ * C2-H-094: the notes that are written, from the body outward: a note with a reference that is written, which is one
+ * the degraded forms left that stands in the body or in a note that is written.
+ */
+function writtenNotes(resolution: Resolution, goneIds: ReadonlySet<string>): Note[] {
+  const owners = referenceOwners(resolution)
+  const written = new Set<Note>()
+  const isWritten = (id: string): boolean => {
+    if (goneIds.has(id)) return false
+    const owner = owners.get(id)
+    return owner === undefined || written.has(owner)
+  }
+  for (let grew = true; grew;) {
+    grew = false
+    for (const note of resolution.notes) {
+      if (written.has(note) || !note.refIds.some(isWritten)) continue
+      written.add(note)
+      grew = true
+    }
+  }
+  const notes: Note[] = []
+  for (const note of resolution.notes) if (written.has(note)) notes.push({ ...note, refIds: note.refIds.filter(isWritten) })
+  return notes
+}
+
 /**
  * The resolution as the render sees it under a profile: a note keeps its number, and only the
  * references that the degraded forms left write a backlink. A note with none writes nothing.
@@ -377,10 +427,5 @@ export function liveResolution(resolution: Resolution, gone: ReadonlySet<Node>, 
     const id = resolution.refIds.get(node)
     if (id !== undefined) goneIds.add(id)
   }
-  const notes: Note[] = []
-  for (const note of resolution.notes) {
-    const refIds = note.refIds.filter((id) => !goneIds.has(id))
-    if (refIds.length > 0) notes.push({ ...note, refIds })
-  }
-  return { ...resolution, notes, goneTargets }
+  return { ...resolution, notes: writtenNotes(resolution, goneIds), goneTargets }
 }

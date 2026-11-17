@@ -6,9 +6,10 @@ import {
   type RawInlineNode, type RubyNode, type SpanNode, type SymbolNode, type TagNode, type XrefNode,
 } from './ast.ts'
 import {
-  attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, keyValue, loss, type Pair, type Render,
-  type TagParts,
+  attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, isDenied, keyValue, loss, type Pair,
+  type Render, type TagParts,
 } from './html-attributes.ts'
+import { inlinesText } from './profile.ts'
 import { smartGlyph } from './ast-text.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
@@ -167,15 +168,24 @@ function definitionFor(r: Render, node: LinkNode | ImageNode, key: string | unde
   return r.resolution.definitionOf.get(node) ?? r.resolution.definitions.get(key)
 }
 
+/** C2-H-163, C2-H-165: under `comment` a link the policy denies is the plain text of its children, and no `<a>`. */
+function isDroppedLink(r: Render, href: string, node: Node): boolean {
+  return r.settings.profile === 'comment' && isDenied(r, href, node)
+}
+
+/** C2-H-177: a reference with no target, or one that resolved to a heading the profile degraded, is written unresolved. */
+function isUnresolvedLink(r: Render, href: string | undefined, definition: object | undefined): boolean {
+  return href === undefined || (definition === undefined && r.resolution.goneTargets?.has(href) === true)
+}
+
 function link(node: LinkNode, r: Render): string {
   // C2-H-081: a link inside link text writes its content and no element.
   if (r.linkDepth > 0) return children(r, node)
   const key = node.key
   const href = node.href
   const definition = definitionFor(r, node, key)
-  // C2-H-177: a reference that resolved to a heading the profile degraded is written unresolved.
-  const gone = definition === undefined && href !== undefined && r.resolution.goneTargets?.has(href) === true
-  if (key !== undefined && (href === undefined || gone)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
+  if (key !== undefined && isUnresolvedLink(r, href, definition)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
+  if (isDroppedLink(r, href ?? '', node)) return escapeText(inlinesText(node.children))
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['href', destination(r, href ?? '', node)]]
   if (title !== undefined) structural.push(['title', title])
@@ -205,7 +215,7 @@ function image(node: ImageNode, r: Render): string {
 
 function autolink(node: AutolinkNode, r: Render): string {
   const text = escapeText(node.text ?? node.href)
-  if (r.linkDepth > 0) return text
+  if (r.linkDepth > 0 || isDroppedLink(r, node.href, node)) return text
   const structural: Pair[] = [['href', destination(r, node.href, node)]]
   const written = withRel(r, node, structural)
   if (r.settings.roundtrip) structural.push(['data-carve-autolink', null])
