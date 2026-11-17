@@ -450,6 +450,14 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (before === 37 || before === 123) return undecidedIf(!percentBehindText(leaf, at, before, escaped), leaf, 'mark %')
   // C2-B-144: in the body of a line block `%%` is text.
   if (isSpace(before) && !leaf.inLine) escaped[at] = 1
+  // C2-I-023: directly behind a `^[` that may open an inline footnote, `%%` opens a line comment too.
+  else if (before === 91 && opensNoteBefore(leaf, at - 2, escaped)) escaped[at] = 1
+}
+
+/** Whether the `^` at `caret` and the `[` behind it are text that opens an inline footnote, not the `{^` of a span. */
+function opensNoteBefore(leaf: Leaf, caret: number, escaped: Uint8Array): boolean {
+  if (code(leaf, caret) !== 94 || isLiteral(leaf, caret, escaped) || isLiteral(leaf, caret + 1, escaped)) return false
+  return code(leaf, caret - 1) !== 123 || isLiteral(leaf, caret - 1, escaped)
 }
 
 /**
