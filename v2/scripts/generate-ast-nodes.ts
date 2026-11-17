@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { type Content, NODE_TABLE } from '../src/ast-validate.ts'
 import { MAX_COLUMNS, wrapJson } from './wrap-literal.ts'
 
-const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT } = NODE_TABLE
+const { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT } = NODE_TABLE
 
 /** `table_cell` is `TableCellNode`. */
 export function interfaceName(type: string): string {
@@ -65,7 +65,6 @@ function fieldType(type: string, name: string): string {
   if (STRINGS.includes(name)) return 'string'
   if (INTEGERS.includes(name)) return 'number'
   if (BOOLEANS.includes(name)) return 'boolean'
-  if (TRUE_ONLY.includes(name)) return 'true'
   if (INLINE_SLOTS.includes(name)) return 'Inline[]'
   throw new Error(`no type for ${type}.${name}`)
 }

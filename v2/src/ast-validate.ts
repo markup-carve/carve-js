@@ -144,7 +144,6 @@ const STRINGS = [
 ]
 const INTEGERS = ['n', 'number', 'level', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
 const BOOLEANS = ['display', 'header', 'decorative', 'useIndex']
-const TRUE_ONLY: string[] = []
 const INLINE_SLOTS = ['short', 'prefix', 'suffix', 'base', 'annotation']
 const POSITION_FIELDS = ['startLine', 'endLine', 'startColumn', 'endColumn', 'startOffset', 'endOffset']
 
@@ -190,7 +189,7 @@ const OPTIONAL_CONTENT = new Map<string, Content>([['include', DOCUMENT_CHILDREN
 const ORDERED_STYLES = ['1', 'a', 'A', 'i', 'I']
 
 /** The node table and the field kinds, which scripts/generate-ast-nodes.ts writes the node interfaces from. */
-export const NODE_TABLE = { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, TRUE_ONLY, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT }
+export const NODE_TABLE = { BLOCKS, INLINES, RULES, STRINGS, INTEGERS, BOOLEANS, INLINE_SLOTS, ENUMS, STAGES, OPTIONAL_CONTENT }
 
 type Value = unknown
 type Fields = Record<string, Value>
@@ -479,7 +478,6 @@ function checkScalar(type: string, name: string, value: Value, path: string): bo
     return true
   }
   if (name === 'width') return isWidth(value) || fail(path, 'not a fraction above 0 and at most 1')
-  if (TRUE_ONLY.includes(name)) return value === true || fail(path, 'not true')
   if (BOOLEANS.includes(name)) return typeof value === 'boolean' || fail(path, 'not a boolean')
   if (INTEGERS.includes(name)) return checkCount(name, value, path)
   if ((name === 'source' && type !== 'smart_punctuation') || (!STRINGS.includes(name) && name !== 'dir')) return false
