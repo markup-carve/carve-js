@@ -236,7 +236,7 @@ describe('the extension interface', () => {
   it('C2-X-039, C2-X-040, C2-X-041, C2-X-042, C2-X-045: the worked tree is byte for byte', () => {
     const install = expectedTab('Install', 'Run setup.')
     const use = expectedTab('Use', 'Open the app.')
-    expect(tabsTree()).toEqual({ type: 'document', astVersion: '2.0',
+    expect(tabsTree()).toEqual({ type: 'document', astVersion: '2.0', srcByteLength: Buffer.byteLength(source),
       extensions: [{ name: 'carve.tab', version: '1', required: false, slots: ['title', 'body'] },
         { name: 'carve.tabs', version: '1', required: false, slots: ['tabs'] }],
       children: [{ type: 'block_extension', name: 'carve.tabs', version: '1', children: [], slots: { tabs: [install, use] },

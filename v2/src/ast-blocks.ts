@@ -683,8 +683,8 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
   const src = ctx.src
   const children = buildChildren(ctx, root.children!, FLOW_PLAIN, DOCUMENT_BUILDERS)
   const document: DocumentNode = { type: 'document', astVersion: AST_VERSION, children }
+  document.srcByteLength = utf8Length(source)
   if (ctx.positions) {
-    document.srcByteLength = utf8Length(source)
     finishPositions(document, source)
   }
   const facts: ParseFacts = {

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { type Block, type CaptionNode, type CitationNode, type CodeBlockNode, type DivNode, type DocumentNode, type FootnoteNode, type Inline, type InlineExtensionNode, type ListItemNode, type ListNode, type Node, type ParagraphNode, type TableCellNode, type TableRowNode, type Task } from '../src/ast.ts'
 import { decodeTree, encodeEnvelope, encodeTree, treesEqual } from '../src/ast-json.ts'
 import { CarveTreeError, MAX_TREE_DEPTH, validateTree } from '../src/ast-validate.ts'
+import { parse } from '../src/api.ts'
 import { childrenOf, inlinesOf, ofType } from './support/nodes.ts'
 import { at, block, blocks, documentOf, inlines, paragraph, placedTree, text, tree } from './support/tree.ts'
 
@@ -25,14 +26,14 @@ function types(nodes: readonly Node[]): string[] {
 
 describe('tree and sidecars', () => {
   it('C2-A-001, C2-A-002: spelling that changes no output is not in the tree', () => {
-    expect(tree('> a')).toEqual(tree('::: >\na\n:::'))
-    expect(tree('1. a')).toEqual(tree('. a'))
-    expect(tree('# T')).toEqual(tree('= T'))
+    expect(treesEqual(tree('> a'), tree('::: >\na\n:::'))).toBe(true)
+    expect(treesEqual(tree('1. a'), tree('. a'))).toBe(true)
+    expect(treesEqual(tree('# T'), tree('= T'))).toBe(true)
   })
 
   it('C2-A-003, C2-A-004: a tree holds no sidecar, so two spellings of one document are equal', () => {
     expect(treesEqual(tree('| a |\n+ b |'), tree('| a b |'))).toBe(true)
-    expect(Object.keys(tree('a'))).toEqual(['type', 'astVersion', 'children'])
+    expect(Object.keys(tree('a'))).toEqual(['type', 'astVersion', 'children', 'srcByteLength'])
   })
 
   it('C2-A-006, C2-A-007: every node and field of a parsed tree is one the contract names', () => {
@@ -55,7 +56,11 @@ describe('root, envelope and versions', () => {
   it('C2-A-010: srcByteLength is the number of source bytes, and zero for an empty source', () => {
     expect(placedTree('é').srcByteLength).toBe(2)
     expect(placedTree('').srcByteLength).toBe(0)
-    expect(tree('é').srcByteLength).toBeUndefined()
+    expect(tree('é').srcByteLength).toBe(2)
+  })
+
+  it('C2-A-138: omitting positions keeps the source byte length', () => {
+    expect(parse('a\n', { positions: false }).srcByteLength).toBe(2)
   })
 
   it('C2-A-012, C2-A-013: an envelope wraps the tree and does not change it', () => {
