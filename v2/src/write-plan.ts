@@ -894,12 +894,10 @@ export function notePlaces(plan: Plan, nodes: readonly Node[], first: boolean): 
 /** A list of nodes with its nesting below the group, the number of containers around it (C2-B-190), and its place. */
 type Pending = [readonly Node[], number, number, LeafPlace]
 
-/** C2-W-075: image brackets can reframe a reference, and label escapes can change a collapsed key. */
+/** C2-W-075: comment-held image brackets can reframe a reference, and label escapes can change a collapsed key. */
 function referenceNeedsCheck(node: Node): boolean {
-  if (node.type === 'image' && node.alt?.includes('[') === true) return true
-  if (node.type !== 'image' && node.type !== 'link') return false
-  if (node.refForm !== 'collapsed') return false
-  return node.type === 'image' || node.children.some((child) => child.type === 'comment')
+  if (node.type === 'image') return node.alt?.includes('%%[') === true
+  return node.type === 'link' && node.refForm === 'collapsed' && node.children.some((child) => child.type === 'comment')
 }
 
 function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, place]: Pending, at: number, first: boolean): void {
