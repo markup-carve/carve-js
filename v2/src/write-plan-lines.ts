@@ -4,7 +4,7 @@
 // lines inside an item, a description or a footnote body (C2-B-015) and inside a quote.
 import { isImageOnly } from './image-line.ts'
 import { isAbbreviation, isAttributeLine, isDefinition, taskBoxEnd } from './lines.ts'
-import { ATOM, ESCAPE, type Leaf, TEXT } from './write-plan-model.ts'
+import { ATOM, CLOSE, ESCAPE, type Leaf, OPEN, TEXT } from './write-plan-model.ts'
 
 /** Where the leaf stands, as far as its line starts depend on it. */
 export interface LeafPlace {
@@ -275,8 +275,10 @@ function otherLine(leaf: Leaf, at: number, value: number, place: LeafPlace, firs
  * left to the repair.
  */
 function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): number {
-  if (!isBlank(code(leaf, at + 1)) && !isLineEnd(code(leaf, at + 1))) return NO_ESCAPE
+  // C2-B-146: the mark needs one or more spaces and content behind it.
+  if (code(leaf, at + 1) !== TAB && !hasContentBehind(leaf, at + 1)) return NO_ESCAPE
   if (first) return decidedIf(place.before !== null)
+  if (!mayBeBlockImage(leaf, at)) return NO_ESCAPE
   let unit = at - 2
   for (; unit >= 0 && leaf.codes[unit] !== LF; unit--) {
     if (leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) return UNDECIDED
@@ -285,6 +287,32 @@ function caption(leaf: Leaf, at: number, place: LeafPlace, first: boolean): numb
   let above = ''
   for (let char = unit + 1; char < at - 1; char++) above += String.fromCharCode(leaf.codes[char]!)
   return isImageOnly(above, 0, above.length) ? UNDECIDED : NO_ESCAPE
+}
+
+const UNMARKED: ReadonlySet<string> = new Set(['comment', 'soft_break', 'hard_break'])
+
+/**
+ * C2-B-147, C2-B-157: whether the paragraph before `end` may still be a block image, which alone takes a caption: it
+ * holds no text but blanks and no node but one image, comments and breaks.
+ */
+function mayBeBlockImage(leaf: Leaf, end: number): boolean {
+  let depth = 0
+  for (let unit = 0; unit < end; unit++) {
+    const kind = leaf.kinds[unit]
+    if (kind === OPEN && depth++ === 0 && leaf.owners[unit]?.type !== 'image') return false
+    if (kind === CLOSE) depth--
+    else if (kind !== OPEN && depth === 0 && !blankOrImage(leaf, unit)) return false
+  }
+  return true
+}
+
+/** A unit outside every mark that a block image may hold: a blank, a line break, or the unit of an image, a comment or a break. */
+function blankOrImage(leaf: Leaf, unit: number): boolean {
+  const kind = leaf.kinds[unit]
+  const value = leaf.codes[unit]!
+  if (kind === TEXT) return isBlank(value) || value === LF
+  const owner = leaf.owners[unit]
+  return kind !== ATOM || owner === undefined || owner.type === 'image' || UNMARKED.has(owner.type)
 }
 
 /**
