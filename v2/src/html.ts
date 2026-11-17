@@ -545,6 +545,7 @@ function rendererHost(r: Render): ExtensionRenderHost {
     escapeText,
     escapeAttribute,
     nextId: (prefix) => nextExtensionId(r, prefix),
+    labels: r.settings.labels,
     profile: r.settings.profile,
     urlPolicy: r.settings.urlPolicy,
   }

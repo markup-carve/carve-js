@@ -43,6 +43,7 @@ export interface ExtensionRenderHost {
   escapeText(value: string): string
   escapeAttribute(value: string): string
   nextId(prefix: string): string
+  labels: Readonly<Record<string, string>>
   profile: Profile
   urlPolicy: UrlPolicy
 }

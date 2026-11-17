@@ -63,7 +63,8 @@ function renderTabs(node: BlockExtensionNode | { type: 'inline_extension' }, hos
     controls += `<label for="${id}">${title.length === 0 ? host.escapeText(label) : host.inlines(title)}</label>`
     panels += `<div class="tab-panel" role="group" aria-label="${host.escapeAttribute(label)}">${host.blocks(body)}</div>`
   }
-  return `<div class="tabs" role="group" aria-label="Tabs">${controls}${panels}</div>`
+  const groupLabel = host.escapeAttribute(host.labels['tabsGroup'] ?? 'Tabs')
+  return `<div class="tabs" role="group" aria-label="${groupLabel}">${controls}${panels}</div>`
 }
 
 /** C2-X-043 to C2-X-048: all panel content is present in static HTML. */

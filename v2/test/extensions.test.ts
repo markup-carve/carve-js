@@ -38,6 +38,13 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('C2-X-047: the tabs group uses the configured label', () => {
+    const input = ':::: tabs\n::: tab "/A/ b"\nx\n:::\n::::\n'
+    const html = render(input, { extensions: tabsExtensions, renderers: { 'carve.tabs': tabsRenderer },
+      labels: { tabsGroup: 'Reiter' } })
+    expect(html).toContain('role="group" aria-label="Reiter"')
+  })
+
   it('C2-X-038 validates a transformed child in its declared parent slot', () => {
     const child: ExtensionDefinition = { name: 'test.child', version: '1',
       matcher: { form: 'div', name: 'child' }, parent: { name: 'test.parent', slot: 'body' }, props: {}, slots: {},
