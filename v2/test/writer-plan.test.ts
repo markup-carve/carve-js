@@ -45,6 +45,15 @@ describe('the planned writer', () => {
     expect(documents).toBeGreaterThan(200)
   })
 
+  it('C2-W-089: a deep quote group is checked before the plan claims it', () => {
+    const source = readFileSync(join(import.meta.dirname, 'fixtures/plan-quote-depth.crv'), 'utf8')
+    const parsed = parseWithLayout(source, { extensions: [] })
+    const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
+    expect(result.stats.reasons.get('check') ?? 0).toBe(0)
+    expect(result.stats.repaired).toBeGreaterThan(0)
+    expect(result.output.diagnostics.some((diagnostic) => diagnostic.code === 'structure-unspellable')).toBe(true)
+  })
+
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
     const source = [
       '= Title', '', 'A paragraph with *strong*, /emphasis/, `code` and a [link](https://example.org "T").',

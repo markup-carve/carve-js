@@ -901,6 +901,8 @@ function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, plac
   const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
   inner.documentStart = first && depth === 0 && at === 0
   const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)
+  // Long quote prefixes can keep a multiline image alive past the modeled leaf boundary.
+  if (below > MAX_DEPTH / 2 && node.type === 'image' && plan.undecided === null) plan.undecided = 'deep image'
   inner.capped = below >= MAX_DEPTH
   forEachSlot(node, (children) => {
     plan.places.set(children, inner)
