@@ -416,7 +416,8 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (leaf.inTitle || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
   const before = code(leaf, at - 1)
   if (before === 37 || before === 123) return undecide(leaf, 'mark %')
-  if (isSpace(before)) escaped[at] = 1
+  // C2-B-144: in the body of a line block `%%` is text.
+  if (isSpace(before) && !leaf.inLine) escaped[at] = 1
 }
 
 const RESOLVERS: Readonly<Record<string, Resolver>> = {
@@ -590,20 +591,41 @@ function definitionShape(leaf: Leaf, at: number): boolean {
   return false
 }
 
+/**
+ * C2-B-123: a line of a line block opens nothing but the closer, a colon run; the spaces that lead it are content
+ * (C2-B-130). A tab meets the strip of C2-B-027, and a line of spaces alone is the blank line between two stanzas
+ * (C2-B-131): those the plan leaves.
+ */
+function mayCloseLineBlock(leaf: Leaf): boolean {
+  let at = 0
+  while (code(leaf, at) === SPACE) at++
+  const first = code(leaf, at)
+  return first < 0 || first === LF || first === TAB || first === 58
+}
+
 /** C2-W-092: the line starts of a paragraph by the rules of write-plan-lines.ts; of any other leaf, none may open a block. */
 function checkLines(leaf: Leaf, start: number, place: LeafPlace | undefined, escaped: Uint8Array): void {
-  const rules = place?.paragraph === true && start === LINE_START ? place : null
+  const rules = lineRules(start, place)
+  const line = place?.line === true && start === LINE_START
   for (let at = -1; at < leaf.codes.length && leaf.undecided === null; at++) {
     leaf.cursor = Math.max(at, 0)
     if (at < 0 ? start !== LINE_START : leaf.codes[at] !== LF || leaf.kinds[at] === TEXT) continue
-    if (rules === null) {
-      undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
-      continue
-    }
-    const escape = lineEscape(leaf, at + 1, at < 0, rules)
-    if (escape === UNDECIDED) undecide(leaf, `line start ${String.fromCharCode(code(leaf, at + 1))}`)
-    else if (escape >= 0) escaped[escape] = 1
+    if (line && at < 0) undecidedIf(mayCloseLineBlock(leaf), leaf, 'line start')
+    else if (rules === null) undecidedIf(opensBlock(leaf, at + 1), leaf, 'line start')
+    else checkLine(leaf, at, rules, escaped)
   }
+}
+
+/** The place whose line rules a leaf follows: a paragraph from its first line, a term on its later lines (C2-B-069). */
+function lineRules(start: number, place: LeafPlace | undefined): LeafPlace | null {
+  if (place === undefined) return null
+  return (place.paragraph && start === LINE_START) || place.term ? place : null
+}
+
+function checkLine(leaf: Leaf, at: number, rules: LeafPlace, escaped: Uint8Array): void {
+  const escape = lineEscape(leaf, at + 1, at < 0, rules)
+  if (escape === UNDECIDED) undecide(leaf, `line start ${String.fromCharCode(code(leaf, at + 1))}`)
+  else if (escape >= 0) escaped[escape] = 1
 }
 
 /** C2-I-090, C2-W-125 six: a mention or a tag forms after a boundary, and a name character behind it lengthens it. */
@@ -776,6 +798,7 @@ function blockShape(node: Node, level: number): string | null {
 
 const TOP_PLACE: LeafPlace = {
   paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, nested: false, item: null, before: null, documentStart: false,
+  line: false, term: false,
 }
 
 /** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
@@ -791,6 +814,8 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
     item: node.type === 'list_item' ? (node.task === undefined ? 'plain' : 'task') : type === 'paragraph' ? place.item : null,
     before,
     documentStart: false,
+    line: type === 'line',
+    term: type === 'definition_term',
   }
 }
 
@@ -798,6 +823,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   const escaped = new Uint8Array(leaf.codes.length)
   leaf.inCell = (flags & IN_CELL) !== 0
   leaf.inTitle = start === IN_TITLE
+  leaf.inLine = place?.line === true
   if (w.abbreviations.size > 0) undecide(leaf, 'abbreviations')
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)

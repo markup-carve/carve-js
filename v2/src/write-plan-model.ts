@@ -43,6 +43,8 @@ export interface Leaf {
   inCell: boolean
   /** The leaf is the quoted title of a div opener, which is no line of content (C2-B-119). */
   inTitle: boolean
+  /** The leaf is a line of a line block, where `%%` is text (C2-B-144). */
+  inLine: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number
   /** Per unit, how a backtick of text is written (TICK_BARE, TICK_ESCAPED, TICK_UNDECIDED), once a backtick asked. */
@@ -66,7 +68,8 @@ export interface Leaf {
 export function createLeaf(): Leaf {
   return {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
-    angleFailEnd: -1, inCell: false, inTitle: false, lastAtomTick: -1, ticks: null, closes: null, opens: null, extensions: new Map(),
+    angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
+    extensions: new Map(),
     textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1,
   }
 }

@@ -22,6 +22,10 @@ export interface LeafPlace {
   before: string | null
   /** The leaf starts the document: its first line is line 1. */
   documentStart: boolean
+  /** The leaf is a line of a line block, which recognizes only prefixes and the closer (C2-B-123). */
+  line: boolean
+  /** The leaf is a term, whose later lines continue like paragraph text (C2-B-069). */
+  term: boolean
 }
 
 export const NO_ESCAPE = -1
@@ -209,7 +213,10 @@ function colon(leaf: Leaf, at: number, place: LeafPlace): number {
  * directly after paragraph text inside an item is a lazy line (C2-B-024).
  */
 function laterColon(leaf: Leaf, at: number, place: LeafPlace): number {
-  return place.inItem && runEnd(leaf, at, 58) - at === 2 ? NO_ESCAPE : colon(leaf, at, place)
+  const run = runEnd(leaf, at, 58) - at
+  // C2-B-016, C2-B-071: a later term line stands at the content column, not at the list's, so a mark there is text.
+  if (place.term && run < 3) return NO_ESCAPE
+  return place.inItem && run === 2 ? NO_ESCAPE : colon(leaf, at, place)
 }
 
 /** A later line of a paragraph: list markers only inside an item (C2-B-015). */

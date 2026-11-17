@@ -72,6 +72,9 @@ describe('the planned writer', () => {
     ['C2-I-104: straight quotes that read as smart quotes', 'a \'b\' c and it\'s, a "b" c\n'],
     ['C2-I-115: an arrow of one hyphen stays as typed', 'a <- b and \\<= c\n'],
     ['C2-I-074: an image sigil before a link of the tree, and before an open bracket', '\\![a](/u) and ![a\n'],
+    ['C2-B-123: a line of a line block opens no block', '::: |\n- a\n# b\n  > c\n:::\n'],
+    ['C2-B-144: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
+    ['C2-B-069: a later line of a term continues like paragraph text', ':: t\n   - a\n   :: e\n   \\::: x\n: d\n'],
   ]
   for (const [clause, source] of PLANNED) {
     it(`${clause}, planned with no parse`, () => {
