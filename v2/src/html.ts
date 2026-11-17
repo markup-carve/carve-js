@@ -68,10 +68,14 @@ function tag(r: Render, node: Node | null, parts: TagParts = NO_PARTS): string {
   return attributes(r, node, { ...parts, block: true })
 }
 
-/** C2-H-019: comments and the line breaks between them, which hold no text. */
+/** C2-H-019: one comment or more and the line breaks between them; breaks alone are no comment. */
 function onlyComments(nodes: readonly Node[]): boolean {
-  for (const child of nodes) if (child.type !== 'comment' && child.type !== 'soft_break' && child.type !== 'hard_break') return false
-  return true
+  let comment = false
+  for (const child of nodes) {
+    if (child.type === 'comment') comment = true
+    else if (child.type !== 'soft_break' && child.type !== 'hard_break') return false
+  }
+  return comment
 }
 
 /** C2-N-075: the blocks of `nodes` with each expanded include read as its children, recursively. */
@@ -261,6 +265,9 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
     const bare = tight && first.attrs === undefined && first.lang === undefined
     open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
     rest = blocks.slice(1)
+  } else if (isIncludeParagraph(first)) {
+    open += includeParagraph(r, first, tight)
+    rest = blocks.slice(1)
   }
   if (rest.length === 0) {
     line(r, level, `${open}</li>`)
@@ -275,6 +282,10 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
 function description(r: Render, node: DefinitionDescriptionNode, level: number): void {
   const blocks = visibleBlocks(node.children)
   const first = blocks[0]
+  if (blocks.length === 1 && isIncludeParagraph(first)) {
+    line(r, level, `<dd${tag(r, node)}>${includeParagraph(r, first, true)}</dd>`)
+    return
+  }
   if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
     const bare = first !== undefined && first.attrs === undefined && first.lang === undefined
@@ -461,6 +472,19 @@ function lineBlock(r: Render, node: LineBlockNode, level: number): void {
   line(r, level, '</div>')
 }
 
+/** C2-H-133: an unexpanded include with no caption, which is written bare where a paragraph at its place would be. */
+function isIncludeParagraph(node: Node | undefined): node is IncludeNode {
+  return node !== undefined && node.type === 'include' && node.children === undefined && node.caption === undefined
+}
+
+/** C2-H-133: the paragraph of an unexpanded include, bare or with `<p>`. */
+function includeParagraph(r: Render, node: IncludeNode, bare: boolean): string {
+  loss(r, node, 'include-unresolved', includeMessage('include-unresolved', { path: node.path }))
+  const text = escapeText(includeSource(node))
+  // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
+  return bare ? text : `<p${tag(r, node, { bare: true })}>${text}</p>`
+}
+
 /** C2-H-133: an include directive that was not expanded is a paragraph that holds the directive as text, written as in C2-W-058. */
 function include(r: Render, node: IncludeNode, level: number): void {
   const children = node.children
@@ -468,9 +492,7 @@ function include(r: Render, node: IncludeNode, level: number): void {
     writeBlocks(r, children, level)
     return
   }
-  loss(r, node, 'include-unresolved', includeMessage('include-unresolved', { path: node.path }))
-  // C2-H-016: the paragraph is a block element and carries its source line; the attributes of the directive are not written.
-  line(r, level, `<p${tag(r, node, { bare: true })}>${escapeText(includeSource(node))}</p>`)
+  line(r, level, includeParagraph(r, node, false))
   // C2-N-074, C2-H-165: its caption follows as one more paragraph of its plain text.
   const caption = node.caption?.children[0]
   const text = caption?.type === 'paragraph' ? plainText(caption.children) : ''

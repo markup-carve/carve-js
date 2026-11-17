@@ -21,9 +21,9 @@ function fields(mismatches: readonly Mismatch[]): string[] {
 describe('the examples of the specification', () => {
   const carve = CORPUS_EXAMPLES.filter((example) => example.kind !== 'import')
 
-  it('holds the 543 examples of the nine documents, 495 of them with a Carve input', () => {
-    expect(CORPUS_EXAMPLES).toHaveLength(543)
-    expect(carve).toHaveLength(495)
+  it('holds the 562 examples of the nine documents, 514 of them with a Carve input', () => {
+    expect(CORPUS_EXAMPLES).toHaveLength(562)
+    expect(carve).toHaveLength(514)
   })
 
   for (const example of carve) {
@@ -58,8 +58,8 @@ describe('the clause cases of the specification', () => {
 })
 
 describe('the trees of the specification', () => {
-  it('the reader refuses each of the 35 refused trees at the field its clause decides', () => {
-    expect(REFUSED_TREES).toHaveLength(35)
+  it('the reader refuses each of the 55 refused trees at the field its clause decides', () => {
+    expect(REFUSED_TREES).toHaveLength(55)
     expect(new Set(REFUSED_TREES.map((entry) => entry.id))).toEqual(new Set(REFUSED_AT.keys()))
     for (const entry of REFUSED_TREES) {
       const path = refusalPath(entry)
@@ -72,7 +72,9 @@ describe('the trees of the specification', () => {
     const trees = EXAMPLE_TREES.get(file) ?? []
     it(`C2-A-161, C2-A-165: the ${trees.length} trees of trees/${file}.json are this engine's trees, positions included`, () => {
       const failures = trees.flatMap((entry) => {
-        const found = fields(exampleTreeMismatches(entry))
+        // A held tree field of the example is held in its tree file too.
+        const held = HELD.get(entry.id)?.fields ?? []
+        const found = fields(exampleTreeMismatches(entry)).filter((field) => !held.includes(field))
         return found.length === 0 ? [] : [[entry.id, found]]
       })
       expect(failures).toEqual([])

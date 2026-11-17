@@ -61,6 +61,8 @@ function wordEnd(src: string, p: number, end: number, fence: boolean): number {
 
 /** Whether `word` reads whole as the language word of a fence, or with `raw` as the format of a raw block (C2-B-116, C2-B-117). */
 export function isFenceWord(word: string, raw: boolean): boolean {
+  // A language word holds no `=`, so `=html` is the format of a raw fence and no language (C2-B-117).
+  if (!raw && word.charCodeAt(0) === EQUALS) return false
   const src = raw ? `=${word}` : word
   return word !== '' && wordEnd(src, 0, src.length, true) === src.length
 }

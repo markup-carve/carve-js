@@ -124,12 +124,10 @@ describe('a start value of more than nine digits', () => {
     }],
   })
 
-  it('C2-W-044: a supplied tree is written from 1 and reported with field-unspellable', () => {
-    for (const [delimiter, carve] of [['.', '. a\n. b\n'], [')', '1) a\n2) b\n']]) {
-      const output = writeWithDiagnostics(list(delimiter!))
-      expect(output.source).toBe(carve)
-      expect(output.diagnostics.map((entry) => entry.code)).toEqual(['field-unspellable'])
-    }
+  // The schema bounds `marker.start` to nine digits, so the reader refuses the tree that C2-W-044 would write
+  // from 1 (_SPEC_GAPS.md G-E3).
+  it('C2-W-044, C2-A-056: a supplied start of more than nine digits is refused by the reader', () => {
+    for (const delimiter of ['.', ')']) expect(() => writeWithDiagnostics(list(delimiter))).toThrow('a start outside 0 to 999999999')
   })
 
   it('C2-B-219: a start attribute of more than nine digits stays a key', () => {

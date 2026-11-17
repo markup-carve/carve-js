@@ -46,8 +46,10 @@ describe('attributes', () => {
     expect(renderWithDiagnostics(src).diagnostics).toEqual([])
   })
 
-  it('C2-H-078: a supplied smart-punctuation node without glyph is written as the glyph of its kind', () => {
-    const tree = decodeTree(JSON.stringify(documentOf(paragraph({ type: 'smart_punctuation', kind: 'em_dash', source: '---' }))))
+  it('C2-H-078, C2-A-098: a supplied smart-punctuation node carries the glyph of its kind, and is refused without it', () => {
+    const node = { type: 'smart_punctuation', kind: 'em_dash', source: '---' }
+    expect(() => decodeTree(JSON.stringify(documentOf(paragraph(node as never))))).toThrow(/glyph/)
+    const tree = decodeTree(JSON.stringify(documentOf(paragraph({ type: 'smart_punctuation', kind: 'em_dash', source: '---', glyph: '\u2014' }))))
     expect(render(tree)).toBe('<p>\u2014</p>')
     expect(render(tree, { smartTypography: false })).toBe('<p>---</p>')
   })
@@ -70,6 +72,8 @@ describe('paragraphs, headings and sections', () => {
   check([
     ['C2-H-018: a paragraph is p around its inline content', 'a *b*', '<p>a <strong>b</strong></p>'],
     ['C2-H-019: a paragraph that holds only comments renders nothing', '{% only %}\n\na', '<p>a</p>'],
+    ['C2-H-019, C2-B-140: a paragraph of breaks alone holds no comment and is written with p', '\\', '<p><br>\n</p>'],
+    ['C2-H-019: the paragraph of a note that is a break alone keeps it before the backlink', 'a^[\\\n]', '<p>a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a></p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p><br>\n<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
     ['C2-H-020: a block image is written without its p; one whose reference does not resolve is text and keeps it', '![a](b)\n\n![c][nope]\n\n![d](e) f', '<img src="b" alt="a">\n<p>![c][nope]</p>\n<p><img src="e" alt="d"> f</p>'],
     ['C2-H-022: every heading has an id, authored or generated', '# One two\n\n{#mine}\n## Three', '<h1 id="One-two">One two</h1>\n<h2 id="mine">Three</h2>', { sections: false }],
     ['C2-H-022, C2-H-131: with headingIds off no id is generated, and an authored id is still written', '# One\n\n{#mine}\n# Two', '<h1>One</h1>\n<h1 id="mine">Two</h1>', { sections: false, headingIds: 'off' }],
@@ -199,6 +203,9 @@ describe('comments, frontmatter and definitions', () => {
     ['C2-H-069: a comment renders nothing in every form, and the whitespace around a braced comment stays', 'a {% c %} b %% d\n\n%%%\nx\n%%%\n\n> %% e', '<p>a  b</p>\n<blockquote>\n\n</blockquote>'],
     ['C2-H-070, C2-H-071: frontmatter and the definitions render nothing', '---\na: b\n---\n\n[r]: /u\n*[A]: b\n[^unused]: c\n\nx', '<p>x</p>'],
     ['C2-H-133: an include directive renders as a paragraph that holds the directive as text', '{{  a.crv #s @code:js @lines:1-2 }}', '<p>{{ a.crv #s @lines:1-2 @code:js }}</p>'],
+    ['C2-H-133, C2-H-034: an unexpanded include that is the first block of a tight item is written bare', '- {{ a.crv }}\n- b', '<ul>\n  <li>{{ a.crv }}</li>\n  <li>b</li>\n</ul>'],
+    ['C2-H-133, C2-H-007: in a loose item it stands on the line of li, as a paragraph does', '- {{ a.crv }}\n\n- b', '<ul>\n  <li><p>{{ a.crv }}</p></li>\n  <li><p>b</p></li>\n</ul>'],
+    ['C2-H-133, C2-H-040: the one block of a description is written bare', ':: t\n: {{ a.crv }}', '<dl>\n  <dt>t</dt>\n  <dd>{{ a.crv }}</dd>\n</dl>'],
   ])
 
   it('C2-H-133: the unexpanded include is reported', () => {
@@ -365,13 +372,14 @@ describe('roundtrip carriers', () => {
     ['C2-H-113, C2-H-119: a spelling the sidecar holds has no carrier', '::: >\nq\n:::\n\n. a\n\n***', '<blockquote><p>q</p></blockquote>\n<ol data-carve-tight>\n  <li>a</li>\n</ol>\n<hr>', { roundtrip: true }],
     ['C2-H-114: the carriers of a raw span, of a code fence label, of a line block and of a div with no other attribute', 'a `<b>`{=html}\n\n```js [L]\n```\n\n::: |\nx\n:::\n\n:::\n:::\n\n{.c}\n:::\n:::', '<p>a <span data-carve-raw="html">&lt;b&gt;</span></p>\n<pre data-carve-label="L"><code class="language-js"></code></pre>\n<div data-carve-line-block class="line-block">\n  <p>x</p>\n</div>\n<div data-carve-div>\n\n</div>\n<div class="c">\n\n</div>', { roundtrip: true }],
     ['C2-H-115, C2-H-116, C2-H-120: with roundtrip on an authored attribute with a reserved name is dropped; another data-carve- name is ordinary', '[t]{data-carve-ref=x data-carve-other=y data-marker=z}', '<p><span data-carve-other="y">t</span></p>', { roundtrip: true }],
-    ['C2-H-116: with roundtrip off the attribute passes through', '[t]{data-carve-ref=x}', '<p><span data-carve-ref="x">t</span></p>'],
+    ['C2-H-116: with roundtrip off the attribute is dropped too', '[t]{data-carve-ref=x data-carve-raw=html}', '<p><span>t</span></p>'],
     ['C2-H-117: a presence carrier is the bare attribute name', '<https://x.y>', '<p><a href="https://x.y" data-carve-autolink>https://x.y</a></p>', { roundtrip: true }],
     ['C2-H-118: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
   ])
 
   it('C2-H-116: the dropped attribute is reported as a render loss', () => {
     expect(lossCodes('[t]{data-carve-ref=x}', { roundtrip: true })).toEqual(['carrier-attribute-dropped'])
+    expect(lossCodes('[t]{data-carve-ref=x}')).toEqual(['carrier-attribute-dropped'])
   })
 
   it('C2-H-115: the 18 reserved names include the new data-carve-ref-shortcut and the reserved data-carve-src', () => {

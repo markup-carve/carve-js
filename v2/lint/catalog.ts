@@ -468,9 +468,9 @@ export const CATALOG = {
   "list-marker-below-content-column": { severity: "warning", default: "on", messages: [
     [
       "This list marker starts at column ${column}, between the columns of ",
-      "two open lists, so it joins the deeper list. Start it at column ${co",
-      "ntentColumn} to make that explicit, or at column ${baseColumn} to pu",
-      "t it in the outer list.",
+      "two open lists, so it is read at the column of the deeper list. Star",
+      "t it at column ${contentColumn} to make that explicit, or at column ",
+      "${baseColumn} to put it in the outer list.",
     ].join(''),
   ] },
   "list-marker-without-blank-line": { severity: "warning", default: "on", messages: [
@@ -512,8 +512,9 @@ export const CATALOG = {
   ] },
   "ordered-marker-right-aligned": { severity: "warning", default: "on", messages: [
     [
-      "This marker sits left of its list and is text of the item above. Ord",
-      "ered markers are left-aligned in 0.2.",
+      "This marker sits left of its list, so it is a sibling item that move",
+      "s the list's column. Write the ordered markers left-aligned, as the ",
+      "formatter does.",
     ].join(''),
   ] },
   "platform-issue-reference": { severity: "warning", default: undefined, messages: [

@@ -25,8 +25,8 @@ describe('the brace block', () => {
     expect(writeWithDiagnostics(paragraphWith({ classes: [''] })).source).toBe('{class=""}\na\n')
   })
 
-  it('C2-I-030: a key that starts with a digit is no key and is not written', () => {
-    expect(writeWithDiagnostics(paragraphWith({ keyValues: [['1a', 'x'], ['b', 'y']] })).source).toBe('{b=y}\na\n')
+  it('C2-A-035, C2-I-030: a key that starts with a digit is no key, and the reader refuses the tree before it is written', () => {
+    expect(() => writeWithDiagnostics(paragraphWith({ keyValues: [['1a', 'x'], ['b', 'y']] }))).toThrow('"1a" is no key')
   })
 
   it('C2-W-050, C2-I-033: a quoted value escapes a quote, and a backslash only where it would be read as an escape', () => {

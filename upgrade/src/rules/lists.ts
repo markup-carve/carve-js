@@ -309,7 +309,7 @@ function listAbove(ctx: Context, visit: Visit): Node01 | null {
 
 /**
  * U-023: a marker right of the marker above it and short of that item's content column
- * nests in 0.2 (C2-B-056), so it moves to the column of the list. A marker at or left of the
+ * nests in 0.2 (C2-B-015), so it moves to the column of the list. A marker at or left of the
  * marker above continues the list (C2-B-030, C2-B-054) and stays.
  */
 function markerColumns(ctx: Context, visit: Visit): void {
@@ -385,7 +385,7 @@ function longNumber(ctx: Context, list: Node01): void {
 
 /**
  * The spaces U-026 puts before each line of the comment block `visit`: a `%%%` block left of its
- * item's content column, between two items, ends the list in 0.2 (C2-B-142).
+ * item's content column, between two items, ends the list in 0.2 (C2-B-053).
  */
 export function commentShift(ctx: Context, visit: Visit): number {
   const item = visit.parent

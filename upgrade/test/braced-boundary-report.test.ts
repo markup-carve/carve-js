@@ -17,7 +17,7 @@ describe('C2-I-060, C2-I-062, C2-I-119 braced boundary reports', () => {
     })
   }
 
-  it('C2-I-044 leaves the failed-opening-brace engine defect visible', () => {
+  it('C2-I-119 leaves the failed-opening-brace engine defect visible', () => {
     const result = upgrade('{#foo a\n')
     expect(result.records.map((record) => record.entry)).not.toContain('U-201')
   })

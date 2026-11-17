@@ -58,10 +58,10 @@ describe('AST 2.0 reader checks', () => {
   })
 
   it('C2-A-058, C2-A-092, C2-A-093, C2-A-102: marker, table and math values obey their shapes', () => {
-    const list = documentOf({ type: 'list', marker: { kind: 'ordered', start: 1 }, spacing: 'tight', children: [] })
+    const list = documentOf({ type: 'list', marker: { kind: 'ordered', style: '1', delimiter: '.', start: 1 }, spacing: 'tight', children: [] })
     expect(refusal(list)).toContain('a start of 1 is omitted')
-    expect(refusal(documentOf(paragraph({ type: 'math', display: true, value: 'x', number: 1 })))).toContain('stand together')
-    const cell = (fields: Record<string, unknown>) => ({ type: 'table_cell', header: false, children: [], ...fields })
+    expect(refusal(documentOf(paragraph({ type: 'math', display: true, value: 'x', number: 1 })))).toContain('a number without its prefix')
+    const cell = (fields: Record<string, unknown>) => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [] }], ...fields })
     const table = (cells: unknown[]) => documentOf({ type: 'table', columns: [], children: [{ type: 'table_body',
       children: [{ type: 'table_row', children: cells }] }] } as never)
     expect(refusal(table([cell({ colspan: 0 })]))).toContain('not a count of at least 1')
@@ -70,10 +70,10 @@ describe('AST 2.0 reader checks', () => {
   })
 
   it('C2-A-098, C2-A-131, C2-A-188: punctuation kinds and header ids are checked', () => {
-    expect(refusal(documentOf(paragraph({ type: 'smart_punctuation', kind: 'invented', source: 'x' } as never))))
+    expect(refusal(documentOf(paragraph({ type: 'smart_punctuation', kind: 'invented', source: 'x', glyph: 'x' } as never))))
       .toContain('unknown value')
     const cell = (header: boolean, id?: string, headerIds?: string[]) => ({ type: 'table_cell', header,
-      attrs: id === undefined ? undefined : { id }, headerIds, children: [] })
+      attrs: id === undefined ? undefined : { id }, headerIds, children: [{ type: 'cell_paragraph', children: [] }] })
     const table = (cells: unknown[]) => documentOf({ type: 'table', columns: [], children: [{ type: 'table_body',
       children: [{ type: 'table_row', children: cells }] }] } as never)
     expect(refusal(table([cell(false, 'h'), cell(false, undefined, ['h'])]))).toContain('no header cell has the id')

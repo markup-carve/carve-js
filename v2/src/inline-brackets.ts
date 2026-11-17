@@ -268,7 +268,7 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   const formed = end !== NONE || (state.definitions !== null && closeShortcut(state, open, pos) !== NONE)
   leaveBracket(state, formed)
   if (end !== NONE) return end
-  // C2-I-065: the pair forms no construct. It is text and bounds nothing.
+  // C2-I-072: the pair forms no construct. It is text and bounds nothing.
   if (!formed) state.tokens[open] = TOKEN_TEXT
   return pos + 1
 }

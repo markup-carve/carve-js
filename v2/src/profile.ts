@@ -5,7 +5,7 @@ import {
   type Block, type BlockQuoteNode, type CaptionNode, captionOf, DEFINITION_TYPES, type DocumentNode, type ExtensionDeclaration,
   forEachSlot, type HeadingNode, type Inline,
   isBlockParent, isInlineParent, type ListItemNode, type Node, type NodeHandlers, type NodeOfType, type ParagraphNode, type TableCellNode,
-  type TableNode, type TableRowNode, type TextNode, titleOf,
+  type TableNode, type TableRowNode, titleOf,
 } from './ast.ts'
 import { plainText } from './ast-text.ts'
 import { NODE_TABLE } from './ast-validate.ts'
@@ -226,7 +226,9 @@ function inlineForm(node: Inline): string {
   return spelledText(node.type, node) ?? plainText([node])
 }
 
-function degradedInline(node: Inline): TextNode[] {
+function degradedInline(node: Inline): Inline[] {
+  // C2-H-165, C2-H-019: an editorial comment gives no text and still counts as a comment of its paragraph.
+  if (node.type === 'critic_comment') return [{ type: 'comment', form: 'braced', value: node.value }]
   const text = inlineForm(node)
   return text === '' ? [] : [{ type: 'text', value: text }]
 }

@@ -242,6 +242,6 @@ export function pairDelimiters(state: InlineState): void {
     else if (kind === TOKEN_OPEN) enterConstruct(state, at)
     else if (kind === TOKEN_CLOSE) leaveConstruct(state, at)
   }
-  // C2-I-054, C2-I-060: an opener with no closer in its content is text.
+  // C2-I-119, C2-I-060: an opener with no closer in its content is text.
   removeAbove(state, NONE)
 }

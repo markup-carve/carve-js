@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-I-044 C2-I-047: nested bracket text in an inline note', () => {
+describe('C2-I-119 C2-I-047: nested bracket text in an inline note', () => {
   const source = '^[/[^[g]/] b/]\n'
 
   it('escapes the inner bracket run inside a braced emphasis span', () => {

@@ -198,7 +198,7 @@ export function measuredReport(input: string, expected: string, actual: string, 
   if (boundary !== null) return boundary
   if (unresolvedEngineShape(input, expected, actual)) return null
   if (lineCommentInContainer(input)) return recordOf('U-146', line,
-    'C2-B-133 and C2-I-044 end the percent line comment at its container boundary')
+    'C2-B-133 and C2-I-119 end the percent line comment at its container boundary')
   if (input.includes('{{') && input.includes('}}')) return recordOf('U-011', line,
     'C2-B-201 and C2-B-206 read the include-looking directive as an include')
   if (input.includes('{table') && input.includes('```csv')) return recordOf('U-061', line,

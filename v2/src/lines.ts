@@ -35,7 +35,7 @@ export function isQuoteMark(src: string, pos: number, end: number): boolean {
   return pos + 1 === end || src.charCodeAt(pos + 1) === SPACE
 }
 
-/** Offset after the `spaces` spaces of a marker that ends at `markerEnd`, or -1 (C2-B-006, C2-B-033). */
+/** Offset after the `spaces` spaces of a marker that ends at `markerEnd`, or -1 (C2-B-033). */
 function afterMarkerSpace(src: string, markerEnd: number, end: number, spaces: number): number {
   const contentStart = markerEnd + spaces
   if (contentStart > end || runLength(src, markerEnd, contentStart, SPACE) !== spaces) return -1
@@ -309,7 +309,7 @@ export function divRunLength(src: string, pos: number, end: number): number {
   let after = pos + length
   while (after < end && src.charCodeAt(after) === SPACE) after++
   if (after === end) return length
-  // C2-B-006, C2-B-119: only spaces stand before a name, a sigil, a title or a label; a tab leaves the run bare or text.
+  // C2-B-033, C2-B-119: only spaces stand before a name, a sigil, a title or a label; a tab leaves the run bare or text.
   if (src.charCodeAt(after) !== TAB) return after > pos + length ? length : 0
   return skipSpaces(src, after, end) === end ? length : 0
 }
@@ -622,7 +622,7 @@ export function rowClosingPipe(src: string, pos: number, end: number): number {
   return last >= 0 && rowTailValid(src, last, end) ? last : -1
 }
 
-/** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-177). */
+/** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-170). */
 export function continuationClosingPipe(src: string, pos: number, end: number): number {
   if (src.charCodeAt(pos) !== PLUS) return -1
   const last = lastPipe(src, pos + 1, end)

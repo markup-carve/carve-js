@@ -179,13 +179,28 @@ describe('Carve 0.2 importers', () => {
     ['<ol start="2"><li>x</li></ol>', 2, '{start=2}\n. x\n'],
     ['<ol start="1e3"><li>x</li></ol>', undefined, '. x\n'],
     ['<ol start="0x10"><li>x</li></ol>', 0, '{start=0}\n. x\n'],
-    ['<ol start=" -2junk"><li>x</li></ol>', -2, '{start=-2}\n. x\n'],
+    ['<ol start=" -2junk"><li>x</li></ol>', undefined, '. x\n'],
   ] as const)('C2-H-030 distinguishes an HTML start attribute from zero: %s', (input, expected, source) => {
     const result = importDocument(input, { from: 'html' })
     const first = result.document.children[0]
     expect(first?.type).toBe('list')
     if (first?.type === 'list') expect(first.marker.kind === 'ordered' ? first.marker.start : undefined).toBe(expected)
     expect(result.source).toBe(source)
+  })
+
+  it('C2-A-098 gives a Djot smart punctuation node the glyph and the source of its kind', () => {
+    const inlines = importDocument('a -- b ...', { from: 'djot' }).document.children[0]
+    const smart = inlines?.type === 'paragraph' ? inlines.children.filter(node => node.type === 'smart_punctuation') : []
+    expect(smart.map(node => [node.kind, node.glyph, node.source])).toEqual([
+      ['en_dash', '\u2013', '--'], ['ellipsis', '\u2026', '...'],
+    ])
+  })
+
+  it.each(['1234567890', '-3'])('C2-M-031 drops an ordered start outside 0 to 999999999: %s', (start) => {
+    const result = importDocument(`<ol start="${start}"><li>a</li></ol>`, { from: 'html' })
+    const first = result.document.children[0]
+    expect(first?.type === 'list' && first.marker.kind === 'ordered' ? first.marker.start : 'none').toBeUndefined()
+    expect(result.diagnostics.map(entry => entry.code)).toEqual(['import-attribute-dropped'])
   })
 
   it('C2-A-050 keeps numeric spans and heading levels without truthiness conversion', () => {

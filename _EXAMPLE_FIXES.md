@@ -1,6 +1,6 @@
 # Example fixes for the specification
 
-**Status at `e1f3c5a2` (freeze candidate 2, revision 1):** the corpus corrects F1 to F6, every hold is gone, and no example of the pinned corpus departs from its clause. F7 is prose under examples, which the runner does not check.
+**Status at `011cb22e` (freeze candidate 4):** one hold, F8 (`includes-38`, field `tree`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
@@ -78,3 +78,18 @@ Clause-correct: `[]`. Tree and source of the example are right.
 ## F7. Prose under the import examples
 
 The sentences under Examples 4, 7, 13, 30, 31, 33, 35, 39, 41 and 42 state what the importer did before this session ("The importer ..."). The importer now gives the stated tree and source of each, so those sentences can go and the examples can be marked verified at the carve-js commit of this session.
+
+## F8. `includes.md` Example 38: `expected.tree`
+
+Input, with the file `a.txt` holding `code`:
+
+```carve
+{{ a.txt @code }}
+^ Listing #: x^[note] [s]{#q}
+```
+
+Stated in the corpus: the copy of the caption in the child `code_block` holds the `inline_footnote` without `number`, while its `caption_number` carries `n: 1`.
+
+C2-N-074 decides it: "the copy in its child is numbered, resolved and written", and C2-A-100 makes `number` the resolution result of an `inline_footnote`. The HTML of the same example numbers the note (`fnref1`, `fn1`), and every other example tree of the corpus carries the number of a resolved note.
+
+Clause-correct: the `inline_footnote` of the copy carries `"number": 1`; the caption of the include itself stays without a number, as stated. The engine gives that tree, and the HTML of the example passes.

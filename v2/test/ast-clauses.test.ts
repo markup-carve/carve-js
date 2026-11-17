@@ -549,11 +549,14 @@ describe('inline nodes', () => {
 
 describe('citations, extension nodes and resources', () => {
   it('C2-A-118, C2-A-120: a citation stands only in a group, and mode belongs to the item', () => {
-    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', mode: 'normal' }
+    const citation: CitationNode = { type: 'citation', key: 'a', namespace: 'citation', mode: 'author-in-text' }
     expect(refusal(documentOf(paragraph(citation as unknown as Inline)))).toBe('/children/0/children/0: citation does not stand here')
     expect(refusal(documentOf(paragraph({ type: 'citation_group', raw: '[@a]', children: [citation] })))).toBeNull()
     const group = { type: 'citation_group', raw: '[@a]', extra: 'paren', children: [citation] } as unknown as Inline
     expect(refusal(documentOf(paragraph(group)))).toBe('/children/0/children/0/extra: not a field of citation_group')
+    // C2-A-058: `normal` is the absent mode and has no second encoding.
+    const normal = { type: 'citation_group', raw: '[@a]', children: [{ ...citation, mode: 'normal' }] } satisfies Inline
+    expect(refusal(documentOf(paragraph(normal)))).toBe('/children/0/children/0/children/0/mode: the default mode is never written')
   })
 
   it('C2-A-121: a citation definition carries its key and inline children', () => {
@@ -582,10 +585,14 @@ describe('citations, extension nodes and resources', () => {
     for (let level = 0; level < 70; level++) metadata = { a: metadata }
     expect(refusal(documentOf({ ...paragraph(), metadata }))).toBe('/children/0/metadata/a: not a field of metadata')
     const references = Array.from({ length: 5000 }, (_unused, index) => `r${index}`)
-    const extension: InlineExtensionNode = { type: 'inline_extension', name: 'x', children: [], resourceIds: references }
-    expect(refusal(documentOf(paragraph(extension)))).toBe('/children/0/children/0: more than 4096 resource references')
+    const extension: InlineExtensionNode = {
+      type: 'inline_extension', name: 'org.example.x', version: '1', children: [], fallback: [text('f')], resourceIds: references,
+    }
+    const declared = { ...documentOf(paragraph(extension)), extensions: [{ name: 'org.example.x', version: '1', required: false, slots: [] }] }
+    expect(refusal(declared)).toBe('/children/0/children/0: more than 4096 resource references')
     let nested: Inline = text('x')
     for (let level = 0; level < 40; level++) nested = { type: 'inline_extension', name: 'x', children: [], fallback: [nested] }
+    // C2-A-124 refuses a fallback on an unqualified node, so the bound of C2-A-132 is met first only at depth.
     expect(refusal(documentOf(paragraph(nested)))).toMatch(/fallbacks are nested deeper than 32 unqualified inline extension nodes$/)
   })
 

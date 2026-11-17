@@ -135,7 +135,7 @@
   },
   {
     "cause": "C05",
-    "clause": "C2-I-037",
+    "clause": "C2-I-036",
     "path": "resources/examples/edge-cases/0879-a-line-comment-hides-a-substitution-arrow.md",
     "line": 72,
     "input": "x:foo[\"q\"]\n",
@@ -146,7 +146,7 @@
   },
   {
     "cause": "C05",
-    "clause": "C2-I-037",
+    "clause": "C2-I-036",
     "path": "resources/examples/edge-cases/0605-an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter.md",
     "line": 64,
     "input": "{+a {#x+}#} b+}\n",
@@ -157,7 +157,7 @@
   },
   {
     "cause": "C05",
-    "clause": "C2-I-037",
+    "clause": "C2-I-036",
     "path": "resources/examples/edge-cases/0605-an-autolink-a-cross-reference-or-a-comment-is-atomic-to-every-outside-delimiter.md",
     "line": 76,
     "input": "{-a {#x-}#} b-}\n",
@@ -506,7 +506,7 @@
   },
   {
     "cause": "C19",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0649-a-first-block-plus-refuses-a-follower-at-an-intervening-column.md",
     "line": 10,
     "input": "- > +\n b\n",
@@ -517,7 +517,7 @@
   },
   {
     "cause": "C19",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0632-a-continuation-marker-uses-its-container-column.md",
     "line": 680,
     "input": "- > +\n> q\n",
@@ -528,7 +528,7 @@
   },
   {
     "cause": "C19",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0634-a-refused-continuation-plus-remains-text.md",
     "line": 707,
     "input": "- > +\n# h\n",
@@ -749,7 +749,7 @@
   },
   {
     "cause": "C26",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0148-colon-fence-as-a-block-opener-in-a-list-item.md",
     "line": 8,
     "input": "- one\n ::: note\n b\n :::\n",
@@ -760,7 +760,7 @@
   },
   {
     "cause": "C26",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "tests/corpus/148-colon-fence-as-a-block-opener-in-a-list-item.crv",
     "line": 1,
     "input": "- one\n ::: note\n b\n :::\n",
@@ -1062,7 +1062,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0656-the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth.md",
     "line": 10,
     "input": "- - > +\n    b\n",
@@ -1073,7 +1073,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0736-model-syntax-boundaries-and-ownership.md",
     "line": 87,
     "input": "- {{ c@code }}\n",
@@ -1084,7 +1084,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0656-the-column-of-the-quote-that-owns-a-first-block-plus-stays-eligible-at-every-depth.md",
     "line": 33,
     "input": "- - - > +\n      b\n",
@@ -1260,7 +1260,7 @@
   },
   {
     "cause": "C37",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
     "line": 54,
     "input": ":foo[%% c] d\n",
@@ -1271,7 +1271,7 @@
   },
   {
     "cause": "C37",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 123,
     "input": "-{#k} [x] {#h}\n # h\n",
@@ -1283,7 +1283,7 @@
   },
   {
     "cause": "C37",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0415-a-floating-attribute-does-not-widen-a-list-item-s-content-column.md",
     "line": 45,
     "input": "-{#k} [x] {#h}\n  # h\n",
@@ -1819,7 +1819,7 @@
   },
   {
     "cause": "C64",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-2.crv",
     "line": 1,
     "input": "^[a %% c] d\n",
@@ -1830,7 +1830,7 @@
   },
   {
     "cause": "C64",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-4.crv",
     "line": 1,
     "input": ":foo[a %% c] d\n",
@@ -1841,7 +1841,7 @@
   },
   {
     "cause": "C64",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-5.crv",
     "line": 1,
     "input": "[a %% c] d\n",
@@ -2122,7 +2122,7 @@
   },
   {
     "cause": "C77",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
     "line": 8,
     "input": "[{^a]^}\n",
@@ -2133,7 +2133,7 @@
   },
   {
     "cause": "C77",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
     "line": 20,
     "input": "[{,a],}\n",
@@ -2144,7 +2144,7 @@
   },
   {
     "cause": "C77",
-    "clause": "C2-I-044",
+    "clause": "C2-I-119",
     "path": "resources/examples/edge-cases/0533-a-braced-span-cannot-close-beyond-its-bracket-run.md",
     "line": 56,
     "input": "[{+a]+}\n",
@@ -3258,7 +3258,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in.md",
     "line": 142,
     "input": "- x\n  - ::: d\n   y\n    :::\n",
@@ -3270,7 +3270,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "resources/examples/edge-cases/0872-every-list-item-measures-its-content-against-its-own-content-column.md",
     "line": 133,
     "input": "- a\n  * w\n  1. v\n    - u\n",
@@ -3281,7 +3281,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "tests/corpus/482-a-closer-does-not-rescue-a-marker-line-colon-opener-whose-body-folded-in-6.crv",
     "line": 1,
     "input": "- x\n  - ::: d\n   y\n    :::\n",
@@ -3293,7 +3293,7 @@
   },
   {
     "cause": "C33",
-    "clause": "C2-B-056",
+    "clause": "C2-B-015",
     "path": "tests/corpus/872-every-list-item-measures-its-content-against-its-own-content-column-6.crv",
     "line": 1,
     "input": "- a\n  * w\n  1. v\n    - u\n",
@@ -3547,7 +3547,7 @@
   },
   {
     "cause": "C98",
-    "clause": "C2-I-087 C2-I-044 C2-B-091",
+    "clause": "C2-I-087 C2-I-119 C2-B-091",
     "path": "resources/examples/edge-cases/0822-an-id-dropped-with-an-unresolved-reference-reserves-nothing.md",
     "line": 12,
     "input": "x[^n]{#i}\n\n## {#i}\n",
@@ -3558,7 +3558,7 @@
   },
   {
     "cause": "C98",
-    "clause": "C2-I-087 C2-I-044 C2-B-091",
+    "clause": "C2-I-087 C2-I-119 C2-B-091",
     "path": "tests/corpus/822-an-id-dropped-with-an-unresolved-reference-reserves-nothing.crv",
     "line": 1,
     "input": "x[^n]{#i}\n\n## {#i}\n",

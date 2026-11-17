@@ -123,18 +123,18 @@ function divLine(leaf: Leaf, at: number, end: number): number {
   let after = end
   while (code(leaf, after) === SPACE) after++
   if (isLineEnd(code(leaf, after))) return at
-  // C2-B-006: a tab before further text leaves the line text.
+  // C2-B-033: a tab before further text leaves the line text.
   if (code(leaf, after) !== TAB) return after > end ? at : NO_ESCAPE
   while (isBlank(code(leaf, after))) after++
   return isLineEnd(code(leaf, after)) ? at : NO_ESCAPE
 }
 
-/** C2-B-014, C2-B-006: a div or a comment fence opens where a blank or the end of the line follows its run. */
+/** C2-B-014, C2-B-033: a div or a comment fence opens where a blank or the end of the line follows its run. */
 function fence(leaf: Leaf, at: number, end: number): number {
   return code(leaf, end) === SPACE || isLineEnd(code(leaf, end)) ? at : UNDECIDED
 }
 
-/** C2-B-031, C2-B-006: a quote mark before a space or the end of the line. */
+/** C2-B-031: a quote mark before a space or the end of the line. */
 function quoteMark(leaf: Leaf, at: number): number {
   const next = code(leaf, at + 1)
   if (next === SPACE || isLineEnd(next)) return at
@@ -206,7 +206,7 @@ function colon(leaf: Leaf, at: number, place: LeafPlace): number {
 
 /**
  * C2-B-016: a description mark or a term mark opens on every line inside a description list, except that a term mark
- * directly after paragraph text inside an item is a lazy line (C2-B-023).
+ * directly after paragraph text inside an item is a lazy line (C2-B-024).
  */
 function laterColon(leaf: Leaf, at: number, place: LeafPlace): number {
   return place.inItem && runEnd(leaf, at, 58) - at === 2 ? NO_ESCAPE : colon(leaf, at, place)
@@ -382,7 +382,7 @@ function insideRawValue(leaf: Leaf, at: number): boolean {
 /** What a line start decides before its first character is read as an opener, or null. */
 function lineStartRule(leaf: Leaf, at: number, first: boolean): number | null {
   const owner = leaf.kinds[at] === ATOM && leaf.owners[at - 1] !== leaf.owners[at] ? leaf.owners[at] : undefined
-  // C2-B-138, C2-B-139: a comment of the tree at a line start stays a comment of the paragraph, except that a
+  // C2-B-138, C2-B-137: a comment of the tree at a line start stays a comment of the paragraph, except that a
   // line comment would make the first line a comment-only line.
   if (owner?.type === 'comment') return first && owner.form === 'line' ? UNDECIDED : NO_ESCAPE
   const value = code(leaf, at)

@@ -484,9 +484,20 @@ function listMarker(node: Html.Element, context: HtmlContext): ListNode['marker'
   }
   if (carried !== undefined) ignoredCarrier(context, node, 'data-marker', 'an ordered list has no bullet')
   const type = attr(node, 'type')
-  const start = htmlInteger(attr(node, 'start'))
+  const start = listStart(node, context)
   return { kind: 'ordered', style: type === 'a' || type === 'A' || type === 'i' || type === 'I' ? type : '1',
     delimiter: attr(node, 'data-delim') === ')' ? ')' : '.', ...(start !== undefined && start !== 1 ? { start } : {}) }
+}
+
+// C2-M-031, C2-B-219: a start lies between 0 and 999999999.
+const MAX_START = 999_999_999
+
+/** C2-M-031: the `start` of `<ol>` as an HTML integer; one outside the bound is dropped and reported. */
+function listStart(node: Html.Element, context: HtmlContext): number | undefined {
+  const start = htmlInteger(attr(node, 'start'))
+  if (start === undefined || (start >= 0 && start <= MAX_START)) return start
+  report(context, node, 'import-attribute-dropped', `Attribute start of ol dropped: ${start} lies outside 0 to 999999999`)
+  return undefined
 }
 
 /** C2-H-034: a loose list writes the first paragraph of an item as `<p>`, which a tight list leaves bare. */

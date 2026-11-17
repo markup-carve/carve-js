@@ -35,7 +35,7 @@ function bracketCandidates(output: string): string[] {
   return found
 }
 
-/** C2-I-044, C2-I-047: spell the nested bracket run as literal emphasis content. */
+/** C2-I-119, C2-I-047: spell the nested bracket run as literal emphasis content. */
 export function rescueNestedNote(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   const before = '^[{+[^[g]+}] b+}]'
   const after = '^[{+\\[\\^[g]\\+\\}\\] b+}]'

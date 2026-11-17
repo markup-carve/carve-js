@@ -44,13 +44,14 @@ export const DROPPED_PREFIXES: readonly string[] = ["on"]
 /** C2-H-161: the attributes that hold a list of URLs, and whether a comma separates its entries besides whitespace. */
 export const URL_LIST_ATTRIBUTES: ReadonlyMap<string, boolean> = new Map([
   ["attributionsrc", false],
+  ["background", false],
   ["imagesrcset", true],
   ["ping", false],
   ["srcset", true],
 ])
 
 /** C2-H-162: the texts that blank a `style` value. */
-export const STYLE_PATTERNS: readonly string[] = ["-moz-binding","@import","behavior:","expression(","url("]
+export const STYLE_PATTERNS: readonly string[] = ["-moz-binding","@import","behavior:","expression(","image(","image-set(","src(","url("]
 
 /** C2-H-163: what a profile accepts. A list that is null does not restrict, and -1 is no bound. */
 export interface ProfileRule {

@@ -1,4 +1,4 @@
-import { SMART_GLYPHS, SMART_KIND_NAMES } from '../src/inline-tables.ts'
+import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../src/inline-tables.ts'
 import { fact, folded, integer, list, object, string, type Fields, type MigrationState } from './shared.ts'
 import { migrateCell, migrateRow, migrateTable } from './table.ts'
 
@@ -267,7 +267,11 @@ function frontmatter(node: Fields): void {
 function punctuation(node: Fields, old: Fields): void {
   node['source'] = string(old['value']) ?? ''
   const index = SMART_KIND_NAMES.findIndex((name) => name === node['kind'])
-  if (index >= 0) node['glyph'] = SMART_GLYPHS[index]
+  // C2-A-098: the glyph and the source are the ones data/smart-punctuation.json gives the kind.
+  if (index >= 0) {
+    node['glyph'] = SMART_GLYPHS[index]
+    node['source'] = SMART_SOURCES[index]
+  }
   delete node['value']
 }
 

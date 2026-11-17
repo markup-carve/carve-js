@@ -12,7 +12,7 @@
   {
     "id": "U-146",
     "input": "[ %%]",
-    "message": "C2-B-133,C2-I-044: a percent line comment inside brackets or a container ends at its boundary"
+    "message": "C2-B-133,C2-I-119: a percent line comment inside brackets or a container ends at its boundary"
   },
   {
     "id": "U-147",
@@ -27,7 +27,7 @@
   {
     "id": "U-149",
     "input": ":f[%%]",
-    "message": "C2-I-044,C2-I-090: inline sigils inside unmatched bracket text are still scanned"
+    "message": "C2-I-119,C2-I-090: inline sigils inside unmatched bracket text are still scanned"
   },
   {
     "id": "U-150",
@@ -42,7 +42,7 @@
   {
     "id": "U-152",
     "input": "||\t<|",
-    "message": "C2-B-169,C2-B-177: a table span marker after padded cell content is reinterpreted"
+    "message": "C2-B-169,C2-B-170: a table span marker after padded cell content is reinterpreted"
   },
   {
     "id": "U-153",
@@ -92,7 +92,7 @@
   {
     "id": "U-163",
     "input": "-  [ ] q",
-    "message": "C2-B-046,C2-B-047: a task box after extra marker padding is ordinary item text"
+    "message": "C2-B-046: a task box after extra marker padding is ordinary item text"
   },
   {
     "id": "U-164",

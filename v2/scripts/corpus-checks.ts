@@ -158,7 +158,8 @@ export function layoutAccepted(entry: LayoutFixture): boolean {
  */
 export function layoutMismatches(entry: LayoutFixture): Mismatch[] {
   const accepted = layoutAccepted(entry)
-  if (accepted !== (entry.refused !== true)) return [{ field: 'accepted', actual: accepted, expected: entry.refused !== true }]
+  const expected = entry.refused === undefined
+  if (accepted !== expected) return [{ field: 'accepted', actual: accepted, expected }]
   if (!accepted || !isRecord(entry.layout)) return []
   const source = entry.layout['source']
   const input = entry.input === undefined ? source : hexBytes(entry.input)

@@ -6,7 +6,9 @@
  * clause-correct result, in _EXAMPLE_FIXES.md for the specification; the field must keep failing until the
  * corpus is corrected, and every other field of the example is still checked.
  */
-export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([])
+export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
+  ['includes-38', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F8: the copy in the child carries its note number (C2-N-074, C2-A-100)' }],
+])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
 export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
@@ -26,4 +28,18 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['role-image-text', '/children/0/children'], ['role-math-inline', '/children/0/children'],
   ['include-children-without-file', '/children/0/file'], ['duplicate-attribute-key', '/children/0/attrs/keyValues'],
   ['duplicate-extension-declaration', '/extensions/1/name'], ['head-rows-field', '/children/0/children/0/headRows'],
+  ['attribute-key-not-a-key', '/children/0/attrs/keyValues/0/0'],
+  ['math-number-without-prefix', '/children/0/children/0/number'], ['math-prefix-inline', '/children/0/children/0/numberPrefix'],
+  ['table-group-order', '/children/0/children/1'], ['default-citation-mode', '/children/0/children/0/children/0/mode'],
+  ['default-autolink-text', '/children/0/children/0/text'], ['default-empty-attrs', '/children/0/attrs'],
+  ['ordered-marker-without-style', '/children/0/marker/style'],
+  ['smart-punctuation-without-glyph', '/children/0/children/0/glyph'],
+  ['smart-punctuation-other-glyph', '/children/0/children/0/glyph'], ['include-caption-without-code', '/children/0/caption'],
+  ['table-cell-empty', '/children/0/children/0/children/0/children/0/children'],
+  ['cell-paragraph-beside-block', '/children/0/children/0/children/0/children/0/children/0'],
+  ['extension-source-name-raw-fence', '/children/0/source/name'],
+  ['unqualified-inline-extension-fallback', '/children/0/children/0/fallback'],
+  ['smart-punctuation-other-source', '/children/0/children/0/source'], ['marker-start-out-of-range', '/children/0/marker/start'],
+  ['extension-undeclared', '/children/0/name'], ['extension-version-differs', '/children/0/version'],
+  ['default-empty-props', '/children/0/props'],
 ])

@@ -52,6 +52,16 @@ function codesOf(entries: string[]): number[] {
   return codes
 }
 
+/**
+ * C2-I-021: the name is a raw format name (C2-B-225), the `raw_format` ref of line-shapes.json. The
+ * `suffix_name` of inline-atoms.json lets `_` start the name, which the clause does not.
+ */
+function rawFormatShape(read: DataReader): Shape {
+  const refs = load<{ refs: (Named & { chars: string[], not_first: string[] })[] }>(read, 'line-shapes.json').refs
+  const shape = byName(refs, 'raw_format')
+  return { first: shape.chars.filter((entry) => !shape.not_first.includes(entry)), rest: shape.chars }
+}
+
 /** The character classes of the inline scan, as [constant, characters]. A class is one bit of the table. */
 function characterClasses(read: DataReader): [string, string[]][] {
   const atoms = load<{ atoms: (Named & {
@@ -64,7 +74,7 @@ function characterClasses(read: DataReader): [string, string[]][] {
   const braces = load<{ order: (Named & { marks?: string[] })[] }>(read, 'inline-braces.json').order
   const smart = load<{ quote_opens_after: Shape }>(read, 'smart-punctuation.json')
   const autolink = byName(atoms, 'autolink')
-  const raw = byName(atoms, 'raw_inline').suffix_name!
+  const raw = rawFormatShape(read)
   const extension = byName(sigils, 'inline_extension').name_shape
   const symbol = byName(sigils, 'symbol').name_shape
   const key = byName(attributes, 'key').shape
@@ -117,11 +127,17 @@ function smartLines(read: DataReader): { lines: string[], triggers: number[] } {
   }>(read, 'smart-punctuation.json')
   const replaced = smart.runs.filter((run) => run.replaced)
   const kinds = new Map<string, string>()
-  for (const row of [...replaced, ...smart.quotes, ...smart.dashes]) kinds.set(row.kind!, row.glyph!)
+  const sources = new Map<string, string>()
+  for (const row of [...replaced, ...smart.quotes, ...smart.dashes] as (Glyph & { source: string })[]) {
+    kinds.set(row.kind, row.glyph)
+    sources.set(row.kind, row.source)
+  }
   const names = [...kinds.keys()].sort()
   const lines = names.map((name, index) => `export const SMART_${name.toUpperCase()} = ${index}`)
   lines.push('', ...wrapJson('export const SMART_KIND_NAMES = ', names, ' as const'))
   lines.push(...wrapJson('export const SMART_GLYPHS: readonly string[] = ', names.map((name) => kinds.get(name))))
+  lines.push('/** C2-A-098: the source of each kind, as SMART_KIND_NAMES orders them. */')
+  lines.push(...wrapJson('export const SMART_SOURCES: readonly string[] = ', names.map((name) => sources.get(name))))
   // The runs matched in text, the longest first (C2-I-115). The braced en dash is an atom of the scan.
   const runs = replaced
     .filter((run) => !run.source.startsWith('{'))

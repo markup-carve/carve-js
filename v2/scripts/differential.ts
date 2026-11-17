@@ -14,7 +14,7 @@ const EXPLANATIONS = [
   'C2-B-062: a blank line inside an item does not make its list loose',
   'C2-B-052: three blank lines end a list',
   'C2-B-014: a fence line interrupts a paragraph',
-  'C2-B-015, C2-B-056: a marker past the item\'s marker opens a nested list without a blank line',
+  'C2-B-015: a marker past the item\'s marker opens a nested list without a blank line',
   'C2-B-025: an item that joined its list from the left owns lines from its own marker column',
   'C2-B-012: a line that is no interrupter stays a lazy line, also without the container\'s prefix',
 ]

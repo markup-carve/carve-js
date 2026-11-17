@@ -2,6 +2,34 @@
 
 Ranked by the cost of changing the contract after a freeze. The `carve` checkout was read only.
 
+## Freeze candidate 4 session (spec `011cb22e`)
+
+Cases found while following freeze candidate 4. The engine choice is named in each.
+
+### G-E1. `data/inline-atoms.json` lets `_` start a raw format name
+
+C2-I-021: "The name is a raw format name (C2-B-225)." C2-B-225: "A raw format name starts with an ASCII letter", and `raw_format` in `data/line-shapes.json` has `not_first: ["-", "0-9", "_"]`. Inline Example 123 says `` `x`{=_a} `` is code and the text `{=_a}`. But the `suffix_name` of `raw_inline` in `data/inline-atoms.json` still has `"first": ["A-Z", "_", "a-z"]`.
+
+The engine follows the clauses: the inline scan takes the first and the further characters from `raw_format` of `data/line-shapes.json` (`scripts/generate-inline.ts`). The data row should drop `_` from `first`.
+
+### G-E2. A span mark cell has no children, and C2-A-091 refuses a cell with none
+
+C2-A-091: "A reader refuses a cell with no children". C2-A-092: "a valid mark cell stays empty", and blocks Examples 208, 251 to 253 and writer Example 7 hold mark cells with `"children": []`. Read literally, C2-A-091 refuses every parsed table with a span.
+
+The engine reads the refusal as one of a cell without `span`: an empty ordinary cell is one empty `cell_paragraph`, a mark cell has no children. C2-A-091 should say "a cell without `span` that has no children".
+
+### G-E3. The writer case of C2-W-044 for a start of more than nine digits cannot occur
+
+C2-W-044: "for a supplied tree the writer writes the list from 1 and reports `field-unspellable`". Freeze candidate 4 bounds `marker.start` to 0 to 999999999 in the schema (refused tree `marker-start-out-of-range`), so the reader refuses that tree before a writer sees it. The engine refuses it; the writer sentence of C2-W-044 can go, or say that only a writer that skips the reader checks meets it.
+
+### G-E4. The fallback bound of C2-A-132 counts nodes that C2-A-124 refuses
+
+C2-A-132 bounds "fallback nesting to 32 unqualified inline extension nodes". C2-A-124 now refuses every field but `name`, `children` and the common fields on an unqualified inline extension, `fallback` among them, and a qualified fallback holds no extension node (C2-A-126). So no valid tree nests a fallback at all, and the bound only decides which refusal message a deep tree gets. The engine keeps the bound; the clause can drop it.
+
+### G-E5. Contract entry U-184 no longer holds after C2-H-133
+
+`data/upgrade-map.json` U-184: `- {{ e }}` becomes `- \{{ e }}`, with `meaning02` `<li>` and `<p>{{ e }}</p>` on its own lines. C2-H-133 now writes the unexpanded include of a tight item bare (html Example 64), so 0.2 renders `<li>{{ e }}</li>` as 0.1 does, and the upgrade tool, which escapes only where the HTML differs, leaves the line as it is. Either U-184 becomes `none` (the HTML agrees), or it stays an escape for the reason that a resolver would expand the 0.2 include; the row should say which. The contract test pins the tool's output (`DOES_NOT_HOLD`).
+
 ## Freeze candidate 2 session (spec `e1f3c5a2`)
 
 Cases found while following freeze candidate 2, revision 1, and the third review. The engine choice is named in each.

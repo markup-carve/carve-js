@@ -30,7 +30,7 @@ export * from './inline-kinds.ts'
 export { scanInline } from './inline-scan.ts'
 export { acquireInlineState, type InlineState, releaseInlineState } from './inline-state.ts'
 export { type Attributes, foldLabel } from './ast-attributes.ts'
-export { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
+export { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from './inline-tables.ts'
 export { type DelimitedTable, readDelimitedTable } from './delimited.ts'
 
 export {

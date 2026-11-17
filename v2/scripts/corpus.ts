@@ -77,7 +77,8 @@ export interface LayoutFixture {
   id: string
   clauses: string[]
   input?: string
-  refused?: boolean
+  /** `true` where the layout schema refuses the record, `reader` where only a reader check does (C2-L-058). */
+  refused?: boolean | 'reader'
   layout: unknown
 }
 

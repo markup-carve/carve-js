@@ -70,7 +70,7 @@ export interface TagParts {
   origin?: Node
 }
 
-// C2-H-115: the reserved names of the carriers.
+// C2-H-115: the reserved names of the carriers; C2-H-116 drops an authored one on every render.
 const CARRIERS = new Set([
   'data-marker', 'data-carve-explicit-id', 'data-carve-generated-id', 'data-carve-ref', 'data-carve-ref-collapsed',
   'data-carve-autolink', 'data-carve-footnote-label', 'data-carve-inline-footnote', 'data-carve-raw',
@@ -458,7 +458,7 @@ function addKeyValue(
 ): void {
   const name = key.toLowerCase()
   if (isBlockedName(name) || list.has(name)) return
-  if (r.settings.roundtrip && CARRIERS.has(name)) {
+  if (CARRIERS.has(name)) {
     return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
   }
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))

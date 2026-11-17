@@ -25,7 +25,7 @@ function escapedMalformed(output: string, expected: string): string | null {
   return null
 }
 
-/** C2-I-044, C2-I-090: keep a tag visible inside a failed brace attribute. */
+/** C2-I-119, C2-I-090: keep a tag visible inside a failed brace attribute. */
 export function rescueHeadingBraceTag(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('{#')) return null
   const expected = html01(input)

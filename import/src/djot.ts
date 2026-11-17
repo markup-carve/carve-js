@@ -1,5 +1,6 @@
 import { parse, type Block as DjotBlock, type Inline as DjotInline, type Doc, type Row } from '@djot/djot'
 import type { Attrs, Block, DocumentNode, Inline, TableCellNode, TableRowNode } from '../../v2/src/index.ts'
+import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../../v2/src/index.ts'
 import { assertNever, attrsOf, cell, coalesce, complete, ensureForeignDepth, finding, list, paragraph, row, safeUrl, text,
   withDestination,
   type Context, type ImportResult } from './kit.ts'
@@ -48,12 +49,16 @@ function leafInline(node: LeafInline, context: Context): Inline[] {
     case 'url': return djotUrl(node, context)
     case 'email': return [{ type: 'autolink', href: `mailto:${node.text}`, text: node.text }]
     case 'footnote_reference': return [{ type: 'footnote_ref', key: node.text, namespace: 'footnote' }]
-    case 'smart_punctuation': {
-      const kind = node.type === 'ellipses' ? 'ellipsis' : node.type
-      return [{ type: 'smart_punctuation', kind, source: node.text }]
-    }
+    case 'smart_punctuation': return [smartPunctuation(node)]
     default: return assertNever(node)
   }
+}
+
+/** C2-A-098: the glyph and the source of the kind, whatever Djot spelled. */
+function smartPunctuation(node: Extract<DjotInline, { tag: 'smart_punctuation' }>): Inline {
+  const kind = node.type === 'ellipses' ? 'ellipsis' : node.type
+  const at = SMART_KIND_NAMES.indexOf(kind)
+  return { type: 'smart_punctuation', kind, glyph: SMART_GLYPHS[at] ?? '', source: SMART_SOURCES[at] ?? node.text }
 }
 
 function djotUrl(node: Extract<DjotInline, { tag: 'url' }>, context: Context): Inline[] {

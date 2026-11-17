@@ -59,13 +59,13 @@ describe('the planned writer', () => {
 
   // Each source is written by the plan alone, with the bytes the repair writes.
   const PLANNED: readonly [string, string][] = [
-    ['C2-B-006: a marker before a tab is text', '-\ta\n'],
+    ['C2-B-033: a marker before a tab is text', '-\ta\n'],
     ['C2-B-020: a list marker inside a quote of an item does not interrupt', '- > a\n  > - b\n'],
     ['C2-B-043: a bare dot before a dot and a space is no marker', '. . . and then silence\n'],
     ['C2-B-092: an attribute-shaped later line is text', 'a\n{.x}\n'],
     ['C2-B-138: a line comment on a later line stays in the paragraph', 'a\n%% c\nb\n'],
     ['C2-B-166: a pipe line without a closing pipe is text', 'a\n| b\n'],
-    ['C2-I-065: a bracket pair with nothing glued to it is text', 'x [a] y\n'],
+    ['C2-I-072: a bracket pair with nothing glued to it is text', 'x [a] y\n'],
     ['C2-I-073: an autolink of text takes its backslash, a broken one none', '\\<a:b> and <a b>\n'],
     ['C2-I-089: an inline footnote of text takes the backslash on its bracket', 'x ^\\[a] and ^[a\n'],
     ['C2-I-096: a cross-reference of text takes its backslash, an empty one none', '\\</#a> and </#>\n'],
@@ -169,7 +169,7 @@ describe('the planned writer', () => {
   })
 
   it('C2-B-119, C2-B-196: a colon run glued to a name is text, and the plan writes it bare', () => {
-    // C2-B-006: a tab before further text leaves the line text too.
+    // C2-B-033: a tab before further text leaves the line text too.
     for (const source of ['a\n\\:::x\n', '\\:::x\n', 'a\n\\::::x\n', '- a\n  \\:::x\n', 'a\n\\:::>\n', 'a\n\\:::\tx\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source.replace('\\:', ':'))
@@ -448,7 +448,7 @@ describe('the planned writer', () => {
       expect(result.stats.repaired, source).toBe(0)
       expect(result.stats.differences, source).toEqual([])
     }
-    // C2-I-037: a node that is no host, such as a non-breaking space, takes no block, and the brace stays bare.
+    // C2-I-036: a node that is no host, such as a non-breaking space, takes no block, and the brace stays bare.
     expect(formatBy('x\\ {a}\n', 'both').stats.differences).toEqual([])
     // C2-I-045: behind a code span `{=` may be a raw marker, which the attribute grammar does not read.
     expect(formatBy('x`a`{=\\_}\n', 'both').stats.differences).toEqual([])
@@ -483,7 +483,7 @@ describe('the planned writer', () => {
     expect(formatBy('{-a -\\-} b\n', 'both').stats.repaired).toBe(1)
   })
 
-  it('C2-B-023: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
+  it('C2-B-024: a term mark on a later line of a paragraph inside an item is a lazy line, and the plan writes it bare', () => {
     for (const source of [':: a\n: b\n  :: c\n  # H\n', ':: a\n: b\n  :: c\n', ':: term\n: - a\n    :: sub\n: def\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)

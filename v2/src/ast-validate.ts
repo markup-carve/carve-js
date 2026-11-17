@@ -7,7 +7,12 @@ import { isIncludeIdentifier, isRange } from './include.ts'
 import { utf8Length } from './positions.ts'
 import { MAX_DEPTH } from './state.ts'
 import { TASK_STATUS } from './tree-tables.ts'
-import { DEPTH_CAP, SMART_KIND_NAMES } from './inline-tables.ts'
+import {
+  CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, DEPTH_CAP, SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES,
+} from './inline-tables.ts'
+import { isAttributeKey, isClassWord } from './attributes.ts'
+import { DIV_KINDS } from './tree-tables.ts'
+import { isAsciiNameCharacter } from './unicode.ts'
 import { type ExtensionDefinition, type ExtensionSlot } from './extensions/types.ts'
 
 /** A tree that a reader refuses. `path` is an RFC 6901 pointer to the node or the field. */
@@ -109,7 +114,7 @@ const RULES = new Map<string, Rule>([
   ['ruby_pair', ['none', ['base', 'annotation'], []]],
   ['section', ['blocks', [], ['level']]],
   ['small_caps', ['inlines', [], []]],
-  ['smart_punctuation', ['none', ['kind', 'source'], ['glyph']]],
+  ['smart_punctuation', ['none', ['kind', 'source', 'glyph'], []]],
   ['soft_break', ['none', [], []]],
   ['span', ['inlines', [], []]],
   ['strike', ['inlines', [], []]],
@@ -269,23 +274,33 @@ function checkOptions(value: Value, path: string): void {
 /** C2-A-032, C2-A-034: an optional id, a list of classes and a list of pairs; `id` and `class` are no keys. */
 function checkAttrs(value: Value, path: string): void {
   if (!isRecord(value)) fail(path, 'attrs is not an object')
+  // C2-A-058: absent attributes have one encoding, so an empty object or list is refused.
+  if (Object.keys(value).length === 0) fail(path, 'an empty attrs')
   for (const name of Object.keys(value)) {
     if (name !== 'id' && name !== 'classes' && name !== 'keyValues') fail(`${path}/${name}`, 'unknown field of attrs')
   }
   if (value['id'] !== undefined) requireString(value['id'], `${path}/id`)
   if (value['classes'] !== undefined) {
-    requireArray(value['classes'], `${path}/classes`).forEach((name, index) => requireString(name, `${path}/classes/${index}`))
+    const classes = requireArray(value['classes'], `${path}/classes`)
+    if (classes.length === 0) fail(`${path}/classes`, 'an empty list of classes')
+    classes.forEach((name, index) => requireString(name, `${path}/classes/${index}`))
   }
-  if (value['keyValues'] === undefined) return
-  checkPairs(value['keyValues'], `${path}/keyValues`)
+  if (value['keyValues'] !== undefined) checkKeyValues(value['keyValues'], `${path}/keyValues`)
+}
+
+function checkKeyValues(value: Value, path: string): void {
+  checkPairs(value, path)
+  const pairs = value as [string, string][]
+  if (pairs.length === 0) fail(path, 'an empty list of key-value pairs')
   const seen = new Set<string>()
-  for (const [key] of value['keyValues'] as [string, string][]) {
-    // C2-A-035: a key occurs once, compared without ASCII letter case.
-    if (seen.has(key.toLowerCase())) fail(`${path}/keyValues`, `the key ${key} occurs twice`)
-    seen.add(key.toLowerCase())
+  pairs.forEach(([key], index) => {
+    // C2-A-035: a key occurs once, compared without ASCII letter case, and is a key by C2-I-030.
+    if (!isAttributeKey(key)) fail(`${path}/${index}/0`, `${JSON.stringify(key)} is no key`)
     const name = key.toLowerCase()
-    if (name === 'id' || name === 'class') fail(`${path}/keyValues`, `the key ${key} folds into the id or the classes`)
-  }
+    if (seen.has(name)) fail(path, `the key ${key} occurs twice`)
+    seen.add(name)
+    if (name === 'id' || name === 'class') fail(path, `the key ${key} folds into the id or the classes`)
+  })
 }
 
 /** C2-A-139, C2-A-140: six integers, never null, with the start not behind the end. */
@@ -332,12 +347,19 @@ function checkMarker(value: Value, path: string): void {
   else if (value['char'] !== '-' && value['char'] !== '*') fail(`${path}/char`, 'not a bullet character')
 }
 
+// The schema bound of `marker.start`: nine digits at most (C2-B-219).
+const MAX_START = 999_999_999
+
+/** C2-A-056, C2-A-058: an ordered marker always carries its style and delimiter; a start of 1 is omitted. */
 function checkOrderedMarker(value: Fields, path: string): void {
-  if (value['style'] !== undefined && !ORDERED_STYLES.includes(value['style'] as string)) fail(`${path}/style`, 'unknown style')
+  if (!ORDERED_STYLES.includes(value['style'] as string)) fail(`${path}/style`, 'no ordered style')
   const delimiter = value['delimiter']
-  if (delimiter !== undefined && delimiter !== '.' && delimiter !== ')') fail(`${path}/delimiter`, 'unknown delimiter')
-  if (value['start'] !== undefined && !Number.isInteger(value['start'])) fail(`${path}/start`, 'not an integer')
-  if (value['start'] === 1) fail(`${path}/start`, 'a start of 1 is omitted')
+  if (delimiter !== '.' && delimiter !== ')') fail(`${path}/delimiter`, 'no ordered delimiter')
+  const start = value['start']
+  if (start === undefined) return
+  if (typeof start !== 'number' || !Number.isInteger(start)) fail(`${path}/start`, 'not an integer')
+  if (start === 1) fail(`${path}/start`, 'a start of 1 is omitted')
+  if (start < 0 || start > MAX_START) fail(`${path}/start`, 'a start outside 0 to 999999999')
 }
 
 /** C2-A-060, C2-A-061: the status follows from the mark. */
@@ -903,12 +925,78 @@ function checkRole(node: Fields, path: string): void {
 /** C2-A-105, C2-A-120 and the other rules that tie two fields of one node together. */
 function checkDependencies(node: Fields, type: string, path: string, walk: Walk): void {
   if (type === 'link' || type === 'image') checkLinkFields(node, type, path)
-  if (type === 'paragraph') checkRole(node, path)
-  if (type === 'math' && (node['number'] === undefined) !== (node['numberPrefix'] === undefined)) {
-    fail(path, 'number and numberPrefix stand together')
-  }
-  if (type === 'inline_extension' || type === 'block_extension') checkExtensionName(node, type, path, walk)
+  else if (type === 'inline_extension' || type === 'block_extension') checkExtensionName(node, type, path, walk)
+  else DEPENDENCIES.get(type)?.(node, path)
 }
+
+/** C2-A-102: a display equation may carry `numberPrefix`, and `number` only with it; inline math carries neither. */
+function checkMathNumber(node: Fields, path: string): void {
+  for (const name of ['number', 'numberPrefix']) {
+    if (node['display'] !== true && node[name] !== undefined) fail(`${path}/${name}`, 'a number on inline math')
+  }
+  if (node['number'] !== undefined && node['numberPrefix'] === undefined) fail(`${path}/number`, 'a number without its prefix')
+}
+
+/** C2-A-098: the glyph and the source are those data/smart-punctuation.json gives the kind. */
+function checkSmartPunctuation(node: Fields, path: string): void {
+  const kind = SMART_KIND_NAMES.indexOf(node['kind'] as (typeof SMART_KIND_NAMES)[number])
+  if (node['glyph'] !== SMART_GLYPHS[kind]) fail(`${path}/glyph`, 'not the glyph of its kind')
+  if (node['source'] !== SMART_SOURCES[kind]) fail(`${path}/source`, 'not the source of its kind')
+}
+
+const GROUP_RANKS: ReadonlyMap<unknown, number> = new Map([['table_head', 0], ['table_body', 1], ['table_foot', 2]])
+
+/** C2-A-086: at most one head, then the bodies, then at most one foot; C2-A-093: the span counts. */
+function checkTable(node: Fields, path: string): void {
+  // A head or a foot moves the rank half a step past its own, so a second one stands out of order.
+  let rank = 0
+  members(node, 'children').forEach((group, index) => {
+    const at = GROUP_RANKS.get(isRecord(group) ? group['type'] : undefined)
+    if (at === undefined) return
+    if (at < rank) fail(`${path}/children/${index}`, 'the table groups are out of order')
+    rank = at === 1 ? 1 : at + 0.5
+  })
+  checkSpanCounts(node, path)
+}
+
+function isGroup(node: unknown, type: unknown): boolean {
+  return isRecord(node) && node['type'] === type
+}
+
+/**
+ * C2-A-091: a cell holds blocks, at least one, and a `cell_paragraph` only as its only child. C2-A-092: a span
+ * mark cell stays empty, so the first rule reads the other cells.
+ */
+function checkCellChildren(node: Fields, path: string): void {
+  const children = members(node, 'children')
+  if (children.length === 0 && node['span'] === undefined) fail(`${path}/children`, 'a cell with no children')
+  children.forEach((child, index) => {
+    if (children.length > 1 && isGroup(child, 'cell_paragraph')) {
+      fail(`${path}/children/${index}`, 'a cell_paragraph beside another block')
+    }
+  })
+}
+
+/** C2-A-181: a caption stands only on a code include. */
+function checkIncludeCaption(node: Fields, path: string): void {
+  const options = node['options']
+  if (node['caption'] !== undefined && !(isRecord(options) && options['code'] !== undefined)) {
+    fail(`${path}/caption`, 'a caption on an include without code')
+  }
+}
+
+const DEPENDENCIES: ReadonlyMap<string, (node: Fields, path: string) => void> = new Map([
+  ['paragraph', checkRole],
+  ['math', checkMathNumber],
+  ['smart_punctuation', checkSmartPunctuation],
+  ['table', checkTable],
+  ['table_cell', checkCellChildren],
+  ['include', checkIncludeCaption],
+  // C2-A-058, C2-A-120: `normal` is the absent mode.
+  ['citation', (node, path) => { if (node['mode'] === 'normal') fail(`${path}/mode`, 'the default mode is never written') }],
+  // C2-A-058, C2-A-216: `text` stands only where it differs from `href`.
+  ['autolink', (node, path) => { if (node['text'] === node['href']) fail(`${path}/text`, 'a text equal to the href') }],
+])
 
 function checkLinkFields(node: Fields, type: string, path: string): void {
   const present = ['key', 'namespace', 'refForm'].filter((name) => node[name] !== undefined).length
@@ -935,7 +1023,26 @@ function checkExtensionIdentity(node: Fields, type: string, path: string, walk: 
   if (qualified && node['version'] !== walk.tree.declarations.get(name)?.version) {
     fail(`${path}/version`, 'version differs from declaration')
   }
-  if (!qualified && node['version'] !== undefined) fail(`${path}/version`, 'an unqualified extension has no version')
+  if (!qualified) checkUnqualifiedFields(node, type, path)
+  checkEmptyContainers(node, path)
+}
+
+/** C2-A-124: an unqualified inline extension carries its name, its children and the common fields only. */
+function checkUnqualifiedFields(node: Fields, type: string, path: string): void {
+  if (node['version'] !== undefined) fail(`${path}/version`, 'an unqualified extension has no version')
+  if (type !== 'inline_extension') return
+  for (const name of Object.keys(node)) {
+    if (name !== 'name' && name !== 'children' && !COMMON.includes(name)) fail(`${path}/${name}`, 'not a field of an unqualified extension')
+  }
+}
+
+/** C2-A-058: an empty props, slots or payload is a second encoding of the absent field. */
+function checkEmptyContainers(node: Fields, path: string): void {
+  for (const name of ['props', 'slots', 'payload']) {
+    const value = node[name]
+    const empty = Array.isArray(value) ? value.length === 0 : isRecord(value) && Object.keys(value).length === 0
+    if (empty) fail(`${path}/${name}`, `an empty ${name}`)
+  }
 }
 
 function checkExtensionSource(node: Fields, type: string, path: string): void {
@@ -943,7 +1050,20 @@ function checkExtensionSource(node: Fields, type: string, path: string): void {
     const form = node['source']['form']
     if (form === 'inline' && type !== 'inline_extension') fail(`${path}/source/form`, 'inline source on a block extension')
     if (form !== 'inline' && type !== 'block_extension') fail(`${path}/source/form`, 'block source on an inline extension')
+    if (!isClaimableName(node['source'])) fail(`${path}/source/name`, `no ${String(form)} matcher can claim this name`)
   }
+}
+
+/** C2-X-025: a div name makes a plain div (C2-B-127), a fence name opens a code block, an inline name is C2-I-094's. */
+function isClaimableName(source: Fields): boolean {
+  const name = source['name'] as string
+  if (source['form'] === 'inline') return isClassWord(name, CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST)
+  if (source['form'] === 'fence') return isFenceWord(name, false)
+  for (let at = 0; at < name.length; at++) if (!isAsciiNameCharacter(name.charCodeAt(at))) return false
+  const kind = DIV_KINDS.get(name)
+  // C2-B-127: `figure` with a title or a label is a plain div.
+  const titled = source['title'] !== undefined || source['groupLabel'] !== undefined
+  return name !== '' && (kind === undefined || (kind === 'figure_group' && titled))
 }
 
 function checkExtensionDefinition(node: Fields, path: string, walk: Walk, name: string): void {
@@ -1069,7 +1189,6 @@ function checkNode(value: Value, path: string, allowed: readonly string[], walk:
   const current: Walk = levels(walk, type, path)
   checkFields(value, type, rule, path, current)
   checkDependencies(value, type, path, current)
-  if (type === 'table') checkSpanCounts(value, path)
   if (type === 'table_cell') checkCellReferences(value, path, walk)
   checkNodeBounds(value, path, walk)
 }

@@ -229,7 +229,7 @@ describe('caption numbering', () => {
     const caption = (...children: Inline[]): CaptionNode => ({ type: 'caption', children: [{ type: 'paragraph', children }] })
     const numbered: ParagraphNode = { ...paragraph(math()), role: 'math', caption: caption(text('Eq. '), { type: 'caption_number' }) }
     const plain: ParagraphNode = { ...paragraph(math()), role: 'math', caption: caption(text('no mark')) }
-    const document = documentOf(paragraph(math()), numbered, plain, paragraph(math({ display: false })), paragraph(math({ numberPrefix: 'Other' })))
+    const document = documentOf(paragraph(math()), numbered, plain, paragraph({ type: 'math', display: false, value: 'x' }), paragraph(math({ numberPrefix: 'Other' })))
     const html = render(document)
     expect([...html.matchAll(/class="equation-number">([^<]*)</g)].map((match) => match[1])).toEqual(['Eq. 1', 'Eq. 3', 'Other 1'])
     expect(html).toContain('<p><span class="math display" role="math">\\[x\\]</span> <span class="equation-number">Eq. 1</span></p>')

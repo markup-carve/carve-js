@@ -8,8 +8,8 @@ function losses(document: DocumentNode): string[] {
 }
 
 function tableWith(field: 'scope' | 'headerIds'): DocumentNode {
-  const header: TableCellNode = { type: 'table_cell', header: true, attrs: { id: 'h' }, children: [] }
-  const data: TableCellNode = { type: 'table_cell', header: false, children: [],
+  const header: TableCellNode = { type: 'table_cell', header: true, attrs: { id: 'h' }, children: [{ type: 'cell_paragraph', children: [] }] }
+  const data: TableCellNode = { type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [] }],
     ...(field === 'scope' ? { scope: 'row' as const } : { headerIds: ['h'] }) }
   const table: TableNode = { type: 'table', columns: [], children: [
     { type: 'table_head', children: [{ type: 'table_row', children: [header] }] },

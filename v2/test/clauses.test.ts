@@ -38,7 +38,7 @@ describe('preliminaries', () => {
     expect(blocks('>  - a', '>', '> \tb')).toBe('quote[ul(-)[li[p"a" p"b"]]]')
   })
 
-  it('C2-B-006: a marker or a quote mark followed by a tab is text', () => {
+  it('C2-B-033: a marker or a quote mark followed by a tab is text', () => {
     expect(blocks('-\ta')).toBe('p"-\ta"')
     expect(blocks('1.\ta')).toBe('p"1.\ta"')
     expect(blocks('>\ta')).toBe('p">\ta"')
@@ -214,7 +214,7 @@ describe('lists', () => {
     }
   })
 
-  it('C2-B-047: in every other case the brackets are content', () => {
+  it('C2-B-046: in every other case the brackets are content', () => {
     expect(blocks('- [ ]')).toBe('ul(-)[li[p"[ ]"]]')
     expect(blocks('- [x]a')).toBe('ul(-)[li[p"[x]a"]]')
     expect(blocks('- [y] a')).toBe('ul(-)[li[p"[y] a"]]')
@@ -264,7 +264,7 @@ describe('lists', () => {
     expect(blocks('- a', '    - b', '  1. c')).toBe('ul(-)[li[p"a" ul(-)[li[p"b"]] ol(1.)[li[p"c"]]]]')
   })
 
-  it('C2-B-056, C2-B-060, C2-B-015: a marker indented past an item\'s marker opens a nested list, at another number than 1 after a blank line', () => {
+  it('C2-B-015, C2-B-060: a marker indented past an item\'s marker opens a nested list, at another number than 1 after a blank line', () => {
     expect(blocks('- a', '  1. b')).toBe('ul(-)[li[p"a" ol(1.)[li[p"b"]]]]')
     expect(blocks('- a', '  7. b')).toBe('ul(-)[li[p"a|7. b"]]')
     expect(blocks('- 7. b')).toBe('ul(-)[li[ol(7.)[li[p"b"]]]]')
@@ -356,7 +356,7 @@ describe('code fences', () => {
 })
 
 describe('comments', () => {
-  it('C2-B-143: the line form is never an interrupter and stays in its leaf', () => {
+  it('C2-B-024: the line form is never an interrupter and stays in its leaf', () => {
     expect(blocks('a', '%% c', 'b')).toBe('p"a|%% c|b"')
     expect(blocks('- a', '%% c', '- b')).toBe('ul(-)[li[p"a|%% c"] li[p"b"]]')
   })
@@ -385,7 +385,7 @@ describe('comments', () => {
     expect(blocks('= a', '        %% c')).toBe('h1"a|%% c"')
   })
 
-  it('C2-B-139: a line that holds only a braced comment is a paragraph', () => {
+  it('C2-B-137: a line that holds only a braced comment is a paragraph', () => {
     expect(blocks('- = a', '{% c %}')).toBe('ul(-)[li[h1"a"]] p"{% c %}"')
   })
 })
@@ -588,7 +588,7 @@ describe('description lists', () => {
     expect(blocks('- a', '', '  :: t', '  : d', '- b')).toBe('ul(-)[li[p"a" dl[dt"t" dd[p"d"]]] li[p"b"]]')
   })
 
-  it('C2-B-023: a term mark directly after paragraph text inside an item is a lazy line', () => {
+  it('C2-B-024: a term mark directly after paragraph text inside an item is a lazy line', () => {
     expect(blocks('- a', '  :: t')).toBe('ul(-)[li[p"a|:: t"]]')
     expect(blocks('- a', '', '  :: t')).toBe('ul(-)[li[p"a" dl[dt"t"]]]')
   })
@@ -777,7 +777,7 @@ describe('divs, sigil divs and comment blocks', () => {
     expect(blocks('::: a', ':::::::: |', 'x')).toBe('div[lines!"x"]')
   })
 
-  it('C2-B-142: a comment block at column 0 between two list items ends the first list', () => {
+  it('C2-B-053: a comment block at column 0 between two list items ends the first list', () => {
     expect(blocks('- a', '%%%', 'x', '%%%', '- b')).toBe('ul(-)[li[p"a"]] %%%"x" ul(-)[li[p"b"]]')
     expect(blocks('- a', '  %%%', '  x', '  %%%', '- b')).toBe('ul(-)[li[p"a" %%%"x"] li[p"b"]]')
   })
@@ -1002,7 +1002,7 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('% a', 'b')).toBe('p"% a|b"')
   })
 
-  it('C2-B-139, C2-B-156: a braced comment and a lone brace pair are no attribute line and no include', () => {
+  it('C2-B-137, C2-B-156: a braced comment and a lone brace pair are no attribute line and no include', () => {
     expect(blocks('{% c %}', 'x')).toBe('p"{% c %}|x"')
     // C2-B-201: a directive holds a path between spaces.
     expect(blocks('{{}}', 'x')).toBe('p"{{}}|x"')
@@ -1185,7 +1185,7 @@ describe('tables', () => {
     expect(blocks('| 1 |', '+ a | b |', '| 2 |')).toBe('table[tr[td"1|a" td"b"] tr[td"2"]]')
   })
 
-  it('C2-B-177: without the closing pipe a `+` line is text and ends the table', () => {
+  it('C2-B-175, C2-B-170: without the closing pipe a `+` line is text and ends the table', () => {
     expect(blocks('| 1 |', '+ a', '| 2 |')).toBe('table[tr[td"1"]] p"+ a" table[tr[td"2"]]')
   })
 

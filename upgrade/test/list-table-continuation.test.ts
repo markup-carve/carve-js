@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-B-056 C2-B-059 list continuation', () => {
+describe('C2-B-015 C2-B-059 list continuation', () => {
   const cases: [string, string][] = [
     ['smallest list quote item', '- > +\n'],
     ['star list quote item', '* > +\n'],

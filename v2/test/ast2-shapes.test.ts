@@ -20,8 +20,8 @@ describe('AST 2.0 shapes', () => {
   })
 
   it('C2-A-092, C2-H-056: explicit scope and headerIds reach the table cells', () => {
-    const header: TableCellNode = { type: 'table_cell', header: true, scope: 'colgroup', attrs: { id: 'h' }, children: [] }
-    const data: TableCellNode = { type: 'table_cell', header: false, headerIds: ['h'], children: [] }
+    const header: TableCellNode = { type: 'table_cell', header: true, scope: 'colgroup', attrs: { id: 'h' }, children: [{ type: 'cell_paragraph', children: [] }] }
+    const data: TableCellNode = { type: 'table_cell', header: false, headerIds: ['h'], children: [{ type: 'cell_paragraph', children: [] }] }
     const table: TableNode = {
       type: 'table', columns: [], children: [{ type: 'table_head', children: [{ type: 'table_row', children: [header, data] }] }],
     }

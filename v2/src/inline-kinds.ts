@@ -72,7 +72,7 @@ const HOSTS = [
   INLINE_FOOTNOTE, INLINE_EXTENSION, IMAGE, CODE_SPAN, LITERAL, MATH, AUTOLINK, SYMBOL, FOOTNOTE_REF,
 ]
 
-/** C2-I-036, C2-I-037: the kinds an attribute block attaches to. */
+/** C2-I-036: the kinds an attribute block attaches to. */
 export function isHost(kind: number): boolean {
   return HOSTS.includes(kind)
 }

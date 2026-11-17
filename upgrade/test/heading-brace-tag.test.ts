@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-I-044 C2-I-090: tag inside a failed brace attribute', () => {
+describe('C2-I-119 C2-I-090: tag inside a failed brace attribute', () => {
   it('escapes the brace closer to keep the old tag scan', () => {
     const result = upgrade('# H {#id .cls}\n')
     expect(result.output).toBe('# H {#id .cls\\}\n')

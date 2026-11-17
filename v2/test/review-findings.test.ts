@@ -27,6 +27,12 @@ function inParagraph(...children: unknown[]): Record<string, unknown> {
   return { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children }] }
 }
 
+/** C2-A-124: only a qualified extension carries payload, resources and slots, so the node is declared. */
+function declaredExtension(fields: Record<string, unknown>, slots: string[] = []): Record<string, unknown> {
+  const node = { type: 'inline_extension', name: 'org.example.a', version: '1', children: [], fallback: [{ type: 'text', value: 'f' }], ...fields }
+  return { ...inParagraph(node), extensions: [{ name: 'org.example.a', version: '1', required: false, slots }] }
+}
+
 describe('linear passes', () => {
   it('C2-I-099: a term reads the character behind the empty spans that follow it, and many spans stay linear', () => {
     expect(render('*[A]: B\n\nA[]{.x}[]{.x} A[]{.x}b')).toBe(
@@ -51,7 +57,7 @@ describe('linear passes', () => {
 
 describe('reading a supplied tree', () => {
   it('C2-A-167, C2-A-170: a payload alternative that is no object with a media type is refused with its path', () => {
-    const extension = (payload: unknown): unknown => inParagraph({ type: 'inline_extension', name: 'a', children: [], payload })
+    const extension = (payload: unknown): unknown => declaredExtension({ payload })
     expect(refusal(extension([null]))).toBe('/children/0/children/0/payload/0: not a payload alternative')
     expect(refusal(extension([{ value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: not a string')
     expect(refusal(extension([{ format: '', value: 'x' }]))).toBe('/children/0/children/0/payload/0/format: an empty media type')
@@ -76,8 +82,7 @@ describe('reading a supplied tree', () => {
     const resources = [{ id: 'r', mediaType: 'image/png', digest: DIGEST }]
     expect(refusal(inParagraph({ type: 'image', resourceId: 'missing', decorative: true }))).toBe('/children/0/children/0/resourceId: no resource has the id "missing"')
     expect(refusal({ ...inParagraph({ type: 'image', resourceId: 'r', decorative: true }), resources })).toBeNull()
-    const extension = { type: 'inline_extension', name: 'a', children: [], resourceIds: ['r', 'q'] }
-    expect(refusal({ ...inParagraph(extension), resources })).toBe('/children/0/children/0/resourceIds/1: no resource has the id "q"')
+    expect(refusal({ ...declaredExtension({ resourceIds: ['r', 'q'] }), resources })).toBe('/children/0/children/0/resourceIds/1: no resource has the id "q"')
   })
 
   it('C2-A-132: references are counted in every slot that holds nodes, ruby pairs and extension slots included', () => {
@@ -86,7 +91,7 @@ describe('reading a supplied tree', () => {
     const ruby = (count: number): unknown => ({ ...inParagraph({ type: 'ruby', pairs: [{ type: 'ruby_pair', base: images(count), annotation: [] }] }), resources })
     expect(refusal(ruby(4096))).toBeNull()
     expect(refusal(ruby(4097))).toBe('/children/0/children/0/pairs/0/base/4096: more than 4096 resource references')
-    const slots = (count: number): unknown => ({ ...inParagraph({ type: 'inline_extension', name: 'a', children: [], slots: { s: images(count) } }), resources })
+    const slots = (count: number): unknown => ({ ...declaredExtension({ slots: { s: images(count) } }, ['s']), resources })
     expect(refusal(slots(4096))).toBeNull()
     expect(refusal(slots(4097))).toBe('/children/0/children/0/slots/s/4096: more than 4096 resource references')
   })
@@ -113,7 +118,7 @@ describe('the attribute filter', () => {
     const table = (valign: string): string => render(decodeTree(JSON.stringify({
       type: 'document', astVersion: '2.0', children: [{
         type: 'table', columns: [{ type: 'table_column' }], children: [{
-          type: 'table_body', children: [{ type: 'table_row', children: [{ type: 'table_cell', header: false, valign, children: [] }] }],
+          type: 'table_body', children: [{ type: 'table_row', children: [{ type: 'table_cell', header: false, valign, children: [{ type: 'cell_paragraph', children: [] }] }] }],
         }],
       }],
     })))

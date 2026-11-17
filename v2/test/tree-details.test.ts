@@ -168,6 +168,10 @@ describe('more edges', () => {
   })
 })
 
+// C2-A-124: payload, resources and slots stand on a qualified extension, which its root declares.
+const qualified: InlineExtensionNode = { type: 'inline_extension', name: 'org.example.a', version: '1', children: [], fallback: [text('f')] }
+const DECLARED = [{ name: 'org.example.a', version: '1', required: false, slots: [] as string[] }]
+
 describe('the reader at its bounds', () => {
   const nest = (levels: number): DocumentNode => {
     let node: Block = paragraph('a')
@@ -193,9 +197,10 @@ describe('the reader at its bounds', () => {
     // C2-A-131: every reference names an entry of the manifest.
     const references = (count: number): DocumentNode => ({
       ...documentOf(paragraph(
-        { type: 'inline_extension', name: 'a', children: [], resourceIds: Array.from({ length: count - 1 }, () => 'r') },
+        { ...qualified, resourceIds: Array.from({ length: count - 1 }, () => 'r') },
         { type: 'image', resourceId: 'r', decorative: true },
       )),
+      extensions: DECLARED,
       resources: [{ id: 'r', mediaType: 'image/png', digest: `sha256:${'0'.repeat(64)}` }],
     })
     expect([refusal(references(4096)), refusal(references(4097)) === null]).toEqual([null, false])
@@ -204,12 +209,15 @@ describe('the reader at its bounds', () => {
       for (let level = 0; level < levels; level++) node = { type: 'inline_extension', name: 'a', children: [], fallback: [node] }
       return documentOf(paragraph(node))
     }
-    expect([refusal(fallbacks(32)), refusal(fallbacks(33)) === null]).toEqual([null, false])
+    // C2-A-124: an unqualified extension carries no fallback, so the bound of C2-A-132 is never reached.
+    expect(refusal(fallbacks(1))).toBe('/children/0/children/0/fallback: not a field of an unqualified extension')
+    expect(refusal(fallbacks(33)) === null).toBe(false)
   })
 
   it('bounds the payload of an extension node by its string values', () => {
     const big = 'x'.repeat(8 * 1024 * 1024)
-    const node = (payload: { format: string, value: string }[]): DocumentNode => documentOf(paragraph({ type: 'inline_extension', name: 'a', children: [], payload }))
+    const node = (payload: { format: string, value: string }[]): DocumentNode =>
+      ({ ...documentOf(paragraph({ ...qualified, payload })), extensions: DECLARED })
     expect(refusal(node([{ format: 'a', value: big }]))).toBeNull()
     expect(refusal(node([{ format: 'a', value: big }, { format: 'b', value: 'y' }]))).toBe('/children/0/children/0/payload: an extension payload above 8 MiB')
   })
@@ -230,9 +238,13 @@ describe('the reader at its bounds', () => {
   })
 
   it('checks the slots and the fallback of an extension node by its role, and the fields that depend on each other', () => {
-    const inline: InlineExtensionNode = { type: 'inline_extension', name: 'a', children: [], slots: { s: [text('x')] }, fallback: [text('y')] }
-    expect(refusal(documentOf(paragraph(inline)))).toBeNull()
-    expect(refusal(documentOf(paragraph({ ...inline, slots: { s: [paragraph()] } })))).toBe('/children/0/children/0/slots/s/0: paragraph does not stand here')
+    const inline: InlineExtensionNode = { ...qualified, slots: { s: [text('x')] }, fallback: [text('y')] }
+    const slotted = (node: InlineExtensionNode) => ({ ...documentOf(paragraph(node)), extensions: [{ ...DECLARED[0]!, slots: ['s'] }] })
+    expect(refusal(slotted(inline))).toBeNull()
+    // C2-A-124: an unqualified extension carries no slots; an undeclared slot of a qualified one is refused.
+    expect(refusal(documentOf(paragraph({ type: 'inline_extension', name: 'a', children: [], slots: { s: [text('x')] } }))))
+      .toBe('/children/0/children/0/slots: not a field of an unqualified extension')
+    expect(refusal({ ...documentOf(paragraph(inline)), extensions: DECLARED })).toBe('/children/0/children/0/slots/s: slot absent from extension declaration')
     const blockNode: BlockExtensionNode = { type: 'block_extension', name: 'a.b', version: '1', children: [], slots: { s: [paragraph()] }, fallback: [] }
     const declared = (node: BlockExtensionNode) => ({ ...documentOf(node), extensions: [{ name: 'a.b', version: '1', required: false, slots: ['s'] }] })
     expect(refusal(declared(blockNode))).toBeNull()
@@ -241,7 +253,9 @@ describe('the reader at its bounds', () => {
     expect([link({}), link({ key: 'a', namespace: 'link', refForm: 'full' })]).toEqual([null, null])
     for (const fields of [{ key: 'a' }, { namespace: 'link' }, { refForm: 'full' }, { key: 'a', refForm: 'full' }, { namespace: 'link', refForm: 'full' }] satisfies Partial<LinkNode>[]) expect(link(fields)).not.toBeNull()
     const ordered = (marker: object): string | null => refusal(documentOf({ type: 'list', marker, spacing: 'tight', children: [] } as unknown as Block))
-    expect([ordered({ kind: 'ordered' }), ordered({ kind: 'ordered', style: 'a', delimiter: ')', start: 3 })]).toEqual([null, null])
+    // C2-A-056, C2-A-058: an ordered marker always carries its style and delimiter.
+    expect([ordered({ kind: 'ordered', style: '1', delimiter: '.' }), ordered({ kind: 'ordered', style: 'a', delimiter: ')', start: 3 })]).toEqual([null, null])
+    expect(ordered({ kind: 'ordered' })).toBe('/children/0/marker/style: no ordered style')
     expect([ordered({ kind: 'ordered', style: 'x' }), ordered({ kind: 'ordered', delimiter: ':' }), ordered({ kind: 'ordered', start: 1.5 })].every((reason) => reason !== null)).toBe(true)
   })
 })
@@ -249,12 +263,13 @@ describe('the reader at its bounds', () => {
 describe('equality in detail', () => {
   const link = (fields: Partial<LinkNode>): DocumentNode => documentOf(paragraph({ type: 'link', children: [], ...fields }))
 
-  it('a destination is a resolution result only on a reference use', () => {
+  it('C2-A-115: a destination and a tooltip are resolution results only on a reference use', () => {
     const reference = { key: 'a', namespace: 'link', refForm: 'full' } satisfies Partial<LinkNode>
     expect(treesEqual(link({ ...reference, href: '/u' }), link(reference))).toBe(true)
     expect(treesEqual(link({ href: '/u' }), link({ href: '/v' }))).toBe(false)
     expect(treesEqual(link({ href: '/u' }), link({}))).toBe(false)
-    expect(treesEqual(link({ ...reference, tooltip: 'a' }), link(reference))).toBe(false)
+    expect(treesEqual(link({ ...reference, tooltip: 'a' }), link(reference))).toBe(true)
+    expect(treesEqual(link({ href: '/u', tooltip: 'a' }), link({ href: '/u' }))).toBe(false)
     const image = (fields: Partial<ImageNode>): DocumentNode => documentOf(paragraph({ type: 'image', ...fields }))
     expect(treesEqual(image({ ...reference, src: '/u' }), image(reference))).toBe(true)
     expect(treesEqual(image({ src: '/u', alt: 'a' }), image({ src: '/v', alt: 'a' }))).toBe(false)
@@ -273,7 +288,7 @@ describe('equality in detail', () => {
 
   it('a span count is compared where no span mark is written, and not where one is', () => {
     const table = (cells: TableCellNode[]): DocumentNode => documentOf({ type: 'table', columns: [], children: [{ type: 'table_body', children: [{ type: 'table_row', children: cells }] }] })
-    const cell = (fields: Partial<TableCellNode> = {}): TableCellNode => ({ type: 'table_cell', header: false, children: [], ...fields })
+    const cell = (fields: Partial<TableCellNode> = {}): TableCellNode => ({ type: 'table_cell', header: false, children: [{ type: 'cell_paragraph', children: [] }], ...fields })
     expect(treesEqual(table([cell({ colspan: 2 })]), table([cell()]))).toBe(false)
     expect(treesEqual(table([cell({ colspan: 2 }), cell({ span: 'colspan' })]), table([cell(), cell({ span: 'colspan' })]))).toBe(true)
     expect(treesEqual(table([cell({ colspan: 2 }), cell({ span: 'colspan' })]), table([cell({ colspan: 2 }), cell()]))).toBe(false)

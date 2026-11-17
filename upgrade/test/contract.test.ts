@@ -41,6 +41,8 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
   'U-114#4': { entry: 'U-114', check: 'mismatch' },
+  // C2-H-133 (html Example 64): 0.2 renders the unexpanded include of a tight item bare, as 0.1 does, so no escape is needed.
+  'U-184#0': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */

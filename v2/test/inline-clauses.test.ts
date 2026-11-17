@@ -170,7 +170,9 @@ describe('math spans', () => {
 describe('raw inline', () => {
   it('C2-I-021: a closed code span with `{=name}` glued to it is raw inline', () => {
     expect(inline('`<b>`{=html}')).toBe('raw(html)"<b>"')
-    expect(inline('`` a ` b ``{=_x-1}')).toBe('raw(_x-1)"a ` b"')
+    expect(inline('`` a ` b ``{=x_-1}')).toBe('raw(x_-1)"a ` b"')
+    // The name is a raw format name (C2-B-225), which starts with an ASCII letter.
+    expect(inline('`x`{=_a}')).toBe('code"x" "{=_a}"')
     expect(inline('`a`{=1x} `a`{=} `a`{=x y} `a` {=x}')).toBe('code"a" "{=1x} " code"a" "{=} " code"a" "{=x y} " code"a" " {=x}"')
   })
 
@@ -214,7 +216,7 @@ describe('comments', () => {
     expect(inline('a{% c %}"b"')).toBe('"a" {%}" c " ‹”› "b" ‹”›')
   })
 
-  it('C2-I-027: a braced comment whose closer stands behind an interrupter line stays text', () => {
+  it('C2-B-141: a braced comment whose closer stands behind an interrupter line stays text', () => {
     expect(tree('a {% b', '', 'c %} d')).toBe('p["a {% b"] p["c %} d"]')
     expect(tree('- a {% b', '- c %} d')).toBe('ul(-)[li[p["a {% b"]] li[p["c %} d"]]]')
   })
@@ -278,14 +280,14 @@ describe('attribute blocks', () => {
     expect(inline('*a* {.c}')).toBe('strong["a"] " {.c}"')
   })
 
-  it('C2-I-037: what is not a host', () => {
+  it('C2-I-036: what is not a host', () => {
     expect(inline('word{.c} @a{.c} #a{.c} </#a>{.c} {# a #}{.c} `a`{=x}{.c} "a"{.c} ...{.c} \\*{.c}')).toBe(
       '"word{.c} " @"a" "{.c} " #"a" "{.c} " xref"a" "{.c} " {#}" a " "{.c} " raw(x)"a" "{.c} " ‹“› "a" ‹”› "{.c} " ‹…› "{.c} *{.c}"',
     )
     expect(inline('a %% b {.c}')).toBe('"a" %%" b {.c}"')
   })
 
-  it('C2-I-038: a reference is a host whether or not its label resolves', () => {
+  it('C2-I-036: a reference is a host whether or not its label resolves', () => {
     expect(inline('[a][nope]{.c} [a][]{#i}')).toBe('ref(nope)["a"]{.c} " " ref(=a)["a"]{#i}')
   })
 
@@ -322,7 +324,7 @@ describe('the opening brace', () => {
     expect(inline('{-- } {---}')).toBe('"{" ‹–› " } " del["-"]')
   })
 
-  it('C2-I-044: a brace that starts none of these is text', () => {
+  it('C2-I-119: a brace that starts none of these is text', () => {
     expect(inline('{a} { b } {} {1} {!x!}')).toBe('"{a} { b } {} {1} {!x!}"')
     expect(inline('a } b {')).toBe('"a } b {"')
   })
@@ -387,7 +389,7 @@ describe('emphasis and strong', () => {
     expect(inline('/a/b /c/')).toBe('"/a/b " em["c"]')
   })
 
-  it('C2-I-054: an opener with no closer in its content is text', () => {
+  it('C2-I-119: an opener with no closer in its content is text', () => {
     expect(inline('*a /b')).toBe('"*a /b"')
     expect(tree('*a', '', 'b*')).toBe('p["*a"] p["b*"]')
   })
@@ -456,7 +458,7 @@ describe('spans', () => {
     expect(inline('[[a]{.b}]{.c}')).toBe('span[span["a"]{.b}]{.c}')
   })
 
-  it('C2-I-065: a bracket pair followed by anything else is text', () => {
+  it('C2-I-072: a bracket pair followed by anything else is text', () => {
     expect(inline('[a] {.c} [a]b [a]{?} [a]')).toBe('"[a] {.c} [a]b [a]{?} [a]"')
   })
 })

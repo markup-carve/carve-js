@@ -13,7 +13,7 @@ interface Fixture {
 
 const fixtures = JSON.parse(readFileSync(join(import.meta.dirname, 'measured-plus.json'), 'utf8')) as Fixture[]
 const clauses: Record<string, string> = {
-  C19: 'C2-B-056 C2-B-059',
+  C19: 'C2-B-015 C2-B-059',
   C16: 'C2-B-059 C2-B-076',
   C17: 'C2-B-059 C2-B-087',
   C18: 'C2-B-032 C2-B-059',

@@ -400,7 +400,7 @@ export interface SmartPunctuationNode extends NodeBase {
     | "rightwards_double_arrow"
     | "trademark"
   source: string
-  glyph?: string
+  glyph: string
 }
 
 export interface SoftBreakNode extends NodeBase {

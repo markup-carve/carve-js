@@ -288,7 +288,7 @@ export function scanBrace(state: InlineState, pos: number): number {
   const next = codeAt(state, pos + 1)
   if (next === PERCENT) return bracedComment(state, pos, INLINE_COMMENT)
   if (next === HASH) return bracedComment(state, pos, EDITORIAL)
-  // C2-I-050: a mark before a combining mark is text, and so the brace is (C2-I-044).
+  // C2-I-050: a mark before a combining mark is text, and so the brace is (C2-I-119).
   if (!inClass(next, CLASS_BRACED_MARK) || isJoining(codePointAt(text, pos + 2, state.end))) return pos + 1
   // C2-I-118: an opener read at the cap is text and is not pushed.
   if (atDepthCap(state)) return pos + 2

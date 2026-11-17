@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-B-056 and C2-B-059 repeated quote continuations', () => {
+describe('C2-B-015 and C2-B-059 repeated quote continuations', () => {
   for (const source of [
     '> - > +\n> - > +\n s\n',
     '> > - > +\n> > - > +\n>  s\n',

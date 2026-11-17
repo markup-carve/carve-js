@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { format, parse, render, type TableRowNode, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
 
-it('C2-I-044/090/119 C44: a failed brace leaves the tag sigil available', () => {
+it('C2-I-090/119 C44: a failed brace leaves the tag sigil available', () => {
   expect(render('{#d')).toContain('{<span class="tag"><strong>#d</strong></span>')
 })
 

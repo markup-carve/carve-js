@@ -43,6 +43,16 @@ export function classRunEnd(text: string, pos: number, end: number, mask: number
   return pos
 }
 
+/** Whether `text` reads whole as one run of the shape whose first character is of `first` and the rest of `rest`. */
+export function isClassWord(text: string, first: number, rest: number): boolean {
+  return text.length > 0 && inClass(text.charCodeAt(0), first) && classRunEnd(text, 1, text.length, rest) === text.length
+}
+
+/** C2-I-030: a key is an ASCII letter or `_`, then letters, digits, `_` and `-`. */
+export function isAttributeKey(text: string): boolean {
+  return isClassWord(text, CLASS_KEY_FIRST, CLASS_KEY_REST)
+}
+
 /** C2-I-028: the offset behind the closing brace of the valid block at `pos`, or NONE. */
 export function readAttributeBlock(text: string, pos: number, end: number, memo: AttributeMemo, sink: AttributeSink | null): number {
   let p = skipSpaces(text, pos + 1, end)

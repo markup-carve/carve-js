@@ -90,7 +90,7 @@ describe('C2-W-100: the upgrade self-check', () => {
     expect(result.check).toBe('pass')
   })
 
-  it('C2-B-056: U-023 uses the general marker-column lint for a bullet', () => {
+  it('C2-B-015: U-023 uses the general marker-column lint for a bullet', () => {
     const result = upgrade('- a\n - b\n')
     expect(result.records.find((record) => record.entry === 'U-023')?.lint).toBe('list-marker-below-content-column')
   })

@@ -77,6 +77,7 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["image", [
     {"field":"src","when":"reference use"},
+    {"field":"tooltip","when":"reference use"},
   ]],
   ["include", [
     {"field":"children"},
@@ -95,6 +96,7 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["link", [
     {"field":"href","when":"reference use"},
+    {"field":"tooltip","when":"reference use"},
   ]],
   ["link_reference_definition", [
   ]],

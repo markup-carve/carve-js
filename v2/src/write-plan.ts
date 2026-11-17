@@ -217,7 +217,7 @@ function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
   else if (reading === REFERENCE) escaped[at] = 1
 }
 
-// C2-I-037: the atoms that are no host of an attribute block.
+// C2-I-036: the atoms that are no host of an attribute block.
 const NO_HOSTS: ReadonlySet<string> = new Set([
   'mention', 'tag', 'xref', 'comment', 'critic_comment', 'raw_inline', 'smart_punctuation', 'soft_break', 'hard_break',
 ])
