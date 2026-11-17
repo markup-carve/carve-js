@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { CARVE_SOURCES as EXAMPLES } from '../scripts/corpus.ts'
 import { generateWriterTables } from '../scripts/generate-writer-tables.ts'
 import { parseWithLayout } from '../src/api.ts'
-import { format } from '../src/index.ts'
+import { format, formatWithDiagnostics } from '../src/index.ts'
 import { writeTreeWithStats, type WriterPath } from '../src/write.ts'
 
 const root = join(import.meta.dirname, '..')
@@ -59,6 +59,14 @@ describe('the planned writer', () => {
     const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', true)
     expect(result.stats.reasons.get('check') ?? 0).toBe(0)
     expect(result.stats.repaired).toBeGreaterThan(0)
+  })
+
+  it('C2-I-024: an empty comment after an escaped bang enters repair', () => {
+    const source = ']\\![%%]'
+    const parsed = parseWithLayout(source, { extensions: [] })
+    const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
+    expect(result.stats.repaired).toBeGreaterThan(0)
+    expect(formatWithDiagnostics(source).diagnostics.some((entry) => entry.code === 'structure-unspellable')).toBe(true)
   })
 
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
