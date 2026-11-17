@@ -357,8 +357,9 @@ function readsAsCollapsed(candidate: string, key: string, children: ParagraphNod
 }
 
 /**
- * C2-I-001, C2-I-079: the content with a backslash before each ASCII punctuation character that the key escapes,
- * where the two differ in nothing else than those and the whitespace the fold collapses; null otherwise.
+ * C2-I-001, C2-I-079: the content with a backslash before each ASCII punctuation character that the key escapes and
+ * none before one it holds bare, where the two differ in nothing else than those and the whitespace the fold
+ * collapses; null otherwise.
  */
 function escapedLike(content: string, key: string): string | null {
   let out = ''
@@ -373,6 +374,12 @@ function escapedLike(content: string, key: string): string | null {
       at = end
       continue
     }
+    if (dropsEscape(content, at, key, k)) {
+      out += content[at + 1]!
+      k++
+      at += 2
+      continue
+    }
     const escape = keyEscapes(key, k, char)
     if (!escape && key[k] !== char) return null
     out += escape ? '\\' + char : char
@@ -385,6 +392,12 @@ function escapedLike(content: string, key: string): string | null {
 /** C2-I-079: the fold drops the space at the start and at the end of a label and makes one space of each run between. */
 function keyAfterSpace(key: string, k: number, inner: boolean): number {
   return k > 0 && inner && key[k] === ' ' ? k + 1 : k
+}
+
+/** C2-I-001: the content escapes an ASCII punctuation character at `at` that the key holds bare at `k`. */
+function dropsEscape(content: string, at: number, key: string, k: number): boolean {
+  const next = content[at + 1]
+  return content[at] === '\\' && next !== undefined && next !== '\\' && key[k] === next && isAsciiPunctuation(next.charCodeAt(0))
 }
 
 /** C2-I-001: the key holds an escape of the ASCII punctuation character `char` at `k`. */
