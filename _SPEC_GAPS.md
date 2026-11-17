@@ -10,6 +10,14 @@ Cases found while following freeze candidate 5, revision 1. The engine choice is
 
 `|=|` in 0.1 renders `<td>=</td>`. C2-B-171 lets the header mark end at the cell end, so 0.2 reads an empty header cell. U-185 covered this as an escape and is withdrawn at `7db33836`; no other row of `data/upgrade-map.json` names it, and U-270 covers only a mark glued to text (`|=a|`), whose meaning did not change. Reading one: the meaning changed and the tool must escape it, as every C-class change requires. Reading two: the withdrawal means the case is accepted as a silent change. The tool takes reading one and keeps the escape `|\=|` as its own extension entry X-003, which leaves the output identical to the withdrawn row.
 
+### G-F2. C2-H-168 refuses a `renderers` option that C2-H-123 and C2-X-033 define
+
+The last sentence of C2-H-168 says "A `renderers` option that is not empty is refused in 0.2.0, which has no build-time renderer to call." C2-H-123 says `renderers` "maps an extension name to a build-time renderer and is read only in static mode", C2-X-033 lets a host register a renderer by qualified name and version, and C2-X-043 specifies the tabs renderer. Reading one: the sentence means a math renderer only, which 0.2.0 does not have. Reading two: every nonempty `renderers` is refused, which removes the extension renderers. The engine takes reading one and keeps accepting extension renderers; the sentence should name math.
+
+### G-F3. UPGRADING.md says the engine has no migration function
+
+UPGRADING.md (the paragraph on stored 1.x JSON, and "Tooling not yet shipped") says "The current 0.2 engine has no migration function for stored 1.x or draft JSON." carve-js ships one in `v2/migrate/` and as `carve2 migrate-ast`, and C2-A-015 and C2-A-176 require it. The sentence and the list item are stale. The same paragraph says "Keep `pos` byte offsets only if they still match the original source"; 0.1 offsets count code points, so the tool converts them when the source is given and otherwise drops them with a `migration-loss` when the tree holds text past ASCII (C2-A-141).
+
 ## Freeze candidate 4 session (spec `011cb22e`)
 
 Cases found while following freeze candidate 4. The engine choice is named in each.
