@@ -913,7 +913,8 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   const parent = context.nodeTypes.get(path.slice(0, split))
   if (parent !== 'strong' && parent !== 'emphasis') return
   const source = raw(node, context)
-  const at = source.indexOf(parent === 'strong' ? '{*' : '{/')
+  const openers = [source.indexOf('{*'), source.indexOf('{/')].filter((at) => at >= 0)
+  const at = openers.length === 0 ? -1 : Math.min(...openers)
   const range = bounds(node, context)
   if (at >= 0 && range !== null) context.report('braced-span-opener-as-text', range[0] + at,
     range[0] + at + 2, path)

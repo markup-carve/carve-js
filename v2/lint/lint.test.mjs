@@ -37,6 +37,12 @@ it('C2-A-086: a trailing table comment starts at its preceding space', () => {
   expect(entries).toHaveLength(1)
   expect(entries[0].range).toEqual({ startOffset: 5, endOffset: 10 })
 })
+
+it('C2-I-059: an inner braced opener made text by the outer closer is reported', () => {
+  const entries = lint('*a {/b*/}\n').filter((entry) => entry.code === 'braced-span-opener-as-text')
+  expect(entries).toHaveLength(1)
+  expect(entries[0].range.startOffset).toBe(3)
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 
