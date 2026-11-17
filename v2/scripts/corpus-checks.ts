@@ -166,5 +166,15 @@ export function layoutMismatches(entry: LayoutFixture): Mismatch[] {
   const input = entry.input === undefined ? source : hexBytes(entry.input)
   if (typeof input !== 'string' && !(input instanceof Uint8Array)) return []
   const layout = outcome(() => parseWithLayout(input).layout)
-  return same(layout, entry.layout) ? [] : [{ field: 'layout', actual: layout, expected: entry.layout }]
+  // C2-L-014: every fact is optional, so a sidecar that omits facts is the engine's where every fact it states is.
+  return holdsFacts(layout, entry.layout) ? [] : [{ field: 'layout', actual: layout, expected: entry.layout }]
+}
+
+/** Whether `actual` states every fact of `stated` with the same value, in the same lists. */
+function holdsFacts(actual: unknown, stated: unknown): boolean {
+  if (Array.isArray(stated)) {
+    return Array.isArray(actual) && actual.length === stated.length && stated.every((item, index) => holdsFacts(actual[index], item))
+  }
+  if (!isRecord(stated) || !isRecord(actual)) return same(actual, stated)
+  return Object.keys(stated).every((key) => holdsFacts(actual[key], stated[key]))
 }
