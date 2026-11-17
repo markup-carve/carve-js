@@ -510,6 +510,8 @@ export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPl
   const start = lineStartRule(leaf, at, first)
   if (start !== null) return start
   if (place.capped && opensContainer(leaf, at)) return NO_ESCAPE
+  // C2-B-125: past the cap a colon line still meets the fences of the outer divs, whose length the writer picks.
+  if (place.capped && code(leaf, at) === 58) return UNDECIDED
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape
   return leaf.kinds[escape] === TEXT && leaf.kinds[escape - 1] !== ESCAPE ? escape : UNDECIDED
