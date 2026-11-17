@@ -56,9 +56,9 @@ function runEnd(leaf: Leaf, at: number, value: number): number {
 }
 
 /** Whether a blank and some content follow `at` on its line: the content a list marker needs. */
-function hasContentBehind(leaf: Leaf, at: number): boolean {
-  if (code(leaf, at) !== SPACE) return false
-  let end = at
+function hasContentBehind(leaf: Leaf, at: number, glued = false): boolean {
+  if (!glued && code(leaf, at) !== SPACE) return false
+  let end = glued ? at + 1 : at
   while (isBlank(code(leaf, end))) end++
   return !isLineEnd(code(leaf, end))
 }
@@ -93,7 +93,7 @@ function digits(leaf: Leaf, at: number): number {
   const mark = code(leaf, end)
   if (end - at > 9 || (mark !== 46 && mark !== 41)) return NO_ESCAPE
   // C2-B-101: the attributes of an item abut its marker.
-  if (code(leaf, end + 1) === BRACE_OPEN) return UNDECIDED
+  if (code(leaf, end + 1) === BRACE_OPEN) return markerBlock(leaf, end + 1)
   // C2-B-033: a bare marker is text.
   return hasContentBehind(leaf, end + 1) ? end : NO_ESCAPE
 }
@@ -101,7 +101,7 @@ function digits(leaf: Leaf, at: number): number {
 /** C2-B-015: a bullet and content. */
 function bullet(leaf: Leaf, at: number): number {
   // C2-B-101: the attributes of an item abut its marker.
-  if (code(leaf, at + 1) === BRACE_OPEN) return UNDECIDED
+  if (code(leaf, at + 1) === BRACE_OPEN) return markerBlock(leaf, at + 1)
   // C2-B-033: a bare marker is text.
   return hasContentBehind(leaf, at + 1) ? at : NO_ESCAPE
 }
@@ -156,8 +156,17 @@ function bareDot(leaf: Leaf, at: number): number {
 }
 
 /** C2-B-160, C2-B-161: a hyphen run is text, but on line 1 three hyphens open frontmatter. */
+/** C2-B-101: a brace that is no valid block makes no marker of the character before it, so the line is text. */
+function markerBlock(leaf: Leaf, at: number): number {
+  return braceBlocksEnd(leaf, at) === NO_ESCAPE ? NO_ESCAPE : UNDECIDED
+}
+
 function hyphenLine(leaf: Leaf, at: number, place: LeafPlace): number {
   const end = runEnd(leaf, at, 45)
+  // C2-B-159, C2-B-161: a break is a run of stars, a frontmatter fence exactly three hyphens on line 1 with no more
+  // than a format name behind, and a hyphen run opens no item, so a longer run with content behind it is text.
+  const fence = place.documentStart && end - at === 3
+  if (end - at >= 3 && !fence && hasContentBehind(leaf, end - 1, true)) return NO_ESCAPE
   if (end - at < 3 || !place.documentStart) return bullet(leaf, at)
   for (let unit = at; unit < end; unit++) if (leaf.kinds[unit] !== TEXT) return UNDECIDED
   return bullet(leaf, at)
@@ -181,7 +190,7 @@ function pipeLine(leaf: Leaf, at: number): number {
  */
 function mayCloseRow(leaf: Leaf, at: number): boolean {
   const brace = code(leaf, at) === SPACE && code(leaf, at + 1) === BRACE_OPEN ? at + 1 : at
-  let unit = code(leaf, brace) === BRACE_OPEN ? rowAttributeEnd(leaf, brace) : at
+  let unit = code(leaf, brace) === BRACE_OPEN ? braceBlocksEnd(leaf, brace) : at
   if (unit < 0) return unit === UNDECIDED
   const blanks = unit
   while (isBlank(code(leaf, unit))) unit++
@@ -194,7 +203,7 @@ function mayCloseRow(leaf: Leaf, at: number): boolean {
  * one. A braced mark of the tree opens no block (C2-I-043). A quote or a backslash may take an escape that makes a
  * block of the text valid, so those are left to the repair too.
  */
-function rowAttributeEnd(leaf: Leaf, at: number): number {
+function braceBlocksEnd(leaf: Leaf, at: number): number {
   if (leaf.kinds[at] === OPEN) return NO_ESCAPE
   let end = at
   while (end < leaf.codes.length && leaf.codes[end] !== LF) {
