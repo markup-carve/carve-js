@@ -8,6 +8,9 @@
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
   ['includes-38', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F8: the copy in the child carries its note number (C2-N-074, C2-A-100)' }],
+  ['syntax-blocks-231', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F9: a region marker line ends the paragraph above it (C2-B-137)' }],
+  ['syntax-blocks-278', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
+  ['syntax-blocks-282', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

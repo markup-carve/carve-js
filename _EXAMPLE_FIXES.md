@@ -1,6 +1,6 @@
 # Example fixes for the specification
 
-**Status at `011cb22e` (freeze candidate 4):** one hold, F8 (`includes-38`, field `tree`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
+**Status at `068552fc` (freeze candidate 6):** four holds, F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`. F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
@@ -93,3 +93,26 @@ Stated in the corpus: the copy of the caption in the child `code_block` holds th
 C2-N-074 decides it: "the copy in its child is numbered, resolved and written", and C2-A-100 makes `number` the resolution result of an `inline_footnote`. The HTML of the same example numbers the note (`fnref1`, `fn1`), and every other example tree of the corpus carries the number of a resolved note.
 
 Clause-correct: the `inline_footnote` of the copy carries `"number": 1`; the caption of the include itself stays without a number, as stated. The engine gives that tree, and the HTML of the example passes.
+
+## F9. `syntax-blocks.md` Example 231: `expected.tree`
+
+Input:
+
+```carve
+See [c]().
+%% #endregion intro
+```
+
+(the last two lines of the example). Stated in the corpus and in `trees/examples-syntax-blocks.json`: the paragraph `See [c]().` holds a `soft_break` and the marker as an inline `comment`.
+
+C2-B-137 decides it: a region marker line "is no comment-only line [...] it ends every open paragraph, heading and table, and no lazy line [...] reaches across it. Its comment is a comment node of that container." C2-B-024 excludes a region marker line from the lazy lines of a paragraph. Example 278, added in the same round, applies the rule.
+
+Clause-correct: the paragraph ends at `See [c]().`, and `%% #endregion intro` is a `comment` (form `line`) child of the document. The engine gives that tree; the HTML of the example passes.
+
+## F10. `syntax-blocks.md` Examples 278 and 282: `expected.tree`
+
+Stated in the corpus and in `trees/examples-syntax-blocks.json`: `stages` is `["includeExpansion", "referenceResolution", "tableAlignment"]`.
+
+C2-N-006 adds `includeExpansion` to a tree in which expansion ran. Neither input holds an include, the examples set no option, and the other 500 examples without an include state `["referenceResolution", "tableAlignment"]`.
+
+Clause-correct: `stages` is `["referenceResolution", "tableAlignment"]`; every other field of both trees matches the engine.
