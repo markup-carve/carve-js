@@ -49,6 +49,19 @@ const CONTAINER_SHAPES = SHAPE_QUOTE | MARKER_SHAPES | SHAPE_DESCRIPTION | SHAPE
 const LEAF_SHAPES = FENCE_SHAPES | SHAPE_COMMENT_ONLY | SHAPE_HEADING | SHAPE_THEMATIC_BREAK | SHAPE_TERM |
   SHAPE_ATTRIBUTE_LINE | SHAPE_INCLUDE | SHAPE_LINK_DEFINITION | SHAPE_ABBREVIATION_DEFINITION | SHAPE_TABLE_ROW
 
+// C2-N-020: a selection that starts after line 1 of its file opens no frontmatter.
+let frontmatterOpens = true
+
+/** Runs `parse` with line 1 read as an ordinary line, as a selection that starts later in its file. */
+export function withoutFrontmatter<T>(parse: () => T): T {
+  frontmatterOpens = false
+  try {
+    return parse()
+  } finally {
+    frontmatterOpens = true
+  }
+}
+
 /** Writes the block events of `src` into `state`, with the line-start table. */
 export function scanBlocks(state: BlockState, src: string): void {
   state.src = src
@@ -75,7 +88,7 @@ export function scanBlocks(state: BlockState, src: string): void {
     addLine(state, lineStart)
     if (lineStart > 0) scanLine(state, lineStart, lineEnd)
     // C2-B-165: a byte-order mark is skipped before line 1 is read, whatever the line holds.
-    else if (!openFrontmatter(state, lineEnd)) scanLine(state, src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0, lineEnd)
+    else if (!frontmatterOpens || !openFrontmatter(state, lineEnd)) scanLine(state, src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0, lineEnd)
     lineStart = next
   }
   closeTo(state, 1)

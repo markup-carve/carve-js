@@ -1,6 +1,6 @@
 // Include expansion (spec/0.2/includes.md): each included file is parsed as a document of its own and its blocks
 // become the children of the include node, which stays where the directive stood (C2-N-015 to C2-N-019).
-import { type DocumentNode, forEachSlot, type IncludeNode, type Node, type Position } from './ast.ts'
+import { DEFINITION_TYPES, type DocumentNode, forEachSlot, type IncludeNode, type Node, type Position } from './ast.ts'
 import { type OuterScope, type ParseFacts, type ParsedTree } from './ast-blocks.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { INCLUDE_KEY_REPEATED, optionProblem } from './include.ts'
@@ -13,9 +13,11 @@ import { applyShifts, selectSection } from './include-select.ts'
 import { INCLUDE_CAUSES, INCLUDE_CONFLICTS, INCLUDE_MESSAGES } from './include-tables.ts'
 import { type HeadingIds } from './options.ts'
 import { utf8Length } from './positions.ts'
+import { withoutFrontmatter } from './blocks.ts'
 
 /** Parses the text of one file with the parse options of the top-level document (C2-N-015). */
-export type FileParse = (text: string, outer: OuterScope) => ParsedTree
+/** Parses the text of a file; `positions` asks for positions where the expansion would not keep them. */
+export type FileParse = (text: string, outer: OuterScope, positions?: boolean) => ParsedTree
 
 interface Expansion {
   settings: IncludeSettings
@@ -196,7 +198,9 @@ function movePositions(nodes: readonly Node[], lines: number, bytes: number): vo
 function parseLines(exp: Expansion, text: string, lines: FileLines, range: LineRange, scope: OuterScope): ParsedTree {
   if (range.from >= range.to) return exp.parse('', scope)
   const start = lines.starts[range.from]!
-  const parsed = exp.parse(text.slice(start, lines.nexts[range.to - 1]), scope)
+  const slice = text.slice(start, lines.nexts[range.to - 1])
+  // C2-N-020: frontmatter belongs to the file, so only a selection from its line 1 opens it.
+  const parsed = range.from === 0 ? exp.parse(slice, scope) : withoutFrontmatter(() => exp.parse(slice, scope))
   // A slice from line 1 holds the U+FEFF too, and stands where the file starts.
   const from = range.from === 0 ? 0 : start
   if (exp.positions && from > 0) movePositions(parsed.document.children, range.from, utf8Length(text.slice(0, from)))
@@ -235,7 +239,32 @@ function select(exp: Expansion, node: IncludeNode, text: string, frame: Frame): 
     const code = codeChildren(node, text, lines, range, exp.positions)
     return 'cause' in code ? code : { children: code.children, facts: code.facts, includes: [], scope: frame.scope }
   }
-  return fromParse(parseLines(exp, text, lines, range, frame.scope))
+  if (range.from === 0 && range.to === lines.starts.length) return fromParse(parseLines(exp, text, lines, range, frame.scope))
+  return selectionWithDefinitions(exp, text, lines, range, frame.scope)
+}
+
+/**
+ * C2-N-020, C2-N-054: a selection by lines or by region resolves against the definitions of its whole file. Its
+ * children are its blocks, then every definition of the file parsed whole whose first line it did not take.
+ */
+function selectionWithDefinitions(exp: Expansion, text: string, lines: FileLines, range: LineRange, scope: OuterScope): Selected {
+  const whole = exp.parse(text, scope, true)
+  const selected = fromParse(parseLines(exp, text, lines, range, whole.facts?.scope ?? scope))
+  const outside = whole.document.children.filter((node) => {
+    const line = (node.pos?.startLine ?? 0) - 1
+    return DEFINITION_TYPES.includes(node.type) && (line < range.from || line >= range.to)
+  })
+  if (!exp.positions) dropPositions(outside)
+  return { ...selected, children: [...selected.children, ...outside] }
+}
+
+function dropPositions(nodes: readonly Node[]): void {
+  const pending: Node[] = [...nodes]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    delete node.pos
+    delete node.segments
+    forEachSlot(node, (list) => { for (const child of list) pending.push(child) })
+  }
 }
 
 /** C2-N-061 to C2-N-066, C2-N-018: expands one include, then the includes of its file, a node before those inside it. */
