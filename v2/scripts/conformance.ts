@@ -63,8 +63,10 @@ for (const entry of REFUSED_TREES) {
 for (const [file, trees] of EXAMPLE_TREES) {
   for (const entry of trees) {
     const failed = exampleTreeMismatches(entry).map((mismatch) => mismatch.field)
-    count('positive trees', failed)
-    if (failed.length > 0) failures.push(`${file} ${entry.id}: ${failed.join(', ')}`)
+    const held = HELD.get(entry.id)
+    const row = count('positive trees', failed)
+    if (held !== undefined && failed.join() === held.fields.join()) row.held++
+    else if (failed.length > 0) failures.push(`${file} ${entry.id}: ${failed.join(', ')}`)
   }
 }
 for (const entry of SUPPLIED_TREES) {

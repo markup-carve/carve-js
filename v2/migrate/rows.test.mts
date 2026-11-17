@@ -134,7 +134,7 @@ const cases: Record<string, Case> = {
   'T-049': { children: [{ type: 'include', path: 'a.crv', section: 'intro', options: [['code', '']] }],
     path: 'document.children.0.section', expected: 'intro' },
   'T-050': { children: [{ type: 'block_extension', name: 'test.note', version: '1', children: [],
-    fallback: [paragraph(text('safe'))], source: { form: 'div', name: 'note', body: 'safe\n' } }],
+    fallback: [paragraph(text('safe'))], source: { form: 'div', name: 'callout', body: 'safe\n' } }],
     root: { extensions: [{ name: 'test.note', version: '1', required: false, slots: [] }] },
     path: 'document.children.0.source.body', expected: 'safe\n',
     also: { 'document.children.0.fallback.0.type': 'paragraph' } },

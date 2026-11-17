@@ -2,13 +2,20 @@ import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../src/inline-tab
 import { fact, folded, integer, list, object, string, type Fields, type MigrationState } from './shared.ts'
 import { migrateCell, migrateRow, migrateTable } from './table.ts'
 
+// C2-A-058: a start is 0 to 999999999 and omitted when it is 1; any other number leaves the list starting at 1 (U-025).
+const MAX_START = 999_999_999
+
+function keptStart(start: number | undefined): start is number {
+  return start !== undefined && Number.isInteger(start) && start >= 0 && start <= MAX_START && start !== 1
+}
+
 function listStart(node: Fields, marker: Fields): void {
   if (!object(node['attrs']) || !Array.isArray(node['attrs']['keyValues'])) return
   const pairs = node['attrs']['keyValues'].filter((pair) => Array.isArray(pair))
   const startPair = pairs.find((pair) => pair[0] === 'start')
   if (startPair === undefined) return
   const start = Number(startPair[1])
-  if (Number.isInteger(start) && start >= 0) marker['start'] = start
+  if (keptStart(start)) marker['start'] = start
   const remaining = pairs.filter((pair) => pair !== startPair)
   if (remaining.length === 0) delete node['attrs']['keyValues']
   else node['attrs']['keyValues'] = remaining
@@ -19,7 +26,7 @@ function markerOf(old: Fields): Fields {
   if (old['ordered'] !== true) return { kind: 'bullet', char: string(old['bulletChar']) ?? '-' }
   const marker: Fields = { kind: 'ordered', style: string(old['olType']) ?? '1', delimiter: string(old['delim']) ?? '.' }
   const start = integer(old['start'])
-  if (start !== undefined && start !== 1) marker['start'] = start
+  if (keptStart(start)) marker['start'] = start
   return marker
 }
 
