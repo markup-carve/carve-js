@@ -66,6 +66,8 @@ export interface Leaf {
   openDepth: number
   /** C2-W-016: the nodes whose value holds a CR at a line end, which no spelling keeps. */
   lostValues: Node[]
+  /** C2-I-089: per unit, whether it stands inside an inline footnote, once a caret asked. */
+  notes: Uint8Array | null
 }
 
 export function createLeaf(): Leaf {
@@ -73,8 +75,24 @@ export function createLeaf(): Leaf {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
     extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1, lostValues: [],
+    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
   }
+}
+
+/** C2-I-089: whether the unit `at` stands inside the marks of an inline footnote of the tree. */
+export function inNote(leaf: Leaf, at: number): boolean {
+  if (leaf.notes === null) {
+    const notes = new Uint8Array(leaf.codes.length)
+    let depth = 0
+    for (let unit = 0; unit < leaf.codes.length; unit++) {
+      const note = leaf.owners[unit]?.type === 'inline_footnote'
+      if (note && leaf.kinds[unit] === CLOSE) depth--
+      notes[unit] = depth > 0 ? 1 : 0
+      if (note && leaf.kinds[unit] === OPEN && leaf.codes[unit] === 91) depth++
+    }
+    leaf.notes = notes
+  }
+  return leaf.notes[at] === 1
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {

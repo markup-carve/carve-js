@@ -3,18 +3,19 @@
 import { emptyBlockEnd, readAttributeBlock } from './attributes.ts'
 import { foldLabel } from './ast-attributes.ts'
 import {
-  APOSTROPHE, AT_SIGN, BACKSLASH, BACKTICK, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN, PERCENT,
-  QUOTE_MARK, SPACE,
+  APOSTROPHE, AT_SIGN, BACKSLASH, BACKTICK, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, LF, PAREN_CLOSE, PAREN_OPEN,
+  PERCENT, QUOTE_MARK, SPACE,
 } from './chars.ts'
 import {
   ATTRIBUTE_BLOCK, BRACKET_SPAN, ESCAPE, FLAG_COLLAPSED, FLAG_SHORTCUT, FOOTNOTE_REF, IMAGE, INLINE_EXTENSION, INLINE_FOOTNOTE, LABEL,
   LINK,
 } from './inline-kinds.ts'
-import { atDepthCap, enterBracket, leaveBracket } from './inline-depth.ts'
+import { atDepthCap, enterBracket, innermostBracedOpener, leaveBracket } from './inline-depth.ts'
 import {
-  closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_C, TOKEN_CLOSE,
-  TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
+  closerMissing, type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, OPEN_PLAIN, pushToken, TOKEN_A, TOKEN_B, TOKEN_BRACED_OPEN, TOKEN_C,
+  TOKEN_CLOSE, TOKEN_END, TOKEN_OPEN, TOKEN_START, TOKEN_TAIL, TOKEN_TEXT, TOKEN_WIDTH,
 } from './inline-state.ts'
+import { BRACED_MARKS } from './inline-tables.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
 
 
@@ -69,13 +70,25 @@ function footnoteReference(state: InlineState, pos: number): number {
 }
 
 export function scanBracketOpen(state: InlineState, pos: number): number {
-  if (state.text.charCodeAt(pos + 1) === CARET) return footnoteReference(state, pos)
+  if (state.text.charCodeAt(pos + 1) === CARET && !demotedInNote(state)) return footnoteReference(state, pos)
   return openBracket(state, pos, pos + 1, OPEN_PLAIN)
 }
 
-/** C2-I-089: `^[` opens an inline footnote. */
+/** C2-I-089: `^[` opens an inline footnote; inside an open one the caret is text and the bracket an ordinary one. */
 export function scanFootnoteOpen(state: InlineState, pos: number): number {
+  if (demotedInNote(state)) return pos + 1
   return openBracket(state, pos, pos + 2, OPEN_FOOTNOTE)
+}
+
+/** Whether an inline footnote is open at the scan, so that a caret pair here opens no note; notes the demotion. */
+function demotedInNote(state: InlineState): boolean {
+  for (let at = state.bracketDepth - 1; at >= 0; at--) {
+    const open = state.brackets[at]!
+    if (state.tokens[open + TOKEN_A] !== OPEN_FOOTNOTE || state.unclosedNotes.includes(state.tokens[open + TOKEN_START]!)) continue
+    state.demotedInNote = true
+    return true
+  }
+  return false
 }
 
 /** C2-I-074: `![` opens what may become an image. */
@@ -285,19 +298,12 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   return pos + 1
 }
 
-/** C2-I-023: whether `pos` directly follows the `^[` of an inline footnote. */
-export function followsNoteOpener(state: InlineState, pos: number): boolean {
-  if (state.bracketDepth === 0) return false
-  const open = state.brackets[state.bracketDepth - 1]!
-  return state.tokens[open + TOKEN_A] === OPEN_FOOTNOTE && state.tokens[open + TOKEN_END] === pos
-}
-
-/** The number of brackets above the innermost open inline footnote, or NONE where no note is open. */
-function bracketsAboveNote(state: InlineState): number {
-  for (let at = state.bracketDepth - 1; at >= 0; at--) {
-    if (state.tokens[state.brackets[at]! + TOKEN_A] === OPEN_FOOTNOTE) return state.bracketDepth - 1 - at
-  }
-  return NONE
+/** C2-I-023: whether `pos` is the start of the content of a bracket or a braced opener, which counts as a line start. */
+export function followsOpener(state: InlineState, pos: number): boolean {
+  const last = state.tokenLength - TOKEN_WIDTH
+  if (last < 0 || state.tokens[last + TOKEN_END] !== pos) return false
+  const kind = state.tokens[last]
+  return kind === TOKEN_OPEN || kind === TOKEN_BRACED_OPEN
 }
 
 /** The end of a backtick run at `pos` read as a code span opener: past its closer on the line, or past the run. */
@@ -315,19 +321,35 @@ function codeSpanEnd(text: string, pos: number, end: number): number {
 }
 
 /**
- * C2-I-024: where a line comment that starts at `from` while an inline footnote is open ends: directly before the
- * bracket that closes the innermost open note on this line, read with code spans and the bracket stack, or `end`.
+ * C2-I-024: where a line comment that starts at `from` ends: directly before the closer of the innermost bracket or
+ * braced opener open at it, where that closer is on this line, read with code spans and nested openers, or `end`.
  */
-export function noteCommentEnd(state: InlineState, from: number, end: number): number {
-  let depth = bracketsAboveNote(state)
-  if (depth === NONE) return end
+export function commentEnd(state: InlineState, from: number, end: number): number {
+  const braced = innermostBracedOpener(state)
+  if (braced !== NONE) return bracedCloserAt(state.text, BRACED_MARKS.charCodeAt(state.tokens[braced + TOKEN_A]!), from, end)
+  if (state.bracketDepth === 0) return end
   const text = state.text
+  // C2-I-077: a bracket glued to a closing bracket starts a reference label, whose closer the comment takes.
+  if (text.charCodeAt(state.tokens[state.brackets[state.bracketDepth - 1]! + TOKEN_START]! - 1) === BRACKET_CLOSE) return end
+  let depth = 0
   for (let p = from; p < end; p++) {
     const code = text.charCodeAt(p)
     if (code === BACKSLASH) p++
     else if (code === BACKTICK) p = codeSpanEnd(text, p, end) - 1
     else if (code === BRACKET_OPEN) depth++
     else if (code === BRACKET_CLOSE && depth-- === 0) return p
+  }
+  return end
+}
+
+function bracedCloserAt(text: string, mark: number, from: number, end: number): number {
+  let depth = 0
+  for (let p = from; p < end; p++) {
+    const code = text.charCodeAt(p)
+    if (code === BACKSLASH) p++
+    else if (code === BACKTICK) p = codeSpanEnd(text, p, end) - 1
+    else if (code === BRACE_OPEN && text.charCodeAt(p + 1) === mark) depth++
+    else if (code === mark && text.charCodeAt(p + 1) === BRACE_CLOSE && depth-- === 0) return p
   }
   return end
 }

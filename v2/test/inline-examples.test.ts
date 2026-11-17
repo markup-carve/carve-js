@@ -32,7 +32,7 @@ const EXAMPLES: readonly (readonly [number, readonly string[], string])[] = [
   [15, ['`<br>`{=html .c} and [s]{=html} and $`x`{=html}'], 'p[code"<br>" "{=html .c} and [s]{=html} and " math"x" "{=html}"]'],
   [16, ['a %% comment', 'b and 50%% and a%%b'], 'p["a" %%" comment" sb "b and 50%% and a%%b"]'],
   [17, ['*a %% b*', 'c* d'], 'p[strong["a" %%" b*" sb "c"] " d"]'],
-  [18, ['[a %% b](/u) c'], 'p["[a" %%" b](/u) c"]'],
+  [18, ['[a %% b](/u) c'], 'p[a(/u)["a" %%" b"] " c"]'],
   [19, ['`a %% b` and [a](/u%%20c) and [a]{k="a %% b"}'], 'p[code"a %% b" " and " a(/u%%20c)["a"] " and " span["a"]{k="a %% b"}]'],
   [20, ['a {% one', 'two %} b and *bo{% c %}ld* and a {% oops'], 'p["a " {%}" one|two " " b and " strong["bo" {%}" c " "ld"] " and a {% oops"]'],
   [21, ['[s]{#a .b k=v} [s]{k="v w" k2=\'x\'} [s]{:en} [s]{ .a } [s]{open}'], 'p[span["s"]{#a .b k=v} " " span["s"]{k="v w" k2=x} " " span["s"]{:en} " " span["s"]{.a} " " span["s"]{open=""}]'],

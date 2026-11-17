@@ -6,7 +6,7 @@ import { forEachSlot, type Node, type TextNode } from './ast.ts'
 import { isAsciiPunctuation, isWordCharacter } from './unicode.ts'
 import { IN_CELL } from './write-inline.ts'
 import {
-  ATOM, CLOSE, createLeaf, ESCAPE, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
+  ATOM, CLOSE, createLeaf, ESCAPE, inNote, type Leaf, leafText, modelContent, modelInlines, OPEN, TEXT, trimLast, undecide,
 } from './write-plan-model.ts'
 import { emptyMemo, readAttributeBlock } from './attributes.ts'
 import { opensAngleAtom } from './write-plan-angle.ts'
@@ -18,6 +18,7 @@ import { type LeafPlace, lineEscape, UNDECIDED } from './write-plan-lines.ts'
 import { BRACED_CLOSER_MARKS, INLINE_TRIGGERS, LINE_TRIGGERS } from './write-tables.ts'
 import { type Writer } from './write-state.ts'
 import { MAX_DEPTH } from './state.ts'
+import { BRACED_MARKS } from './inline-tables.ts'
 
 /** What one planned write of a group collects. */
 export interface Plan {
@@ -228,7 +229,7 @@ function footnotePlanned(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
  * are checked in write-plan-brackets.ts.
  */
 function bracket(leaf: Leaf, at: number, escaped: Uint8Array): void {
-  if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '^')) return
+  if (isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '^') || inNote(leaf, at)) return
   const reading = leaf.kinds[at + 1] === TEXT ? footnoteReading(leaf, at, escaped) : UNREAD
   if (reading === UNREAD) undecide(leaf, 'footnote bracket')
   else if (reading === REFERENCE) escaped[at] = 1
@@ -422,6 +423,8 @@ function caret(leaf: Leaf, at: number, escaped: Uint8Array): void {
   const before = code(leaf, at - 1)
   const textBefore = leaf.kinds[at - 1] === TEXT
   if (before === 123 && textBefore && !isLiteral(leaf, at - 1, escaped)) return
+  // C2-I-089: inside a note a caret pair opens nothing.
+  if (inNote(leaf, at)) return
   if ((before === 123 && !textBefore) || (before === 91 && leaf.lastBracket > at && !footnotePlanned(leaf, at - 1, escaped))) {
     return undecide(leaf, 'footnote bracket')
   }
@@ -453,20 +456,23 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
 }
 
 /**
- * C2-I-023: directly behind a `^[` that may open an inline footnote, `%%` opens a line comment too. Decided once the
- * brackets are, since an escaped `[` opens no note and the `%` then needs none.
+ * C2-I-023: at the start of the content of a bracket or a braced opener, `%%` opens a line comment too. Decided once
+ * the brackets are, since an escaped `[` opens nothing and the `%` then needs no backslash.
  */
-function percentsBehindNotes(leaf: Leaf, escaped: Uint8Array): void {
+function percentsBehindOpeners(leaf: Leaf, escaped: Uint8Array): void {
   for (let at = leaf.codes.indexOf(37); at >= 0; at = leaf.codes.indexOf(37, at + 1)) {
-    if (leaf.inTitle || leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) continue
-    if (code(leaf, at - 1) === 91 && opensNoteBefore(leaf, at - 2, escaped)) escaped[at] = 1
+    if (leaf.inTitle || leaf.inLine || leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) continue
+    if (opensContentBefore(leaf, at - 1, escaped)) escaped[at] = 1
   }
 }
 
-/** Whether the `^` at `caret` and the `[` behind it are text that opens an inline footnote, not the `{^` of a span. */
-function opensNoteBefore(leaf: Leaf, caret: number, escaped: Uint8Array): boolean {
-  if (code(leaf, caret) !== 94 || isLiteral(leaf, caret, escaped) || isLiteral(leaf, caret + 1, escaped)) return false
-  return code(leaf, caret - 1) !== 123 || isLiteral(leaf, caret - 1, escaped)
+/** Whether the unit `at` ends a bracket or a braced opener, of the tree or of text the reader reads as one. */
+function opensContentBefore(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  const value = code(leaf, at)
+  if (leaf.kinds[at] === OPEN) return value === 91 || (code(leaf, at - 1) === 123 && BRACED_MARKS.includes(String.fromCharCode(value)))
+  if (isLiteral(leaf, at, escaped)) return false
+  if (value === 91) return true
+  return BRACED_MARKS.includes(String.fromCharCode(value)) && code(leaf, at - 1) === 123 && !isLiteral(leaf, at - 1, escaped)
 }
 
 /**
@@ -938,7 +944,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
-  if (leaf.undecided === null) percentsBehindNotes(leaf, escaped)
+  if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
   return escaped
 }
 

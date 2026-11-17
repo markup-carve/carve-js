@@ -18,7 +18,7 @@ interface ImageLine {
   runs: BacktickRuns | null
 }
 
-/** C2-I-023, C2-I-024: a line comment starts at `p` and takes every closer on the rest of the line. */
+/** C2-I-023: a line comment starts at `p`. */
 function isLineComment(src: string, p: number): boolean {
   return src.charCodeAt(p) === PERCENT && src.charCodeAt(p + 1) === PERCENT && isBoundarySpace(src.charCodeAt(p - 1))
 }
@@ -105,11 +105,11 @@ function bracketClose(line: ImageLine, pos: number): number {
   let depth = 1
   let p = pos + 1
   while (p < line.end) {
-    const atom = atomEnd(line, p)
-    if (atom === NONE) return NONE
+    const skipped = skipAtom(line, p)
+    if (skipped === NONE) return NONE
     const code = src.charCodeAt(p)
-    if (atom > p) {
-      p = atom
+    if (skipped !== p) {
+      p = skipped
     } else if (code === BRACKET_OPEN) {
       const reference = footnoteReferenceEnd(line, p)
       if (reference === p) depth++
@@ -122,6 +122,26 @@ function bracketClose(line: ImageLine, pos: number): number {
       p = nestedTailEnd(line, p)
       if (p === NONE) return NONE
     }
+  }
+  return NONE
+}
+
+/** The offset behind the atom at `p`, `p` where none starts; C2-I-024: a line comment ends before its bracket's closer. */
+function skipAtom(line: ImageLine, p: number): number {
+  const atom = atomEnd(line, p)
+  return atom === NONE ? commentCloser(line, p + 2) : atom
+}
+
+/** The offset of the `]` that closes the innermost open bracket behind a line comment, read with code spans, or NONE. */
+function commentCloser(line: ImageLine, from: number): number {
+  const src = line.src
+  let depth = 0
+  for (let p = from; p < line.end; p++) {
+    const code = src.charCodeAt(p)
+    if (code === BACKSLASH) p++
+    else if (code === BACKTICK) p = codeSpanEnd(line, p) - 1
+    else if (code === BRACKET_OPEN) depth++
+    else if (code === BRACKET_CLOSE && depth-- === 0) return p
   }
   return NONE
 }

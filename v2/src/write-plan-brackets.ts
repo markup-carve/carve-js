@@ -3,7 +3,7 @@
 // block or definition and its label can name no reference; every other pair is left to the repair.
 import { emptyBlockEnd, emptyMemo, readAttributeBlock } from './attributes.ts'
 import { DEPTH_CAP } from './inline-tables.ts'
-import { CLOSE, ESCAPE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
+import { CLOSE, ESCAPE, inNote, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
 
 const OPENING = 91
 const CLOSING = 93
@@ -23,7 +23,8 @@ function isReadText(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
 
 /** C2-I-089, C2-I-055: a bare caret of text opens `^[`, unless a bare `{` of text before it makes `{^` of it. */
 export function isFootnoteCaret(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
-  return leaf.codes[at] === 94 && isReadText(leaf, at, escaped) && !(leaf.codes[at - 1] === 123 && isReadText(leaf, at - 1, escaped))
+  if (leaf.codes[at] !== 94 || !isReadText(leaf, at, escaped) || inNote(leaf, at)) return false
+  return !(leaf.codes[at - 1] === 123 && isReadText(leaf, at - 1, escaped))
 }
 
 const LITERAL = 0

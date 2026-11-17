@@ -146,10 +146,9 @@ describe('C2-B-197: a block image line has the shape of the inline image form', 
     expect(kind('![a][ @x]')).toBe('figure')
   })
 
-  it('C2-I-024, C2-I-077: a line comment in the alt or the label leaves the form open', () => {
-    for (const line of ['![a][b %% c]', '![a %% b](x)', '![a\t%% b](x)', '![a [b %% c] d](x)']) {
-      expect(kind(line)).toBe('paragraph')
-    }
+  it('C2-I-024, C2-I-077: a line comment in the label leaves the form open, one in the alt ends before its bracket', () => {
+    for (const line of ['![a][b %% c]', '![a [b %% c](x)']) expect(kind(line)).toBe('paragraph')
+    for (const line of ['![a %% b](x)', '![a\t%% b](x)', '![a [b %% c] d](x)']) expect(kind(line)).toBe('figure')
     expect(kind('![a%%b](x)')).toBe('figure')
     expect(kind('![a][b%%c]')).toBe('figure')
   })

@@ -19,7 +19,7 @@ import {
   CLASS_EXTENSION_FIRST, CLASS_EXTENSION_REST, CLASS_MENTION, CLASS_RAW_FIRST, CLASS_RAW_REST, CLASS_SCHEME_FIRST,
   CLASS_SCHEME_REST, CLASS_SYMBOL_FIRST, CLASS_SYMBOL_REST, CLASS_URL_BODY,
 } from './inline-tables.ts'
-import { followsNoteOpener, noteCommentEnd } from './inline-brackets.ts'
+import { commentEnd, followsOpener } from './inline-brackets.ts'
 import { atDepthCap, countBracedOpen } from './inline-depth.ts'
 import { isSpaceOrTab } from './source.ts'
 import {
@@ -252,16 +252,16 @@ export function scanLess(state: InlineState, pos: number): number {
   return close + 1
 }
 
-/** C2-I-023: `%%` at the start of a line, after whitespace or after `^[`, to the end of its line or an open note's bracket. */
+/** C2-I-023: `%%` at a line start, after whitespace or at the start of an opener's content, to its line end or the closer of C2-I-024. */
 export function scanPercent(state: InlineState, pos: number): number {
   const text = state.text
   if (!state.lineComments || text.charCodeAt(pos + 1) !== PERCENT) return pos + 1
-  if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER) && !followsNoteOpener(state, pos)) return pos + 1
+  if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER) && !followsOpener(state, pos)) return pos + 1
   let start = pos
   while (start > state.tokenEnd && isSpaceOrTab(text.charCodeAt(start - 1))) start--
   let lineEnd = text.indexOf('\n', pos)
   if (lineEnd < 0 || lineEnd > state.end) lineEnd = state.end
-  const end = noteCommentEnd(state, pos + 2, lineEnd)
+  const end = commentEnd(state, pos + 2, lineEnd)
   pushToken(state, INLINE_COMMENT, start, end, pos + 2, end, 0, NONE)
   return end
 }

@@ -196,10 +196,12 @@ describe('comments', () => {
     expect(inline('a  %%')).toBe('"a" %%""')
   })
 
-  it('C2-I-024: a line comment takes the rest of its line with every closer on it', () => {
+  it('C2-I-024: a line comment takes the rest of its line, up to the closer of the innermost open bracket or braced opener', () => {
     expect(inline('*a %% b*', 'c* d')).toBe('strong["a" %%" b*" sb "c"] " d"')
     expect(inline('`a` %% `b', 'c`')).toBe('code"a" %%" `b" sb "c`"')
-    expect(inline('x {*a %% *}', '*}')).toBe('"x " strong["a" %%" *}" sb]')
+    expect(inline('x {*a %% *}', '*}')).toBe('"x " strong["a" %%" "] sb "*}"')
+    expect(inline('x {*a %% b', '*}')).toBe('"x " strong["a" %%" b" sb]')
+    expect(inline('[a {_b %% c] d_} e')).toBe('"[a " u["b" %%" c] d"] " e"')
   })
 
   it('C2-I-025: a braced comment closes at the first `%}` and may cross lines', () => {
@@ -805,7 +807,8 @@ describe('the depth cap', () => {
     expect(depth(inline(`${'{^'.repeat(MAX_DEPTH + 1)}x${'^}'.repeat(MAX_DEPTH + 1)}`), 'sup[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${'*a '.repeat(MAX_DEPTH + 5)}${'b* '.repeat(MAX_DEPTH + 5)}`), 'strong[')).toBe(MAX_DEPTH)
     expect(depth(inline(`${'['.repeat(MAX_DEPTH + 1)}x${']{.c}'.repeat(MAX_DEPTH + 1)}`), 'span[')).toBe(MAX_DEPTH)
-    expect(depth(inline(`${'^['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'fn[')).toBe(MAX_DEPTH)
+    // C2-I-089: inside a note `^[` opens no note, so the brackets inside it count.
+    expect(depth(inline(`${'^['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'fn[')).toBe(1)
     expect(depth(inline(`${':n['.repeat(MAX_DEPTH + 1)}x${']'.repeat(MAX_DEPTH + 1)}`), 'ext(n)[')).toBe(MAX_DEPTH)
     // No block counts: behind a quote and a list item each content nests to the cap by itself.
     expect(depth(tree(`> > ${'{^'.repeat(MAX_DEPTH)}x${'^}'.repeat(MAX_DEPTH)}`), 'sup[')).toBe(MAX_DEPTH)

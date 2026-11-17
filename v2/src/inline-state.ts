@@ -83,6 +83,10 @@ export interface InlineState {
   // Open bracket openers, as token offsets.
   brackets: Int32Array
   bracketDepth: number
+  /** C2-I-089: the starts of the inline footnotes that stayed unclosed in an earlier pass, which open no note. */
+  unclosedNotes: number[]
+  /** Whether the pass read a caret pair as text inside an open note. */
+  demotedInNote: boolean
 
   // Memos that let an opener fail in bounded work. Each holds the offset up to which a search
   // has already found nothing, or NONE. The three closer memos hold the offset from which on no
@@ -158,6 +162,8 @@ function createState(): InlineState {
     codeRunEnd: 0,
     bidi: false,
     definitions: null,
+    unclosedNotes: [],
+    demotedInNote: false,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,
     tokenEnd: 0,

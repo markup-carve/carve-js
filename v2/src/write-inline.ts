@@ -22,6 +22,8 @@ export const BARE_BREAKS = 8
 export const IN_BRACKET = 16
 /** C2-W-117: a block written inside the body of a figure group, which a nested figure group cannot be. */
 export const IN_FIGURE_GROUP = 32
+/** C2-I-089: inside an inline footnote, where a caret pair opens nothing. */
+export const IN_NOTE = 64
 
 const BACKSLASH = 92
 const EXCLAMATION = 33
@@ -321,8 +323,9 @@ function trimLineEnds(raw: string): string {
 }
 
 /** C2-W-125 case five: an unescaped leading caret of link or span text reads as a footnote reference instead. */
-function escapeLeadingCaret(w: Writer, children: readonly Inline[]): void {
+function escapeLeadingCaret(w: Writer, children: readonly Inline[], flags: number): void {
   const first = children[0]
+  if ((flags & IN_NOTE) !== 0) return
   if (first?.type === 'text' && first.value.startsWith('^')) {
     const escapes = w.escapes.get(first) ?? []
     if (escapes[0] !== 0) w.escapes.set(first, [0, ...escapes])
@@ -332,7 +335,7 @@ function escapeLeadingCaret(w: Writer, children: readonly Inline[]): void {
 function linkNode(w: Writer, node: LinkNode, flags: number): string {
   const raw = rawReference(w, node, flags)
   if (raw !== null) return raw
-  escapeLeadingCaret(w, node.children)
+  escapeLeadingCaret(w, node.children, flags)
   const content = writeInlines(w, node.children, flags | IN_BRACKET)
   return `[${collapsedContent(node, content, flags)}]${target(node, node.href, (flags & IN_CELL) !== 0)}`
 }
@@ -606,7 +609,7 @@ const WRITERS: InlineWriters = {
   span: (w, node, flags) => `[${writeInlines(w, node.children, flags)}]`,
   link: linkNode,
   image: imageNode,
-  inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags)}]`,
+  inline_footnote: (w, node, flags) => `^[${writeInlines(w, node.children, flags | IN_NOTE)}]`,
   inline_extension: inlineExtension,
   footnote_ref: (_w, node) => `[^${labelText(node.key)}]`,
   code: (w, node, flags) => spanValue(w, node, node.value, flags),
@@ -695,7 +698,7 @@ function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number
     escapeGluedBacktick(w, node, nodes[at - 1])
   }
   // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
-  if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children)
+  if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)
 }
 
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {

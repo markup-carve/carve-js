@@ -13,7 +13,7 @@ import {
 } from './inline-brackets.ts'
 import { pairDelimiters, scanBareMark, scanBracedMark } from './inline-delimiters.ts'
 import { writeEvents } from './inline-emit.ts'
-import { type InlineState, NONE, setContent } from './inline-state.ts'
+import { type InlineState, NONE, OPEN_FOOTNOTE, setContent, TOKEN_A, TOKEN_START } from './inline-state.ts'
 import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import { BIDI_FIRST, BIDI_LAST, holdsBidiControl, isBidiControl } from './unicode.ts'
@@ -107,6 +107,44 @@ function resetScan(state: InlineState): void {
   state.tailEnd = NONE
 }
 
+function scanPass(state: InlineState): void {
+  const text = state.text
+  const end = state.end
+  resetScan(state)
+  state.demotedInNote = false
+  for (let pos = 0; pos < end;) {
+    const code = text.charCodeAt(pos)
+    if (code >= ASCII) {
+      if (code >= BIDI_FIRST && code <= BIDI_LAST && isBidiControl(code)) state.bidi = true
+      pos++
+    } else if (STARTS_TOKEN[code] === 1) {
+      const next = SCANNERS[code]!(state, pos)
+      // C2-H-172: what a scanner stepped over can still end up as text.
+      if (next > pos + 1 && !state.bidi) state.bidi = holdsBidiControl(text, pos + 1, next)
+      pos = next
+    } else {
+      pos++
+    }
+  }
+}
+
+/**
+ * C2-I-089: a note that stays unclosed is text, so the caret pairs read as text inside it are read again. Records
+ * the unclosed notes and returns whether the content needs another pass.
+ */
+function unclosedNoteDemoted(state: InlineState): boolean {
+  if (!state.demotedInNote) return false
+  let found = false
+  for (let at = 0; at < state.bracketDepth; at++) {
+    const open = state.brackets[at]!
+    const start = state.tokens[open + TOKEN_START]!
+    if (state.tokens[open + TOKEN_A] !== OPEN_FOOTNOTE || state.unclosedNotes.includes(start)) continue
+    state.unclosedNotes.push(start)
+    found = true
+  }
+  return found
+}
+
 /**
  * Reads the inline content of the source spans `spans[from..to)` (start and end pairs) and
  * leaves its events in the state. A line block reads no line comment (C2-B-144).
@@ -122,21 +160,9 @@ export function scanInline(
   state.end = end
   state.lineComments = lineComments
   state.cell = cell
-  resetScan(state)
-  for (let pos = 0; pos < end;) {
-    const code = text.charCodeAt(pos)
-    if (code >= ASCII) {
-      if (code >= BIDI_FIRST && code <= BIDI_LAST && isBidiControl(code)) state.bidi = true
-      pos++
-    } else if (STARTS_TOKEN[code] === 1) {
-      const next = SCANNERS[code]!(state, pos)
-      // C2-H-172: what a scanner stepped over can still end up as text.
-      if (next > pos + 1 && !state.bidi) state.bidi = holdsBidiControl(text, pos + 1, next)
-      pos = next
-    } else {
-      pos++
-    }
-  }
+  state.unclosedNotes = []
+  do scanPass(state)
+  while (unclosedNoteDemoted(state))
   failOpenBrackets(state)
   pairDelimiters(state)
   writeEvents(state)

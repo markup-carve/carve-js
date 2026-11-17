@@ -119,6 +119,12 @@ function openBare(state: InlineState, token: number, entryClass: number): void {
   state.depthLive++
 }
 
+/** C2-I-024: the token of the innermost braced opener open above the innermost open bracket, or NONE. */
+export function innermostBracedOpener(state: InlineState): number {
+  for (let at = state.depthLength - 1; at > state.depthFloor; at--) if (state.depthClass[at]! < BARE_CLASS) return state.depthToken[at]!
+  return NONE
+}
+
 export function countBracedOpen(state: InlineState, token: number): void {
   push(state, state.tokens[token + TOKEN_A]!, token)
   state.depthLive++
