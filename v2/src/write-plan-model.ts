@@ -1,7 +1,7 @@
 // The content of one inline leaf as the reader sees it, built from the tree with the writer's own
 // spellings, with the origin of every code unit: a text node and its offset, a mark of a node, or the
 // body of an atom (C2-W-088). The planner compares it with what the writer wrote for the leaf.
-import { forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
+import { type CommentNode, forEachSlot, type LinkNode, type Node, type NodeOfType, type TextNode } from './ast.ts'
 import { braceBlock } from './write-attributes.ts'
 import {
   BARE_BREAKS, escapeOffsets, IN_BRACKET, lineStartBreak, IN_CELL, IN_EMPHASIS, IN_STRONG, joinsNextCode, kindsBelow, rawReference,
@@ -223,14 +223,32 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
   pushString(leaf, node.type === 'span' && block === '' ? '{}' : block, ATOM, node)
 }
 
+/**
+ * C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it. C2-I-024: a
+ * bracket in it may close an inline footnote that a text `^[` before it opens, which the plan leaves to the repair.
+ */
+function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean {
+  if (!lineStart) push(leaf, SPACE, ATOM, node, -1)
+  if (!node.value.includes(']') || !holdsNoteSigil(leaf)) return false
+  undecide(leaf, 'comment bracket')
+  return true
+}
+
+/** Whether the units so far hold a `^` of text directly before a `[` of text. */
+function holdsNoteSigil(leaf: Leaf): boolean {
+  for (let at = leaf.codes.indexOf(94); at >= 0; at = leaf.codes.indexOf(94, at + 1)) {
+    if (leaf.codes[at + 1] === 91 && leaf.kinds[at] === TEXT && leaf.kinds[at + 1] === TEXT) return true
+  }
+  return false
+}
+
 /** The units of `nodes`, as `writeInlines` writes them. */
 export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {
   for (let at = 0; at < nodes.length && leaf.undecided === null; at++) {
     const node = nodes[at]!
     const size = leaf.codes.length
     const lineStart = size === 0 || leaf.codes[size - 1] === LF
-    // C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it.
-    if (node.type === 'comment' && node.form !== 'braced' && !lineStart) push(leaf, SPACE, ATOM, node, -1)
+    if (node.type === 'comment' && node.form !== 'braced' && lineComment(leaf, node, lineStart)) return
     if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) return undecide(leaf, 'continuation row')
     if (joinsNextCode(nodes, at)) return undecide(leaf, 'code run')
     nodeUnits(w, leaf, node, flags, lineStart)
