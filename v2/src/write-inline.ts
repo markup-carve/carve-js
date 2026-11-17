@@ -339,9 +339,16 @@ function collapsedContent(node: LinkNode, content: string, flags: number): strin
   if (node.refForm !== 'collapsed' || key === undefined || (flags & IN_CELL) !== 0 || foldLabel(content) === key) return content
   const children: ParagraphNode = { type: 'paragraph', children: node.children }
   for (const candidate of [escapedLike(content, key), key]) {
-    if (candidate !== null && treesEqual({ type: 'paragraph', children: inlineContent(candidate) }, children)) return candidate
+    if (candidate !== null && readsAsCollapsed(candidate, key, children)) return candidate
   }
   return content
+}
+
+/** Trap: the candidate is read inside its brackets, where an edge space stays and `%%` opens no comment. */
+function readsAsCollapsed(candidate: string, key: string, children: ParagraphNode): boolean {
+  const read = inlineContent(`[${candidate}][]`)
+  const link = read.length === 1 ? read[0] : undefined
+  return link?.type === 'link' && link.key === key && treesEqual({ type: 'paragraph', children: link.children }, children)
 }
 
 /**

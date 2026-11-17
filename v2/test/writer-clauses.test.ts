@@ -811,6 +811,15 @@ describe('canonical forms: inline', () => {
     expect(format('[text]() ![alt]()')).toBe('[text]() ![alt]()\n')
   })
 
+  it('C2-W-075, C2-I-079: a collapsed key is checked inside its brackets, where an edge space and a percent pair stay text', () => {
+    for (const source of ['x[\\-{= ][]*}\n', 'x:n[%%|\\{/][]\n']) {
+      const tree = parse(source)
+      const written = write(tree)
+      expect(written).toBe(source)
+      expect(treesEqual(parse(written), tree)).toBe(true)
+    }
+  })
+
   it('C2-W-075: a reference is written with the recorded text, and from the tree with no record', () => {
     const src = '[a][ b ] [c][]\n\n[b]: /u\n\n[c]: /u'
     expect(format(src)).toBe(`${src}\n`)
