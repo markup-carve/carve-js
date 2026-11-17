@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 // Limit vitest discovery to this repo's own `test/` suite.
 // The vendored `spec/` submodule (markup-carve/carve) carries its own
@@ -9,6 +9,8 @@ export default defineConfig({
   test: {
     // `v2/` is the 0.2 engine. It shares the runner and nothing else.
     include: ['test/**/*.test.ts', 'v2/test/**/*.test.ts'],
+    // Cases that take seconds run under `npm run test:stress:v2`, in CI as a step of their own.
+    exclude: process.env['CARVE_STRESS'] === undefined ? [...configDefaults.exclude, '**/*.stress.test.ts'] : configDefaults.exclude,
     // Rule A branch differences from the spec model, each with its ticket.
     setupFiles: ['test/rule-a-todo.setup.ts'],
     // One module graph per worker instead of per file: re-importing the engine

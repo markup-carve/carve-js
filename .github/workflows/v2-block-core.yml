@@ -125,6 +125,10 @@ jobs:
       - name: Stress
         run: npm run stress-inline:v2
 
+      # Writer cases that take seconds, kept out of the everyday test run.
+      - name: Writer stress cases
+        run: npm run test:stress:v2
+
   conformance:
     name: examples of the specification
     runs-on: ubuntu-latest

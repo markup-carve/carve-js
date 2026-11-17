@@ -29,15 +29,6 @@ describe('Carve 0.2 importers', () => {
       }
     })
 
-  it('C2-A-167 keeps the saved inline importer case valid in every format', () => {
-    const input = readFileSync(join(import.meta.dirname, '../../v2/proptest/regressions/import-inline-timeout.crv'), 'utf8')
-    for (const from of ['markdown', 'gfm', 'djot', 'html'] as const) {
-      const result = importDocument(input, { from })
-      expect(() => validateTree(result.document)).not.toThrow()
-      if (from === 'markdown') expect(format(result.source)).toBe(result.source)
-    }
-  })
-
   it('C2-W-134 returns writer refusal diagnostics with a valid imported tree', () => {
     const result = importDocument('``` \na\r\nb\n```', { from: 'djot' })
     expect(() => validateTree(result.document)).not.toThrow()

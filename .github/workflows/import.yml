@@ -38,6 +38,9 @@ jobs:
         run: npm --prefix import run lint
       - name: Test
         run: npm --prefix import test
+      # Cases that take seconds, kept out of the everyday test run.
+      - name: Stress cases
+        run: npm --prefix import run test:stress
       - name: Suite sample
         run: node import/scripts/measure.ts --sample
       - name: Mutation sample

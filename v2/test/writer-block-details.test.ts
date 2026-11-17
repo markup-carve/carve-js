@@ -1,6 +1,6 @@
 // Edges of the block writer that the mutation run showed no clause test reaches.
 import { describe, expect, it } from 'vitest'
-import { CarveWriteError, decodeTree, encodeTree, format, parse, treesEqual, write } from '../src/index.ts'
+import { decodeTree, encodeTree, format, parse, treesEqual, write } from '../src/index.ts'
 import { childrenOf, inlinesOf } from './support/nodes.ts'
 
 const TICK = '`'
@@ -43,17 +43,6 @@ describe('blocks', () => {
     expect(format(written)).toBe(written)
     expect(treesEqual(parse(written), parse(source))).toBe(true)
   }, 10_000)
-
-  it('C2-W-133: a long repeated reference label chain reports its repair limit', () => {
-    const source = `x ${'[a][\\]'.repeat(4_000)}`
-    try {
-      format(source)
-      throw new Error('expected a reported refusal')
-    } catch (error) {
-      expect(error).toBeInstanceOf(CarveWriteError)
-      if (error instanceof CarveWriteError) expect(error.diagnostics.map((entry) => entry.code)).toContain('writer-refused')
-    }
-  }, 20_000)
 
   it('C2-W-035, C2-B-040: level six is written as it is, and the last uppercase letter takes two spaces', () => {
     expect(format('###### a')).toBe('====== a\n')

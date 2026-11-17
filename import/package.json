@@ -14,6 +14,7 @@
   },
   "scripts": {
     "test": "vitest run --root . --config vitest.config.ts",
+    "test:stress": "CARVE_STRESS=1 vitest run --root . --config vitest.config.ts test/import.stress.test.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings=0"
   },
