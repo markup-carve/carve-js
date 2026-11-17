@@ -241,7 +241,8 @@ function xref(node: XrefNode, r: Render): string {
 function noteReference(node: FootnoteRefNode | InlineFootnoteNode, r: Render): string {
   const key = node.type === 'footnote_ref' ? node.key : undefined
   const note = r.resolution.noteOf.get(node)
-  if (note === undefined) return escapeText(`[^${key ?? ''}]`)
+  // C2-I-088: unresolved, its attribute blocks follow as one block in the fixed order (C2-I-085).
+  if (note === undefined) return escapeText(`[^${key ?? ''}]${attributeBlockText(node)}`)
   const structural: Pair[] = [['href', `#fn${note.number}`], ['role', 'doc-noteref']]
   if (r.settings.roundtrip && key !== undefined) structural.push(['data-carve-footnote-label', key])
   const tag = attributes(r, node, { structural, id: r.resolution.refIds.get(node)!, idFirst: true })
