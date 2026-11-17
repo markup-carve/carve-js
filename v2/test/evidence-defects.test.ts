@@ -24,18 +24,21 @@ function firstRow(tree: DocumentNode): TableRowNode {
   return row
 }
 
-it('C2-B-169, C2-W-002: a pipe in the attribute value of a row or a cell is written escaped', () => {
-  const rowTree = parse('| a |{title=z}')
-  firstRow(rowTree).attrs = { keyValues: [['title', 'x|y']] }
-  const cellTree = parse('|{title=z} a |')
-  const cell = firstRow(cellTree).children[0]!
-  cell.attrs = { keyValues: [['title', 'x|y']] }
-  for (const tree of [rowTree, cellTree]) {
-    const out = writeWithDiagnostics(tree)
-    expect(out.diagnostics).toEqual([])
-    expect(out.source).toContain('{title="x\\|y"}')
-    expect(treesEqual(parse(out.source), tree)).toBe(true)
-  }
+it('C2-B-169, C2-W-098: a pipe in the attribute value of a cell is written escaped', () => {
+  const tree = parse('|{title=z} a |')
+  firstRow(tree).children[0]!.attrs = { keyValues: [['title', 'x|y']] }
+  const out = writeWithDiagnostics(tree)
+  expect(out.diagnostics).toEqual([])
+  expect(out.source).toContain('{title="x\\|y"}')
+  expect(treesEqual(parse(out.source), tree)).toBe(true)
+})
+
+it('C2-W-098, C2-B-166: a row attribute value that holds a pipe has no spelling', () => {
+  const tree = parse('| a |{title=z}')
+  firstRow(tree).attrs = { keyValues: [['title', 'x|y']] }
+  const out = writeWithDiagnostics(tree)
+  expect(out.diagnostics.map((d) => d.code)).toEqual(['field-unspellable'])
+  expect(out.source).not.toContain('x\\|y')
 })
 
 it('C2-B-222 C82: an unclosed fence retains the final content line feed', () => {
