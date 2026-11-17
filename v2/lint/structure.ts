@@ -1,4 +1,4 @@
-import { type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
+import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
 import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { type LintContext, type Rule } from './types.ts'
 
@@ -361,12 +361,19 @@ function figureNested(node: Node, path: string, context: LintContext): void {
   }
 }
 
+function hasCaptionNumber(node: Node): boolean {
+  if (node.type === 'caption_number') return true
+  let found = false
+  forEachSlot(node, (children) => { if (children.some(hasCaptionNumber)) found = true })
+  return found
+}
+
 function figurePanelNumber(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'figure_group') return
   for (let at = 0; at < node.children.length; at++) {
     const panel = node.children[at]
     if (panel === undefined || !isPanel(panel) || !('caption' in panel) || panel.caption === undefined) continue
-    if (raw(panel.caption, context).includes('#')) {
+    if (hasCaptionNumber(panel.caption)) {
       reportNode('figure-group-panel-number', panel.caption, `${path}/children/${at}/caption`, context)
     }
   }

@@ -26,6 +26,11 @@ it('C2-B-154: an indented heading continuation is reported', () => {
   expect(entries).toHaveLength(1)
   expect(entries[0].range.startOffset).toBe(4)
 })
+
+it('C2-B-207: an escaped number mark in a figure caption is literal', () => {
+  const source = '::: figure\n![a](a.png)\n^ A \\#\n:::\n'
+  expect(lint(source).map((entry) => entry.code)).not.toContain('figure-group-panel-number')
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 
