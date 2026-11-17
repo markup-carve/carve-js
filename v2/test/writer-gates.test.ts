@@ -61,7 +61,7 @@ describe('the gates on the comments of candidate 8', () => {
 
 describe('the gates on comments at the start and the end of a span', () => {
   it('C2-I-023, C2-I-024, C2-W-002: a span that starts or ends with a line comment, or a note-shaped bracket around one, reads back', () => {
-    for (const source of ['x {*%%*}', 'x {/%%/}', 'x\n{*%%*}', 'x[{/%%/}', 'x\\^[%%]', 'x {*a %%*}']) {
+    for (const source of ['x {*%%*}', 'x {/%%/}', 'x\n{*%%*}', 'x[{/%%/}', 'x\\^[%%]', 'x {*a %%*}', 'x(/u)\\{/%%']) {
       expect(checkWriter(source, []), source).toBeNull()
     }
   })

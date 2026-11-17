@@ -455,6 +455,15 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (isSpace(before) && !leaf.inLine) escaped[at] = 1
 }
 
+/** C2-I-055: a bare `{` of text before the mark of a node reads as a braced opener with it, so it takes the backslash. */
+function bracesBeforeMarks(leaf: Leaf, escaped: Uint8Array): void {
+  for (let at = leaf.codes.indexOf(123); at >= 0; at = leaf.codes.indexOf(123, at + 1)) {
+    const next = leaf.kinds[at + 1]
+    if (leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || (next !== OPEN && next !== CLOSE)) continue
+    if (BRACED_MARKS.includes(String.fromCharCode(leaf.codes[at + 1]!))) escaped[at] = 1
+  }
+}
+
 /**
  * C2-I-023: at the start of the content of a bracket or a braced opener, `%%` opens a line comment too. Decided once
  * the brackets are, since an escaped `[` opens nothing and the `%` then needs no backslash.
@@ -956,6 +965,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkLines(leaf, (flags & IN_CELL) !== 0 ? AFTER_MARK : start, place, escaped)
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
+  if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
   if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
   if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
