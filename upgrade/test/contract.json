@@ -1774,6 +1774,17 @@
     "class": "escape"
   },
   {
+    "id": "U-183",
+    "title": "Unresolved block image reference before a caption",
+    "inputs": [
+      "![a][nope]\n^ cap\n"
+    ],
+    "outputs": [
+      "\\![a][nope]\n^ cap\n"
+    ],
+    "class": "escape"
+  },
+  {
     "id": "U-184",
     "title": "Nested list include-looking brace",
     "inputs": [
@@ -1847,17 +1858,6 @@
     ],
     "outputs": [
       "x{.k title=“`\"} y`\n"
-    ],
-    "class": "rewrite"
-  },
-  {
-    "id": "U-191",
-    "title": "Quoted Empty Title On A Code Fence",
-    "inputs": [
-      "```s\t\"\"\n"
-    ],
-    "outputs": [
-      "```s\t\n"
     ],
     "class": "rewrite"
   },
@@ -2167,14 +2167,14 @@
     "inputs": [
       "{%%}![alt](x.png)\n",
       "{.c}\n{%%}![a](x.png)\n",
-      "{% c %} %% t\n{% d %} %% u\n\nz\n",
+      
       "![a](/i) %% c\n^ cap\n",
       "![a](/i){%%}\n^ cap\n"
     ],
     "outputs": [
       "![alt](x.png)\n",
       "![a](x.png){.c}\n",
-      "\nz\n",
+      
       "![a](/i)\n^ cap\n",
       "![a](/i)\n^ cap\n"
     ]

@@ -21,3 +21,7 @@ The map withdraws U-183 because `![][]` above `^ a` is paragraph text in both ve
 ```
 
 0.1 gives one paragraph holding both lines; 0.2 gives a `<figure>` with the text `![a][nope]` and the caption `cap` (C2-B-147). A backslash before the `!` keeps the 0.1 HTML. Four measured real sources hit this shape (`docs/ast-json-contract.md:556`, edge cases 0209 and 0434). The tool keeps the rewrite as its own entry `X-003`; the map should restate U-183 with this input or add a row.
+
+## Spec `e1f3c5a2`
+
+The map restates U-183 with the labeled input, so the tool's `X-003` is U-183 again. U-191 and the contract input U-216#2 are withdrawn from the map, and U-114 is `none` in the tool as in the map; its fifth input still differs in HTML, which the tool reports as `upgrade-mismatch` (UPGRADING.md lists it as open). Every class of `data/entries.json` now equals the kind of its map row.

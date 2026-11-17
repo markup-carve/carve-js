@@ -668,7 +668,7 @@
     {
       "id": "U-114",
       "name": "new spellings that 0.1 already had",
-      "class": "report",
+      "class": "none",
       "lint": []
     },
     {
@@ -1092,6 +1092,12 @@
       "lint": []
     },
     {
+      "id": "U-183",
+      "name": "unresolved block image reference before a caption",
+      "class": "escape",
+      "lint": []
+    },
+    {
       "id": "U-184",
       "name": "nested list include-looking brace",
       "class": "escape",
@@ -1130,12 +1136,6 @@
     {
       "id": "U-190",
       "name": "smart quote in a punctuation boundary",
-      "class": "rewrite",
-      "lint": []
-    },
-    {
-      "id": "U-191",
-      "name": "quoted empty title on a code fence",
       "class": "rewrite",
       "lint": []
     },
@@ -1525,12 +1525,6 @@
       "id": "X-002",
       "name": "U+0000 in the source",
       "class": "none",
-      "lint": []
-    },
-    {
-      "id": "X-003",
-      "name": "unresolved block image reference before a caption",
-      "class": "escape",
       "lint": []
     }
   ]

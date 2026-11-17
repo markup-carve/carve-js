@@ -77,25 +77,6 @@ function smartQuoteCandidates(output: string, expected: string): Candidate[] {
   return found
 }
 
-function metadataCandidates(output: string): Candidate[] {
-  const found: Candidate[] = []
-  const lines = readLines(output)
-  for (let line = 1; line <= lines.count; line++) {
-    const value = lineText(lines, line)
-    if (!value.trimStart().startsWith('```') && !value.trimStart().startsWith(':::')) continue
-    const first = value.indexOf('"')
-    const last = value.indexOf('"', first + 1)
-    if (first < 0 || last < 0) continue
-    if (last + 1 < value.length && value.charCodeAt(last + 1) > 0x20) continue
-    const at = lineStart(lines, line) + first
-    const begin = at > 0 && output[at - 1] === ' ' ? at - 1 : at
-    const end = lineStart(lines, line) + last + 1
-    found.push({ id: 'U-191', output: output.slice(0, begin) + output.slice(end) })
-    found.push({ id: 'U-191', output: output.slice(0, begin) + output.slice(lineEnd(lines, line)) })
-  }
-  return found
-}
-
 function languageCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
   let combined = output
@@ -229,7 +210,7 @@ function lineCandidates(output: string): Candidate[] {
     const start = lineStart(lines, line)
     if (value.startsWith('[@]:'))
       found.push({ id: 'U-187', output: output.slice(0, start) + ' ' + output.slice(start) })
-    // C2-B-147: an unresolved block image reference above a caption is a figure in 0.2; the map withdrew U-183 for `![][]` only.
+    // U-183, C2-B-147: an unresolved block image reference above a caption is a figure in 0.2.
     if (
       value.startsWith('![') &&
       lineText(lines, line + 1)
@@ -237,10 +218,10 @@ function lineCandidates(output: string): Candidate[] {
         .startsWith('^ ')
     ) {
       const escaped = output.slice(0, start) + '\\' + output.slice(start)
-      found.push({ id: 'X-003', output: escaped })
+      found.push({ id: 'U-183', output: escaped })
       if (lineText(lines, line + 2).trimStart().startsWith('^ ')) {
         const nextCaption = lineStart(lines, line + 2) + 1
-        found.push({ id: 'X-003', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
+        found.push({ id: 'U-183', output: escaped.slice(0, nextCaption) + '\n' + escaped.slice(nextCaption) })
       }
     }
     if (value.includes(': ```')) descriptionFence = line
@@ -332,7 +313,6 @@ export function rescueTargeted(
     ...tableCodeSpanCandidates(input),
     ...smartQuoteCandidates(output, expected),
     ...smartQuoteCandidates(output, expected).flatMap((candidate) => closedRunCandidates(candidate.output, 'U-190')),
-    ...metadataCandidates(output),
     ...languageCandidates(output),
     ...substitutionAttributeCandidates(input, output),
     ...nestedFootnoteCandidates(output),

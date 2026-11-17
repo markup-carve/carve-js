@@ -52,9 +52,8 @@ element in 0.2.
 
 The entries `X-001` and `X-002` are the tool's own `none` entries. The 0.2 engine handles
 bidirectional controls and U+0000 itself (C2-H-172, C2-B-218), so the tool leaves their source unchanged.
-`X-003` is the tool's own `escape` entry for an unresolved block image reference above a caption, such as
-`![a][r]` over `^ cap`: 0.2 makes it a figure (C2-B-147), so a backslash keeps the 0.1 paragraph. The upgrade map
-withdrew U-183 for the shape `![][]`, whose brackets are text in both versions.
+U-183 escapes an unresolved block image reference above a caption, such as `![a][r]` over `^ cap`: 0.2 makes it a
+figure (C2-B-147), so a backslash keeps the 0.1 paragraph.
 
 Two edits that touch the same characters: the entry with the lower id applies, the other is
 reported as `upgrade-conflict`.

@@ -141,10 +141,10 @@ describe('the report', () => {
   it('holds the 226 entries of the upgrade map with their classes', () => {
     const count = (name: string): number => ENTRIES.filter((entry) => entry.class === name).length
     expect([ENTRIES.length, count('rewrite'), count('escape'), count('report'), count('none')]).toEqual([
-      226, 108, 30, 68, 20
+      226, 107, 31, 67, 21
     ])
     // The tool's own entries, for cases the specification does not decide, stand apart.
-    expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002', 'X-003'])
+    expect(EXTENSIONS.map((entry) => entry.id)).toEqual(['X-001', 'X-002'])
   })
 
   it('gives every record the entry id, the class, the line of the input and the lint rule', () => {
@@ -193,12 +193,13 @@ describe('the report', () => {
     ])
   })
 
-  it('U-114: reports the div difference with the line of the shorter closer', () => {
+  it('U-114: names the div difference with the line of the shorter closer, as a none entry of the map', () => {
     // The last line opens a second anonymous div in 0.1 and closes the outer block in 0.2.
     const result = upgrade('ok\n\n:::: note\nbody\n:::\nafter\n::::\n')
     expect(result.check).toBe('mismatch')
+    expect(result.records.map((entry) => entry.entry)).toContain('upgrade-mismatch')
     const record = result.records.find((entry) => entry.entry === 'U-114')
-    expect([record?.class, record?.line]).toEqual(['unverified explanation', 5])
+    expect([record?.class, record?.line]).toEqual(['none', 5])
     expect(record?.message).toContain('0.1 opens another anonymous div')
   })
 

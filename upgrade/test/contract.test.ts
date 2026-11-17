@@ -41,10 +41,6 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.
   'U-114#4': { entry: 'U-114', check: 'mismatch' },
-  // C2-B-117: spaces separate the parts of an opener, so a tab before `""` leaves no title, in 0.2 as in 0.1.
-  'U-191#0': { check: 'pass' },
-  // C2-H-019: a paragraph that holds only comments and line breaks writes nothing, in 0.2 as in 0.1.
-  'U-216#2': { check: 'pass' },
 }
 
 /** U-014, U-015, and U-113#1 produce source that 0.1 reads differently on a second run. */
