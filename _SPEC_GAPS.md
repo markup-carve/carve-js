@@ -78,6 +78,8 @@ The render writes `<p><a href="/u" role="doc-noteref">x</a></p>`. `/u` names no 
 
 C2-A-031 makes `dir` a field of every node that carries `lang`; html.md writes it only on the `<figure>` of a captioned block (C2-H-063). `<p dir="rtl">x</p>` imports with `dir` and renders `<p>x</p>`. The engine is unchanged until F4 is ruled; the defect list names it a defect only under a ruling toward writing the field.
 
+Ruled at `011cb22e`: C2-H-009 and C2-H-013 write `dir` after `lang` on every element that carries the node's attributes. Done in the freeze candidate 4 session.
+
 ## Corpus session (spec `0d422808`)
 
 Cases where neither clause decides, found while running the conformance corpus. The engine choice is named in each.

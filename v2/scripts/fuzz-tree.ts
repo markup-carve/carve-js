@@ -48,7 +48,8 @@ const SEEDS: Json[] = [
       {
         type: 'paragraph', data: { 'org.example.x': 1 }, children: [
           {
-            type: 'inline_extension', name: 'x', payload: [{ format: 'application/json', value: { a: [1] } }], fallback: [TEXT],
+            type: 'inline_extension', name: 'org.example.x', version: '1',
+            payload: [{ format: 'application/json', value: { a: [1] } }], fallback: [TEXT],
             slots: { s: [TEXT] }, resourceIds: ['r'], children: [TEXT],
           },
           { type: 'ruby', pairs: [{ type: 'ruby_pair', attrs: { id: 'pair' }, base: [TEXT], annotation: [TEXT] }] },
@@ -57,7 +58,7 @@ const SEEDS: Json[] = [
           {
             type: 'citation_group', raw: '[@a]', children: [
               {
-                type: 'citation', key: 'a', namespace: 'citation', mode: 'normal',
+                type: 'citation', key: 'a', namespace: 'citation', mode: 'author-in-text',
                 prefix: [TEXT], locator: { label: 'page', children: [TEXT] }, suffix: [TEXT],
               },
             ],
@@ -78,10 +79,13 @@ const SEEDS: Json[] = [
       ] },
       { type: 'table', columns: [{ type: 'table_column' }], children: [
         { type: 'table_head', children: [{ type: 'table_row', children: [
-          { type: 'table_cell', header: true, scope: 'col', attrs: { id: 'head' }, children: [] },
+          {
+            type: 'table_cell', header: true, scope: 'col', attrs: { id: 'head' },
+            children: [{ type: 'cell_paragraph', children: [TEXT] }],
+          },
         ] }] },
         { type: 'table_body', children: [{ type: 'table_row', children: [
-          { type: 'table_cell', header: false, headerIds: ['head'], children: [] },
+          { type: 'table_cell', header: false, headerIds: ['head'], children: [{ type: 'cell_paragraph', children: [] }] },
         ] }] },
       ] },
     ],
