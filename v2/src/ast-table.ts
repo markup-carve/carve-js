@@ -140,16 +140,24 @@ function rowCells(ctx: TreeContext, row: BlockNode, covered: number[], rowEnd: n
       cells.push(coveredCell(ctx, 'rowspan', marks))
     }
   }
+  const formed: TableCellNode[] = []
   for (const node of row.children!) {
     takeCovered()
     const cell = cellNode(ctx, node, rowEnd)
     const column = cells.length
     cells.push(cell)
+    if (node.start >= rowEnd) formed.push(cell)
     for (let more = 1; more < (cell.colspan ?? 1); more++) cells.push(coveredCell(ctx, 'colspan', marks))
     covered[column] = (cell.rowspan ?? 1) - 1
   }
   takeCovered()
+  if (formed.length > 0 && isHeaderRow(cells.filter((cell) => !formed.includes(cell)))) for (const cell of formed) cell.header = true
   return cells
+}
+
+/** C2-B-176: every cell is a header cell, a `<` mark cell counting as the cell it extends and a `^` mark cell as data. */
+function isHeaderRow(cells: readonly TableCellNode[]): boolean {
+  return cells.length > 0 && cells.every((cell) => cell.span === 'colspan' || (cell.span !== 'rowspan' && cell.header))
 }
 
 function holdsPercent(src: string, start: number, end: number): boolean {
