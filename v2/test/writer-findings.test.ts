@@ -14,7 +14,9 @@ function written(children: unknown[]): { source: string, codes: string[] } {
 describe('line comments', () => {
   it('C2-W-022, C2-W-117: a line comment value that ends with spaces or tabs is written without them, and the loss is reported', () => {
     expect(written([comment])).toEqual({ source: '%% x\n', codes: ['field-unspellable /children/0/value'] })
-    expect(written([{ type: 'comment', form: 'line', value: '  ' }])).toEqual({ source: '%%\n', codes: ['field-unspellable /children/0/value'] })
+    expect(written([{ type: 'comment', form: 'line', value: '  ' }])).toEqual({
+      source: '%%\n', codes: ['field-unspellable /children/0/value'],
+    })
   })
 
   it('C2-W-022, C2-W-117: so is the value of an inline line comment and of a comment between table rows', () => {
