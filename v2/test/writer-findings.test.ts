@@ -27,6 +27,18 @@ describe('line comments', () => {
   })
 })
 
+it('C2-A-193: source metadata does not make the writer report a loss', () => {
+  const document = decodeTree(JSON.stringify({ type: 'document', astVersion: '2.0',
+    extensions: [{ name: 'carve.source', version: '1', required: false, slots: [] }],
+    children: [{ type: 'paragraph', data: { 'carve.source': {
+      format: 'docx', locator: { part: 'word/document.xml', path: '/document/body/p[1]' },
+      importer: { name: 'pandoc-carve', version: '2.0' },
+    } }, children: [{ type: 'text', value: 'a' }] }] }))
+  const result = writeWithDiagnostics(document)
+  expect(result.source).toBe('a\n')
+  expect(result.diagnostics).toEqual([])
+})
+
 describe('bodies opened behind a task box or attributes', () => {
   const written = (source: string): string => {
     const out = format(source)

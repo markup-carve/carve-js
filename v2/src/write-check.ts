@@ -69,6 +69,7 @@ function changes(c: Check): number {
 
 // C2-A-162: positions and the results of resolution are not compared.
 const NODE_SLOTS: readonly string[] = ['children', 'caption']
+const IGNORED_DATA = new Set(['carve.source', 'carve.style', 'carve.annotation'])
 
 type Fields = Record<string, unknown>
 
@@ -101,6 +102,7 @@ function skipped(node: Fields, name: string, spanMarks: boolean): boolean {
 
 function isCompared(c: Check, node: Node, name: string): boolean {
   if (NODE_SLOTS.includes(name)) return false
+  if (name === 'data' && node.data !== undefined && Object.keys(node.data).every((key) => IGNORED_DATA.has(key))) return false
   if (name === 'title') return titleOf(node) === undefined
   return !isRecord(node) || !skipped(node, name, c.spanMarks)
 }

@@ -564,10 +564,30 @@ function planReason(w: Writer, group: readonly Node[], plan: Plan, reported: num
   return uncovered(group, plan) ? 'coverage' : null
 }
 
+function withoutStandardData(node: Node): Node {
+  const copy = structuredClone(node)
+  const visit = (item: Node): void => {
+    if (isRecord(item.data)) {
+      const kept = Object.entries(item.data).filter(([key]) =>
+        key !== 'carve.source' && key !== 'carve.style' && key !== 'carve.annotation')
+      if (kept.length === 0) delete item.data
+      else item.data = Object.fromEntries(kept)
+    }
+    forEachSlot(item, (children) => { for (const child of children) visit(child) })
+  }
+  visit(copy)
+  return copy
+}
+
+/** C2-W-002, C2-A-193: the writer disregards standard data namespaces in its readback check. */
+function writerEqual(expected: Node, actual: Node): boolean {
+  return treesEqual(expected, actual) || treesEqual(withoutStandardData(expected), actual)
+}
+
 /** C2-W-002: whether the written group reads back as its blocks. */
 function readsBack(w: Writer, group: readonly Node[], first: boolean): boolean {
   const parsed = parseChunk(w, `${first ? '' : '\n'}${w.lines.join('\n')}\n`).children
-  return parsed.length === group.length && parsed.every((node, at) => treesEqual(node, group[at]!))
+  return parsed.length === group.length && parsed.every((node, at) => writerEqual(group[at]!, node))
 }
 
 /**
@@ -729,7 +749,7 @@ function reportUnread(w: Writer, group: readonly Node[]): void {
   const parsed = w.parsed?.children ?? []
   for (let at = 0; at < Math.max(group.length, parsed.length); at++) {
     const block = parsed[at]
-    if (block !== undefined && at < group.length && treesEqual(group[at]!, block)) continue
+    if (block !== undefined && at < group.length && writerEqual(group[at]!, block)) continue
     lose(w, group[Math.min(at, group.length - 1)]!, null)
     return
   }
