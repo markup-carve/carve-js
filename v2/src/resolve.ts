@@ -472,15 +472,15 @@ function headingIndex(walk: Walk, mode: HeadingIds): Map<string, HeadingNode> {
   const index = new Map<string, HeadingNode>()
   for (const heading of walk.headings) {
     if (mode === 'off' && heading.attrs?.id === undefined) continue
-    const text = foldLabel(plainText(heading.children))
-    if (!index.has(text)) index.set(text, heading)
+    const text = foldLabel(plainText(heading.children)).normalize('NFC')
+    if (text !== '' && !index.has(text)) index.set(text, heading)
   }
   return index
 }
 
-/** C2-I-084: the stored key read as inline content of its own, then its plain text, folded. */
+/** C2-I-084: the stored key read as inline content of its own, then its plain text, folded and in NFC. Empty matches nothing. */
 function keyText(key: string): string {
-  return foldLabel(plainText(inlineContent(key)))
+  return foldLabel(plainText(inlineContent(key))).normalize('NFC')
 }
 
 /** What a reference resolves to: a definition, or a heading (C2-I-084). */
