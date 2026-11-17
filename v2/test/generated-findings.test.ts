@@ -101,6 +101,38 @@ describe('generated parser findings', () => {
     expect(rendered.diagnostics.some((entry) => entry.code === 'extension-renderer-failed')).toBe(true)
   })
 
+  it('C2-X-050: after a renderer throws, the fallback is written unresolved and the diagnostic says so', () => {
+    const rendered = renderWithDiagnostics('# H\n\n::: failure\nSee </#H>.\n:::\n', {
+      extensions: [failureExtension], renderers: { 'test.failure': { version: '1', render: () => { throw new Error('boom') } } },
+    })
+    expect(rendered.html).toContain('<p>See &lt;/#H&gt;.</p>')
+    const failure = rendered.diagnostics.find((entry) => entry.code === 'extension-renderer-failed')
+    expect(failure?.message).toContain('its fallback is written unresolved')
+  })
+
+  it('C2-X-032: a node the profile degrades is resolved in its fallback, with a renderer registered', () => {
+    const renderers = { 'test.failure': { version: '1', render: () => '<b>own</b>' } }
+    const rendered = renderWithDiagnostics('# H\n\n::: failure\nSee </#H>.\n:::\n', {
+      extensions: [failureExtension], renderers, profile: 'comment',
+    })
+    expect(rendered.html).toContain('<p>See H.</p>')
+    expect(rendered.html).not.toContain('<b>own</b>')
+  })
+
+  it('C2-H-165: a degraded qualified inline extension writes the plain text of its fallback', () => {
+    const document = parse('x')
+    document.extensions = [{ name: 'org.example.x', version: '1', required: false, slots: [] }]
+    document.children = [{ type: 'paragraph', children: [{
+      type: 'inline_extension', name: 'org.example.x', version: '1', children: [], fallback: [{ type: 'text', value: 'fb' }],
+    }] }]
+    expect(render(document, { profile: 'minimal' })).toBe('<p>fb</p>')
+  })
+
+  it('C2-X-035: the fallback of an extension node with attributes stands in an element that carries them', () => {
+    const rendered = renderWithDiagnostics('{#t .k}\n::: failure\nBody\n:::\n', { extensions: [failureExtension] })
+    expect(rendered.html).toBe('<div id="t" class="k">\n<p>Body</p>\n</div>')
+  })
+
   it('C2-X-050: a failed renderer does not duplicate findings from its partial output', () => {
     const rendered = renderWithDiagnostics('::: failure\n[bad](javascript:alert)\n:::', {
       extensions: [failureExtension], renderers: { 'test.failure': { version: '1', render: (node, host) => {

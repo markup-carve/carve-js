@@ -63,7 +63,12 @@ function leafText<T extends keyof NodeOfType>(type: T, node: NodeOfType[T]): str
 function inlineText(node: Inline): string {
   const leaf = leafText(node.type, node)
   if (leaf !== undefined) return leaf
-  return isInlineParent(node) && node.type !== 'inline_footnote' ? inlinesText(node.children) : plainText([node])
+  return isInlineParent(node) && node.type !== 'inline_footnote' ? inlinesText(viewOf(node)) : plainText([node])
+}
+
+/** C2-X-032, C2-H-165: a qualified inline extension degrades to the text of its fallback. */
+function viewOf(node: Inline & { children: Inline[] }): readonly Inline[] {
+  return node.type === 'inline_extension' && node.name.includes('.') ? node.fallback ?? node.children : node.children
 }
 
 /** The block-level text of `nodes`; `texts` gives the link texts of the cross-references where the caller has them. */
@@ -199,7 +204,7 @@ function inlineForm(node: Inline): string {
   if (node.type === 'footnote_ref') return `[^${node.key}]`
   if (isInlineParent(node)) {
     let out = ''
-    for (const child of node.children) out += inlineForm(child)
+    for (const child of viewOf(node)) out += inlineForm(child)
     return out
   }
   return plainText([node])
@@ -235,6 +240,13 @@ function degradedItem(node: ListItemNode): ListItemNode[] {
 }
 
 /** C2-H-163: the deny list of the axis, then its allow list, then the nesting bound. */
+/** C2-H-163: whether the profile `rule` admits nodes of `type`, the bound of nesting aside. */
+export function admitsType(rule: ProfileRule, type: string, block: boolean): boolean {
+  if ((block ? rule.deniedBlock : rule.deniedInline)?.includes(type) === true) return false
+  const allowed = block ? rule.allowedBlock : rule.allowedInline
+  return allowed === null || allowed.includes(type)
+}
+
 function isOutside(filter: Filter, node: Node, block: boolean, depth: number): boolean {
   const rule = filter.rule
   // C2-H-163: a captioned block is tested as its `<figure>`, a type that no allow list names.

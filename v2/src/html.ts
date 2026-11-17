@@ -500,7 +500,10 @@ function blockExtension(r: Render, node: BlockExtensionNode, level: number): voi
   const rendered = r.renderExtension(node)
   if (rendered !== null) { line(r, level, rendered); return }
   loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
-  line(r, level, rendererHost(r).blocks(node.fallback))
+  const fallback = rendererHost(r).blocks(node.fallback)
+  // C2-X-035: the attributes of the node go on a div around its fallback.
+  const tag = attributes(r, node, {})
+  line(r, level, tag === '' ? fallback : `<div${tag}>\n${fallback}\n</div>`)
 }
 
 function isBlockNode(node: Node): node is Block {
@@ -973,7 +976,9 @@ export function renderDocument(
       r.backlinks = before.backlinks
       r.longDescriptions = before.longDescriptions
       const detail = error instanceof Error ? error.message : String(error)
-      loss(r, node, 'extension-renderer-failed', `the extension ${node.name} renderer failed: ${detail}`)
+      // C2-X-050: resolution visited the slots, so the fallback is written unresolved.
+      const message = `the extension ${node.name} renderer failed: ${detail}; its fallback is written unresolved`
+      loss(r, node, 'extension-renderer-failed', message)
       return null
     }
   }

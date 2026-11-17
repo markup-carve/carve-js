@@ -368,7 +368,10 @@ function inlineExtension(node: InlineExtensionNode, r: Render): string {
   const rendered = r.renderExtension(node)
   if (rendered !== null) return rendered
   loss(r, node, 'extension-fallback-rendered', `the extension ${name} is rendered through its fallback`)
-  return inlineList(r, node.fallback ?? node.children, true)
+  const fallback = inlineList(r, node.fallback ?? node.children, true)
+  // C2-X-035: the attributes of the node go on a span around its fallback.
+  const tag = attributes(r, node, {})
+  return tag === '' ? fallback : `<span${tag}>${fallback}</span>`
 }
 
 const WRITERS: NodeHandlers<string, Render> = {

@@ -99,6 +99,8 @@ interface Walk {
   markupLine: ((node: Node) => number | undefined) | null
   /** C2-X-032: the versions of the registered renderers, by extension name. */
   renderers: Readonly<Record<string, { version: string }>>
+  /** C2-X-032: whether the profile admits a block and an inline extension node, which a renderer then writes. */
+  admitted: Admitted
   /** Whether the walk is in the slots of an extension node that a renderer writes. */
   rendered: boolean
   /** The extension nodes around the visited node: a transform builds their nodes after the inline scan noted its leaves. */
@@ -298,6 +300,8 @@ const STEPS = new Map<string, Step>([
 ])
 
 type Renderers = Readonly<Record<string, { version: string }>>
+export interface Admitted { block: boolean, inline: boolean }
+const ALL_ADMITTED: Admitted = { block: true, inline: true }
 
 /**
  * C2-X-032: one view of an extension node, its children and named slots when a renderer is registered for it or for an
@@ -305,7 +309,8 @@ type Renderers = Readonly<Record<string, { version: string }>>
  */
 function visitExtension(node: BlockExtensionNode | InlineExtensionNode, walk: Walk): void {
   const renderer = walk.renderers[node.name]
-  const rendered = walk.rendered || (renderer !== undefined && renderer.version === node.version)
+  const admitted = node.type === 'block_extension' ? walk.admitted.block : walk.admitted.inline
+  const rendered = walk.rendered || (renderer !== undefined && renderer.version === node.version && admitted)
   const outer = walk.rendered
   walk.extensionDepth++
   forEachSlot(node, (nodes, step) => {
@@ -687,9 +692,9 @@ function resolveXrefs(walk: Walk): void {
  */
 export function resolve(
   document: DocumentNode, mode: HeadingIds, facts: ParseFacts | null, symbols: Readonly<Record<string, string>> = {},
-  renderers: Renderers = {},
+  renderers: Renderers = {}, admitted: Admitted = ALL_ADMITTED,
 ): Resolution {
-  const walk = newWalk(document, facts, symbols, renderers)
+  const walk = newWalk(document, facts, symbols, renderers, admitted)
   const resolution = walk.resolution
   const top = walk.scope
   collectDefinitions(document, walk, facts)
@@ -734,6 +739,7 @@ function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): vo
 
 function newWalk(
   document: DocumentNode, facts: ParseFacts | null, symbols: Readonly<Record<string, string>>, renderers: Renderers = {},
+  admitted: Admitted = ALL_ADMITTED,
 ): Walk {
   const findings: Findings = { entries: [], nodes: [] }
   const resolution: Resolution = {
@@ -746,7 +752,7 @@ function newWalk(
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
     headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
-    markupLine: facts?.markupLine ?? null, renderers, rendered: false, extensionDepth: 0,
+    markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,
   }
 }
 

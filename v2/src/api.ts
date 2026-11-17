@@ -12,7 +12,7 @@ import { type ParseOptions, readOptions, type RenderOptions, type Settings } fro
 import { type Node } from './ast.ts'
 import { utf8Length } from './positions.ts'
 import { noteSource } from './derived-text.ts'
-import { applyProfile, liveResolution } from './profile.ts'
+import { admitsType, applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
 import { applyExtensions, declareExtensions } from './extensions/claims.ts'
@@ -167,7 +167,8 @@ function inputStage(input: string | Uint8Array | DocumentNode, settings: Setting
 function resolveStage(parsed: ParsedTree, settings: Settings): ResolvedTree {
   const rule = profileRule(settings)
   const losses: Findings = { entries: [], nodes: [] }
-  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, settings.renderers)
+  const admitted = { block: admitsType(rule, 'block_extension', true), inline: admitsType(rule, 'inline_extension', false) }
+  const resolution = resolve(parsed.document, settings.headingIds, parsed.facts, settings.symbols, settings.renderers, admitted)
   // A degraded node turns source that the inline scan did not read into text.
   const bidi = parsed.facts === null || rule !== NO_PROFILE || parsed.facts.bidi
   return { document: parsed.document, settings, resolution, losses, bidi }
