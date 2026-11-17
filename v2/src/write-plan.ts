@@ -450,8 +450,17 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (before === 37 || before === 123) return undecidedIf(!percentBehindText(leaf, at, before, escaped), leaf, 'mark %')
   // C2-B-144: in the body of a line block `%%` is text.
   if (isSpace(before) && !leaf.inLine) escaped[at] = 1
-  // C2-I-023: directly behind a `^[` that may open an inline footnote, `%%` opens a line comment too.
-  else if (before === 91 && opensNoteBefore(leaf, at - 2, escaped)) escaped[at] = 1
+}
+
+/**
+ * C2-I-023: directly behind a `^[` that may open an inline footnote, `%%` opens a line comment too. Decided once the
+ * brackets are, since an escaped `[` opens no note and the `%` then needs none.
+ */
+function percentsBehindNotes(leaf: Leaf, escaped: Uint8Array): void {
+  for (let at = leaf.codes.indexOf(37); at >= 0; at = leaf.codes.indexOf(37, at + 1)) {
+    if (leaf.inTitle || leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) continue
+    if (code(leaf, at - 1) === 91 && opensNoteBefore(leaf, at - 2, escaped)) escaped[at] = 1
+  }
 }
 
 /** Whether the `^` at `caret` and the `[` behind it are text that opens an inline footnote, not the `{^` of a span. */
@@ -929,6 +938,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) scanUnits(leaf, escaped)
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
+  if (leaf.undecided === null) percentsBehindNotes(leaf, escaped)
   return escaped
 }
 

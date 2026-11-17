@@ -150,14 +150,21 @@ function regionLine(state: BlockState, matched: number, end: number): void {
   writeComment(state, end)
 }
 
+/** C2-B-137: a comment-only line, or a region marker line, which is a line of block structure. */
+function lineOfComment(state: BlockState, matched: number, end: number): boolean {
+  const pos = state.cursor.pos
+  if (isOpaqueLeaf(state.leaf.kind) || !isLineComment(state.src, pos, end)) return false
+  if (isRegionMarkerLine(state.src, pos, end)) regionLine(state, matched, end)
+  else commentLine(state, end)
+  return true
+}
+
 function scanLine(state: BlockState, lineStart: number, end: number): void {
   const leaf = state.leaf
   const cursor = state.cursor
   let matched = matchContainers(state, lineStart, end)
   const blank = cursor.pos >= end
-  if (!isOpaqueLeaf(leaf.kind) && isLineComment(state.src, cursor.pos, end)) {
-    return isRegionMarkerLine(state.src, cursor.pos, end) ? regionLine(state, matched, end) : commentLine(state, end)
-  }
+  if (lineOfComment(state, matched, end)) return
   if (leaf.kind !== NO_LEAF && !isTextLeaf(leaf.kind)) {
     if (bodyLine(state, matched, lineStart, end, blank)) return
     matched = closeBodyLeaf(state, matched, end, blank)
