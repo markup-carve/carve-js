@@ -30,13 +30,14 @@ describe('preliminaries', () => {
     expect(tree('a `b', '', '- c`')).toBe('p["a `b"] ul(-)[li[p["c`"]]]')
   })
 
-  it('C2-I-002: spaces and tabs at the end of a line are no content, but an escaped space is', () => {
+  it('C2-I-002, C2-I-011: spaces and tabs at the end of a line are no content, and an escaped space there is a hard break', () => {
     expect(inline('a \t', 'b  ')).toBe('"a" sb "b"')
-    expect(inline('a\\ ')).toBe('"a" nbsp')
-    expect(inline('a\\  \t')).toBe('"a" nbsp')
+    expect(inline('a\\ ')).toBe('"a" br')
+    expect(inline('a\\  \t')).toBe('"a" br')
     expect(inline('a\\\\ ')).toBe('"a\\"')
-    expect(inline('a\\\\\\ ')).toBe('"a\\" nbsp')
-    expect(inline('a\\ ', 'b')).toBe('"a" nbsp sb "b"')
+    expect(inline('a\\\\\\ ')).toBe('"a\\" br')
+    expect(inline('a\\ ', 'b')).toBe('"a" br "b"')
+    expect(inline('a\\ b')).toBe('"a" nbsp "b"')
     expect(tree('| a\\ | b |')).toBe('table[tr[td["a" br] td["b"]]]')
   })
 
@@ -956,8 +957,9 @@ describe('more cases per clause', () => {
     expect(inline('</#a</#b c/')).toBe('"<" em[#"a" "<"] #"b" " c/"')
   })
 
-  it('C2-I-103: a soft break does not take the space of a no-break space', () => {
-    expect(inline('a\\ ', 'b')).toBe('"a" nbsp sb "b"')
+  it('C2-I-103, C2-I-011: a backslash and a space at a line end are a hard break, not a no-break space and a soft break', () => {
+    expect(inline('a\\ ', 'b')).toBe('"a" br "b"')
+    expect(inline('a\\ \u00a0', 'b')).toBe('"a" nbsp "\u00a0" sb "b"')
   })
 
   it('C2-I-104: what a quote sees before it', () => {

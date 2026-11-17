@@ -11,6 +11,7 @@ import { isClaimableName } from './ast-validate.ts'
 import { treesEqual } from './ast-json.ts'
 import { plainText } from './ast-text.ts'
 import { includeSource, unreadField } from './include.ts'
+import { isRegionMarkerLine } from './include-source.ts'
 import { isFenceWord } from './opener.ts'
 import { DIV_KINDS, HARD_BREAKS_CLASS } from './tree-tables.ts'
 import { type BlockParts, braceBlock, isName, quoted } from './write-attributes.ts'
@@ -636,7 +637,15 @@ function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
     lose(w, node, null)
     return 1
   }
+  if (isMarkerBelowText(before, node)) return 0
   return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
+}
+
+/** C2-W-034, C2-B-137: a region marker line ends the paragraph above it, so it keeps its line there. */
+function isMarkerBelowText(before: Node, node: Node): boolean {
+  if (before.type !== 'paragraph' || before.caption !== undefined || node.type !== 'comment' || node.form !== 'line') return false
+  const line = `%% ${node.value}`
+  return isRegionMarkerLine(line, 0, line.length)
 }
 
 export function followingAttributes(w: Writer, node: Node | undefined): string {

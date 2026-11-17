@@ -284,10 +284,15 @@ describe('layout', () => {
     expect(write(documentOf({ type: 'code_block', value: 'a\n  \nb\n' }))).toBe('```\na\n  \nb\n```\n')
   })
 
-  it('C2-W-022: no space at the end of a line, one line ending at the end, and the no-break space stays', () => {
+  it('C2-W-022: no space at the end of a line, one line ending at the end, and a no-break space there is U+00A0', () => {
     expect(format('a   \nb\t')).toBe('a\nb\n')
     expect(format('a\n\n\n')).toBe('a\n')
-    expect(format('a\\ \nb')).toBe('a\\ \nb\n')
+    expect(format('a\\ \nb')).toBe('a\\\nb\n')
+    for (const tail of [[{ type: 'soft_break' }, { type: 'text', value: 'b' }], []] as const) {
+      const result = writeWithDiagnostics(documentOf(paragraph({ type: 'text', value: 'a' }, { type: 'non_breaking_space' }, ...tail)))
+      expect(result.source).toBe(tail.length === 0 ? 'a\u00a0\n' : 'a\u00a0\nb\n')
+      expect(result.diagnostics.map((entry) => [entry.code, entry.path])).toEqual([['structure-unspellable', '/children/0/children/1']])
+    }
   })
 
   it('C2-W-022: a paragraph that ends in a hard break ends the output with one line ending', () => {

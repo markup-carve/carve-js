@@ -585,9 +585,16 @@ export function joinsNextCode(nodes: readonly Node[], at: number): boolean {
 /** The written form of the part `nodes[at..end)`. */
 function writePart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number): string {
   const node = nodes[at]!
+  if (node.type === 'non_breaking_space' && nodes[at + 1]?.type === 'soft_break') return unspelledSpace(w, node)
   const part = end > at + 1 ? codeRun(nodes, at, end) : writeInline(w, node, flags)
   // C2-W-022: no space or tab of text stands at the end of a line. Before the backslash of a hard break it is text.
   return node.type === 'text' && nodes[at + 1]?.type === 'soft_break' ? trimEnd(part) : part
+}
+
+/** C2-W-022: a no-break space before a soft break or at the end of the content is written as U+00A0, and reported. */
+function unspelledSpace(w: Writer, node: Node): string {
+  lose(w, node, null)
+  return '\u00a0'
 }
 
 /**
@@ -682,8 +689,9 @@ function escapeGluedBacktick(w: Writer, node: TextNode, before: Node | undefined
 
 /** The source of the content of a text leaf: no space or tab of text stands at its end (C2-W-022). */
 export function writeContent(w: Writer, nodes: readonly Node[], flags: number): string {
-  const out = writeInlines(w, nodes, flags)
   const last = nodes[nodes.length - 1]
+  if (last?.type === 'non_breaking_space') return writeInlines(w, nodes.slice(0, -1), flags) + unspelledSpace(w, last)
+  const out = writeInlines(w, nodes, flags)
   if (last?.type === 'text') return trimEnd(out)
   // The line ending of a hard break at the end of the content is the line ending of the leaf (C2-W-022). In a hard-break
   // block that line ending alone is no break at the end of the content, so the backslash stays (C2-I-102).
