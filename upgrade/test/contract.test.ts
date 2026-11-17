@@ -35,9 +35,7 @@ const UNVERIFIED_REPORTS = new Set([
  * tool does, so an implemented row moves out of this list.
  */
 const NOT_YET: ReadonlySet<string> = new Set([
-  'U-265#0', 'U-267#0', 'U-273#0', 'U-274#0', 'U-275#0', 'U-276#0', 'U-277#0', 'U-278#0', 'U-280#0', 'U-281#0',
-  'U-284#0', 'U-285#0', 'U-286#0', 'U-290#0', 'U-300#0', 'U-304#0', 'U-305#0', 'U-340#0', 'U-365#0', 'U-366#0',
-  'U-367#0', 'U-368#0', 'U-369#0', 'U-279#0', 'U-287#0', 'U-288#0', 'U-293#0', 'U-341#0', 'U-362#0',
+  'U-279#0', 'U-287#0', 'U-288#0', 'U-293#0', 'U-341#0', 'U-362#0',
   'U-262#0', 'U-263#0', 'U-264#0', 'U-271#0', 'U-282#0', 'U-283#0', 'U-289#0', 'U-291#0', 'U-292#0',
   'U-301#0', 'U-302#0', 'U-303#0', 'U-364#0', 'U-370#0', 'U-371#0',
 ])
@@ -49,6 +47,7 @@ const NOT_YET: ReadonlySet<string> = new Set([
 const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: string }> = {
   // 0.1 makes this one-item list loose, which is U-021.
   'U-046#1': { entry: 'U-021', check: 'explained' },
+  'U-206#1': { output: '{#A}\n# A [A A ](#A)\n', entry: 'U-366', check: 'pass' },
   // Left as it is, 0.2 writes the key as `loose=""` on the list, so the tool removes it (U-020) and reports U-021.
   'U-021#0': { output: '- Note text.\n', entry: 'U-021', check: 'explained' },
   // 0.1 opens a second anonymous div at the last line; 0.2 closes the outer block there.

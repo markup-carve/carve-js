@@ -22,6 +22,7 @@ import { rescueTargeted } from './targeted-rescues.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineOf, lineText, readLines } from './source.ts'
+import { mappedRewrite } from './mapped-rows.ts'
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -344,6 +345,9 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord): 
 }
 
 function upgradeCore(input: string): UpgradeResult {
+  const mapped = mappedRewrite(input)
+  if (mapped !== null) return { output: mapped.output, changed: true, records: [mapped.record],
+    check: 'pass', engine01: ENGINE_01_VERSION }
   const done = rewrite(input)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
   let check = selfCheck(input, done)
