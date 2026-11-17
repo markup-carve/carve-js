@@ -6,7 +6,7 @@ import { type Diagnostic } from '../src/diagnostics.ts'
 import { type IncludeConfig, includeSettings, type IncludeResolver, type IncludeSettings } from '../src/include-settings.ts'
 import { fileLines, type LineRange, lineRange, regionRange } from '../src/include-source.ts'
 import { CarveOptionError } from '../src/options.ts'
-import { utf8Length } from '../src/positions.ts'
+import { unitBytes, utf8Length } from '../src/positions.ts'
 
 /** The text the resolver returned for each id, as the expansion read it. */
 function recording(config: IncludeSettings, texts: Map<string, string>): IncludeConfig {
@@ -52,7 +52,7 @@ function lineOfByte(text: string, byte: number): number {
   let line = 1
   let bytes = 0
   for (let at = 0; at < text.length && bytes < byte; at++) {
-    bytes += utf8Length(text[at]!)
+    bytes += unitBytes(text, at)
     if (text.charCodeAt(at) === 0x0a) line++
   }
   return line

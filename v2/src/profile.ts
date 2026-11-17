@@ -13,6 +13,7 @@ import { addFinding, type Findings } from './diagnostics.ts'
 import { includeSource } from './include.ts'
 import { type ProfileRule } from './render-tables.ts'
 import { type Note, type Resolution } from './resolve.ts'
+import { append } from './append.ts'
 
 interface Filter {
   declarations: readonly ExtensionDeclaration[]
@@ -175,9 +176,9 @@ function degradedBlocks(node: Node): ParagraphNode[] {
   const out: ParagraphNode[] = []
   // C2-H-165: a block extension gives the blocks of its fallback.
   const blocks: readonly Node[] = node.type === 'block_extension' ? node.fallback : node.children
-  for (const child of blocks) if (!UNWRITTEN.includes(child.type)) out.push(...degradedBlocks(child))
+  for (const child of blocks) if (!UNWRITTEN.includes(child.type)) append(out, degradedBlocks(child))
   const groupCaption = captionOf(node)
-  if (groupCaption !== undefined) out.push(...degradedBlocks(groupCaption))
+  if (groupCaption !== undefined) append(out, degradedBlocks(groupCaption))
   return out
 }
 
@@ -250,7 +251,7 @@ function noteGone(filter: Filter, node: Node): void {
 /** An item stays an item, as its list expects. C2-H-166: it keeps its `<li>`, so its source line stays (C2-H-016). */
 function degradedItem(node: ListItemNode): ListItemNode[] {
   const children: Block[] = []
-  for (const child of node.children) if (!UNWRITTEN.includes(child.type)) children.push(...degradedBlocks(child))
+  for (const child of node.children) if (!UNWRITTEN.includes(child.type)) append(children, degradedBlocks(child))
   if (children.length === 0) return []
   const item: ListItemNode = { type: 'list_item', children }
   if (node.pos !== undefined) item.pos = node.pos

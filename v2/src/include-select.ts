@@ -9,6 +9,7 @@ import { type Selected } from './expand.ts'
 import { INCLUDE_MESSAGES } from './include-tables.ts'
 import { type HeadingIds } from './options.ts'
 import { headingIdsAlone } from './resolve.ts'
+import { append } from './append.ts'
 
 type Child = NonNullable<IncludeNode['children']>[number]
 
@@ -61,7 +62,7 @@ function eachNode(nodes: readonly Node[], visit: (node: Node) => void): void {
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
     visit(node)
     const below: Node[] = []
-    forEachSlot(node, (list) => { below.push(...list) })
+    forEachSlot(node, (list) => { append(below, list) })
     for (let at = below.length - 1; at >= 0; at--) pending.push(below[at]!)
   }
 }
@@ -138,7 +139,7 @@ function contextLevel(walk: ShiftWalk): number {
 function shiftInclude(walk: ShiftWalk, node: IncludeNode, shift: number | 'auto'): void {
   const headings = headingsOf(node.children ?? [])
   if (headings.length === 0) return
-  const lowest = Math.min(...headings.map((heading) => heading.level))
+  const lowest = headings.reduce((least, heading) => Math.min(least, heading.level), MAX_LEVEL)
   const by = shift === 'auto' ? contextLevel(walk) + 1 - lowest : shift
   if (by === 0) return
   for (const heading of headings) {

@@ -12,6 +12,7 @@ import {
 } from './include-source.ts'
 import { utf8Length } from './positions.ts'
 import { braceBlock } from './write-attributes.ts'
+import { append } from './append.ts'
 
 /** A failure of a selection: its cause and the values its message names. */
 interface Failure {
@@ -119,7 +120,7 @@ function selectRecordsOf(node: IncludeNode, table: TableNode, kinds: readonly nu
   const body = chosen.filter((at) => at >= records.head && at < footAt).map((at) => records.rows[at]!)
   const groups: TableNode['children'] = table.children.filter((group) => group.type === 'table_head')
   if (body.length > 0) groups.push({ type: 'table_body', children: body })
-  groups.push(...table.children.filter((group) => group.type === 'table_foot'))
+  append(groups, table.children.filter((group) => group.type === 'table_foot'))
   table.children = groups
   return null
 }

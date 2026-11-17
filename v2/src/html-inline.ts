@@ -161,12 +161,18 @@ function withRel<N extends Node>(r: Render, node: N, structural: Pair[]): N {
   return authored === undefined ? node : withoutKeys(node, ['rel'])
 }
 
+/** C2-N-054: a reference in an included file takes the definition resolution chose for it. */
+function definitionFor(r: Render, node: LinkNode | ImageNode, key: string | undefined): LinkReferenceDefinitionNode | undefined {
+  if (key === undefined) return undefined
+  return r.resolution.definitionOf.get(node) ?? r.resolution.definitions.get(key)
+}
+
 function link(node: LinkNode, r: Render): string {
   // C2-H-081: a link inside link text writes its content and no element.
   if (r.linkDepth > 0) return children(r, node)
   const key = node.key
   const href = node.href
-  const definition = key === undefined ? undefined : r.resolution.definitions.get(key)
+  const definition = definitionFor(r, node, key)
   // C2-H-177: a reference that resolved to a heading the profile degraded is written unresolved.
   const gone = definition === undefined && href !== undefined && r.resolution.goneTargets?.has(href) === true
   if (key !== undefined && (href === undefined || gone)) return `[${children(r, node)}]${unresolvedLabel(node, key)}`
@@ -189,7 +195,7 @@ function image(node: ImageNode, r: Render): string {
   const src = node.src
   const alt = node.alt ?? ''
   if (key !== undefined && src === undefined) return `![${escapeText(alt)}]${unresolvedLabel(node, key)}`
-  const definition = key === undefined ? undefined : r.resolution.definitions.get(key)
+  const definition = definitionFor(r, node, key)
   const title = node.tooltip ?? definition?.tooltip
   const structural: Pair[] = [['src', destination(r, src ?? '', node)], ['alt', alt]]
   if (title !== undefined) structural.push(['title', title])

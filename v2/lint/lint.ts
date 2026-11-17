@@ -8,6 +8,7 @@ import { finishStructure, NODE_RULES } from './structure.ts'
 import { lintIncludes } from './includes.ts'
 import { markNodeLines, sourceLines } from './source.ts'
 import { type Line, type LintContext, type LintOptions, type Rule } from './types.ts'
+import { append } from '../src/append.ts'
 
 interface Control {
   kind: 'disable-line' | 'disable-next-line' | 'disable' | 'enable'
@@ -213,7 +214,7 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
   const length = context.bytes[context.source.length] ?? 0
   for (let at = 0; at <= length; at++) {
     const bucket = buckets.get(at)
-    if (bucket !== undefined) output.push(...bucket)
+    if (bucket !== undefined) append(output, bucket)
   }
   return output
 }

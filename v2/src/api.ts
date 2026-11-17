@@ -16,6 +16,7 @@ import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
 import { applyExtensions, declareExtensions } from './extensions/claims.ts'
 import { base64, mapPositions, type SourceText, sourceText } from './byte-source.ts'
+import { append } from './append.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -94,8 +95,8 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
     bidi: all.some((facts) => facts.bidi),
     addFindings: (findings) => {
       for (const facts of all) facts.addFindings(findings)
-      findings.entries.push(...found.entries)
-      findings.nodes.push(...found.nodes)
+      append(findings.entries, found.entries)
+      append(findings.nodes, found.nodes)
     },
     footnoteLines: (node) => all.reduce((lines, facts) => lines || facts.footnoteLines(node), 0),
     markupLine: (node) => {

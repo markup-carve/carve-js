@@ -2,12 +2,13 @@ import { type Block, type BlockExtensionNode, type DivNode } from '../ast.ts'
 import { plainText } from '../ast-text.ts'
 import { divSource, remainingAttrs } from './claims.ts'
 import { type ExtensionClaim, type ExtensionDefinition, type ExtensionRenderer } from './types.ts'
+import { append } from '../append.ts'
 
 function tabNode(node: DivNode): BlockExtensionNode {
   const title = node.title ?? []
   const fallback: Block[] = []
   if (title.length > 0) fallback.push({ type: 'paragraph', children: [{ type: 'strong', children: title }] })
-  fallback.push(...structuredClone(node.children))
+  append(fallback, structuredClone(node.children))
   const result: BlockExtensionNode = {
     type: 'block_extension', name: 'carve.tab', version: '1', children: [],
     slots: { title, body: node.children }, fallback, source: divSource(node, 'tab'),

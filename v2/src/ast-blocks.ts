@@ -408,7 +408,8 @@ function placeBlock<N extends Node>(ctx: TreeContext, out: N, node: BlockNode): 
   // C2-A-148: a block that took attribute lines starts at the first of them.
   const first = node.attributes?.[0]
   if (first === undefined || !ctx.positions) return place(ctx, out, node.start, end)
-  ctx.markup.set(out, node.start)
+  // Counted here, in string offsets: `pos` holds UTF-8 byte offsets once positions finish.
+  ctx.markup.set(out, lineCount(ctx.src, first, node.start) - 1)
   return place(ctx, out, first, end)
 }
 
@@ -655,9 +656,9 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
       return block === undefined ? 0 : lineCount(src, block.start, block.end)
     },
     markupLine: (node) => {
-      const markup = ctx.markup.get(node)
+      const lines = ctx.markup.get(node)
       const pos = node.pos
-      return markup === undefined || pos === undefined ? undefined : pos.startLine + lineCount(src, pos.startOffset, markup) - 1
+      return lines === undefined || pos === undefined ? undefined : pos.startLine + lines
     },
     includes: ctx.includes,
     scope: { abbreviations: ctx.abbreviations, linkKeys: ctx.inline.definitions },

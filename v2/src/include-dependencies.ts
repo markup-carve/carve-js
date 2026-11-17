@@ -1,5 +1,6 @@
 // The dependencies of a document (C2-N-083, C2-N-084): the include nodes of its tree in tree order.
 import { type DocumentNode, forEachSlot, type Node } from './ast.ts'
+import { append } from './append.ts'
 
 /** One include node: its path as written, the id of its including file (absent for the top level), and its file if read. */
 export interface IncludeDependency {
@@ -24,7 +25,7 @@ export function includeDependencies(document: DocumentNode): IncludeDependency[]
       inner = node.file
     }
     const below: Node[] = []
-    forEachSlot(node, (nodes) => { below.push(...nodes) }, undefined, document.extensions)
+    forEachSlot(node, (nodes) => { append(below, nodes) }, undefined, document.extensions)
     for (let at = below.length - 1; at >= 0; at--) pending.push({ node: below[at]!, from: inner })
   }
   return found

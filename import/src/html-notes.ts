@@ -4,6 +4,7 @@ import { foldLabel } from '../../v2/src/index.ts'
 import {
   attr, classList, content, elements, has, ignoredCarrier, isBlank, isElement, isRawSpan, isText, type HtmlContext, type NoteEntry,
 } from './html-dom.ts'
+import { append } from '../../v2/src/append.ts'
 
 export function isFootnoteSection(node: Html.Element): boolean {
   return attr(node, 'role') === 'doc-endnotes' || attr(node, 'class')?.split(' ').includes('footnotes') === true
@@ -80,7 +81,7 @@ export function collectNotes(nodes: Html.ChildNode[], context: HtmlContext): voi
     if (node.tagName === 'section' && isFootnoteSection(node)) sections.push(node)
     else recordReference(node, referenced)
     // A note can hold the reference to another note.
-    pending.push(...content(node))
+    append(pending, content(node))
   }
   for (const section of sections) collectSection(section, referenced, context)
 }

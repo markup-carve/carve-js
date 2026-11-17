@@ -26,6 +26,13 @@ describe('lint and includes', () => {
     expect(found.filter((entry) => entry.code === 'empty-link-destination').map((entry) => entry.range)).toEqual([{ startOffset: 7, endOffset: 12 }])
   })
 
+  it('C2-N-086, C2-N-087: characters outside the BMP before a section keep its findings (review F3)', () => {
+    for (const lead of ['😀'.repeat(10), 'a'.repeat(10)]) {
+      const found = lint('{{ child.crv #s }}', { includes: resolver({ 'child.crv': `${lead}\n\n{#s}\n[y]()\n` }) })
+      expect(found.filter((entry) => entry.code === 'empty-link-destination'), lead).toHaveLength(1)
+    }
+  })
+
   it('C2-N-086: a section keeps the findings from its first line through its last', () => {
     const found = lint('{{ child.crv #s }}', { includes: resolver({ 'child.crv': '[x]()\n\n{#s}\n[y]()\n\n[z]()\n' }) })
     expect(found.filter((entry) => entry.code === 'empty-link-destination').map((entry) => entry.range)).toEqual([{ startOffset: 12, endOffset: 17 }])

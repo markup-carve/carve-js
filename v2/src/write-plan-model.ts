@@ -8,6 +8,7 @@ import {
   target, writeInline,
 } from './write-inline.ts'
 import { type Writer } from './write-state.ts'
+import { append } from './append.ts'
 
 /** A unit of a text node. */
 export const TEXT = 0
@@ -155,7 +156,7 @@ function coverSource(w: Writer, node: Node): void {
   const pending: Node[] = [node]
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     if (next.type === 'text') covered.add(next)
-    forEachSlot(next, (children) => { pending.push(...children) })
+    forEachSlot(next, (children) => { append(pending, children) })
   }
 }
 

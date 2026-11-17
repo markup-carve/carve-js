@@ -58,7 +58,7 @@ export interface TreeContext {
   inline: InlineState
   /** C2-I-098: the expansion of each defined term. The first definition of a term wins (C2-B-085). */
   abbreviations: Map<string, string>
-  /** The offset of the own markup of each block that took attribute lines (C2-A-148). */
+  /** The lines from the first attribute line of each block that took attribute lines to its own markup (C2-A-148). */
   markup: Map<Node, number>
   /**
    * Set when an inline node is built that resolution reads: one with an id, a reference, a note or

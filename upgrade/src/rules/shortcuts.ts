@@ -2,6 +2,7 @@
 import { childNodes, type Node } from '../../../v2/src/ast.ts'
 import { parseTree } from '../../../v2/src/api.ts'
 import { change, type Context } from '../context.ts'
+import { append } from '../../../v2/src/append.ts'
 
 function wasText(ctx: Context, start: number): boolean {
   return ctx.visits.some(({ node }) => node.type === 'text' && node.pos !== undefined &&
@@ -19,6 +20,6 @@ export function shortcuts(ctx: Context): void {
         change(ctx, 'U-121', bracket, bracket, '\\', 'shortcut bracket escaped to keep its 0.1 text')
       }
     }
-    stack.push(...childNodes(node))
+    append(stack, childNodes(node))
   }
 }

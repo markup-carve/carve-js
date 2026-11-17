@@ -8,6 +8,7 @@ import {
 import { isBacklink } from './html-notes.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
 import { coalesce, isKey, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
+import { append } from '../../v2/src/append.ts'
 
 const EDGE_ELEMENTS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption', 'figcaption']
 
@@ -429,7 +430,7 @@ function htmlRuby(node: Html.Element, context: HtmlContext): Inline[] {
     if (isElement(child) && child.tagName === 'rt') {
       pairs.push({ type: 'ruby_pair', base: coalesce(base), annotation: inlineChildren(child, context) })
       base = []
-    } else base.push(...rubyBase(child, context))
+    } else append(base, rubyBase(child, context))
   }
   if (base.length) report(context, node, 'import-structure-repaired', 'Ruby base without annotation read as text')
   const ruby: Inline = { type: 'ruby', pairs, ...attrs(context, node) }
