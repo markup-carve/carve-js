@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { format, parse, render, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
+import { format, parse, render, type TableRowNode, treesEqual, writeWithDiagnostics, type DocumentNode } from '../src/index.ts'
 
 it('C2-I-044/090/119 C44: a failed brace leaves the tag sigil available', () => {
   expect(render('{#d')).toContain('{<span class="tag"><strong>#d</strong></span>')
@@ -9,10 +9,33 @@ it('C2-I-049 C45: a repeated closing slash remains text under the current clause
   expect(render('/a//')).toContain('/a//')
 })
 
-it('C2-B-166/167/169 C61: a quoted pipe in a row attribute is not the row closer', () => {
-  expect(render('||{d="|"}')).toMatch(/^<table>/)
+it('C2-B-166, C2-B-169: the closing pipe is the last pipe of the line, also one quoted in a row attribute', () => {
+  expect(render('||{d="|"}')).toMatch(/^<p>/)
+  expect(render('| a |{title="x|y"}')).toBe('<p>| a |{title="x|y"}</p>')
   expect(render('||{d="\\|"}')).toMatch(/^<table>/)
   expect(render('||{!}')).toMatch(/^<p>/)
+})
+
+function firstRow(tree: DocumentNode): TableRowNode {
+  const table = tree.children[0]
+  const group = table?.type === 'table' ? table.children[0] : undefined
+  const row = group?.type === 'table_body' ? group.children[0] : undefined
+  if (row?.type !== 'table_row') throw new Error('no row')
+  return row
+}
+
+it('C2-B-169, C2-W-002: a pipe in the attribute value of a row or a cell is written escaped', () => {
+  const rowTree = parse('| a |{title=z}')
+  firstRow(rowTree).attrs = { keyValues: [['title', 'x|y']] }
+  const cellTree = parse('|{title=z} a |')
+  const cell = firstRow(cellTree).children[0]!
+  cell.attrs = { keyValues: [['title', 'x|y']] }
+  for (const tree of [rowTree, cellTree]) {
+    const out = writeWithDiagnostics(tree)
+    expect(out.diagnostics).toEqual([])
+    expect(out.source).toContain('{title="x\\|y"}')
+    expect(treesEqual(parse(out.source), tree)).toBe(true)
+  }
 })
 
 it('C2-B-222 C82: an unclosed fence retains the final content line feed', () => {

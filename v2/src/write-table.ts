@@ -101,7 +101,7 @@ function cellContent(w: Writer, cell: TableCellNode, flags: number): string {
 function cellPrefix(cell: TableCellNode): string {
   const align = cell.align
   const mark = align === undefined ? undefined : ALIGN_MARKS.get(align)
-  return (cell.header ? '=' : '') + braceBlock(cell, mark === undefined ? {} : { mark })
+  return (cell.header ? '=' : '') + braceBlock(cell, mark === undefined ? { pipes: true } : { mark, pipes: true })
 }
 
 /** C2-W-062, C2-W-118: the prefix, one space, the content and one space; an empty cell is its prefix and one space. */
@@ -159,7 +159,7 @@ function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean):
     lines[0]![column] = segment(cell.prefix, cell.parts[0]!)
     cell.places.forEach((line, at) => (lines[line]![column] = segment('', cell.parts[at + 1]!)))
   })
-  return { lines, attribute: braceBlock(row) }
+  return { lines, attribute: braceBlock(row, { pipes: true }) }
 }
 
 /** C2-W-118: pads the segments of each column to its widest. */

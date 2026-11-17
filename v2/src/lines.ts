@@ -618,14 +618,8 @@ function rowTailValid(src: string, pipe: number, end: number): boolean {
 export function rowClosingPipe(src: string, pos: number, end: number): number {
   if (src.charCodeAt(pos) !== PIPE) return -1
   const last = lastPipe(src, pos + 1, end)
-  if (last < 0) return -1
-  if (rowTailValid(src, last, end)) return last
-  const pipes = separatorPipes(src, pos + 1, end)
-  for (let at = pipes.length - 1; at >= 0; at--) {
-    const pipe = pipes[at]!
-    if (rowTailValid(src, pipe, end)) return pipe
-  }
-  return -1
+  // C2-B-166: the closing pipe is the last separating pipe of the line, also one inside a row attribute's value.
+  return last >= 0 && rowTailValid(src, last, end) ? last : -1
 }
 
 /** Offset of the closing pipe of the continuation row at `pos`, or -1 (C2-B-175, C2-B-177). */
