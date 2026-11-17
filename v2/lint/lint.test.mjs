@@ -8,6 +8,12 @@ it('C2-B-202: an empty quoted include path is reported', () => {
   expect(lint('{{ "" }}\n').map((entry) => entry.code)).toContain('empty-include-path')
   expect(lint('{{ “” }}\n').map((entry) => entry.code)).toContain('empty-include-path')
 })
+
+it('C2-B-081: a definition shaped line in a quote is reported', () => {
+  const entries = lint('> [a]: /u\n').filter((entry) => entry.code === 'definition-in-container')
+  expect(entries).toHaveLength(1)
+  expect(entries[0].range.startOffset).toBe(2)
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 

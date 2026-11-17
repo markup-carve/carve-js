@@ -242,7 +242,10 @@ function djotPlus(line: Line, context: LintContext): void {
 }
 
 function definitionInContainer(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const raw = trimmed(line)
+  const prefix = /^(?:>\s*)+/u.exec(raw.text)?.[0] ?? ''
+  const text = raw.text.slice(prefix.length)
+  const start = raw.start + prefix.length
   const close = text.indexOf(']:')
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (hasAncestor(line.path, context, 'footnote')) return
