@@ -243,22 +243,18 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
 
 /**
  * C2-I-023: a line comment starts at the start of a line or after whitespace, which it takes with it. C2-I-024: a
- * bracket in it may close an inline footnote that a text `^[` before it opens, which the plan leaves to the repair.
+ * bracket or a braced closer in it may close a bracket or a braced opener open before it, which the plan leaves to
+ * the repair.
  */
 function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean {
   if (!lineStart) push(leaf, SPACE, ATOM, node, -1)
-  if (!node.value.includes(']') || !holdsNoteSigil(leaf)) return false
+  const bracket = node.value.includes(']') && leaf.codes.includes(91)
+  if (!bracket && !(BRACED_CLOSER.test(node.value) && leaf.codes.includes(123))) return false
   undecide(leaf, 'comment bracket')
   return true
 }
 
-/** Whether the units so far hold a `^` of text directly before a `[` of text. */
-function holdsNoteSigil(leaf: Leaf): boolean {
-  for (let at = leaf.codes.indexOf(94); at >= 0; at = leaf.codes.indexOf(94, at + 1)) {
-    if (leaf.codes[at + 1] === 91 && leaf.kinds[at] === TEXT && leaf.kinds[at + 1] === TEXT) return true
-  }
-  return false
-}
+const BRACED_CLOSER = /[*+,\-/=^_~]\}/
 
 /** The units of `nodes`, as `writeInlines` writes them. */
 export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {

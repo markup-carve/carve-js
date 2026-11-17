@@ -956,7 +956,20 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
   if (leaf.undecided === null) percentsBehindOpeners(leaf, escaped)
+  if (leaf.undecided === null) commentsBeforeClosers(leaf)
   return escaped
+}
+
+/**
+ * C2-I-024: a line comment directly followed by the closer of a node of the tree ends before it only where that node
+ * is a bracket or a braced form, which the spelling of the node decides; the plan leaves such a group to the repair.
+ */
+function commentsBeforeClosers(leaf: Leaf): void {
+  for (let at = 1; at < leaf.codes.length; at++) {
+    const before = leaf.owners[at - 1]
+    if (leaf.kinds[at] !== CLOSE || before?.type !== 'comment' || before.form !== 'line' || leaf.owners[at] === before) continue
+    return undecide(leaf, 'comment before a closer')
+  }
 }
 
 function record(plan: Plan, leaf: Leaf, escaped: Uint8Array): void {
