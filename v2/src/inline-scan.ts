@@ -147,7 +147,7 @@ function unclosedNoteDemoted(state: InlineState): boolean {
 
 /**
  * Reads the inline content of the source spans `spans[from..to)` (start and end pairs) and
- * leaves its events in the state. A line block reads no line comment (C2-B-144).
+ * leaves its events in the state. A line block reads no line comment (C2-B-135).
  */
 export function scanInline(
   state: InlineState, src: string, spans: ArrayLike<number>, from: number, to: number, lineComments: boolean,

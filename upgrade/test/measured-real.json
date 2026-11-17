@@ -932,7 +932,7 @@
   },
   {
     "cause": "C30",
-    "clause": "C2-B-114",
+    "clause": "C2-B-111",
     "path": "tests/corpus/944-a-quoted-span-after-a-hosted-span-s-closer-leaves-the-follower-outside.crv",
     "line": 1,
     "input": "> > - %%%\n> > %%%\n> > %%%\n> > x\nt\n",
@@ -943,7 +943,7 @@
   },
   {
     "cause": "C30",
-    "clause": "C2-B-114",
+    "clause": "C2-B-111",
     "path": "tests/corpus/944-a-quoted-span-after-a-hosted-span-s-closer-leaves-the-follower-outside-2.crv",
     "line": 1,
     "input": "> - %%%\n> %%%\n> %%%\n> x\nt\n",
@@ -954,7 +954,7 @@
   },
   {
     "cause": "C30",
-    "clause": "C2-B-114",
+    "clause": "C2-B-111",
     "path": "tests/corpus/944-a-quoted-span-after-a-hosted-span-s-closer-leaves-the-follower-outside-3.crv",
     "line": 1,
     "input": "> > > 1. %%%%\n> > > %%%%\n> > > %%%%\n> > > x\n- t\n",
@@ -1708,7 +1708,7 @@
   },
   {
     "cause": "C60",
-    "clause": "C2-B-103",
+    "clause": "C2-A-037",
     "path": "resources/examples/edge-cases/0298-a-boolean-lang-is-the-third-spelling-of-the-same-key.md",
     "line": 12,
     "input": "[a]{:fr lang} [b]{lang :fr}\n",
@@ -1719,7 +1719,7 @@
   },
   {
     "cause": "C60",
-    "clause": "C2-B-103",
+    "clause": "C2-A-037",
     "path": "resources/examples/edge-cases/0296-a-language-attribute-and-lang-are-one-key.md",
     "line": 26,
     "input": "[x]{k=1 :fr lang=de title=t}\n",
@@ -1730,7 +1730,7 @@
   },
   {
     "cause": "C60",
-    "clause": "C2-B-103",
+    "clause": "C2-A-037",
     "path": "resources/examples/edge-cases/0296-a-language-attribute-and-lang-are-one-key.md",
     "line": 11,
     "input": "[a]{:fr lang=de} [b]{lang=de :fr}\n",
@@ -2088,7 +2088,7 @@
   },
   {
     "cause": "C75",
-    "clause": "C2-I-041",
+    "clause": "C2-B-098",
     "path": "resources/examples/extensions.md",
     "line": 533,
     "input": "Vote :+1: or :-1:. Tolerance :+-: is a symbol, but a +- b and word:+-: are not.\n",
@@ -3411,7 +3411,7 @@
   },
   {
     "cause": "C84",
-    "clause": "C2-B-129",
+    "clause": "C2-A-068",
     "path": "resources/examples/edge-cases/0965-unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi.md",
     "line": 28,
     "input": "::: \\\n[a\nb][missing]\n:::\n",
@@ -3422,7 +3422,7 @@
   },
   {
     "cause": "C84",
-    "clause": "C2-B-129",
+    "clause": "C2-A-068",
     "path": "tests/corpus/965-unresolved-reference-fallback-folds-soft-breaks-on-plain-and-ansi-2.crv",
     "line": 1,
     "input": "::: \\\n[a\nb][missing]\n:::\n",

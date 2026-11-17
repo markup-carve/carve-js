@@ -76,7 +76,7 @@ describe('root, envelope and versions', () => {
     expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.notes', version: '1' }] })).toBe('/extensions/0/required: not a boolean')
   })
 
-  it('C2-A-018, C2-A-020: a higher major version, an unknown required extension, an unknown field and an unknown type are refused', () => {
+  it('C2-A-018: a higher major version, an unknown required extension, an unknown field and an unknown type are refused', () => {
     expect(refusal({ ...documentOf(), astVersion: '3.0' })).toBe('/astVersion: major version 3 is not read by this engine')
     expect(refusal({ ...documentOf(), extensions: [{ name: 'org.example.x', version: '1', required: true, slots: [] }] })).toBe('/extensions/0: an unknown required extension')
     expect(refusal(documentOf({ type: 'paragraph', children: [], extra: 1 } as unknown as Block))).toBe('/children/0/extra: not a field of paragraph')
@@ -223,7 +223,7 @@ describe('node types', () => {
 })
 
 describe('lists and tasks', () => {
-  it('C2-A-053 to C2-A-055: a list carries its items, one marker and its spacing; the bullet character is meaning', () => {
+  it('C2-A-053 to C2-A-054, C2-B-035: a list carries its items, one marker and its spacing; the bullet character is meaning', () => {
     expect(block('- a')).toEqual({
       type: 'list', marker: { kind: 'bullet', char: '-' }, spacing: 'tight', children: [{ type: 'list_item', children: [paragraph('a')] }],
     })
@@ -238,7 +238,7 @@ describe('lists and tasks', () => {
     expect(ofType(block('B) a'), 'list').marker).toEqual({ kind: 'ordered', style: 'A', delimiter: ')', start: 2 })
   })
 
-  it('C2-A-057: a marker that carries fields of both kinds is invalid', () => {
+  it('C2-A-054, C2-A-056: a marker that carries fields of both kinds is invalid', () => {
     const list: ListNode = { type: 'list', marker: { kind: 'bullet', char: '-', start: 2 }, spacing: 'tight', children: [] }
     expect(refusal(documentOf(list))).toBe('/children/0/marker/start: a field of the other kind of marker')
   })
@@ -346,7 +346,7 @@ describe('comments', () => {
     expect(at(block('| a %% c |'), 'children.0.children.0.children.0.children.0.children.1')).toEqual({ type: 'comment', form: 'line', value: 'c' })
   })
 
-  it('C2-A-075: the comment of a comment-only line is a child of the open leaf, or else of the innermost open container', () => {
+  it('C2-B-138: the comment of a comment-only line is a child of the open leaf, or else of the innermost open container', () => {
     expect(inlines('a\n%% c\nb').map((node) => node.type)).toEqual(['text', 'soft_break', 'comment', 'soft_break', 'text'])
     expect(types(childrenOf(block('> a\n>\n> %% c')))).toEqual(['paragraph', 'comment'])
   })
@@ -411,7 +411,7 @@ describe('figures and captions', () => {
     expect(group.caption).toEqual(caption('both'))
   })
 
-  it('C2-B-150: the first bare number mark of a caption is a caption_number node', () => {
+  it('C2-B-207: the first bare number mark of a caption is a caption_number node', () => {
     expect(at(block('| a |\n^ Table #: x'), 'caption.children.0.children')).toEqual([text('Table '), { type: 'caption_number' }, text(': x')])
     expect(at(block('| a |\n^ a \\# b #tag *#* #'), 'caption.children.0.children.5')).toEqual({ type: 'caption_number' })
   })
@@ -421,7 +421,7 @@ describe('tables', () => {
   const cell = (value: string, header = false): TableCellNode => ({ type: 'table_cell', header, children: [{ type: 'cell_paragraph', children: value === '' ? [] : [text(value)] }] })
   const row = (...cells: TableCellNode[]): TableRowNode => ({ type: 'table_row', children: cells })
 
-  it('C2-A-086, C2-A-087: a table holds groups of rows of cells; the leading rows of header cells are its head', () => {
+  it('C2-A-086, C2-B-178: a table holds groups of rows of cells; the leading rows of header cells are its head', () => {
     expect(block('|= h |\n| a |\n%% c\n| b |')).toEqual({
       type: 'table', columns: [{ type: 'table_column' }],
       children: [
@@ -563,7 +563,7 @@ describe('citations, extension nodes and resources', () => {
     expect(refusal(documentOf({ type: 'citation_definition', key: 'a', namespace: 'citation', children: [text('x')] }))).toBeNull()
   })
 
-  it('C2-A-122, C2-A-125, C2-A-126: a block extension carries a fallback of block content', () => {
+  it('C2-A-122, C2-A-125, C2-X-022: a block extension carries a fallback of block content', () => {
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [] } as unknown as Block))).toBe('/children/0/fallback: a required field is missing')
     expect(refusal(documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [text('x')] } as unknown as Block))).toBe('/children/0/fallback/0: text does not stand here')
     const declared = { ...documentOf({ type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [paragraph('x')] }),
@@ -626,7 +626,7 @@ describe('facts set at close', () => {
     expect(ofType(block('$$`x\ny`'), 'paragraph').role).toBeUndefined()
   })
 
-  it('C2-A-185: the five facts set at close are in the tree and take part in equality', () => {
+  it('C2-B-191: the five facts set at close are in the tree and take part in equality', () => {
     expect(treesEqual(tree('- a\n- b'), tree('- a\n\n- b'))).toBe(false)
     expect(treesEqual(tree('![a](b)'), tree('![a](b) '))).toBe(true)
     expect(treesEqual(documentOf({ ...paragraph(), role: 'image' }), documentOf(paragraph()))).toBe(false)

@@ -1,4 +1,4 @@
-// One test per clause of spec/0.2/source-layout.md. The clauses C2-L-030 to C2-L-044 are rules for
+// One test per clause of spec/0.2/source-layout.md. The clauses C2-L-030 to C2-L-042, C2-W-002 are rules for
 // a writer: here they are tested from the side of the record, which is that both spellings give
 // one tree and differ in the fact the rule reads. The writer rule itself is tested with the writer.
 import { describe, expect, it } from 'vitest'
@@ -51,14 +51,14 @@ const FIRST = '/children/0'
 const CELL = '/children/0/children/0/children/0/children/0'
 
 describe('what the sidecar is', () => {
-  it('C2-L-001: the record is returned only on request, and the tree holds none of it', () => {
+  it('C2-A-003: the record is returned only on request, and the tree holds none of it', () => {
     expect(Object.keys(parseWithDiagnostics('. a'))).toEqual(['document', 'diagnostics'])
     expect(Object.keys(parseWithLayout('. a'))).toEqual(['document', 'diagnostics', 'layout'])
     const list = parseWithLayout('. a').document.children![0]!
     expect(Object.keys(list).sort()).toEqual(['children', 'marker', 'pos', 'spacing', 'type'])
   })
 
-  it('C2-L-002: two documents that differ only in the record are the same document', () => {
+  it('C2-A-004: two documents that differ only in the record are the same document', () => {
     const bare = parseWithLayout('. a')
     const numbered = parseWithLayout('1. a')
     expect(treesEqual(bare.document, numbered.document)).toBe(true)
@@ -565,13 +565,13 @@ describe('defaults, from the side of the record', () => {
     for (const fact of ['bare', 'fenced', 'hardBreakOpener', 'sourceFormat', 'continuationLines', 'wraps']) expect(facts.has(fact)).toBe(true)
   })
 
-  it('C2-L-043: the record states the spellings that have one canonical form as typed', () => {
+  it('C2-W-085: the record states the spellings that have one canonical form as typed', () => {
     const src = '---\na: 1\n---\n\n# a\n\n*****\n\n````\nb\n````\n'
     const nodes = layoutOf(src).nodes
     expect(nodes.map((node) => node.markerRaw ?? node.openerRaw)).toEqual(['---', '#', '*****', '````'])
   })
 
-  it('C2-L-044: no fact changes the tree', () => {
+  it('C2-L-042, C2-W-002: no fact changes the tree', () => {
     const typed = '# a\n\n1. b\n\n::: >\nc\n:::\n\n````\nd\n````\n\n*****\n\n| e |\n+ f |\n'
     const canonical = '= a\n\n. b\n\n> c\n\n```\nd\n```\n\n***\n\n| e f |\n'
     expect(treesEqual(parse(typed), parse(canonical))).toBe(true)

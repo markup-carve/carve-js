@@ -624,7 +624,7 @@ const WRITERS: InlineWriters = {
   non_breaking_space: () => '\\ ',
   smart_punctuation: (_w, node) => node.source,
   abbreviation: abbreviationNode,
-  // The mark of a caption number is the first bare `#` of the caption (C2-B-150).
+  // The mark of a caption number is the first bare `#` of the caption (C2-B-207).
   caption_number: () => '#',
   comment: commentNode,
   small_caps: childrenOnly,

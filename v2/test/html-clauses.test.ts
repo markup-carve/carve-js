@@ -78,7 +78,7 @@ describe('paragraphs, headings and sections', () => {
     ['C2-H-022: every heading has an id, authored or generated', '# One two\n\n{#mine}\n## Three', '<h1 id="One-two">One two</h1>\n<h2 id="mine">Three</h2>', { sections: false }],
     ['C2-H-022, C2-H-131: with headingIds off no id is generated, and an authored id is still written', '# One\n\n{#mine}\n# Two', '<h1>One</h1>\n<h1 id="mine">Two</h1>', { sections: false, headingIds: 'off' }],
     ['C2-H-022: lower folds the slug to lower case', '# One Two', '<h1 id="one-two">One Two</h1>', { sections: false, headingIds: 'lower' }],
-    ['C2-H-023: the carriers say whether the id of a heading was authored or generated', '# A\n\n{#b}\n# B', '<h1 data-carve-generated-id id="A">A</h1>\n<h1 data-carve-explicit-id id="b">B</h1>', { sections: false, roundtrip: true }],
+    ['C2-A-134: the carriers say whether the id of a heading was authored or generated', '# A\n\n{#b}\n# B', '<h1 data-carve-generated-id id="A">A</h1>\n<h1 data-carve-explicit-id id="b">B</h1>', { sections: false, roundtrip: true }],
     ['C2-H-024: a slug that is taken gets a suffix, and an authored id is written as the author wrote it', '# T\n\n# T\n\n{#T}\nx\n\n{#T}\ny', '<h1 id="T-2">T</h1>\n<h1 id="T-3">T</h1>\n<p id="T">x</p>\n<p id="T">y</p>', { sections: false }],
     ['C2-H-026: a top-level heading opens a section up to the next heading of the same or a lower level number; a skipped level makes none', '# A\n\na\n\n### C\n\n## B\n\n# D', '<section id="A">\n  <h1>A</h1>\n  <p>a</p>\n  <section id="C">\n    <h3>C</h3>\n  </section>\n  <section id="B">\n    <h2>B</h2>\n  </section>\n</section>\n<section id="D">\n  <h1>D</h1>\n</section>'],
     ['C2-H-027: the id of a heading that opens a section is on the section, every other attribute on the heading', '{#i .c k=v :en}\n# H', '<section id="i">\n  <h1 class="c" lang="en" k="v">H</h1>\n</section>'],
@@ -419,7 +419,7 @@ describe('a supplied tree', () => {
       '<table>\n  <tbody>\n    <tr><td><p>a</p>\n      <p>b</p>\n    </td></tr>\n  </tbody>\n</table>')
   })
 
-  it('C2-A-135, C2-H-023: the renderer resolves again and reads no result field from the tree', () => {
+  it('C2-A-135, C2-A-134: the renderer resolves again and reads no result field from the tree', () => {
     const tree: DocumentNode = { type: 'document', astVersion: '2.0', stages: ['referenceResolution', 'tableAlignment'], children: [
       { type: 'heading', level: 1, generatedId: 'custom', children: [text('Title')] },
       paragraph(text('a'), { type: 'footnote_ref', key: 'n', namespace: 'footnote', number: 5 },

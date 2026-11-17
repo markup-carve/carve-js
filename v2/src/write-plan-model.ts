@@ -44,7 +44,7 @@ export interface Leaf {
   inCell: boolean
   /** The leaf is the quoted title of a div opener, which is no line of content (C2-B-119). */
   inTitle: boolean
-  /** The leaf is a line of a line block, where `%%` is text (C2-B-144). */
+  /** The leaf is a line of a line block, where `%%` is text (C2-B-135). */
   inLine: boolean
   /** The last backtick written by an atom, or -1. */
   lastAtomTick: number

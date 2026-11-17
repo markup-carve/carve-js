@@ -74,7 +74,7 @@ describe('the planned writer', () => {
     ['C2-I-115: an arrow of one hyphen stays as typed', 'a <- b and \\<= c\n'],
     ['C2-I-074: an image sigil before a link of the tree, and before an open bracket', '\\![a](/u) and ![a\n'],
     ['C2-B-123: a line of a line block opens no block', '::: |\n- a\n# b\n  > c\n:::\n'],
-    ['C2-B-144: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
+    ['C2-B-135: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
     ['C2-B-125: in a line block only a bare colon run closes', '::: |\n:: t\n::: x\n:::\n'],
     ['C2-B-069: a later line of a term continues like paragraph text', ':: t\n   - a\n   :: e\n   \\::: x\n: d\n'],
     ['C2-W-091: a text backtick before a code span takes its backslash behind other text openers', 'x< \\`{#`a` y\n'],
@@ -124,7 +124,7 @@ describe('the planned writer', () => {
     for (const source of ['![i](u)\n\\^ b\n']) expect(formatBy(source, 'both').stats.planned, source).toBe(0)
   })
 
-  it('C2-B-150, C2-B-207: a text `#` of a caption before its number mark keeps its backslash in the formatted source', () => {
+  it('C2-B-207: a text `#` of a caption before its number mark keeps its backslash in the formatted source', () => {
     for (const source of ['![b](b.png)\n^ Two \\# more\n', '![b](b.png)\n^ *Figure* 2. Two \\# more\n', '![b](b.png)\n^ a \\#\n']) {
       expect(format(source), source).toBe(source)
       expect(formatBy(source, 'plan').stats.planned, source).toBe(0)
@@ -478,7 +478,7 @@ describe('the planned writer', () => {
     }
     // C2-I-036: a node that is no host, such as a non-breaking space, takes no block, and the brace stays bare.
     expect(formatBy('x\\ {a}\n', 'both').stats.differences).toEqual([])
-    // C2-I-045: behind a code span `{=` may be a raw marker, which the attribute grammar does not read.
+    // C2-I-021: behind a code span `{=` may be a raw marker, which the attribute grammar does not read.
     expect(formatBy('x`a`{=\\_}\n', 'both').stats.differences).toEqual([])
   })
 
@@ -492,7 +492,7 @@ describe('the planned writer', () => {
     expect(formatBy('x {--}\n', 'both').stats.repaired).toBe(1)
   })
 
-  it('C2-I-022, C2-I-045: behind a host other than a plain code span, `{=` is a braced opener and no attribute block', () => {
+  it('C2-I-021: behind a host other than a plain code span, `{=` is a braced opener and no attribute block', () => {
     for (const source of ['*a*{=b=} c\n', '*a*{=b c\n', '*a*{=b}\n', '$`a`{=b}\n', '`a`{=html}\n']) {
       const result = formatBy(source, 'both')
       expect(result.output.source, source).toBe(source)

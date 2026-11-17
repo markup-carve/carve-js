@@ -145,7 +145,7 @@ function contentInlines(
   return buildInlineTree(src, state.events, state.eventLength, (start, end) => contentSource(src, spans, start, end))
 }
 
-/** C2-B-130, C2-B-144: each line of a line block is a content of its own, and `%%` is text in it. */
+/** C2-B-130, C2-B-135: each line of a line block is a content of its own, and `%%` is text in it. */
 function lineInlines(state: InlineState, src: string, spans: number[]): InlineNode[] {
   const lines: InlineNode[] = []
   for (let at = 0; at < spans.length; at += 2) {

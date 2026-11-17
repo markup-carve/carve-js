@@ -60,7 +60,7 @@ export interface InlineState {
   lineText: Int32Array
   lineSource: Int32Array
   lineCount: number
-  /** C2-B-144: a line block reads `%%` as text. */
+  /** C2-B-135: a line block reads `%%` as text. */
   lineComments: boolean
   cell: boolean
   /** C2-I-015: backtick runs indexed by length for repeated cell scans. */

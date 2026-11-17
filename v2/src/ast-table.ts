@@ -38,7 +38,7 @@ interface Groups {
   width: number
   /** The source range of each group, by its row list. A delimited table has none (C2-A-158). */
   ranges: Map<GroupRows, [number, number]>
-  /** The comments behind the last row, which are children of the table (C2-A-075, C2-A-086). */
+  /** The comments behind the last row, which are children of the table (C2-B-138, C2-A-086). */
   trailing: CommentNode[]
 }
 

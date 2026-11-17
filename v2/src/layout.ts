@@ -1,5 +1,5 @@
 // The source-layout record of spec/0.2/source-layout.md: how the author spelled the document, in a
-// second object beside the tree. It is built from what the tree builder traced, and only on request (C2-L-001).
+// second object beside the tree. It is built from what the tree builder traced, and only on request (C2-A-003).
 import { captionOf, type DocumentNode, type ExtensionDeclaration, forEachSlot, type Node, SOURCE_ORDER,
   type TableCellNode } from './ast.ts'
 import { BYTE_ORDER_MARK, CR, LF } from './chars.ts'

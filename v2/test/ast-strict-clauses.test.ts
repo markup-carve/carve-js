@@ -16,7 +16,7 @@ describe('AST 2.0 reader checks', () => {
       .toBe('/document/astVersion: the document and envelope versions differ')
   })
 
-  it('C2-A-029, C2-A-123, C2-A-124, C2-A-125, C2-A-126: names, declarations and fallback are checked', () => {
+  it('C2-A-029, C2-A-123, C2-A-124, C2-A-125, C2-X-022: names, declarations and fallback are checked', () => {
     const inline = (name: string, fallback?: unknown[]) => documentOf(paragraph({ type: 'inline_extension', name,
       children: [], ...(name.includes('.') ? { version: '1' } : {}), ...(fallback === undefined ? {} : { fallback }) } as never))
     expect(refusal(inline('kbd'))).toBeNull()

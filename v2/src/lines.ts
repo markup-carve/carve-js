@@ -675,7 +675,7 @@ export function continuationClosingPipe(src: string, pos: number, end: number): 
   return last >= 0 && skipSpaces(src, last + 1, end) === end ? last : -1
 }
 
-/** Offset of the first bare `#` of a caption's text, the caption number mark, or -1 (C2-B-150). */
+/** Offset of the first bare `#` of a caption's text, the caption number mark, or -1 (C2-B-207). */
 export function captionNumberMark(src: string, pos: number, end: number): number {
   return scanOutsideCode(src, pos, end, HASH, true, null)
 }

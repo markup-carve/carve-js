@@ -260,7 +260,7 @@ function paragraphElement(node: Html.Element, context: HtmlContext): Block {
   return { ...base, ...attrs(context, node, [], true) }
 }
 
-/** C2-H-021, C2-H-023: a heading, its true level above six, and whether its id was authored (C2-H-114). */
+/** C2-H-021, C2-A-134: a heading, its true level above six, and whether its id was authored (C2-H-114). */
 function heading(node: Html.Element, level: number, context: HtmlContext, id?: HeadingId): Block {
   const own = headingId(node, context)
   const chosen = id ?? own

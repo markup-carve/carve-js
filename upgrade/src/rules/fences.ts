@@ -37,7 +37,7 @@ function commentCloser(ctx: Context, visit: Visit): void {
   change(ctx, 'U-050', start + at, lineEnd(ctx.lines, line), '', message)
 }
 
-/** U-052: in the body of a line block `%%` is text in 0.2 (C2-B-144); a braced comment renders nothing. */
+/** U-052: in the body of a line block `%%` is text in 0.2 (C2-B-135); a braced comment renders nothing. */
 function commentInLineBlock(ctx: Context, visit: Visit): void {
   const node = visit.node
   if (node.block === true || !ctx.src.startsWith('%%', node.pos!.startOffset)) return

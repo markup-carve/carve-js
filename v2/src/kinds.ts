@@ -50,7 +50,7 @@ export function isTextLeaf(kind: number): boolean {
   return kind === PARAGRAPH || kind === TERM || kind === CAPTION || kind === HEADING
 }
 
-/** The leaves whose body is not read and that end at a closer (C2-B-114, C2-B-123, C2-B-162). */
+/** The leaves whose body is not read and that end at a closer (C2-B-111, C2-B-112, C2-B-123, C2-B-162). */
 export function isOpaqueLeaf(kind: number): boolean {
   return kind >= CODE && kind <= FRONTMATTER
 }

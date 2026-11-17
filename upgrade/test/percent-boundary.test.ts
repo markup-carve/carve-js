@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { upgrade } from '../src/index.ts'
 
-describe('C2-B-108, C2-B-110, C2-B-114 percent fence ownership', () => {
+describe('C2-B-108, C2-B-110, C2-B-111, C2-B-112 percent fence ownership', () => {
   const cases: [string, string][] = [
     ['- a\n %%% n\n x\n %%%\n tail\n', '- a\n %%% n\n x\n %%%\ntail\n'],
     ['- intro\n%%%\nc\n%%%\n  tail\n', '- intro\n  %%%\n  c\n  %%%\n  tail\n'],

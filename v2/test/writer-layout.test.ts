@@ -221,19 +221,19 @@ describe('the rest of the record', () => {
     expect(write(parse('* a\n* b\n\n- c'))).toBe('* a\n* b\n\n- c\n')
   })
 
-  it('C2-L-037, C2-L-038, C2-L-039, C2-L-043: the fence, the heading marker and the thematic break are normalized whatever is recorded', () => {
+  it('C2-L-037, C2-L-038, C2-L-039, C2-W-085: the fence, the heading marker and the thematic break are normalized whatever is recorded', () => {
     const src = '## T\n\n*****\n\n`````js\nc\n`````\n\n::::: box\nx\n:::::'
     expect(format(src)).toBe('== T\n\n***\n\n```js\nc\n```\n\n::: box\nx\n:::\n')
     expect(write(parse(src))).toBe(format(src))
   })
 
-  it('C2-L-041, C2-L-043: blank lines, the content column, the frontmatter opener and the title quotes are canonical', () => {
+  it('C2-L-041, C2-W-085: blank lines, the content column, the frontmatter opener and the title quotes are canonical', () => {
     const src = '---yaml\na: b\n---\n\n\n\n   -   a\n       b\n\n\n[c](/u \'t\')'
     expect(format(src)).toBe('---\na: b\n---\n\n- a\n  b\n\n[c](/u "t")\n')
     expect(write(parse(src))).toBe(format(src))
   })
 
-  it('C2-L-044: neither the kept form nor the default changes the tree', () => {
+  it('C2-L-042, C2-W-002: neither the kept form nor the default changes the tree', () => {
     for (const src of ['1. a\n2. b', '::: >\na\n:::', '{.hardbreaks}\n:::\na\nb\n:::', '{table}\n```csv\na,b\nc,d\n```', '| a |\n+ b |', '[a][ b ]\n\n[b]: /u']) {
       expect(keepsTree(format(src), src)).toBe(true)
       expect(keepsTree(write(parse(src)), src)).toBe(true)

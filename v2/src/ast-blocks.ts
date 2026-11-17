@@ -465,7 +465,7 @@ function blockNode<N extends Node>(ctx: TreeContext, node: BlockNode, flow: numb
   return placeBlock(ctx, out, node)
 }
 
-/** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-150). */
+/** C2-A-081: a caption holds one paragraph; the first bare `#` of its text is the number mark (C2-B-207). */
 function captionNode(ctx: TreeContext, node: BlockNode, flow: number): CaptionNode {
   // The mark is found in the source of the text, so the text is placed also where no position is asked for.
   const placed = ctx.positions ? ctx : { ...ctx, positions: true }
@@ -708,7 +708,7 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
 /**
  * The public tree of `src` before resolution, built from the events of the block pass and of the
  * inline pass of each content. `abbreviations` replaces the terms the source defines, for a source
- * that is one block of a larger document (C2-W-089). `trace` takes what the source-layout record reads (C2-L-001).
+ * that is one block of a larger document (C2-W-089). `trace` takes what the source-layout record reads (C2-A-003).
  */
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,

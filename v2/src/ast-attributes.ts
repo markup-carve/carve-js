@@ -3,7 +3,7 @@ import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.
 import { BRACE_OPEN, LF, SPACE, TAB } from './chars.ts'
 import { cellMarksLength } from './lines.ts'
 
-/** The merged attribute blocks of a host, in the fixed order of C2-I-041. */
+/** The merged attribute blocks of a host, in the fixed order of C2-B-098. */
 export interface Attributes {
   id: string | null
   classes: string[]

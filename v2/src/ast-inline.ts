@@ -42,7 +42,7 @@ export interface InlineFrame {
   attributes: Attributes | null
 }
 
-/** What the source-layout record reads beside the tree (C2-L-001). Filled only on request. */
+/** What the source-layout record reads beside the tree (C2-A-003). Filled only on request. */
 export interface LayoutTrace {
   blocks: Map<Node, BlockNode>
   inlines: Map<Node, InlineFrame>
@@ -394,7 +394,7 @@ function buildFromEvents(ctx: TreeContext, spans: number[], flow: number): Inlin
 
 /**
  * C2-I-001: the public nodes of the content `spans[from..to)`. `lineComments` is false where `%%`
- * is text (C2-B-130, C2-B-144).
+ * is text (C2-B-130, C2-B-135).
  */
 export function contentNodes(ctx: TreeContext, spans: number[], from: number, to: number, lineComments: boolean, flow: number): Inline[] {
   // One line of plain text is one text node, with no pass over it.
@@ -416,7 +416,7 @@ export function leafInlines(ctx: TreeContext, spans: number[], flow: number): In
   return contentNodes(ctx, spans, 0, spans.length, true, flow)
 }
 
-/** C2-B-130, C2-B-144: line `at` of a line block is a content of its own, and `%%` is text in it. */
+/** C2-B-130, C2-B-135: line `at` of a line block is a content of its own, and `%%` is text in it. */
 export function lineInlines(ctx: TreeContext, spans: number[], at: number): Inline[] {
   ctx.resolvable = false
   return contentNodes(ctx, spans, at, at + 2, false, FLOW_PLAIN)

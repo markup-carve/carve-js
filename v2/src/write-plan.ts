@@ -257,7 +257,7 @@ function behindHost(leaf: Leaf, at: number): boolean {
   return kind === ATOM && !NO_HOSTS.has(leaf.owners[at - 1]!.type)
 }
 
-/** C2-I-022, C2-I-045: only behind a plain code span is `{=` a raw marker; anywhere else it is a braced opener. */
+/** C2-I-021: only behind a plain code span is `{=` a raw marker; anywhere else it is a braced opener. */
 function behindCode(leaf: Leaf, at: number): boolean {
   return leaf.kinds[at - 1] === ATOM && leaf.owners[at - 1]?.type === 'code'
 }
@@ -278,7 +278,7 @@ const ESCAPED = 1
  * C2-I-028, C2-I-043: how a text brace behind a host reads, by the reader's grammar on the read text up to the line
  * end. A block that forms takes the backslash on its brace (C2-W-090); a brace that forms none is text. A node, an
  * escape or a comment brace inside the text leaves it to the repair, and so does `{=`, which behind a code span may
- * be a raw marker (C2-I-045).
+ * be a raw marker (C2-I-021).
  */
 function hostBlock(leaf: Leaf, at: number, escaped: Uint8Array): number {
   // C2-I-043: a valid block comes before a comment, so `{%` and `{#` are read as a block first.
@@ -451,7 +451,7 @@ function percent(leaf: Leaf, at: number, escaped: Uint8Array): void {
   if (leaf.inTitle || isLiteral(leaf, at, escaped) || !nextIs(leaf, at, '%')) return
   const before = code(leaf, at - 1)
   if (before === 37 || before === 123) return undecidedIf(!percentBehindText(leaf, at, before, escaped), leaf, 'mark %')
-  // C2-B-144: in the body of a line block `%%` is text.
+  // C2-B-135: in the body of a line block `%%` is text.
   if (isSpace(before) && !leaf.inLine) escaped[at] = 1
 }
 

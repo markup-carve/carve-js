@@ -179,7 +179,7 @@ describe('raw inline', () => {
     expect(inline('`a`{=1x} `a`{=} `a`{=x y} `a` {=x}')).toBe('code"a" "{=1x} " code"a" "{=} " code"a" "{=x y} " code"a" " {=x}"')
   })
 
-  it('C2-I-022: only a plain code span takes the marker', () => {
+  it('C2-I-021: only a plain code span takes the marker', () => {
     expect(inline('!`a`{=html} $`a`{=html}')).toBe('lit"a" "{=html} " math"a" "{=html}"')
     expect(inline('a{=html} b=}')).toBe('"a" mark["html} b"]')
     expect(inline('`a`{.c}{=html}')).toBe('code"a"{.c} "{=html}"')
@@ -307,7 +307,7 @@ describe('attribute blocks', () => {
     expect(inline('*a*{} `a`{} a {} [a](/u){} [a] {}')).toBe('strong["a"] "{} " code"a" "{} a {} " a(/u)["a"] "{} [a] {}"')
   })
 
-  it('C2-I-041: the order inside a block is fixed in the tree', () => {
+  it('C2-B-098: the order inside a block is fixed in the tree', () => {
     expect(inline('[s]{k=v .a :en #b .c j=w}')).toBe('span["s"]{#b .a .c :en k=v j=w}')
   })
 
@@ -334,7 +334,7 @@ describe('the opening brace', () => {
     expect(inline('a } b {')).toBe('"a } b {"')
   })
 
-  it('C2-I-045: glued to a closed code span the raw marker is tried before the highlight opener', () => {
+  it('C2-I-021: glued to a closed code span the raw marker is tried before the highlight opener', () => {
     expect(inline('`a`{=x} b=}')).toBe('raw(x)"a" " b=}"')
     expect(inline('`a`{=x y=}')).toBe('code"a" mark["x y"]')
     expect(inline('`a`{=x .c}')).toBe('code"a" "{=x .c}"')

@@ -662,7 +662,7 @@ describe('attribute lines', () => {
     expect(blocks('- x', '', '  {.a}', '  - y')).toBe('ul(-)[li[p"x" {.a}ul(-)[li[p"y"]]]]')
   })
 
-  it('C2-B-002, C2-B-092: an attribute line waits for the next line and is a paragraph when no block takes it', () => {
+  it('C2-B-092: an attribute line waits for the next line and is a paragraph when no block takes it', () => {
     expect(blocks('{.a}')).toBe('p"{.a}"')
     expect(blocks('{.a}', '', 'x')).toBe('p"{.a}" p"x"')
     expect(blocks('> {.a}', 'x')).toBe('quote[p"{.a}"] p"x"')
@@ -788,7 +788,7 @@ describe('divs, sigil divs and comment blocks', () => {
     expect(blocks('- a', '  %%%', '  x', '  %%%', '- b')).toBe('ul(-)[li[p"a" %%%"x"] li[p"b"]]')
   })
 
-  it('C2-B-114, C2-B-144: in a line block and in a comment block a `%%` line is body text', () => {
+  it('C2-B-111, C2-B-112, C2-B-135: in a line block and in a comment block a `%%` line is body text', () => {
     expect(blocks('- ::: |', '  a', '  %% c', '  b', '  :::')).toBe('ul(-)[li[lines"a|%% c|b"]]')
     expect(blocks('- %%%', '  a', '  %% c', '  %%%')).toBe('ul(-)[li[%%%"a|%% c"]]')
     expect(blocks('- ::: |', '  a', '%% c')).toBe('ul(-)[li[lines!"a|%% c"]]')
@@ -1252,7 +1252,7 @@ describe('raw blocks and the caption number', () => {
     expect(blocks('```=html', '%% c', '```')).toBe('raw"%% c"')
   })
 
-  it('C2-B-150: the first bare `#` in a caption is the caption number mark', () => {
+  it('C2-B-207: the first bare `#` in a caption is the caption number mark', () => {
     const mark = (text: string): number => captionNumberMark(text, 0, text.length)
     expect(mark('Table #: one')).toBe(6)
     expect(mark('Table \\#, then #')).toBe(15)

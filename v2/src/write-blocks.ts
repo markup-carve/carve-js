@@ -412,7 +412,7 @@ function caption(w: Writer, node: CaptionNode | undefined, prefix: string, flags
   emitLines(w, prefix, '  ', parts.join(' '))
 }
 
-/** C2-B-150, C2-B-207: a `#` of top-level text before the number mark, which the reader would take as the mark. */
+/** C2-B-207: a `#` of top-level text before the number mark, which the reader would take as the mark. */
 function holdsMarkBeforeNumber(nodes: readonly Node[]): boolean {
   for (const node of nodes) {
     if (node.type === 'caption_number') return false

@@ -419,7 +419,7 @@ describe('layout', () => {
 })
 
 describe('canonical forms: blocks', () => {
-  it('C2-W-126, C2-B-015: a nested ordered list that starts past 1 below a paragraph of its item follows a blank line', () => {
+  it('C2-W-018, C2-B-015: a nested ordered list that starts past 1 below a paragraph of its item follows a blank line', () => {
     const tree = parse('- a\n\n  3. b\n')
     const source = write(tree)
     expect(source).toBe('- a\n\n  {start=3}\n  . b\n')

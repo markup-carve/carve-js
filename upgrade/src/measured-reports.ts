@@ -181,7 +181,7 @@ function lateMeasuredReport(input: string, expected: string, actual: string, lin
   const legacy = legacyMeasured(input, expected, actual, line)
   if (legacy !== null) return legacy
   if (percentFenceInContainer(input)) return recordOf('U-224', line,
-    'C2-B-108, C2-B-110, and C2-B-114 change the percent fence container extent; no preserving spelling was verified')
+    'C2-B-108, C2-B-110, and C2-B-111, C2-B-112 change the percent fence container extent; no preserving spelling was verified')
   if (unresolvedContinuation(input)) return recordOf('U-209', line,
     'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
   return null

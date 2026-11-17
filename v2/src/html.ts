@@ -175,7 +175,7 @@ function headingId(node: HeadingNode): string | undefined {
   return node.attrs?.id ?? node.generatedId
 }
 
-/** C2-H-023: under `roundtrip` a carrier says whether the id of a heading was authored or generated. */
+/** C2-A-134: under `roundtrip` a carrier says whether the id of a heading was authored or generated. */
 function idCarriers(r: Render, node: HeadingNode): Pair[] {
   if (!r.settings.roundtrip || headingId(node) === undefined) return []
   return [[node.attrs?.id === undefined ? 'data-carve-generated-id' : 'data-carve-explicit-id', null]]

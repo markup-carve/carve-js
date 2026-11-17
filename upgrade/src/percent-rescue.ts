@@ -113,7 +113,7 @@ function duplicatedPercentCandidates(output: string): string[] {
   return found
 }
 
-/** C2-B-108, C2-B-110 and C2-B-114: outgrow a closer 0.1 kept inside the comment. */
+/** C2-B-108, C2-B-110 and C2-B-111, C2-B-112: outgrow a closer 0.1 kept inside the comment. */
 export function rescuePercent(input: string, output: string, mismatch: ReportRecord): Rescue | null {
   if (!input.includes('%%%')) return null
   const expected = html01(input)

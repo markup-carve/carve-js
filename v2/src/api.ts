@@ -30,7 +30,7 @@ export interface ParseResult {
 }
 
 export interface LayoutResult extends ParseResult {
-  /** C2-L-001: the source-layout record, beside the tree. */
+  /** C2-A-003: the source-layout record, beside the tree. */
   layout: SourceLayout
 }
 
