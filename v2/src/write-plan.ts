@@ -570,7 +570,7 @@ function backtick(leaf: Leaf, at: number, escaped: Uint8Array): void {
  */
 function opensFirst(leaf: Leaf, at: number): boolean {
   const before = code(leaf, at - 1)
-  return !leaf.textOpener && leaf.openDepth === 0 && before !== 33 && before !== 36
+  return leaf.openDepth === 0 && before !== 33 && before !== 36
 }
 
 /** The run of `value` at `at` and its length. */
@@ -707,9 +707,35 @@ function isLineEndAfterCr(codes: readonly number[], at: number): boolean {
   return at === codes.length || codes[at] === LF
 }
 
-// One entry per CR, so the writer can tell that every line it ends with a CR is one the plan reported.
-function loseValue(leaf: Leaf, node: Node): void {
-  leaf.lostValues.push(node)
+/**
+ * C2-W-016: a CR before a line end joins it, in text and in the value of an atom alike, so no spelling keeps it. Each
+ * such CR is reported, one entry per CR so the writer can tell that every line it ends with a CR is one the plan
+ * reported, and taken out of the leaf, which is then read as the reader reads its lines. Returns the backslashes of
+ * text left before a line end that way, which are doubled, as the reader would take them for a hard break.
+ */
+function dropLineEndCrs(leaf: Leaf): number[] {
+  const doubled: number[] = []
+  const ends: number[] = []
+  for (let at = 0; at < leaf.codes.length; at++) if (leaf.codes[at] === CR && isLineEndAfterCr(leaf.codes, at + 1)) ends.push(at)
+  for (const at of ends.reverse()) {
+    leaf.lostValues.push(leaf.owners[at]!)
+    for (const list of [leaf.codes, leaf.kinds, leaf.owners, leaf.offsets] as unknown[][]) list.splice(at, 1)
+    shiftDown(doubled)
+    if (code(leaf, at - 1) === BACKSLASH && leaf.kinds[at - 1] === TEXT) doubled.push(at - 1)
+  }
+  if (ends.length > 0) relocate(leaf)
+  return doubled
+}
+
+function shiftDown(units: number[]): void {
+  for (let at = 0; at < units.length; at++) units[at]!--
+}
+
+/** The last backtick of an atom and the last bracket, after units were taken out of the leaf. */
+function relocate(leaf: Leaf): void {
+  leaf.lastAtomTick = -1
+  for (let at = 0; at < leaf.codes.length; at++) if (leaf.codes[at] === 96 && leaf.kinds[at] === ATOM) leaf.lastAtomTick = at
+  leaf.lastBracket = leaf.codes.lastIndexOf(93)
 }
 
 function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
@@ -717,8 +743,6 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
   for (let at = 0; at < codes.length && leaf.undecided === null; at++) {
     leaf.cursor = at
     const kind = leaf.kinds[at]
-    // C2-W-016: a CR before a line end joins it, in text and in the value of an atom alike.
-    if (codes[at] === CR && isLineEndAfterCr(codes, at + 1)) loseValue(leaf, leaf.owners[at]!)
     if (kind === ATOM && !continuesAtom(leaf, at)) {
       const node = leaf.owners[at]!
       checkAtom(leaf, at, node)
@@ -886,7 +910,9 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
 }
 
 function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: LeafPlace | undefined): Uint8Array {
+  const doubled = dropLineEndCrs(leaf)
   const escaped = new Uint8Array(leaf.codes.length)
+  for (const at of doubled) escaped[at] = 1
   leaf.inCell = (flags & IN_CELL) !== 0
   leaf.inTitle = start === IN_TITLE
   leaf.inLine = place?.line === true

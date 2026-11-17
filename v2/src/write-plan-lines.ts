@@ -203,16 +203,21 @@ function mayCloseRow(leaf: Leaf, at: number): boolean {
 
 /**
  * The end of the glued brace blocks at `at`, NO_ESCAPE where they are no valid blocks, or UNDECIDED where a node writes
- * one. A braced mark of the tree opens no block (C2-I-043). A quote or a backslash may take an escape that makes a
- * block of the text valid, so those are left to the repair too.
+ * one. A braced mark of the tree opens no block (C2-I-043). A quote or a backslash before the last `}` of the line may
+ * take an escape that makes a block of the text valid, so those are left to the repair too.
  */
 function braceBlocksEnd(leaf: Leaf, at: number): number {
   if (leaf.kinds[at] === OPEN) return NO_ESCAPE
   let end = at
+  let close = -1
   while (end < leaf.codes.length && leaf.codes[end] !== LF) {
-    const value = leaf.codes[end]
-    if (leaf.kinds[end] !== TEXT || value === 34 || value === 39 || value === 92) return UNDECIDED
+    if (leaf.codes[end] === 125) close = end
     end++
+  }
+  // Behind the last `}` of the line nothing can close a block, so what stands there decides nothing.
+  for (let unit = at; unit < close; unit++) {
+    const value = leaf.codes[unit]
+    if (leaf.kinds[unit] !== TEXT || value === 34 || value === 39 || value === 92) return UNDECIDED
   }
   const text = String.fromCharCode(...leaf.codes.slice(at, end))
   let block = 0

@@ -77,6 +77,11 @@ describe('the planned writer', () => {
     ['C2-B-144: in a line block `%%` is text', '::: |\n%% a\nb %% c\n:::\n'],
     ['C2-B-125: in a line block only a bare colon run closes', '::: |\n:: t\n::: x\n:::\n'],
     ['C2-B-069: a later line of a term continues like paragraph text', ':: t\n   - a\n   :: e\n   \\::: x\n: d\n'],
+    ['C2-W-091: a text backtick before a code span takes its backslash behind other text openers', 'x< \\`{#`a` y\n'],
+    ['C2-W-091: a text backtick before a code span behind an angle that opens nothing', 'x<a \\`b`a` c\n'],
+    ['C2-B-167: a quote behind the last brace of a pipe line decides no row attribute', 'a\n| a |{*=}\'\n'],
+    ['C2-B-167: a quote behind a row attribute after one space', 'a\n| a | {=\'\n'],
+    ['C2-B-167: a quote glued behind a row attribute', '| a |{.c}\'\n'],
   ]
   for (const [clause, source] of PLANNED) {
     it(`${clause}, planned with no parse`, () => {
