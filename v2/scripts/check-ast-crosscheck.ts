@@ -69,6 +69,10 @@ const BEYOND_SCHEMA = [
   'an expanded include names its file',
   // C2-A-091: a cell with no children is refused unless a span mark fills it; the schema cannot read the span.
   'a cell with no children',
+  // C2-A-091, C2-A-188: a cell_paragraph that is not the only child of its cell is a reader check.
+  'a cell_paragraph beside another block',
+  // C2-A-086, C2-A-188: the order of the table groups is a reader check.
+  'the table groups are out of order',
   // C2-A-098: the glyph and the source of a smart punctuation node follow its kind; the schema lists each field apart.
   'not the glyph of its kind', 'not the source of its kind',
   // C2-A-124: an unqualified extension has no version, so no field that a declaration gives; the schema cannot tie them.
