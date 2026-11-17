@@ -381,7 +381,7 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
   const pos = state.cursor.pos
   const shapes = shapesAt(state)
   // C2-B-014.
-  if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return !isRefusedDivLine(state, end)
+  if ((shapes & FENCE_SHAPES) !== 0 && isFenceLine(src, pos, end)) return !isRefusedDivLine(state, matched, end)
   // C2-B-200.
   if ((shapes & SHAPE_THEMATIC_BREAK) !== 0 && isThematicBreak(src, pos, end)) return true
   // C2-B-019.
@@ -395,14 +395,15 @@ function interruptsLeaf(state: BlockState, matched: number, lineStart: number, e
  * C2-B-190, C2-B-024: past the depth cap a div line that closes no open div opens nothing and is text, so it is a lazy
  * line of the open paragraph and no interrupter.
  */
-function isRefusedDivLine(state: BlockState, end: number): boolean {
+function isRefusedDivLine(state: BlockState, matched: number, end: number): boolean {
   const containers = state.containers
   const src = state.src
   const pos = state.cursor.pos
   if (containers.depth <= MAX_DEPTH || src.charCodeAt(pos) !== COLON) return false
   const length = divRunLength(src, pos, end)
   if (skipSpaces(src, pos + length, end) !== end) return true
-  for (let index = containers.depth - 1; containers.kind[index] === DIV; index--) if (containers.column[index]! <= length) return false
+  // The containers from `matched` on close first, as in `openBareRun`.
+  for (let index = matched - 1; containers.kind[index] === DIV; index--) if (containers.column[index]! <= length) return false
   return true
 }
 
