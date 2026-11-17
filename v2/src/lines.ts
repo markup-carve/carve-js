@@ -104,7 +104,8 @@ export function attributeBlocksEnd(src: string, pos: number, end: number, cell =
   let p = pos
   for (;;) {
     const blockEnd = braceBlockEnd(src, p, end)
-    if (blockEnd < 0 || !isValidBlock(src, p, blockEnd, memo, cell)) return p
+    // C2-B-182: the marks stand only in the first block of the run.
+    if (blockEnd < 0 || !isValidBlock(src, p, blockEnd, memo, cell && p === pos)) return p
     p = blockEnd
   }
 }

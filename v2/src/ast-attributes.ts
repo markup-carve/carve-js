@@ -86,9 +86,10 @@ export function emptyAttributes(): Attributes {
 export function readGluedBlocks(src: string, pos: number, end: number, attributes: Attributes): number {
   const sink = attributeSink(attributes)
   const memo = emptyMemo()
+  const first = pos
   while (pos < end && src.charCodeAt(pos) === BRACE_OPEN) {
-    // C2-B-182: the alignment marks of a cell prefix stand before the parts and are none of them.
-    const marks = cellMarksLength(src, pos)
+    // C2-B-182: the alignment marks of a cell prefix stand before the parts of its first block and are none of them.
+    const marks = pos === first ? cellMarksLength(src, pos) : 0
     const next = readAttributeBlock(src, pos + marks, end, memo, sink)
     if (next < 0) {
       const close = marks > 0 ? src.indexOf('}', pos) : -1
