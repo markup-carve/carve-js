@@ -134,15 +134,16 @@ function closePair(scan: Scan, at: number): void {
 }
 
 /**
- * C2-I-023, C2-I-024: a line comment at the start of a note's content, or one that its closer ends, needs the bracket;
- * there the caret takes the backslash and the pair stays an ordinary bracket.
+ * C2-I-023, C2-I-024: a line comment that a note's closer ends needs the bracket; there the caret takes the backslash
+ * and the pair stays an ordinary bracket.
  */
 function keepsBracket(scan: Scan, opener: number, closer: number): boolean {
   const leaf = scan.leaf
   if (!isFootnoteCaret(leaf, opener - 1, scan.escaped)) return false
-  const first = leaf.owners[opener + 1]
   const last = leaf.owners[closer - 1]
-  return (first?.type === 'comment' && first.form === 'line') || (last?.type === 'comment' && last.form === 'line')
+  // The bracket then pairs as an ordinary one, so nothing glued to its closer may make a construct of it.
+  const next = closer + 1 < leaf.codes.length ? String.fromCharCode(leaf.codes[closer + 1]!) : ''
+  return last?.type === 'comment' && last.form === 'line' && !FOLLOWERS.includes(next === '' ? ' ' : next)
 }
 
 export function checkBrackets(leaf: Leaf, escaped: Uint8Array, hasKeys: boolean): void {

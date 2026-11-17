@@ -1005,8 +1005,21 @@ function openBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
  * bracket of text the reader reads is open, which would be the innermost form.
  */
 function closesAfterComment(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
-  if (leaf.codes[at] === 93) return true
+  if (leaf.codes[at] === 93) return openTextBraces(leaf, at, escaped) === 0
   return (leaf.codes[at] === 125 || leaf.codes[at + 1] === 125) && openTextBrackets(leaf, at, escaped) === 0
+}
+
+/** The braced openers of text the reader reads before `at` that no closer of their mark closes. */
+function openTextBraces(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  const open: number[] = []
+  for (let unit = 1; unit < at; unit++) {
+    if (leaf.kinds[unit] !== TEXT || leaf.kinds[unit - 1] !== TEXT || isLiteral(leaf, unit, escaped)) continue
+    const mark = leaf.codes[unit]!
+    if (!BRACED_MARKS.includes(String.fromCharCode(mark))) continue
+    if (leaf.codes[unit - 1] === 123 && !isLiteral(leaf, unit - 1, escaped)) open.push(mark)
+    else if (leaf.codes[unit + 1] === 125 && open.includes(mark)) open.splice(open.lastIndexOf(mark), 1)
+  }
+  return open.length
 }
 
 /** The `[` of text the reader reads as brackets before `at` that no `]` closes. */
