@@ -3,6 +3,7 @@
 // it gives the direction its kind names (C2-I-104, C2-I-105, C2-I-111 to C2-I-117). Every other place is
 // left to the repair.
 import { type Node } from './ast.ts'
+import { smartGlyph } from './ast-text.ts'
 import { CHARACTER_CLASSES, CLASS_QUOTE_OPENS_AFTER } from './inline-tables.ts'
 import { isAsciiDigit, isBoundarySpace, NO_CHARACTER } from './unicode.ts'
 import { ATOM, CLOSE, type Leaf, OPEN, TEXT, undecide } from './write-plan-model.ts'
@@ -47,7 +48,7 @@ function isBracedComment(leaf: Leaf, at: number): boolean {
 function previousOfNode(leaf: Leaf, at: number): number | null {
   const owner = leaf.owners[at]
   const kind = leaf.kinds[at]
-  if (kind === ATOM && owner?.type === 'smart_punctuation') return lastCodePoint(owner.glyph)
+  if (kind === ATOM && owner?.type === 'smart_punctuation') return lastCodePoint(smartGlyph(owner))
   // C2-I-104: the content of a node starts with no character before it.
   if (kind === OPEN) return NO_CHARACTER
   if (kind === CLOSE) return LOWER_A

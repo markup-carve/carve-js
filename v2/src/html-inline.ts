@@ -9,6 +9,7 @@ import {
   attributeBlockText, attributes, destination, escapeCarrierText, escapeText, escapeTextNode, keyValue, loss, type Pair, type Render,
   type TagParts,
 } from './html-attributes.ts'
+import { smartGlyph } from './ast-text.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -362,7 +363,7 @@ const WRITERS: NodeHandlers<string, Render> = {
   hard_break: () => '<br>\n',
   soft_break: () => '\n',
   // C2-H-078.
-  smart_punctuation: (node, r) => escapeText((r.settings.smartTypography ? node.glyph : undefined) ?? node.source),
+  smart_punctuation: (node, r) => escapeText(r.settings.smartTypography ? smartGlyph(node) : node.source),
   abbreviation,
   caption_number: captionNumber,
   inline_extension: inlineExtension,

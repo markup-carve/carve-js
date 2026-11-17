@@ -1,6 +1,9 @@
 // The plain text of inline nodes (C2-H-143): what a heading id, a task label, a caption label
 // and the text of a cross-reference are made of. A node gives the literal text it carries or nothing.
-import { type Block, type Inline, isInlineParent, type NodeHandlers, type NodeOfType, type RubyNode } from './ast.ts'
+import {
+  type Block, type Inline, isInlineParent, type NodeHandlers, type NodeOfType, type RubyNode, type SmartPunctuationNode,
+} from './ast.ts'
+import { SMART_GLYPHS, SMART_KIND_NAMES } from './inline-tables.ts'
 
 const NO_BREAK_SPACE = ' '
 
@@ -8,6 +11,13 @@ function rubyText(node: RubyNode): string {
   let out = ''
   for (const pair of node.pairs) out += `${plainText(pair.base)}(${plainText(pair.annotation)})`
   return out
+}
+
+const GLYPH_OF_KIND: ReadonlyMap<string, string> = new Map(SMART_KIND_NAMES.map((kind, at) => [kind, SMART_GLYPHS[at] ?? '']))
+
+/** C2-H-078, C2-A-098: the glyph a node carries, or else the one glyph of its kind (data/smart-punctuation.json). */
+export function smartGlyph(node: SmartPunctuationNode): string {
+  return node.glyph ?? GLYPH_OF_KIND.get(node.kind) ?? node.source
 }
 
 function valueText(node: { value: string }): string {
@@ -19,7 +29,7 @@ const TEXT_OF: NodeHandlers<string> = {
   text: valueText, code: valueText, math: valueText, literal_inline: valueText,
   non_breaking_space: () => NO_BREAK_SPACE,
   soft_break: () => ' ', hard_break: () => ' ',
-  smart_punctuation: (node) => node.glyph ?? node.source,
+  smart_punctuation: smartGlyph,
   abbreviation: (node) => node.key,
   mention: (node) => `@${node.target}`,
   tag: (node) => `#${node.name}`,

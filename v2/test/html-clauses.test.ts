@@ -38,6 +38,12 @@ describe('output form', () => {
 })
 
 describe('attributes', () => {
+  it('C2-H-078: a supplied smart-punctuation node without glyph is written as the glyph of its kind', () => {
+    const tree = decodeTree(JSON.stringify(documentOf(paragraph({ type: 'smart_punctuation', kind: 'em_dash', source: '---' }))))
+    expect(render(tree)).toBe('<p>\u2014</p>')
+    expect(render(tree, { smartTypography: false })).toBe('<p>---</p>')
+  })
+
   check([
     ['C2-H-009: structural attributes, then id, class, language and the keys as written', '{k=v :en .c #i}\n2) a', '<ol start="2" data-delim=")" id="i" class="c" lang="en" k="v">\n  <li>a</li>\n</ol>'],
     ['C2-H-010: the structural attributes of a link and of an image stand in their fixed order', '[a](b "T"){#i} ![c](d "U"){.x}', '<p><a href="b" title="T" id="i">a</a> <img src="d" alt="c" title="U" class="x"></p>'],
