@@ -195,7 +195,7 @@ describe('text and literal payload', () => {
     expect(block('---\na: b\n---')).toEqual({ type: 'frontmatter', format: 'yaml', value: 'a: b\n' })
     expect(ofType(block('---toml\na = 1\n---'), 'frontmatter').format).toBe('toml')
     expect(ofType(block('---json\n{}'), 'frontmatter').value).toBe('{}\n')
-    expect([ofType(block('--- json\n{}'), 'frontmatter').format, ofType(block('---ini-2  \r\na\r\n---'), 'frontmatter').format, ofType(block('---\r\na\r\n---'), 'frontmatter').format]).toEqual(['json', 'ini-2', 'yaml'])
+    expect([ofType(block('--- json\n{}'), 'frontmatter').format, ofType(block('---ini2  \r\na\r\n---'), 'frontmatter').format, ofType(block('---\r\na\r\n---'), 'frontmatter').format]).toEqual(['json', 'ini2', 'yaml'])
     expect(ofType(block('---markdown\nx\n---'), 'frontmatter').format).toBe('markdown')
     expect(ofType(block('--- toml\nx\n---'), 'frontmatter').format).toBe('toml')
     expect(refusal(documentOf(paragraph('a'), { type: 'frontmatter', format: 'yaml', value: '' }))).toBe('/children/1: frontmatter is not the first child')

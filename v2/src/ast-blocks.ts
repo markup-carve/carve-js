@@ -102,7 +102,7 @@ function commentBlockNode(ctx: TreeContext, node: BlockNode): CommentNode {
 /** C2-A-049: the format is the word on the opener, or `yaml`. */
 function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
   const src = ctx.src
-  // C2-B-164: the name is glued or stands after one space, and ends at the next space, tab or line end.
+  // C2-B-164: the name is glued or stands after one space, and ends at the next space, tab or line end; the opener test made it a word.
   const word = src.charCodeAt(node.start + 3) === SPACE ? node.start + 4 : node.start + 3
   let wordEnd = word
   while (wordEnd < src.length && src.charCodeAt(wordEnd) > SPACE) wordEnd++

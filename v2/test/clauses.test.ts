@@ -1073,13 +1073,16 @@ describe('boundaries pinned by the mutation check', () => {
     expect(blocks('$$`x', '^ c')).toBe('p"$$`x|^ c"')
   })
 
-  it('C2-B-164: the format name is `yaml`, `toml` or `json`, glued to the hyphens', () => {
+  it('C2-B-164: the format name is one word of ASCII letters and digits, glued or after one space', () => {
     expect(blocks('---yaml', 'a', '---')).toBe('fm"a"')
     expect(blocks('---json', 'a', '---')).toBe('fm"a"')
     expect(blocks('---yml', 'a', '---')).toBe('fm"a"')
-    expect(blocks('---Yml', 'a', '---')).toBe('p"---Yml|a|---"')
+    expect(blocks('---Yml', 'a', '---')).toBe('fm"a"')
+    expect(blocks('--- 1', 'a', '---')).toBe('fm"a"')
     expect(blocks('---y ml', 'a', '---')).toBe('p"---y ml|a|---"')
-    expect(blocks('--- 1', 'a')).toBe('p"--- 1|a"')
+    expect(blocks('---x-y', 'a', '---')).toBe('p"---x-y|a|---"')
+    expect(blocks('---x_y', 'a', '---')).toBe('p"---x_y|a|---"')
+    expect(blocks('---  toml', 'a', '---')).toBe('p"---  toml|a|---"')
   })
 })
 

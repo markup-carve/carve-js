@@ -484,12 +484,16 @@ export function isDisplayMathOnly(src: string, pos: number, end: number): boolea
 export function isFrontmatterOpener(src: string, pos: number, end: number): boolean {
   if (runLength(src, pos, end, HYPHEN) !== FRONTMATTER_RUN) return false
   let p = pos + FRONTMATTER_RUN
+  // C2-B-164: one word of ASCII letters and digits, glued or after one space.
   const name = p + 1 < end && src.charCodeAt(p) === SPACE ? p + 1 : p
-  if (name < end && isLower(src.charCodeAt(name))) {
-    p = name + 1
-    while (p < end && (isLower(src.charCodeAt(p)) || isAsciiDigit(src.charCodeAt(p)) || src.charCodeAt(p) === HYPHEN)) p++
-  }
+  let wordEnd = name
+  while (wordEnd < end && isFormatNameCharacter(src.charCodeAt(wordEnd))) wordEnd++
+  if (wordEnd > name) p = wordEnd
   return skipSpaces(src, p, end) === end
+}
+
+function isFormatNameCharacter(code: number): boolean {
+  return isLower(code) || isUpper(code) || isAsciiDigit(code)
 }
 
 /** C2-B-162: exactly `---` plus trailing spaces and tabs. */
