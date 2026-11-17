@@ -229,6 +229,12 @@ function laterLine(leaf: Leaf, at: number, place: LeafPlace): number {
   if (place.inItem && value >= 48 && value <= 57) return value === 49 && code(leaf, at + 1) < 48 ? digits(leaf, at) : NO_ESCAPE
   if (place.inItem && (value === 45 || value === 42 || value === 46)) return firstLine(leaf, at, place)
   if (value === 42 && runEnd(leaf, at, 42) - at < 3) return NO_ESCAPE
+  return laterOther(leaf, at, value, place)
+}
+
+function laterOther(leaf: Leaf, at: number, value: number, place: LeafPlace): number {
+  // C2-B-015: outside an item no list is open for a letter marker to continue.
+  if (!place.inItem && isLetter(value)) return NO_ESCAPE
   return otherLine(leaf, at, value, place, false)
 }
 
@@ -238,8 +244,9 @@ function decidedIf(condition: boolean): number {
   return condition ? UNDECIDED : NO_ESCAPE
 }
 
-// C2-B-081, C2-B-046, C2-B-090, C2-B-156, C2-B-146, C2-B-175: a definition shape, an attribute line or an include, a
-// caption, a continuation row. Each depends on more than its line, so it is left to the repair.
+// C2-B-081, C2-B-046, C2-B-090, C2-B-156, C2-B-146: a definition shape, an attribute line or an include, a caption.
+// Each depends on more than its line, so it is left to the repair. A `+` line is text: a continuation row stands
+// directly below a row (C2-B-175), and a paragraph line below a blank line (C2-W-017) or paragraph text.
 const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [96, (leaf, at) => anyLine(leaf, at, 96)],
   [58, (leaf, at) => anyLine(leaf, at, 58)],
@@ -251,7 +258,6 @@ const OTHER_RULES: ReadonlyMap<number, LineRule> = new Map<number, LineRule>([
   [91, bracketLine],
   [123, attributeLine],
   [94, caption],
-  [43, (leaf, at) => decidedIf(lineEndsWith(leaf, at, 124))],
 ])
 
 /** The rules that hold on the first and on later lines, and the openers left to the repair. */
