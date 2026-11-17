@@ -1,11 +1,11 @@
 // The block elements of spec/0.2/html.md, the sections of C2-H-026 and the footnote section.
 import {
-  type AdmonitionNode, type Attrs, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
+  type AdmonitionNode, type Block, type BlockExtensionNode, type BlockQuoteNode, type CaptionNode, type CellParagraphNode,
   type CodeBlockNode, DEFINITION_TYPES, type DefinitionDescriptionNode, type DirectiveNode, type DivNode, type DocumentNode,
   forEachSlot,
   type FigureGroupNode, type HeadingNode, type IncludeNode, type Inline, type LineBlockNode, type LineNode,
   type ListItemNode,
-  type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
+  type ImageNode, type ListNode, type Marker, type Node, type NodeOfType, type ParagraphNode, type RawBlockNode, type TableBodyNode,
   type TableCellNode, type TableColumnNode, type TableFootNode, type TableHeadNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { blockText, plainText } from './ast-text.ts'
@@ -13,7 +13,7 @@ import { type Findings } from './diagnostics.ts'
 import {
   attributes, carriesAttributes, escapeAttribute, escapeCarrierText, escapeText, loss, type Pair, type Render, type TagParts,
 } from './html-attributes.ts'
-import { inlineHtml } from './html-inline.ts'
+import { inlineHtml, mergedAttrs } from './html-inline.ts'
 import { type Settings } from './options.ts'
 import { attributesAct, includeSource } from './include.ts'
 import { includeMessage } from './expand.ts'
@@ -105,19 +105,12 @@ function isVisible(node: Node): boolean {
   return node.type !== 'paragraph' || !onlyComments(node.children)
 }
 
-/**
- * C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`,
- * and so does one whose paragraph carries attributes or a `lang`, which the `<p>` carries.
- */
+/** C2-H-020: a block image is a bare `<img>`; one whose reference does not resolve is text and keeps its `<p>`. */
 function isBareImage(node: ParagraphNode): boolean {
-  if (node.role !== 'image' || node.lang !== undefined || node.dir !== undefined || hasAttributes(node.attrs)) return false
+  if (node.role !== 'image' || node.dir !== undefined) return false
   // A block image that a profile degraded holds its text and keeps its `<p>` (C2-H-165).
   for (const child of node.children) if (child.type === 'image') return child.key === undefined || child.src !== undefined
   return false
-}
-
-function hasAttributes(attrs: Attrs | undefined): boolean {
-  return attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || (attrs.keyValues?.length ?? 0) > 0)
 }
 
 /** A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it. */
@@ -163,7 +156,17 @@ function paragraphHtml(r: Render, node: ParagraphNode): string {
 
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
   if (onlyComments(node.children)) return
-  line(r, level, isBareImage(node) ? inlineHtml(r, node.children) : paragraphHtml(r, node))
+  if (!isBareImage(node)) return line(r, level, paragraphHtml(r, node))
+  line(r, level, inlineHtml(r, node.children.map((child) => withParagraphAttributes(node, child))))
+}
+
+/** C2-H-020: the attributes and the `lang` of a block image's paragraph go on the image, as its first glued block. */
+function withParagraphAttributes(paragraph: ParagraphNode, child: Inline): Inline {
+  if (child.type !== 'image' || (paragraph.attrs === undefined && paragraph.lang === undefined)) return child
+  const merged: ImageNode = { ...child, attrs: mergedAttrs(child.attrs ?? {}, paragraph.attrs ?? {}) }
+  const lang = child.lang ?? paragraph.lang
+  if (lang !== undefined) merged.lang = lang
+  return merged
 }
 
 function headingId(node: HeadingNode): string | undefined {

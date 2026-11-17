@@ -1,6 +1,6 @@
 # Example fixes for the specification
 
-**Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, F11 (clause case `CC-287`, field `children`) and F12 (`html-81`, field `tree`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
+**Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, F11 (clause case `CC-287`, field `children`), F12 (`html-81`, field `tree`) and F13 (`html-80`, field `html`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
@@ -151,3 +151,17 @@ Stated in the corpus and in `trees/examples-html.json` (whose `options` carry `h
 C2-H-147 decides it: under `ascii` "ASCII letters keep their case, as in 0.1 [...] an ASCII heading keeps its slug, `Hello-World` under `ascii` and `hello-world` under `ascii-lower`."
 
 Clause-correct: `generatedId` is `Hello-World` and `API-v2`, as the HTML states. The tree looks generated without the example's flag.
+
+## F13. `html.md` Example 80: `expected.html`
+
+Input:
+
+```carve
+[x]{KBD} and [y]{abbr="a" ABBR="b"}
+```
+
+Stated in the corpus: the HTML `<abbr title="a" ABBR="b">y</abbr>`, while the tree of the same example has `keyValues: [["abbr", "b"]]`.
+
+C2-A-035 decides the tree: names that agree without regard to ASCII case are one key, written in the first spelling with the last value. From that tree no render gives `ABBR="b"` beside `title="a"`. The two readings are `_SPEC_GAPS.md` G-H1.
+
+Clause-correct under C2-A-035: `<p><span KBD="">x</span> and <abbr title="b">y</abbr></p>`, which the engine writes; the hold is on `html` only.

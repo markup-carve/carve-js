@@ -97,10 +97,12 @@ describe('the neighbors of plus-minus and arrows', () => {
 })
 
 describe('block image paragraphs', () => {
-  it('C2-H-020: an attributed block image paragraph keeps its <p>, which carries the attributes and the lang', () => {
+  it('C2-H-020: the attributes and the lang of a block image paragraph go on the bare <img>, before its own', () => {
     expect(render('{.c #i}\n![a](x.png)\n\n{:de}\n![b](y.png)\n\n![c](z.png)\n')).toBe([
-      '<p id="i" class="c"><img src="x.png" alt="a"></p>', '<p lang="de"><img src="y.png" alt="b"></p>', '<img src="z.png" alt="c">',
+      '<img src="x.png" alt="a" id="i" class="c">', '<img src="y.png" alt="b" lang="de">', '<img src="z.png" alt="c">',
     ].join('\n'))
+    expect(render('{.outer #p k=one}\n![a](b){.inner #q k=two}\n')).toBe('<img src="b" alt="a" id="q" class="outer inner" k="two">')
+    expect(render('{.c}\n![a][nope]\n')).toBe('<p class="c">![a][nope]</p>')
   })
 })
 

@@ -2,6 +2,24 @@
 
 Ranked by the cost of changing the contract after a freeze. The `carve` checkout was read only.
 
+## Freeze candidate 8 session (spec `6bdc5a26`)
+
+Cases found while moving from freeze candidate 6 to 8. The engine choice is named in each.
+
+### G-H1. Does `ABBR` merge with `abbr` in one attribute block?
+
+Input (html.md Example 80):
+
+```carve
+[x]{KBD} and [y]{abbr="a" ABBR="b"}
+```
+
+Reading one, C2-A-035: "Names are the same when they agree without regard to ASCII letter case, within one block", so the later `ABBR="b"` replaces the value of `abbr` and `keyValues` is `[["abbr", "b"]]`, which renders `<abbr title="b">y</abbr>`. The stored tree of the example says exactly this.
+
+Reading two, C2-H-013: the keys `abbr`, `time` and `kbd` "are no attribute names in this sense: they match in lower case only, and a key in another case is an ordinary attribute", so the two keys stay apart and the render is `<abbr title="a" ABBR="b">y</abbr>`, as the stated HTML says. That needs a tree with both keys, which C2-A-035 and the reader's duplicate check (C2-A-035, last sentence) refuse.
+
+The engine follows C2-A-035 for the tree; its HTML follows from that tree. The HTML field is held (`_EXAMPLE_FIXES.md` F13). One sentence in C2-A-035 naming the three keys as an exception, or a different example input, closes it.
+
 ## Freeze candidate 6 session (spec `068552fc`)
 
 Cases found while moving to freeze candidate 6 and its restores. The engine choice is named in each.
