@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, CarveTreeError, CarveWriteError,
-  decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, render, type Diagnostic,
+  decodeTree, encodeEnvelope, encodeTree, format, parse, parseWithDiagnostics, renderWithDiagnostics, includeDependencies, type Diagnostic,
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
 import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
@@ -10,6 +10,8 @@ import { importDocument, ImportInputError, type Format } from '../../import/src/
 import { migrateTree, type MigrationResult } from '../migrate/index.ts'
 import { type ParsedArgs } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
+import { lint } from '../lint/lint.ts'
+import { CATALOG } from '../lint/catalog.ts'
 import { type IncludeConfig } from '../src/include-settings.ts'
 
 export class CliError extends Error {
@@ -80,20 +82,74 @@ function migrateAst(text: string): string {
   return result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)
 }
 
-function importSource(text: string, format: Format): string {
+function importSource(text: string, path: string, args: ParsedArgs): number {
   try {
-    const result = importDocument(text, { from: format })
+    const result = importDocument(text, { from: args.values['from'] as Format, rawHtml: args.values['raw-html'] === true })
     if (writerHasLoss(result.diagnostics)) throw new CarveWriteError(result.diagnostics)
-    for (const diagnostic of result.diagnostics) {
-      process.stderr.write(`carve[${diagnostic.code}]: ${diagnostic.message}\n`)
-    }
-    return result.source
-  }
-  catch (error) {
+    for (const entry of result.diagnostics) process.stderr.write(`carve[${entry.code}]: ${entry.message}\n`)
+    if (args.values['report'] !== undefined) report(args.values['report'], {
+      file: path, from: args.values['from'], diagnostics: result.diagnostics,
+    })
+    process.stdout.write(result.source)
+    return args.values['check-loss'] === true && result.diagnostics.some((entry) => entry.channel === 'render-loss') ? 1 : 0
+  } catch (error) {
     if (error instanceof ImportInputError) throw new CliError('import-input-invalid', error.message)
     if (error instanceof CarveTreeError) throw new CliError('import-tree-invalid', error.message)
     throw error
   }
+}
+
+function report(destination: unknown, value: unknown): void {
+  if (typeof destination !== 'string') return
+  const json = `${JSON.stringify(value, null, 2)}\n`
+  if (destination === '-') { process.stderr.write(json); return }
+  try { writeFileSync(destination, json) }
+  catch (error) { throw new CliError('input-unreadable', `${destination}: ${String(error)}`) }
+}
+
+function reportIncludes(args: ParsedArgs, path: string, document: DocumentNode): void {
+  if (args.values['report-includes'] === undefined) return
+  return void includeReports.push({ file: path, dependencies: includeDependencies(document) })
+}
+const includeReports: object[] = []
+
+function lintRules(args: ParsedArgs): Record<string, 'on' | 'off'> {
+  const result: Record<string, 'on' | 'off'> = {}
+  for (const [flag, state] of [['rule', 'on'], ['ignore', 'off']] as const) {
+    for (const id of (args.values[flag] as string[] | undefined) ?? []) {
+      if (!Object.hasOwn(CATALOG, id)) throw new CliError('usage', `unknown rule ${id}`)
+      result[id] = state
+    }
+  }
+  return result
+}
+
+function lintPlatforms(args: ParsedArgs): 'github'[] {
+  const names = (args.values['platform'] as string[] | undefined) ?? []
+  for (const name of names) if (name !== 'github') throw new CliError('usage', `unknown platform ${name}`)
+  return names as 'github'[]
+}
+
+const RENDER_LOSS_CODES = new Set([
+  'carrier-attribute-dropped', 'destination-denied', 'extension-fallback-rendered', 'extension-renderer-failed',
+  'extension-transform-failed', 'include-expanded-roundtrip', 'include-unresolved', 'profile-construct-degraded',
+  'raw-format-dropped', 'field-unspellable', 'structure-unspellable', 'writer-refused',
+])
+
+function allowedLosses(args: ParsedArgs): ReadonlySet<string> {
+  const names = (args.values['allow-loss'] as string[] | undefined) ?? []
+  for (const name of names) if (!RENDER_LOSS_CODES.has(name)) throw new CliError('usage', `unknown loss code ${name}`)
+  return new Set(names)
+}
+
+function lossLimit(args: ParsedArgs): number {
+  const raw = args.values['max-render-losses']
+  if (raw === undefined) return 100
+  const count = Number(raw)
+  if (!Number.isSafeInteger(count) || count < 0 || !/^\d+$/.test(String(raw))) {
+    throw new CliError('usage', '--max-render-losses must be a non-negative safe integer')
+  }
+  return count
 }
 
 function hasRawHtml(document: DocumentNode): boolean {
@@ -134,14 +190,27 @@ function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig 
   return config === null ? {} : { includes: config }
 }
 
-function renderOne(source: string, path: string, args: ParsedArgs): { html: string, escapedRawHtml: boolean } {
+function renderOne(source: string, path: string, args: ParsedArgs): {
+  html: string, escapedRawHtml: boolean, status: number, losses: Diagnostic[], suppressed: number
+} {
   const names = ['heading-ids', 'mode', 'profile', 'raw-html', 'roundtrip', 'sections', 'smart-typography',
     'source-lines', 'strict-losses', 'labels', 'symbols', 'social', 'url-policy', 'renderers', 'extensions']
   const fromAst = args.values['from-ast'] === true
   const settings = { ...options(args, names), ...(fromAst ? {} : includesOf(path, args)) } as RenderOptions
   const input = fromAst ? ast(source) : source
   const escapedRawHtml = args.values['raw-html'] !== true && hasRawHtml(typeof input === 'string' ? parse(input) : input)
-  return { html: render(input, settings), escapedRawHtml }
+  // The gate of --strict-losses is applied here, so that --allow-loss can exempt codes from it, as in 0.1.
+  const result = renderWithDiagnostics(input, { ...settings, strictLosses: false })
+  const losses = result.diagnostics.filter((entry) => entry.channel === 'render-loss')
+  const allowed = allowedLosses(args)
+  lossLimit(args)
+  if (args.values['report-includes'] !== undefined) {
+    const document = fromAst ? input as DocumentNode : parseWithDiagnostics(source, includesOf(path, args)).document
+    reportIncludes(args, path === '-' ? '<stdin>' : path, document)
+  }
+  const refused = losses.filter((entry) => !allowed.has(entry.code))
+  if (settings.strictLosses === true && refused.length > 0) throw new CarveRenderError(refused)
+  return { html: result.html, escapedRawHtml, status: 0, losses, suppressed: result.suppressedIncludeDiagnostics ?? 0 }
 }
 
 function formatOne(source: string, args: ParsedArgs): string {
@@ -157,9 +226,9 @@ function location(source: string, diagnostic: Diagnostic): { line: number, colum
 }
 
 function diagnosticLines(path: string, source: string, diagnostics: readonly Diagnostic[]): string {
-  return diagnostics.filter((entry) => entry.channel === 'parse').map((entry) => {
+  return diagnostics.map((entry) => {
     const place = location(source, entry)
-    return `${path}:${place.line}:${place.column}: ${entry.severity} ${entry.code} ${entry.message}\n`
+    return `${entry.file ?? path}:${place.line}:${place.column}: ${entry.severity} ${entry.code} ${entry.message}\n`
   }).join('')
 }
 
@@ -189,7 +258,41 @@ function formatFile(path: string, display: string, source: string, args: ParsedA
   return (args.values['check'] === true || args.values['diff'] === true) && changed ? 1 : 0
 }
 
-function executeFile(path: string, args: ParsedArgs): { status: number, record?: object, escapedRawHtml?: boolean } {
+interface FileResult {
+  status: number
+  record?: object
+  escapedRawHtml?: boolean
+  suppressed?: number
+  losses?: Diagnostic[]
+}
+
+function located(display: string, source: string, entries: readonly Diagnostic[]): object[] {
+  return entries.map((entry) => ({ ...entry, file: entry.file ?? display, ...location(source, entry) }))
+}
+
+function diagnosticsFile(path: string, display: string, source: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const result = parseWithDiagnostics(bytes, includesOf(path, args))
+  const entries = result.diagnostics.filter((entry) => entry.channel === 'parse')
+  const suppressed = result.suppressedIncludeDiagnostics ?? 0
+  reportIncludes(args, display, result.document)
+  if (args.values['json'] === true) {
+    const diagnostics = located(display, source, entries)
+    return { status: 0, suppressed, record: { file: display, suppressedIncludeDiagnostics: suppressed, diagnostics } }
+  }
+  process.stdout.write(diagnosticLines(display, source, entries))
+  return { status: 0, suppressed }
+}
+
+/** As in 0.1, any finding makes lint exit 1. */
+function lintFile(path: string, display: string, source: string, args: ParsedArgs): FileResult {
+  const entries = lint(source, { rules: lintRules(args), platforms: lintPlatforms(args), ...includesOf(path, args) })
+  const status = entries.length > 0 ? 1 : 0
+  if (args.values['json'] === true) return { status, record: { file: display, diagnostics: located(display, source, entries) } }
+  process.stdout.write(diagnosticLines(display, source, entries))
+  return { status }
+}
+
+function executeFile(path: string, args: ParsedArgs): FileResult {
   const bytes = readBytes(path)
   const source = decode(path, bytes, args.command)
   const display = path === '-' ? '<stdin>' : path
@@ -197,22 +300,17 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
     case 'render': {
       const result = renderOne(source, path, args)
       process.stdout.write(`${result.html}\n`)
-      return { status: 0, escapedRawHtml: result.escapedRawHtml }
+      return { status: result.status, escapedRawHtml: result.escapedRawHtml, suppressed: result.suppressed, losses: result.losses }
     }
     case 'ast': {
       const tree = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
+      reportIncludes(args, display, tree)
       process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(tree) : encodeTree(tree)}\n`)
       return { status: 0 }
     }
     case 'fmt': return { status: formatFile(path, display, source, args) }
-    case 'diagnostics': {
-      const entries = parseWithDiagnostics(bytes, includesOf(path, args)).diagnostics.filter((entry) => entry.channel === 'parse')
-      if (args.values['json'] === true) return { status: 0, record: { file: display, diagnostics: entries.map((entry) => ({
-        ...entry, file: display, ...location(source, entry),
-      })) } }
-      process.stdout.write(diagnosticLines(display, source, entries))
-      return { status: 0 }
-    }
+    case 'diagnostics': return diagnosticsFile(path, display, source, bytes, args)
+    case 'lint': return lintFile(path, display, source, args)
     case 'upgrade': {
       const result = upgradeOne(display, source, args)
       return { status: result.status, record: result.record }
@@ -222,32 +320,59 @@ function executeFile(path: string, args: ParsedArgs): { status: number, record?:
       return { status: 0 }
     }
     case 'import': {
-      process.stdout.write(importSource(source, args.values['from'] as Format))
-      return { status: 0 }
+      return { status: importSource(source, display, args) }
     }
+  }
+}
+
+function processFiles(files: string[], args: ParsedArgs): {
+  status: number, records: object[], escapedRawHtml: boolean, suppressed: number,
+  losses: { file: string, diagnostics: Diagnostic[] }[]
+} {
+  const records: object[] = []
+  const losses: { file: string, diagnostics: Diagnostic[] }[] = []
+  let status = 0
+  let escapedRawHtml = false
+  let suppressed = 0
+  for (const file of files) {
+    const result = executeFile(file, args)
+    status = Math.max(status, result.status)
+    escapedRawHtml ||= result.escapedRawHtml === true
+    suppressed += result.suppressed ?? 0
+    if (result.losses !== undefined) losses.push({ file: file === '-' ? '<stdin>' : file, diagnostics: result.losses })
+    if (result.record !== undefined) records.push(result.record)
+  }
+  return { status, records, escapedRawHtml, suppressed, losses }
+}
+
+/** As in 0.1, the report keeps at most `--max-render-losses` rows of each file and still carries the whole total. */
+function lossReport(args: ParsedArgs, files: readonly { file: string, diagnostics: Diagnostic[] }[]): object[] {
+  const limit = lossLimit(args)
+  return files.map((entry) => ({ file: entry.file, total: entry.diagnostics.length, diagnostics: entry.diagnostics.slice(0, limit) }))
+}
+
+function finishRun(args: ParsedArgs, result: ReturnType<typeof processFiles>): void {
+  if (result.suppressed > 0 && (args.command === 'render' || args.command === 'diagnostics')) {
+    process.stderr.write(`carve2: ${result.suppressed} include diagnostics suppressed\n`)
+  }
+  if (args.values['report-includes'] !== undefined) report(args.values['report-includes'], includeReports)
+  if (args.values['report-losses'] !== undefined) report(args.values['report-losses'], lossReport(args, result.losses))
+  if (result.escapedRawHtml) process.stderr.write('carve2: raw HTML escaped; pass --raw-html to allow it\n')
+  if (args.command === 'upgrade') {
+    process.stderr.write('U-079 report: review host render options; rawHtml is off by default (pass --raw-html to keep raw HTML).\n')
+    process.stderr.write(`read with the 0.1 engine ${ENGINE_01_VERSION}\n`)
+  }
+  if (args.values['json'] === true) {
+    const output = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: result.records } : { files: result.records }
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
   }
 }
 
 export function run(args: ParsedArgs): number {
   const files = args.files.length === 0 ? ['-'] : args.files
   if (args.values['write'] === true && files.includes('-')) throw new CliError('usage', 'cannot write standard input in place')
-  const records: object[] = []
-  let status = 0
-  let escapedRawHtml = false
-  for (const file of files) {
-    const result = executeFile(file, args)
-    status = Math.max(status, result.status)
-    escapedRawHtml ||= result.escapedRawHtml === true
-    if (result.record !== undefined) records.push(result.record)
-  }
-  if (escapedRawHtml) process.stderr.write('carve2: raw HTML escaped; pass --raw-html to allow it\n')
-  if (args.command === 'upgrade') {
-    process.stderr.write('U-079 report: review host render options; rawHtml is off by default (pass --raw-html to keep raw HTML).\n')
-    process.stderr.write(`read with the 0.1 engine ${ENGINE_01_VERSION}\n`)
-  }
-  if (args.values['json'] === true) {
-    const result = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: records } : { files: records }
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
-  }
-  return status
+  includeReports.length = 0
+  const result = processFiles(files, args)
+  finishRun(args, result)
+  return result.status
 }

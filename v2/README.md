@@ -45,9 +45,16 @@ carve2 render --heading-ids lower article.crv
 carve2 ast --envelope article.crv
 carve2 fmt --check article.crv
 carve2 diagnostics --json article.crv
+carve2 lint --rule empty-link-destination article.crv
 carve2 upgrade --check legacy.crv
 ```
 
-`render`, `ast` and `diagnostics` expand includes by default, reading files below the directory of the entry file (the containment root, with every symbolic link resolved). `--include-root DIR` names another root, and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt` never expands.
+`render`, `ast`, `diagnostics` and `lint` expand includes by default, reading files below the directory of the entry file (the containment root, with every symbolic link resolved). `--include-root DIR` names another root, and `--no-includes` turns expansion off. On standard input nothing is expanded unless `--include-root` is given. `fmt` never expands. `render`, `ast` and `diagnostics` accept `--report-includes FILE` to write include dependencies as JSON; `-` writes the report to standard error.
 
 `carve2 FILE...` is shorthand for `carve2 render FILE...`. `render` and `fmt` accept `--from-ast` for AST JSON. `fmt --diff` prints a unified diff, and `fmt -w` writes files in place. `upgrade` uses the separate rewrite engine in `upgrade/`; its report may require manual review. All commands accept `--help`.
+
+`lint` prints each finding with its file, line, column, severity and code. `--json` writes one diagnostics array per file. Repeat `--rule ID` to enable rules, `--ignore ID` to disable rules, and `--platform github` to enable GitHub checks. Any finding makes lint exit 1.
+
+`import --from FORMAT` accepts markdown, gfm, djot or html. `--raw-html` preserves HTML raw nodes. `--check-loss` exits 1 for any render loss while still writing source. `--report FILE` writes import diagnostics as JSON; `-` writes to standard error.
+
+`render --report-losses FILE` writes the render losses of each file as JSON, with their total. `--max-render-losses N` keeps at most N of them per file in the report (default 100). Repeat `--allow-loss CODE` to let `--strict-losses` pass a loss of that code. A report destination of `-` writes to standard error. Render and diagnostics report suppressed include diagnostics on standard error; diagnostics JSON records the count per file.

@@ -242,3 +242,54 @@ describe('carve2 process', () => {
     expect(cli(['render', path]).stdout).toBe('<p>a\ufffd</p>\n')
   })
 })
+
+describe('new command line reports', () => {
+  it('C2-W-109: lint reports every finding and rejects unknown rules', () => {
+    const result = cli(['lint', '--json'], '[x]()')
+    expect(result.status).toBe(1)
+    expect((JSON.parse(result.stdout) as { files: { diagnostics: unknown[] }[] }).files[0]?.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'empty-link-destination', line: 1, column: 1 }),
+    ]))
+    expect(cli(['lint', '--ignore', 'empty-link-destination'], '[x]()').status).toBe(0)
+    expect(cli(['lint', '--rule', 'bogus'], 'x').status).toBe(2)
+  })
+
+  it('C2-M-065: import raw HTML is preserved when requested', () => {
+    const result = cli(['import', '--from=html', '--raw-html'], '<script>hi</script>')
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('<script>hi</script>')
+  })
+
+  it('C2-M-082: import writes source while check-loss gates and report records losses', () => {
+    const path = join(temp(), 'import.json')
+    const result = cli(['import', '--from=html', '--check-loss', '--report', path], '<p><a href="javascript:x">t</a></p>')
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('t\n')
+    expect((JSON.parse(readFileSync(path, 'utf8')) as { diagnostics: unknown[] }).diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'import-destination-denied' }),
+    ]))
+  })
+
+  it('C2-H-130: the render loss report keeps its total, and --allow-loss exempts a code from --strict-losses', () => {
+    const path = join(temp(), 'losses.json')
+    expect(cli(['render', '--report-losses', path], '{{ e }}').status).toBe(0)
+    const losses = JSON.parse(readFileSync(path, 'utf8')) as { total: number, diagnostics: unknown[] }[]
+    expect(losses[0]?.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'include-unresolved' })]))
+    expect(cli(['render', '--max-render-losses', '0', '--report-losses', path], '{{ e }}').status).toBe(0)
+    const capped = JSON.parse(readFileSync(path, 'utf8')) as { total: number, diagnostics: unknown[] }[]
+    expect([capped[0]?.total, capped[0]?.diagnostics.length]).toEqual([losses[0]?.total, 0])
+    expect(cli(['render', '--strict-losses'], '{{ e }}').status).toBe(1)
+    expect(cli(['render', '--strict-losses', '--allow-loss', 'include-unresolved'], '{{ e }}').status).toBe(0)
+    expect(cli(['render', '--allow-loss', 'not-a-loss'], '{{ e }}').status).toBe(2)
+    expect(cli(['render', '--max-render-losses', 'x'], '{{ e }}').status).toBe(2)
+  })
+
+  it('C2-N-083: include dependency report has one entry per file', () => {
+    const path = join(temp(), 'includes.json')
+    const result = cli(['diagnostics', '--no-includes', '--report-includes', path], '{{ e }}')
+    expect(result.status).toBe(0)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual([
+      { file: '<stdin>', dependencies: [{ path: 'e', read: false }] },
+    ])
+  })
+})

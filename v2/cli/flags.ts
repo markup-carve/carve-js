@@ -1,5 +1,5 @@
-export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import'
-export type ValueKind = 'boolean' | 'enum' | 'json' | 'string'
+export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint'
+export type ValueKind = 'boolean' | 'enum' | 'json' | 'string' | 'repeatable-string'
 export interface Flag {
   name: string
   commands: readonly Command[]
@@ -13,7 +13,7 @@ const fmt = ['fmt'] as const
 const ast = ['ast'] as const
 const upgrade = ['upgrade'] as const
 // C2-N-004: every command whose product is not Carve source expands includes.
-const expanding = ['render', 'ast', 'diagnostics'] as const
+const expanding = ['render', 'ast', 'diagnostics', 'lint'] as const
 
 // C2-H-137, C2-W-100: the option table drives both parsing and help.
 export const FLAGS: readonly Flag[] = [
@@ -32,6 +32,16 @@ export const FLAGS: readonly Flag[] = [
   { name: 'url-policy', commands: render, kind: 'json', description: 'URL policy as JSON' },
   { name: 'renderers', commands: render, kind: 'json', description: 'Renderer map as JSON' },
   { name: 'extensions', commands: render, kind: 'json', description: 'Extension list as JSON' },
+  { name: 'report-includes', commands: ['render', 'ast', 'diagnostics'], kind: 'string', description: 'Write include dependencies as JSON' },
+  { name: 'report-losses', commands: render, kind: 'string', description: 'Write render losses as JSON' },
+  { name: 'allow-loss', commands: render, kind: 'repeatable-string', description: 'Exclude a loss code from the gate' },
+  { name: 'max-render-losses', commands: render, kind: 'string', description: 'Maximum counted render losses' },
+  { name: 'rule', commands: ['lint'], kind: 'repeatable-string', description: 'Enable a lint rule' },
+  { name: 'ignore', commands: ['lint'], kind: 'repeatable-string', description: 'Disable a lint rule' },
+  { name: 'platform', commands: ['lint'], kind: 'repeatable-string', description: 'Enable platform rules (github)' },
+  { name: 'raw-html', commands: ['import'], kind: 'boolean', description: 'Preserve raw HTML' },
+  { name: 'check-loss', commands: ['import'], kind: 'boolean', description: 'Fail when import loses content' },
+  { name: 'report', commands: ['import'], kind: 'string', description: 'Write import diagnostics as JSON' },
   { name: 'includes', commands: expanding, kind: 'boolean', description: 'Expand includes (default on; --no-includes turns it off)' },
   { name: 'include-root', commands: expanding, kind: 'string', description: 'Containment root of includes (default: the directory of FILE)' },
   { name: 'from-ast', commands: ['render', 'fmt'], kind: 'boolean', description: 'Read AST JSON' },
@@ -42,7 +52,7 @@ export const FLAGS: readonly Flag[] = [
   { name: 'normalize', commands: fmt, kind: 'boolean', description: 'Normalize source spelling' },
   { name: 'align-tables', commands: fmt, kind: 'boolean', description: 'Align pipe table cells' },
   { name: 'write', commands: ['fmt', 'upgrade'], kind: 'boolean', description: 'Write files in place (-w for fmt)' },
-  { name: 'json', commands: ['diagnostics', 'upgrade'], kind: 'boolean', description: 'Print JSON' },
+  { name: 'json', commands: ['diagnostics', 'upgrade', 'lint'], kind: 'boolean', description: 'Print JSON' },
   { name: 'force', commands: upgrade, kind: 'boolean', description: 'Write even with an unexplained difference' },
   { name: 'from', commands: ['import'], kind: 'enum', values: ['markdown', 'gfm', 'djot', 'html'],
     description: 'Input format for import' },
@@ -61,7 +71,7 @@ function flagFor(command: Command, spelling: string): Flag | undefined {
 }
 
 function readValue(flag: Flag, input: string): unknown {
-  if (flag.kind === 'string') return input
+  if (flag.kind === 'string' || flag.kind === 'repeatable-string') return input
   if (flag.kind === 'enum') {
     if (!flag.values?.includes(input)) throw new Error(`bad value for --${flag.name}: ${input}`)
     return input
@@ -74,6 +84,13 @@ function booleanOption(flag: Flag, negated: boolean, equals: number, parsed: Par
   if (equals >= 0) throw new Error(`bad value for --${flag.name}`)
   parsed.values[flag.name] = !negated
   return true
+}
+
+function setValue(parsed: ParsedArgs, flag: Flag, value: string): void {
+  if (flag.kind === 'repeatable-string') {
+    const collected = parsed.values[flag.name] as string[] | undefined
+    parsed.values[flag.name] = [...(collected ?? []), value]
+  } else parsed.values[flag.name] = readValue(flag, value)
 }
 
 function option(args: readonly string[], index: number, parsed: ParsedArgs): number {
@@ -89,13 +106,13 @@ function option(args: readonly string[], index: number, parsed: ParsedArgs): num
   if (negated) throw new Error(`unknown option --${name}`)
   const value = equals >= 0 ? arg.slice(equals + 1) : args[index + 1]
   if (value === undefined) throw new Error(`missing value for --${name}`)
-  parsed.values[flag.name] = readValue(flag, value)
+  setValue(parsed, flag, value)
   return equals >= 0 ? index : index + 1
 }
 
 function commandAt(arg: string | undefined): Command | undefined {
   if (arg === 'render' || arg === 'ast' || arg === 'fmt' || arg === 'diagnostics' || arg === 'upgrade' ||
-    arg === 'migrate-ast' || arg === 'import') return arg
+    arg === 'migrate-ast' || arg === 'import' || arg === 'lint') return arg
   return undefined
 }
 
@@ -131,6 +148,6 @@ export function help(command: Command): string {
     lines.push(`  --${flag.name}${suffix}  ${flag.description}`)
   }
   lines.push('  --help  Show this help', '  --version  Show version', '',
-    'Commands: render, ast, fmt, diagnostics, upgrade, migrate-ast, import')
+    'Commands: render, ast, fmt, diagnostics, upgrade, migrate-ast, import, lint')
   return `${lines.join('\n')}\n`
 }
