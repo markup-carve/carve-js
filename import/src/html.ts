@@ -316,9 +316,19 @@ function section<T extends DocumentChild>(node: Html.Element, context: HtmlConte
     return [{ type: 'div', children: blockChildren(node, context), ...attrs(context, node) }]
   }
   sectionAttributes(node, context)
-  const id = headingId(node, context)
   const rest = content(node).slice(content(node).indexOf(first) + 1)
-  return [heading(first, level, context, id), ...flow(rest, node, context, reader)]
+  return [heading(first, level, context, sectionId(node, first, context)), ...flow(rest, node, context, reader)]
+}
+
+/** C2-M-026: the id of the section is the heading's, unless the heading carries an id of its own that differs. */
+function sectionId(node: Html.Element, first: Html.Element, context: HtmlContext): HeadingId | undefined {
+  const own = attr(first, 'id')
+  const outer = attr(node, 'id')
+  if (own === undefined || own === '') return headingId(node, context)
+  if (outer !== undefined && outer !== own) {
+    report(context, node, 'import-attribute-dropped', `Attribute id of a section dropped: its heading carries the id ${own}`)
+  }
+  return undefined
 }
 
 /** C2-H-089: the notes stand at the section; an inline footnote reads back at its reference (C2-H-114). */
@@ -529,7 +539,9 @@ function taskMark(node: Html.Element, checkbox: Html.Element, context: HtmlConte
 
 /** C2-H-032, C2-H-033: the box of a task item, its state, and the class and style every render gives the item. */
 function listItem(node: Html.Element, context: HtmlContext): ListItemNode {
-  const checkbox = elements(node).find(child => child.nodeName === 'input' && attr(child, 'type') === 'checkbox')
+  const [checkbox, ...further] = elements(node).filter(child => child.nodeName === 'input' && attr(child, 'type') === 'checkbox')
+  // C2-M-032: each box after the first is dropped, also with rawHtml on.
+  for (const box of further) report(context, box, 'import-element-dropped', 'A further checkbox of a task item dropped')
   if (checkbox?.attrs.some(entry => !['type', 'checked', 'disabled', 'aria-label'].includes(entry.name)) === true) {
     report(context, checkbox, 'import-attribute-dropped', 'Checkbox attributes outside task state dropped')
   }
@@ -538,10 +550,11 @@ function listItem(node: Html.Element, context: HtmlContext): ListItemNode {
   if (checkbox && lead !== undefined && isText(lead) && lead.value.startsWith(' ')) {
     nodes[0] = { ...lead, value: lead.value.slice(1) }
   }
+  const kept = nodes.filter(child => !further.some(box => box === child))
   const mapped = attrs(context, node, ['data-task-state'])
   const own = checkbox ? withoutStyle(withoutClasses(mapped, ['task'])) : mapped
   const task = checkbox ? { task: { mark: taskMark(node, checkbox, context) } } : {}
-  return { type: 'list_item', children: blocks(nodes, node, context), ...task, ...own }
+  return { type: 'list_item', children: blocks(kept, node, context), ...task, ...own }
 }
 
 function withoutStyle(mapped: MappedAttrs): MappedAttrs {
@@ -724,7 +737,10 @@ function tableColumns(children: TableChildren, node: Html.Element): TableColumnN
 
 function table(node: Html.Element, context: HtmlContext): Block {
   const children = tableGroups(node, context)
-  const caption = elements(node).find(child => child.nodeName === 'caption')
+  const captions = elements(node).filter(child => child.nodeName === 'caption')
+  const caption = captions[0]
+  // C2-M-041: each caption after the first is dropped with its content.
+  for (const extra of captions.slice(1)) report(context, extra, 'import-element-dropped', 'A second caption of a table dropped')
   for (const child of elements(node)) {
     if (!['caption', 'thead', 'tbody', 'tfoot', 'tr', 'colgroup'].includes(child.tagName)) {
       report(context, child, 'import-structure-repaired', `Unsupported table child ${child.tagName}`)

@@ -56,6 +56,8 @@ Reading B: C2-H-007 and C2-H-040 apply as written, and the item holds the bare m
 
 ### G-C2. Edge whitespace of a delimited-table cell is lost, and no row says so
 
+Settled at `e1f3c5a2`: C2-H-195 row 16 lists the loss, and the importer's round-trip harness applies it.
+
 C2-M-018: "At the start and at the end of the inline content of a block, whitespace of every kind is removed". C2-M-011 counts a cell that holds no block element as inline content. C2-H-196: "A tree fact that neither the table of C2-H-186, nor C2-H-119, C2-H-193, C2-H-194 or the table of C2-H-195 names is expected to survive a render with `roundtrip` and an import".
 
 Input (block chapter example source, through `roundtrip` render and import):

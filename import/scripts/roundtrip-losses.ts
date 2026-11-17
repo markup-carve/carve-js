@@ -532,6 +532,32 @@ function cellBreaks(tree: Fields, found: Set<string>): void {
   })
 }
 
+const ASCII_WHITESPACE = ' \t\n\f\r'
+
+function trimmed(value: string, start: boolean): string {
+  let from = 0
+  let to = value.length
+  if (start) while (from < to && ASCII_WHITESPACE.includes(value[from] ?? '')) from++
+  else while (to > from && ASCII_WHITESPACE.includes(value[to - 1] ?? '')) to--
+  return value.slice(from, to)
+}
+
+/** C2-H-195 row 16: the import removes the whitespace at the edge of a cell's inline content (C2-M-018). */
+function cellEdges(tree: Fields, found: Set<string>): void {
+  eachNode(tree, node => {
+    if (node['type'] !== 'cell_paragraph') return
+    const list = children(node)
+    for (const [entry, start] of [[list[0], true], [list.at(-1), false]] as const) {
+      if (entry?.['type'] !== 'text') continue
+      const value = trimmed(str(entry['value']), start)
+      if (value === entry['value']) continue
+      entry['value'] = value
+      found.add('C2-H-195 row 16 cell edge whitespace')
+    }
+    node['children'] = list.filter(entry => entry['type'] !== 'text' || entry['value'] !== '')
+  })
+}
+
 function flattenBreaks(node: Fields): boolean {
   let changed = false
   for (const name of ['children', 'base', 'annotation', 'pairs']) {
@@ -591,6 +617,7 @@ export function project(document: DocumentNode): { tree: DocumentNode, losses: s
   if (['G1 carriage return', 'G7 line feed in text', 'C2-H-176 C2-H-172 characters'].some(loss => found.has(loss))) edgeBreaks(tree)
   tree = plainSpaces(tree, found)
   cellBreaks(tree, found)
+  cellEdges(tree, found)
   columnAlignments(tree, found)
   uniqueClasses(tree, found)
   lineBlocks(tree, found)

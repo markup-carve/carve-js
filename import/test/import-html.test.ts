@@ -69,6 +69,20 @@ describe('block elements', () => {
     expect(children('<section><p>no heading</p></section>')).toEqual([{ type: 'div', children: [paragraphOf(text('no heading'))] }])
     expect(codes('<section><p>no heading</p></section>')).toEqual(['import-element-mapped'])
   })
+
+  it('C2-M-026: a heading id of its own that differs wins, and the id of the section is dropped and reported', () => {
+    expect(source('<section id="outer"><h1 id="inner">H</h1></section>')).toBe('{#inner}\n= H\n')
+    expect(codes('<section id="outer"><h1 id="inner">H</h1></section>')).toEqual(['import-attribute-dropped'])
+    expect(source('<section><h1 id="i">H</h1></section>')).toBe('{#i}\n= H\n')
+    expect(codes('<section id="s"><h1 id="s">H</h1></section>')).toEqual([])
+    expect(source('<section id="s"><h1>H</h1></section>')).toBe('{#s}\n= H\n')
+  })
+
+  it('C2-M-012: comments in a run with inline content are raw inline; a run of only comments gives raw blocks', () => {
+    expect(source('<div>x<!--c-->y</div>', true)).toBe(':::\nx`<!--c-->`{=html}y\n:::\n')
+    expect(source('<div><!--c--> <!--d--></div>', true)).toBe(':::\n```=html\n<!--c-->\n```\n\n```=html\n<!--d-->\n```\n:::\n')
+    expect(source('<p>a</p><!--c--> <p>b</p>', true)).toBe('a\n\n```=html\n<!--c-->\n```\n\nb\n')
+  })
 })
 
 describe('lists', () => {
@@ -87,6 +101,14 @@ describe('lists', () => {
   it('C2-M-032: a known task state gives the mark', () => {
     const list = children('<ul><li data-task-state="?"><input type="checkbox"> x</li></ul>') as { children: { task: unknown }[] }[]
     expect(list[0]?.children[0]?.task).toEqual({ mark: '?' })
+  })
+
+  it('C2-M-032: each box after the first is dropped and reported, also with rawHtml on', () => {
+    const html = '<ul><li><input type="checkbox"><input type="checkbox" checked> x</li></ul>'
+    for (const rawHtml of [false, true]) {
+      expect(source(html, rawHtml)).toBe('- [ ] x\n')
+      expect(codes(html, rawHtml)).toEqual(['import-element-dropped', 'import-whitespace-normalized'])
+    }
   })
 
   it('C2-M-033: a list with one item is tight', () => {
@@ -112,9 +134,28 @@ describe('figures', () => {
   it('C2-M-043: a figure that holds a table and a figcaption is the table with its caption', () => {
     expect(source('<figure><table><tr><td>a</td></tr></table><figcaption>T</figcaption></figure>')).toBe('| a |\n^ T\n')
   })
+
+  it('C2-M-043: a block without a caption slot, or with a caption already, is a figure group; a lone image is its paragraph', () => {
+    expect(source('<figure><p>x</p><figcaption>y</figcaption></figure>')).toBe('::: figure\nx\n:::\n^ y\n')
+    expect(source('<figure><img src="i.png" alt="a"></figure>')).toBe('![a](i.png)\n')
+    expect(source('<figure><pre><code>x</code></pre><figcaption>y</figcaption></figure>')).toBe('```\nx\n```\n^ y\n')
+    const nested = '<figure><figure><pre><code>x</code></pre><figcaption>a</figcaption></figure><figcaption>y</figcaption></figure>'
+    expect(source(nested)).toBe('::: figure\n```\nx\n```\n^ a\n:::\n^ y\n')
+  })
+
+  it('C2-M-041: the first caption is the caption of the table, and each further one is dropped and reported', () => {
+    const html = '<table><caption>A</caption><caption>B</caption><tr><td>x</td></tr></table>'
+    expect(source(html)).toBe('| x |\n^ A\n')
+    expect(codes(html)).toEqual(['import-element-dropped'])
+  })
 })
 
 describe('inline elements', () => {
+  it('C2-M-047: a time without datetime and an abbr without title are spans with an empty value', () => {
+    expect(source('<p><time>today</time> <abbr>HTML</abbr> <time datetime="2020">t</time> <abbr title="T">A</abbr></p>'))
+      .toBe('[today]{time} [HTML]{abbr} [t]{time=2020} [A]{abbr=T}\n')
+  })
+
   it('C2-M-046: <wbr> is dropped and reported', () => {
     expect(children('<p>a<wbr>b</p>')).toEqual([paragraphOf(text('ab'))])
     expect(codes('<p>a<wbr>b</p>')).toEqual(['import-element-dropped'])
