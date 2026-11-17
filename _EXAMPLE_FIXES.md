@@ -1,6 +1,6 @@
 # Example fixes for the specification
 
-**Status at `068552fc` (freeze candidate 6):** four holds, F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`. F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
+**Status at `6bdc5a26` (freeze candidate 8):** holds F8 (`includes-38`), F9 (`syntax-blocks-231`) and F10 (`syntax-blocks-278`, `syntax-blocks-282`), each on the field `tree`, and F11 (clause case `CC-287`, field `children`). F1 to F6 are corrected by the corpus; F7 is prose under examples, which the runner does not check.
 
 Examples of `spec/0.2` whose stated result departs from its own clause, found by running the conformance corpus (`spec/0.2/conformance`, pinned at `0d422808`) through the 0.2 engine. The engine follows the clause. Each entry is held by name in the corpus runner (`v2/scripts/corpus-held.ts`, `import/test/corpus.test.ts`); a held field must keep failing, so the hold goes when the corpus is corrected.
 
@@ -116,3 +116,22 @@ Stated in the corpus and in `trees/examples-syntax-blocks.json`: `stages` is `["
 C2-N-006 adds `includeExpansion` to a tree in which expansion ran. Neither input holds an include, the examples set no option, and the other 500 examples without an include state `["referenceResolution", "tableAlignment"]`.
 
 Clause-correct: `stages` is `["referenceResolution", "tableAlignment"]`; every other field of both trees matches the engine.
+
+## F11. Clause case CC-287: `expected.children`
+
+Input:
+
+```carve
+i.  first 1
+
+
+
+c.  second 1
+d.  second 2
+```
+
+Stated in the corpus: the HTML writes the second list as `<ol type="a" start="3">`, while `children` gives it `style: "i"` and `start: 100`.
+
+C2-B-042 decides it: three blank lines end the first list (C2-B-052), so `c.` is a first marker again, and its next marker `d.` is "the next letter of the alphabet, as `i.` then `j.` and `c.` then `d.`", which makes it alphabetic.
+
+Clause-correct: the second list has `"style": "a"` and `"start": 3`, as the HTML of the same case states. The engine gives both; the hold is on `children` only.

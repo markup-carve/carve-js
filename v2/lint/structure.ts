@@ -752,15 +752,23 @@ function unclosedEmphasis(node: Node, path: string, context: LintContext): void 
   }
 }
 
+const ROMAN_LETTER = /^[ivxlcdmIVXLCDM][.)]/
+const LETTER_STYLES = new Map([['i', 'a'], ['a', 'i'], ['I', 'A'], ['A', 'I']])
+
+/** C2-B-044: a one-item list of a one-roman-letter marker, then a list of the other letter style, fewer than three blank lines apart. */
 function orderedKindSplit(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'document') return
-  for (let at = 1; at < node.children.length; at++) {
-    const before = node.children[at - 1]
-    const after = node.children[at]
+  if (!('children' in node) || !Array.isArray(node.children)) return
+  const children = node.children as Node[]
+  for (let at = 1; at < children.length; at++) {
+    const before = children[at - 1]
+    const after = children[at]
     if (before?.type !== 'list' || after?.type !== 'list' || before.children.length !== 1) continue
-    if (before.marker.style === 'i' && after.marker.style === 'a') {
-      reportNode('ordered-list-kind-split', after, `${path}/children/${at}`, context)
-    }
+    if (after.marker.style !== LETTER_STYLES.get(before.marker.style ?? '')) continue
+    const first = bounds(before, context)
+    const next = bounds(after, context)
+    if (first === null || next === null || !ROMAN_LETTER.test(context.source.slice(first[0]).trimStart())) continue
+    if (context.source.slice(first[1], next[0]).split('\n').length - 2 >= 3) continue
+    reportNode('ordered-list-kind-split', after, `${path}/children/${at}`, context)
   }
 }
 
@@ -1124,7 +1132,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('braced-comment-in-a-template-source', ['comment'], templateComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
   nodeRule('unclosed-inline-emphasis', ['text'], unclosedEmphasis),
-  nodeRule('ordered-list-kind-split', ['document'], orderedKindSplit),
+  nodeRule('ordered-list-kind-split', ['document', 'block_quote', 'list_item', 'div', 'footnote', 'admonition'], orderedKindSplit),
   nodeRule('sigil-after-letter', ['text'], sigilAfterLetter),
   nodeRule('list-item-body-below-content-column', ['list_item'], listItemBodyColumn),
   nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),

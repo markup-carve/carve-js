@@ -40,7 +40,8 @@ describe('the examples of the specification', () => {
   }
 
   it('every held example is an example of the corpus', () => {
-    for (const id of HELD.keys()) expect(carve.some((example) => example.id === id), id).toBe(true)
+    const ids = new Set([...carve, ...CLAUSE_CASES].map((entry) => entry.id))
+    for (const id of HELD.keys()) expect(ids.has(id), id).toBe(true)
   })
 })
 
@@ -51,8 +52,9 @@ describe('the clause cases of the specification', () => {
   })
 
   for (const entry of CLAUSE_CASES) {
+    const held = HELD.get(entry.id)
     it(`${entry.clauses.join(', ')}: ${entry.id}, ${entry.summary}`, () => {
-      expect(clauseCaseMismatches(entry)).toEqual([])
+      expect(fields(clauseCaseMismatches(entry)), held?.fix).toEqual(held?.fields ?? [])
     })
   }
 })

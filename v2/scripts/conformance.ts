@@ -51,8 +51,10 @@ for (const example of CORPUS_EXAMPLES) {
 }
 for (const entry of CLAUSE_CASES) {
   const failed = clauseCaseMismatches(entry).map((mismatch) => mismatch.field)
-  count('clause cases', failed)
-  if (failed.length > 0) failures.push(`${entry.id}: ${failed.join(', ')}`)
+  const held = HELD.get(entry.id)
+  const row = count('clause cases', failed)
+  if (held !== undefined && failed.join() === held.fields.join()) row.held++
+  else if (failed.length > 0) failures.push(`${entry.id}: ${failed.join(', ')}`)
 }
 for (const entry of REFUSED_TREES) {
   const path = refusalPath(entry)
