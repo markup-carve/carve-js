@@ -2,11 +2,21 @@
 
 Ranked by the cost of changing the contract after a freeze. The `carve` checkout was read only.
 
+## Freeze candidate 5 session (spec `7db33836`)
+
+Cases found while following freeze candidate 5, revision 1. The engine choice is named in each.
+
+### G-F1. No upgrade row covers a bare header mark that 0.1 read as text
+
+`|=|` in 0.1 renders `<td>=</td>`. C2-B-171 lets the header mark end at the cell end, so 0.2 reads an empty header cell. U-185 covered this as an escape and is withdrawn at `7db33836`; no other row of `data/upgrade-map.json` names it, and U-270 covers only a mark glued to text (`|=a|`), whose meaning did not change. Reading one: the meaning changed and the tool must escape it, as every C-class change requires. Reading two: the withdrawal means the case is accepted as a silent change. The tool takes reading one and keeps the escape `|\=|` as its own extension entry X-003, which leaves the output identical to the withdrawn row.
+
 ## Freeze candidate 4 session (spec `011cb22e`)
 
 Cases found while following freeze candidate 4. The engine choice is named in each.
 
 ### G-E1. `data/inline-atoms.json` lets `_` start a raw format name
+
+Closed at `7db33836`: `suffix_name.first` is `["A-Z", "a-z"]`.
 
 C2-I-021: "The name is a raw format name (C2-B-225)." C2-B-225: "A raw format name starts with an ASCII letter", and `raw_format` in `data/line-shapes.json` has `not_first: ["-", "0-9", "_"]`. Inline Example 123 says `` `x`{=_a} `` is code and the text `{=_a}`. But the `suffix_name` of `raw_inline` in `data/inline-atoms.json` still has `"first": ["A-Z", "_", "a-z"]`.
 
@@ -14,15 +24,21 @@ The engine follows the clauses: the inline scan takes the first and the further 
 
 ### G-E2. A span mark cell has no children, and C2-A-091 refuses a cell with none
 
+Closed at `7db33836`: C2-A-091 refuses "a cell with no children that carries no `span`".
+
 C2-A-091: "A reader refuses a cell with no children". C2-A-092: "a valid mark cell stays empty", and blocks Examples 208, 251 to 253 and writer Example 7 hold mark cells with `"children": []`. Read literally, C2-A-091 refuses every parsed table with a span.
 
 The engine reads the refusal as one of a cell without `span`: an empty ordinary cell is one empty `cell_paragraph`, a mark cell has no children. C2-A-091 should say "a cell without `span` that has no children".
 
 ### G-E3. The writer case of C2-W-044 for a start of more than nine digits cannot occur
 
+Closed at `7db33836`: C2-W-044 now says a reader refuses a start of more than nine digits (C2-A-056).
+
 C2-W-044: "for a supplied tree the writer writes the list from 1 and reports `field-unspellable`". Freeze candidate 4 bounds `marker.start` to 0 to 999999999 in the schema (refused tree `marker-start-out-of-range`), so the reader refuses that tree before a writer sees it. The engine refuses it; the writer sentence of C2-W-044 can go, or say that only a writer that skips the reader checks meets it.
 
 ### G-E4. The fallback bound of C2-A-132 counts nodes that C2-A-124 refuses
+
+Closed at `7db33836`: the prose under C2-A-132 says the bound counts only the unqualified path.
 
 C2-A-132 bounds "fallback nesting to 32 unqualified inline extension nodes". C2-A-124 now refuses every field but `name`, `children` and the common fields on an unqualified inline extension, `fallback` among them, and a qualified fallback holds no extension node (C2-A-126). So no valid tree nests a fallback at all, and the bound only decides which refusal message a deep tree gets. The engine keeps the bound; the clause can drop it.
 
