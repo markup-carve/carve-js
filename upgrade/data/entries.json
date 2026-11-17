@@ -971,9 +971,11 @@
     },
     {
       "id": "U-162",
-      "name": "deprecated cell alignment prefixes are read as ordinary cell content or attributes",
-      "class": "report",
-      "lint": []
+      "name": "glued 0.1 cell alignment marks, with a vertical mark or in a data cell",
+      "class": "rewrite",
+      "lint": [
+        "deprecated-cell-alignment"
+      ]
     },
     {
       "id": "U-163",
@@ -1100,12 +1102,6 @@
     {
       "id": "U-184",
       "name": "nested list include-looking brace",
-      "class": "escape",
-      "lint": []
-    },
-    {
-      "id": "U-185",
-      "name": "bare equals marker in a table row",
       "class": "escape",
       "lint": []
     },
@@ -1512,6 +1508,20 @@
       "lint": [
         "table-span-marker-blocked"
       ]
+    },
+    {
+      "id": "U-269",
+      "name": "alignment block of a joining span mark",
+      "class": "rewrite",
+      "lint": [
+        "table-span-marker-attribute"
+      ]
+    },
+    {
+      "id": "U-270",
+      "name": "header mark glued to text, for a freeze candidate 5 source",
+      "class": "none",
+      "lint": []
     }
   ],
   "extensions": [
@@ -1525,6 +1535,12 @@
       "id": "X-002",
       "name": "U+0000 in the source",
       "class": "none",
+      "lint": []
+    },
+    {
+      "id": "X-003",
+      "name": "bare header mark before the cell end, which 0.1 read as text",
+      "class": "escape",
       "lint": []
     }
   ]

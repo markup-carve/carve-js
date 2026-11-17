@@ -68,13 +68,77 @@ function separatorRow(ctx: Context, table: Node01): void {
   for (const cell of cellsOf(head)) headerCell(ctx, 'U-055', cell, cell.align, message)
 }
 
-/** U-056: a cell prefix is `|=`, a glued brace block and a space (C2-B-171). */
-function gluedAlignment(ctx: Context, cell: Node01): void {
-  const start = cell.pos!.startOffset
-  const mark = ctx.src[start + 1]
-  if (ctx.src[start] !== '=' || mark === undefined || !'<>~'.includes(mark)) return
-  change(ctx, 'U-056', start + 1, start + 2, `{${mark}}`, 'glued alignment mark put in braces')
+/** The length of the glued 0.1 alignment marks at `at`: a horizontal mark or `?`, then an optional vertical mark. */
+function gluedMarks(src: string, at: number): number {
+  const first = src[at] ?? ''
+  const vertical = '^v~'.includes(src[at + 1] ?? '-') ? 1 : 0
+  if (first !== '' && '<>~'.includes(first)) return 1 + vertical
+  return first === '?' && vertical === 1 ? 2 : 0
 }
+
+/**
+ * U-056, U-162: the glued marks of a 0.1 cell prefix go into a brace block (C2-B-171, C2-B-182). Only a cell that
+ * 0.1 read an alignment for is rewritten, so text that only looks like a mark stays.
+ */
+function gluedAlignment(ctx: Context, cell: Node01): void {
+  if (cell.align === undefined && cell.valign === undefined) return
+  const header = cell.header === true && ctx.src[cell.pos!.startOffset] === '='
+  const start = cell.pos!.startOffset + (header ? 1 : 0)
+  const length = gluedMarks(ctx.src, start)
+  if (length === 0) return
+  const marks = ctx.src.slice(start, start + length)
+  const id = header && length === 1 ? 'U-056' : 'U-162'
+  change(ctx, id, start, start + length, `{${marks}}`, 'glued alignment mark put in braces')
+}
+
+const VALIGN_MARKS: Record<string, string> = { top: '^', middle: '~', bottom: 'v' }
+
+/** The braced 0.2 marks of the alignment `align` and `valign`, `?` in place of an absent horizontal mark. */
+function bracedMarks(align: unknown, valign: unknown): string {
+  const horizontal = typeof align === 'string' ? ALIGN_MARKS[align] ?? '' : ''
+  const vertical = typeof valign === 'string' ? VALIGN_MARKS[valign] ?? '' : ''
+  if (vertical === '') return horizontal === '' ? '' : `{${horizontal}}`
+  return `{${horizontal === '' ? '?' : horizontal}${vertical}}`
+}
+
+/**
+ * U-269: in 0.1 the alignment block of a span mark that joins in the head set the column it covers (C2-B-174);
+ * in 0.2 it sets nothing. The marks move to each cell of that column below the head that has none of its own.
+ */
+function joinedMarks(ctx: Context, table: Node01): void {
+  const rows = rowsOf(table)
+  let head = 0
+  while (head < rows.length && isHeaderRow(rows[head]!)) head++
+  for (const row of rows.slice(0, head)) {
+    const cells = Array.isArray(row.cells) ? (row.cells as Node01[]) : []
+    cells.forEach((cell, column) => {
+      if (cell.span !== 'colspan' || cell.pos === undefined) return
+      const marks = bracedMarks(cell.align, cell.valign)
+      const open = cell.pos.startOffset + (ctx.src[cell.pos.startOffset] === '=' ? 1 : 0)
+      const close = ctx.src.indexOf('}', open)
+      if (marks === '' || ctx.src[open] !== '{' || close < 0 || close >= cell.pos.endOffset) return
+      const message = 'alignment of a joining span mark moved to the cells it covers'
+      change(ctx, 'U-269', open, close + 1, '', message)
+      for (const below of rows.slice(head)) coveredCell(ctx, below, column, cell, message)
+    })
+  }
+}
+
+/** U-269: a covered cell takes the marks on each axis it has none of its own on, into its own brace block. */
+function coveredCell(ctx: Context, row: Node01, column: number, span: Node01, message: string): void {
+  const cell = Array.isArray(row.cells) ? (row.cells as Node01[])[column] : undefined
+  if (cell?.pos === undefined || ctx.src[cell.pos.startOffset - 1] !== '|') return
+  const start = cell.pos.startOffset
+  const marks = bracedMarks(cell.align ?? span.align, cell.valign ?? span.valign)
+  if (cell.align === undefined && cell.valign === undefined) {
+    if (ctx.src[start] !== '{') change(ctx, 'U-269', start, start, marks, message)
+    return
+  }
+  // A cell with marks of its own on one axis: its brace block takes the other one too.
+  const own = ctx.src[start] === '{' ? gluedMarks(ctx.src, start + 1) : 0
+  if (own > 0 && marks !== '') change(ctx, 'U-269', start + 1, start + 1 + own, marks.slice(1, -1), message)
+}
+
 
 /** U-057: an escaped last pipe is no separator in 0.2 (C2-B-166). */
 function escapedLastPipe(ctx: Context, row: Node01): void {
@@ -130,14 +194,13 @@ function tableReports(ctx: Context, table: Node01): void {
 
 function table(ctx: Context, node: Node01): void {
   separatorRow(ctx, node)
+  joinedMarks(ctx, node)
   headerRows(ctx, node)
   tableReports(ctx, node)
   for (const row of rowsOf(node)) {
     if (row.pos === undefined) continue
     escapedLastPipe(ctx, row)
-    for (const cell of cellsOf(row)) {
-      if (cell.header === true) gluedAlignment(ctx, cell)
-    }
+    for (const cell of cellsOf(row)) gluedAlignment(ctx, cell)
   }
 }
 

@@ -12,7 +12,8 @@ interface Candidate {
 const SIMPLE: readonly [string, string, string][] = [
   ['U-181', '</#', '</\\#'],
   ['U-184', '- {{', '- \\{{'],
-  ['U-185', '|=|', '|\\=|'],
+  // C2-B-171: a header mark before the cell end, which 0.1 read as the text `=`.
+  ['X-003', '|=|', '|\\=|'],
   ['U-188', ':+-:', ':\\+-:'],
   ['U-189', '[^]', '[\\^]'],
   ['U-137', '-{} ', '- ']
@@ -23,12 +24,12 @@ function simpleCandidates(output: string): Candidate[] {
   for (const [id, from, to] of SIMPLE) {
     let at = output.indexOf(from)
     while (at >= 0) {
-      if (id !== 'U-185' || output[at + from.length] !== '|') {
+      if (id !== 'X-003' || output[at + from.length] !== '|') {
         found.push({ id, output: output.slice(0, at) + to + output.slice(at + from.length) })
       }
       at = output.indexOf(from, at + from.length)
     }
-    if (id !== 'U-185' && output.includes(from)) {
+    if (id !== 'X-003' && output.includes(from)) {
       found.push({ id, output: output.replaceAll(from, to) })
     }
   }

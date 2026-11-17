@@ -207,10 +207,8 @@
     "path": "resources/examples/edge-cases/0659-table-spans-keep-alignment-defaults-in-physical-columns.md",
     "line": 139,
     "input": "|a|{?^} \\<|\n",
-    "check": "mismatch",
-    "entries": [
-      "U-162"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C101",
@@ -218,7 +216,7 @@
     "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
     "line": 16,
     "input": "|=> Price |= Item |= Size |= Mood |\n| 12 |< pen |>^ big |~~ ok |\n|?v 3 | ink |>{.num} 9 | fine |\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-056",
       "U-162"
@@ -230,10 +228,8 @@
     "path": "resources/examples/edge-cases/0953-a-deprecated-cell-alignment-prefix-reads-as-its-braced-run.md",
     "line": 40,
     "input": "|={>} Price |= Item |= Size |= Mood |\n| 12 |{<} pen |{>^} big |{~~} ok |\n|{?v} 3 | ink |{> .num} 9 | fine |\n",
-    "check": "mismatch",
-    "entries": [
-      "U-162"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C102",
@@ -643,10 +639,8 @@
     "path": "resources/examples/edge-cases/0952-native-head-rows-with-span-placeholders.md",
     "line": 135,
     "input": "| =^ |\n|=^x |\n",
-    "check": "mismatch",
-    "entries": [
-      "U-168"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C25",
@@ -1560,7 +1554,7 @@
     "input": "|=|\n",
     "check": "pass",
     "entries": [
-      "U-185"
+      "X-003"
     ]
   },
   {
@@ -1569,10 +1563,8 @@
     "path": "resources/examples/edge-cases/0256-table-cell-padding-must-be-a-space.md",
     "line": 358,
     "input": "|=h|=  i |\n|a|  b  |\n",
-    "check": "mismatch",
-    "entries": [
-      "U-168"
-    ]
+    "check": "pass",
+    "entries": []
   },
   {
     "cause": "C52",
@@ -3594,7 +3586,7 @@
     "clause": "C2-H-176",
     "path": "resources/examples/edge-cases/0261-a-blank-line-holds-spaces-and-tabs-and-nothing-else.md",
     "line": 88,
-    "input": "a\n\u000b\n\f\n\u0085\n\u2028\n\u2029\nb\n",
+    "input": "a\n\u000b\n\f\n\n \n \nb\n",
     "check": "mismatch",
     "entries": [
       "U-248"
@@ -3627,7 +3619,7 @@
     "clause": "C2-H-176",
     "path": "resources/examples/edge-cases/0985-del-is-ascii-nonalphanumeric-for-heading-slugs.md",
     "line": 12,
-    "input": "# a\u007fb\n\n# a!\u007f?b\n",
+    "input": "# ab\n\n# a!?b\n",
     "check": "explained",
     "entries": [
       "U-248"
@@ -3638,7 +3630,7 @@
     "clause": "C2-H-176",
     "path": "tests/corpus/261-a-blank-line-holds-spaces-and-tabs-and-nothing-else-3.crv",
     "line": 1,
-    "input": "a\n\u000b\n\f\n\u0085\n\u2028\n\u2029\nb\n",
+    "input": "a\n\u000b\n\f\n\n \n \nb\n",
     "check": "mismatch",
     "entries": [
       "U-248"
@@ -3671,7 +3663,7 @@
     "clause": "C2-H-176",
     "path": "tests/corpus/985-del-is-ascii-nonalphanumeric-for-heading-slugs.crv",
     "line": 1,
-    "input": "# a\u007fb\n\n# a!\u007f?b\n",
+    "input": "# ab\n\n# a!?b\n",
     "check": "explained",
     "entries": [
       "U-248"

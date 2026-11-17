@@ -1567,12 +1567,14 @@
   },
   {
     "id": "U-162",
-    "title": "Deprecated cell alignment prefixes are read as ordinary cell content or attributes",
+    "title": "Glued cell alignment marks with a vertical mark are braced",
     "inputs": [
       "|?v |"
     ],
-    "outputs": [],
-    "class": "report"
+    "outputs": [
+      "|{?v} |"
+    ],
+    "class": "rewrite"
   },
   {
     "id": "U-163",
@@ -1792,17 +1794,6 @@
     ],
     "outputs": [
       "- \\{{ e }}"
-    ],
-    "class": "escape"
-  },
-  {
-    "id": "U-185",
-    "title": "Bare equals marker in a table row",
-    "inputs": [
-      "|=|"
-    ],
-    "outputs": [
-      "|\\=|"
     ],
     "class": "escape"
   },
@@ -2167,14 +2158,12 @@
     "inputs": [
       "{%%}![alt](x.png)\n",
       "{.c}\n{%%}![a](x.png)\n",
-      
       "![a](/i) %% c\n^ cap\n",
       "![a](/i){%%}\n^ cap\n"
     ],
     "outputs": [
       "![alt](x.png)\n",
       "![a](x.png){.c}\n",
-      
       "![a](/i)\n^ cap\n",
       "![a](/i)\n^ cap\n"
     ]
@@ -2536,8 +2525,8 @@
     "class": "report",
     "inputs": [
       "c\u000bd\n",
-      "a\n\u0085\nb\n",
-      "# a\u007fb\n\n# a!\u007f?b\n"
+      "a\n\nb\n",
+      "# ab\n\n# a!?b\n"
     ],
     "outputs": []
   },
@@ -2658,5 +2647,25 @@
       "|= |\n"
     ],
     "class": "rewrite"
+  },
+  {
+    "id": "U-269",
+    "title": "Alignment block of a span mark that joins moves to the cells it covers",
+    "inputs": [
+      "|= A |={>^} < |\n| a | b |\n"
+    ],
+    "outputs": [
+      "|= A |= < |\n| a |{>^} b |\n"
+    ],
+    "class": "rewrite"
+  },
+  {
+    "id": "U-270",
+    "title": "Header mark glued to text in a freeze candidate 5 source",
+    "inputs": [
+      "|=a|\n| x |\n"
+    ],
+    "outputs": [],
+    "class": "none"
   }
 ]

@@ -106,7 +106,7 @@ describe('the contract', () => {
     })
   }
 
-  it('covers the 226 entries of the upgrade map', () => {
-    expect(cases.length).toBe(226)
+  it('covers the 227 entries of the upgrade map', () => {
+    expect(cases.length).toBe(227)
   })
 })
