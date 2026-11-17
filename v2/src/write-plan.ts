@@ -718,10 +718,23 @@ function scanUnits(leaf: Leaf, escaped: Uint8Array): void {
       checkAtomEnd(leaf, atomEnd(leaf, at), node)
       continue
     }
-    if (kind === OPEN) leaf.openDepth++
+    if (kind === OPEN) openMark(leaf, at)
     else if (kind === CLOSE) leaf.openDepth--
     else if (kind === TEXT) at = textUnit(leaf, at, escaped) - 1
   }
+}
+
+/**
+ * C2-I-043: a valid attribute block comes first at a brace, and `{_` may open one, since a key may start with `_`
+ * (C2-I-030). A braced underline whose source reads as a block is left to the repair.
+ */
+function openMark(leaf: Leaf, at: number): void {
+  leaf.openDepth++
+  if (leaf.codes[at] !== 123 || code(leaf, at + 1) !== 95) return
+  let end = at
+  while (end < leaf.codes.length && leaf.codes[end] !== LF) end++
+  const text = String.fromCharCode(...leaf.codes.slice(at, end))
+  undecidedIf(readAttributeBlock(text, 0, text.length, emptyMemo(), null) >= 0, leaf, 'attribute block')
 }
 
 /** Decides the unit of text at `at` by its resolver. Returns the unit behind what it decided. */
