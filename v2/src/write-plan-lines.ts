@@ -27,6 +27,8 @@ export interface LeafPlace {
   line: boolean
   /** The leaf is a term, whose later lines continue like paragraph text (C2-B-069). */
   term: boolean
+  /** The leaf stands below the block cap, where the opener of a container is text (C2-B-190). */
+  capped: boolean
 }
 
 export const NO_ESCAPE = -1
@@ -488,12 +490,23 @@ function lineStartRule(leaf: Leaf, at: number, first: boolean): number | null {
 }
 
 /**
+ * C2-B-190: a quote mark, a list marker, a description or a term mark and a colon run open containers; a run of three
+ * or more stars is a break.
+ */
+function opensContainer(leaf: Leaf, at: number): boolean {
+  const value = code(leaf, at)
+  if (value === 42) return runEnd(leaf, at, 42) - at < 3
+  return value === 62 || value === 45 || value === 46 || value === 58 || (value >= 48 && value <= 57) || isLetter(value)
+}
+
+/**
  * The escape the line that starts at `at` needs, NO_ESCAPE, or UNDECIDED. `first` says that the line is the first
  * line of a paragraph. The unit that takes the backslash must be text.
  */
 export function lineEscape(leaf: Leaf, at: number, first: boolean, place: LeafPlace): number {
   const start = lineStartRule(leaf, at, first)
   if (start !== null) return start
+  if (place.capped && opensContainer(leaf, at)) return NO_ESCAPE
   const escape = first ? firstLine(leaf, at, place) : laterLine(leaf, at, place)
   if (escape < 0) return escape
   return leaf.kinds[escape] === TEXT && leaf.kinds[escape - 1] !== ESCAPE ? escape : UNDECIDED

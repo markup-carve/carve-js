@@ -810,6 +810,7 @@ function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, plac
   const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
   inner.documentStart = first && depth === 0 && at === 0
   const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)
+  inner.capped = below >= MAX_DEPTH
   forEachSlot(node, (children) => {
     plan.places.set(children, inner)
     pending.push([children, depth + 1, below, inner])
@@ -832,8 +833,8 @@ function holdsOnly(children: readonly Node[], test: (node: Node) => boolean): bo
  * from behind its label, where the writer indents by two, so only a paragraph is planned there.
  */
 function blockShape(node: Node, level: number): string | null {
-  // C2-B-190: past the block cap an opener is text, which the line rules of the plan do not know.
-  if (level >= MAX_DEPTH) return 'block depth cap'
+  // C2-B-190: past the block cap the opener of a container is text, so a supplied container there has no spelling.
+  if (level >= MAX_DEPTH && BLOCK_CAP_CONTAINERS.includes(node.type)) return 'block depth cap'
   if (node.type === 'paragraph' && node.role === undefined && holdsOnly(node.children,
     (child) => child.type === 'image' || (child.type === 'math' && child.display))) return 'block role'
   if (node.type === 'footnote' && node.children.length > 0 && node.children[0]!.type !== 'paragraph') return 'footnote container'
@@ -842,7 +843,7 @@ function blockShape(node: Node, level: number): string | null {
 
 const TOP_PLACE: LeafPlace = {
   paragraph: false, inItem: false, inQuote: false, inDescriptionList: false, nested: false, item: null, before: null, documentStart: false,
-  line: false, term: false,
+  line: false, term: false, capped: false,
 }
 
 /** The place of the slots of `node`, which stands in `place` behind a block of the type `before`. */
@@ -860,6 +861,7 @@ function innerPlace(node: Node, place: LeafPlace, before: string | null): LeafPl
     documentStart: false,
     line: type === 'line',
     term: type === 'definition_term',
+    capped: false,
   }
 }
 

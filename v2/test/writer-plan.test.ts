@@ -374,9 +374,16 @@ describe('the planned writer', () => {
     }
   })
 
-  it('C2-B-190: a block past the block cap is left to the repair, since an opener there is text', () => {
+  it('C2-B-190: past the block cap the opener of a container is text, and the plan writes it bare', () => {
+    for (const tail of ['> a', '- a', '1. a', ': d']) {
+      const source = `${'> '.repeat(200)}${tail}\n`
+      const result = formatBy(source, 'both')
+      expect(result.output.source, tail).toBe(source)
+      expect(result.stats.repaired, tail).toBe(0)
+      expect(result.stats.differences, tail).toEqual([])
+    }
     const result = formatBy(`${'> '.repeat(200)}>\n`, 'both')
-    expect(result.stats.planned).toBe(0)
+    expect(result.stats.repaired).toBe(0)
     expect(result.stats.differences).toEqual([])
     expect(result.output.source).toBe(`${'> '.repeat(200)}>\n`)
   })
