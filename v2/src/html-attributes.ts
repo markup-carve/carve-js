@@ -318,11 +318,16 @@ function listHasDeniedPrefix(value: string, commas: boolean): boolean {
   return listHas(value, commas, (start, end) => hasDeniedPrefix(value, start, end))
 }
 
-/** C2-H-159, C2-H-161: the value of a URL list attribute, empty when one of its tokens fails the URL policy. */
-function urlListValue(r: Render, name: string, value: string): string {
+/**
+ * C2-H-159, C2-H-161: the value of a URL list attribute, empty when one of its tokens fails the URL policy. A token that
+ * fails is a destination the policy denies, reported as one (C2-H-160).
+ */
+function urlListValue(r: Render, name: string, value: string, origin: Node | null): string {
   const commas = URL_LIST_ATTRIBUTES.get(name)
   if (commas === undefined || value === '') return value
-  return listHas(value, commas, (start, end) => !schemePasses(r, value.slice(start, end))) ? '' : value
+  if (!listHas(value, commas, (start, end) => !schemePasses(r, value.slice(start, end)))) return value
+  loss(r, origin, 'destination-denied', `the destination ${value} is denied by the URL policy`, 'error')
+  return ''
 }
 
 function hexValue(code: number): number {
@@ -458,7 +463,7 @@ function addKeyValue(
   }
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
   if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(value)) {
-    return list.add(key, urlListValue(r, name, keyValue(name, value)))
+    return list.add(key, urlListValue(r, name, keyValue(name, value), origin))
   }
   if (!style.hasStyle) list.add('style', style.declarations)
 }

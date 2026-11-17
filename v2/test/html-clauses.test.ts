@@ -38,6 +38,14 @@ describe('output form', () => {
 })
 
 describe('attributes', () => {
+  it('C2-H-160, C2-H-161: a srcset token the URL policy denies blanks the value and is reported with destination-denied', () => {
+    const src = '![x](/i.png){srcset="https://x.org/i.png 1x"}'
+    const output = renderWithDiagnostics(src, { urlPolicy: { allow: ['mailto'] } })
+    expect(output.html).toBe('<img src="/i.png" alt="x" srcset="">')
+    expect(output.diagnostics.map((entry) => entry.code)).toEqual(['destination-denied'])
+    expect(renderWithDiagnostics(src).diagnostics).toEqual([])
+  })
+
   it('C2-H-078: a supplied smart-punctuation node without glyph is written as the glyph of its kind', () => {
     const tree = decodeTree(JSON.stringify(documentOf(paragraph({ type: 'smart_punctuation', kind: 'em_dash', source: '---' }))))
     expect(render(tree)).toBe('<p>\u2014</p>')
