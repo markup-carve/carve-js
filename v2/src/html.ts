@@ -458,21 +458,26 @@ function lineHtml(r: Render, node: LineNode): string {
   return '&nbsp;'.repeat(spaces) + inlineHtml(r, [{ ...first, value: first.value.slice(spaces) }, ...children.slice(1)])
 }
 
+/** C2-H-043: a hard break that ends a line followed by a line of the same stanza writes nothing; the line end writes the `<br>`. */
+function joinsNext(line: LineNode, next: LineBlockNode['children'][number] | undefined): boolean {
+  return line.children.at(-1)?.type === 'hard_break' && next?.type === 'line' && next.children.length > 0
+}
+
 /** C2-H-043: one `<p>` per stanza, and every line break in it is `<br>`. */
 function lineBlock(r: Render, node: LineBlockNode, level: number): void {
   const structural: Pair[] = r.settings.roundtrip ? [['data-carve-line-block', null]] : []
-  line(r, level, `<div${tag(r, node, { last: [LINE_BLOCK_CLASS], structural })}>`)
+  line(r, level, `<div${tag(r, node, { last: [LINE_BLOCK_CLASS], structural, alignStyle: true })}>`)
   const before = r.count
   let stanza: string[] = []
   const flush = (): void => {
     if (stanza.length > 0) line(r, level + 1, `<p>${stanza.join('<br>\n')}</p>`)
     stanza = []
   }
-  for (const child of node.children) {
-    if (child.type === 'comment') continue
+  node.children.forEach((child, at) => {
+    if (child.type === 'comment') return
     if (child.children.length === 0) flush()
-    else stanza.push(lineHtml(r, child))
-  }
+    else stanza.push(lineHtml(r, joinsNext(child, node.children[at + 1]) ? { ...child, children: child.children.slice(0, -1) } : child))
+  })
   flush()
   if (r.count === before) rawLine(r, '')
   line(r, level, '</div>')
