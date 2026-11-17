@@ -894,14 +894,18 @@ export function notePlaces(plan: Plan, nodes: readonly Node[], first: boolean): 
 /** A list of nodes with its nesting below the group, the number of containers around it (C2-B-190), and its place. */
 type Pending = [readonly Node[], number, number, LeafPlace]
 
+/** C2-W-075: escapes in an image label or comments in a link label can change a collapsed key. */
+function collapsedNeedsCheck(node: Node): boolean {
+  if (node.type !== 'image' && node.type !== 'link') return false
+  if (node.refForm !== 'collapsed') return false
+  return node.type === 'image' || node.children.some((child) => child.type === 'comment')
+}
+
 function noteNode(plan: Plan, pending: Pending[], [list, depth, containers, place]: Pending, at: number, first: boolean): void {
   const node = list[at]!
   const shape = blockShape(node, containers)
   if (shape !== null && plan.undecided === null) plan.undecided = shape
-  // C2-W-075: escapes added around a comment can change the source-folded key of a collapsed reference.
-  if (node.type === 'link' && node.refForm === 'collapsed' && node.children.some((child) => child.type === 'comment')) {
-    plan.undecided ??= 'collapsed comment key'
-  }
+  if (collapsedNeedsCheck(node)) plan.undecided ??= 'collapsed reference key'
   const inner = innerPlace(node, place, at > 0 ? list[at - 1]!.type : null)
   inner.documentStart = first && depth === 0 && at === 0
   const below = containers + (BLOCK_CAP_CONTAINERS.includes(node.type) ? 1 : 0)

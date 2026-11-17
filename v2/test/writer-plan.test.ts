@@ -77,6 +77,14 @@ describe('the planned writer', () => {
     )
   })
 
+  it('C2-W-075: an escaped image label checks its collapsed reference key without a sidecar', () => {
+    const source = '![[%%[\n]][]~'
+    const result = formatWithDiagnostics(source, { normalize: true })
+    expect(result.diagnostics.map((entry) => `${entry.code} ${entry.path}`)).toContain(
+      'field-unspellable /children/0/children/0/key',
+    )
+  })
+
   it('C2-W-089: prose, emphasis, links, lists, quotes, tables and code are planned with no parse', () => {
     const source = [
       '= Title', '', 'A paragraph with *strong*, /emphasis/, `code` and a [link](https://example.org "T").',
