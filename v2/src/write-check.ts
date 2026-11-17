@@ -9,6 +9,7 @@ import {
 import { buildSource } from './ast-blocks.ts'
 import { applyExtensions } from './extensions/claims.ts'
 import { AST_RESULTS } from './ast-tables.ts'
+import { sourceCoreEquivalent } from './write-extension-source.ts'
 import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { firstFrom, IN_BRACKET, IN_CELL, IN_EMPHASIS, IN_STRONG, spelledEnd, writeInlines } from './write-inline.ts'
 import { type Attempt, PLACE_COLUMNS, type Writer } from './write-state.ts'
@@ -1228,6 +1229,7 @@ function compareSlots(c: Check, e: Node, a: Node): void {
 /** Compares one block with its parse. Returns false where the blocks behind it cannot be compared. */
 function compareBlock(c: Check, e: Node, a: Node): boolean {
   if (c.w.lost.has(e)) return true
+  if (sourceCoreEquivalent(e, a)) return true
   if (e.type !== a.type) {
     blockMismatch(c, e)
     return false

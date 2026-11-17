@@ -38,6 +38,31 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('C2-X-023: an unknown extension source form is written without a loss when its body is canonical', () => {
+    const bare = { type: 'document', astVersion: '2.0', extensions: [
+      { name: 'ex.box', version: '1', required: false, slots: ['s'] },
+    ], children: [{ type: 'block_extension', name: 'ex.box', version: '1', children: [],
+      fallback: [paragraph('f')], source: { form: 'div', name: 'box', body: 'x\n' } }] }
+    const div = writeWithDiagnostics(decodeTree(JSON.stringify(bare)))
+    expect(div.source).toBe('::: box\nx\n:::\n')
+    expect(div.diagnostics).toEqual([])
+    bare.children[0]!.source.form = 'fence'
+    bare.children[0]!.source.name = 'py'
+    const fence = writeWithDiagnostics(decodeTree(JSON.stringify(bare)))
+    expect(fence.source).toBe('```py\nx\n```\n')
+    expect(fence.diagnostics).toEqual([])
+  })
+
+  it('C2-X-023: a noncanonical source body falls back', () => {
+    const tree = { type: 'document', astVersion: '2.0', extensions: [
+      { name: 'ex.box', version: '1', required: false, slots: ['s'] },
+    ], children: [{ type: 'block_extension', name: 'ex.box', version: '1', children: [],
+      fallback: [paragraph('f')], source: { form: 'div', name: 'box', body: 'a\n\n\nb\n' } }] }
+    const result = writeWithDiagnostics(decodeTree(JSON.stringify(tree)))
+    expect(result.source).toBe('f\n')
+    expect(result.diagnostics.map((entry) => entry.code)).toContain('structure-unspellable')
+  })
+
   it('C2-X-031: a thirty-third qualified extension in slots is refused', () => {
     let child: BlockExtensionNode | undefined
     for (let depth = 0; depth < 33; depth++) {

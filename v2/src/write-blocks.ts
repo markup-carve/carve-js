@@ -20,6 +20,7 @@ import { listMarkers, sameListKind } from './write-lists.ts'
 import { emit, emitLines, lose, notePlace, type Writer } from './write-state.ts'
 import { AFTER_MARK, AS_CONTENT, AS_INLINES, AS_LINE, IN_TITLE, LINE_START, planLeaf, unplanned } from './write-plan.ts'
 import { parseChunk } from './write-check.ts'
+import { canonicalExtensionBody, sourceCoreEquivalent } from './write-extension-source.ts'
 import { longestBareRun } from './write-fences.ts'
 import { tableAttribute, writeTable } from './write-table.ts'
 
@@ -524,15 +525,14 @@ function extensionSpelling(node: BlockExtensionNode): string | null {
 
 function blockExtension(w: Writer, node: BlockExtensionNode, prefix: string, flags: number): void {
   const spelling = extensionSpelling(node)
-  if (spelling !== null) {
-    let same = w.extensions.length === 0
-    if (!same) {
-      try {
-        const parsed = parseChunk(w, spelling, null).children[0]
-        same = parsed !== undefined && treesEqual(node, parsed)
-      }
-      catch { same = false }
-    }
+  if (spelling !== null && canonicalExtensionBody(node)) {
+    let same = false
+    try {
+      const attrs = braceBlock(node)
+      const probe = attrs === '' ? spelling : `${attrs}\n${spelling}`
+      const parsed = parseChunk(w, probe, null).children[0]
+      same = w.extensions.length === 0 ? sourceCoreEquivalent(node, parsed) : parsed !== undefined && treesEqual(node, parsed)
+    } catch { same = false }
     if (same) {
       attributeLine(w, node, prefix)
       for (const line of spelling.trimEnd().split('\n')) emit(w, prefix, line)
