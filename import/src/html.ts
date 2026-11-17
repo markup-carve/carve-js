@@ -1,11 +1,12 @@
 import { parse, parseFragment, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type {
-  Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
+  Attrs, Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
   TableNode, TableRowNode,
 } from '../../v2/src/index.ts'
 import { resolveTree } from '../../v2/src/index.ts'
 import {
-  attr, attrs, CARRIERS, classList, content, droppedAttribute, elements, has, ignoredCarrier, isBlank, isComment, isElement, isRawSpan,
+  asciiLower, attr, attrs, CARRIERS, classList, content, directionOf, droppedAttribute, elements, has, ignoredCarrier, isBlank,
+  isComment, isElement, isRawSpan,
   isText, plain, report, withoutClasses, withoutKeys, type HtmlContext, type MappedAttrs,
 } from './html-dom.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
@@ -344,7 +345,10 @@ function footnoteSection(node: Html.Element, context: HtmlContext): Block[] {
     if (!id) { report(context, item, 'import-structure-repaired', 'Footnote has no id'); continue }
     const note = context.notes.get(id)
     if (note?.inline === true) continue
-    notes.push({ type: 'footnote', key: note?.label ?? footnoteKeyOf(id), namespace: 'footnote', children: blockChildren(item, context) })
+    const key = note?.label ?? footnoteKeyOf(id)
+    // C2-M-061: an item whose key would be empty is dropped.
+    if (key === '') { report(context, item, 'import-structure-repaired', 'Footnote key is empty'); continue }
+    notes.push({ type: 'footnote', key, namespace: 'footnote', children: blockChildren(item, context) })
   }
   context.footnotes.push(...notes.filter(note => note.type === 'footnote'))
   return notesDirective(node, context)
@@ -484,19 +488,23 @@ function listMarker(node: Html.Element, context: HtmlContext): ListNode['marker'
   }
   if (carried !== undefined) ignoredCarrier(context, node, 'data-marker', 'an ordered list has no bullet')
   const type = attr(node, 'type')
-  const start = listStart(node, context)
-  return { kind: 'ordered', style: type === 'a' || type === 'A' || type === 'i' || type === 'I' ? type : '1',
-    delimiter: attr(node, 'data-delim') === ')' ? ')' : '.', ...(start !== undefined && start !== 1 ? { start } : {}) }
+  const style = type === 'a' || type === 'A' || type === 'i' || type === 'I' ? type : '1'
+  const start = listStart(node, context, style === '1' ? 0 : 1)
+  return { kind: 'ordered', style, delimiter: attr(node, 'data-delim') === ')' ? ')' : '.',
+    ...(start !== undefined && start !== 1 ? { start } : {}) }
 }
 
 // C2-M-031, C2-B-219: a start lies between 0 and 999999999.
 const MAX_START = 999_999_999
 
-/** C2-M-031: the `start` of `<ol>` as an HTML integer; one outside the bound is dropped and reported. */
-function listStart(node: Html.Element, context: HtmlContext): number | undefined {
+/**
+ * C2-M-031, C2-B-045: the `start` of `<ol>` as an HTML integer; one below `least`, which is 1 on a list of letters
+ * or roman numerals, or above the bound is dropped and reported.
+ */
+function listStart(node: Html.Element, context: HtmlContext, least: number): number | undefined {
   const start = htmlInteger(attr(node, 'start'))
-  if (start === undefined || (start >= 0 && start <= MAX_START)) return start
-  report(context, node, 'import-attribute-dropped', `Attribute start of ol dropped: ${start} lies outside 0 to 999999999`)
+  if (start === undefined || (start >= least && start <= MAX_START)) return start
+  report(context, node, 'import-attribute-dropped', `Attribute start of ol dropped: ${start} lies outside ${least} to 999999999`)
   return undefined
 }
 
@@ -598,8 +606,53 @@ function figure(node: Html.Element, context: HtmlContext, drop: readonly string[
   if (group) return { type: 'figure_group', children, ...captionPart, ...withoutClasses(attrs(context, node), ['carve-figure-group']) }
   const own = withoutClasses(attrs(context, node), drop)
   const only = children.length === 1 ? children[0] : undefined
-  if (only !== undefined && takesCaption(only, caption !== undefined)) return { ...only, ...captionPart, ...own }
+  if (only !== undefined && takesCaption(only, caption !== undefined)) {
+    return { ...only, ...captionPart, ...merged(context, node, own, only) }
+  }
   return { type: 'figure_group', children, ...captionPart, ...own }
+}
+
+/**
+ * C2-M-043, C2-H-199: the attributes of a figure and of its block, merged as consecutive attribute blocks are, the
+ * figure's first: classes add up, and an id, a key, a `lang` or a `dir` of the block replaces the figure's, which is
+ * dropped and reported.
+ */
+function merged(context: HtmlContext, node: Html.Element, figure: MappedAttrs, block: Block): MappedAttrs {
+  const inner: MappedAttrs = {}
+  if ('attrs' in block && block.attrs !== undefined) inner.attrs = block.attrs
+  if (block.lang !== undefined) inner.lang = block.lang
+  if (block.dir !== undefined) inner.dir = block.dir
+  if (replacesFigure(figure, inner)) {
+    report(context, node, 'import-attribute-dropped', 'A figure attribute that the captioned block replaces dropped')
+  }
+  const result: MappedAttrs = {}
+  const attrsOut = mergedAttrs(figure.attrs ?? {}, inner.attrs ?? {})
+  if (attrsOut !== undefined) result.attrs = attrsOut
+  const lang = inner.lang ?? figure.lang
+  const dir = inner.dir ?? figure.dir
+  if (lang !== undefined) result.lang = lang
+  if (dir !== undefined) result.dir = dir
+  return result
+}
+
+function replacesFigure(figure: MappedAttrs, inner: MappedAttrs): boolean {
+  if (figure.lang !== undefined && inner.lang !== undefined) return true
+  if (figure.dir !== undefined && inner.dir !== undefined) return true
+  const outer = figure.attrs ?? {}
+  const own = inner.attrs ?? {}
+  if (outer.id !== undefined && own.id !== undefined) return true
+  return (outer.keyValues ?? []).some(([key]) => (own.keyValues ?? []).some(([name]) => name === key))
+}
+
+function mergedAttrs(outer: Attrs, own: Attrs): Attrs | undefined {
+  const result: Attrs = {}
+  const id = own.id ?? outer.id
+  if (id !== undefined) result.id = id
+  const classes = [...outer.classes ?? [], ...own.classes ?? []]
+  if (classes.length > 0) result.classes = classes
+  const keys = new Map([...outer.keyValues ?? [], ...own.keyValues ?? []])
+  if (keys.size > 0) result.keyValues = [...keys]
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 /** C2-M-043, C2-A-082: the blocks with a caption slot, which the figure's caption may fill. */
@@ -620,12 +673,16 @@ function tableCell(node: Html.Element, context: HtmlContext, inHead: boolean): T
   const hasBlocks = elements(node).some(child => isBlockElement(child) || treatment(child) === 'div')
   const result: TableCellNode = hasBlocks ? { type: 'table_cell', header: node.tagName === 'th',
     children: blockChildren(node, context) } : cell(cellInline(node, context), node.tagName === 'th')
+  // C2-M-038, C2-A-091: a cell whose blocks were all dropped keeps one empty cell paragraph.
+  if (result.children.length === 0) {
+    result.children.push({ type: 'cell_paragraph', children: [] })
+    report(context, node, 'import-structure-repaired', 'A table cell whose blocks were all dropped holds an empty paragraph')
+  }
   const colspan = htmlSpan(attr(node, 'colspan'))
   const rowspan = htmlRowspan(node, context)
   if (colspan !== undefined) result.colspan = colspan
   if (rowspan !== undefined) result.rowspan = rowspan
-  cellMarks(node, result, inHead)
-  const styled = result.align !== undefined && attr(node, 'align') === undefined
+  const styled = cellMarks(node, result, inHead, context)
   Object.assign(result, attrs(context, node, ['colspan', 'rowspan', 'scope', 'align', 'valign', ...(styled ? ['style'] : [])]))
   return result
 }
@@ -634,23 +691,60 @@ const SCOPES = ['col', 'row', 'colgroup', 'rowgroup'] as const
 const VALIGNS = ['top', 'middle', 'bottom', 'baseline'] as const
 const ALIGNS = ['left', 'right', 'center'] as const
 
-/** C2-H-056 to C2-H-058: the scope, other than the default a render writes on every header cell, and the alignments. */
-function cellMarks(node: Html.Element, result: TableCellNode, inHead: boolean): void {
-  const scope = attr(node, 'scope')
+/** The value of the attribute `name` in lower case when it lies in `set`; one outside it is dropped and reported. */
+function cellValue<T extends string>(node: Html.Element, name: string, set: readonly T[], context: HtmlContext): T | undefined {
+  const raw = attr(node, name)
+  if (raw === undefined) return undefined
+  const value = asciiLower(raw)
+  if (isKind(set, value)) return value
+  report(context, node, 'import-attribute-dropped', `A ${name} value outside its set dropped`)
+  return undefined
+}
+
+/** C2-M-040: an axis that a declaration gives drops the attribute of that axis, since the declaration wins. */
+function cellAxis<T extends string>(node: Html.Element, name: string, set: readonly T[], declared: T | undefined,
+  context: HtmlContext): T | undefined {
+  if (declared === undefined) return cellValue(node, name, set, context)
+  if (has(node, name)) report(context, node, 'import-attribute-dropped', `A ${name} attribute beside a declaration of its axis dropped`)
+  return declared
+}
+
+/**
+ * C2-H-056 to C2-H-058, C2-M-040: the scope, other than the default a render writes on every header cell, and the
+ * alignments. Returns whether the `style` gave an alignment, which then is no authored style.
+ */
+function cellMarks(node: Html.Element, result: TableCellNode, inHead: boolean, context: HtmlContext): boolean {
+  const scope = cellValue(node, 'scope', SCOPES, context)
   const implied = node.tagName === 'th' && scope === (inHead ? 'col' : 'row')
-  if (!implied && isKind(SCOPES, scope)) result.scope = scope
-  const align = attr(node, 'align') ?? cellAlign(attr(node, 'style'))
-  if (isKind(ALIGNS, align)) result.align = align
-  const valign = attr(node, 'valign')
-  if (isKind(VALIGNS, valign)) result.valign = valign
+  if (!implied && scope !== undefined) result.scope = scope
+  const declared = cellStyle(attr(node, 'style'))
+  const align = cellAxis(node, 'align', ALIGNS, declared?.align, context)
+  const valign = cellAxis(node, 'valign', VALIGNS, declared?.valign, context)
+  if (align !== undefined) result.align = align
+  if (valign !== undefined) result.valign = valign
+  return declared !== undefined
 }
 
-const CELL_ALIGNS: Readonly<Record<string, string>> = {
-  'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
+type CellAlign = typeof ALIGNS[number]
+type CellValign = typeof VALIGNS[number]
+
+/** C2-M-040: a `style` exactly as a render writes it (C2-H-057): one declaration of either axis, or both in order. */
+function cellStyle(style: string | undefined): { align?: CellAlign, valign?: CellValign } | undefined {
+  if (style === undefined) return undefined
+  const align = declaration(style, 'text-align: ', ALIGNS)
+  if (align !== undefined) return { align }
+  const valign = declaration(style, 'vertical-align: ', VALIGNS)
+  if (valign !== undefined) return { valign }
+  const gap = style.indexOf('; ')
+  const first = gap < 0 ? undefined : declaration(style.slice(0, gap + 1), 'text-align: ', ALIGNS)
+  const second = gap < 0 ? undefined : declaration(style.slice(gap + 2), 'vertical-align: ', VALIGNS)
+  return first !== undefined && second !== undefined ? { align: first, valign: second } : undefined
 }
 
-function cellAlign(style: string | undefined): string | undefined {
-  return style === undefined ? undefined : CELL_ALIGNS[style]
+function declaration<T extends string>(text: string, property: string, set: readonly T[]): T | undefined {
+  if (!text.startsWith(property) || !text.endsWith(';')) return undefined
+  const value = text.slice(property.length, -1)
+  return isKind(set, value) ? value : undefined
 }
 
 function flattenCellGroup(group: Inline[], pending: Inline[][]): boolean {
@@ -712,33 +806,53 @@ function clampRowspans(result: TableRowNode[], groupRows: Html.Element[], contex
 
 type TableChildren = Extract<Block, { type: 'table' }>['children']
 
+/**
+ * C2-M-037, C2-A-086: the first `<thead>` is the first group and the first `<tfoot>` the last, as HTML displays them;
+ * each further one is a body at its place, reported.
+ */
 function tableGroups(node: Html.Element, context: HtmlContext): TableChildren {
   const direct = rows(node, context, false)
-  const children: TableChildren = elements(node).filter(child => ['thead', 'tbody', 'tfoot'].includes(child.nodeName)).map(group => {
-    if (group.nodeName === 'thead') return { type: 'table_head', children: rows(group, context, true), ...attrs(context, group) }
-    if (group.nodeName === 'tfoot') return { type: 'table_foot', children: rows(group, context, false), ...attrs(context, group) }
+  const groups = elements(node).filter(child => ['thead', 'tbody', 'tfoot'].includes(child.nodeName))
+  const head = groups.find(group => group.nodeName === 'thead')
+  const foot = groups.find(group => group.nodeName === 'tfoot')
+  const children: TableChildren = groups.filter(group => group !== head && group !== foot).map(group => {
+    if (group.nodeName !== 'tbody') report(context, group, 'import-structure-repaired', `A further ${group.nodeName} read as a body`)
     return { type: 'table_body', children: rows(group, context, false), ...attrs(context, group) }
   })
   if (direct.length) children.unshift({ type: 'table_body', children: direct })
+  if (head !== undefined) children.unshift({ type: 'table_head', children: rows(head, context, true), ...attrs(context, head) })
+  if (foot !== undefined) children.push({ type: 'table_foot', children: rows(foot, context, false), ...attrs(context, foot) })
   return children
 }
 
 /** C2-H-152: the widths of a column group, a percent each. */
-function columnWidths(node: Html.Element): (number | undefined)[] {
+function columnWidths(node: Html.Element, context: HtmlContext): (number | undefined)[] {
   const group = elements(node).find(child => child.tagName === 'colgroup')
   return (group === undefined ? [] : elements(group).filter(child => child.tagName === 'col')).map(col => {
-    const style = attr(col, 'style') ?? ''
-    if (!style.startsWith('width: ') || !style.endsWith('%;')) return undefined
-    const value = Number(style.slice(7, -2))
-    return Number.isFinite(value) && value > 0 ? value / 100 : undefined
+    const style = attr(col, 'style')
+    const width = style === undefined ? undefined : percentWidth(style)
+    // C2-M-041: another style of a `<col>` gives no width.
+    if (style !== undefined && width === undefined) {
+      report(context, col, 'import-attribute-dropped', 'A col style that gives no width dropped')
+    }
+    return width
   })
 }
 
-function tableColumns(children: TableChildren, node: Html.Element): TableColumnNode[] {
+/** C2-M-041, C2-B-212: `width: N%;` with N a decimal number above 0 and at most 100, as a fraction. */
+function percentWidth(style: string): number | undefined {
+  if (!style.startsWith('width: ') || !style.endsWith('%;')) return undefined
+  const text = style.slice(7, -2)
+  if (!/^\d+(?:\.\d+)?$/u.test(text)) return undefined
+  const value = Number(text)
+  return value > 0 && value <= 100 ? value / 100 : undefined
+}
+
+function tableColumns(children: TableChildren, node: Html.Element, context: HtmlContext): TableColumnNode[] {
   const width = Math.max(0, ...children.flatMap(group => group.type === 'comment' ? [] : group.children
     .filter(entry => entry.type === 'table_row').map(entry => entry.children.reduce((sum, entryCell) =>
       sum + (entryCell.colspan ?? 1), 0))))
-  const widths = columnWidths(node)
+  const widths = columnWidths(node, context)
   return Array.from({ length: width }, (_, index) => {
     const value = widths[index]
     return value === undefined ? { type: 'table_column' as const }
@@ -758,7 +872,7 @@ function table(node: Html.Element, context: HtmlContext): Block {
     }
   }
   const captionNode = caption === undefined ? undefined : figureCaption(caption, context)
-  const result: TableNode = { type: 'table', children, columns: tableColumns(children, node),
+  const result: TableNode = { type: 'table', children, columns: tableColumns(children, node, context),
     ...(captionNode ? { caption: captionNode } : {}), ...attrs(context, node) }
   resolveAlignments(result)
   return result
@@ -881,9 +995,9 @@ function rootLanguage(nodes: Html.ChildNode[], context: HtmlContext): void {
   if (html && isElement(html)) {
     const body = elements(html).find(child => child.tagName === 'body')
     const lang = (body ? attr(body, 'lang') : undefined) ?? attr(html, 'lang')
-    const dir = (body ? attr(body, 'dir') : undefined) ?? attr(html, 'dir')
+    const dir = directionOf((body ? attr(body, 'dir') : undefined) ?? attr(html, 'dir'))
     if (lang) context.rootLang = lang
-    if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') context.rootDir = dir
+    if (dir !== undefined) context.rootDir = dir
   }
 }
 

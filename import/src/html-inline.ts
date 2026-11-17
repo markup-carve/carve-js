@@ -7,7 +7,7 @@ import {
 } from './html-dom.ts'
 import { isBacklink } from './html-notes.ts'
 import { dropElement, isBlockElement, isOrphan, keepsRaw, rawValue, treatment } from './html-elements.ts'
-import { coalesce, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
+import { coalesce, isKey, paragraph, safeUrl, softText, text, withDestination } from './kit.ts'
 
 const EDGE_ELEMENTS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'dt', 'caption', 'figcaption']
 
@@ -356,7 +356,8 @@ function classedSpan(node: Html.Element, context: HtmlContext): Inline[] | undef
   if (first === 'math' && (classes[1] === 'inline' || classes[1] === 'display')) return mathSpan(node, classes[1], context)
   if (first === 'critic-comment') return [{ type: 'critic_comment', value: plain(node), ...withoutClasses(attrs(context, node), [first]) }]
   if (first === 'mention' || first === 'tag') return socialSpan(node, first, context)
-  if (first?.startsWith('ext-') === true && first.length > 4) {
+  // C2-M-035 row `ext`, C2-I-094: NAME is an inline extension name, which has the shape of a key.
+  if (first?.startsWith('ext-') === true && isKey(first.slice(4))) {
     return [{ type: 'inline_extension', name: first.slice(4), children: inlineChildren(node, context),
       ...withoutClasses(attrs(context, node), [first]) }]
   }

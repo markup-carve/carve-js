@@ -11,7 +11,7 @@ export function isName(text: string): boolean {
 }
 
 /** C2-I-030: a key is an ASCII letter or `_`, then name characters. */
-function isKey(text: string): boolean {
+export function isKey(text: string): boolean {
   const first = text.charCodeAt(0)
   return isName(text) && (isAsciiLetter(first) || first === UNDERSCORE)
 }

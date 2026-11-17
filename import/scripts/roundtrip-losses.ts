@@ -281,7 +281,7 @@ function deniedDestinations(tree: Fields, found: Set<string>): void {
 }
 
 /** C2-H-153: the table keys a table kept in `attrs` (C2-B-227) are never written. */
-const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows']
 
 /** C2-H-161, C2-H-162: a key the policy drops is not written, and a value that fails its test is written empty. */
 function filteredStyle(node: Fields, found: Set<string>): void {
@@ -516,11 +516,14 @@ function columnAlignments(tree: Fields, found: Set<string>): void {
   eachNode(tree, node => {
     if (node['type'] !== 'table' || !Array.isArray(node['columns'])) return
     node['columns'].filter(isFields).forEach((column, at) => {
-      const cell = column['align'] === undefined ? undefined : headCellAt(node, at)
-      if (cell === undefined) return
-      cell['align'] ??= column['align']
-      delete column['align']
-      found.add('C2-H-195 row 8 column alignment')
+      // `valigns` comes back the same way, on its own axis.
+      for (const axis of ['align', 'valign']) {
+        const cell = column[axis] === undefined ? undefined : headCellAt(node, at)
+        if (cell === undefined) continue
+        cell[axis] ??= column[axis]
+        delete column[axis]
+        found.add('C2-H-195 row 8 column alignment')
+      }
     })
   })
 }

@@ -1,7 +1,7 @@
 // The parse5 reading shared by the HTML import modules, and the import state of one document.
 import { defaultTreeAdapter, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type { AbbreviationDefNode, Attrs, Block, FootnoteNode, LinkReferenceDefinitionNode } from '../../v2/src/index.ts'
-import { attrsOf, finding, type Context, type HtmlImportCode } from './kit.ts'
+import { attrsOf, classNames, finding, isKey, type Context, type HtmlImportCode } from './kit.ts'
 
 /** C2-H-115: the reserved names that a render with `roundtrip` writes; `data-carve-src` is reserved and never written. */
 export const CARRIERS: ReadonlySet<string> = new Set([
@@ -88,16 +88,18 @@ export function ignoredCarrier(context: Context, node: Html.Element, name: strin
 }
 
 export function classList(node: Html.Element): string[] {
-  const value = attr(node, 'class') ?? ''
-  const names: string[] = []
-  let start = -1
-  for (let index = 0; index <= value.length; index++) {
-    const code = index === value.length ? 32 : value.charCodeAt(index)
-    const space = code === 32 || (code >= 9 && code <= 13)
-    if (space && start >= 0) { names.push(value.slice(start, index)); start = -1 }
-    else if (!space && start < 0) start = index
-  }
-  return names
+  return classNames(attr(node, 'class') ?? '')
+}
+
+/** ASCII letters in lower case, other characters as they are: HTML compares these values without ASCII case. */
+export function asciiLower(value: string): string {
+  return value.replace(/[A-Z]/gu, letter => letter.toLowerCase())
+}
+
+/** C2-M-052 row `dir`: `ltr`, `rtl` or `auto` in any ASCII letter case, kept in lower case. */
+export function directionOf(value: string | undefined): 'ltr' | 'rtl' | 'auto' | undefined {
+  const dir = value === undefined ? undefined : asciiLower(value)
+  return dir === 'ltr' || dir === 'rtl' || dir === 'auto' ? dir : undefined
 }
 
 export interface MappedAttrs { attrs?: Attrs, lang?: string, dir?: 'ltr' | 'rtl' | 'auto' }
@@ -106,23 +108,12 @@ const ALIGN_STYLES: Readonly<Record<string, string>> = {
   'text-align: left;': 'left', 'text-align: right;': 'right', 'text-align: center;': 'center',
 }
 
-function isKeyChar(code: number, first: boolean): boolean {
-  const letter = (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 95
-  return first ? letter : letter || (code >= 48 && code <= 57) || code === 45
-}
-
-/** C2-I-030: a key is an ASCII letter or `_`, then letters, digits, `_` and `-`. */
-export function isKey(name: string): boolean {
-  if (name === '') return false
-  for (let index = 0; index < name.length; index++) if (!isKeyChar(name.charCodeAt(index), index === 0)) return false
-  return true
-}
 
 /** C2-M-052, C2-M-054: the attributes dropped wherever they stand, and why; undefined for one the tree can keep. */
 export function droppedAttribute(name: string, value: string): string | undefined {
   if (name.startsWith('on')) return 'an event handler'
   if (name === 'srcdoc' || name === 'formaction') return 'a dropped attribute'
-  if (name === 'dir') return value === 'ltr' || value === 'rtl' || value === 'auto' ? undefined : 'an invalid direction'
+  if (name === 'dir') return directionOf(value) === undefined ? 'an invalid direction' : undefined
   return isKey(name) || CARRIERS.has(name) ? undefined : 'a name that is no key'
 }
 
@@ -133,12 +124,18 @@ function isAuthored(item: { name: string, value: string }, omit: readonly string
 
 /**
  * The authored attributes of `node`: without `omit`, the reserved names (C2-H-186) and the names C2-M-052 drops, which
- * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align` (C2-M-075).
+ * the audit of the document reports. With `alignStyle`, an exact alignment declaration is the key `align`, and an
+ * `align` attribute beside it is dropped and reported, since the declaration wins in a browser (C2-M-075).
  */
-export function attrs(_context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
+export function attrs(context: HtmlContext, node: Html.Element, omit: readonly string[] = [], alignStyle = false): MappedAttrs {
+  const styled = alignStyle && ALIGN_STYLES[attr(node, 'style') ?? ''] !== undefined
   const entries: [string, string][] = []
   for (const item of node.attrs) {
     if (!isAuthored(item, omit)) continue
+    if (styled && item.name === 'align') {
+      report(context, node, 'import-attribute-dropped', 'An align attribute beside a text-align declaration dropped')
+      continue
+    }
     const align = item.name === 'style' && alignStyle ? ALIGN_STYLES[item.value] : undefined
     entries.push(align === undefined ? [item.name, item.value] : ['align', align])
   }
@@ -151,9 +148,9 @@ export function attrs(_context: HtmlContext, node: Html.Element, omit: readonly 
 function languageOf(node: Html.Element): MappedAttrs {
   const result: MappedAttrs = {}
   const lang = attr(node, 'lang')
-  const dir = attr(node, 'dir')
+  const dir = directionOf(attr(node, 'dir'))
   if (lang) result.lang = lang
-  if (dir === 'ltr' || dir === 'rtl' || dir === 'auto') result.dir = dir
+  if (dir !== undefined) result.dir = dir
   return result
 }
 

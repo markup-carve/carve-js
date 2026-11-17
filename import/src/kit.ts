@@ -109,12 +109,21 @@ export function attrsOf(entries: Iterable<readonly [string, string]>): Attrs | u
   const attrs: Attrs = {}
   for (const [key, value] of entries) {
     if (key.toLowerCase() === 'id') attrs.id = value
-    else if (key.toLowerCase() === 'class') attrs.classes = [...(attrs.classes ?? []), ...classNames(value)]
+    else if (key.toLowerCase() === 'class') addClasses(attrs, classNames(value))
     else attrs.keyValues = [...(attrs.keyValues ?? []), [key, value]]
   }
   return Object.keys(attrs).length ? attrs : undefined
 }
 
+/** C2-M-052 row `class`, C2-A-058: a value that leaves no class gives no `classes`. */
+function addClasses(attrs: Attrs, names: string[]): void {
+  if (names.length > 0) attrs.classes = [...(attrs.classes ?? []), ...names]
+}
+
+// C2-I-030: the writer's key test, so that the importer keeps only a key the writer can spell.
+export { isKey } from '../../v2/src/write-attributes.ts'
+
+/** Splits a class attribute at ASCII whitespace (C2-M-052). */
 export function classNames(value: string): string[] {
   const names: string[] = []
   let start = -1

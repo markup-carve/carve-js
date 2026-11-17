@@ -40,8 +40,8 @@ function mismatches(example: ImportExample): string[] {
 }
 
 describe('the HTML import examples of the specification', () => {
-  it('holds the 48 examples of import-html.md', () => {
-    expect(examples).toHaveLength(48)
+  it('holds the 58 examples of import-html.md', () => {
+    expect(examples).toHaveLength(58)
   })
 
   for (const example of examples) {
