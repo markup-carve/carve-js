@@ -258,8 +258,11 @@ function body(
   w: Writer, node: FootnoteNode | ListItemNode | DefinitionDescriptionNode, prefix: string, flags: number, mark: string, width: number,
   tight: boolean,
 ): void {
+  // C2-W-033, C2-B-229: a body opened on the marker line of another body, behind its task box or its attributes, has
+  // its content column behind its own marker there, so its continuation lines stand at that column.
+  const behind = w.lead === null ? 0 : Math.max(0, w.lead.length - prefix.length)
   w.lead = (w.lead ?? prefix) + mark
-  writeBlocks(w, node.children, prefix + ' '.repeat(width), flags, tight)
+  writeBlocks(w, node.children, prefix + ' '.repeat(behind + width), flags, tight)
   if (w.lead === null) return
   // C2-W-057: an empty body has no spelling.
   lose(w, node, null)

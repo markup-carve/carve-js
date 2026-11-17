@@ -512,18 +512,13 @@ describe('the planned writer', () => {
     expect(result.stats.planned).toBe(0)
   })
 
-  // `format` writes a planned group with no parse, so a block the plan cannot check goes to the repair, which reports the loss.
-  const UNCHECKED_BLOCKS: readonly [string, string, string][] = [
-    ['C2-B-157: a container on the first line of a footnote', '[^f]: - :::', 'structure-unspellable'],
-  ]
-  for (const [clause, source, code] of UNCHECKED_BLOCKS) {
-    it(`${clause} is left to the repair, which reports ${code}`, () => {
-      const parsed = parseWithLayout(source, { extensions: [] })
-      const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
-      expect(result.stats.planned).toBe(0)
-      expect(result.output.diagnostics.map((entry) => entry.code)).toContain(code)
-    })
-  }
+  // `format` writes a planned group with no parse, so a block the plan cannot check goes to the repair.
+  it('C2-W-002, C2-W-033: a container on the first line of a footnote is left to the repair, which writes it', () => {
+    const parsed = parseWithLayout('[^f]: - :::', { extensions: [] })
+    const result = writeTreeWithStats(parsed.document, { layout: parsed.layout }, 'plan', false)
+    expect(result.stats.planned).toBe(0)
+    expect(result.output).toEqual({ source: '[^f]: - :::\n\n        :::\n', diagnostics: [] })
+  })
 
   it('C2-W-099: a run of hyphens of text is planned with every second hyphen escaped', () => {
     const result = formatBy('a -\\-- b\n', 'both')
