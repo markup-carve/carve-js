@@ -135,4 +135,11 @@ describe('the HTML importer at freeze candidate 5', () => {
   it('C2-M-016, C2-M-052 row `class`: a vertical tab is no ASCII whitespace, so it splits no class', () => {
     expect(imported('<p class="a\u000bb c">x</p>').children[0]).toMatchObject({ attrs: { classes: ['a\u000bb', 'c'] } })
   })
+
+  it('C2-M-060: an aside that is no admonition is a div', () => {
+    const result = imported('<aside class="note"><p>a</p></aside>')
+    expect(result.children[0]).toEqual({ type: 'div', children: [{ type: 'paragraph', children: [{ type: 'text', value: 'a' }] }],
+      attrs: { classes: ['note'] } })
+    expect(result.codes).not.toContain('import-element-mapped')
+  })
 })

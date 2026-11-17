@@ -34,6 +34,7 @@ describe('scope and input', () => {
     const result = importDocument(html, { from: 'html' })
     expect(result.diagnostics.map(entry => [entry.code, entry.foreignType])).toEqual([
       ['import-element-dropped', '#doctype'], ['import-element-dropped', 'head'], ['import-attribute-dropped', 'body'],
+      ['field-unspellable', undefined],
     ])
   })
 })

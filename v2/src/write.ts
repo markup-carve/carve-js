@@ -785,6 +785,11 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
     code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
     message: `root metadata.${name} has no spelling in Carve source`, path: `/metadata/${name}`,
   })
+  // C2-W-011, C2-M-074: no source gives the document node a language or a direction (C2-M-004 imports them).
+  for (const name of ['lang', 'dir'] as const) if (document[name] !== undefined) diagnostics.push({
+    code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+    message: `the document ${name} has no spelling in Carve source`, path: `/${name}`,
+  })
   if (document.metadata?.fields !== undefined && !document.children.some((node) => node.type === 'frontmatter')) {
     diagnostics.push({ code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
       message: 'root metadata.fields has no spelling in Carve source', path: '/metadata/fields' })

@@ -235,7 +235,7 @@ function simpleBlockElement(node: Html.Element, context: HtmlContext): Block[] |
     case 'hr': return [{ type: 'thematic_break', ...attrs(context, node) }]
     case 'blockquote': return [{ type: 'block_quote', children: blockChildren(node, context), ...attrs(context, node) }]
     case 'section': return section(node, context)
-    case 'aside': return admonition(node, context)
+    case 'aside': return admonition(node, context) ?? [divElement(node, context)]
     default: return undefined
   }
 }

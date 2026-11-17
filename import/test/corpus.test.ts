@@ -53,7 +53,8 @@ describe('the HTML import examples of the specification', () => {
 
   it('C2-M-081: every entry of an import carries a foreignType and a byte range', () => {
     for (const example of examples) {
-      for (const entry of importDocument(example.html ?? '', { from: 'html', ...example.options }).diagnostics) {
+      const entries = importDocument(example.html ?? '', { from: 'html', ...example.options }).diagnostics
+      for (const entry of entries.filter(found => found.code.startsWith('import-'))) {
         expect(entry.foreignType, `${example.id} ${entry.code}`).toBeTypeOf('string')
         expect(entry.range, `${example.id} ${entry.code}`).toBeDefined()
       }
