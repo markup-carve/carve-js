@@ -4,7 +4,7 @@ import {
   type Block, type BlockExtensionNode, type CaptionNode, CarveOptionError, CarveRenderError, type CitationDefinitionNode,
   type CitationGroupNode, type CitationNode, decodeTree, type DocumentNode, encodeTree, type HeadingNode,
   type InlineExtensionNode, type ListItemNode, type ListNode, parse, render, type RenderOptions, renderWithDiagnostics,
-  type RubyNode, type SectionNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableRowNode,
+  type RubyNode, type SectionNode, type SocialRequest, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableRowNode,
 } from '../src/index.ts'
 import { documentOf, paragraph, text } from './support/tree.ts'
 
@@ -337,14 +337,17 @@ describe('cross-references and abbreviations', () => {
 describe('mentions, tags and symbols', () => {
   check([
     ['C2-H-100: a mention and a tag are inert spans without social', '@ann #t', '<p><span class="mention"><strong>@ann</strong></span> <span class="tag"><strong>#t</strong></span></p>'],
-    ['C2-H-100, C2-H-126: with social the outer element is a link to the URL of the template', '@a.b #t', '<p><a class="mention" href="/u/a.b">@a.b</a> <a class="tag" href="/t?q=t">#t</a></p>'.replaceAll('">@a.b', '"><strong>@a.b</strong>').replaceAll('">#t', '"><strong>#t</strong>'), { social: { mentionUrl: '/u/{name}', tagUrl: '/t?q={name}' } }],
+    ['C2-H-100, C2-H-126: with social the outer element is a link to the URL of the template', '@a.b #t', '<p><a class="mention" href="/u/a.b">@a.b</a> <a class="tag" href="/t?q=t">#t</a></p>', { social: { mentionUrl: '/u/{name}', tagUrl: '/t?q={name}' } }],
     ['C2-H-101, C2-H-124: a symbol in the symbols table is its value verbatim, any other its source; one with attributes is wrapped in a span', ':ok: :no: :ok:{.c}', '<p><b>✓</b> :no: <span class="c"><b>✓</b></span></p>', { symbols: { ok: '<b>✓</b>' } }],
   ])
 
   it('C2-H-126: a resolver gives the URL of a mention, and a denied one leaves the element inert of a destination', () => {
-    const social = { resolveMention: (name: string) => (name === 'ann' ? 'https://x.y/ann' : null), resolveTag: () => 'javascript:x' }
+    const social = {
+      resolveMention: ({ name }: SocialRequest) => (name === 'ann' ? 'https://x.y/ann' : null), resolveTag: () => 'javascript:x',
+    }
     expect(render('@ann @bob #t', { social })).toBe(
-      '<p><a class="mention" href="https://x.y/ann"><strong>@ann</strong></a> <span class="mention"><strong>@bob</strong></span> <a class="tag" href=""><strong>#t</strong></a></p>',
+      '<p><a class="mention" href="https://x.y/ann">@ann</a> <span class="mention"><strong>@bob</strong></span> '
+        + '<a class="tag" href="">#t</a></p>',
     )
   })
 })

@@ -447,7 +447,7 @@ describe('the URL filter', () => {
   })
 
   it('C2-H-159: a URL that a social template gives is a sink', () => {
-    expect(render('@a', { social: { mentionUrl: 'javascript:{name}' } })).toBe('<p><a class="mention" href=""><strong>@a</strong></a></p>')
+    expect(render('@a', { social: { mentionUrl: 'javascript:{name}' } })).toBe('<p><a class="mention" href="">@a</a></p>')
   })
 
   it('C2-H-161: a name that starts with `on`, `srcdoc` and `formaction` are not written, in any case', () => {

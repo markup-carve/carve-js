@@ -394,7 +394,7 @@ describe('resolution and rendering in detail', () => {
   it('the language of a definition goes to a reference that has none, and an empty social URL leaves the span', () => {
     expect(render('[a][r] [b][r]{:fr}\n\n{:en}\n[r]: /u')).toBe('<p><a href="/u" lang="en">a</a> <a href="/u" lang="fr">b</a></p>')
     expect(render('@a', { social: { resolveMention: () => '' } })).toBe('<p><span class="mention"><strong>@a</strong></span></p>')
-    expect(render('@a', { social: { resolveMention: () => undefined, mentionUrl: '/u/{name}' } })).toContain('href="/u/a"')
+    expect(render('@a', { social: { resolveMention: () => undefined, mentionUrl: '/u/{name}' } })).not.toContain('href')
   })
 
   it('a block with a language and no attribute still writes it, and a div of a supplied tree takes no class from a stray kind', () => {

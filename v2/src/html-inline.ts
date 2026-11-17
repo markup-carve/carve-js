@@ -11,6 +11,7 @@ import {
 } from './html-attributes.ts'
 import { inlinesText } from './profile.ts'
 import { smartGlyph } from './ast-text.ts'
+import { type SocialRequest } from './options.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -277,13 +278,22 @@ function templateUrl(template: string | undefined, name: string): string | null 
   return template === undefined ? null : template.replaceAll('{name}', encodeURIComponent(name))
 }
 
-/** C2-H-126: the URL that `social` gives for a mention or a tag, or null. */
-function socialUrl(r: Render, type: 'mention' | 'tag', name: string): string | null {
+/** C2-H-126: the URL that `social` gives for a mention or a tag, or null. A resolver is final, and its error stays inside. */
+function socialUrl(r: Render, kind: 'mention' | 'tag', name: string): string | null {
   const settings = r.settings.social
   if (settings === null) return null
-  const resolver = type === 'mention' ? settings.resolveMention : settings.resolveTag
-  const url = resolver?.(name) ?? templateUrl(type === 'mention' ? settings.mentionUrl : settings.tagUrl, name)
-  return url === undefined || url === '' ? null : url
+  const resolver = kind === 'mention' ? settings.resolveMention : settings.resolveTag
+  let url: string | null | undefined
+  if (resolver === undefined) url = templateUrl(kind === 'mention' ? settings.mentionUrl : settings.tagUrl, name)
+  else {
+    const request: SocialRequest = Object.hasOwn(settings, 'context') ? { kind, name, context: settings.context } : { kind, name }
+    try {
+      url = resolver(request)
+    } catch {
+      url = null
+    }
+  }
+  return typeof url !== 'string' || url === '' ? null : url
 }
 
 /** C2-H-100: a mention or a tag is an inert span, or a link when `social` gives a URL for it. */
@@ -291,11 +301,11 @@ function social(node: MentionNode | TagNode, r: Render): string {
   const mention = node.type === 'mention'
   const name = mention ? node.target : node.name
   const label = mention ? node.label : undefined
-  const text = `<strong>${escapeText(label ?? `${mention ? '@' : '#'}${name}`)}</strong>`
+  const text = escapeText(label ?? `${mention ? '@' : '#'}${name}`)
   // C2-H-167: a linked mention or tag is a link for the profile, an inert span where the profile has no links.
   const url = r.linkDepth > 0 || !r.linksAllowed ? null : socialUrl(r, node.type, name)
   const parts: TagParts = { base: [node.type], classFirst: true }
-  if (url === null) return `<span${attributes(r, node, parts)}>${text}</span>`
+  if (url === null) return `<span${attributes(r, node, parts)}><strong>${text}</strong></span>`
   const structural: Pair[] = [['href', destination(r, url, node)]]
   const written = withRel(r, node, structural)
   return `<a${attributes(r, written, { ...parts, structural })}>${text}</a>`

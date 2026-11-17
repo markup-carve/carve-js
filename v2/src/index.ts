@@ -49,7 +49,7 @@ export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '.
 export { CarveLayoutError, validateLayout } from './layout-validate.ts'
 export {
   CarveOptionError, type HeadingIds, type Mode, type Options, type ParseOptions, type Profile, type RenderOptions,
-  type Social, type UrlPolicy,
+  type Social, type SocialRequest, type UrlPolicy,
 } from './options.ts'
 export { stringOffsetOfByte, utf8Length } from './positions.ts'
 export { format, type FormatOptions, type FormatOutput, formatWithDiagnostics } from './format.ts'

@@ -15,12 +15,20 @@ export interface UrlPolicy {
   allow?: readonly string[]
 }
 
+/** C2-H-126: what a social resolver is called with; `context` is the host's own value, passed on unread. */
+export interface SocialRequest {
+  kind: 'mention' | 'tag'
+  name: string
+  context?: unknown
+}
+
 /** C2-H-126: URL templates, in which `{name}` stands for the encoded name, or resolvers. */
 export interface Social {
   mentionUrl?: string
   tagUrl?: string
-  resolveMention?: (name: string) => string | null | undefined
-  resolveTag?: (name: string) => string | null | undefined
+  resolveMention?: (request: SocialRequest) => string | null | undefined
+  resolveTag?: (request: SocialRequest) => string | null | undefined
+  context?: unknown
 }
 
 export interface Options {
@@ -191,7 +199,10 @@ function stringMap(options: OptionMap, name: string): Readonly<Record<string, st
   return value as Readonly<Record<string, string>>
 }
 
-const SOCIAL_FIELDS = new Map([['mentionUrl', 'string'], ['tagUrl', 'string'], ['resolveMention', 'function'], ['resolveTag', 'function']])
+const SOCIAL_FIELDS = new Map([
+  ['mentionUrl', 'string'], ['tagUrl', 'string'], ['resolveMention', 'function'], ['resolveTag', 'function'], ['context', 'any'],
+])
+const PLACEHOLDER = /\{[A-Za-z0-9_]+\}/g
 
 /** C2-H-126: URL templates and resolvers, or null for none. */
 function socialValue(options: OptionMap): Social | null {
@@ -201,7 +212,10 @@ function socialValue(options: OptionMap): Social | null {
   for (const [name, field] of Object.entries(value)) {
     const kind = SOCIAL_FIELDS.get(name)
     if (kind === undefined) throw new CarveOptionError('social', `unknown field ${name}`)
-    if (field !== undefined && typeof field !== kind) throw new CarveOptionError('social', `${name} is not a ${kind}`)
+    if (field !== undefined && kind !== 'any' && typeof field !== kind) throw new CarveOptionError('social', `${name} is not a ${kind}`)
+    // C2-H-126, U-341: `{name}` is the only placeholder of a template.
+    const other = typeof field === 'string' ? field.match(PLACEHOLDER)?.find((placeholder) => placeholder !== '{name}') : undefined
+    if (other !== undefined) throw new CarveOptionError('social', `${name} holds the placeholder ${other}; {name} is the only one`)
   }
   return value as Social
 }

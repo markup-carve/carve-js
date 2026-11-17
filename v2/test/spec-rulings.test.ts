@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CarveOptionError, CarveTreeError, type DocumentNode, format, parse, parseTree, parseWithDiagnostics, render, renderTree, resolveTree,
-  type RenderOptions, treesEqual, validateTree,
+  type RenderOptions, type SocialRequest, treesEqual, validateTree,
 } from '../src/index.ts'
 import { isJoining, isLetter, isUrlCharacter, isWordCharacter } from '../src/unicode.ts'
 import { UNICODE_VERSION } from '../src/unicode-tables.ts'
@@ -109,16 +109,37 @@ describe('the social option', () => {
 
   it('C2-H-167: a linked mention is a link for the profile: an inert span where links are outside it', () => {
     expect(render('@ann.b and #topic', { social }))
-      .toBe('<p><a class="mention" href="https://x.org/u/ann.b"><strong>@ann.b</strong></a> and <span class="tag"><strong>#topic</strong></span></p>')
+      .toBe('<p><a class="mention" href="https://x.org/u/ann.b">@ann.b</a> and <span class="tag"><strong>#topic</strong></span></p>')
     expect(render('@ann', { social, profile: 'minimal' })).toBe('<p><span class="mention"><strong>@ann</strong></span></p>')
     expect(render('@ann', { social, profile: 'comment' }))
-      .toBe('<p><a class="mention" href="https://x.org/u/ann" rel="nofollow ugc"><strong>@ann</strong></a></p>')
+      .toBe('<p><a class="mention" href="https://x.org/u/ann" rel="nofollow ugc">@ann</a></p>')
   })
 
-  it('C2-H-126: the resolver is asked first, the template when it returns nothing, and an empty URL is no URL', () => {
-    const resolveMention = (name: string): string | undefined => (name === 'a' ? '/r/a' : name === 'e' ? '' : undefined)
-    expect(render('@a @b @e', { social: { ...social, resolveMention } })).toBe('<p><a class="mention" href="/r/a"><strong>@a</strong></a> '
-      + '<a class="mention" href="https://x.org/u/b"><strong>@b</strong></a> <span class="mention"><strong>@e</strong></span></p>')
+  it('C2-H-126: a resolver is final: nothing, an empty URL or an error leaves the inert span, and no template is read', () => {
+    const resolveMention = ({ name }: SocialRequest): string | undefined => {
+      if (name === 'x') throw new Error('host')
+      return name === 'a' ? '/r/a' : name === 'e' ? '' : undefined
+    }
+    expect(render('@a @b @e @x', { social: { ...social, resolveMention } })).toBe('<p><a class="mention" href="/r/a">@a</a> '
+      + '<span class="mention"><strong>@b</strong></span> <span class="mention"><strong>@e</strong></span> '
+      + '<span class="mention"><strong>@x</strong></span></p>')
+  })
+
+  it('C2-H-126: a resolver is called with the kind, the name and the context of social', () => {
+    const seen: SocialRequest[] = []
+    const resolveTag = (request: SocialRequest): string => {
+      seen.push(request)
+      return '/t'
+    }
+    render('#n', { social: { resolveTag, context: { site: 1 } } })
+    render('#m', { social: { resolveTag } })
+    expect(seen).toEqual([{ kind: 'tag', name: 'n', context: { site: 1 } }, { kind: 'tag', name: 'm' }])
+  })
+
+  it('C2-H-126, U-341: a template with a placeholder other than {name} is refused before the render', () => {
+    expect(() => render('@a', { social: { mentionUrl: '/u/{user}' } })).toThrow(CarveOptionError)
+    expect(() => render('#a', { social: { tagUrl: '/t/{tag}' } })).toThrow(CarveOptionError)
+    expect(render('@a', { social: { mentionUrl: '/u/{name}?{' } })).toContain('href="/u/a?{"')
   })
 
   it('C2-H-126: the name is percent-encoded as UTF-8 except ASCII letters, digits and -_.!~*\'()', () => {
@@ -129,7 +150,7 @@ describe('the social option', () => {
       .toContain('href="/u/%C3%A9%20a%2Fb-_.!~*&apos;()/%C3%A9%20a%2Fb-_.!~*&apos;()"')
   })
 
-  it('C2-H-126: social has four optional fields and no other', () => {
+  it('C2-H-126: social has five optional fields and no other', () => {
     expect(() => render('@a', JSON.parse('{"social":{"mentionUrl":"/u","other":1}}') as RenderOptions)).toThrow(CarveOptionError)
   })
 })
