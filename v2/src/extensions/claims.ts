@@ -154,15 +154,11 @@ function replaceChildren(node: Node, definitions: readonly ExtensionDefinition[]
   })
 }
 
-/** C2-X-005: a separate pass claims core nodes after the core parse. */
-export function applyExtensions(parsed: ParsedTree, definitions: readonly ExtensionDefinition[]): ParsedTree {
-  if (definitions.length === 0) return parsed
-  const document = parsed.document
-  const sourceNames = parsed.facts?.sourceNames ?? null
-  const findings: Findings = { entries: [], nodes: [] }
-  for (const [at, child] of document.children.entries()) {
-    Reflect.set(document.children, at, replace(child, definitions, sourceNames, findings))
-  }
+/**
+ * C2-A-017, C2-N-016: the root declares each qualified extension that a node of the tree names, a name once, the
+ * nodes of expanded includes counted too.
+ */
+export function declareExtensions(document: DocumentNode, definitions: readonly ExtensionDefinition[]): void {
   const used = new Map<string, string>()
   forEachSlot(document, function collect(nodes) {
     for (const node of nodes) {
@@ -174,6 +170,18 @@ export function applyExtensions(parsed: ParsedTree, definitions: readonly Extens
   if (used.size > 0) document.extensions = [...used].sort(([a], [b]) => a.localeCompare(b))
     .map(([name, version]) => ({ name, version, required: false,
       slots: Object.keys(definitions.find((entry) => entry.name === name)?.slots ?? {}) }))
+}
+
+/** C2-X-005: a separate pass claims core nodes after the core parse. */
+export function applyExtensions(parsed: ParsedTree, definitions: readonly ExtensionDefinition[]): ParsedTree {
+  if (definitions.length === 0) return parsed
+  const document = parsed.document
+  const sourceNames = parsed.facts?.sourceNames ?? null
+  const findings: Findings = { entries: [], nodes: [] }
+  for (const [at, child] of document.children.entries()) {
+    Reflect.set(document.children, at, replace(child, definitions, sourceNames, findings))
+  }
+  declareExtensions(document, definitions)
   if (findings.entries.length === 0 || parsed.facts === null) return parsed
   const original = parsed.facts.addFindings
   return { document, facts: { ...parsed.facts, addFindings(target) {

@@ -21,9 +21,9 @@ function fields(mismatches: readonly Mismatch[]): string[] {
 describe('the examples of the specification', () => {
   const carve = CORPUS_EXAMPLES.filter((example) => example.kind !== 'import')
 
-  it('holds the 562 examples of the nine documents, 514 of them with a Carve input', () => {
-    expect(CORPUS_EXAMPLES).toHaveLength(562)
-    expect(carve).toHaveLength(514)
+  it('holds the 582 examples of the nine documents, 524 of them with a Carve input', () => {
+    expect(CORPUS_EXAMPLES).toHaveLength(582)
+    expect(carve).toHaveLength(524)
   })
 
   for (const example of carve) {
@@ -45,8 +45,8 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 80 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(80)
+  it('holds 96 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(96)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 
@@ -58,8 +58,8 @@ describe('the clause cases of the specification', () => {
 })
 
 describe('the trees of the specification', () => {
-  it('the reader refuses each of the 55 refused trees at the field its clause decides', () => {
-    expect(REFUSED_TREES).toHaveLength(55)
+  it('the reader refuses each of the 56 refused trees at the field its clause decides', () => {
+    expect(REFUSED_TREES).toHaveLength(56)
     expect(new Set(REFUSED_TREES.map((entry) => entry.id))).toEqual(new Set(REFUSED_AT.keys()))
     for (const entry of REFUSED_TREES) {
       const path = refusalPath(entry)

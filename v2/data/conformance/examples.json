@@ -11550,7 +11550,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -11627,7 +11626,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -11813,7 +11811,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -11940,7 +11937,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12123,7 +12119,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12316,7 +12311,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12413,7 +12407,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12502,7 +12495,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12563,7 +12555,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12669,7 +12660,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12771,7 +12761,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -12896,7 +12885,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -13029,7 +13017,6 @@
     "C2-B-083",
     "C2-B-084",
     "C2-B-085",
-    "C2-B-086",
     "C2-B-087",
     "C2-B-088",
     "C2-B-089"
@@ -25790,6 +25777,981 @@
    "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
   },
   {
+   "id": "syntax-blocks-275",
+   "document": "syntax-blocks.md",
+   "number": 275,
+   "section": "Tables",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-167",
+    "C2-B-168",
+    "C2-B-169",
+    "C2-B-223",
+    "C2-B-224",
+    "C2-B-170",
+    "C2-B-171",
+    "C2-B-172",
+    "C2-B-173",
+    "C2-B-174",
+    "C2-B-175",
+    "C2-B-176",
+    "C2-B-178",
+    "C2-B-179",
+    "C2-B-180",
+    "C2-B-181",
+    "C2-B-182",
+    "C2-B-183",
+    "C2-B-184",
+    "C2-B-185",
+    "C2-B-186",
+    "C2-B-187",
+    "C2-B-188",
+    "C2-B-209",
+    "C2-B-221",
+    "C2-B-210",
+    "C2-B-211",
+    "C2-B-212",
+    "C2-B-220",
+    "C2-B-213",
+    "C2-B-214",
+    "C2-B-227",
+    "C2-B-226"
+   ],
+   "kind": "render",
+   "input": "|= Item |=|=<x|\n| tea |=SUM(A1:A3)|==2|",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\">Item</th><th scope=\"col\"></th><th scope=\"col\">&lt;x</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>tea</td><td>=SUM(A1:A3)</td><td>==2</td></tr>\n  </tbody>\n</table>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column"
+        },
+        {
+         "type": "table_column"
+        },
+        {
+         "type": "table_column"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_head",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "Item",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 4,
+                  "endColumn": 8,
+                  "startOffset": 3,
+                  "endOffset": 7
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 4,
+                "endColumn": 8,
+                "startOffset": 3,
+                "endOffset": 7
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 2,
+              "endColumn": 9,
+              "startOffset": 1,
+              "endOffset": 8
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": []
+              }
+             ],
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 10,
+              "endColumn": 11,
+              "startOffset": 9,
+              "endOffset": 10
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "<x",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 13,
+                  "endColumn": 15,
+                  "startOffset": 12,
+                  "endOffset": 14
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 13,
+                "endColumn": 15,
+                "startOffset": 12,
+                "endOffset": 14
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 12,
+              "endColumn": 15,
+              "startOffset": 11,
+              "endOffset": 14
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 1,
+            "endLine": 1,
+            "startColumn": 1,
+            "endColumn": 16,
+            "startOffset": 0,
+            "endOffset": 15
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 16,
+          "startOffset": 0,
+          "endOffset": 15
+         }
+        },
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "tea",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 3,
+                  "endColumn": 6,
+                  "startOffset": 18,
+                  "endOffset": 21
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 3,
+                "endColumn": 6,
+                "startOffset": 18,
+                "endOffset": 21
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 2,
+              "endColumn": 7,
+              "startOffset": 17,
+              "endOffset": 22
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "=SUM(A1:A3)",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 8,
+                  "endColumn": 19,
+                  "startOffset": 23,
+                  "endOffset": 34
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 8,
+                "endColumn": 19,
+                "startOffset": 23,
+                "endOffset": 34
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 8,
+              "endColumn": 19,
+              "startOffset": 23,
+              "endOffset": 34
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "==2",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 20,
+                  "endColumn": 23,
+                  "startOffset": 35,
+                  "endOffset": 38
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 20,
+                "endColumn": 23,
+                "startOffset": 35,
+                "endOffset": 38
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 20,
+              "endColumn": 23,
+              "startOffset": 35,
+              "endOffset": 38
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 2,
+            "endLine": 2,
+            "startColumn": 1,
+            "endColumn": 24,
+            "startOffset": 16,
+            "endOffset": 39
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 2,
+          "endLine": 2,
+          "startColumn": 1,
+          "endColumn": 24,
+          "startOffset": 16,
+          "endOffset": 39
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 2,
+        "startColumn": 1,
+        "endColumn": 24,
+        "startOffset": 0,
+        "endOffset": 39
+       }
+      }
+     ],
+     "srcByteLength": 39,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "unverified",
+   "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
+  },
+  {
+   "id": "syntax-blocks-272",
+   "document": "syntax-blocks.md",
+   "number": 272,
+   "section": "Tables",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-167",
+    "C2-B-168",
+    "C2-B-169",
+    "C2-B-223",
+    "C2-B-224",
+    "C2-B-170",
+    "C2-B-171",
+    "C2-B-172",
+    "C2-B-173",
+    "C2-B-174",
+    "C2-B-175",
+    "C2-B-176",
+    "C2-B-178",
+    "C2-B-179",
+    "C2-B-180",
+    "C2-B-181",
+    "C2-B-182",
+    "C2-B-183",
+    "C2-B-184",
+    "C2-B-185",
+    "C2-B-186",
+    "C2-B-187",
+    "C2-B-188",
+    "C2-B-209",
+    "C2-B-221",
+    "C2-B-210",
+    "C2-B-211",
+    "C2-B-212",
+    "C2-B-220",
+    "C2-B-213",
+    "C2-B-214",
+    "C2-B-227",
+    "C2-B-226"
+   ],
+   "kind": "render",
+   "input": "|={>^} Qty |={?v} Note |\n| 1 |{<~} a |\n| 2 | b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: right; vertical-align: top;\">Qty</th><th scope=\"col\" style=\"vertical-align: bottom;\">Note</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: right; vertical-align: top;\">1</td><td style=\"text-align: left; vertical-align: middle;\">a</td></tr>\n    <tr><td style=\"text-align: right; vertical-align: top;\">2</td><td style=\"vertical-align: bottom;\">b</td></tr>\n  </tbody>\n</table>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column",
+         "resolvedAlign": "right",
+         "resolvedValign": "top"
+        },
+        {
+         "type": "table_column",
+         "resolvedValign": "bottom"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_head",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "Qty",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 8,
+                  "endColumn": 11,
+                  "startOffset": 7,
+                  "endOffset": 10
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 8,
+                "endColumn": 11,
+                "startOffset": 7,
+                "endOffset": 10
+               }
+              }
+             ],
+             "align": "right",
+             "valign": "top",
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 2,
+              "endColumn": 12,
+              "startOffset": 1,
+              "endOffset": 11
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "Note",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 19,
+                  "endColumn": 23,
+                  "startOffset": 18,
+                  "endOffset": 22
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 19,
+                "endColumn": 23,
+                "startOffset": 18,
+                "endOffset": 22
+               }
+              }
+             ],
+             "valign": "bottom",
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 13,
+              "endColumn": 24,
+              "startOffset": 12,
+              "endOffset": 23
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 1,
+            "endLine": 1,
+            "startColumn": 1,
+            "endColumn": 25,
+            "startOffset": 0,
+            "endOffset": 24
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 25,
+          "startOffset": 0,
+          "endOffset": 24
+         }
+        },
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "1",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 3,
+                  "endColumn": 4,
+                  "startOffset": 27,
+                  "endOffset": 28
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 3,
+                "endColumn": 4,
+                "startOffset": 27,
+                "endOffset": 28
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 2,
+              "endColumn": 5,
+              "startOffset": 26,
+              "endOffset": 29
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "a",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 11,
+                  "endColumn": 12,
+                  "startOffset": 35,
+                  "endOffset": 36
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 11,
+                "endColumn": 12,
+                "startOffset": 35,
+                "endOffset": 36
+               }
+              }
+             ],
+             "align": "left",
+             "valign": "middle",
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 6,
+              "endColumn": 13,
+              "startOffset": 30,
+              "endOffset": 37
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 2,
+            "endLine": 2,
+            "startColumn": 1,
+            "endColumn": 14,
+            "startOffset": 25,
+            "endOffset": 38
+           }
+          },
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "2",
+                 "pos": {
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 3,
+                  "endColumn": 4,
+                  "startOffset": 41,
+                  "endOffset": 42
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 3,
+                "endLine": 3,
+                "startColumn": 3,
+                "endColumn": 4,
+                "startOffset": 41,
+                "endOffset": 42
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 2,
+              "endColumn": 5,
+              "startOffset": 40,
+              "endOffset": 43
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "b",
+                 "pos": {
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 7,
+                  "endColumn": 8,
+                  "startOffset": 45,
+                  "endOffset": 46
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 3,
+                "endLine": 3,
+                "startColumn": 7,
+                "endColumn": 8,
+                "startOffset": 45,
+                "endOffset": 46
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 6,
+              "endColumn": 9,
+              "startOffset": 44,
+              "endOffset": 47
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 3,
+            "endLine": 3,
+            "startColumn": 1,
+            "endColumn": 10,
+            "startOffset": 39,
+            "endOffset": 48
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 2,
+          "endLine": 3,
+          "startColumn": 1,
+          "endColumn": 10,
+          "startOffset": 25,
+          "endOffset": 48
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 3,
+        "startColumn": 1,
+        "endColumn": 10,
+        "startOffset": 0,
+        "endOffset": 48
+       }
+      }
+     ],
+     "srcByteLength": 48,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
+   "id": "syntax-blocks-274",
+   "document": "syntax-blocks.md",
+   "number": 274,
+   "section": "Tables",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-167",
+    "C2-B-168",
+    "C2-B-169",
+    "C2-B-223",
+    "C2-B-224",
+    "C2-B-170",
+    "C2-B-171",
+    "C2-B-172",
+    "C2-B-173",
+    "C2-B-174",
+    "C2-B-175",
+    "C2-B-176",
+    "C2-B-178",
+    "C2-B-179",
+    "C2-B-180",
+    "C2-B-181",
+    "C2-B-182",
+    "C2-B-183",
+    "C2-B-184",
+    "C2-B-185",
+    "C2-B-186",
+    "C2-B-187",
+    "C2-B-188",
+    "C2-B-209",
+    "C2-B-221",
+    "C2-B-210",
+    "C2-B-211",
+    "C2-B-212",
+    "C2-B-220",
+    "C2-B-213",
+    "C2-B-214",
+    "C2-B-227",
+    "C2-B-226"
+   ],
+   "kind": "render",
+   "input": "|{^} a |{v} b |{>^^} c |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td>{^} a</td><td v=\"\">b</td><td>{&gt;^^} c</td></tr>\n  </tbody>\n</table>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column"
+        },
+        {
+         "type": "table_column"
+        },
+        {
+         "type": "table_column"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "{^} a",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 2,
+                  "endColumn": 7,
+                  "startOffset": 1,
+                  "endOffset": 6
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 2,
+                "endColumn": 7,
+                "startOffset": 1,
+                "endOffset": 6
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 2,
+              "endColumn": 8,
+              "startOffset": 1,
+              "endOffset": 7
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "b",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 13,
+                  "endColumn": 14,
+                  "startOffset": 12,
+                  "endOffset": 13
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 13,
+                "endColumn": 14,
+                "startOffset": 12,
+                "endOffset": 13
+               }
+              }
+             ],
+             "attrs": {
+              "keyValues": [
+               [
+                "v",
+                ""
+               ]
+              ]
+             },
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 9,
+              "endColumn": 15,
+              "startOffset": 8,
+              "endOffset": 14
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "{>^^} c",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 16,
+                  "endColumn": 23,
+                  "startOffset": 15,
+                  "endOffset": 22
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 16,
+                "endColumn": 23,
+                "startOffset": 15,
+                "endOffset": 22
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 16,
+              "endColumn": 24,
+              "startOffset": 15,
+              "endOffset": 23
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 1,
+            "endLine": 1,
+            "startColumn": 1,
+            "endColumn": 25,
+            "startOffset": 0,
+            "endOffset": 24
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 25,
+          "startOffset": 0,
+          "endOffset": 24
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 1,
+        "startColumn": 1,
+        "endColumn": 25,
+        "startOffset": 0,
+        "endOffset": 24
+       }
+      }
+     ],
+     "srcByteLength": 24,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
    "id": "syntax-blocks-271",
    "document": "syntax-blocks.md",
    "number": 271,
@@ -32192,6 +33154,308 @@
    "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
   },
   {
+   "id": "syntax-blocks-273",
+   "document": "syntax-blocks.md",
+   "number": 273,
+   "section": "Tables",
+   "clauses": [
+    "C2-B-166",
+    "C2-B-167",
+    "C2-B-168",
+    "C2-B-169",
+    "C2-B-223",
+    "C2-B-224",
+    "C2-B-170",
+    "C2-B-171",
+    "C2-B-172",
+    "C2-B-173",
+    "C2-B-174",
+    "C2-B-175",
+    "C2-B-176",
+    "C2-B-178",
+    "C2-B-179",
+    "C2-B-180",
+    "C2-B-181",
+    "C2-B-182",
+    "C2-B-183",
+    "C2-B-184",
+    "C2-B-185",
+    "C2-B-186",
+    "C2-B-187",
+    "C2-B-188",
+    "C2-B-209",
+    "C2-B-221",
+    "C2-B-210",
+    "C2-B-211",
+    "C2-B-212",
+    "C2-B-220",
+    "C2-B-213",
+    "C2-B-214",
+    "C2-B-227",
+    "C2-B-226"
+   ],
+   "kind": "render",
+   "input": "{valigns=\"top,bottom\" aligns=\"left,right\"}\n|= A |={?^} B |\n| a | b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: top;\">A</th><th scope=\"col\" style=\"text-align: right; vertical-align: top;\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: left; vertical-align: top;\">a</td><td style=\"text-align: right; vertical-align: top;\">b</td></tr>\n  </tbody>\n</table>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column",
+         "align": "left",
+         "valign": "top",
+         "resolvedAlign": "left",
+         "resolvedValign": "top"
+        },
+        {
+         "type": "table_column",
+         "align": "right",
+         "valign": "bottom",
+         "resolvedAlign": "right",
+         "resolvedValign": "top"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_head",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "A",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 4,
+                  "endColumn": 5,
+                  "startOffset": 46,
+                  "endOffset": 47
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 4,
+                "endColumn": 5,
+                "startOffset": 46,
+                "endOffset": 47
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 2,
+              "endColumn": 6,
+              "startOffset": 44,
+              "endOffset": 48
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "B",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 13,
+                  "endColumn": 14,
+                  "startOffset": 55,
+                  "endOffset": 56
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 13,
+                "endColumn": 14,
+                "startOffset": 55,
+                "endOffset": 56
+               }
+              }
+             ],
+             "valign": "top",
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 7,
+              "endColumn": 15,
+              "startOffset": 49,
+              "endOffset": 57
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 2,
+            "endLine": 2,
+            "startColumn": 1,
+            "endColumn": 16,
+            "startOffset": 43,
+            "endOffset": 58
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 2,
+          "endLine": 2,
+          "startColumn": 1,
+          "endColumn": 16,
+          "startOffset": 43,
+          "endOffset": 58
+         }
+        },
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "a",
+                 "pos": {
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 3,
+                  "endColumn": 4,
+                  "startOffset": 61,
+                  "endOffset": 62
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 3,
+                "endLine": 3,
+                "startColumn": 3,
+                "endColumn": 4,
+                "startOffset": 61,
+                "endOffset": 62
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 2,
+              "endColumn": 5,
+              "startOffset": 60,
+              "endOffset": 63
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "b",
+                 "pos": {
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 7,
+                  "endColumn": 8,
+                  "startOffset": 65,
+                  "endOffset": 66
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 3,
+                "endLine": 3,
+                "startColumn": 7,
+                "endColumn": 8,
+                "startOffset": 65,
+                "endOffset": 66
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 6,
+              "endColumn": 9,
+              "startOffset": 64,
+              "endOffset": 67
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 3,
+            "endLine": 3,
+            "startColumn": 1,
+            "endColumn": 10,
+            "startOffset": 59,
+            "endOffset": 68
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 3,
+          "endLine": 3,
+          "startColumn": 1,
+          "endColumn": 10,
+          "startOffset": 59,
+          "endOffset": 68
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 3,
+        "startColumn": 1,
+        "endColumn": 10,
+        "startOffset": 0,
+        "endOffset": 68
+       }
+      }
+     ],
+     "srcByteLength": 68,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    },
+    "diagnostics": [
+     "table-column-overlap"
+    ]
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
    "id": "syntax-blocks-229",
    "document": "syntax-blocks.md",
    "number": 229,
@@ -37264,6 +38528,84 @@
       }
      ],
      "srcByteLength": 49,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
+   "id": "syntax-inline-124",
+   "document": "syntax-inline.md",
+   "number": 124,
+   "section": "Attribute blocks",
+   "clauses": [
+    "C2-I-028",
+    "C2-I-029",
+    "C2-I-030",
+    "C2-I-031",
+    "C2-I-032",
+    "C2-I-033",
+    "C2-I-034",
+    "C2-I-035",
+    "C2-I-036",
+    "C2-I-039",
+    "C2-I-040",
+    "C2-I-041",
+    "C2-I-042"
+   ],
+   "kind": "render",
+   "input": "`x`{=html}{.c}",
+   "options": {},
+   "expected": {
+    "html": "<p>x{.c}</p>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "paragraph",
+       "children": [
+        {
+         "type": "raw_inline",
+         "format": "html",
+         "value": "x",
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 11,
+          "startOffset": 0,
+          "endOffset": 10
+         }
+        },
+        {
+         "type": "text",
+         "value": "{.c}",
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 11,
+          "endColumn": 15,
+          "startOffset": 10,
+          "endOffset": 14
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 1,
+        "startColumn": 1,
+        "endColumn": 15,
+        "startOffset": 0,
+        "endOffset": 14
+       }
+      }
+     ],
+     "srcByteLength": 14,
      "stages": [
       "referenceResolution",
       "tableAlignment"
@@ -57545,8 +58887,7 @@
    "section": "fn1",
    "clauses": [
     "C2-H-026",
-    "C2-H-027",
-    "C2-H-028"
+    "C2-H-027"
    ],
    "kind": "render",
    "input": "# One\n\n## Two words\n\n# One\n\n{#mine .c k=v}\n## Three\n\n> # Quoted",
@@ -59925,6 +61266,176 @@
    "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
   },
   {
+   "id": "html-68",
+   "document": "html.md",
+   "number": 68,
+   "section": "Quotes, divs and their sigil forms",
+   "clauses": [
+    "C2-H-041",
+    "C2-H-042",
+    "C2-H-043",
+    "C2-H-044",
+    "C2-H-045",
+    "C2-H-046",
+    "C2-H-136",
+    "C2-H-154",
+    "C2-H-155",
+    "C2-H-156",
+    "C2-H-157",
+    "C2-H-169",
+    "C2-H-158"
+   ],
+   "kind": "render",
+   "input": "a[^n]\n\n::: footnotes\n:::\n\nb\n\n::: footnotes\n:::\n\n[^n]: x",
+   "options": {},
+   "expected": {
+    "html": "<p>a<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>x<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>\n<p>b</p>\n<div class=\"footnotes\">\n\n</div>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "paragraph",
+       "children": [
+        {
+         "type": "text",
+         "value": "a",
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 2,
+          "startOffset": 0,
+          "endOffset": 1
+         }
+        },
+        {
+         "type": "footnote_ref",
+         "key": "n",
+         "namespace": "footnote",
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 2,
+          "endColumn": 6,
+          "startOffset": 1,
+          "endOffset": 5
+         },
+         "number": 1
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 1,
+        "startColumn": 1,
+        "endColumn": 6,
+        "startOffset": 0,
+        "endOffset": 5
+       }
+      },
+      {
+       "type": "directive",
+       "kind": "footnotes",
+       "children": [],
+       "pos": {
+        "startLine": 3,
+        "endLine": 4,
+        "startColumn": 1,
+        "endColumn": 4,
+        "startOffset": 7,
+        "endOffset": 24
+       }
+      },
+      {
+       "type": "paragraph",
+       "children": [
+        {
+         "type": "text",
+         "value": "b",
+         "pos": {
+          "startLine": 6,
+          "endLine": 6,
+          "startColumn": 1,
+          "endColumn": 2,
+          "startOffset": 26,
+          "endOffset": 27
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 6,
+        "endLine": 6,
+        "startColumn": 1,
+        "endColumn": 2,
+        "startOffset": 26,
+        "endOffset": 27
+       }
+      },
+      {
+       "type": "directive",
+       "kind": "footnotes",
+       "children": [],
+       "pos": {
+        "startLine": 8,
+        "endLine": 9,
+        "startColumn": 1,
+        "endColumn": 4,
+        "startOffset": 29,
+        "endOffset": 46
+       }
+      },
+      {
+       "type": "footnote",
+       "key": "n",
+       "namespace": "footnote",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "x",
+           "pos": {
+            "startLine": 11,
+            "endLine": 11,
+            "startColumn": 7,
+            "endColumn": 8,
+            "startOffset": 54,
+            "endOffset": 55
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 11,
+          "endLine": 11,
+          "startColumn": 7,
+          "endColumn": 8,
+          "startOffset": 54,
+          "endOffset": 55
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 11,
+        "endLine": 11,
+        "startColumn": 1,
+        "endColumn": 8,
+        "startOffset": 48,
+        "endOffset": 55
+       }
+      }
+     ],
+     "srcByteLength": 55,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
    "id": "html-28",
    "document": "html.md",
    "number": 28,
@@ -60530,6 +62041,187 @@
    "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
   },
   {
+   "id": "html-71",
+   "document": "html.md",
+   "number": 71,
+   "section": "Tables",
+   "clauses": [
+    "C2-H-055",
+    "C2-H-056",
+    "C2-H-057",
+    "C2-H-058",
+    "C2-H-061",
+    "C2-H-152",
+    "C2-H-153",
+    "C2-H-200"
+   ],
+   "kind": "render",
+   "input": "{valigns=\"middle\"}\n| a |\n|{?v style=\"color: red;\"} b |",
+   "options": {},
+   "expected": {
+    "html": "<table>\n  <tbody>\n    <tr><td style=\"vertical-align: middle;\">a</td></tr>\n    <tr><td style=\"color: red; vertical-align: bottom;\">b</td></tr>\n  </tbody>\n</table>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column",
+         "valign": "middle",
+         "resolvedValign": "middle"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "a",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 3,
+                  "endColumn": 4,
+                  "startOffset": 21,
+                  "endOffset": 22
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 3,
+                "endColumn": 4,
+                "startOffset": 21,
+                "endOffset": 22
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 2,
+              "endColumn": 5,
+              "startOffset": 20,
+              "endOffset": 23
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 2,
+            "endLine": 2,
+            "startColumn": 1,
+            "endColumn": 6,
+            "startOffset": 19,
+            "endOffset": 24
+           }
+          },
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "b",
+                 "pos": {
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 27,
+                  "endColumn": 28,
+                  "startOffset": 51,
+                  "endOffset": 52
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 3,
+                "endLine": 3,
+                "startColumn": 27,
+                "endColumn": 28,
+                "startOffset": 51,
+                "endOffset": 52
+               }
+              }
+             ],
+             "attrs": {
+              "keyValues": [
+               [
+                "style",
+                "color: red;"
+               ]
+              ]
+             },
+             "valign": "bottom",
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 2,
+              "endColumn": 29,
+              "startOffset": 26,
+              "endOffset": 53
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 3,
+            "endLine": 3,
+            "startColumn": 1,
+            "endColumn": 30,
+            "startOffset": 25,
+            "endOffset": 54
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 2,
+          "endLine": 3,
+          "startColumn": 1,
+          "endColumn": 30,
+          "startOffset": 19,
+          "endOffset": 54
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 3,
+        "startColumn": 1,
+        "endColumn": 30,
+        "startOffset": 0,
+        "endOffset": 54
+       }
+      }
+     ],
+     "srcByteLength": 54,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
    "id": "html-12",
    "document": "html.md",
    "number": 12,
@@ -60539,7 +62231,6 @@
     "C2-H-056",
     "C2-H-057",
     "C2-H-058",
-    "C2-H-059",
     "C2-H-061",
     "C2-H-152",
     "C2-H-153",
@@ -60871,7 +62562,6 @@
     "C2-H-066",
     "C2-H-067",
     "C2-H-068",
-    "C2-H-135",
     "C2-H-149",
     "C2-H-150",
     "C2-H-170",
@@ -61376,7 +63066,6 @@
     "C2-H-066",
     "C2-H-067",
     "C2-H-068",
-    "C2-H-135",
     "C2-H-149",
     "C2-H-150",
     "C2-H-170",
@@ -61620,7 +63309,6 @@
     "C2-H-066",
     "C2-H-067",
     "C2-H-068",
-    "C2-H-135",
     "C2-H-149",
     "C2-H-150",
     "C2-H-170",
@@ -62105,7 +63793,6 @@
     "C2-H-066",
     "C2-H-067",
     "C2-H-068",
-    "C2-H-135",
     "C2-H-149",
     "C2-H-150",
     "C2-H-170",
@@ -62653,7 +64340,6 @@
     "C2-H-066",
     "C2-H-067",
     "C2-H-068",
-    "C2-H-135",
     "C2-H-149",
     "C2-H-150",
     "C2-H-170",
@@ -63294,6 +64980,163 @@
    "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
   },
   {
+   "id": "html-70",
+   "document": "html.md",
+   "number": 70,
+   "section": "Comments, frontmatter and definitions",
+   "clauses": [
+    "C2-H-069",
+    "C2-H-070",
+    "C2-H-071",
+    "C2-H-133",
+    "C2-H-171"
+   ],
+   "kind": "render",
+   "input": "- {{ a.txt @code }}\n  ^ cap\n- b",
+   "options": {},
+   "expected": {
+    "html": "<ul>\n  <li>\n    <p>{{ a.txt @code }}</p>\n    <p>cap</p>\n  </li>\n  <li>b</li>\n</ul>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "list",
+       "marker": {
+        "kind": "bullet",
+        "char": "-"
+       },
+       "spacing": "tight",
+       "children": [
+        {
+         "type": "list_item",
+         "children": [
+          {
+           "type": "include",
+           "path": "a.txt",
+           "options": {
+            "code": true
+           },
+           "pos": {
+            "startLine": 1,
+            "endLine": 2,
+            "startColumn": 3,
+            "endColumn": 8,
+            "startOffset": 2,
+            "endOffset": 27
+           },
+           "caption": {
+            "type": "caption",
+            "children": [
+             {
+              "type": "paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "cap",
+                "pos": {
+                 "startLine": 2,
+                 "endLine": 2,
+                 "startColumn": 5,
+                 "endColumn": 8,
+                 "startOffset": 24,
+                 "endOffset": 27
+                }
+               }
+              ],
+              "pos": {
+               "startLine": 2,
+               "endLine": 2,
+               "startColumn": 5,
+               "endColumn": 8,
+               "startOffset": 24,
+               "endOffset": 27
+              }
+             }
+            ],
+            "pos": {
+             "startLine": 2,
+             "endLine": 2,
+             "startColumn": 3,
+             "endColumn": 8,
+             "startOffset": 22,
+             "endOffset": 27
+            }
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 2,
+          "startColumn": 1,
+          "endColumn": 8,
+          "startOffset": 0,
+          "endOffset": 27
+         }
+        },
+        {
+         "type": "list_item",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "text",
+             "value": "b",
+             "pos": {
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 3,
+              "endColumn": 4,
+              "startOffset": 30,
+              "endOffset": 31
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 3,
+            "endLine": 3,
+            "startColumn": 3,
+            "endColumn": 4,
+            "startOffset": 30,
+            "endOffset": 31
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 3,
+          "endLine": 3,
+          "startColumn": 1,
+          "endColumn": 4,
+          "startOffset": 28,
+          "endOffset": 31
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 3,
+        "startColumn": 1,
+        "endColumn": 4,
+        "startOffset": 0,
+        "endOffset": 31
+       }
+      }
+     ],
+     "srcByteLength": 31,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    },
+    "diagnostics": [
+     "include-unresolved"
+    ]
+   },
+   "status": "verified",
+   "reason": "the HTML was produced by the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (conventions of the document)"
+  },
+  {
    "id": "html-16",
    "document": "html.md",
    "number": 16,
@@ -63683,7 +65526,6 @@
     "C2-H-081",
     "C2-H-082",
     "C2-H-083",
-    "C2-H-084",
     "C2-H-085",
     "C2-H-086"
    ],
@@ -65167,7 +67009,6 @@
    "clauses": [
     "C2-H-095",
     "C2-H-096",
-    "C2-H-097",
     "C2-H-098",
     "C2-H-099"
    ],
@@ -65627,7 +67468,6 @@
     "C2-H-115",
     "C2-H-116",
     "C2-H-117",
-    "C2-H-118",
     "C2-H-119",
     "C2-H-120"
    ],
@@ -65712,7 +67552,6 @@
     "C2-H-115",
     "C2-H-116",
     "C2-H-117",
-    "C2-H-118",
     "C2-H-119",
     "C2-H-120"
    ],
@@ -67280,6 +69119,117 @@
       }
      ],
      "srcByteLength": 77,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "unverified",
+   "reason": "the HTML was written by hand from the clauses and has not been run through any engine (conventions of the document)"
+  },
+  {
+   "id": "html-69",
+   "document": "html.md",
+   "number": 69,
+   "section": "Options",
+   "clauses": [
+    "C2-H-121",
+    "C2-H-122",
+    "C2-H-168",
+    "C2-H-123",
+    "C2-H-124",
+    "C2-H-125",
+    "C2-H-126",
+    "C2-H-127",
+    "C2-H-128",
+    "C2-H-129",
+    "C2-H-130",
+    "C2-H-131",
+    "C2-H-132",
+    "C2-H-159",
+    "C2-H-160",
+    "C2-H-161",
+    "C2-H-162",
+    "C2-H-172",
+    "C2-H-163",
+    "C2-H-165",
+    "C2-H-166",
+    "C2-H-167",
+    "C2-H-164",
+    "C2-H-177"
+   ],
+   "kind": "render",
+   "input": "- $$`x`",
+   "options": {
+    "mode": "static"
+   },
+   "expected": {
+    "html": "<ul>\n  <li>\n    <pre><code class=\"language-math\">x\n</code></pre>\n  </li>\n</ul>",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "list",
+       "marker": {
+        "kind": "bullet",
+        "char": "-"
+       },
+       "spacing": "tight",
+       "children": [
+        {
+         "type": "list_item",
+         "children": [
+          {
+           "type": "paragraph",
+           "children": [
+            {
+             "type": "math",
+             "display": true,
+             "value": "x",
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 3,
+              "endColumn": 8,
+              "startOffset": 2,
+              "endOffset": 7
+             }
+            }
+           ],
+           "role": "math",
+           "pos": {
+            "startLine": 1,
+            "endLine": 1,
+            "startColumn": 3,
+            "endColumn": 8,
+            "startOffset": 2,
+            "endOffset": 7
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 8,
+          "startOffset": 0,
+          "endOffset": 7
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 1,
+        "startColumn": 1,
+        "endColumn": 8,
+        "startOffset": 0,
+        "endOffset": 7
+       }
+      }
+     ],
+     "srcByteLength": 7,
      "stages": [
       "referenceResolution",
       "tableAlignment"
@@ -69416,11 +71366,9 @@
    "clauses": [
     "C2-W-017",
     "C2-W-018",
-    "C2-W-019",
     "C2-W-020",
     "C2-W-021",
     "C2-W-022",
-    "C2-W-132",
     "C2-W-024",
     "C2-W-128",
     "C2-W-129",
@@ -69585,11 +71533,9 @@
    "clauses": [
     "C2-W-017",
     "C2-W-018",
-    "C2-W-019",
     "C2-W-020",
     "C2-W-021",
     "C2-W-022",
-    "C2-W-132",
     "C2-W-024",
     "C2-W-128",
     "C2-W-129",
@@ -69773,8 +71719,6 @@
     "C2-W-120",
     "C2-W-040",
     "C2-W-041",
-    "C2-W-042",
-    "C2-W-043",
     "C2-W-044",
     "C2-W-045",
     "C2-W-046",
@@ -69785,7 +71729,6 @@
     "C2-W-051",
     "C2-W-052",
     "C2-W-053",
-    "C2-W-054",
     "C2-W-055",
     "C2-W-056",
     "C2-W-057",
@@ -69824,6 +71767,287 @@
    },
    "status": "unverified",
    "reason": "the written source was written by hand from the clauses (writer.md, conventions)"
+  },
+  {
+   "id": "writer-16",
+   "document": "writer.md",
+   "number": 16,
+   "section": "Canonical forms: tables",
+   "clauses": [
+    "C2-W-061",
+    "C2-W-062",
+    "C2-W-063",
+    "C2-W-064",
+    "C2-W-065",
+    "C2-W-066",
+    "C2-W-067",
+    "C2-W-068",
+    "C2-W-118",
+    "C2-W-119",
+    "C2-W-135",
+    "C2-W-136"
+   ],
+   "kind": "write",
+   "input": "|={>^} A |={?v} B |\n|{~~ .c} a | b |",
+   "options": {},
+   "expected": {
+    "carve": "|={>^} A |={?v} B |\n|{~~ .c} a | b |\n",
+    "tree": {
+     "type": "document",
+     "astVersion": "2.0",
+     "children": [
+      {
+       "type": "table",
+       "columns": [
+        {
+         "type": "table_column",
+         "resolvedAlign": "right",
+         "resolvedValign": "top"
+        },
+        {
+         "type": "table_column",
+         "resolvedValign": "bottom"
+        }
+       ],
+       "children": [
+        {
+         "type": "table_head",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "A",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 8,
+                  "endColumn": 9,
+                  "startOffset": 7,
+                  "endOffset": 8
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 8,
+                "endColumn": 9,
+                "startOffset": 7,
+                "endOffset": 8
+               }
+              }
+             ],
+             "align": "right",
+             "valign": "top",
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 2,
+              "endColumn": 10,
+              "startOffset": 1,
+              "endOffset": 9
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": true,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "B",
+                 "pos": {
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 17,
+                  "endColumn": 18,
+                  "startOffset": 16,
+                  "endOffset": 17
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 1,
+                "endLine": 1,
+                "startColumn": 17,
+                "endColumn": 18,
+                "startOffset": 16,
+                "endOffset": 17
+               }
+              }
+             ],
+             "valign": "bottom",
+             "pos": {
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 11,
+              "endColumn": 19,
+              "startOffset": 10,
+              "endOffset": 18
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 1,
+            "endLine": 1,
+            "startColumn": 1,
+            "endColumn": 20,
+            "startOffset": 0,
+            "endOffset": 19
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 1,
+          "endLine": 1,
+          "startColumn": 1,
+          "endColumn": 20,
+          "startOffset": 0,
+          "endOffset": 19
+         }
+        },
+        {
+         "type": "table_body",
+         "children": [
+          {
+           "type": "table_row",
+           "children": [
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "a",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 10,
+                  "endColumn": 11,
+                  "startOffset": 29,
+                  "endOffset": 30
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 10,
+                "endColumn": 11,
+                "startOffset": 29,
+                "endOffset": 30
+               }
+              }
+             ],
+             "align": "center",
+             "valign": "middle",
+             "attrs": {
+              "classes": [
+               "c"
+              ]
+             },
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 2,
+              "endColumn": 12,
+              "startOffset": 21,
+              "endOffset": 31
+             }
+            },
+            {
+             "type": "table_cell",
+             "header": false,
+             "children": [
+              {
+               "type": "cell_paragraph",
+               "children": [
+                {
+                 "type": "text",
+                 "value": "b",
+                 "pos": {
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 14,
+                  "endColumn": 15,
+                  "startOffset": 33,
+                  "endOffset": 34
+                 }
+                }
+               ],
+               "pos": {
+                "startLine": 2,
+                "endLine": 2,
+                "startColumn": 14,
+                "endColumn": 15,
+                "startOffset": 33,
+                "endOffset": 34
+               }
+              }
+             ],
+             "pos": {
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 13,
+              "endColumn": 16,
+              "startOffset": 32,
+              "endOffset": 35
+             }
+            }
+           ],
+           "pos": {
+            "startLine": 2,
+            "endLine": 2,
+            "startColumn": 1,
+            "endColumn": 17,
+            "startOffset": 20,
+            "endOffset": 36
+           }
+          }
+         ],
+         "pos": {
+          "startLine": 2,
+          "endLine": 2,
+          "startColumn": 1,
+          "endColumn": 17,
+          "startOffset": 20,
+          "endOffset": 36
+         }
+        }
+       ],
+       "pos": {
+        "startLine": 1,
+        "endLine": 2,
+        "startColumn": 1,
+        "endColumn": 17,
+        "startOffset": 0,
+        "endOffset": 36
+       }
+      }
+     ],
+     "srcByteLength": 36,
+     "stages": [
+      "referenceResolution",
+      "tableAlignment"
+     ]
+    }
+   },
+   "status": "verified",
+   "reason": "the written source was produced by carve fmt of the 0.1 reference engine, because the 0.2 rule equals 0.1 behavior for that input (writer.md, conventions)"
   },
   {
    "id": "writer-13",
@@ -70476,7 +72700,6 @@
     "C2-W-069",
     "C2-W-070",
     "C2-W-071",
-    "C2-W-072",
     "C2-W-073",
     "C2-W-074",
     "C2-W-075",
@@ -70582,7 +72805,6 @@
     "C2-W-090",
     "C2-W-091",
     "C2-W-125",
-    "C2-W-121",
     "C2-W-092",
     "C2-W-093",
     "C2-W-094",
@@ -70714,7 +72936,6 @@
     "C2-W-090",
     "C2-W-091",
     "C2-W-125",
-    "C2-W-121",
     "C2-W-092",
     "C2-W-093",
     "C2-W-094",
@@ -77634,6 +79855,367 @@
    "reason": "the reference importer at carve-js next2 commit 0266e137 gives this tree and this source and reports the codes of the Reported line (import-html.md, conventions)"
   },
   {
+   "id": "import-html-50",
+   "document": "import-html.md",
+   "number": 50,
+   "section": "Tables",
+   "clauses": [
+    "C2-M-037",
+    "C2-M-038",
+    "C2-M-039",
+    "C2-M-040",
+    "C2-M-041"
+   ],
+   "kind": "import",
+   "html": "<table><thead><tr><th>h</th></tr></thead><tfoot><tr><td>f</td></tr></tfoot><tbody><tr><td>b</td></tr></tbody></table>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "h"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "b"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_foot",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "f"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ]
+     }
+    ],
+    "carve": "{footer-rows=1}\n|= h |\n| b |\n| f |\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-49",
+   "document": "import-html.md",
+   "number": 49,
+   "section": "Tables",
+   "clauses": [
+    "C2-M-037",
+    "C2-M-038",
+    "C2-M-039",
+    "C2-M-040",
+    "C2-M-041"
+   ],
+   "kind": "import",
+   "html": "<table><tr><td><p></p></td><td>a</td></tr></table>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": []
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ]
+     }
+    ],
+    "carve": "| | a |\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-58",
+   "document": "import-html.md",
+   "number": 58,
+   "section": "Tables",
+   "clauses": [
+    "C2-M-037",
+    "C2-M-038",
+    "C2-M-039",
+    "C2-M-040",
+    "C2-M-041"
+   ],
+   "kind": "import",
+   "html": "<table>\n<thead><tr><th style=\"text-align: right; vertical-align: top;\">Qty</th><th valign=\"bottom\">Note</th></tr></thead>\n<tbody><tr><td style=\"text-align: right; vertical-align: top;\">1</td><td style=\"vertical-align: middle;\">a</td></tr></tbody>\n</table>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_head",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "Qty"
+               }
+              ]
+             }
+            ],
+            "align": "right",
+            "valign": "top"
+           },
+           {
+            "type": "table_cell",
+            "header": true,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "Note"
+               }
+              ]
+             }
+            ],
+            "valign": "bottom"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "1"
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ],
+            "valign": "middle"
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column"
+       },
+       {
+        "type": "table_column"
+       }
+      ]
+     }
+    ],
+    "carve": "|={>^} Qty |={?v} Note |\n| 1 |{?~} a |\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-54",
+   "document": "import-html.md",
+   "number": 54,
+   "section": "Tables",
+   "clauses": [
+    "C2-M-037",
+    "C2-M-038",
+    "C2-M-039",
+    "C2-M-040",
+    "C2-M-041"
+   ],
+   "kind": "import",
+   "html": "<table><tr><td ALIGN=\"CENTER\" valign=\"center\">a</td></tr></table>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column",
+        "align": "center"
+       }
+      ]
+     }
+    ],
+    "carve": "{aligns=center}\n| a |\n",
+    "diagnostics": [
+     "import-attribute-dropped"
+    ]
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
    "id": "import-html-48",
    "document": "import-html.md",
    "number": 48,
@@ -77938,6 +80520,67 @@
    "reason": "the reference importer at carve-js next2 commit 0266e137 gives this tree and this source and reports the codes of the Reported line (import-html.md, conventions)"
   },
   {
+   "id": "import-html-53",
+   "document": "import-html.md",
+   "number": 53,
+   "section": "Tables",
+   "clauses": [
+    "C2-M-037",
+    "C2-M-038",
+    "C2-M-039",
+    "C2-M-040",
+    "C2-M-041"
+   ],
+   "kind": "import",
+   "html": "<table><colgroup><col style=\"width: 150%;\"></colgroup><tr><td>a</td></tr></table>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ]
+     }
+    ],
+    "carve": "| a |\n",
+    "diagnostics": [
+     "import-attribute-dropped"
+    ]
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
    "id": "import-html-18",
    "document": "import-html.md",
    "number": 18,
@@ -78105,6 +80748,161 @@
    "reason": "the reference importer at carve-js next2 commit 0266e137 gives this tree and this source and reports the codes of the Reported line (import-html.md, conventions)"
   },
   {
+   "id": "import-html-55",
+   "document": "import-html.md",
+   "number": 55,
+   "section": "Figures",
+   "clauses": [
+    "C2-M-042",
+    "C2-M-043"
+   ],
+   "kind": "import",
+   "html": "<figure class=\"wide\" id=\"f\"><table class=\"t\" id=\"t\"><tr><td>a</td></tr></table><figcaption>c</figcaption></figure>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "table",
+      "children": [
+       {
+        "type": "table_body",
+        "children": [
+         {
+          "type": "table_row",
+          "children": [
+           {
+            "type": "table_cell",
+            "header": false,
+            "children": [
+             {
+              "type": "cell_paragraph",
+              "children": [
+               {
+                "type": "text",
+                "value": "a"
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "columns": [
+       {
+        "type": "table_column"
+       }
+      ],
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "c"
+          }
+         ]
+        }
+       ]
+      },
+      "attrs": {
+       "id": "t",
+       "classes": [
+        "wide",
+        "t"
+       ]
+      }
+     }
+    ],
+    "carve": "{#t .wide .t}\n| a |\n^ c\n",
+    "diagnostics": [
+     "import-attribute-dropped"
+    ]
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-56",
+   "document": "import-html.md",
+   "number": 56,
+   "section": "Figures",
+   "clauses": [
+    "C2-M-042",
+    "C2-M-043"
+   ],
+   "kind": "import",
+   "html": "<figure class=\"k\"><pre>x</pre></figure><figure><figcaption>c</figcaption></figure>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "code_block",
+      "value": "x\n",
+      "attrs": {
+       "classes": [
+        "k"
+       ]
+      }
+     },
+     {
+      "type": "figure_group",
+      "children": [],
+      "caption": {
+       "type": "caption",
+       "children": [
+        {
+         "type": "paragraph",
+         "children": [
+          {
+           "type": "text",
+           "value": "c"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    "carve": "{.k}\n```\nx\n```\n\n::: figure\n\n:::\n^ c\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-57",
+   "document": "import-html.md",
+   "number": 57,
+   "section": "Figures",
+   "clauses": [
+    "C2-M-042",
+    "C2-M-043"
+   ],
+   "kind": "import",
+   "html": "<p class=\"  \">x</p>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ]
+     }
+    ],
+    "carve": "x\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
+  },
+  {
    "id": "import-html-20",
    "document": "import-html.md",
    "number": 20,
@@ -78228,6 +81026,44 @@
    },
    "status": "verified",
    "reason": "the reference importer at carve-js next2 commit 0266e137 gives this tree and this source and reports the codes of the Reported line (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-52",
+   "document": "import-html.md",
+   "number": 52,
+   "section": "Conventions",
+   "clauses": [
+    "C2-M-035"
+   ],
+   "kind": "import",
+   "html": "<p><span class=\"ext-1\">x</span></p>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "span",
+        "children": [
+         {
+          "type": "text",
+          "value": "x"
+         }
+        ],
+        "attrs": {
+         "classes": [
+          "ext-1"
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "carve": "[x]{.ext-1}\n"
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
   },
   {
    "id": "import-html-46",
@@ -79174,6 +82010,52 @@
    },
    "status": "verified",
    "reason": "the reference importer at carve-js next2 commit 0266e137 gives this tree and this source and reports the codes of the Reported line (import-html.md, conventions)"
+  },
+  {
+   "id": "import-html-51",
+   "document": "import-html.md",
+   "number": 51,
+   "section": "Normalization",
+   "clauses": [
+    "C2-M-068",
+    "C2-M-069",
+    "C2-M-070",
+    "C2-M-071",
+    "C2-M-072",
+    "C2-M-073",
+    "C2-M-074",
+    "C2-M-075"
+   ],
+   "kind": "import",
+   "html": "<p align=\"right\" style=\"text-align: left;\">x</p>",
+   "options": {},
+   "expected": {
+    "children": [
+     {
+      "type": "paragraph",
+      "children": [
+       {
+        "type": "text",
+        "value": "x"
+       }
+      ],
+      "attrs": {
+       "keyValues": [
+        [
+         "align",
+         "left"
+        ]
+       ]
+      }
+     }
+    ],
+    "carve": "{align=left}\nx\n",
+    "diagnostics": [
+     "import-attribute-dropped"
+    ]
+   },
+   "status": "unverified",
+   "reason": "the reference importer differs: the tree and the report were written by hand from the clauses, and the source was produced by the 0.2 writer from that tree (import-html.md, conventions)"
   },
   {
    "id": "import-html-36",

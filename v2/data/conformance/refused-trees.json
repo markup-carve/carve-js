@@ -98,8 +98,7 @@
    "id": "unknown-core-field",
    "clauses": [
     "C2-A-018",
-    "C2-A-028",
-    "C2-A-169"
+    "C2-A-028"
    ],
    "reason": "a field the schema does not name on a paragraph",
    "refusedBy": "schema",
@@ -123,7 +122,7 @@
   {
    "id": "unknown-core-field-nested",
    "clauses": [
-    "C2-A-169"
+    "C2-A-028"
    ],
    "reason": "a field the schema does not name on a nested text node",
    "refusedBy": "schema",
@@ -3812,6 +3811,47 @@
       "name": "org.example.n",
       "version": "1",
       "props": {},
+      "children": [],
+      "fallback": [
+       {
+        "type": "paragraph",
+        "children": [
+         {
+          "type": "text",
+          "value": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "default-empty-resource-ids",
+   "clauses": [
+    "C2-A-058",
+    "C2-X-037"
+   ],
+   "reason": "an empty resourceIds list on an extension node, a second encoding of absent resource ids",
+   "refusedBy": "schema",
+   "tree": {
+    "type": "document",
+    "astVersion": "2.0",
+    "extensions": [
+     {
+      "name": "org.example.n",
+      "version": "1",
+      "required": false,
+      "slots": []
+     }
+    ],
+    "children": [
+     {
+      "type": "block_extension",
+      "name": "org.example.n",
+      "version": "1",
+      "resourceIds": [],
       "children": [],
       "fallback": [
        {

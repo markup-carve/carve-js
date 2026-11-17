@@ -36,6 +36,7 @@ export const UNDERSCORE = 95
 export const BACKTICK = 96
 export const LOWER_A = 97
 export const LOWER_I = 105
+export const LOWER_V = 118
 export const LOWER_X = 120
 export const LOWER_Z = 122
 export const BRACE_OPEN = 123

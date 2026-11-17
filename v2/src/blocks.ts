@@ -3,7 +3,7 @@
 // Clause ids (C2-B-nnn) refer to the block chapter of the 0.2 syntax spec.
 import {
   BACKSLASH, BACKTICK, BRACE_OPEN, BYTE_ORDER_MARK, CARET, COLON, CR, DIGIT_0, DIGIT_9, EQUALS, GREATER, HYPHEN, LESS, LOWER_A,
-  LOWER_I, LOWER_X, PAREN_CLOSE, PERCENT, PIPE, STAR, TILDE, UPPER_A, UPPER_I, UPPER_X,
+  LOWER_I, LOWER_X, PAREN_CLOSE, PERCENT, PIPE, QUESTION, SPACE, STAR, TAB, TILDE, UPPER_A, UPPER_I, UPPER_X,
 } from './chars.ts'
 import {
   FIRST_CHARACTER_SHAPES, SHAPE_ABBREVIATION_DEFINITION, SHAPE_ATTRIBUTE_LINE, SHAPE_BULLET, SHAPE_CAPTION,
@@ -22,7 +22,7 @@ import {
   isTextLeaf, ITEM, LINE_BLOCK, LINK_DEFINITION, ORDERED_LIST, PARAGRAPH, QUOTE, ROW, TABLE, TERM, THEMATIC_BREAK,
 } from './kinds.ts'
 import {
-  attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, continuationClosingPipe, countValue,
+  attributeBlocksEnd, attributeKeyValue, bulletMarkerEnd, captionContentStart, cellMarksLength, continuationClosingPipe, countValue,
   decimalValue, descriptionMarkEnd, divRunLength, divSigil, fenceOpenerLength, fenceRunLength, footnoteMarkerEnd, headingLevel,
   isAbbreviation, isAttributeLine, isBareRun, isDefinition, isDescriptionListMark, isDisplayMathOnly, isFenceLine,
   isFrontmatterCloser, isFrontmatterOpener, isLineComment,
@@ -850,13 +850,13 @@ function writeCell(state: BlockState, pipe: number, next: number): number {
   // C2-B-171: the header cell mark, a glued brace block, one space.
   let p = pipe + 1
   let flags = 0
-  if (src.charCodeAt(p) === EQUALS) {
+  if (src.charCodeAt(p) === EQUALS && isHeaderMarkEnd(src, p + 1, next)) {
     flags = FLAG_HEADER
     p++
   }
   const blocksEnd = attributeBlocksEnd(src, p, next, true)
-  // C2-B-182: the alignment mark comes first in the brace block.
-  const alignment = blocksEnd > p ? alignmentMark(src.charCodeAt(p + 1)) : 0
+  // C2-B-182: the alignment marks come first in the brace block, the horizontal one in the low byte.
+  const alignment = blocksEnd > p ? alignmentMarks(src, p) : 0
   if (blocksEnd > p) flags |= FLAG_CELL_ATTRIBUTES
   const content = skipSpaces(src, blocksEnd, next)
   const contentEnd = trimEnd(src, content, next)
@@ -868,8 +868,19 @@ function writeCell(state: BlockState, pipe: number, next: number): number {
   return flags
 }
 
-function alignmentMark(code: number): number {
-  return code === LESS || code === GREATER || code === TILDE ? code : 0
+/** C2-B-171: `=` is the header mark only before a space, a tab, `{`, an alignment mark or the end of the cell. */
+function isHeaderMarkEnd(src: string, at: number, next: number): boolean {
+  if (at >= next) return true
+  const code = src.charCodeAt(at)
+  return code === SPACE || code === TAB || code === BRACE_OPEN || code === LESS || code === GREATER || code === QUESTION ||
+    code === TILDE
+}
+
+function alignmentMarks(src: string, pos: number): number {
+  const marks = cellMarksLength(src, pos)
+  if (marks === 0) return 0
+  const horizontal = src.charCodeAt(pos + 1)
+  return (horizontal === QUESTION ? 0 : horizontal) | (marks === 2 ? src.charCodeAt(pos + 2) << 8 : 0)
 }
 
 /** C2-B-172: a cell that holds only `<` or `^` is a span mark. */

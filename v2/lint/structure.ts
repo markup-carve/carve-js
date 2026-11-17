@@ -1,4 +1,4 @@
-import { type Node } from '../src/ast.ts'
+import { type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
@@ -73,7 +73,7 @@ function tableAttribute(node: Node, path: string, context: LintContext): void {
   }
 }
 
-const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows']
 
 /** C2-B-227: a table keeps a key it reads in `attrs` only when the value is invalid, or `header-rows` on a pipe table. */
 function keptTableKeys(node: Node): string[] {
@@ -388,7 +388,7 @@ function semanticValue(node: Node, path: string, context: LintContext): void {
 
 function tableColumnArity(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table') return
-  for (const key of ['aligns', 'widths']) {
+  for (const key of ['aligns', 'valigns', 'widths']) {
     const value = attributeValue(node, context, key)
     // C2-B-211: an invalid list sets no column, and table-attribute-invalid reports it.
     if (value === undefined || keptTableKeys(node).includes(key)) continue
@@ -453,13 +453,24 @@ function unattachedInline(node: Node, path: string, context: LintContext): void 
     range[0] + end + 1, path)
 }
 
+/** The 0.1.13 glued alignment prefix of a cell: a horizontal mark or `?`, then an optional vertical mark (C2-B-182). */
+function oldAlignmentPrefix(source: string): string {
+  const vertical = source[1] === '^' || source[1] === 'v' || source[1] === '~'
+  if (source[0] === '<' || source[0] === '>' || source[0] === '~') return vertical ? source.slice(0, 2) : source[0]
+  return source[0] === '?' && vertical ? source.slice(0, 2) : ''
+}
+
 function deprecatedCellAlignment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell') return
-  const source = raw(node, context).trimStart()
-  const prefix = source[0]
-  if (prefix !== '<' && prefix !== '>' && prefix !== '~') return
-  if (source[1] !== ' ' && source[1] !== '\t') return
-  if (source.slice(1).trim() === '') return
+  let source = raw(node, context)
+  // C2-B-171: the header mark stands before the prefix.
+  if (node.header && source.startsWith('=')) source = source.slice(1)
+  source = source.trimStart()
+  const prefix = oldAlignmentPrefix(source)
+  if (prefix === '') return
+  const after = source[prefix.length]
+  if (after !== ' ' && after !== '\t') return
+  if (source.slice(prefix.length).trim() === '') return
   reportNode('deprecated-cell-alignment', node, path, context, { prefix, braced: `{${prefix}}` })
 }
 
@@ -666,18 +677,22 @@ function footnoteWhitespace(node: Node, path: string, context: LintContext): voi
   } else if (twin === undefined) context.state.footnoteLabels.set(node.key, label)
 }
 
+/** C2-B-213: a head mark and an `aligns` or `valigns` entry that set the same axis of a column. */
 function tableColumnOverlap(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table' || attributeValue(node, context, 'aligns') === undefined) return
+  if (node.type !== 'table') return
+  if (attributeValue(node, context, 'aligns') === undefined && attributeValue(node, context, 'valigns') === undefined) return
   const head = node.children.find((child) => child.type === 'table_head')
   const first = head?.type === 'table_head' ? head.children.find((child) => child.type === 'table_row') : undefined
   if (first?.type !== 'table_row') return
-  for (let at = 0; at < node.columns.length; at++) {
-    // C2-A-095: the column fields carry the fact that `aligns` or `widths` wrote them.
-    const column = node.columns[at]
-    if ((column?.align !== undefined || column?.width !== undefined) && first.children[at]?.align !== undefined) {
-      reportNode('table-column-overlap', node, path, context, { n: String(at + 1) })
-    }
-  }
+  node.columns.forEach((column, at) => {
+    // C2-A-095: the column fields carry the fact that `aligns` or `valigns` wrote them.
+    if (overlaps(column, first.children[at])) reportNode('table-column-overlap', node, path, context, { n: String(at + 1) })
+  })
+}
+
+function overlaps(column: TableColumnNode, cell: TableCellNode | undefined): boolean {
+  if (cell === undefined) return false
+  return (column.align !== undefined && cell.align !== undefined) || (column.valign !== undefined && cell.valign !== undefined)
 }
 
 function tightBlankLine(node: Node, path: string, context: LintContext): void {
@@ -854,10 +869,12 @@ function allColons(value: string): boolean {
   return true
 }
 
+const NEAR_MISSES = new Map([['align', 'aligns'], ['width', 'widths']])
+
 function consumedNearMiss(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table') return
   for (const [word] of node.attrs?.keyValues ?? []) {
-    const key = word === 'align' ? 'aligns' : word === 'width' ? 'widths' : undefined
+    const key = NEAR_MISSES.get(word)
     if (key !== undefined) reportNode('consumed-key-near-miss', node, path, context, { word, key })
   }
 }

@@ -153,6 +153,7 @@ export const AST_RESULTS: ReadonlyMap<string, readonly ResultField[]> = new Map(
   ]],
   ["table_column", [
     {"field":"resolvedAlign"},
+    {"field":"resolvedValign"},
   ]],
   ["table_foot", [
   ]],

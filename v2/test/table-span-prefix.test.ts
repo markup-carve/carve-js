@@ -25,13 +25,19 @@ function rows(src: string): Cell[][] {
 
 describe('a span mark behind a cell prefix', () => {
   it('C2-B-172, C2-B-173: a mark behind a header mark that joins nothing is a header cell that holds the mark', () => {
-    for (const src of ['|= ^|', '|= <|', '|=^|', '|= ^ |', '|={.x} ^|', '|={<} ^|']) {
+    for (const src of ['|= ^|', '|= <|', '|= ^ |', '|={.x} ^|', '|={<} ^|']) {
       const [cell] = rows(src)[0]!
       const mark = src.includes('<|') ? '<' : '^'
       expect(cell, src).toMatchObject({ header: true })
       expect(cell!.children[0]!.children, src).toEqual([expect.objectContaining({ type: 'text', value: mark })])
       expect(render(src), src).toMatch(mark === '<' ? />&lt;</u : />\^</u)
     }
+  })
+
+  it('C2-B-171: `=` glued to `^` is no header mark, so `|=^|` is a data cell that holds `=^` (CC-093)', () => {
+    const [cell] = rows('|=^|')[0]!
+    expect(cell).toMatchObject({ header: false })
+    expect(cell!.children[0]!.children).toEqual([expect.objectContaining({ type: 'text', value: '=^' })])
   })
 
   it('C2-B-173: such a cell keeps its header mark in a row with a body cell, and the row is no head row', () => {

@@ -9,7 +9,7 @@ import { type Attributes, emptyAttributes, readAttributeLines, readGluedBlocks, 
 import {
   commentValue, contentNodes, FLOW_CELL, FLOW_UNPLACED, joinFragment, leafInlines, noteLeaf, place, setAttributes, type TreeContext,
 } from './ast-inline.ts'
-import { DIGIT_0, DIGIT_9, DOT, EQUALS, GREATER, LESS, PERCENT } from './chars.ts'
+import { CARET, DIGIT_0, DIGIT_9, DOT, GREATER, LESS, PERCENT, TILDE } from './chars.ts'
 import { readDelimitedTable } from './delimited.ts'
 import { DELIMITED_MALFORMED } from './parse-findings.ts'
 import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
@@ -53,6 +53,12 @@ function alignmentOf(mark: number): 'left' | 'right' | 'center' {
   return mark === GREATER ? 'right' : 'center'
 }
 
+/** C2-B-182: `^` top, `~` middle, `v` bottom. */
+function valignOf(mark: number): 'top' | 'middle' | 'bottom' {
+  if (mark === CARET) return 'top'
+  return mark === TILDE ? 'middle' : 'bottom'
+}
+
 /** C2-A-092: the cell a span mark stood in. It has no content of its own and a covering cell holds the counts. */
 function coveredCell(ctx: TreeContext, span: 'rowspan' | 'colspan', marks: Marks): TableCellNode {
   const cell: TableCellNode = { type: 'table_cell', header: false, span, children: [] }
@@ -75,7 +81,7 @@ interface Marks {
 function cellAttributes(ctx: TreeContext, node: BlockNode): Attributes | null {
   if ((node.flags & FLAG_CELL_ATTRIBUTES) === 0) return null
   const attributes = emptyAttributes()
-  const start = node.start + (ctx.src.charCodeAt(node.start + 1) === EQUALS ? 2 : 1)
+  const start = node.start + ((node.flags & FLAG_HEADER) !== 0 ? 2 : 1)
   // C2-I-034: the prefix ends before a glued block that is no valid attribute block.
   readGluedBlocks(ctx.src, start, attributeBlocksEnd(ctx.src, start, node.end, true), attributes)
   return attributes
@@ -109,7 +115,8 @@ function cellNode(ctx: TreeContext, node: BlockNode, rowEnd: number): TableCellN
   const cell: TableCellNode = { type: 'table_cell', header: (node.flags & FLAG_HEADER) !== 0, children: [paragraph] }
   if (node.facts > 1) cell.colspan = node.facts
   if (node.rowFacts > 1) cell.rowspan = node.rowFacts
-  if (node.aux !== 0) cell.align = alignmentOf(node.aux)
+  if ((node.aux & 0xff) !== 0) cell.align = alignmentOf(node.aux & 0xff)
+  if (node.aux >> 8 !== 0) cell.valign = valignOf(node.aux >> 8)
   setAttributes(cell, cellAttributes(ctx, node))
   if (ctx.trace !== null) ctx.trace.blocks.set(cell, node)
   if (joined) return cell
@@ -273,6 +280,11 @@ function alignEntry(entry: string): string | undefined {
   return isFieldValue('table_column.align', entry) ? entry : undefined
 }
 
+/** C2-B-211: `valigns` takes `top`, `middle` and `bottom`; `baseline` has no source. */
+function valignEntry(entry: string): string | undefined {
+  return entry === 'top' || entry === 'middle' || entry === 'bottom' ? entry : undefined
+}
+
 /** C2-B-211, C2-B-212: the entries of a column list, or null when the list is absent or any entry is not valid. */
 function columnEntries<T>(value: string | null, read: (entry: string) => T | undefined): T[] | null {
   if (value === null) return null
@@ -285,14 +297,23 @@ function columnEntries<T>(value: string | null, read: (entry: string) => T | und
   return out
 }
 
-/** C2-A-089: one column per position up to the widest row, with what `aligns` and `widths` spell (C2-B-211, C2-B-212). */
-function columnNodes(width: number, aligns: string[] | null, widths: number[] | null): TableColumnNode[] {
+/** The column lists of a table: `aligns`, `valigns` and `widths` (C2-B-211, C2-B-212). */
+interface ColumnLists {
+  aligns: string[] | null
+  valigns: string[] | null
+  widths: number[] | null
+}
+
+/** C2-A-089: one column per position up to the widest row, with what the column lists spell. */
+function columnNodes(width: number, lists: ColumnLists): TableColumnNode[] {
   const columns: TableColumnNode[] = []
   for (let at = 0; at < width; at++) {
     const column: TableColumnNode = { type: 'table_column' }
-    const align = aligns?.[at]
-    const fraction = widths?.[at]
+    const align = lists.aligns?.[at]
+    const valign = lists.valigns?.[at]
+    const fraction = lists.widths?.[at]
     if (align !== undefined && isFieldValue('table_column.align', align)) column.align = align
+    if (valign !== undefined && isFieldValue('table_column.valign', valign)) column.valign = valign
     if (fraction !== undefined) column.width = fraction
     columns.push(column)
   }
@@ -323,15 +344,16 @@ function groupNode(
 }
 
 /**
- * C2-B-227: `aligns`, `widths`, `header-rows` and `footer-rows` are read here. A valid key that applies to the
+ * C2-B-227: `aligns`, `valigns`, `widths`, `header-rows` and `footer-rows` are read here. A valid key that applies to the
  * table form is consumed; an invalid one, and `header-rows` on a pipe table (C2-B-186), stays in `attrs`.
  */
 function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null, delimited: boolean): TableNode {
   consumed(attributes, 'footer-rows', count(keyOf(attributes, 'footer-rows')))
   if (delimited) consumed(attributes, 'header-rows', count(keyOf(attributes, 'header-rows')))
   const aligns = consumed(attributes, 'aligns', columnEntries(keyOf(attributes, 'aligns'), alignEntry))
+  const valigns = consumed(attributes, 'valigns', columnEntries(keyOf(attributes, 'valigns'), valignEntry))
   const widths = consumed(attributes, 'widths', columnEntries(keyOf(attributes, 'widths'), columnWidth))
-  const columns = columnNodes(groups.width, aligns, widths)
+  const columns = columnNodes(groups.width, { aligns, valigns, widths })
   const table: TableNode = { type: 'table', columns, children: [] }
   if (groups.head.length > 0) table.children.push(groupNode(ctx, groups, 'table_head', groups.head))
   if (groups.body.length > 0) table.children.push(groupNode(ctx, groups, 'table_body', groups.body))

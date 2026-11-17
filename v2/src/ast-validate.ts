@@ -125,7 +125,7 @@ const RULES = new Map<string, Rule>([
   ['table', [[...TABLE_GROUPS, 'comment'], ['columns'], ['caption']]],
   ['table_body', [['table_row', 'comment'], [], ['rowHeadColumns']]],
   ['table_cell', [[...BLOCKS, 'cell_paragraph'], ['header'], ['span', 'colspan', 'rowspan', 'align', 'valign', 'scope', 'headerIds']]],
-  ['table_column', ['none', [], ['align', 'valign', 'width', 'resolvedAlign']]],
+  ['table_column', ['none', [], ['align', 'valign', 'width', 'resolvedAlign', 'resolvedValign']]],
   ['table_foot', [['table_row', 'comment'], [], []]],
   ['table_head', [['table_row', 'comment'], [], []]],
   ['table_row', [['table_cell'], [], []]],
@@ -140,7 +140,7 @@ const STRINGS = [
   'key', 'namespace', 'expansion', 'kind', 'groupLabel', 'href', 'text', 'name', 'version', 'raw', 'syntax', 'form',
   'tocTarget', 'generatedId', 'src', 'alt', 'tooltip', 'targetKind', 'resourceId', 'path', 'section', 'spacing',
   'numberPrefix', 'target', 'label', 'format', 'glyph', 'source', 'span', 'align', 'valign', 'resolvedAlign',
-  'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope', 'file',
+  'resolvedValign', 'mode', 'value', 'astVersion', 'lang', 'refForm', 'role', 'scope', 'file',
 ]
 const INTEGERS = ['n', 'number', 'level', 'rowHeadColumns', 'colspan', 'rowspan', 'srcByteLength']
 const BOOLEANS = ['display', 'header', 'decorative', 'useIndex']
@@ -163,6 +163,7 @@ const ENUMS = new Map<string, readonly string[]>([
   ['table_cell.align', ['left', 'right', 'center']],
   ['table_column.align', ['left', 'right', 'center']],
   ['table_column.resolvedAlign', ['left', 'right', 'center']],
+  ['table_column.resolvedValign', ['top', 'middle', 'bottom', 'baseline']],
   ['table_cell.valign', ['top', 'middle', 'bottom', 'baseline']],
   ['table_column.valign', ['top', 'middle', 'bottom', 'baseline']],
   ['smart_punctuation.kind', SMART_KIND_NAMES],
@@ -1036,9 +1037,9 @@ function checkUnqualifiedFields(node: Fields, type: string, path: string): void 
   }
 }
 
-/** C2-A-058: an empty props, slots or payload is a second encoding of the absent field. */
+/** C2-A-058: an empty props, slots, payload or resourceIds is a second encoding of the absent field. */
 function checkEmptyContainers(node: Fields, path: string): void {
-  for (const name of ['props', 'slots', 'payload']) {
+  for (const name of ['props', 'slots', 'payload', 'resourceIds']) {
     const value = node[name]
     const empty = Array.isArray(value) ? value.length === 0 : isRecord(value) && Object.keys(value).length === 0
     if (empty) fail(`${path}/${name}`, `an empty ${name}`)
@@ -1144,7 +1145,7 @@ function checkSpanCounts(table: Fields, path: string): void {
   })
 }
 
-/** C2-A-028, C2-A-169: nodes are closed. C2-A-139: a field that is absent is left out; it is never null. */
+/** C2-A-028, C2-A-167: nodes are closed. C2-A-139: a field that is absent is left out; it is never null. */
 function checkField(node: Fields, type: string, rule: Rule, name: string, path: string, walk: Walk): void {
   const [, required, optional] = rule
   const value = node[name]

@@ -14,7 +14,7 @@ import { utf8Length } from './positions.ts'
 import { applyProfile, liveResolution } from './profile.ts'
 import { type ProfileRule, PROFILES } from './render-tables.ts'
 import { type Resolution, resolve } from './resolve.ts'
-import { applyExtensions } from './extensions/claims.ts'
+import { applyExtensions, declareExtensions } from './extensions/claims.ts'
 import { base64, mapPositions, type SourceText, sourceText } from './byte-source.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
@@ -128,6 +128,7 @@ function parseSource(src: string, settings: Settings, positions: boolean, trace:
     return { document: parsed.document, facts: combinedFacts(facts, [], found) }
   }
   const expanded = expandTree(parsed, includes, parse, settings.headingIds, positions)
+  if (settings.extensions.length > 0) declareExtensions(parsed.document, settings.extensions)
   return { document: parsed.document, facts: combinedFacts(facts, expanded.facts, expanded.findings) }
 }
 

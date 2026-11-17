@@ -273,7 +273,10 @@ function body(
 function footnote(w: Writer, node: FootnoteNode, prefix: string, flags: number): void {
   attributeLine(w, node, prefix)
   loseBlankKey(w, node)
-  body(w, node, prefix, flags, `[^${node.key}]: `, 2, false)
+  const mark = `[^${node.key}]: `
+  // C2-B-067: a description list opened on the marker line takes its descriptions at its own column.
+  const width = node.children[0]?.type === 'definition_list' ? mark.length : 2
+  body(w, node, prefix, flags, mark, width, false)
 }
 
 /** C2-W-025, C2-B-040: an uppercase marker with a dot, a letter or a roman numeral, takes two spaces. */

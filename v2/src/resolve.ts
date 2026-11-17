@@ -407,15 +407,22 @@ export function headMarks<F extends 'align' | 'valign'>(table: TableNode, field:
   return marks
 }
 
-/** C2-B-213: the resolved alignment of a column is the mark of its head cell, or else what `aligns` spelled. */
+/**
+ * C2-B-213, C2-A-089: on each axis the resolved alignment of a column is the mark of its head cell, or else what
+ * `aligns` or `valigns` spelled.
+ */
 function alignColumns(table: TableNode): void {
   const columns = table.columns
   if (columns.length === 0) return
   const fromHead = headMarks(table, 'align')
+  const verticalFromHead = headMarks(table, 'valign')
   columns.forEach((column, at) => {
     const align = fromHead[at] ?? column.align
     if (align === undefined) delete column.resolvedAlign
     else column.resolvedAlign = align
+    const valign = verticalFromHead[at] ?? column.valign
+    if (valign === undefined) delete column.resolvedValign
+    else column.resolvedValign = valign
   })
 }
 

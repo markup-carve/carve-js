@@ -469,6 +469,7 @@ export interface TableColumnNode extends NodeBase {
   valign?: "top" | "middle" | "bottom" | "baseline"
   width?: number
   resolvedAlign?: "left" | "right" | "center"
+  resolvedValign?: "top" | "middle" | "bottom" | "baseline"
 }
 
 export interface TableFootNode extends NodeBase {
@@ -748,6 +749,7 @@ export const FIELD_VALUES = {
   "table_cell.align": ["left","right","center"],
   "table_column.align": ["left","right","center"],
   "table_column.resolvedAlign": ["left","right","center"],
+  "table_column.resolvedValign": ["top","middle","bottom","baseline"],
   "table_cell.valign": ["top","middle","bottom","baseline"],
   "table_column.valign": ["top","middle","bottom","baseline"],
   "smart_punctuation.kind": [

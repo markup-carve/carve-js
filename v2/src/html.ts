@@ -119,9 +119,13 @@ function hasAttributes(attrs: Attrs | undefined): boolean {
   return attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || (attrs.keyValues?.length ?? 0) > 0)
 }
 
-/** A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it. */
-function isTextParagraph(node: Node | undefined): node is ParagraphNode {
-  return node !== undefined && node.type === 'paragraph' && !isBareImage(node) && node.caption === undefined
+/**
+ * A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it, and
+ * neither takes a display math paragraph in static mode, whose `<pre>` stands on its own lines (C2-H-007, C2-H-168).
+ */
+function isTextParagraph(r: Render, node: Node | undefined): node is ParagraphNode {
+  if (node === undefined || node.type !== 'paragraph' || isBareImage(node) || node.caption !== undefined) return false
+  return node.role !== 'math' || r.settings.mode !== 'static'
 }
 
 /** Writes `node` through the writer of its type, where it has one. */
@@ -207,7 +211,7 @@ function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
 function quote(r: Render, node: BlockQuoteNode, level: number): void {
   const visible = visibleBlocks(node.children)
   const first = visible[0]
-  if (visible.length === 1 && isTextParagraph(first)) {
+  if (visible.length === 1 && isTextParagraph(r, first)) {
     line(r, level, `<blockquote${tag(r, node)}>${paragraphHtml(r, first)}</blockquote>`)
     return
   }
@@ -260,7 +264,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   const first = blocks[0]
   let open = itemOpen(r, node, bullet)
   let rest = blocks
-  if (isTextParagraph(first)) {
+  if (isTextParagraph(r, first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
     const bare = tight && !carriesAttributes(first)
     open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
@@ -286,7 +290,7 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
     line(r, level, `<dd${tag(r, node)}>${includeParagraph(r, first, true)}</dd>`)
     return
   }
-  if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
+  if (blocks.length <= 1 && (first === undefined || isTextParagraph(r, first))) {
     let text = ''
     const bare = first !== undefined && !carriesAttributes(first)
     if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
@@ -348,7 +352,7 @@ function admonition(r: Render, node: AdmonitionNode, level: number): void {
 function captionLine(r: Render, caption: CaptionNode, name: string, level: number): void {
   const blocks = caption.children.filter(isVisible)
   const first = blocks[0]
-  if (blocks.length === 1 && isTextParagraph(first)) {
+  if (blocks.length === 1 && isTextParagraph(r, first)) {
     line(r, level, `<${name}>${inlineHtml(r, first.children)}</${name}>`)
     return
   }
@@ -499,7 +503,7 @@ function include(r: Render, node: IncludeNode, level: number): void {
   if (text !== '') line(r, level, `<p>${escapeText(text)}</p>`)
 }
 
-/** C2-A-127: an extension this engine does not know renders through its fallback. */
+/** C2-X-004: an extension this engine does not know renders through its fallback. */
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
   const rendered = r.renderExtension(node)
   if (rendered !== null) { line(r, level, rendered); return }
@@ -584,9 +588,9 @@ function isCssKeyword(value: string): boolean {
 
 function cellStyle(cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined): string {
   const align = cell.align ?? column?.resolvedAlign ?? column?.align
-  const valign = cell.valign ?? headValign ?? column?.valign
+  const valign = cell.valign ?? column?.resolvedValign ?? headValign ?? column?.valign
   let declarations = align === undefined ? '' : `text-align: ${align};`
-  // A vertical alignment has no source spelling, so only a supplied tree holds one; its value is not filtered elsewhere.
+  // A supplied tree may hold any string here, so the value is checked before it enters the declaration.
   if (valign !== undefined && isCssKeyword(valign)) declarations += `${declarations === '' ? '' : ' '}vertical-align: ${valign};`
   return declarations
 }
@@ -605,7 +609,7 @@ function cellContent(r: Render, cell: TableCellNode, level: number): string {
   if (blocks.every(isCellParagraph)) return blocks.map((block) => inlineHtml(r, block.children)).join(' ')
   const visible = visibleBlocks(blocks)
   const first = visible[0]
-  const open = isTextParagraph(first) ? paragraphHtml(r, first) : ''
+  const open = isTextParagraph(r, first) ? paragraphHtml(r, first) : ''
   const rest = open === '' ? visible : visible.slice(1)
   if (rest.length === 0) return open
   const inner: Render = { ...r, out: '', count: 0 }
@@ -714,9 +718,9 @@ function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level:
   line(r, level, '</colgroup>')
 }
 
-const TABLE_KEYS = ['aligns', 'widths', 'header-rows', 'footer-rows']
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows']
 
-/** C2-H-153: the four keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
+/** C2-H-153: the five keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
 function withoutTableKeys(node: TableNode): TableNode {
   const keyValues = node.attrs?.keyValues
   if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key))) return node
@@ -787,7 +791,7 @@ function writeNote(r: Render, note: Note, level: number): void {
   const visible = blocks.filter(isVisible)
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
-  r.backlinkHost = isTextParagraph(last) ? last : null
+  r.backlinkHost = isTextParagraph(r, last) ? last : null
   line(r, level, `<li id="fn${note.number}"${noteCarriers(r, note)}>`)
   writeBlocks(r, blocks, level + 1)
   if (r.backlinkHost === null) line(r, level + 1, `<p>${r.backlinks}</p>`)

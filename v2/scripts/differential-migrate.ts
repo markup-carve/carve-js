@@ -14,7 +14,7 @@ interface RefusalCase { name: string, classes: string[] }
 
 const ROOT = join(import.meta.dirname, '../..')
 const OMIT = new Set(['.git', 'node_modules', 'dist', '.next'])
-const IGNORED = new Set(['pos', 'segments', 'srcByteLength', 'stages', 'generatedId', 'number', 'resolvedAlign'])
+const IGNORED = new Set(['pos', 'segments', 'srcByteLength', 'stages', 'generatedId', 'number', 'resolvedAlign', 'resolvedValign'])
 
 function files(root: string, directory = root): Input[] {
   const result: Input[] = []

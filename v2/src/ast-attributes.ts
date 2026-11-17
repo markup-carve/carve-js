@@ -1,6 +1,7 @@
 // The attribute blocks a block took, read from their source spans into the fields of C2-A-032.
 import { type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
-import { BRACE_OPEN, GREATER, LESS, LF, SPACE, TAB, TILDE } from './chars.ts'
+import { BRACE_OPEN, LF, SPACE, TAB } from './chars.ts'
+import { cellMarksLength } from './lines.ts'
 
 /** The merged attribute blocks of a host, in the fixed order of C2-I-041. */
 export interface Attributes {
@@ -86,12 +87,11 @@ export function readGluedBlocks(src: string, pos: number, end: number, attribute
   const sink = attributeSink(attributes)
   const memo = emptyMemo()
   while (pos < end && src.charCodeAt(pos) === BRACE_OPEN) {
-    const first = src.charCodeAt(pos + 1)
-    // C2-B-182: the alignment mark of a cell prefix stands before the parts and is none of them.
-    const marked = first === LESS || first === GREATER || first === TILDE
-    const next = readAttributeBlock(src, marked ? pos + 1 : pos, end, memo, sink)
+    // C2-B-182: the alignment marks of a cell prefix stand before the parts and are none of them.
+    const marks = cellMarksLength(src, pos)
+    const next = readAttributeBlock(src, pos + marks, end, memo, sink)
     if (next < 0) {
-      const close = marked ? src.indexOf('}', pos) : -1
+      const close = marks > 0 ? src.indexOf('}', pos) : -1
       if (close < 0 || close >= end) break
       pos = close + 1
     } else {

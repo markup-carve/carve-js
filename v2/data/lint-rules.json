@@ -445,7 +445,7 @@
       ],
       "message_origin": "design",
       "reports": "`header-rows` on a pipe table",
-      "change": "only `header-rows`; `aligns`, `widths`, `header-cols` and `footer-rows` stay as in 0.1",
+      "change": "only `header-rows`; `aligns`, `valigns`, `widths` and `footer-rows` stay as in 0.1, and `header-cols` has no effect in 0.2.0",
       "clauses": ["C2-B-186"]
     },
     {
@@ -695,8 +695,8 @@
       "status": "new",
       "messages": ["Rendered the fallback of the unknown extension \"${name}\""],
       "message_origin": "data_file",
-      "reports": "an unknown optional extension that rendered through its fallback (C2-A-127, C2-H-076)",
-      "clauses": ["C2-A-127", "C2-H-076"]
+      "reports": "an unknown optional extension that rendered through its fallback (C2-X-004, C2-H-076)",
+      "clauses": ["C2-H-076", "C2-X-004"]
     },
     {
       "id": "extension-renderer-failed",
@@ -945,8 +945,8 @@
       "severity": "warning",
       "channel": "render-loss",
       "status": "new",
-      "reports": "an attribute that the tree does not keep: an event handler, a name that is no key, an invalid `dir`, a wrapper or section attribute, an unread attribute of `code` or of a task box, an ordered start out of range",
-      "clauses": ["C2-M-004", "C2-M-027", "C2-M-030", "C2-M-031", "C2-M-032", "C2-M-052", "C2-M-054"]
+      "reports": "an attribute that the tree does not keep: an event handler, a name that is no key, an invalid `dir`, a wrapper or section attribute, an unread attribute of `code` or of a task box, an ordered start out of range, an `align` or `valign` beside a declaration of its axis, a `col` style that gives no width, a cell `scope`, `align` or `valign` outside its set, an attribute of a `figure` that the captioned block replaces",
+      "clauses": ["C2-M-004", "C2-M-026", "C2-M-027", "C2-M-030", "C2-M-031", "C2-M-032", "C2-M-040", "C2-M-041", "C2-M-043", "C2-M-052", "C2-M-054", "C2-M-075"]
     },
     {
       "id": "import-carrier-ignored",
@@ -969,8 +969,8 @@
       "severity": "warning",
       "channel": "render-loss",
       "status": "new",
-      "reports": "an element or comment given nothing, with its content: the head, the doctype, the treatment `drop`, and with `rawHtml` off every comment, the treatment `raw` and every `data-carve-raw` span",
-      "clauses": ["C2-M-005", "C2-M-046", "C2-M-057", "C2-M-066"]
+      "reports": "an element or comment given nothing, with its content: the head, the doctype, the treatment `drop`, and with `rawHtml` off every comment, the treatment `raw` and every `data-carve-raw` span; a further task box or table caption",
+      "clauses": ["C2-M-005", "C2-M-032", "C2-M-041", "C2-M-046", "C2-M-057", "C2-M-066"]
     },
     {
       "id": "import-element-mapped",
@@ -985,8 +985,8 @@
       "severity": "warning",
       "channel": "render-loss",
       "status": "new",
-      "reports": "content dropped or changed so that the tree is valid: a non-item child of a list, a foreign child of a table or a description list, a clamped row span, an empty node that held attributes, a ruby base without annotation",
-      "clauses": ["C2-M-034", "C2-M-036", "C2-M-039", "C2-M-041", "C2-M-048", "C2-M-061", "C2-M-069", "C2-M-070"]
+      "reports": "content dropped or changed so that the tree is valid: a non-item child of a list, a foreign child of a table or a description list, a second head or foot of a table, a clamped row span, an empty node that held attributes, a ruby base without annotation, a footnote item with no `id` or an empty key",
+      "clauses": ["C2-M-034", "C2-M-036", "C2-M-037", "C2-M-039", "C2-M-041", "C2-M-048", "C2-M-061", "C2-M-069", "C2-M-070"]
     },
     {
       "id": "import-whitespace-normalized",
@@ -1047,7 +1047,7 @@
       "status": "kept",
       "messages": ["Include \"${path}\" was not expanded: @cols ${reason}."],
       "message_origin": "data_file",
-      "reports": "a `cols` name that the head lacks, an empty or repeated head name, or a column range that the table does not allow (C2-N-047)",
+      "reports": "a `cols` name that the head lacks or holds twice, or a column range that the table does not allow (C2-N-047)",
       "clauses": ["C2-N-047", "C2-N-061"]
     },
     {
@@ -1582,7 +1582,7 @@
         "The value of ${key} is not valid, so the table ignores the whole attribute. Correct every entry, or remove the attribute."
       ],
       "message_origin": "data_file",
-      "reports": "an invalid value of `aligns`, `widths`, `header-rows` or `footer-rows` that a table keeps in `attrs` and that has no effect (C2-B-227)",
+      "reports": "an invalid value of `aligns`, `valigns`, `widths`, `header-rows` or `footer-rows` that a table keeps in `attrs` and that has no effect (C2-B-227)",
       "clauses": ["C2-B-210", "C2-B-211", "C2-B-212", "C2-B-227"]
     },
     {

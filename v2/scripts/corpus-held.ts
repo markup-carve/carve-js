@@ -41,5 +41,5 @@ export const REFUSED_AT: ReadonlyMap<string, string> = new Map([
   ['unqualified-inline-extension-fallback', '/children/0/children/0/fallback'],
   ['smart-punctuation-other-source', '/children/0/children/0/source'], ['marker-start-out-of-range', '/children/0/marker/start'],
   ['extension-undeclared', '/children/0/name'], ['extension-version-differs', '/children/0/version'],
-  ['default-empty-props', '/children/0/props'],
+  ['default-empty-props', '/children/0/props'], ['default-empty-resource-ids', '/children/0/resourceIds'],
 ])

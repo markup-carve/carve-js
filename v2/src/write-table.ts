@@ -12,6 +12,7 @@ import { longestBareRun } from './write-fences.ts'
 import { displayWidth } from './width.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
+const VALIGN_MARKS = new Map([['top', '^'], ['middle', '~'], ['bottom', 'v']])
 const SPAN_MARKS = new Map([['rowspan', '^'], ['colspan', '<']])
 const MIN_RUN = 3
 
@@ -47,18 +48,19 @@ function percentage(width: number): string {
   return String(width * 100)
 }
 
-function columnEntry(column: TableColumnNode, field: 'align' | 'width'): string {
+function columnEntry(column: TableColumnNode, field: 'align' | 'valign' | 'width'): string {
   if (field === 'align') return column.align ?? ''
+  if (field === 'valign') return column.valign === 'baseline' ? '' : column.valign ?? ''
   const width = column.width
   return width === undefined ? '' : percentage(width)
 }
 
-/** The value of `aligns` or `widths`: one entry per column up to the last column that has one (C2-B-211, C2-B-212). */
-function columnList(table: TableNode, field: 'align' | 'width'): string | null {
+/** The value of `aligns`, `valigns` or `widths`: one entry per column up to the last column that has one (C2-B-211, C2-B-212). */
+function columnList(table: TableNode, field: 'align' | 'valign' | 'width'): string | null {
   const columns = table.columns
   let last = -1
   columns.forEach((column, at) => {
-    if (column[field] !== undefined) last = at
+    if (columnEntry(column, field) !== '') last = at
   })
   if (last < 0) return null
   return columns.slice(0, last + 1).map((column) => columnEntry(column, field)).join(',')
@@ -71,9 +73,13 @@ function columnList(table: TableNode, field: 'align' | 'width'): string | null {
 function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly [string, string])[]): BlockParts {
   const keys: (readonly [string, string])[] = [...first]
   const aligns = columnList(table, 'align')
+  const valigns = columnList(table, 'valign')
+  // C2-W-062: `baseline` has no spelling, in a cell mark or in `valigns`.
+  if (w !== null) for (const column of table.columns) if (column.valign === 'baseline') lose(w, column, 'valign')
   const widths = columnList(table, 'width')
   const footRows = rowsOf(table, 'table_foot').length
   if (aligns !== null) keys.push(['aligns', aligns])
+  if (valigns !== null) keys.push(['valigns', valigns])
   if (widths !== null) keys.push(['widths', widths])
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
   const skipKeys: string[] = []
@@ -98,10 +104,21 @@ function cellContent(w: Writer, cell: TableCellNode, flags: number): string {
   return content === '^' || content === '<' ? `\\${content}` : content
 }
 
-function cellPrefix(cell: TableCellNode): string {
-  const align = cell.align
-  const mark = align === undefined ? undefined : ALIGN_MARKS.get(align)
-  return (cell.header ? '=' : '') + braceBlock(cell, mark === undefined ? { pipes: true } : { mark, pipes: true })
+/**
+ * C2-W-062: the marks of the cell's own `align` and `valign`, the horizontal one first, and `?` in its place where
+ * only `valign` is set. `baseline` has no mark and is reported.
+ */
+function cellMarks(w: Writer, cell: TableCellNode): string {
+  const horizontal = cell.align === undefined ? '' : ALIGN_MARKS.get(cell.align) ?? ''
+  const valign = cell.valign
+  const vertical = valign === undefined ? '' : VALIGN_MARKS.get(valign) ?? ''
+  if (valign !== undefined && vertical === '') lose(w, cell, 'valign')
+  return vertical !== '' && horizontal === '' ? `?${vertical}` : horizontal + vertical
+}
+
+function cellPrefix(w: Writer, cell: TableCellNode): string {
+  const mark = cellMarks(w, cell)
+  return (cell.header ? '=' : '') + braceBlock(cell, mark === '' ? { pipes: true } : { mark, pipes: true })
 }
 
 /** C2-W-062, C2-W-118: the prefix, one space, the content and one space; an empty cell is its prefix and one space. */
@@ -141,12 +158,12 @@ function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: n
   if (span !== undefined) return { prefix: head ? '=' : '', parts: [span], places: [] }
   const parts = cellContent(w, cell, flags).split('\n')
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
-  if (recorded !== null) return { prefix: cellPrefix(cell), parts, places: recorded }
+  if (recorded !== null) return { prefix: cellPrefix(w, cell), parts, places: recorded }
   // C2-L-035: without a record that fits, the row is one line. C2-L-021: a fragment that starts an empty cell came
   // without a joining space, so it is joined without one.
   const wraps = w.facts?.get(cell)?.wraps?.length ?? 0
   const joined = (wraps === parts.length - 1 && parts[0] === '' ? parts.slice(1) : parts).join(' ')
-  return { prefix: cellPrefix(cell), parts: [joined], places: [] }
+  return { prefix: cellPrefix(w, cell), parts: [joined], places: [] }
 }
 
 function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean): WrittenRow {
@@ -236,7 +253,7 @@ function endsWithGroupComment(table: TableNode): boolean {
 
 /** Whether `cell` holds what a cell of a delimited table can: plain text and nothing else (C2-B-180). */
 function isPlainCell(cell: TableCellNode, header: boolean): boolean {
-  if (cell.header !== header || cell.span !== undefined || cell.align !== undefined) return false
+  if (cell.header !== header || cell.span !== undefined || cell.align !== undefined || cell.valign !== undefined) return false
   if (cell.attrs !== undefined || cell.lang !== undefined) return false
   const blocks = cell.children
   const block = blocks[0]

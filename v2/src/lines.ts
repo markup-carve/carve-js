@@ -3,7 +3,7 @@
 import { type AttributeMemo, type AttributeSink, emptyMemo, readAttributeBlock } from './attributes.ts'
 import {
   APOSTROPHE, BACKSLASH, BACKTICK, BANG, BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, CARET, COLON, DIGIT_0,
-  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_X, LOWER_Z, PAREN_CLOSE,
+  DOLLAR, DOT, EQUALS, GREATER, HASH, HYPHEN, LESS, LOWER_A, LOWER_I, LOWER_V, LOWER_X, LOWER_Z, PAREN_CLOSE,
   PERCENT, PIPE, PLUS, QUESTION, QUOTE_MARK, SLASH, SPACE, STAR, TAB, TILDE, UNDERSCORE, UPPER_A, UPPER_X, UPPER_Z,
 } from './chars.ts'
 import { readInclude } from './include.ts'
@@ -72,13 +72,27 @@ export function braceBlocksEnd(src: string, pos: number, end: number): number {
   }
 }
 
-/** True when the brace block `[pos, blockEnd)` is a valid attribute block; in a cell prefix it may start with an alignment mark. */
-function isValidBlock(src: string, pos: number, blockEnd: number, memo: AttributeMemo, cell: boolean): boolean {
+function isVerticalMark(code: number): boolean {
+  return code === CARET || code === TILDE || code === LOWER_V
+}
+
+/**
+ * C2-B-182: the number of alignment marks after the `{` at `pos`: a horizontal mark and an optional vertical
+ * mark directly after it, or `?` and a vertical mark. A vertical mark alone and a `?` alone are no marks.
+ */
+export function cellMarksLength(src: string, pos: number): number {
   const first = src.charCodeAt(pos + 1)
-  // C2-B-182: the mark is read before the parts, and a block of the mark alone is valid.
-  const marked = cell && (first === LESS || first === GREATER || first === TILDE)
-  if (marked && skipSpaces(src, pos + 2, blockEnd) === blockEnd - 1) return true
-  return readAttributeBlock(src, marked ? pos + 1 : pos, blockEnd, memo, null) === blockEnd
+  const vertical = isVerticalMark(src.charCodeAt(pos + 2)) ? 1 : 0
+  if (first === LESS || first === GREATER || first === TILDE) return 1 + vertical
+  return first === QUESTION && vertical === 1 ? 2 : 0
+}
+
+/** True when the brace block `[pos, blockEnd)` is a valid attribute block; in a cell prefix it may start with alignment marks. */
+function isValidBlock(src: string, pos: number, blockEnd: number, memo: AttributeMemo, cell: boolean): boolean {
+  // C2-B-182: the marks are read before the parts, and a block of the marks alone is valid.
+  const marks = cell ? cellMarksLength(src, pos) : 0
+  if (marks > 0 && skipSpaces(src, pos + 1 + marks, blockEnd) === blockEnd - 1) return true
+  return readAttributeBlock(src, pos + marks, blockEnd, memo, null) === blockEnd
 }
 
 /**
