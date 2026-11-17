@@ -192,11 +192,9 @@ describe('C2-I-002: spaces and tabs at the end of every line of a content are no
     expect(nodes('a %% x  \nb\n')[1]).toEqual({ type: 'comment', form: 'line', value: 'x' })
   })
 
-  it('C2-I-011: an escaped space at the end of a line stays, on every line', () => {
-    expect(nodes('a\\ \nb\n')).toEqual([
-      { type: 'text', value: 'a' }, { type: 'non_breaking_space' }, { type: 'soft_break' }, { type: 'text', value: 'b' },
-    ])
-    expect(nodes('a\\  \nb\n')[1]).toEqual({ type: 'non_breaking_space' })
+  it('C2-I-011: an escaped space at the end of a line is a hard break, on every line', () => {
+    expect(nodes('a\\ \nb\n')).toEqual([{ type: 'text', value: 'a' }, { type: 'hard_break' }, { type: 'text', value: 'b' }])
+    expect(nodes('a\\  \nb\n')[1]).toEqual({ type: 'hard_break' })
     expect(nodes('a\\\\ \nb\n')).toEqual([{ type: 'text', value: 'a\\' }, { type: 'soft_break' }, { type: 'text', value: 'b' }])
   })
 

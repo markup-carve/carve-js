@@ -398,7 +398,9 @@ describe('layout', () => {
       { type: 'code_block', value: 'y\n' }, { type: 'comment', form: 'line', value: '#endregion' },
     )
     expect(write(tree)).toBe('```\nx\n```\n%% #region r\n\n```\ny\n```\n%% #endregion\n')
-    expect(format('a\n%% #endregion')).toBe('a\n%% #endregion\n')
+    // C2-B-137: the marker line ends the paragraph, so the two are blocks with a blank line between them (C2-W-017).
+    expect(format('a\n%% #endregion')).toBe('a\n\n%% #endregion\n')
+    expect(format('- a\n%% #endregion')).toBe('- a\n\n%% #endregion\n')
   })
 
   it('C2-W-114: no blank line between a term and its description or between two entries', () => {

@@ -631,19 +631,19 @@ export function afterComments(nodes: readonly Node[], at: number): Node | undefi
 function blankLinesBeforeComment(w: Writer, before: Node, node: Node): number {
   // C2-W-059: a line comment after a code block with a caption stands between its closer and the caption line.
   if (before.type === 'code_block' && before.caption !== undefined && node.type === 'comment' && node.form === 'line') return 0
-  if (isCommentLine(node) && isOpenContainer(w, before)) {
+  // C2-W-034: a region marker is read into no container, so it ends the one above with the usual blank line.
+  if (isCommentLine(node) && isOpenContainer(w, before) && !isRegionMarker(node)) {
     // C2-B-138: the line stays in the container, unless it ends a fence that the container ends with.
     if (lastFence(w, before) !== null) return 0
     lose(w, node, null)
     return 1
   }
-  if (isMarkerBelowText(before, node)) return 0
   return takesLineBelow(w, before) || (w.forms.get(node) ?? 0) > 0 ? 1 : 0
 }
 
-/** C2-W-034, C2-B-137: a region marker line ends the paragraph above it, so it keeps its line there. */
-function isMarkerBelowText(before: Node, node: Node): boolean {
-  if (before.type !== 'paragraph' || before.caption !== undefined || node.type !== 'comment' || node.form !== 'line') return false
+/** C2-W-034, C2-B-137: a region marker line ends the leaf and the unowned containers above it, so it keeps its line. */
+function isRegionMarker(node: Node): boolean {
+  if (node.type !== 'comment' || node.form !== 'line') return false
   const line = `%% ${node.value}`
   return isRegionMarkerLine(line, 0, line.length)
 }

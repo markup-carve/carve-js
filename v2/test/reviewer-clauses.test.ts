@@ -116,8 +116,10 @@ function messages(src: string): string[] {
 
 describe('the parse channel', () => {
   it('C2-B-111: a comment block that ends with its container and one that runs to the end are two reports, and both say what they hide', () => {
-    expect(reports('> %%%\n> a\n%%%\nb')).toEqual(['unclosed-comment-fence /children/0/children/0 2-9', 'unclosed-comment-fence /children/1 10-15'])
-    expect(messages('> %%%\n> a\n%%%\nb')).toEqual([
+    // C2-B-109: a bare closer line closes the comment before the ownership walk, so the blank line keeps the two apart.
+    expect(reports('> %%%\n> a\n%%%\nb')).toEqual([])
+    expect(reports('> %%%\n> a\n\n%%%\nb')).toEqual(['unclosed-comment-fence /children/0/children/0 2-9', 'unclosed-comment-fence /children/1 11-16'])
+    expect(messages('> %%%\n> a\n\n%%%\nb')).toEqual([
       'The %%% comment fence opened here has no closing fence and hides everything to the end of its container. Add a closing %%% where the comment should stop.',
       'The %%% comment fence opened here has no closing fence and hides everything to the end of the document. Add a closing %%% where the comment should stop.',
     ])

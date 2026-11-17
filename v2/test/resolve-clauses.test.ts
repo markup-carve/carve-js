@@ -203,8 +203,8 @@ describe('footnotes, captions and cross-references', () => {
     expect(resolution.notes.map((note) => note.refIds)).toEqual([['fnref1', 'fnref1-2'], ['fnref2'], ['fnref3']])
   })
 
-  it('C2-H-086: a footnote reference inside an unresolved reference or inside a note is an ordinary one', () => {
-    expect(resolved('[a[^n]][nope] ^[b[^m]]\n\n[^n]: N\n[^m]: M').resolution.notes.map((note) => note.number)).toEqual([1, 2, 3])
+  it('C2-H-086, C2-I-089: a footnote reference inside an unresolved reference is an ordinary one, inside an inline note text', () => {
+    expect(resolved('[a[^n]][nope] ^[b[^m]]\n\n[^n]: N\n[^m]: M').resolution.notes.map((note) => note.number)).toEqual([1, 2])
   })
 
   it('C2-H-088: an id the author wrote on the reference replaces the generated one', () => {
