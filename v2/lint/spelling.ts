@@ -100,16 +100,29 @@ function htmlComment(line: Line, context: LintContext): void {
   context.report('html-comment-renders-as-text', line.start + at, line.start + end + 3, line.path)
 }
 
+/** The end of the tag-shaped text at `at`, or -1: a `<` before a letter or `/`, up to the next `>`. */
+function tagEnd(text: string, at: number): number {
+  const after = text[at + 1]
+  if (after === undefined || !((after >= 'A' && after <= 'Z') || (after >= 'a' && after <= 'z') || after === '/')) return -1
+  const end = text.indexOf('>', at + 2)
+  const inside = text.slice(at + 1, end)
+  return end < 0 || inside.includes('://') || inside.includes('@') || inside.startsWith('/#') ? -1 : end
+}
+
+// C2-W-106: every `<` is tested, so the tag in `<<k>` is found behind the first bracket.
 function bareHtml(line: Line, context: LintContext): void {
   if (!line.paragraph) return
-  const at = line.text.indexOf('<')
-  if (at < 0 || line.text.startsWith('<!--', at)) return
-  const after = line.text[at + 1]
-  if (after === undefined || !((after >= 'A' && after <= 'Z') || (after >= 'a' && after <= 'z') || after === '/')) return
-  const end = line.text.indexOf('>', at + 2)
-  const inside = line.text.slice(at + 1, end)
-  if (inside.includes('://') || inside.includes('@') || inside.startsWith('/#')) return
-  if (end > at) context.report('bare-html-tag', line.start + at, line.start + end + 1, line.path)
+  for (let at = line.text.indexOf('<'); at >= 0; at = line.text.indexOf('<', at + 1)) {
+    if (line.text.startsWith('<!--', at)) {
+      at = line.text.indexOf('-->', at + 4)
+      if (at < 0) return
+      continue
+    }
+    const end = tagEnd(line.text, at)
+    if (end < 0) continue
+    context.report('bare-html-tag', line.start + at, line.start + end + 1, line.path)
+    return
+  }
 }
 
 function emptyReference(line: Line, context: LintContext): void {
@@ -153,7 +166,8 @@ function openerWithoutBlank(line: Line, context: LintContext): void {
   if (!startsBlock(text)) return
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
-  if (text.startsWith('> ') && previous.text.trimStart().startsWith('> ')) return
+  // In a quote the mark on both lines is the quote's own; outside one it opens a quote (C2-B-019).
+  if (text.startsWith('> ') && previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')) return
   context.report('block-opener-without-blank-line', start, start + text.length, line.path)
 }
 

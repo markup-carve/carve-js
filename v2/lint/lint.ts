@@ -1,5 +1,5 @@
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
-import { parseWithLayout } from '../src/api.ts'
+import { parseWithDiagnostics, parseWithLayout } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
@@ -226,11 +226,20 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
 export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   validateOptions(options)
   const own = lintSource(source, options)
-  if (options.includes === undefined) return own
+  if (options.includes === undefined) return withoutResolver(source, own)
   const rest: LintOptions = { ...options }
   delete rest.includes
   return [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest),
     (text, node, path) => lintPayload(text, node, path, rest))]
+}
+
+/** C2-N-085: without a resolver each include reports `include-no-resolver`, as in any parse. */
+function withoutResolver(source: string, own: Diagnostic[]): Diagnostic[] {
+  if (!source.includes('{{')) return own
+  const found = parseWithDiagnostics(source).diagnostics.filter((entry) => entry.code === 'include-no-resolver')
+  if (found.length === 0) return own
+  const all = [...own, ...found]
+  return all.sort((a, b) => (a.range?.startOffset ?? 0) - (b.range?.startOffset ?? 0))
 }
 
 function createContext(source: string, options: LintOptions, layouts: LintContext['layouts']): LintContext {

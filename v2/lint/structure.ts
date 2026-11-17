@@ -21,6 +21,16 @@ function isWord(ch: string | undefined): boolean {
   return ch !== undefined && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'))
 }
 
+// 0.1 read U+FEFF as content, which String.prototype.trim would strip.
+const EDGE_SPACE = /^[\p{Zs}\t\n\r\f\v]|[\p{Zs}\t\n\r\f\v]$/u
+
+/** Whether the character at `at` stands behind an odd run of backslashes, so 0.1 read it as text. */
+function escaped(text: string, at: number): boolean {
+  let slashes = 0
+  while (text[at - 1 - slashes] === '\\') slashes++
+  return slashes % 2 === 1
+}
+
 function paired(text: string, mark: string, visit: (start: number, end: number) => void): void {
   let at = 0
   while (at < text.length) {
@@ -31,8 +41,8 @@ function paired(text: string, mark: string, visit: (start: number, end: number) 
     const before = text[start - 1]
     const after = text[end + mark.length]
     const inside = text.slice(start + mark.length, end)
-    if (before !== '\\' && inside[0] !== mark[0] && inside.at(-1) !== mark[0] &&
-      inside.trim() === inside && inside !== '' && !isWord(before) && !isWord(after)) {
+    if (before !== '\\' && !escaped(text, end) && inside[0] !== mark[0] && inside.at(-1) !== mark[0] &&
+      !EDGE_SPACE.test(inside) && inside !== '' && !isWord(before) && !isWord(after)) {
       visit(start, end + mark.length)
     }
     at = end + mark.length
@@ -277,10 +287,14 @@ function tableRows(node: Node, path: string, context: LintContext): void {
   }
 }
 
-/** C2-A-084: the children of a group that carry a caption. */
+/** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
+function isPanel(child: Node): boolean {
+  return child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined
+}
+
 function panelCount(node: Node): number {
   if (node.type !== 'figure_group') return 0
-  return node.children.filter((child) => 'caption' in child && child.caption !== undefined).length
+  return node.children.filter(isPanel).length
 }
 
 function figureEmpty(node: Node, path: string, context: LintContext): void {
@@ -351,7 +365,7 @@ function figurePanelNumber(node: Node, path: string, context: LintContext): void
   if (node.type !== 'figure_group') return
   for (let at = 0; at < node.children.length; at++) {
     const panel = node.children[at]
-    if (panel === undefined || !('caption' in panel) || panel.caption === undefined) continue
+    if (panel === undefined || !isPanel(panel) || !('caption' in panel) || panel.caption === undefined) continue
     if (raw(panel.caption, context).includes('#')) {
       reportNode('figure-group-panel-number', panel.caption, `${path}/children/${at}/caption`, context)
     }
@@ -496,12 +510,6 @@ function fenceCloserIndent(node: Node, path: string, context: LintContext): void
   if (opener < 0 || closer < 0 || opener === closer) return
   if (!last.text.slice(closer).startsWith('```')) return
   context.report('fence-closer-indented', last.start + closer, last.end, path)
-}
-
-function indentation(text: string): number {
-  let at = 0
-  while (text[at] === ' ' || text[at] === '\t') at++
-  return at < text.length ? at : -1
 }
 
 function figureOpenerMetadata(node: Node, path: string, context: LintContext): void {
@@ -661,6 +669,8 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
   const before = context.source.slice(line.start, range[0])
   const open = before.lastIndexOf('[')
   if (open < 0 || before.indexOf(']', open) >= 0) return
+  // C2-I-077: only a comment that takes the label's closer leaves the label unclosed; `[ %%` had none to take.
+  if (!context.source.slice(range[0], line.end).includes(']')) return
   context.report('comment-in-reference-label', line.start + open, range[1], path)
 }
 
@@ -724,9 +734,9 @@ function unclosedBracedComment(node: Node, path: string, context: LintContext): 
   const source = raw(node, context)
   const at = source.indexOf('{%')
   const range = bounds(node, context)
-  if (at >= 0 && source.indexOf('%}', at + 2) < 0 && range !== null) {
-    context.report('unclosed-braced-comment', range[0] + at, range[1], path)
-  }
+  if (at < 0 || source.indexOf('%}', at + 2) >= 0 || range === null) return
+  // C2-B-141: the comment is left unclosed by an interrupter line before its closer; with no closer at all nothing split it.
+  if (context.source.indexOf('%}', range[1]) >= 0) context.report('unclosed-braced-comment', range[0] + at, range[1], path)
 }
 
 function unclosedEmphasis(node: Node, path: string, context: LintContext): void {
@@ -770,69 +780,89 @@ function sigilAfterLetter(node: Node, path: string, context: LintContext): void 
   }
 }
 
+/**
+ * The column of `child` in the container of `item`, as the layout counts the item's columns: positions count from the
+ * start of the line, so a quote mark before the item would otherwise read as indentation.
+ */
+function itemColumn(item: Node, marker: number, child: Node): number | undefined {
+  if (item.pos === undefined || child.pos === undefined) return undefined
+  return child.pos.startColumn - item.pos.startColumn + marker
+}
+
+/** C2-W-106 table: a block of an item, after its first, that starts past the marker and short of the content column. */
 function listItemBodyColumn(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list_item' || node.pos === undefined) return
+  if (node.type !== 'list_item') return
   const layout = context.layouts.get(path)
   const marker = layout?.markerColumn
   const content = layout?.contentColumn
   if (marker === undefined || content === undefined) return
-  for (let lineNumber = node.pos.startLine + 1; lineNumber <= node.pos.endLine; lineNumber++) {
-    const line = context.lines[lineNumber - 1]
-    const previous = context.lines[lineNumber - 2]
-    if (line === undefined || previous?.text.trim() !== '') continue
-    const indent = indentation(line.text)
-    if (indent > marker && indent < content) {
-      context.report('list-item-body-below-content-column', line.start + indent, line.end, path)
-    }
+  for (const child of node.children.slice(1)) {
+    const line = child.pos === undefined ? undefined : context.lines[child.pos.startLine - 1]
+    const column = itemColumn(node, marker, child)
+    if (line === undefined || column === undefined || column <= marker || column >= content) continue
+    const at = line.start + (child.pos?.startColumn ?? 1) - 1
+    context.report('list-item-body-below-content-column', at, line.end, path)
+  }
+}
+
+/** Each block of a list item, other than a paragraph, that starts past the item's content column. */
+function overindentedBlocks(node: Node, path: string, context: LintContext,
+  visit: (at: number, child: Node, start: number, end: number, past: number, content: number) => void): void {
+  if (node.type !== 'list_item') return
+  const layout = context.layouts.get(path)
+  const content = layout?.contentColumn
+  const marker = layout?.markerColumn
+  if (content === undefined || marker === undefined) return
+  for (let at = 0; at < node.children.length; at++) {
+    const child = node.children[at]
+    if (child === undefined || child.type === 'paragraph' || child.pos === undefined) continue
+    const line = context.lines[child.pos.startLine - 1]
+    const column = itemColumn(node, marker, child)
+    if (line === undefined || column === undefined || column <= content) continue
+    visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
   }
 }
 
 function listItemBlockIndent(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list_item') return
-  const content = context.layouts.get(path)?.contentColumn
-  if (content === undefined) return
-  for (let at = 0; at < node.children.length; at++) {
-    const child = node.children[at]
-    if (child === undefined || child.type === 'paragraph' || child.pos === undefined) continue
-    const line = context.lines[child.pos.startLine - 1]
-    if (line === undefined) continue
-    const indent = indentation(line.text)
-    if (indent > content) context.report('list-item-block-overindented', line.start + indent, line.end,
-      `${path}/children/${at}`, { contentColumn: String(content + 1) })
+  overindentedBlocks(node, path, context, (at, _child, start, end, _past, content) => context.report(
+    'list-item-block-overindented', start, end, `${path}/children/${at}`, { contentColumn: String(content + 1) }))
+}
+
+/** The marker column of the list item that holds the list at `path`, or undefined at the top of a container. */
+function outerMarkerColumn(path: string, context: LintContext): number | undefined {
+  const split = path.lastIndexOf('/children/')
+  if (split < 0) return undefined
+  const parent = path.slice(0, split)
+  return context.nodeTypes.get(parent) === 'list_item' ? context.layouts.get(parent)?.markerColumn : undefined
+}
+
+/**
+ * Each later item of `node` whose marker stands left of the item before it, with `between` true where it stands right of
+ * the item that holds the list: C2-B-055 then read it between two open lists, and otherwise C2-B-054 left of them all.
+ */
+function leftMarkers(node: Node, path: string, context: LintContext,
+  visit: (at: number, column: number, deeper: number, outer: number | undefined) => void): void {
+  if (node.type !== 'list') return
+  const outer = outerMarkerColumn(path, context)
+  for (let at = 1; at < node.children.length; at++) {
+    const deeper = context.layouts.get(`${path}/children/${at - 1}`)?.markerColumn
+    const column = context.layouts.get(`${path}/children/${at}`)?.markerColumn
+    if (deeper !== undefined && column !== undefined && column < deeper) visit(at, column, deeper, outer)
   }
 }
 
 function listMarkerBelowColumn(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list') return
-  const split = path.lastIndexOf('/children/')
-  if (split < 0) return
-  const parent = path.slice(0, split)
-  if (context.nodeTypes.get(parent) !== 'list_item') return
-  const outer = context.layouts.get(parent)
-  const first = context.layouts.get(`${path}/children/0`)
-  const marker = first?.markerColumn
-  const base = outer?.markerColumn
-  const content = outer?.contentColumn
-  if (marker === undefined || base === undefined || content === undefined) return
-  if (marker > base && marker < content) reportNode('list-marker-below-content-column', node, path, context,
-    { column: String(marker + 1), contentColumn: String(content + 1), baseColumn: String(base + 1) })
+  leftMarkers(node, path, context, (at, column, deeper, outer) => {
+    const item = node.type === 'list' ? node.children[at] : undefined
+    if (item === undefined || outer === undefined || column <= outer) return
+    reportNode('list-marker-below-content-column', item, `${path}/children/${at}`, context,
+      { column: String(column + 1), contentColumn: String(deeper + 1), baseColumn: String(outer + 1) })
+  })
 }
 
 function blockOverindent(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list_item') return
-  const content = context.layouts.get(path)?.contentColumn
-  if (content === undefined) return
-  for (let at = 0; at < node.children.length; at++) {
-    const child = node.children[at]
-    if (child === undefined || child.type === 'paragraph' || child.pos === undefined) continue
-    const line = context.lines[child.pos.startLine - 1]
-    if (line === undefined) continue
-    const indent = indentation(line.text)
-    if (indent <= content) continue
-    const kind = child.type.replaceAll('_', ' ')
-    context.report('block-opener-overindented', line.start + indent, line.end, `${path}/children/${at}`,
-      { kind, past: String(indent - content), owner: 'list item' })
-  }
+  overindentedBlocks(node, path, context, (at, child, start, end, past) => context.report('block-opener-overindented', start, end,
+    `${path}/children/${at}`, { kind: child.type.replaceAll('_', ' '), past: String(past), owner: 'list item' }))
 }
 
 function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
@@ -926,15 +956,10 @@ function groupPath(path: string): string {
 }
 
 function unevenListIndent(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'list') return
-  for (let at = 1; at < node.children.length; at++) {
-    const first = context.layouts.get(`${path}/children/${at - 1}`)
-    const next = context.layouts.get(`${path}/children/${at}`)
-    if (first?.markerColumn !== undefined && next?.markerColumn !== undefined && next.markerColumn < first.markerColumn) {
-      const item = node.children[at]
-      if (item !== undefined) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
-    }
-  }
+  leftMarkers(node, path, context, (at, column, _deeper, outer) => {
+    const item = node.type === 'list' ? node.children[at] : undefined
+    if (item !== undefined && (outer === undefined || column <= outer)) reportNode('uneven-list-indent', item, `${path}/children/${at}`, context)
+  })
 }
 
 function nonDescriptiveLink(node: Node, path: string, context: LintContext): void {
