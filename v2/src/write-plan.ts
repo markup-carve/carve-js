@@ -478,7 +478,9 @@ function percentsBehindOpeners(leaf: Leaf, escaped: Uint8Array): void {
 /** Whether the unit `at` ends a bracket or a braced opener, of the tree or of text the reader reads as one. */
 function opensContentBefore(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
   const value = code(leaf, at)
-  if (leaf.kinds[at] === OPEN) return value === 91 || (code(leaf, at - 1) === 123 && BRACED_MARKS.includes(String.fromCharCode(value)))
+  if (leaf.kinds[at] === OPEN) {
+    return value === 91 || (code(leaf, at - 1) === 123 && leaf.kinds[at - 1] === OPEN && BRACED_MARKS.includes(String.fromCharCode(value)))
+  }
   if (leaf.kinds[at] !== TEXT || isLiteral(leaf, at, escaped)) return false
   if (value === 91) return true
   // A `{` of text before a mark of the tree is escaped for that mark, so it opens nothing.
@@ -980,7 +982,7 @@ function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
   for (let at = 1; at < leaf.codes.length; at++) {
     const before = leaf.owners[at - 1]
     if (before?.type !== 'comment' || before.form !== 'line' || leaf.owners[at] === before) continue
-    if (leaf.kinds[at] === CLOSE ? !closesBracketOrBrace(leaf, at) : endsAComment(leaf, at, escaped)) {
+    if (leaf.kinds[at] === CLOSE ? !closesAfterComment(leaf, at, escaped) : endsAComment(leaf, at, escaped)) {
       return undecide(leaf, 'comment before a closer')
     }
   }
@@ -998,9 +1000,24 @@ function openBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
   return depth
 }
 
-/** Whether the closing mark at `at` is a bracket or the closer of a braced form, before which a comment ends. */
-function closesBracketOrBrace(leaf: Leaf, at: number): boolean {
-  return leaf.codes[at] === 93 || leaf.codes[at] === 125 || leaf.codes[at + 1] === 125
+/**
+ * Whether the comment ends before the closing mark at `at`: a bracket, or the closer of a braced form where no
+ * bracket of text the reader reads is open, which would be the innermost form.
+ */
+function closesAfterComment(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+  if (leaf.codes[at] === 93) return true
+  return (leaf.codes[at] === 125 || leaf.codes[at + 1] === 125) && openTextBrackets(leaf, at, escaped) === 0
+}
+
+/** The `[` of text the reader reads as brackets before `at` that no `]` closes. */
+function openTextBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
+  let depth = 0
+  for (let unit = 0; unit < at; unit++) {
+    if (leaf.kinds[unit] !== TEXT || isLiteral(leaf, unit, escaped)) continue
+    if (leaf.codes[unit] === 91) depth++
+    else if (leaf.codes[unit] === 93 && depth > 0) depth--
+  }
+  return depth
 }
 
 /**
