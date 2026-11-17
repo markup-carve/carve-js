@@ -210,7 +210,7 @@ function xref(node: XrefNode, r: Render): string {
   const href = node.href
   // C2-H-086: unresolved, the characters as typed.
   if (href === undefined || r.resolution.goneTargets?.has(href) === true) return escapeText(`</#${node.key}>`)
-  // C2-H-097: the generated text is plain text.
+  // C2-H-096: the generated text is plain text.
   const text = escapeText(r.resolution.xrefText.get(node) ?? '')
   if (r.linkDepth > 0) return text
   const structural: Pair[] = [['href', href]]
@@ -329,7 +329,7 @@ function ruby(node: RubyNode, r: Render): string {
 
 /**
  * C2-H-076: an inline extension written in source has no renderer and is a span. C2-A-123,
- * C2-A-127: a name with a dot names a registered extension, which this engine does not know, so
+ * C2-X-004: a name with a dot names a registered extension, which this engine does not know, so
  * it renders through its fallback and is reported.
  */
 function inlineExtension(node: InlineExtensionNode, r: Render): string {

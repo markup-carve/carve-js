@@ -67,9 +67,9 @@
   "verdict": "gone",
   "clauses": [
    "C2-B-081",
-   "C2-A-076",
+   "C2-A-052",
    "C2-B-138",
-   "C2-A-147"
+   "C2-A-144"
   ],
   "input": "- [^n]: t\n  %%\n  y\n",
   "html": "<ul>\n  <li>[^n]: t\ny</li>\n</ul>"
@@ -79,9 +79,9 @@
   "verdict": "gone",
   "clauses": [
    "C2-B-081",
-   "C2-A-076",
+   "C2-A-052",
    "C2-B-138",
-   "C2-A-147"
+   "C2-A-144"
   ],
   "input": "[^n]: t\n%%\n  y\n\nx[^n]\n",
   "html": "<p>x<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes\">\n  <hr>\n  <ol>\n    <li id=\"fn1\">\n      <p>t\ny<a href=\"#fnref1\" role=\"doc-backlink\" aria-label=\"Back to reference\">↩</a></p>\n    </li>\n  </ol>\n</section>"
@@ -186,7 +186,7 @@
    "C2-B-138",
    "C2-B-053",
    "C2-A-145",
-   "C2-A-147"
+   "C2-A-144"
   ],
   "input": "- a\n%%%\nx\n%%%\n%% d\n- b\n",
   "html": "<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>"
@@ -199,7 +199,7 @@
    "C2-B-138",
    "C2-B-053",
    "C2-A-145",
-   "C2-A-147"
+   "C2-A-144"
   ],
   "input": "- a\n%%%\nx\n%%%\n- b\n",
   "html": "<ul>\n  <li>a</li>\n</ul>\n<ul>\n  <li>b</li>\n</ul>"

@@ -88,7 +88,7 @@ describe('invariants', () => {
     expect(placed('> - a', 'children.0.children.0.children.0.children.0')).toBe('1:5-1:6@4-5')
   })
 
-  it('C2-A-145, C2-A-147: siblings are ordered and disjoint, a comment of a comment-only line included', () => {
+  it('C2-A-144, C2-A-145: siblings are ordered and disjoint, a comment of a comment-only line included', () => {
     expect(placed('> a\n>\n> %% c\n>\n> b', 'children.0.children.1')).toBe('3:3-3:7@8-12')
     expect(placed('> a\n>\n> %% c\n>\n> b', 'children.0.children.2')).toBe('5:3-5:4@17-18')
   })

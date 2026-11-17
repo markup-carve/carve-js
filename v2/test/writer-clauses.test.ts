@@ -269,7 +269,7 @@ describe('layout', () => {
     expect(format('| a |\n^ cap')).toBe('| a |\n^ cap\n')
   })
 
-  it('C2-W-019: no blank line between two items of a tight list', () => {
+  it('C2-W-030: no blank line between two items of a tight list', () => {
     expect(format('- a\n- b')).toBe('- a\n- b\n')
   })
 
@@ -484,11 +484,11 @@ describe('canonical forms: blocks', () => {
     expect(format('{title="T"}\n```php\nx\n```')).toBe('{title=T}\n```php\nx\n```\n')
   })
 
-  it('C2-W-042: a bullet item is written with the character of the tree', () => {
+  it('C2-W-009: a bullet item is written with the character of the tree', () => {
     expect(format('- a\n- b\n\n* c\n* d')).toBe('- a\n- b\n\n* c\n* d\n')
   })
 
-  it('C2-W-043: an ordered list keeps its style, its delimiter and its start value', () => {
+  it('C2-W-009: an ordered list keeps its style, its delimiter and its start value', () => {
     expect(format('a) x\nb) y')).toBe('a) x\nb) y\n')
     expect(format('iv. x\nv. y')).toBe('iv. x\nv. y\n')
     expect(format('3) a\n4) b')).toBe('3) a\n4) b\n')
@@ -586,7 +586,7 @@ describe('canonical forms: blocks', () => {
     expect(format('```\nx\n```\n^ Code cap')).toBe('```\nx\n```\n^ Code cap\n')
   })
 
-  it('C2-W-054: an id is written on a heading exactly when attrs.id holds one', () => {
+  it('C2-W-009, C2-A-134: an id is written on a heading exactly when attrs.id holds one', () => {
     expect(format('{#my}\n= Title')).toBe('{#my}\n= Title\n')
     expect(write(documentOf({ type: 'heading', level: 1, generatedId: 'title', children: [text('Title')] }))).toBe('= Title\n')
     expect(write(parse('= Title'))).toBe('= Title\n')
@@ -796,7 +796,7 @@ describe('canonical forms: inline', () => {
     expect(write(documentOf(paragraph(inline('underline', 'u'), ' ', inline('strike', 's'), ' ', inline('highlight', 'h'))))).toBe('{_u_} {~s~} {=h=}\n')
   })
 
-  it('C2-W-072: a replacement is a deletion directly followed by an insertion', () => {
+  it('C2-W-009, C2-A-097: a replacement is a deletion directly followed by an insertion', () => {
     expect(write(documentOf(paragraph(inline('delete', 'old'), inline('insert', 'new'))))).toBe('{-old-}{+new+}\n')
   })
 

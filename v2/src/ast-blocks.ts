@@ -367,7 +367,7 @@ const BUILDERS = new Map<number, BlockBuilder<Block>>([
   [INCLUDE, includeBlock],
 ])
 
-// C2-A-052: the block pass opens definitions and the frontmatter at the top level only (C2-B-086, C2-B-164).
+// C2-A-052: the block pass opens definitions and the frontmatter at the top level only (C2-B-081, C2-B-164).
 const DOCUMENT_BUILDERS = new Map<number, BlockBuilder<DocumentChild>>([
   ...BUILDERS,
   [FOOTNOTE, footnoteNode],

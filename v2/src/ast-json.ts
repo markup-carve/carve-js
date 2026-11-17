@@ -1,4 +1,4 @@
-// The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161 to C2-A-163).
+// The JSON form of a tree (C2-A-012, C2-A-165) and tree equality (C2-A-161, C2-A-162).
 import { type DocumentNode, type Envelope, isRecord, type Node } from './ast.ts'
 import { AST_RESULTS, type ResultField } from './ast-tables.ts'
 import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.ts'

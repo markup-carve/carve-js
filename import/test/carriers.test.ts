@@ -190,7 +190,7 @@ describe('C2-H-186 carriers', () => {
   })
 })
 
-describe('C2-H-118 facts every render writes', () => {
+describe('C2-H-031, C2-H-032: facts every render writes', () => {
   it('C2-H-033 data-task-state and C2-H-032 the task-list class give task items', () => {
     expect(back('- [ ] a\n- [x] b\n')).toEqual([])
   })

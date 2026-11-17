@@ -82,7 +82,7 @@ describe('paragraphs, headings and sections', () => {
     ['C2-H-024: a slug that is taken gets a suffix, and an authored id is written as the author wrote it', '# T\n\n# T\n\n{#T}\nx\n\n{#T}\ny', '<h1 id="T-2">T</h1>\n<h1 id="T-3">T</h1>\n<p id="T">x</p>\n<p id="T">y</p>', { sections: false }],
     ['C2-H-026: a top-level heading opens a section up to the next heading of the same or a lower level number; a skipped level makes none', '# A\n\na\n\n### C\n\n## B\n\n# D', '<section id="A">\n  <h1>A</h1>\n  <p>a</p>\n  <section id="C">\n    <h3>C</h3>\n  </section>\n  <section id="B">\n    <h2>B</h2>\n  </section>\n</section>\n<section id="D">\n  <h1>D</h1>\n</section>'],
     ['C2-H-027: the id of a heading that opens a section is on the section, every other attribute on the heading', '{#i .c k=v :en}\n# H', '<section id="i">\n  <h1 class="c" lang="en" k="v">H</h1>\n</section>'],
-    ['C2-H-028: a heading inside a container opens no section and carries its id itself', '> # Q\n\n- # L', '<blockquote>\n  <h1 id="Q">Q</h1>\n</blockquote>\n<ul>\n  <li>\n    <h1 id="L">L</h1>\n  </li>\n</ul>'],
+    ['C2-H-026: a heading inside a container opens no section and carries its id itself', '> # Q\n\n- # L', '<blockquote>\n  <h1 id="Q">Q</h1>\n</blockquote>\n<ul>\n  <li>\n    <h1 id="L">L</h1>\n  </li>\n</ul>'],
     ['C2-H-127: with sections off no heading opens a section', '# A\n\nx', '<h1 id="A">A</h1>\n<p>x</p>', { sections: false }],
   ])
 
@@ -163,7 +163,7 @@ describe('tables', () => {
     ['C2-H-056: a header cell in the head carries scope col, one outside it scope row', '|= h |= i |\n|= r | d |', '<table>\n  <thead>\n    <tr><th scope="col">h</th><th scope="col">i</th></tr>\n  </thead>\n  <tbody>\n    <tr><th scope="row">r</th><td>d</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-057: a resolved alignment is a style that follows an authored style', '|={>} a |={~ style="color: red"} b |\n| c |{<} d |', '<table>\n  <thead>\n    <tr><th scope="col" style="text-align: right;">a</th><th scope="col" style="color: red; text-align: center;">b</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style="text-align: right;">c</td><td style="text-align: left;">d</td></tr>\n  </tbody>\n</table>'],
     ['C2-H-058: rowspan and colspan are written for a count above 1, and a covered cell is not written', '| a | < | b |\n| c | d | ^ |', '<table>\n  <tbody>\n    <tr><td colspan="2">a</td><td rowspan="2">b</td></tr>\n    <tr><td>c</td><td>d</td></tr>\n  </tbody>\n</table>'],
-    ['C2-H-059: widths gives a colgroup', '{widths="30,70"}\n| a | b |', '<table>\n  <colgroup>\n    <col style="width: 30%;">\n    <col style="width: 70%;">\n  </colgroup>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>'],
+    ['C2-H-152: widths gives a colgroup', '{widths="30,70"}\n| a | b |', '<table>\n  <colgroup>\n    <col style="width: 30%;">\n    <col style="width: 70%;">\n  </colgroup>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>'],
     ['C2-B-174: no row span crosses into the foot, so the mark in its first row is text', '{footer-rows=1}\n| a |\n| ^ |', '<table>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td>^</td></tr>\n  </tfoot>\n</table>'],
     ['C2-H-061: the caption is the first child of the table, and the attributes stay on the table', '{#t .c}\n| a |{.r}\n^ *C*', '<table id="t" class="c">\n  <caption><strong>C</strong></caption>\n  <tbody>\n    <tr class="r"><td>a</td></tr>\n  </tbody>\n</table>'],
   ])
@@ -185,7 +185,7 @@ describe('captions and figures', () => {
     ['C2-H-062, C2-H-063: a captioned block is a figure around the block and its figcaption; the attribute line applies to the figure', '{#f .c}\n> q\n^ who', '<figure id="f" class="c">\n  <blockquote><p>q</p></blockquote>\n  <figcaption>who</figcaption>\n</figure>'],
     ['C2-H-064: a figure group and its panels carry their classes, and the caption of the group is its last child', '::: figure\n![a](b)\n^ one\n:::\n^ both', '<figure class="carve-figure-group">\n  <figure class="carve-figure-panel">\n    <img src="b" alt="a">\n    <figcaption>one</figcaption>\n  </figure>\n  <figcaption>both</figcaption>\n</figure>'],
     ['C2-H-065: a caption with one paragraph writes it bare, and its line breaks are soft breaks', '| a |\n^ one\ntwo', '<table>\n  <caption>one\ntwo</caption>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>'],
-    ['C2-H-066, C2-H-135: the number mark is the number of the caption in the sequence of its label; a panel caption takes none', '| a |\n^ Table #: x\n\n| b |\n^ Table #\n\n::: figure\n![a](b)\n^ P #\n:::\n^ Figure #', '<table>\n  <caption>Table 1: x</caption>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<table>\n  <caption>Table 2</caption>\n  <tbody>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>\n<figure class="carve-figure-group">\n  <figure class="carve-figure-panel">\n    <img src="b" alt="a">\n    <figcaption>P #</figcaption>\n  </figure>\n  <figcaption>Figure 1</figcaption>\n</figure>'],
+    ['C2-H-066, C2-H-149: the number mark is the number of the caption in the sequence of its label; a panel caption takes none', '| a |\n^ Table #: x\n\n| b |\n^ Table #\n\n::: figure\n![a](b)\n^ P #\n:::\n^ Figure #', '<table>\n  <caption>Table 1: x</caption>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<table>\n  <caption>Table 2</caption>\n  <tbody>\n    <tr><td>b</td></tr>\n  </tbody>\n</table>\n<figure class="carve-figure-group">\n  <figure class="carve-figure-panel">\n    <img src="b" alt="a">\n    <figcaption>P #</figcaption>\n  </figure>\n  <figcaption>Figure 1</figcaption>\n</figure>'],
     ['C2-H-067: under roundtrip the number is wrapped in a span', '| a |\n^ T #', '<table>\n  <caption>T <span data-carve-caption-number>1</span></caption>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>', { roundtrip: true }],
     ['C2-H-077: a math block is p around the display form, and it takes a caption', '$$`x`\n^ Equation #', '<figure>\n  <p><span class="math display" role="math">\\[x\\]</span></p>\n  <figcaption>Equation 1</figcaption>\n</figure>'],
   ])
@@ -246,7 +246,7 @@ describe('inline elements', () => {
     expect(lossCodes(document)).toEqual(['extension-fallback-rendered'])
   })
 
-  it('C2-H-076, C2-A-127: an unknown optional extension renders through its fallback and is reported', () => {
+  it('C2-H-076, C2-X-004: an unknown optional extension renders through its fallback and is reported', () => {
     const extension: BlockExtensionNode = { type: 'block_extension', name: 'org.example.d', version: '1', children: [], fallback: [paragraph('f')] }
     const document = { ...documentOf(extension), extensions: [{ name: 'org.example.d', version: '1', required: false, slots: [] }] }
     expect(render(document)).toBe('<p>f</p>')
@@ -262,7 +262,7 @@ describe('links, images and references', () => {
     ['C2-H-081: a cross-reference and social links inside link text write text and inert spans', '# H\n\n[go </#H> @ann #tag](/u)', '<h1 id="H">H</h1>\n<p><a href="/u">go H <span class="mention"><strong>@ann</strong></span> <span class="tag"><strong>#tag</strong></span></a></p>', { sections: false, social: { mentionUrl: '/m/{name}', tagUrl: '/t/{name}' } }],
     ['C2-H-082: a destination the policy denies is the empty string, and the element stays', '[a](javascript:alert(1)) ![b](DATA:x) <vbscript:y>', '<p><a href="">a</a> <img src="" alt="b"> <a href="">vbscript:y</a></p>'],
     ['C2-H-083: a reference a heading resolves leads to the id of the first matching heading', '# T\n\n# T\n\n[T][] [x][T]', '<h1 id="T">T</h1>\n<h1 id="T-2">T</h1>\n<p><a href="#T">T</a> <a href="#T">x</a></p>', { sections: false }],
-    ['C2-H-084: an image reference never resolves against the headings', '# T\n\nx ![i][T]', '<h1 id="T">T</h1>\n<p>x ![i][T]</p>', { sections: false }],
+    ['C2-I-083: an image reference never resolves against the headings', '# T\n\nx ![i][T]', '<h1 id="T">T</h1>\n<p>x ![i][T]</p>', { sections: false }],
     ['C2-H-085: an unresolved reference renders its brackets and its label as text and its children as HTML', '[*a* & `b`][no  pe] [/c/][] x ![i <j>][k]', '<p>[<strong>a</strong> &amp; <code>b</code>][no pe] [<em>c</em>][] x ![i &lt;j&gt;][k]</p>'],
     ['C2-H-086: an unresolved footnote reference and cross-reference are text; a footnote inside an unresolved reference is an ordinary one', '[^zz] </#no> [a^[n]][nope]', '<p>[^zz] &lt;/#no&gt; [a<a id="fnref1" href="#fn1" role="doc-noteref"><sup>1</sup></a>][nope]</p>\n<section role="doc-endnotes" aria-label="Footnotes">\n  <hr>\n  <ol>\n    <li id="fn1">\n      <p>n<a href="#fnref1" role="doc-backlink" aria-label="Back to reference">↩</a></p>\n    </li>\n  </ol>\n</section>'],
     ['C2-H-139: the attribute block of an unresolved reference is text, as one block in the fixed order', '[a][nope]{k="v w" .c :en #i bare}', '<p>[a][nope]{#i .c :en k="v w" bare}</p>'],
@@ -328,7 +328,7 @@ describe('footnotes', () => {
 describe('cross-references and abbreviations', () => {
   check([
     ['C2-H-095, C2-H-096: a resolved cross-reference is a link around the plain text of the heading or the label and number of the caption', '# The *big* one\n\n{#t}\n| a |\n^ Table #: x\n\n</#The-big-one> </#t> </#the-big-one>', '<h1 id="The-big-one">The <strong>big</strong> one</h1>\n<table id="t">\n  <caption>Table 1: x</caption>\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>\n<p><a href="#The-big-one">The big one</a> <a href="#t">Table 1</a> &lt;/#the-big-one&gt;</p>', { sections: false }],
-    ['C2-H-097: the generated text is plain text, with no abbreviation in it', '*[HTML]: x\n\n# HTML & co\n\n</#HTML-co>', '<h1 id="HTML-co"><abbr title="x">HTML</abbr> &amp; co</h1>\n<p><a href="#HTML-co">HTML &amp; co</a></p>', { sections: false }],
+    ['C2-H-096, C2-H-143: the generated text is plain text, with no abbreviation in it', '*[HTML]: x\n\n# HTML & co\n\n</#HTML-co>', '<h1 id="HTML-co"><abbr title="x">HTML</abbr> &amp; co</h1>\n<p><a href="#HTML-co">HTML &amp; co</a></p>', { sections: false }],
     ['C2-H-098, C2-H-099: an abbreviation node is abbr with its expansion, and inside a span with the abbr key only its text', '*[HTML]: Hyper "Text"\n\nHTML [HTML]{abbr="other"}', '<p><abbr title="Hyper &quot;Text&quot;">HTML</abbr> <abbr title="other">HTML</abbr></p>'],
     ['C2-H-104: a reference and a cross-reference resolve against a block further down', '[T][] </#T> </#f>\n\n# T\n\n{#f}\n![a](b)\n^ Figure #', '<p><a href="#T">T</a> <a href="#T">T</a> <a href="#f">Figure 1</a></p>\n<h1 id="T">T</h1>\n<figure id="f">\n  <img src="b" alt="a">\n  <figcaption>Figure 1</figcaption>\n</figure>', { sections: false }],
   ])
@@ -376,7 +376,7 @@ describe('roundtrip carriers', () => {
     ['C2-H-115, C2-H-116, C2-H-120: with roundtrip on an authored attribute with a reserved name is dropped; another data-carve- name is ordinary', '[t]{data-carve-ref=x data-carve-other=y data-marker=z}', '<p><span data-carve-other="y">t</span></p>', { roundtrip: true }],
     ['C2-H-116: with roundtrip off the attribute is dropped too', '[t]{data-carve-ref=x data-carve-raw=html}', '<p><span>t</span></p>'],
     ['C2-H-117: a presence carrier is the bare attribute name', '<https://x.y>', '<p><a href="https://x.y" data-carve-autolink>https://x.y</a></p>', { roundtrip: true }],
-    ['C2-H-118: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
+    ['C2-H-031, C2-H-032: data-task-state, data-delim and task-list are written on every render', '1) a\n\n- [x] b', '<ol data-delim=")">\n  <li>a</li>\n</ol>\n<ul class="task-list">\n  <li data-task-state="x" class="task" style="list-style: none"><input type="checkbox" checked disabled aria-label="b"> b</li>\n</ul>'],
   ])
 
   it('C2-H-116: the dropped attribute is reported as a render loss', () => {

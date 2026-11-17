@@ -1,4 +1,4 @@
-// The markers of a list (C2-W-042 to C2-W-045) and whether two lists would read as one (C2-W-028).
+// The markers of a list (C2-W-044, C2-W-045) and whether two lists would read as one (C2-W-028).
 import { type ListNode, type Node } from './ast.ts'
 import { type Writer } from './write-state.ts'
 

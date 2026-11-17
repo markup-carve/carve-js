@@ -243,7 +243,7 @@ function firstLine(leaf: Leaf, at: number, place: LeafPlace): number {
   }
 }
 
-/** C2-B-016, C2-W-121: a term mark opens a description list; a description mark opens below one. */
+/** C2-B-016, C2-W-088: a term mark opens a description list; a description mark opens below one. */
 function colon(leaf: Leaf, at: number, place: LeafPlace): number {
   const end = runEnd(leaf, at, 58)
   if (end - at >= 3) return divLine(leaf, at, end)

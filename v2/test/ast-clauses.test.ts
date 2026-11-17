@@ -353,7 +353,7 @@ describe('comments', () => {
 })
 
 describe('definitions', () => {
-  it('C2-A-076: a definition-shaped line inside a container is text', () => {
+  it('C2-A-052, C2-B-081: a definition-shaped line inside a container is text', () => {
     expect(block('> [r]: /u')).toEqual({ type: 'block_quote', children: [paragraph('[r]: /u')] })
   })
 
@@ -656,7 +656,7 @@ describe('equality', () => {
     expect(treesEqual(documentOf({ ...paragraph(), data: { x: 1 } }), documentOf({ ...paragraph(), data: { x: 2 } }))).toBe(false)
   })
 
-  it('C2-A-162, C2-A-163: positions and the byte length are not compared', () => {
+  it('C2-A-161, C2-A-162: positions and the byte length are not compared', () => {
     expect(treesEqual(placedTree('a'), tree('a'))).toBe(true)
     expect(treesEqual(placedTree('> a'), placedTree('::: >\na\n:::'))).toBe(true)
   })
@@ -666,7 +666,7 @@ describe('equality', () => {
     expect(decodeTree(encodeTree(root))).toEqual(root)
   })
 
-  it('C2-A-166: what the tree holds differs between two documents that differ in it', () => {
+  it('C2-A-161: what the tree holds differs between two documents that differ in it', () => {
     for (const [a, b] of [['- a', '* a'], ['1. a', '1) a'], ['1. a', '2. a'], ['a. a', 'A. a'], ['- [ ] a', '- [_] a'], ['a %% c', 'a {% c %}']]) {
       expect(treesEqual(tree(a!), tree(b!))).toBe(false)
     }
@@ -705,7 +705,7 @@ describe('reading a tree', () => {
     expect(refusal({ type: 'paragraph', astVersion: '2.0', children: [] })).toBe('/type: the root is not a document')
   })
 
-  it('C2-A-169, C2-A-170: an unknown field is refused at any node, at decode', () => {
+  it('C2-A-028, C2-A-167, C2-A-170: an unknown field is refused at any node, at decode', () => {
     expect(() => decodeTree(encodeTree(documentOf(paragraph({ type: 'text', value: 'a', bold: true } as unknown as Inline))))).toThrow('/children/0/children/0/bold: not a field of text')
     expect(refusal(documentOf({ ...paragraph(), pos: null } as unknown as Block))).toBe('/children/0/pos: a field without a value')
   })

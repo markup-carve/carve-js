@@ -282,7 +282,7 @@ describe('the other clauses of the two commits', () => {
     expect(write(div('a.b'))).toBe('{class="a.b"}\n:::\nx\n:::\n')
   })
 
-  it('C2-W-121: a paragraph that starts with a description mark after a description list keeps its backslash', () => {
+  it('C2-W-088: a paragraph that starts with a description mark after a description list keeps its backslash', () => {
     expect(format(':: t\n: d\n\n\n\n\\: x')).toBe(':: t\n: d\n\n\\: x\n')
   })
 
