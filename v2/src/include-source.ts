@@ -1,5 +1,5 @@
 // The physical lines of an included file (C2-N-034) and its region markers (C2-N-037 to C2-N-041).
-import { BYTE_ORDER_MARK, CR, HASH, HYPHEN, PERCENT, SLASH, STAR, TAB, UNDERSCORE } from './chars.ts'
+import { BYTE_ORDER_MARK, COMMA, CR, HASH, HYPHEN, PERCENT, QUOTE_MARK, SLASH, STAR, TAB, UNDERSCORE } from './chars.ts'
 import { isRange } from './include.ts'
 import { isAsciiAlphanumeric, isAsciiLetter, isAsciiNameCharacter } from './unicode.ts'
 
@@ -144,10 +144,16 @@ function takeMarker(scan: RegionScan, marker: Marker, index: number, name: strin
   return true
 }
 
-/** C2-N-037, C2-N-041: the lines strictly between the markers of the region `name`, or the reason there are none. */
-export function regionRange(text: string, lines: FileLines, name: string, code: boolean): LineRange | string {
+/**
+ * C2-N-037, C2-N-041: the lines strictly between the markers of the region `name`, or the reason there are none.
+ * C2-N-046: a line of a table include that `quoted` marks stands inside a quoted field and is no marker.
+ */
+export function regionRange(
+  text: string, lines: FileLines, name: string, code: boolean, quoted: (index: number) => boolean = () => false,
+): LineRange | string {
   const scan: RegionScan = { stack: [], seen: new Set(), range: null }
   for (let index = 0; index < lines.starts.length; index++) {
+    if (quoted(index)) continue
     const marker = readMarker(text.slice(lines.starts[index], lines.ends[index]), code)
     if (marker.kind === NOT_MARKER) continue
     if (marker.kind === MALFORMED || !takeMarker(scan, marker, index, name)) return REGION_MALFORMED
@@ -164,4 +170,51 @@ export function payloadOf(text: string, lines: FileLines, range: LineRange, skip
     payload += `${text.slice(lines.starts[index], lines.ends[index])}\n`
   }
   return payload
+}
+
+/** What a line of a table include is (C2-N-046): the start of a record, a line inside a quoted field, or a marker. */
+export const RECORD_START = 0
+export const RECORD_QUOTED = 1
+export const RECORD_MARKER = 2
+
+interface QuoteScan {
+  quoted: boolean
+  cellStart: boolean
+}
+
+/** C2-B-180: the quote state after one line; a quote opens a field only at its start, and a doubled one is one quote. */
+function scanQuotes(text: string, start: number, end: number, separator: number, scan: QuoteScan): void {
+  for (let at = start; at < end; at++) {
+    const code = text.charCodeAt(at)
+    if (scan.quoted) {
+      if (code !== QUOTE_MARK) continue
+      if (text.charCodeAt(at + 1) === QUOTE_MARK && at + 1 < end) at++
+      else scan.quoted = false
+    } else if (code === separator) {
+      scan.cellStart = true
+    } else {
+      scan.quoted = scan.cellStart && code === QUOTE_MARK
+      scan.cellStart = false
+    }
+  }
+}
+
+/** C2-N-046: the kind of each line of a `csv` or `tsv` file; a marker is recognized only outside a quoted field. */
+export function recordKinds(text: string, lines: FileLines, tsv: boolean): number[] {
+  const separator = tsv ? TAB : COMMA
+  const scan: QuoteScan = { quoted: false, cellStart: true }
+  const kinds: number[] = []
+  for (let index = 0; index < lines.starts.length; index++) {
+    if (scan.quoted) {
+      kinds.push(RECORD_QUOTED)
+    } else if (isMarkerLine(text, lines, index)) {
+      kinds.push(RECORD_MARKER)
+      continue
+    } else {
+      kinds.push(RECORD_START)
+      scan.cellStart = true
+    }
+    scanQuotes(text, lines.starts[index]!, lines.ends[index]!, separator, scan)
+  }
+  return kinds
 }

@@ -461,6 +461,46 @@ describe('13. code mode, attributes, captions and tables', () => {
     expect(html).toBe('<table>\n  <thead>\n    <tr><th scope="col">h</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>v</td></tr>\n  </tbody>\n</table>')
   })
 
+  it('C2-N-046: a marker line inside a quoted field is data of that field, also for region', () => {
+    const file = 'Name\n"first\n#region keep\nmid\n#endregion keep\nlast"\n'
+    const cell = 'first\n#region keep\nmid\n#endregion keep\nlast'
+    expect(render('{table}\n{{ a.csv @code:csv }}', { includes: includes({ 'a.csv': file }) })).toContain(`<td>${cell}</td>`)
+    expect(codes('{table}\n{{ a.csv @region:keep @code:csv }}', { 'a.csv': file })[0]).toBe('include-region-invalid')
+    const outer = render('{table}\n{{ a.csv @region:r @code:csv }}', { includes: includes({ 'a.csv': `#region r\n${file}#endregion r\n` }) })
+    expect(outer).toContain(`<td>${cell}</td>`)
+  })
+
+  it('C2-N-046: the foot is the last footer-rows records of the file under rows, lines and region', () => {
+    const t = { 't.csv': 'H\na\nb\nF\n' }
+    const html = (selection: string): string => render(`{table footer-rows=1}\n{{ t.csv ${selection} @code:csv }}`, { includes: includes(t) })
+    const table = (body: string[]): string => [
+      '<table>', '  <thead>', '    <tr><th scope="col">H</th></tr>', '  </thead>', '  <tbody>', ...body.map((cell) => `    <tr><td>${cell}</td></tr>`),
+      '  </tbody>', '  <tfoot>', '    <tr><td>F</td></tr>', '  </tfoot>', '</table>',
+    ].join('\n')
+    expect(html('@rows:2-4')).toBe(table(['a', 'b']))
+    expect(html('@rows:1-2')).toBe(table(['a']))
+    expect(html('@lines:3-4')).toBe(table(['b']))
+    const regioned = { 't.csv': 'H\na\n#region r\nb\n#endregion\nF\n' }
+    expect(render('{table footer-rows=1}\n{{ t.csv @region:r @code:csv }}', { includes: includes(regioned) })).toBe(table(['b']))
+  })
+
+  it('C2-N-046, C2-B-221: the head takes its records first, and a larger footer-rows takes all records below it', () => {
+    const html = render('{table header-rows=2 footer-rows=5}\n{{ t.csv @rows:1-3 @code:csv }}', { includes: includes({ 't.csv': 'H\nI\nF\n' }) })
+    expect(html).toBe([
+      '<table>', '  <thead>', '    <tr><th scope="col">H</th></tr>', '    <tr><th scope="col">I</th></tr>', '  </thead>',
+      '  <tfoot>', '    <tr><td>F</td></tr>', '  </tfoot>', '</table>',
+    ].join('\n'))
+  })
+
+  it('C2-N-047: cols names match the head of the whole file under lines and region', () => {
+    const file = { 'a.csv': 'Name,Price\nA,1\n%% #region r\nB,2\n%% #endregion\n' }
+    const html = (selection: string): string => render(`{table}\n{{ a.csv ${selection} @cols:"Price" @code:csv }}`, { includes: includes(file) })
+    const table = (cell: string): string =>
+      `<table>\n  <thead>\n    <tr><th scope="col">Price</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>${cell}</td></tr>\n  </tbody>\n</table>`
+    expect(html('@lines:2-2')).toBe(table('1'))
+    expect(html('@region:r')).toBe(table('2'))
+  })
+
   it('C2-N-073, C2-N-074: the caption of an unexpanded code include is numbered and written after the directive', () => {
     expect(render('{{ x.js @code }}\n^ Listing #: Code', { includes: includes({}) })).toBe('<p>{{ x.js @code }}</p>\n<p>Listing 1: Code</p>')
   })

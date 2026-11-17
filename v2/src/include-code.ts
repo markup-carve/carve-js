@@ -7,7 +7,9 @@ import {
 import { buildSource, type ParseFacts } from './ast-blocks.ts'
 import { plainText } from './ast-text.ts'
 import { BACKTICK, BYTE_ORDER_MARK } from './chars.ts'
-import { type FileLines, isMarkerLine, type LineRange, payloadOf, rangeBounds } from './include-source.ts'
+import {
+  type FileLines, type LineRange, payloadOf, rangeBounds, RECORD_MARKER, RECORD_START, recordKinds,
+} from './include-source.ts'
 import { utf8Length } from './positions.ts'
 import { braceBlock } from './write-attributes.ts'
 
@@ -78,15 +80,46 @@ function rowsOf(table: TableNode, type: 'table_head' | 'table_body' | 'table_foo
   return rows
 }
 
-/** C2-N-046: `rows` chooses body records by their number among all records; a head record is not repeated. */
-function selectRows(table: TableNode, value: string): Failure | null {
+/** The records of a table include: the rows of the whole file, and the line index each record starts on. */
+interface FileRecords {
+  rows: TableRowNode[]
+  starts: number[]
+  head: number
+  foot: number
+}
+
+function fileRecords(table: TableNode, kinds: readonly number[]): FileRecords {
   const head = rowsOf(table, 'table_head')
-  const records = [...head, ...rowsOf(table, 'table_body'), ...rowsOf(table, 'table_foot')]
-  const [first, last] = rangeBounds(value)
-  if (first > records.length) return { cause: 'rows_past_end' }
-  const chosen = records.slice(first - 1, last).slice(Math.max(0, head.length - first + 1))
+  const foot = rowsOf(table, 'table_foot')
+  const rows = [...head, ...rowsOf(table, 'table_body'), ...foot]
+  const starts: number[] = []
+  kinds.forEach((kind, index) => { if (kind === RECORD_START) starts.push(index) })
+  return { rows, starts, head: head.length, foot: foot.length }
+}
+
+/** C2-N-046: the records a selection chooses, by number under `rows` and by the line they start on otherwise. */
+function chosenRecords(node: IncludeNode, records: FileRecords, range: LineRange): number[] | Failure {
+  const rows = node.options?.rows
+  const all = records.rows.map((_, at) => at)
+  if (rows === undefined) return all.filter((at) => records.starts[at]! >= range.from && records.starts[at]! < range.to)
+  const [first, last] = rangeBounds(rows)
+  if (first > records.rows.length) return { cause: 'rows_past_end' }
+  return all.slice(first - 1, last)
+}
+
+/**
+ * C2-N-046: the head and the foot are the first and the last records of the whole file, written under any selection;
+ * a selection chooses only body records, so a head or foot record inside it is not repeated.
+ */
+function selectRecordsOf(node: IncludeNode, table: TableNode, kinds: readonly number[], range: LineRange): Failure | null {
+  const records = fileRecords(table, kinds)
+  const chosen = chosenRecords(node, records, range)
+  if (!Array.isArray(chosen)) return chosen
+  const footAt = records.rows.length - records.foot
+  const body = chosen.filter((at) => at >= records.head && at < footAt).map((at) => records.rows[at]!)
   const groups: TableNode['children'] = table.children.filter((group) => group.type === 'table_head')
-  groups.push({ type: 'table_body', children: chosen })
+  if (body.length > 0) groups.push({ type: 'table_body', children: body })
+  groups.push(...table.children.filter((group) => group.type === 'table_foot'))
   table.children = groups
   return null
 }
@@ -142,11 +175,9 @@ function selectColumns(node: IncludeNode, table: TableNode, cols: string | strin
   return null
 }
 
-function selectRecords(node: IncludeNode, table: TableNode): Failure | null {
-  const rows = node.options?.rows
-  const failure = rows === undefined ? null : selectRows(table, rows)
+function selectRecords(node: IncludeNode, table: TableNode, kinds: readonly number[], range: LineRange): Failure | null {
   const cols = node.options?.cols
-  return failure ?? (cols === undefined ? null : selectColumns(node, table, cols))
+  return selectRecordsOf(node, table, kinds, range) ?? (cols === undefined ? null : selectColumns(node, table, cols))
 }
 
 /** C2-N-045: a `csv` or `tsv` code include whose attributes carry the `table` flag. */
@@ -164,21 +195,23 @@ function withoutPositions<N extends Node>(root: N): N {
   return root
 }
 
-/** C2-N-046: a line that is a well-formed marker is no record of a table include. */
-function skipped(node: IncludeNode, text: string, lines: FileLines): (index: number) => boolean {
-  if (!isTableInclude(node)) return () => false
-  return (index) => isMarkerLine(text, lines, index)
+/** C2-N-046: a table include reads the records of the whole file; a marker outside a quoted field is no record. */
+function tableChild(node: IncludeNode, text: string, lines: FileLines, range: LineRange): ReturnType<typeof fencedBlock> | Failure {
+  const kinds = recordKinds(text, lines, node.options?.code === 'tsv')
+  const all = { from: 0, to: lines.starts.length }
+  const fenced = fencedBlock(node, payloadOf(text, lines, all, (index) => kinds[index] === RECORD_MARKER))
+  if (fenced?.block.type !== 'table') return fenced
+  return selectRecords(node, fenced.block, kinds, range) ?? fenced
 }
 
 /** C2-N-042 to C2-N-047: the one child of a code include, or the failure of its record selection. */
 export function codeChildren(
   node: IncludeNode, text: string, lines: FileLines, range: LineRange, positions: boolean,
 ): { children: Block[], facts: ParseFacts | null } | Failure {
-  const fenced = fencedBlock(node, payloadOf(text, lines, range, skipped(node, text, lines)))
+  const fenced = isTableInclude(node) ? tableChild(node, text, lines, range) : fencedBlock(node, payloadOf(text, lines, range, () => false))
   if (fenced === null) return { children: [], facts: null }
+  if ('cause' in fenced) return fenced
   const child = fenced.block
-  const failure = child.type === 'table' ? selectRecords(node, child) : null
-  if (failure !== null) return failure
   if (positions) child.pos = payloadPosition(text, lines, range)
   // C2-N-073: the child carries a copy of the caption, which is numbered and written in place of the include's own.
   // The copy was not produced by the included file, so it carries no position of it (C2-N-019).

@@ -6,7 +6,9 @@ import { addFinding, type Findings } from './diagnostics.ts'
 import { INCLUDE_KEY_REPEATED, optionProblem } from './include.ts'
 import { codeChildren, isTableInclude } from './include-code.ts'
 import { type IncludeAnswer, type IncludeError, type IncludeRequest, type IncludeSettings } from './include-settings.ts'
-import { fileLines, type FileLines, type LineRange, lineRange, regionRange } from './include-source.ts'
+import {
+  fileLines, type FileLines, type LineRange, lineRange, RECORD_QUOTED, recordKinds, regionRange,
+} from './include-source.ts'
 import { applyShifts, selectSection } from './include-select.ts'
 import { INCLUDE_CAUSES, INCLUDE_CONFLICTS, INCLUDE_MESSAGES } from './include-tables.ts'
 import { type HeadingIds } from './options.ts'
@@ -207,7 +209,8 @@ function selectedLines(node: IncludeNode, text: string, lines: FileLines): LineR
   const count = lines.starts.length
   if (options?.lines !== undefined) return lineRange(options.lines, count) ?? { cause: 'lines_past_end' }
   if (options?.region === undefined) return { from: 0, to: count }
-  const range = regionRange(text, lines, options.region, options.code !== undefined)
+  const kinds = isTableInclude(node) ? recordKinds(text, lines, options.code === 'tsv') : []
+  const range = regionRange(text, lines, options.region, options.code !== undefined, (index) => kinds[index] === RECORD_QUOTED)
   return typeof range === 'string' ? { cause: 'region_invalid', values: { name: options.region, reason: range } } : range
 }
 

@@ -2,6 +2,30 @@
 
 Ranked by the cost of changing the contract after a freeze. The `carve` checkout was read only.
 
+## Freeze candidate 2 session (spec `e1f3c5a2`)
+
+Cases found while following freeze candidate 2, revision 1, and the third review. The engine choice is named in each.
+
+### G-D1. Which records a `lines` or `region` selection of a table include chooses
+
+C2-N-047: "a `lines` or `region` selection chooses records and never makes a new head". C2-N-036: "A slice that cuts a fence, a list or a div ends that construct at the end of the slice." Neither says which records a line range chooses when a quoted field crosses its edge.
+
+File `a.csv`:
+
+```csv
+H
+"x
+y"
+z
+```
+
+```carve
+{table}
+{{ a.csv @lines:2-2 @code:csv }}
+```
+
+Reading A (the engine): a selection chooses the records of the whole file that start on a selected line, so line 2 chooses the record `x` / `y` whole, and the cell holds both lines. Reading B: the selected lines are read as records on their own, so the quoted field is cut, malformed, and its cell holds `x` with `delimited-table-malformed`. Reading A follows "chooses records", and the head and foot of C2-N-046 are records of the whole file in both readings.
+
 ## Corpus session (spec `0d422808`)
 
 Cases where neither clause decides, found while running the conformance corpus. The engine choice is named in each.
