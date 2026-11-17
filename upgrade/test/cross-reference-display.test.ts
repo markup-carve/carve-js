@@ -10,8 +10,9 @@ describe('C2-H-095 and C2-H-096 cross-reference display', () => {
   ]) {
     it(`U-206 names the display change in ${source.trim()}`, () => {
       const result = upgrade(source)
-      expect(result.check).toBe(source.startsWith('# A </#B>') ? 'mismatch' : 'explained')
-      expect(result.records.map((record) => record.entry)).toContain('U-206')
+      const selfReference = source === '# A </#A>\n'
+      expect(result.check).toBe(selfReference ? 'pass' : source.startsWith('# A </#B>') ? 'mismatch' : 'explained')
+      expect(result.records.map((record) => record.entry)).toContain(selfReference ? 'U-366' : 'U-206')
       if (source.startsWith('# A </#B>')) expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
     })
   }

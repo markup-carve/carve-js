@@ -27,17 +27,9 @@ const UNVERIFIED_REPORTS = new Set([
   'U-219#0', 'U-219#1', 'U-219#2', 'U-219#3', 'U-219#4', 'U-221#0', 'U-221#1',
   'U-221#2', 'U-251#0', 'U-252#0',
   'U-248#0',
-])
-
-/**
- * The rows of candidates 7 and 8 the tool does not carry out yet (_OPEN.md, upgrade): a rewrite it leaves as it is,
- * or a report row whose input both engines render alike, so the self-check reaches no report. The test pins what the
- * tool does, so an implemented row moves out of this list.
- */
-const NOT_YET: ReadonlySet<string> = new Set([
-  'U-279#0', 'U-287#0', 'U-288#0', 'U-293#0', 'U-341#0', 'U-362#0',
-  'U-262#0', 'U-263#0', 'U-264#0', 'U-271#0', 'U-282#0', 'U-283#0', 'U-289#0', 'U-291#0', 'U-292#0',
-  'U-301#0', 'U-302#0', 'U-303#0', 'U-364#0', 'U-370#0', 'U-371#0',
+  'U-262#0', 'U-263#0', 'U-264#0', 'U-271#0', 'U-282#0', 'U-283#0', 'U-289#0',
+  'U-291#0', 'U-292#0', 'U-301#0', 'U-302#0', 'U-303#0', 'U-362#0', 'U-364#0',
+  'U-370#0', 'U-371#0',
 ])
 
 /**
@@ -81,13 +73,7 @@ describe('the contract', () => {
     entry.inputs.forEach((input, index) => {
       const key = `${entry.id}#${index}`
       const known = DOES_NOT_HOLD[key]
-      if (NOT_YET.has(key)) {
-        it(`${key} is not carried out yet`, () => {
-          const result = upgrade(input)
-          if (entry.class === 'report') expect(entries(input)).not.toContain(entry.id)
-          else expect(result.output).not.toBe(entry.outputs[index])
-        })
-      } else if (known !== undefined) {
+      if (known !== undefined) {
         it(`${key} does not hold as stated`, () => {
           const result = upgrade(input)
           expect(result.output).toBe(known.output ?? input)
