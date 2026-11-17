@@ -13,7 +13,10 @@ import {
 } from './inline-brackets.ts'
 import { pairDelimiters, scanBareMark, scanBracedMark } from './inline-delimiters.ts'
 import { writeEvents } from './inline-emit.ts'
-import { type InlineState, NONE, OPEN_FOOTNOTE, setContent, TOKEN_A, TOKEN_START } from './inline-state.ts'
+import {
+  type InlineState, NONE, OPEN_FOOTNOTE, setContent, TOKEN_A, TOKEN_C, TOKEN_OPEN, TOKEN_START, TOKEN_WIDTH,
+} from './inline-state.ts'
+import { INLINE_FOOTNOTE } from './inline-kinds.ts'
 import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import { BIDI_FIRST, BIDI_LAST, holdsBidiControl, isBidiControl } from './unicode.ts'
@@ -91,6 +94,7 @@ function resetScan(state: InlineState): void {
   state.tokenLength = 0
   state.tokenEnd = 0
   state.bracketDepth = 0
+  state.notesOpen = 0
   state.depthLength = 0
   state.depthLive = 0
   state.depthFloor = NONE
@@ -111,7 +115,6 @@ function scanPass(state: InlineState): void {
   const text = state.text
   const end = state.end
   resetScan(state)
-  state.demotedInNote = false
   for (let pos = 0; pos < end;) {
     const code = text.charCodeAt(pos)
     if (code >= ASCII) {
@@ -128,21 +131,34 @@ function scanPass(state: InlineState): void {
   }
 }
 
-/**
- * C2-I-089: a note that stays unclosed is text, so the caret pairs read as text inside it are read again. Records
- * the unclosed notes and returns whether the content needs another pass.
- */
-function unclosedNoteDemoted(state: InlineState): boolean {
-  if (!state.demotedInNote) return false
-  let found = false
-  for (let at = 0; at < state.bracketDepth; at++) {
-    const open = state.brackets[at]!
-    const start = state.tokens[open + TOKEN_START]!
-    if (state.tokens[open + TOKEN_A] !== OPEN_FOOTNOTE || state.unclosedNotes.includes(start)) continue
-    state.unclosedNotes.push(start)
-    found = true
+// A note whose closing depends on how a caret pair in it reads has no reading; this bounds the passes such notes take.
+const MAX_NOTE_PASSES = 8
+
+/** Keeps the notes of the last pass that closed again, and returns whether that changed the set. */
+function narrowsNotes(state: InlineState, closed: Set<number>): boolean {
+  const before = state.closedNotes
+  if (before === null) {
+    state.closedNotes = closed
+    return true
   }
-  return found
+  let changed = false
+  for (const start of before) {
+    if (closed.has(start)) continue
+    before.delete(start)
+    changed = true
+  }
+  return changed
+}
+
+function closedNotes(state: InlineState): Set<number> {
+  const closed = new Set<number>()
+  const tokens = state.tokens
+  for (let at = 0; at < state.tokenLength; at += TOKEN_WIDTH) {
+    if (tokens[at] === TOKEN_OPEN && tokens[at + TOKEN_A] === OPEN_FOOTNOTE && tokens[at + TOKEN_C] === INLINE_FOOTNOTE) {
+      closed.add(tokens[at + TOKEN_START]!)
+    }
+  }
+  return closed
 }
 
 /**
@@ -160,10 +176,17 @@ export function scanInline(
   state.end = end
   state.lineComments = lineComments
   state.cell = cell
-  state.unclosedNotes = []
   state.commentLines = null
-  do scanPass(state)
-  while (unclosedNoteDemoted(state))
+  state.closedNotes = null
+  state.caretInNote = false
+  scanPass(state)
+  // C2-I-089: inside a note that closes, a caret pair opens nothing. The notes that close with every caret pair read
+  // are taken first; a pass that reads them as text may leave one unclosed, and the next pass reads it as text.
+  for (let pass = 0; state.caretInNote && pass < MAX_NOTE_PASSES; pass++) {
+    const closed = closedNotes(state)
+    if (!narrowsNotes(state, closed)) break
+    scanPass(state)
+  }
   failOpenBrackets(state)
   pairDelimiters(state)
   writeEvents(state)

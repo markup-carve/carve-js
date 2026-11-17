@@ -28,6 +28,7 @@ export function openBracket(state: InlineState, start: number, end: number, form
     state.brackets = larger
   }
   state.brackets[state.bracketDepth++] = pushToken(state, TOKEN_OPEN, start, end, form, NONE, 0, NONE)
+  if (form === OPEN_FOOTNOTE) state.notesOpen++
   enterBracket(state)
   return end
 }
@@ -80,13 +81,17 @@ export function scanFootnoteOpen(state: InlineState, pos: number): number {
   return openBracket(state, pos, pos + 2, OPEN_FOOTNOTE)
 }
 
-/** Whether an inline footnote is open at the scan, so that a caret pair here opens no note; notes the demotion. */
+/** Whether a note that closes is open at the scan, so that a caret pair here opens nothing (C2-I-089). */
 function demotedInNote(state: InlineState): boolean {
+  if (state.notesOpen === 0) return false
+  const closed = state.closedNotes
+  if (closed === null) {
+    state.caretInNote = true
+    return false
+  }
   for (let at = state.bracketDepth - 1; at >= 0; at--) {
     const open = state.brackets[at]!
-    if (state.tokens[open + TOKEN_A] !== OPEN_FOOTNOTE || state.unclosedNotes.includes(state.tokens[open + TOKEN_START]!)) continue
-    state.demotedInNote = true
-    return true
+    if (state.tokens[open + TOKEN_A] === OPEN_FOOTNOTE && closed.has(state.tokens[open + TOKEN_START]!)) return true
   }
   return false
 }
@@ -284,6 +289,7 @@ export function scanBracketClose(state: InlineState, pos: number): number {
   if (state.bracketDepth === 0) return pos + 1
   const open = state.brackets[--state.bracketDepth]!
   const form = state.tokens[open + TOKEN_A]!
+  if (form === OPEN_FOOTNOTE) state.notesOpen--
   if (form >= OPEN_FOOTNOTE) {
     closePair(state, open, pos, form === OPEN_FOOTNOTE ? INLINE_FOOTNOTE : INLINE_EXTENSION)
     leaveBracket(state, true)

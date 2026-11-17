@@ -83,10 +83,15 @@ export interface InlineState {
   // Open bracket openers, as token offsets.
   brackets: Int32Array
   bracketDepth: number
-  /** C2-I-089: the starts of the inline footnotes that stayed unclosed in an earlier pass, which open no note. */
-  unclosedNotes: number[]
-  /** Whether the pass read a caret pair as text inside an open note. */
-  demotedInNote: boolean
+  /**
+   * C2-I-089: the starts of the inline footnotes that closed in the first pass, inside which a caret pair opens
+   * nothing; null in the first pass, which reads every caret pair and only notes whether one stood inside a note.
+   */
+  closedNotes: Set<number> | null
+  /** Whether the first pass read a caret pair inside an open note. */
+  caretInNote: boolean
+  /** The inline footnotes open on the bracket stack. */
+  notesOpen: number
   /** C2-B-138: the content offsets of the comment-only lines, which no atom spans, once an atom asked. */
   commentLines: number[] | null
 
@@ -164,8 +169,9 @@ function createState(): InlineState {
     codeRunEnd: 0,
     bidi: false,
     definitions: null,
-    unclosedNotes: [],
-    demotedInNote: false,
+    closedNotes: null,
+    caretInNote: false,
+    notesOpen: 0,
     commentLines: null,
     tokens: new Int32Array(INITIAL_TOKENS),
     tokenLength: 0,

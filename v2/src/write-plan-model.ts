@@ -248,10 +248,23 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
  */
 function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean {
   if (!lineStart) push(leaf, SPACE, ATOM, node, -1)
-  const bracket = node.value.includes(']') && leaf.codes.includes(91)
-  if (!bracket && !(BRACED_CLOSER.test(node.value) && leaf.codes.includes(123))) return false
+  const bracket = node.value.includes(']') && openDepth(leaf, 91, 93) > 0
+  if (!bracket && !(BRACED_CLOSER.test(node.value) && openDepth(leaf, 123, 125) > 0)) return false
   undecide(leaf, 'comment bracket')
   return true
+}
+
+/** The openers `open` of the units so far that no `close` has closed, of text read bare or of the tree's marks. */
+function openDepth(leaf: Leaf, open: number, close: number): number {
+  let depth = 0
+  for (let at = 0; at < leaf.codes.length; at++) {
+    const kind = leaf.kinds[at]
+    const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds[at - 1] !== ESCAPE)
+    if (!read) continue
+    if (leaf.codes[at] === open) depth++
+    else if (leaf.codes[at] === close && depth > 0) depth--
+  }
+  return depth
 }
 
 const BRACED_CLOSER = /[*+,\-/=^_~]\}/

@@ -163,11 +163,12 @@ function codeSpan(state: InlineState, start: number, run: number, kind: number, 
   const open = run < state.codeRunEnd ? state.codeRunEnd : backtickRunEnd(text, run, state.end)
   state.codeRunEnd = open
   const length = open - run
-  let close = state.codeRuns === null ? closingRun(text, open, state.end, length) : indexedClosingRun(state, open, length)
+  // C2-B-138: a closing run behind a comment-only line closes nothing.
+  const limit = atomLimit(state, open)
+  let close = state.codeRuns === null ? closingRun(text, open, limit, length) : indexedClosingRun(state, open, length)
   if (close === NONE && state.codeRuns === null) close = indexedClosingRun(state, open, length)
   // C2-I-017, C2-I-119: with no closing run the opener is text, the prefix with it, and the scan goes on behind the run.
-  // C2-B-138: a closing run behind a comment-only line closes nothing.
-  if (close === NONE || close >= atomLimit(state, open)) return open
+  if (close === NONE || close >= limit) return open
   const padded = hasSpacePadding(text, open, close)
   const contentStart = padded ? open + 1 : open
   const contentEnd = padded ? close - 1 : close
