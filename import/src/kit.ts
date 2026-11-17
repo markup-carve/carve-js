@@ -129,7 +129,8 @@ export function classNames(value: string): string[] {
   let start = -1
   for (let at = 0; at <= value.length; at++) {
     const code = at === value.length ? 32 : value.charCodeAt(at)
-    const space = code === 32 || (code >= 9 && code <= 13)
+    // C2-M-016: ASCII whitespace is space, tab, line feed, form feed and carriage return, not the vertical tab.
+    const space = code === 32 || code === 9 || code === 10 || code === 12 || code === 13
     if (space && start >= 0) { names.push(value.slice(start, at)); start = -1 }
     else if (!space && start < 0) start = at
   }

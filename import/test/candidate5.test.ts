@@ -126,4 +126,13 @@ describe('the HTML importer at freeze candidate 5', () => {
     expect(imported(both).codes).toContain('import-attribute-dropped')
     expect(firstCell('<table><tr><td style="vertical-align: baseline;">a</td></tr></table>')['valign']).toBe('baseline')
   })
+
+  it('C2-M-002: a fragment is parsed with a body context, so a table row outside a table is its text', () => {
+    expect(imported('<tr><td>a</td></tr>').source).toBe('a\n')
+    expect(imported('<td>a</td> b').source).toBe('a b\n')
+  })
+
+  it('C2-M-016, C2-M-052 row `class`: a vertical tab is no ASCII whitespace, so it splits no class', () => {
+    expect(imported('<p class="a\u000bb c">x</p>').children[0]).toMatchObject({ attrs: { classes: ['a\u000bb', 'c'] } })
+  })
 })

@@ -1,4 +1,4 @@
-import { defaultTreeAdapter, parse, Parser, type DefaultTreeAdapterMap, type DefaultTreeAdapterTypes as Html } from 'parse5'
+import { defaultTreeAdapter, html, parse, Parser, type DefaultTreeAdapterMap, type DefaultTreeAdapterTypes as Html } from 'parse5'
 import type {
   Attrs, Block, CaptionNode, DocumentNode, Inline, LinkReferenceDefinitionNode, ListItemNode, ListNode, TableCellNode, TableColumnNode,
   TableNode, TableRowNode,
@@ -946,9 +946,13 @@ export function isFullDocument(input: string): boolean {
   return head === '<!doctype' || head.startsWith('<html')
 }
 
-/** parse5 `parseFragment`, but the children leave the fragment root at once: its own loop splices each off the front. */
+/**
+ * C2-M-002: parse5 `parseFragment` with a `body` context, where parse5 defaults to `template`. The children leave the
+ * fragment root at once: parse5 splices each one off the front, which is quadratic.
+ */
 function parseFragment(input: string): Html.DocumentFragment {
-  const parser = Parser.getFragmentParser<DefaultTreeAdapterMap>(null, { sourceCodeLocationInfo: true })
+  const body = defaultTreeAdapter.createElement('body', html.NS.HTML, [])
+  const parser = Parser.getFragmentParser<DefaultTreeAdapterMap>(body, { sourceCodeLocationInfo: true })
   parser.tokenizer.write(input, true)
   const fragment = defaultTreeAdapter.createDocumentFragment()
   const root = defaultTreeAdapter.getFirstChild(parser.document)
