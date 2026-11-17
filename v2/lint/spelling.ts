@@ -222,7 +222,9 @@ function emptyInclude(line: Line, context: LintContext): void {
   const at = line.text.indexOf('{{')
   if (at < 0 || !line.paragraph) return
   const end = line.text.indexOf('}}', at + 2)
-  if (end < 0 || line.text.slice(at + 2, end).trim() !== '') return
+  if (end < 0) return
+  const path = line.text.slice(at + 2, end).trim()
+  if (path !== '' && !/^(?:""|“”)(?:\s|$)/u.test(path)) return
   const text = line.text.slice(at, end + 2)
   context.report('empty-include-path', line.start + at, line.start + end + 2, line.path, { text })
 }

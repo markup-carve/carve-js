@@ -3,6 +3,11 @@ import { CarveOptionError } from '../src/options.ts'
 import fs from 'node:fs'
 import { format } from '../src/format.ts'
 import { lint } from './lint.ts'
+
+it('C2-B-202: an empty quoted include path is reported', () => {
+  expect(lint('{{ "" }}\n').map((entry) => entry.code)).toContain('empty-include-path')
+  expect(lint('{{ “” }}\n').map((entry) => entry.code)).toContain('empty-include-path')
+})
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
 
