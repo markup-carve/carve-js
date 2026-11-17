@@ -24,7 +24,7 @@ describe('the bidirectional controls', () => {
   })
 
   it('C2-H-172: they are not written in static math', () => {
-    expect(render(`$${TICK}a${CONTROLS}b${TICK}`, { mode: 'static' })).toBe('<p><code class="language-math">ab</code></p>')
+    expect(render(`$${TICK}a${CONTROLS}b${TICK}`, { mode: 'static' })).toBe('<p><span class="math inline" role="math">\\(ab\\)</span></p>')
   })
 
   it('C2-H-172: they are not written in the text of an autolink', () => {

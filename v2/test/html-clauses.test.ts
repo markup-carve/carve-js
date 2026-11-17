@@ -449,11 +449,11 @@ describe('options', () => {
     expect(() => render('a', { sections: 'yes' } as unknown as RenderOptions)).toThrow('option sections: not a boolean')
   })
 
-  it('C2-H-122: an unknown value of mode is refused, and in static mode an equation is its source as code', () => {
+  it('C2-H-122, C2-H-168: an unknown value of mode is refused, and static mode writes an equation as interactive mode does', () => {
     expect(() => render('a', { mode: 'print' } as unknown as RenderOptions)).toThrow('option mode: unknown value "print"')
     expect(render('a', { mode: 'interactive' })).toBe('<p>a</p>')
-    expect(render('a $`x<1`{.c}', { mode: 'static' })).toBe('<p>a <code class="language-math c">x&lt;1</code></p>')
-    expect(render('{#e}\n$$`E`', { mode: 'static' })).toBe('<pre id="e"><code class="language-math">E\n</code></pre>')
+    expect(render('a $`x<1`{.c}', { mode: 'static' })).toBe('<p>a <span class="math inline c" role="math">\\(x&lt;1\\)</span></p>')
+    expect(render('{#e}\n$$`E`', { mode: 'static' })).toBe('<p id="e"><span class="math display" role="math">\\[E\\]</span></p>')
     expect(render('$$`E`')).toBe('<p><span class="math display" role="math">\\[E\\]</span></p>')
   })
 

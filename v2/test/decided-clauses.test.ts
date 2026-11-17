@@ -226,8 +226,10 @@ describe('the other clauses of the two commits', () => {
       .toBe('<ul>\n  <li>a\n    <ul>\n      <li>b\n        <ul>\n          <li>c\n            <p>- d - e</p>\n          </li>\n        </ul>\n      </li>\n    </ul>\n  </li>\n</ul>')
   })
 
-  it('C2-H-168: static math with no renderer is code with the class language-math', () => {
-    expect(render('$`x`\n\n$$`y`', { mode: 'static' })).toBe('<p><code class="language-math">x</code></p>\n<pre><code class="language-math">y\n</code></pre>')
+  it('C2-H-168: static mode writes core math as interactive mode does', () => {
+    expect(render('$`x`\n\n$$`y`', { mode: 'static' })).toBe(
+      '<p><span class="math inline" role="math">\\(x\\)</span></p>\n<p><span class="math display" role="math">\\[y\\]</span></p>',
+    )
   })
 
   it('C2-H-169: the blocks of the footnotes directive come before the section, its attributes are not written, and a title names it', () => {

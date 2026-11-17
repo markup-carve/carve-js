@@ -200,11 +200,10 @@ describe('the carve-js entries of the fifth fix round', () => {
     expect(() => decodeTree(JSON.stringify(document))).not.toThrow()
   })
 
-  it('C2-H-168, C2-H-007, C2-H-040: in static mode a display math paragraph is `<pre>` on its own lines (J3, Example 69)', () => {
-    const pre = '<pre><code class="language-math">x\n</code></pre>'
-    expect(render('- $$`x`', { mode: 'static' }).trimEnd()).toBe(`<ul>\n  <li>\n    ${pre}\n  </li>\n</ul>`)
-    expect(render('> $$`x`', { mode: 'static' }).trimEnd()).toBe(`<blockquote>\n  ${pre}\n</blockquote>`)
-    expect(render(':: t\n: $$`x`', { mode: 'static' })).toContain(`<dd>\n    ${pre}\n  </dd>`)
+  it('C2-H-168, C2-H-007, C2-H-040: in static mode a display math paragraph is written as in interactive mode (Example 69)', () => {
+    const span = '<span class="math display" role="math">\\[x\\]</span>'
+    expect(render('- $$`x`', { mode: 'static' }).trimEnd()).toBe(`<ul>\n  <li>${span}</li>\n</ul>`)
+    for (const input of ['- $$`x`', '> $$`x`', ':: t\n: $$`x`']) expect(render(input, { mode: 'static' })).toBe(render(input))
   })
 
   it('C2-H-158, C2-H-093: the first top-level footnotes directive places the section, a later one nothing (J4, Example 68)', () => {

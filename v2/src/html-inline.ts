@@ -239,8 +239,6 @@ function noteReference(node: FootnoteRefNode | InlineFootnoteNode, r: Render): s
 }
 
 function math(node: MathNode, r: Render): string {
-  // C2-H-122: static output has no client renderer, so an equation is its source as code.
-  if (r.settings.mode === 'static') return `<code${attributes(r, node, { base: ['language-math'] })}>${escapeText(node.value)}</code>`
   const display = node.display
   const tag = attributes(r, node, { base: ['math', display ? 'display' : 'inline'], generated: [['role', 'math']] })
   const value = escapeText(node.value)

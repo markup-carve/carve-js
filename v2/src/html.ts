@@ -120,13 +120,9 @@ function hasAttributes(attrs: Attrs | undefined): boolean {
   return attrs !== undefined && (attrs.id !== undefined || (attrs.classes?.length ?? 0) > 0 || (attrs.keyValues?.length ?? 0) > 0)
 }
 
-/**
- * A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it, and
- * neither takes a display math paragraph in static mode, whose `<pre>` stands on its own lines (C2-H-007, C2-H-168).
- */
-function isTextParagraph(r: Render, node: Node | undefined): node is ParagraphNode {
-  if (node === undefined || node.type !== 'paragraph' || isBareImage(node) || node.caption !== undefined) return false
-  return node.role !== 'math' || r.settings.mode !== 'static'
+/** A paragraph that is written as `<p>`. A captioned one is a figure (C2-H-062), so no one-line rule takes it. */
+function isTextParagraph(node: Node | undefined): node is ParagraphNode {
+  return node !== undefined && node.type === 'paragraph' && !isBareImage(node) && node.caption === undefined
 }
 
 /** Writes `node` through the writer of its type, where it has one. */
@@ -165,24 +161,8 @@ function paragraphHtml(r: Render, node: ParagraphNode): string {
   return `${open}${inlineHtml(r, node.children)}${tail}</p>`
 }
 
-/** C2-H-122: in static mode a math block is its source as a code block. */
-function staticMathBlock(r: Render, node: ParagraphNode): string {
-  let value = ''
-  for (const child of node.children) {
-    if (child.type === 'math') {
-      value = child.value
-      break
-    }
-  }
-  return `<pre${tag(r, node)}><code class="language-math">${escapeText(value.endsWith('\n') ? value : `${value}\n`)}</code></pre>`
-}
-
 function paragraph(r: Render, node: ParagraphNode, level: number): void {
   if (onlyComments(node.children)) return
-  if (node.role === 'math' && r.settings.mode === 'static') {
-    line(r, level, staticMathBlock(r, node))
-    return
-  }
   line(r, level, isBareImage(node) ? inlineHtml(r, node.children) : paragraphHtml(r, node))
 }
 
@@ -212,7 +192,7 @@ function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
 function quote(r: Render, node: BlockQuoteNode, level: number): void {
   const visible = visibleBlocks(node.children)
   const first = visible[0]
-  if (visible.length === 1 && isTextParagraph(r, first)) {
+  if (visible.length === 1 && isTextParagraph(first)) {
     line(r, level, `<blockquote${tag(r, node)}>${paragraphHtml(r, first)}</blockquote>`)
     return
   }
@@ -265,7 +245,7 @@ function listItem(r: Render, node: ListItemNode, level: number, tight: boolean, 
   const first = blocks[0]
   let open = itemOpen(r, node, bullet)
   let rest = blocks
-  if (isTextParagraph(r, first)) {
+  if (isTextParagraph(first)) {
     // A bare paragraph has no element for attributes of its own, so one that carries any keeps its `<p>`.
     const bare = tight && !carriesAttributes(first)
     open += bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
@@ -291,7 +271,7 @@ function description(r: Render, node: DefinitionDescriptionNode, level: number):
     line(r, level, `<dd${tag(r, node)}>${includeParagraph(r, first, true)}</dd>`)
     return
   }
-  if (blocks.length <= 1 && (first === undefined || isTextParagraph(r, first))) {
+  if (blocks.length <= 1 && (first === undefined || isTextParagraph(first))) {
     let text = ''
     const bare = first !== undefined && !carriesAttributes(first)
     if (first !== undefined) text = bare ? inlineHtml(r, first.children) : paragraphHtml(r, first)
@@ -353,7 +333,7 @@ function admonition(r: Render, node: AdmonitionNode, level: number): void {
 function captionLine(r: Render, caption: CaptionNode, name: string, level: number): void {
   const blocks = caption.children.filter(isVisible)
   const first = blocks[0]
-  if (blocks.length === 1 && isTextParagraph(r, first)) {
+  if (blocks.length === 1 && isTextParagraph(first)) {
     line(r, level, `<${name}>${inlineHtml(r, first.children)}</${name}>`)
     return
   }
@@ -627,7 +607,7 @@ function cellContent(r: Render, cell: TableCellNode, level: number): string {
   if (blocks.every(isCellParagraph)) return blocks.map((block) => inlineHtml(r, block.children)).join(' ')
   const visible = visibleBlocks(blocks)
   const first = visible[0]
-  const open = isTextParagraph(r, first) ? paragraphHtml(r, first) : ''
+  const open = isTextParagraph(first) ? paragraphHtml(r, first) : ''
   const rest = open === '' ? visible : visible.slice(1)
   if (rest.length === 0) return open
   const inner: Render = { ...r, out: '', count: 0 }
@@ -817,7 +797,7 @@ function writeNote(r: Render, note: Note, level: number): void {
   const visible = blocks.filter(rendersInNote)
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
-  r.backlinkHost = isTextParagraph(r, last) ? last : null
+  r.backlinkHost = isTextParagraph(last) ? last : null
   line(r, level, `<li id="fn${note.number}"${noteCarriers(r, note)}>`)
   writeBlocks(r, blocks, level + 1)
   if (r.backlinkHost === null) line(r, level + 1, `<p>${r.backlinks}</p>`)
