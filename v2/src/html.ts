@@ -621,15 +621,17 @@ const SPAN_KEYS: readonly string[] = ['rowspan', 'colspan']
 /** C2-H-056 to C2-H-058. */
 function cellHtml(
   r: Render, cell: TableCellNode, column: TableColumnNode | undefined, headValign: string | undefined, inHead: boolean,
-  level: number,
+  level: number, rowHead = false,
 ): string {
-  const name = cell.header ? 'th' : 'td'
+  // C2-H-056: a cell in the first `rowHeadColumns` columns of a body is written as a header cell.
+  const header = cell.header || rowHead
+  const name = header ? 'th' : 'td'
   const structural: Pair[] = []
   const rowspan = cell.rowspan
   if (rowspan !== undefined && rowspan > 1) structural.push(['rowspan', String(rowspan)])
   const colspan = cell.colspan
   if (colspan !== undefined && colspan > 1) structural.push(['colspan', String(colspan)])
-  if (cell.header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
+  if (header) structural.push(['scope', cell.scope ?? (inHead ? 'col' : 'row')])
   else if (cell.scope !== undefined) structural.push(['scope', cell.scope])
   if (cell.headerIds !== undefined) structural.push(['headers', cell.headerIds.join(' ')])
   const written = attributes(r, cell, { structural, style: cellStyle(cell, column, headValign), withheld: SPAN_KEYS })
@@ -640,6 +642,8 @@ function cellHtml(
 interface TableLayout {
   columns: readonly TableColumnNode[]
   headValign: (string | undefined)[]
+  /** The `rowHeadColumns` of the body being written (C2-B-230). */
+  rowHeads: number
 }
 
 /** Moves `column` past the positions a row span from above covers, and counts each of them down. Returns the new column. */
@@ -662,7 +666,7 @@ function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: num
     if (!marked) column = skipCovered(covered, column)
     const colspan = cell.colspan ?? 1
     if (cell.span === undefined) {
-      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead, level)
+      html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead, level, column < layout.rowHeads)
       const below = (cell.rowspan ?? 1) - 1
       if (!marked) for (let more = 0; more < colspan; more++) covered[column + more] = below
     }
@@ -692,6 +696,7 @@ function writeGroups(r: Render, layout: TableLayout, groups: readonly TableGroup
     // C2-H-055: an empty group is not written.
     if (!group.children.some(isRow)) continue
     const name = GROUP_ELEMENTS[group.type]
+    layout.rowHeads = group.type === 'table_body' ? group.rowHeadColumns ?? 0 : 0
     line(r, level, `<${name}${tag(r, group)}>`)
     writeRows(r, layout, group, level + 1, [])
     line(r, level, `</${name}>`)
@@ -719,7 +724,7 @@ function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level:
   line(r, level, '</colgroup>')
 }
 
-const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows']
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
 
 /** C2-H-153: the five keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
 function withoutTableKeys(node: TableNode): TableNode {
@@ -732,7 +737,7 @@ function table(r: Render, node: TableNode, level: number): void {
   line(r, level, `<table${tag(r, withoutTableKeys(node))}>`)
   const caption = node.caption
   if (caption !== undefined) captionLine(r, caption, 'caption', level + 1)
-  const layout: TableLayout = { columns: node.columns, headValign: headMarks(node, 'valign') }
+  const layout: TableLayout = { columns: node.columns, headValign: headMarks(node, 'valign'), rowHeads: 0 }
   writeColumnGroup(r, layout.columns, level + 1)
   writeGroups(r, layout, node.children.filter(isGroup), level + 1)
   line(r, level, '</table>')

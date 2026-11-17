@@ -16,6 +16,7 @@ import { COMMENT, FLAG_CELL_ATTRIBUTES, FLAG_HEADER } from './kinds.ts'
 import { attributeBlocksEnd, countValue, isInnerLineComment, rowClosingPipe, skipSpaces } from './lines.ts'
 import { trimSpaces } from './source.ts'
 import type { BlockNode } from './tree.ts'
+import { BODY_KEYS, type BodyPartition, bodyPartition } from './table-bodies.ts'
 import { holdsBidiControl } from './unicode.ts'
 
 const MAX_WIDTH = 100
@@ -30,6 +31,10 @@ interface Groups {
   head: GroupRows
   body: GroupRows
   foot: GroupRows
+  /** C2-B-230: the bodies of `body-rows`, in source order, where it has an effect; else null. */
+  bodies: GroupRows[] | null
+  /** The body of each row below the head, by its index from the first of them, and the header rows it leads with. */
+  bodyOf: [GroupRows, boolean][]
   width: number
   /** The source range of each group, by its row list. A delimited table has none (C2-A-158). */
   ranges: Map<GroupRows, [number, number]>
@@ -38,7 +43,24 @@ interface Groups {
 }
 
 function emptyGroups(): Groups {
-  return { head: [], body: [], foot: [], width: 0, ranges: new Map(), trailing: [] }
+  return { head: [], body: [], foot: [], bodies: null, bodyOf: [], width: 0, ranges: new Map(), trailing: [] }
+}
+
+/** C2-B-230: splits the body of `groups` as `partition` says. */
+function partitionBodies(groups: Groups, partition: BodyPartition | null): BodyPartition | null {
+  if (partition === null) return null
+  groups.bodies = partition.data.map(() => [])
+  partition.data.forEach((data, body) => {
+    const rows = groups.bodies![body]!
+    for (let at = 0; at < partition.header[body]!; at++) groups.bodyOf.push([rows, true])
+    for (let at = 0; at < data; at++) groups.bodyOf.push([rows, false])
+  })
+  return partition
+}
+
+/** The group of the row `index` below the head, and whether its cells are header cells by `body-header-rows`. */
+function bodyRow(groups: Groups, index: number): [GroupRows, boolean] {
+  return groups.bodyOf[index] ?? [groups.body, false]
 }
 
 /** Widens the range of the group `rows` to hold `[start, end)`. */
@@ -227,11 +249,13 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   flushTrailing(groups, cursor, child.start)
   // C2-B-174: a row span does not cross the head boundary.
   if (cursor.index === cursor.headRows) cursor.covered = []
+  const [body, header] = bodyRow(groups, cursor.index - cursor.headRows)
   if (cursor.index < cursor.headRows) cursor.group = groups.head
-  else cursor.group = cursor.index < cursor.footStart ? groups.body : groups.foot
+  else cursor.group = cursor.index < cursor.footStart ? body : groups.foot
   const lineEnd = rowRangeEnd(ctx.src, child)
   const [end, marker] = rowTail(ctx.src, child, lineEnd)
   const row = rowNode(ctx, child, cursor.covered, marker < 0 ? child.end : end)
+  if (header && cursor.index < cursor.footStart) markHeaderRow(row)
   groups.width = Math.max(groups.width, row.children.length)
   cursor.group.push(row)
   // C2-A-144, C2-A-151: the group owns the continuation rows of its rows.
@@ -243,12 +267,18 @@ function addRow(ctx: TreeContext, groups: Groups, cursor: RowCursor, child: Bloc
   cursor.trailingEnd = lineEnd
 }
 
-function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): Groups {
+/** C2-B-230: every cell of a body header row is a header cell. */
+function markHeaderRow(row: TableRowNode): void {
+  for (const cell of row.children) if (cell.span === undefined) cell.header = true
+}
+
+function sortRows(ctx: TreeContext, node: BlockNode, comment: CommentBuilder, attributes: Attributes | null): Groups {
   const headRows = node.facts
   const rowCount = node.children!.reduce((count, child) => count + (child.kind === COMMENT ? 0 : 1), 0)
   const groups = emptyGroups()
+  partitionBodies(groups, bodyPartition(attributes, rowCount - node.rowFacts - headRows))
   const cursor: RowCursor = {
-    headRows, footStart: rowCount - node.rowFacts, index: 0, group: headRows > 0 ? groups.head : groups.body,
+    headRows, footStart: rowCount - node.rowFacts, index: 0, group: headRows > 0 ? groups.head : bodyRow(groups, 0)[0],
     covered: [], trailingEnd: 0,
   }
   for (const child of node.children!) {
@@ -364,16 +394,33 @@ function tableOf(ctx: TreeContext, groups: Groups, attributes: Attributes | null
   const columns = columnNodes(groups.width, { aligns, valigns, widths })
   const table: TableNode = { type: 'table', columns, children: [] }
   if (groups.head.length > 0) table.children.push(groupNode(ctx, groups, 'table_head', groups.head))
-  if (groups.body.length > 0) table.children.push(groupNode(ctx, groups, 'table_body', groups.body))
+  if (groups.bodies === null) {
+    if (groups.body.length > 0) table.children.push(groupNode(ctx, groups, 'table_body', groups.body))
+  } else {
+    bodyNodes(ctx, groups, groups.bodies, attributes, table)
+  }
   if (groups.foot.length > 0) table.children.push(groupNode(ctx, groups, 'table_foot', groups.foot))
   for (const pending of groups.trailing) table.children.push(pending)
   setAttributes(table, attributes)
   return table
 }
 
+/** C2-B-230: one `table_body` per body, with the `rowHeadColumns` of its entry; the three keys are consumed. */
+function bodyNodes(ctx: TreeContext, groups: Groups, bodies: GroupRows[], attributes: Attributes | null, table: TableNode): void {
+  const columns = bodyPartition(attributes, groups.bodyOf.length)?.columns ?? []
+  for (const name of BODY_KEYS) takeKey(attributes, name)
+  bodies.forEach((rows, at) => {
+    const body = groupNode(ctx, groups, 'table_body', rows) as TableBodyNode
+    const count = columns[at]
+    if (count !== null && count !== undefined) body.rowHeadColumns = count
+    table.children.push(body)
+  })
+}
+
 /** A pipe table. `comment` builds the node of a comment-only line between two rows. */
 export function tableNode(ctx: TreeContext, node: BlockNode, comment: CommentBuilder): TableNode {
-  return tableOf(ctx, sortRows(ctx, node, comment), readAttributeLines(ctx.src, node.attributes), false)
+  const attributes = readAttributeLines(ctx.src, node.attributes)
+  return tableOf(ctx, sortRows(ctx, node, comment, attributes), attributes, false)
 }
 
 function delimitedRow(cells: string[], header: boolean): TableRowNode {
@@ -399,10 +446,12 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
   // C2-B-187: the footer rows are counted among the rows below the head.
   const footer = Math.min(Math.max(0, countValue(keyOf(attributes, 'footer-rows'))), Math.max(0, rows.length - head))
   const groups = emptyGroups()
+  partitionBodies(groups, bodyPartition(attributes, rows.length - head - footer))
   rows.forEach((cells, index) => {
     groups.width = Math.max(groups.width, cells.length)
-    const group = index < head ? groups.head : index < rows.length - footer ? groups.body : groups.foot
-    group.push(delimitedRow(cells, index < head))
+    const [body, header] = bodyRow(groups, index - head)
+    const group = index < head ? groups.head : index < rows.length - footer ? body : groups.foot
+    group.push(delimitedRow(cells, index < head || (header && group === body)))
   })
   const table = tableOf(ctx, groups, attributes, true)
   // C2-B-181: a quote that never closes is reported, and the block stays a table.

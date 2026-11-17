@@ -714,7 +714,7 @@ export function buildSource(
   inline.bidi = false
   try {
     scanBlocks(blocks, text)
-    const root = buildTree(blocks.events, blocks.eventLength)
+    const root = buildTree(blocks.events, blocks.eventLength, text)
     const own = linkKeys ?? collectLinkKeys(text, root)
     inline.definitions = outer === null ? own : withOuterKeys(own, outer.linkKeys)
     const terms = abbreviations ?? collectAbbreviations(text, root)

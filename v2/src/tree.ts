@@ -1,9 +1,11 @@
+import { readAttributeLines } from './ast-attributes.ts'
 import { ENTER, EventCursor, SPAN } from './events.ts'
 import {
   ATTRIBUTES, CELL, COMMENT, FLAG_ATTRIBUTES, FLAG_CONTINUATION, FLAG_SPAN_LEFT, FLAG_SPAN_UP,
   isLeaf, PARAGRAPH, ROW,
   TABLE,
 } from './kinds.ts'
+import { bodyPartition, bodyStarts } from './table-bodies.ts'
 
 
 /**
@@ -28,7 +30,7 @@ export interface BlockNode {
 }
 
 /** Builds the block tree from the first `length` ints of an event array. */
-export function buildTree(events: Int32Array, length: number): BlockNode {
+export function buildTree(events: Int32Array, length: number, src = ''): BlockNode {
   const open: BlockNode[] = []
   let root: BlockNode | null = null
   let top: BlockNode | null = null
@@ -47,7 +49,7 @@ export function buildTree(events: Int32Array, length: number): BlockNode {
       node.end = event.end()
       node.exitFlags = event.flags()
       top = open.length > 0 ? open[open.length - 1]! : null
-      exitNode(node, event.aux())
+      exitNode(node, event.aux(), src)
     }
   }
   return root!
@@ -64,10 +66,10 @@ function enterNode(kind: number, flags: number, start: number, aux: number, pare
 }
 
 /** The aux of a table's exit event is its head rows; the aux of its enter event the footer rows it asks for (C2-B-187). */
-function exitNode(node: BlockNode, headRows: number): void {
+function exitNode(node: BlockNode, headRows: number, src: string): void {
   if (node.kind === TABLE) {
     node.facts = headRows
-    const rows = resolveTable(node)
+    const rows = resolveTable(node, src)
     // C2-B-187: the footer rows are the last rows of the body.
     node.rowFacts = Math.min(node.aux, rows - headRows)
   }
@@ -120,12 +122,13 @@ function orphanAttributes(children: BlockNode[]): void {
  * Resolves the span marks of a closed table (C2-B-172, C2-B-183) and joins its continuation rows.
  * A cell that joins another is removed from its row; a mark that joins nothing is the text of its cell (C2-B-173).
  */
-function resolveTable(table: BlockNode): number {
+function resolveTable(table: BlockNode, src: string): number {
   const headRows = table.facts
   let rows = 0
   for (const row of table.children!) if (row.kind === ROW && (row.flags & FLAG_CONTINUATION) === 0) rows++
   // C2-B-187: the footer rows are the last rows below the head.
   const footStart = rows - Math.min(table.aux, rows - headRows)
+  const bodies = bodyBoundaries(table, src, headRows, footStart)
   const kept: BlockNode[] = []
   let owners: (BlockNode | null)[] = []
   let last: BlockNode | null = null
@@ -137,13 +140,20 @@ function resolveTable(table: BlockNode): number {
     }
     kept.push(row)
     if (row.kind !== ROW) continue
-    // C2-B-174: no span crosses from the head into the body or from the body into the foot.
-    owners = resolveRow(row, rowIndex === headRows || rowIndex === footStart ? [] : owners)
+    // C2-B-174: no span crosses from the head into the body, from one body into the next or from the body into the foot.
+    owners = resolveRow(row, rowIndex === headRows || rowIndex === footStart || bodies.has(rowIndex) ? [] : owners)
     last = row
     rowIndex++
   }
   table.children = kept
   return rowIndex
+}
+
+/** C2-B-230: the row indexes at which a body of `body-rows` starts. */
+function bodyBoundaries(table: BlockNode, src: string, headRows: number, footStart: number): Set<number> {
+  if (table.attributes === null || table.attributes.length === 0 || src === '') return new Set()
+  const partition = bodyPartition(readAttributeLines(src, table.attributes), footStart - headRows)
+  return new Set(partition === null ? [] : bodyStarts(partition).map((start) => start + headRows))
 }
 
 /**

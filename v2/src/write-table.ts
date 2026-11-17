@@ -1,7 +1,7 @@
 // Tables as Carve source (C2-W-061 to C2-W-068, C2-W-118): a pipe table, with the continuation
 // rows the sidecar records, or a delimited table.
 import {
-  childNodes, type CommentNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
+  childNodes, type CommentNode, type TableBodyNode, type TableCellNode, type TableColumnNode, type TableNode, type TableRowNode,
 } from './ast.ts'
 import { type BlockParts, braceBlock } from './write-attributes.ts'
 import { IN_CELL, lineCommentText, writeInlines } from './write-inline.ts'
@@ -82,6 +82,7 @@ function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly
   if (valigns !== null) keys.push(['valigns', valigns])
   if (widths !== null) keys.push(['widths', widths])
   if (footRows > 0) keys.push(['footer-rows', String(footRows)])
+  keys.push(...bodyKeys(table))
   const skipKeys: string[] = []
   table.attrs?.keyValues?.forEach(([key], index) => {
     if (!keys.some((pair) => pair[0] === key)) return
@@ -89,6 +90,43 @@ function tableKeys(w: Writer | null, table: TableNode, first: readonly (readonly
     if (w !== null) loseKey(w, table, index, key)
   })
   return { keys, skipKeys }
+}
+
+function isHeaderRow(row: RowEntry): boolean {
+  return row.type === 'table_row' && row.children.some((cell) => cell.header) &&
+    row.children.every((cell) => cell.header || cell.span !== undefined)
+}
+
+/** C2-W-136: the rows of header cells that lead `body`. */
+function leadingHeaderRows(body: TableBodyNode): number {
+  const rows = body.children.filter((row) => row.type === 'table_row')
+  let count = 0
+  while (count < rows.length && isHeaderRow(rows[count]!)) count++
+  return count
+}
+
+function bodiesOf(table: TableNode): TableBodyNode[] {
+  return table.children.filter((group): group is TableBodyNode => group.type === 'table_body')
+}
+
+/** C2-W-136: whether the bodies of `table` need `body-rows`: more than one, an empty one, header rows or row headers. */
+function partitioned(bodies: readonly TableBodyNode[]): boolean {
+  return bodies.length > 1 || bodies.some((body) => !body.children.some((row) => row.type === 'table_row') ||
+    leadingHeaderRows(body) > 0 || body.rowHeadColumns !== undefined)
+}
+
+/** C2-W-136, C2-B-230: `body-rows`, and `body-header-rows` and `body-header-cols` where a body needs them. */
+function bodyKeys(table: TableNode): (readonly [string, string])[] {
+  const bodies = bodiesOf(table)
+  if (!partitioned(bodies)) return []
+  const header = bodies.map(leadingHeaderRows)
+  const data = bodies.map((body, at) => body.children.filter((row) => row.type === 'table_row').length - header[at]!)
+  const keys: (readonly [string, string])[] = [['body-rows', data.join(',')]]
+  if (header.some((count) => count > 0)) keys.push(['body-header-rows', header.join(',')])
+  if (bodies.some((body) => body.rowHeadColumns !== undefined)) {
+    keys.push(['body-header-cols', bodies.map((body) => (body.rowHeadColumns === undefined ? '' : String(body.rowHeadColumns))).join(',')])
+  }
+  return keys
 }
 
 /** The content of a cell on its lines: a line feed stands where a continuation row breaks it (C2-W-067). */
@@ -116,9 +154,9 @@ function cellMarks(w: Writer, cell: TableCellNode): string {
   return vertical !== '' && horizontal === '' ? `?${vertical}` : horizontal + vertical
 }
 
-function cellPrefix(w: Writer, cell: TableCellNode): string {
+function cellPrefix(w: Writer, cell: TableCellNode, bare: boolean): string {
   const mark = cellMarks(w, cell)
-  return (cell.header ? '=' : '') + braceBlock(cell, mark === '' ? { pipes: true } : { mark, pipes: true })
+  return (cell.header && !bare ? '=' : '') + braceBlock(cell, mark === '' ? { pipes: true } : { mark, pipes: true })
 }
 
 /** C2-W-062, C2-W-118: the prefix, one space, the content and one space; an empty cell is its prefix and one space. */
@@ -151,23 +189,24 @@ interface WrittenCell {
   places: number[]
 }
 
-function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: number, head: boolean): WrittenCell {
+/** C2-W-136: `bare` writes a header cell of a body header row without its mark, which the key makes a header cell. */
+function writtenCell(w: Writer, row: TableRowNode, cell: TableCellNode, flags: number, head: boolean, bare: boolean): WrittenCell {
   const spanned = cell.span
   const span = spanned === undefined ? undefined : SPAN_MARKS.get(spanned)
   // C2-W-063, C2-B-174: in the head the mark carries the header mark, so that a row of marks stays a head row.
   if (span !== undefined) return { prefix: head ? '=' : '', parts: [span], places: [] }
   const parts = cellContent(w, cell, flags).split('\n')
   const recorded = fragmentLines(w, row, cell, parts.length - 1)
-  if (recorded !== null) return { prefix: cellPrefix(w, cell), parts, places: recorded }
+  if (recorded !== null) return { prefix: cellPrefix(w, cell, bare), parts, places: recorded }
   // C2-L-035: without a record that fits, the row is one line. C2-L-021: a fragment that starts an empty cell came
   // without a joining space, so it is joined without one.
   const wraps = w.facts?.get(cell)?.wraps?.length ?? 0
   const joined = (wraps === parts.length - 1 && parts[0] === '' ? parts.slice(1) : parts).join(' ')
-  return { prefix: cellPrefix(w, cell), parts: [joined], places: [] }
+  return { prefix: cellPrefix(w, cell, bare), parts: [joined], places: [] }
 }
 
-function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean): WrittenRow {
-  const cells = row.children.map((cell) => writtenCell(w, row, cell, flags, head))
+function writtenRow(w: Writer, row: TableRowNode, flags: number, head: boolean, bare = false): WrittenRow {
+  const cells = row.children.map((cell) => writtenCell(w, row, cell, flags, head, bare))
   let below = w.facts?.get(row)?.continuationLines ?? 0
   for (const cell of cells) below = Math.max(below, cell.places[cell.places.length - 1] ?? 0)
   const lines: string[][] = []
@@ -205,11 +244,13 @@ function lineComment(w: Writer, node: CommentNode, prefix: string): void {
 /** The written rows of `table` and the comments between them, in source order (C2-A-086). */
 function tableEntries(w: Writer, table: TableNode, flags: number): (WrittenRow | CommentNode)[] {
   const entries: (WrittenRow | CommentNode)[] = []
+  const split = partitioned(bodiesOf(table))
   for (const group of table.children) {
     if (group.type === 'comment') entries.push(group)
     else {
       const head = group.type === 'table_head'
-      for (const row of group.children) entries.push(row.type === 'table_row' ? writtenRow(w, row, flags, head) : row)
+      let bare = split && group.type === 'table_body' ? leadingHeaderRows(group) : 0
+      for (const row of group.children) entries.push(row.type === 'table_row' ? writtenRow(w, row, flags, head, bare-- > 0) : row)
     }
   }
   return entries

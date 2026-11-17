@@ -83,7 +83,7 @@ function tableAttribute(node: Node, path: string, context: LintContext): void {
   }
 }
 
-const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows']
+const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows', 'body-rows', 'body-header-rows', 'body-header-cols']
 
 /** C2-B-227: a table keeps a key it reads in `attrs` only when the value is invalid, or `header-rows` on a pipe table. */
 function keptTableKeys(node: Node): string[] {

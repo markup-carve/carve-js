@@ -73,7 +73,7 @@ export function parseBlockTree(src: string): BlockNode {
   const state = acquireState()
   try {
     scanBlocks(state, src)
-    return buildTree(state.events, state.eventLength)
+    return buildTree(state.events, state.eventLength, src)
   } finally {
     releaseState(state)
   }

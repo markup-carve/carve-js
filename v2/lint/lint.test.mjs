@@ -131,6 +131,7 @@ const CASES = [
   { id: 'table-column-arity', trigger: '{widths=10}\n| a | b |', near: '{widths=10,20}\n| a | b |',
     fragment: 'widths=10' },
   { id: 'table-attribute-invalid', trigger: '{widths=x}\n| a |', near: '{widths=10}\n| a |', fragment: 'widths=x' },
+  { id: 'table-attribute-invalid', trigger: '{body-rows=1}\n| a |\n| b |', near: '{body-rows=1,1}\n| a |\n| b |', fragment: 'body-rows=1' },
   { id: 'table-column-overlap', trigger: '{aligns=left}\n|={>} a |= b |',
     near: '{aligns=left}\n|= a |= b |', fragment: 'aligns=left' },
   { id: 'table-marker-run-padding', trigger: '|{.x}> a |', near: '|>{.x} a |', fragment: '{.x}>' },
