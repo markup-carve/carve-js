@@ -198,8 +198,9 @@ function headingHtml(r: Render, node: HeadingNode, inSection: boolean): string {
 function quote(r: Render, node: BlockQuoteNode, level: number): void {
   const visible = visibleBlocks(node.children)
   const first = visible[0]
-  if (visible.length === 1 && isTextParagraph(first)) {
-    line(r, level, `<blockquote${tag(r, node)}>${paragraphHtml(r, first)}</blockquote>`)
+  if (visible.length === 1 && (isTextParagraph(first) || isIncludeParagraph(first))) {
+    const content = isTextParagraph(first) ? paragraphHtml(r, first) : includeParagraph(r, first, false)
+    line(r, level, `<blockquote${tag(r, node)}>${content}</blockquote>`)
     return
   }
   BLOCKQUOTE(r, node, level)
@@ -681,10 +682,13 @@ function rowHtml(r: Render, row: TableRowNode, layout: TableLayout, covered: num
   for (const cell of cells) {
     if (!marked) column = skipCovered(covered, column)
     const colspan = cell.colspan ?? 1
-    if (cell.span === undefined) {
+    if (cell.span === 'rowspan') {
+      // A marked row names its covered columns explicitly, so consume the prior row span here.
+      covered[column] = Math.max(0, (covered[column] ?? 0) - 1)
+    } else if (cell.span === undefined) {
       html += cellHtml(r, cell, layout.columns[column], layout.headValign[column], inHead, level, column < layout.rowHeads)
       const below = (cell.rowspan ?? 1) - 1
-      if (!marked) for (let more = 0; more < colspan; more++) covered[column + more] = below
+      for (let more = 0; more < colspan; more++) covered[column + more] = below
     }
     column += marked ? 1 : colspan
   }
@@ -808,7 +812,7 @@ function writeNote(r: Render, note: Note, level: number): void {
   const visible = blocks.filter(rendersInNote)
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
-  r.backlinkHost = isTextParagraph(last) ? last : null
+  r.backlinkHost = isTextParagraph(last) && last.children.length > 0 && !onlyComments(last.children) ? last : null
   line(r, level, `<li id="${note.id}"${noteCarriers(r, note)}>`)
   writeBlocks(r, blocks, level + 1)
   if (r.backlinkHost === null) line(r, level + 1, `<p>${r.backlinks}</p>`)

@@ -679,8 +679,8 @@ describe('the position of a diagnostic', () => {
         path: '/children/3', range: { startOffset: 29, endOffset: 36 },
       },
       {
-        code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'Duplicate id "a": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.',
-        path: '/children/1/children/0', range: { startOffset: 11, endOffset: 19 },
+        code: 'duplicate-id', severity: 'warning', channel: 'parse', message: 'Duplicate authored id "a": the first node in document order wins id lookup. Change one id.',
+        path: '/children/1/children/0', range: { startOffset: 12, endOffset: 14 },
       },
     ])
   })

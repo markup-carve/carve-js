@@ -269,7 +269,8 @@ describe('C2-W-106 catalog rules', () => {
 
   for (const id of Object.keys(CATALOG)) {
     it(`${id} has a candidate 13 trigger, near miss, message variant, and byte range`, () => {
-      const positive = CLAUSE_CASES.find((entry) => entry.expected.diagnostics?.some((finding) => finding.code === id))
+      // Later clause cases carry the latest catalog range when an older case predates a ruling.
+      const positive = CLAUSE_CASES.findLast((entry) => entry.expected.diagnostics?.some((finding) => finding.code === id))
       const miss = CLAUSE_CASES.find((entry) => entry.expected.notReported?.includes(id))
       const own = [...CASES, ...CORPUS_CASES].find((entry) => entry.id === id)
       const trigger = positive?.input ?? own?.trigger

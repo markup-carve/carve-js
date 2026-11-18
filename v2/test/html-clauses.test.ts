@@ -277,7 +277,7 @@ describe('links, images and references', () => {
   it('C2-H-082, C2-H-132: the denial is reported with the severity error', () => {
     expect(renderWithDiagnostics('[a](javascript:x)').diagnostics).toEqual([
       {
-        code: 'destination-denied', severity: 'error', channel: 'render-loss', message: 'the destination javascript:x is denied by the URL policy',
+        code: 'destination-denied', severity: 'error', channel: 'render-loss', message: 'Blanked a denied destination scheme',
         path: '/children/0/children/0/href', range: { startOffset: 4, endOffset: 16 },
       },
     ])

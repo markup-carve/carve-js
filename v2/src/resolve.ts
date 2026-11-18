@@ -753,6 +753,8 @@ function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): vo
     const pending: Node[] = [...child.children]
     for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
       if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+      if (node.type === 'xref') walk.xrefs.push(node)
+      if (node.type === 'table') alignColumns(node)
       forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
     }
   }

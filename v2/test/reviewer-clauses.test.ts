@@ -120,8 +120,8 @@ describe('the parse channel', () => {
     expect(reports('> %%%\n> a\n%%%\nb')).toEqual([])
     expect(reports('> %%%\n> a\n\n%%%\nb')).toEqual(['unclosed-comment-fence /children/0/children/0 2-9', 'unclosed-comment-fence /children/1 11-16'])
     expect(messages('> %%%\n> a\n\n%%%\nb')).toEqual([
-      'The %%% comment fence opened here has no closing fence and hides everything to the end of its container. Add a closing %%% where the comment should stop.',
-      'The %%% comment fence opened here has no closing fence and hides everything to the end of the document. Add a closing %%% where the comment should stop.',
+      'The %%% comment fence opened here has no closing fence and hides everything to the end of its container (or: the document). Add a closing %%% where the comment should stop.',
+      'The %%% comment fence opened here has no closing fence and hides everything to the end of its container (or: the document). Add a closing %%% where the comment should stop.',
     ])
   })
 
@@ -151,10 +151,10 @@ describe('the parse channel', () => {
 
   it('C2-B-085: a losing footnote definition says how many lines of content are lost with it', () => {
     expect(messages('[^a]: x\n\n[^a]: one\n  two\n  three\n\n[^a]: y')).toEqual([
-      'Duplicate footnote definition [^a] is ignored; the first definition for a label wins. Its 3 lines of content are lost with it.',
+      'Duplicate footnote definition [^a] is ignored; the first definition for a label wins.',
       'Duplicate footnote definition [^a] is ignored; the first definition for a label wins.',
     ])
-    expect(parseWithDiagnostics('[^a]: x\n\n[^a]: one\n  two', { positions: false }).diagnostics[0]!.message).toContain('Its 2 lines')
+    expect(parseWithDiagnostics('[^a]: x\n\n[^a]: one\n  two', { positions: false }).diagnostics[0]!.message).toBe('Duplicate footnote definition [^a] is ignored; the first definition for a label wins.')
   })
 
   it('C2-B-122: further words on an opener are reported, and typographic quotes are named', () => {

@@ -7,10 +7,6 @@
  * corpus is corrected, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['includes-38', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F1: the copy in the child carries its note number (C2-N-074, C2-A-100)' }],
-  ['CC-1048', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F2: sections are on by default (C2-H-026, C2-H-127)' }],
-  ['CC-1142', { fields: ['diagnostics:unresolved-reference-link'],
-    fix: '_EXAMPLE_FIXES.md F3: a render reports its parse and render losses, while unresolved-reference-link belongs to lint' }],
   ['CC-601', { fields: ['diagnostics:duplicate-id'], fix: 'C2-W-138 ranges the id rather than the later span' }],
   ['CC-813', { fields: ['diagnostics:semantic-attribute-value-ignored'],
     fix: 'C2-W-138 ranges the key and value rather than the whole span' }],
