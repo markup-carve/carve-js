@@ -12,7 +12,7 @@ import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
-import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
+import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, hasTaskPresentationDifference,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
 import { removeListMarkerTab } from './html-list-tab.ts'
@@ -186,9 +186,27 @@ function reportShortTableWidths(done: Rewritten, old: string, next: string): voi
   }
 }
 
+function reportEmptyClass(done: Rewritten, old: string): void {
+  if (!old.includes(' class="')) return
+  for (const { node } of done.context.visits) {
+    if (node.pos === undefined) continue
+    const classes = (node.attrs as { classes?: unknown[] } | undefined)?.classes
+    if (!classes?.some((value) => typeof value === 'string' && /^[ \t]*$/u.test(value))) continue
+    const previous = node.pos.startLine - 1
+    const ownText = done.context.src.slice(node.pos.startOffset, node.pos.endOffset)
+    const metadata = !ownText.includes('class=') && previous > 0
+      && lineText(done.context.lines, previous).includes('class=')
+    const line = metadata ? previous : node.pos.startLine
+    const range = metadata ? { startOffset: lineStart(done.context.lines, line), endOffset: lineEnd(done.context.lines, line) }
+      : { startOffset: node.pos.startOffset, endOffset: node.pos.endOffset }
+    done.records.push({ ...recordOf('U-282', line, 'the empty class token is omitted by 0.2'), range })
+  }
+}
+
 function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
   reportShortTableWidths(done, old, next)
+  reportEmptyClass(done, old)
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
   if (normalized.gainedParagraphs > 0) {
@@ -237,6 +255,11 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
     const columns = addShortTableColumns(transformed.html, next)
     transformed.html = columns.html
     transformed.applied.push(...columns.applied)
+  }
+  if (records.some((record) => record.entry === 'U-282' && record.range !== undefined)) {
+    const classes = dropEmptyClasses(transformed.html, next)
+    transformed.html = classes.html
+    transformed.applied.push(...classes.applied)
   }
   return transformed
 }

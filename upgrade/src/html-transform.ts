@@ -186,6 +186,20 @@ export function addShortTableColumns(old: string, next: string): Result {
   return { html: source.join(''), applied: changed ? ['U-150'] : [] }
 }
 
+export function dropEmptyClasses(old: string, next: string): Result {
+  const source = htmlTokens(old)
+  const target = htmlTokens(next)
+  let changed = false
+  for (let at = 0; at < source.length; at++) {
+    const before = source[at] ?? ''
+    const without = before.replace(/ class="[ \t]*"/u, '')
+    if (without === before || without !== target[at]) continue
+    source[at] = without
+    changed = true
+  }
+  return { html: source.join(''), applied: changed ? ['U-282'] : [] }
+}
+
 export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
   const tokens = htmlTokens(old)
   const target = htmlTokens(next)
