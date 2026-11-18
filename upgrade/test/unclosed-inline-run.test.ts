@@ -12,6 +12,14 @@ describe('U-258: an unclosed 0.1 inline run', () => {
     },
   )
 
+  it('retains the plain unclosed code run under U-258', () => {
+    const result = upgrade('`\n')
+    expect(result.output).toBe('`\n')
+    expect(result.check).toBe('explained')
+    expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'report', line: 1,
+      range: { startOffset: 0, endOffset: 1 } }))
+  })
+
   it('closes a nonempty math run using its 0.1 parse position', () => {
     const result = upgrade('$`x\n')
     expect(result.output).toBe('$`x`\n')

@@ -13,6 +13,16 @@ describe('residual HTML differences name their source', () => {
     expect(canWriteUpgrade(result)).toBe(false)
   })
 
+  it('names U-389 for the braced opener that is now mapped', () => {
+    const source = '={_a=b_}\n'
+    const result = upgrade(source)
+    expect(result.records.find((record) => record.entry === 'U-389')?.range)
+      .toEqual({ startOffset: 0, endOffset: source.length - 1 })
+    const mismatch = result.records.find((record) => record.entry === 'upgrade-mismatch')
+    expect(mismatch?.message).toContain('mapped row U-389')
+    expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.length - 1 })
+  })
+
   it('marks a difference with no tool row as a map finding', () => {
     const source = 'a------- b-------- c---------- d----------- e-------------\n'
     const mismatch = upgrade(source).records.find((record) => record.entry === 'upgrade-mismatch')
