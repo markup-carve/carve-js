@@ -31,6 +31,7 @@ export interface LintContext {
   lines: Line[]
   layouts: Map<string, NodeLayout>
   nodeTypes: Map<string, Node['type']>
+  nodeRules: Map<Node['type'], Rule[]>
   options: LintOptions
   diagnostics: Diagnostic[]
   findingLines: number[]

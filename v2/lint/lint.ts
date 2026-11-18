@@ -104,9 +104,20 @@ function controlOf(node: Node, context: LintContext): Control | null {
 }
 
 function runNodeRules(node: Node, path: string, context: LintContext): void {
+  for (const rule of context.nodeRules.get(node.type) ?? []) rule.checkNode?.(node, path, context)
+}
+
+function nodeRulesByType(options: LintOptions): Map<Node['type'], Rule[]> {
+  const byType = new Map<Node['type'], Rule[]>()
   for (const rule of NODE_RULES) {
-    if (rule.nodes?.includes(node.type) && active(rule.id, context.options)) rule.checkNode?.(node, path, context)
+    if (!active(rule.id, options)) continue
+    for (const type of rule.nodes ?? []) {
+      const rules = byType.get(type)
+      if (rules === undefined) byType.set(type, [rule])
+      else rules.push(rule)
+    }
   }
+  return byType
 }
 
 function visitChildren(node: Node, path: string, context: LintContext, controls: Control[][]): void {
@@ -159,8 +170,12 @@ function maskLeaf(node: Node, path: string, context: LintContext): void {
   context.leafMask.fill(1, start, end)
 }
 
+function needsMasking(line: Line, mask: Uint8Array): boolean {
+  return !line.opaque && (line.text.includes('\\') || mask.subarray(line.start, line.end).includes(1))
+}
+
 function maskLine(line: Line, mask: Uint8Array): Line {
-  if (line.opaque) return line
+  if (!needsMasking(line, mask)) return line
   const chars = line.text.split('')
   let changed = false
   for (let at = 0; at < chars.length; at++) {
@@ -253,6 +268,7 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
   const position = sourceLines(source)
   const context: LintContext = {
     source, ...position, leafMask: new Uint8Array(source.length), options, layouts, nodeTypes: new Map(),
+    nodeRules: nodeRulesByType(options),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
