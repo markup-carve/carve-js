@@ -87,15 +87,17 @@ function definition(scope: ReferenceScope, key: string, kind: 'links' | 'notes')
   return undefined
 }
 
-function recordReference(node: Node, file: string, scope: ReferenceScope, found: ReferenceFindings): void {
+function recordReference(node: Node, file: string, inclusion: string, scope: ReferenceScope,
+  found: ReferenceFindings): void {
   if (node.type !== 'link' && node.type !== 'image' && node.type !== 'footnote_ref') return
   const note = node.type === 'footnote_ref'
   const location = referenceKey(file, node, note ? 'unresolved-footnote' : 'unresolved-reference-link')
   if (location === null) return
-  found.observed.add(location)
+  const occurrence = `${location}\u0000${inclusion}`
+  found.observed.add(occurrence)
   const resolved = note ? node.number !== undefined : node.type === 'link' ? node.href !== undefined : node.src !== undefined
   if (!resolved) {
-    found.unresolved.add(location)
+    found.unresolved.add(occurrence)
     return
   }
   if (node.key === undefined) return
@@ -106,31 +108,37 @@ function recordReference(node: Node, file: string, scope: ReferenceScope, found:
   if (used !== null) found.used.add(used)
 }
 
-function walkReferences(node: Node, file: string, scope: ReferenceScope, found: ReferenceFindings): void {
-  recordReference(node, file, scope, found)
+function walkReferences(node: Node, path: string, file: string, inclusion: string, scope: ReferenceScope,
+  found: ReferenceFindings): void {
+  recordReference(node, file, inclusion, scope, found)
   if (node.type === 'include' && node.children !== undefined) {
     const innerFile = node.file ?? file
     const inner = scopeOf(node.children, innerFile, scope)
-    forEachSlot(node, (nodes, step) => {
-      for (const child of nodes) walkReferences(child, step === 'children' ? innerFile : file,
-        step === 'children' ? inner : scope, found)
+    forEachSlot(node, (nodes, step, single) => {
+      nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
+        step === 'children' ? innerFile : file, step === 'children' ? path : inclusion,
+        step === 'children' ? inner : scope, found))
     })
     return
   }
-  forEachSlot(node, (nodes) => { for (const child of nodes) walkReferences(child, file, scope, found) })
+  forEachSlot(node, (nodes, step, single) => {
+    nodes.forEach((child, index) => walkReferences(child, `${path}/${step}${single ? '' : `/${index}`}`,
+      file, inclusion, scope, found))
+  })
 }
 
 /** The resolved expansion decides which file's definition a reference actually uses (C2-N-054, C2-N-055). */
 function referenceFindings(document: DocumentNode): ReferenceFindings {
   const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set() }
-  walkReferences(document, '', scopeOf(document.children, '', null), found)
+  walkReferences(document, '', '', '', scopeOf(document.children, '', null), found)
   return found
 }
 
-function reconciled(entry: Diagnostic, found: ReferenceFindings): boolean {
+function reconciled(entry: Diagnostic, found: ReferenceFindings, inclusion = ''): boolean {
   const key = diagnosticKey(entry)
   if (entry.code === 'unresolved-reference-link' || entry.code === 'unresolved-footnote') {
-    return !found.observed.has(key) || found.unresolved.has(key)
+    const occurrence = `${key}\u0000${inclusion}`
+    return !found.observed.has(occurrence) || found.unresolved.has(occurrence)
   }
   if (entry.code === 'unused-link-reference-definition' || entry.code === 'unused-footnote-definition') {
     return !found.used.has(key)
@@ -217,12 +225,17 @@ function located(visit: Visit, node: IncludeNode, text: string, part: Linted, en
   const file = node.file ?? ''
   const key = `${file}\u0000${startOffset}\u0000${entry.code}`
   if (visit.seen.has(key)) return null
-  visit.seen.add(key)
   const range = { startOffset, endOffset: (entry.range?.endOffset ?? 0) + part.shift }
   // A finding of a section outside every selected block, such as one on the file as a whole, points at the include.
   const own = entry.path ?? ''
   const under = part.paths === null ? own : pathUnder(part.paths, own) ?? ''
   return { ...entry, path: `${path}${under}`, range, file }
+}
+
+function keepLocated(visit: Visit, entry: Diagnostic | null, inclusion: string): void {
+  if (entry === null || !reconciled(entry, visit.references, inclusion)) return
+  visit.seen.add(diagnosticKey(entry))
+  visit.out.push(entry)
 }
 
 /** C2-N-086, C2-N-087: lints the source of one expanded Carve include and keeps each distinct finding once. */
@@ -235,8 +248,7 @@ function lintInclude(visit: Visit, node: IncludeNode, path: string): void {
   }
   const part = lintedPart(node, text)
   for (const entry of visit.lintFile(part.source)) {
-    const found = located(visit, node, text, part, entry, path)
-    if (found !== null && reconciled(found, visit.references)) visit.out.push(found)
+    keepLocated(visit, located(visit, node, text, part, entry, path), path)
   }
 }
 
@@ -245,8 +257,7 @@ function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: stri
   const whole: Linted = { source: text, shift: 0, kept: null, paths: null }
   ;(node.children ?? []).forEach((child, index) => {
     for (const entry of visit.lintPayload(text, child, `/children/${index}`)) {
-      const found = located(visit, node, text, whole, entry, path)
-      if (found !== null) visit.out.push(found)
+      keepLocated(visit, located(visit, node, text, whole, entry, path), path)
     }
   })
 }

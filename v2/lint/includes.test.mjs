@@ -45,7 +45,7 @@ describe('lint and includes', () => {
       'leaf.crv': '[up][]\n',
     }
     expect(lint(source, { includes: resolver(files) }).filter((entry) => entry.code === 'unresolved-reference-link'))
-      .toEqual([expect.objectContaining({ file: 'leaf.crv' })])
+      .toEqual([expect.objectContaining({ file: 'leaf.crv', path: '/children/1/children/0/children/0/children/0' })])
   })
 
   it('C2-N-023, C2-N-055: an abbreviation defined by the parent is available in the child', () => {
