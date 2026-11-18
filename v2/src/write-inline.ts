@@ -708,6 +708,13 @@ function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number
   if (node.type === 'text') {
     doubleLastBackslash(w, node, nodes, end, flags)
     escapeGluedBacktick(w, node, nodes[at - 1])
+    const before = nodes[at - 1]
+    if ((before?.type === 'strong' || before?.type === 'emphasis') && node.value.includes(']')
+      && before.children.some((child) => child.type === 'text' && /\^\[[^\]]*$/.test(child.value))) {
+      const closing = node.value.indexOf(']')
+      const escapes = w.escapes.get(node) ?? []
+      if (!escapes.includes(closing)) w.escapes.set(node, [...escapes, closing].sort((a, b) => a - b))
+    }
   }
   // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
   if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)
