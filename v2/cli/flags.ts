@@ -1,5 +1,6 @@
 // The commands and flags of spec/0.2/tooling.md, read from data/cli.json, and the engine's own (C2-T-003).
 import cli from '../data/cli.json' with { type: 'json' }
+import { resolve } from 'node:path'
 
 export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint'
 export type ValueKind = 'switch' | 'enum' | 'json' | 'path' | 'code' | 'count'
@@ -112,10 +113,17 @@ function commandAt(arg: string | undefined): Command | undefined {
 /** C2-T-016, C2-T-030, C2-T-033: the combinations a command refuses. */
 function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
   const values = parsed.values
+  if (parsed.command === 'fmt' && values['check'] === true && values['diff'] === true) {
+    throw new UsageError('--check cannot be combined with --diff')
+  }
   if (values['write'] === true && (values['check'] === true || values['diff'] === true) && parsed.command === 'fmt') {
     throw new UsageError('--write cannot be combined with --check or --diff')
   }
   if (values['from-ast'] === true && values['normalize'] === true) throw new UsageError('--normalize needs source input')
+  const losses = values['report-losses']
+  const includes = values['report-includes']
+  if (typeof losses === 'string' && typeof includes === 'string' && losses !== '-' && includes !== '-' &&
+    resolve(losses) === resolve(includes)) throw new UsageError('two reports cannot write the same path')
   if (values['write'] === true && files.includes('-')) throw new UsageError('--write cannot replace standard input')
   if (parsed.command === 'import' && values['from'] === undefined) throw new UsageError('import requires --from')
 }

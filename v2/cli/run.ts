@@ -249,18 +249,17 @@ function astFile(path: string, display: string, bytes: Uint8Array, args: ParsedA
 
 /** C2-W-100: the first line that changes, and its old and new text; a missing line is its prefix alone. */
 function firstChange(display: string, before: string, after: string): string {
-  const oldLines = linesOf(before)
-  const newLines = linesOf(after)
+  const oldLines = linesWithEndings(before)
+  const newLines = linesWithEndings(after)
   let at = 0
-  while (at < oldLines.length && oldLines[at] === newLines[at]) at++
+  while (at < oldLines.length && oldLines[at]?.raw === newLines[at]?.raw) at++
   const side = (prefix: string, line: string | undefined): string => (line === undefined ? prefix : `${prefix} ${line}`)
-  return `${display}:${at + 1}\n${side('-', oldLines[at])}\n${side('+', newLines[at])}\n`
+  return `${display}:${at + 1}\n${side('-', oldLines[at]?.body)}\n${side('+', newLines[at]?.body)}\n`
 }
 
-function linesOf(text: string): string[] {
-  const out = text.split('\n')
-  if (text.endsWith('\n')) out.pop()
-  return out
+function linesWithEndings(text: string): { raw: string, body: string }[] {
+  const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? []
+  return lines.map((raw) => ({ raw, body: raw.replace(/\r?\n$/, '') }))
 }
 
 function unified(display: string, before: string, after: string): string {
