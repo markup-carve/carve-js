@@ -1,11 +1,53 @@
 // Contract 2.11 and 2.13: inline spellings, read off the inline nodes of the 0.1 tree.
 import { isAsciiDigit, isWordCharacter } from '../../../v2/src/unicode.ts'
-import { isInside } from '../blocks.ts'
+import { ancestor, isInside } from '../blocks.ts'
 import { change, type Context, note, type Visit } from '../context.ts'
 import { type Node01 } from '../engines.ts'
+import { recordOf } from '../report.ts'
 import { headingTexts, isUnresolved } from './references.ts'
 
 const BRACE = 0x7b
+const OPEN_RUNS: readonly string[] = ['code', 'math', 'literal_inline']
+
+function hasClosingRun(src: string, openerEnd: number, end: number, width: number): boolean {
+  for (let at = openerEnd; at < end; at++) {
+    if (src[at] !== '`') continue
+    let run = 0
+    while (src[at + run] === '`') run++
+    if (run === width && src[at - 1] !== '\\') return true
+    at += run - 1
+  }
+  return false
+}
+
+function canCloseRun(visit: Visit): boolean {
+  return OPEN_RUNS.includes(visit.node.type) && visit.node.pos !== undefined
+    && ancestor(visit, 'block_quote') === null && ancestor(visit, 'line_block') === null
+    && ancestor(visit, 'table') === null && ancestor(visit, 'figure') === null
+}
+
+function unclosedRun(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  if (!canCloseRun(visit)) return
+  const { startOffset: start, endOffset: end, startLine } = node.pos!
+  let at = start
+  if (ctx.src[at] === '!' || ctx.src[at] === '$') at++
+  if (ctx.src[start] === '$' && ctx.src[at] === '$') at++
+  if (ctx.src[at] !== '`') return
+  let width = 0
+  while (ctx.src[at + width] === '`') width++
+  const openerEnd = at + width
+  const mark = '`'.repeat(width)
+  if (hasClosingRun(ctx.src, openerEnd, end, width)) return
+  if (ctx.findings.some((finding) => finding.edit !== null && start <= finding.offset && finding.offset <= end)) return
+  if (end > openerEnd) {
+    change(ctx, 'U-258', end, end, mark, 'unclosed 0.1 inline run closed at its content end')
+    return
+  }
+  const record = { ...recordOf('U-258', startLine, 'the empty 0.1 inline value has no verified 0.2 spelling'),
+    class: 'report' as const, range: { startOffset: start, endOffset: end } }
+  ctx.findings.push({ record, offset: start, edit: null })
+}
 
 interface Bare {
   mark: string
@@ -101,6 +143,29 @@ function sigil(ctx: Context, node: Node01): void {
   note(ctx, 'U-073', node.pos!.startLine, 'a sigil form directly after a letter or number is text in 0.2')
 }
 
+function escapedBrace(src: string, at: number): boolean {
+  let count = 0
+  for (let before = at - 1; src[before] === '\\'; before--) count++
+  return count % 2 === 1
+}
+
+function hasUnattachedNeighbors(ctx: Context, visit: Visit, start: number, end: number): boolean {
+  const before = visit.siblings[visit.index - 1]
+  const after = visit.siblings[visit.index + 1]
+  return ctx.src[start - 1] === '{' && ctx.src[end] === '}' && !escapedBrace(ctx.src, start - 1)
+    && ctx.src[start - 2] === ' ' && ctx.src[end + 1] === ' '
+    && before?.type === 'text' && before.pos?.endOffset === start
+    && after?.type === 'text' && after.pos?.startOffset === end
+}
+
+function unattachedId(ctx: Context, visit: Visit): void {
+  if (visit.parent?.node.type !== 'paragraph') return
+  const start = visit.node.pos!.startOffset
+  const end = visit.node.pos!.endOffset
+  if (!hasUnattachedNeighbors(ctx, visit, start, end)) return
+  change(ctx, 'U-275', start - 1, start - 1, '\\', 'unattached id attribute escaped to keep the 0.1 tag text')
+}
+
 /** U-072: at a brace the attribute block is tried first (C2-I-043). */
 function editorialComment(ctx: Context, node: Node01): void {
   const { startOffset: start, startLine } = node.pos!
@@ -132,6 +197,7 @@ function inlineNode(ctx: Context, visit: Visit): void {
   else if (node.type === 'substitution') substitution(ctx, node)
   else if (node.type === 'smart_punctuation') demotedQuote(ctx, node)
   else if (node.type === 'critic_comment') editorialComment(ctx, node)
+  else if (node.type === 'tag') { sigil(ctx, node); unattachedId(ctx, visit) }
   else if (SIGILS.has(node.type)) sigil(ctx, node)
   else if (node.type === 'raw_inline' || node.type === 'raw_block') rawHtml(ctx, node)
 }
@@ -145,4 +211,8 @@ export function inline(ctx: Context): void {
     const link = ctx.visits[index]!
     while (index + 1 < ctx.visits.length && isInside(ctx.visits[index + 1]!, link)) index++
   }
+}
+
+export function unclosedRuns(ctx: Context): void {
+  for (const visit of ctx.visits) unclosedRun(ctx, visit)
 }

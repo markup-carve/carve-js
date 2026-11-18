@@ -182,6 +182,26 @@ function tabsInCode(ctx: Context, node: Node01): void {
   }
 }
 
+function titleWasDropped(node: Node01): boolean {
+  if (node.type === 'admonition') return node.title === undefined
+  if (node.type !== 'code_block') return false
+  const keyValues = node.attrs?.keyValues as Record<string, unknown> | undefined
+  return keyValues?.title === undefined
+}
+
+/** U-276 and U-277: 0.1 dropped a title whose later metadata failed its slot parse. */
+function droppedFenceTitle(ctx: Context, node: Node01): void {
+  if (!titleWasDropped(node)) return
+  const line = node.pos!.startLine
+  const source = lineText(ctx.lines, line)
+  const title = source.indexOf(' "')
+  const close = source.indexOf('"', title + 2)
+  if (title < 0 || close <= title + 2 || !/^[ \t]/u.test(source.slice(close + 1))) return
+  const entry = node.type === 'admonition' ? 'U-276' : 'U-277'
+  change(ctx, entry, lineStart(ctx.lines, line) + title, lineEnd(ctx.lines, line), '',
+    'fence title dropped because the 0.1 metadata slot did not parse it')
+}
+
 export function fences(ctx: Context): void {
   for (const visit of ctx.visits) {
     const node = visit.node
@@ -193,6 +213,9 @@ export function fences(ctx: Context): void {
       indentedCloser(ctx, node)
       tabsInCode(ctx, node)
       tildeFence(ctx, node)
+      droppedFenceTitle(ctx, node)
+    } else if (node.type === 'admonition') {
+      droppedFenceTitle(ctx, node)
     } else if (node.type === 'raw_block' || (node.type === 'table' && node.sourceFormat !== undefined)) {
       tildeFence(ctx, node)
     }

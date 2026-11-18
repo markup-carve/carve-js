@@ -15,6 +15,8 @@ export interface ReportRecord {
   class: EntryClass | 'summary' | 'unverified explanation' | 'mismatch'
   /** Line of the input, from 1. 0 for a record about the whole file. */
   line: number
+  /** UTF-16 source offsets of a construct that needs review. */
+  range?: { startOffset: number; endOffset: number }
   message: string
   lint?: string
 }
@@ -50,6 +52,7 @@ export function needsPerson(record: ReportRecord): boolean {
 
 export function formatRecord(file: string, record: ReportRecord): string {
   const place = record.line > 0 ? `${file}:${record.line}` : file
+  const range = record.range === undefined ? '' : ` [source ${record.range.startOffset}..${record.range.endOffset}]`
   const lint = record.lint === undefined ? '' : ` [${record.lint}]`
-  return `${place}: ${record.entry} ${record.class}: ${record.message}${lint}`
+  return `${place}: ${record.entry} ${record.class}: ${record.message}${range}${lint}`
 }

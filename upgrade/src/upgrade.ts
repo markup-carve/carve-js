@@ -21,7 +21,7 @@ import { rescueMinor } from './minor-rescues.ts'
 import { rescueTargeted } from './targeted-rescues.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
 import { RULES } from './rules/index.ts'
-import { lineOf, lineText, readLines } from './source.ts'
+import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedReport, mappedRewrite } from './mapped-rows.ts'
 
 export interface UpgradeResult {
@@ -39,6 +39,7 @@ interface Rewritten {
   output: string
   records: ReportRecord[]
   edits: Edit[]
+  context: Context
 }
 
 /**
@@ -68,9 +69,9 @@ function rewrite(input: string): Rewritten {
   const output = applyEdits(input, edits)
   if (output !== input && !edits.some((edit) => edit.diagnosed === true) && noHtmlEffect(input, output, records)) {
     return { output: input, records: records.filter((record) => record.class === 'report' || record.class === 'none'
-      || record.entry === 'upgrade-error'), edits: [] }
+      || record.entry === 'upgrade-error'), edits: [], context: ctx }
   }
-  return { output, records, edits }
+  return { output, records, edits, context: ctx }
 }
 
 function sameBothEngines(left: string, right: string, rawHtml: boolean): boolean {
@@ -243,8 +244,8 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
   for (let attempt = 0; attempt < ENTRIES.length; attempt++) {
     const remainder = compareHtmlExact(transformed.html, next).difference
     if (remainder === null) break
-    const report = measuredReport(input, remainder.expected, remainder.actual, placeOf(input, done, remainder.line),
-      transformed.applied.length > 0)
+    const report = measuredReport(done.context, remainder.expected, remainder.actual,
+      placeOf(input, done, remainder.line), transformed.applied.length > 0)
     if (report === null || hasEntry(done.records, report.entry)) break
     done.records.push(report)
     const nextTransform = applyExtraHtml(input, done, old, next)
@@ -267,7 +268,7 @@ function applyExtraHtml(input: string, done: Rewritten, old: string, next: strin
 
 function markUnusedReports(records: ReportRecord[], applied: Set<string>): void {
   for (const record of records) {
-    if ((record.class === 'report' || record.entry === 'U-019') && !applied.has(record.entry)) {
+    if ((record.class === 'report' || record.entry === 'U-019') && record.range === undefined && !applied.has(record.entry)) {
       record.class = 'unverified explanation'
     }
   }
@@ -293,8 +294,15 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   markUnusedReports(records, new Set(transformed.applied))
   const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
   const { line, expected, actual } = remainder
-  const message = `the HTML still differs after cited transformations: left ${JSON.stringify(expected)}, 0.2 ${JSON.stringify(actual)}`
-  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: placeOf(input, done, line), message })
+  const sourceLine = placeOf(input, done, line)
+  const source = readLines(input)
+  const range = sourceLine === 0 ? { startOffset: 0, endOffset: input.length }
+    : { startOffset: lineStart(source, sourceLine), endOffset: lineEnd(source, sourceLine) }
+  const rows = [...new Set(records.filter((record) => /^U-\d+$/u.test(record.entry)).map((record) => record.entry))]
+  const owner = rows.length === 0 ? 'no mapped row' : `mapped row ${rows.join(', ')}`
+  const message = `${owner}: the HTML still differs after cited transformations: `
+    + `left ${JSON.stringify(expected)}, 0.2 ${JSON.stringify(actual)}`
+  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: sourceLine, range, message })
   return 'mismatch'
 }
 
@@ -350,7 +358,7 @@ function upgradeCore(input: string): UpgradeResult {
     check: 'pass', engine01: ENGINE_01_VERSION }
   const manual = mappedReport(input)
   if (manual !== null) {
-    const done: Rewritten = { output: input, records: [manual], edits: [] }
+    const done: Rewritten = { output: input, records: [manual], edits: [], context: makeContext(input) }
     const check = selfCheck(input, done)
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }

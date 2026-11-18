@@ -97,6 +97,42 @@ function hoistInPlace(ctx: Context, id: string, span: Span, cut: number, message
   }
 }
 
+function preserveEmptyQuote(ctx: Context, id: string, span: Span, message: string): boolean {
+  const empty = (ctx.doc.children ?? []).some((node) => node.type === 'block_quote' && node.children?.length === 0
+    && node.pos?.startLine === span.first && node.pos.endLine === span.last)
+  if (!empty) return false
+  const first = lineText(ctx.lines, span.first)
+  const prefix = quotePrefix(first, quoteDepth(first)).trimEnd()
+  if (prefix === '') return false
+  const at = lineStart(ctx.lines, span.first)
+  change(ctx, id, at, at + prefixLength(first), `${prefix}\n`, message)
+  for (let line = span.first + 1; line <= span.last; line++) {
+    const start = lineStart(ctx.lines, line)
+    change(ctx, id, start, start + prefixLength(lineText(ctx.lines, line)), '', message)
+  }
+  return true
+}
+
+function preserveEmptyItem(ctx: Context, id: string, span: Span, message: string): boolean {
+  const definition = (ctx.doc.children ?? []).find((node) => node.pos?.startLine === span.first
+    && (node.type === 'link_reference_definition' || node.type === 'abbreviation_def'))
+  if (definition?.pos === undefined) return false
+  const item = ctx.visits.find((visit) => visit.node.type === 'list_item' && visit.node.children?.length === 0
+    && visit.node.pos?.startLine === span.first && visit.node.pos.endLine === span.first
+    && visit.node.pos.endOffset <= definition.pos!.startOffset && visit.siblings.length === 1)
+  if (item?.node.pos === undefined) return false
+  const start = lineStart(ctx.lines, span.first)
+  const marker = ctx.src.slice(start, item.node.pos.endOffset)
+  const first = lineText(ctx.lines, span.first).slice(definition.pos.startOffset - start)
+  let definitionText = first + '\n'
+  for (let line = span.first + 1; line <= span.last; line++) {
+    const text = lineText(ctx.lines, line)
+    definitionText += text.slice(prefixLength(text)) + '\n'
+  }
+  change(ctx, id, start, lineStart(ctx.lines, span.last + 1), `${marker}{% %}\n\n${definitionText}`, message)
+  return true
+}
+
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
 function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
   change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
@@ -125,7 +161,11 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const id = entryOf(ctx, span, depth)
   const end = containerEnd(ctx, span, depth, cut, ends)
   ends.set(span.first, end)
-  if (end === span.last) hoistInPlace(ctx, id, span, cut, message)
+  if (end === span.last) {
+    if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
+      hoistInPlace(ctx, id, span, cut, message)
+    }
+  }
   else moveAfter(ctx, id, span, cut, end, message)
 }
 
