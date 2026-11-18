@@ -8,7 +8,7 @@ import { newCaseMismatches } from './corpus-new.mjs'
 let checked = 0
 const failures: string[] = []
 
-function assess(id: string, actual: string[], held: string[] | undefined): void {
+function assess(id: string, actual: readonly string[], held: readonly string[] | undefined): void {
   checked++
   if (actual.join() !== (held ?? []).join()) failures.push(`${id}: ${actual.join(', ')}`)
 }
