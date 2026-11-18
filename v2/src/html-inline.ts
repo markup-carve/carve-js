@@ -89,8 +89,8 @@ function authoredKey(node: Node, name: string): string | undefined {
 }
 
 /** A copy of `node` without the keys `names`, which an element takes as its name; they match in lower case only (C2-H-075). */
-function withoutKeys<N extends Node>(node: N, names: string[]): N {
-  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(key))
+function withoutKeys<N extends Node>(node: N, names: string[], caseInsensitive = false): N {
+  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(caseInsensitive ? key.toLowerCase() : key))
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
@@ -163,7 +163,7 @@ function withRel<N extends Node>(r: Render, node: N, structural: Pair[]): N {
   const words = authored === undefined ? [] : keyValue('rel', authored).split(' ').filter((word) => word !== '')
   for (const word of r.linkRel.split(' ')) if (word !== '' && !words.includes(word)) words.push(word)
   if (words.length > 0) structural.push(['rel', words.join(' ')])
-  return authored === undefined ? node : withoutKeys(node, ['rel'])
+  return authored === undefined ? node : withoutKeys(node, ['rel'], true)
 }
 
 /** C2-N-054: a reference in an included file takes the definition resolution chose for it. */
