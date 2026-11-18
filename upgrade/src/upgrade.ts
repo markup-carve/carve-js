@@ -12,7 +12,7 @@ import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
-import { addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
+import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, hasTaskPresentationDifference,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
 import { removeListMarkerTab } from './html-list-tab.ts'
@@ -170,8 +170,25 @@ function preserveLineEndings(input: string, output: string): string {
   return output.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
 }
 
+function reportShortTableWidths(done: Rewritten, old: string, next: string): void {
+  if (!old.includes('<colgroup>') || !next.includes('<colgroup>')) return
+  for (const { node } of done.context.visits) {
+    if (node.type !== 'table' || node.pos === undefined) continue
+    const widths = (node.attrs as { keyValues?: { widths?: string } } | undefined)?.keyValues?.widths
+    const columns = node.columns as unknown[] | undefined
+    const rows = node.rows as { cells?: unknown[] }[] | undefined
+    if (widths === undefined || columns === undefined || rows?.[0]?.cells === undefined
+      || columns.length >= rows[0].cells.length) continue
+    const line = node.pos.startLine - 1
+    if (line < 1) continue
+    const range = { startOffset: lineStart(done.context.lines, line), endOffset: lineEnd(done.context.lines, line) }
+    done.records.push({ ...recordOf('U-150', line, 'the short table column list gains an empty column element in 0.2'), range })
+  }
+}
+
 function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
+  reportShortTableWidths(done, old, next)
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
   if (normalized.gainedParagraphs > 0) {
@@ -216,6 +233,11 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
     entries.filter((entry) => entry !== 'U-154' && entry !== 'U-133' && entry !== 'U-159'))
   transformed.html = catalog.html
   transformed.applied.push(...catalog.applied)
+  if (records.some((record) => record.entry === 'U-150' && record.range !== undefined)) {
+    const columns = addShortTableColumns(transformed.html, next)
+    transformed.html = columns.html
+    transformed.applied.push(...columns.applied)
+  }
   return transformed
 }
 

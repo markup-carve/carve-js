@@ -13,7 +13,7 @@ describe('C2-B-059 C2-B-222: an unclosed fence after a description continuation'
   })
 
   it('keeps an unrelated table difference as a mismatch', () => {
-    const result = upgrade(`{valigns=top,bottom widths=40}\n| a | b | c |\n\n${source}`)
+    const result = upgrade(`{aligns="right,,center" widths="25,50,25"}\n| A | B | C |\n\n${source}`)
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })

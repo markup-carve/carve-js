@@ -160,6 +160,32 @@ function targetMatches(change: { after: string[]; right: string | null }, target
   return change.right === null ? index === target.length : target[index] === change.right
 }
 
+export function addShortTableColumns(old: string, next: string): Result {
+  const source = htmlTokens(old)
+  const target = htmlTokens(next)
+  let targetAt = 0
+  let changed = false
+  for (let at = 0; at < source.length; at++) {
+    if (source[at] !== '<colgroup>') continue
+    targetAt = target.indexOf('<colgroup>', targetAt)
+    if (targetAt < 0) break
+    const end = source.indexOf('</colgroup>', at + 1)
+    const targetEnd = target.indexOf('</colgroup>', targetAt + 1)
+    if (end < 0 || targetEnd < 0) break
+    const before = source.slice(at + 1, end)
+    const after = target.slice(targetAt + 1, targetEnd)
+    const added = after.slice(before.length)
+    if (added.length > 0 && before.every((token, index) => token === after[index])
+      && added.every((token) => token === '<col>' || token.startsWith('<col '))) {
+      source.splice(end, 0, ...added)
+      at = end + added.length
+      changed = true
+    }
+    targetAt = targetEnd + 1
+  }
+  return { html: source.join(''), applied: changed ? ['U-150'] : [] }
+}
+
 export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
   const tokens = htmlTokens(old)
   const target = htmlTokens(next)

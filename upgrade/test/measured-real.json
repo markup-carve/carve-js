@@ -1744,7 +1744,7 @@
     "path": "resources/examples/edge-cases/0871-a-widths-list-writes-one-col-per-entry.md",
     "line": 12,
     "input": "{widths=25,50}\n| a | b | c |\n",
-    "check": "mismatch",
+    "check": "explained",
     "entries": [
       "U-150"
     ]

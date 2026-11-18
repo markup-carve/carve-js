@@ -11,7 +11,7 @@ describe('C2-B-027 C2-B-062 C2-H-036: list marker tab and loose first paragraph'
   })
 
   it('does not explain an unrelated table difference', () => {
-    const result = upgrade(`{valigns=top,bottom widths=40}\n| a | b | c |\n\n${source}`)
+    const result = upgrade(`{aligns="right,,center" widths="25,50,25"}\n| A | B | C |\n\n${source}`)
     expect(result.check).toBe('mismatch')
     expect(result.records.map((record) => record.entry)).toContain('upgrade-mismatch')
   })
