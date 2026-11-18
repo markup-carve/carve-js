@@ -42,10 +42,15 @@ export interface ExtensionRenderHost {
   plainText(nodes: readonly Node[]): string
   escapeText(value: string): string
   escapeAttribute(value: string): string
+  /** C2-X-033: writes authored attributes and the generated source line of a block element. */
+  attributes(node: Node | null, options?: { block?: boolean; bare?: boolean }): string
   nextId(prefix: string): string
   labels: Readonly<Record<string, string>>
   profile: Profile
   urlPolicy: UrlPolicy
+  sourceLines: boolean
+  /** C2-H-042: indentation level of the current block, in two-space units. */
+  blockDepth: number
 }
 
 export interface ExtensionRenderer {

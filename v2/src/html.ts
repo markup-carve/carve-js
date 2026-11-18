@@ -498,7 +498,7 @@ function include(r: Render, node: IncludeNode, level: number): void {
 
 /** C2-X-004: an extension this engine does not know renders through its fallback. */
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
-  const rendered = r.renderExtension(node)
+  const rendered = r.renderExtension(node, level)
   if (rendered !== null) { line(r, level, rendered); return }
   loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
   // C2-X-035: the attributes of the node go on a div around its fallback.
@@ -517,7 +517,7 @@ function isInlineNode(node: Node): node is Inline {
   return NODE_TABLE.INLINES.includes(node.type)
 }
 
-function rendererHost(r: Render): ExtensionRenderHost {
+function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
   return {
     blocks: (nodes) => {
       const previous = r.out
@@ -548,10 +548,13 @@ function rendererHost(r: Render): ExtensionRenderHost {
     plainText: (nodes) => plainText(nodes.filter(isInlineNode)),
     escapeText,
     escapeAttribute,
+    attributes: (node, options) => attributes(r, node, options ?? {}),
     nextId: (prefix) => nextExtensionId(r, prefix),
     labels: r.settings.labels,
     profile: r.settings.profile,
     urlPolicy: r.settings.urlPolicy,
+    sourceLines: r.settings.sourceLines,
+    blockDepth,
   }
 }
 
@@ -945,7 +948,7 @@ export function renderDocument(
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }
-  r.renderExtension = (node) => {
+  r.renderExtension = (node, level = 0) => {
     const renderer = settings.renderers[node.name]
     if (renderer === undefined || renderer.version !== node.version) return null
     const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
@@ -953,7 +956,7 @@ export function renderDocument(
       linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
       backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
     try {
-      const result: unknown = renderer.render(node, rendererHost(r))
+      const result: unknown = renderer.render(node, rendererHost(r, level))
       if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
       return result
     } catch (error) {

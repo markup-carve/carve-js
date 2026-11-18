@@ -13,7 +13,7 @@ export interface Render {
   extensionIds: number
   /** The ids in use, each hyphen-led prefix of them, and the order of additions, so a failed renderer can undo its own. */
   usedIds: { ids: Set<string>, prefixes: Set<string>, log: [Set<string>, string][] }
-  renderExtension: (node: BlockExtensionNode | InlineExtensionNode) => string | null
+  renderExtension: (node: BlockExtensionNode | InlineExtensionNode, level?: number) => string | null
   settings: Settings
   resolution: Resolution
   /** The output: every line with a line break before it, so the first character is cut off at the end. */
