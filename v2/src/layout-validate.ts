@@ -220,7 +220,8 @@ export function validateLayout(value: unknown): SourceLayout {
       for (let wrapIndex = 0; wrapIndex < node['wraps'].length; wrapIndex++) {
         const wrap = node['wraps'][wrapIndex] as Fields
         const offset = wrap['offset'] as number
-        if (offset > (node['endByte'] as number) - (node['startByte'] as number)) {
+        // Migration without source has a synthetic empty span while the wrap still indexes a text value.
+        if (length > 0 && offset > (node['endByte'] as number) - (node['startByte'] as number)) {
           fail(`/nodes/${index}/wraps/${wrapIndex}/offset`, 'is past the source span of its cell')
         }
       }

@@ -185,7 +185,7 @@ describe('carve2 process', () => {
     const source = '{#a}\nx\n\n{#a}\ny'
     const plain = cli(['diagnostics'], source)
     expect(plain.status).toBe(0)
-    expect(plain.stdout).toMatch(/^<stdin>:4:1: warning duplicate-id /)
+    expect(plain.stdout).toMatch(/^<stdin>:4:2: warning duplicate-id /)
     const json = cli(['diagnostics', '--json'], source)
     expect(JSON.parse(json.stdout) as unknown).toMatchObject({ files: [{ diagnostics: [{ channel: 'parse' }] }] })
   })

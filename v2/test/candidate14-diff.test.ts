@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { parse, render } from '../src/index.ts'
+import { parse, parseWithDiagnostics, render } from '../src/index.ts'
 
 it('C2-H-006, C2-H-133: a quote with one unresolved include writes compactly', () => {
   expect(render('> {{ "a" }}')).toBe('<blockquote><p>{{ a }}</p></blockquote>')
@@ -33,4 +33,16 @@ it('C2-A-135: a cross-reference in an unused note resolves to the heading', () =
   if (note?.type !== 'footnote') return
   const source = JSON.stringify(note)
   expect(source).toContain('"href":"#h"')
+})
+
+it('C2-W-138: a duplicate id points to its authored attribute behind marker-shaped content', () => {
+  for (const source of ['{#a}\nx\n\n[#a]{#a}', '{#a}\nx\n\n[k]{k=" #a" #a}']) {
+    const finding = parseWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'duplicate-id')
+    const startOffset = source.lastIndexOf('#a')
+    expect(finding?.range).toEqual({ startOffset, endOffset: startOffset + 2 })
+  }
+  const source = '{#a}\nx\n\n{#a}\n# #a'
+  const finding = parseWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'duplicate-id')
+  const startOffset = source.lastIndexOf('{#a}') + 1
+  expect(finding?.range).toEqual({ startOffset, endOffset: startOffset + 2 })
 })
