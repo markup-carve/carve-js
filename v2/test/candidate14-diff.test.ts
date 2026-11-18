@@ -35,6 +35,46 @@ it('C2-A-135: a cross-reference in an unused note resolves to the heading', () =
   expect(source).toContain('"href":"#h"')
 })
 
+it('C2-N-074, C2-A-025: an unexpanded include visits its caption and resolves its inline note', () => {
+  const source = '{{ a.txt @code }}\n^ Listing #: x^[note] [s]{#q}'
+  const include = parse(source).children[0]
+  expect(include?.type).toBe('include')
+  if (include?.type === 'include') {
+    expect(JSON.stringify(include.caption)).toContain('"number":1')
+  }
+  expect(render(source)).toContain('<section role="doc-endnotes"')
+  expect(render(source)).toContain('<p>note<a href="#fnref1"')
+})
+
+it('C2-B-024, C2-A-140: a lazy comment extends the line that owns it', () => {
+  const source = '- ::: |\n  a\n%% c\nb'
+  const list = parse(source).children[0]
+  expect(list?.type).toBe('list')
+  if (list?.type !== 'list') return
+  const block = list.children[0]?.children[0]
+  expect(block?.type).toBe('line_block')
+  if (block?.type === 'line_block') {
+    expect(block.children[0]?.pos?.endOffset).toBe(Buffer.byteLength('- ::: |\n  a\n%% c'))
+    expect(block.children[0]?.pos?.endLine).toBe(3)
+  }
+})
+
+it('C2-B-085, C2-W-138: a duplicate footnote ranges only its marker', () => {
+  for (const source of [
+    '[^a]: +\n[^a]: +\n- b\n\n[^a]\n',
+    '[^é]: first\n\n[^é]: second\n',
+    '[^a\\]b]: first\n\n[^a\\]b]: second\n',
+    '{.x}\n[^a]: first\n\n{.y}\n[^a]: second\n',
+    '[^a\\]b]: first\n\n{.y}\n[^a\\]b]: second\n',
+  ]) {
+    const finding = parseWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'duplicate-footnote-definition')
+    const start = source.indexOf('[^', source.indexOf('[^') + 2)
+    const startOffset = Buffer.byteLength(source.slice(0, start))
+    const marker = source.slice(start).split(':', 1)[0] + ':'
+    expect(finding?.range).toEqual({ startOffset, endOffset: startOffset + Buffer.byteLength(marker) })
+  }
+})
+
 it('C2-W-138: a duplicate id points to its authored attribute behind marker-shaped content', () => {
   for (const source of ['{#a}\nx\n\n[#a]{#a}', '{#a}\nx\n\n[k]{k=" #a" #a}']) {
     const finding = parseWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'duplicate-id')

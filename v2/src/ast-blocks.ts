@@ -179,6 +179,7 @@ function lineBlockNode(ctx: TreeContext, node: BlockNode): LineBlockNode {
       // C2-B-024: a lazy comment-only line is an inline child at the end of the line above.
       const value = commentValue(ctx.src.slice(spans[at]! + 2, spans[at + 1]), false)
       previous.children.push(place(ctx, { type: 'comment', form: 'line', value } satisfies CommentNode, spans[at]!, spans[at + 1]!))
+      if (previous.pos !== undefined) previous.pos.endOffset = spans[at + 1]!
       continue
     }
     const comment = lineBlockComment(ctx, spans, at)
