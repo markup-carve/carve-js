@@ -1,5 +1,6 @@
 // U-258, U-259 and the closing run of U-190: candidate spellings that the complete HTML check decides.
 import { compareHtml } from './compare.ts'
+import { makeContext } from './context.ts'
 import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 
@@ -45,13 +46,25 @@ function closingRun(text: string, from: number, limit: number, length: number): 
   return -1
 }
 
+function opaqueMask(output: string): Uint8Array {
+  const mask = new Uint8Array(output.length)
+  const opaque = ['code_block', 'raw_block', 'raw_inline', 'comment', 'frontmatter']
+  for (const { node } of makeContext(output).visits) {
+    if (!opaque.includes(node.type) || node.pos === undefined) continue
+    mask.fill(1, node.pos.startOffset, node.pos.endOffset)
+  }
+  return mask
+}
+
 /**
  * C2-I-017, U-258: a backtick run with no closing run of its length in its content is text in 0.2, where 0.1 read code
  * to the end of the content. Each candidate closes the first such run at one line end of its paragraph.
  */
 export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
   const found: Candidate[] = []
+  const opaque = opaqueMask(output)
   for (let at = 0; at < output.length; at++) {
+    if (opaque[at] === 1) continue
     if (output[at] === '\\') {
       at++
       continue
@@ -75,17 +88,14 @@ export function closedRunCandidates(output: string, id = 'U-258'): Candidate[] {
 /** C2-B-173, C2-B-174, U-259: a span mark alone in a cell that cannot join is removed, which leaves an empty cell. */
 export function spanMarkCandidates(output: string): Candidate[] {
   const found: Candidate[] = []
-  const lines = output.split('\n')
-  lines.forEach((line, index) => {
-    if (!line.trimStart().startsWith('|')) return
-    for (const shape of ['|= ^|', '|= <|', '| ^|', '| <|', '|=^|', '|=<|']) {
-      const at = line.indexOf(shape)
-      if (at < 0) continue
-      const changed = [...lines]
-      changed[index] = line.slice(0, at) + shape.replace(/[\^<]/, '') + line.slice(at + shape.length)
-      found.push({ id: 'U-259', output: changed.join('\n') })
-    }
-  })
+  for (const { node } of makeContext(output).visits) {
+    if (node.type !== 'table_cell' || node.pos === undefined || node.span === undefined) continue
+    const source = output.slice(node.pos.startOffset, node.pos.endOffset)
+    const content = source.trim().replace(/^=/u, '').trim()
+    if (content !== '^' && content !== '<') continue
+    const at = node.pos.startOffset + source.indexOf(content)
+    found.push({ id: 'U-259', output: output.slice(0, at) + output.slice(at + 1) })
+  }
   return found
 }
 
