@@ -66,7 +66,7 @@
     "test:mxss": "node test/mxss.browser.mjs --selfcheck && node test/mxss.browser.mjs",
     "test:perf": "CARVE_PERF=1 vitest run --no-file-parallelism",
     "test:watch": "vitest",
-    "test:v2": "vitest run v2/test",
+    "test:v2": "git submodule update --init spec && vitest run v2/test",
     "test:stress:v2": "CARVE_STRESS=1 vitest run v2/test/writer.stress.test.ts",
     "test:proptest:v2": "node --test v2/proptest/*.test.ts",
     "test:cli:v2": "vitest run --config v2/cli/vitest.config.ts",
