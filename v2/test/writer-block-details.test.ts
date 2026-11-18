@@ -86,6 +86,12 @@ describe('blocks', () => {
       expect(treesEqual(parse(format(source)), parse(source)), source).toBe(true)
     }
   })
+
+  it('C2-W-080: a hard break after text ending in a space keeps its backslash', () => {
+    const source = '::: \\\n: \\\nt\n:::\n'
+    expect(format(source)).toBe(source)
+    expect(treesEqual(parse(format(source)), parse(source))).toBe(true)
+  })
 })
 
 describe('continuation rows', () => {

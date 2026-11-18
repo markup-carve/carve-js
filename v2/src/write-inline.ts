@@ -29,6 +29,7 @@ const BACKSLASH = 92
 const EXCLAMATION = 33
 const PIPE = 124
 const SPACE = 32
+const TAB = 9
 const BACKTICK = 96
 
 /** A writer per inline node type, each of which reads a node of its own type. */
@@ -755,6 +756,14 @@ function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number
   if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)
 }
 
+function inlinePart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number,
+  last: number, lineStart: boolean): string {
+  const first = lineStartBreak(nodes[at]!, lineStart)
+  if (first !== null) return first
+  if (nodes[at]?.type === 'hard_break' && (flags & BARE_BREAKS) !== 0 && (last === SPACE || last === TAB)) return '\\\n'
+  return gluedPart(w, nodes, at, end, flags, last)
+}
+
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
   let out = ''
   // Whether `out` is empty or ends a line. Asking the string itself would flatten it once per node.
@@ -776,7 +785,7 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
     }
     const end = partEnd(w, nodes, at)
     placeEscapes(w, nodes, at, end, flags, last === EXCLAMATION && out.charCodeAt(out.length - 2) !== BACKSLASH)
-    const part: string = lineStartBreak(node, lineStart) ?? gluedPart(w, nodes, at, end, flags, last)
+    const part = inlinePart(w, nodes, at, end, flags, last, lineStart)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
     lineStart = last === 10 || (lineStart && part === '')
@@ -827,7 +836,8 @@ export function writeContent(w: Writer, nodes: readonly Node[], flags: number): 
   // block that line ending alone is no break at the end of the content, so the backslash stays (C2-I-102).
   if (last?.type !== 'hard_break' || !out.endsWith('\n')) return out
   // A break that starts a line was written with its backslash (lineStartBreak).
-  const spelled = out.endsWith('\\\n') && (out.length === 2 || out[out.length - 3] === '\n')
+  const before = out.charCodeAt(out.length - 3)
+  const spelled = out.endsWith('\\\n') && (out.length === 2 || before === 10 || before === SPACE || before === TAB)
   return (flags & BARE_BREAKS) !== 0 && !spelled ? `${out.slice(0, -1)}\\` : out.slice(0, -1)
 }
 

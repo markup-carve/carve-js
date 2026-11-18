@@ -244,7 +244,9 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
   if (node.type === 'text') return textUnits(w, leaf, node, flags)
   if (node.type === 'soft_break') return push(leaf, LF, ATOM, node, -1)
   if (node.type === 'hard_break') {
-    return pushString(leaf, lineStartBreak(node, lineStart) ?? ((flags & BARE_BREAKS) !== 0 ? '\n' : '\\\n'), ATOM, node)
+    const previous = leaf.codes[leaf.codes.length - 1]
+    const bare = (flags & BARE_BREAKS) !== 0 && previous !== SPACE && previous !== TAB
+    return pushString(leaf, lineStartBreak(node, lineStart) ?? (bare ? '\n' : '\\\n'), ATOM, node)
   }
   if (node.type === 'inline_extension' && node.name.includes('.')) return undecide(leaf, 'extension')
   if (!containerUnits(w, leaf, node.type, node, flags)) return pushString(leaf, writeInline(w, node, flags), ATOM, node)
