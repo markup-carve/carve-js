@@ -19,6 +19,23 @@ concurrency:
 # rather than inheriting the 360-minute GitHub default.
 
 jobs:
+  mutation-v2:
+    name: 0.2 parser and HTML mutation gate
+    if: github.ref == 'refs/heads/next2' || github.base_ref == 'next2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node v2/scripts/mutation-gate.mjs --base=origin/next2
+
   # THE PIN RESOLVES BY SHA, SO NOTHING ELSE HERE CAN SEE A DANGLING ONE. Every
   # other job checks the spec submodule out and runs against whatever tree the
   # pin names, which works just as well for a commit that is not on the lane's spec branch
