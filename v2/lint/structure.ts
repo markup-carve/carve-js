@@ -391,6 +391,10 @@ function frontmatterQuote(node: Node, path: string, context: LintContext): void 
   }
 }
 
+function isBidiControl(code: number): boolean {
+  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)
+}
+
 function bidiControl(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text' && node.type !== 'code' && node.type !== 'code_block' && node.type !== 'math') return
   if (node.type === 'text' && path.includes('/title/')
@@ -401,7 +405,7 @@ function bidiControl(node: Node, path: string, context: LintContext): void {
   const from = node.type === 'code_block' && context.layouts.size > 0 ? text.indexOf('\n') + 1 : 0
   for (let at = from; at < text.length; at++) {
     const code = text.charCodeAt(at)
-    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) {
+    if (isBidiControl(code)) {
       context.report('bidi-control-in-source', range[0] + at, range[0] + at + 1, path,
         { code: code.toString(16).toUpperCase().padStart(4, '0') })
     }
@@ -752,6 +756,11 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
   }
 }
 
+function hasUnescapedMarker(source: string, marker: string, close: number): boolean {
+  for (let at = 1; at < close; at++) if (source[at] === marker && !escaped(source, at)) return true
+  return false
+}
+
 function spanMarkerBeforeAttrs(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'strong' && node.type !== 'emphasis') return
   const source = raw(node, context)
@@ -759,15 +768,12 @@ function spanMarkerBeforeAttrs(node: Node, path: string, context: LintContext): 
   const attrs = /\{(?:[.#_]|[A-Za-z])[^}]*\}$/.exec(source)
   if (attrs === null) return
   const close = attrs.index - 1
-  if (source[0] !== marker || source[close] !== marker || escaped(source, close)) return
-  for (let at = 1; at < close; at++) {
-    if (source[at] !== marker || escaped(source, at)) continue
-    const range = bounds(node, context)
-    if (range !== null) context.report('emphasis-marker-before-attributes', range[0] + close,
-      range[0] + close + 1, path, { marker, name: node.type, line: String(node.pos?.startLine ?? 1),
-        column: String(node.pos?.startColumn ?? 1) }, 1)
-    return
-  }
+  if (source[0] !== marker || source[close] !== marker || escaped(source, close)
+    || !hasUnescapedMarker(source, marker, close)) return
+  const range = bounds(node, context)
+  if (range !== null) context.report('emphasis-marker-before-attributes', range[0] + close,
+    range[0] + close + 1, path, { marker, name: node.type, line: String(node.pos?.startLine ?? 1),
+      column: String(node.pos?.startColumn ?? 1) }, 1)
 }
 
 function carveVersion(node: Node, path: string, context: LintContext): void {
@@ -1149,6 +1155,11 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
 }
 
 /** C2-B-173: a span mark that joins nothing is the text of its cell, whatever prefix the cell has. */
+function blockedSpanVariant(marker: string, cellIndex: number, rowIndex: number): number {
+  if (marker === '<') return cellIndex === 0 ? 0 : 1
+  return rowIndex === 0 ? 2 : 3
+}
+
 function spanMarkerBlocked(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell' || node.span !== undefined) return
   const content = node.children[0]
@@ -1160,7 +1171,7 @@ function spanMarkerBlocked(node: Node, path: string, context: LintContext): void
   const parts = path.split('/children/')
   const cellIndex = Number(parts.at(-1) ?? 0)
   const rowIndex = Number(parts.at(-2) ?? 0)
-  const variant = marker === '<' ? (cellIndex === 0 ? 0 : 1) : (rowIndex === 0 ? 2 : 3)
+  const variant = blockedSpanVariant(marker, cellIndex, rowIndex)
   reportNode('table-span-marker-blocked', node, path, context, {}, variant)
 }
 
@@ -1269,29 +1280,34 @@ function finishCrossrefs(context: LintContext): void {
   }
 }
 
-function finishReferences(context: LintContext): void {
-  for (const item of context.state.unresolvedReferences) {
-    const node = item.node
-    if (node.type !== 'link' && node.type !== 'image') continue
-    const rawRef = context.layouts.get(item.path)?.rawRef ?? raw(node, context)
-    const key = node.key ?? ''
-    const matches = context.state.referenceDefinitions.filter(({ node: definition }) =>
-      definition.type === 'link_reference_definition' && definition.key.toLowerCase() === key.toLowerCase())
-    const headings = node.type === 'link' ? [...context.state.idOwners.keys()].filter((id) =>
-      id.toLowerCase() === key.toLowerCase()) : []
-    const caseOnly = [...matches.map(({ node: definition }) => definition.type === 'link_reference_definition'
-      ? definition.key : ''), ...headings].filter((value) => value !== key)
-    const index = node.type === 'link' ? (caseOnly.length > 0 ? 0 : 1) : (caseOnly.length > 0 ? 2 : 3)
-    reportNode('unresolved-reference-link', node, item.path, context,
-      { rawRef, caseOnlyPhrase: `the label ${caseOnly[0] ?? ''} differs only in case` }, index)
-  }
-  if (context.options.rules?.['unused-link-reference-definition'] !== 'off') {
-    for (const item of context.state.referenceDefinitions) {
-      if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
-        reportNode('unused-link-reference-definition', item.node, item.path, context)
-      }
+function reportUnresolvedReference(item: { node: Node, path: string }, context: LintContext): void {
+  const { node } = item
+  if (node.type !== 'link' && node.type !== 'image') return
+  const rawRef = context.layouts.get(item.path)?.rawRef ?? raw(node, context)
+  const key = node.key ?? ''
+  const matches = context.state.referenceDefinitions.filter(({ node: definition }) =>
+    definition.type === 'link_reference_definition' && definition.key.toLowerCase() === key.toLowerCase())
+  const headings = node.type === 'link' ? [...context.state.idOwners.keys()].filter((id) =>
+    id.toLowerCase() === key.toLowerCase()) : []
+  const caseOnly = [...matches.map(({ node: definition }) => definition.type === 'link_reference_definition'
+    ? definition.key : ''), ...headings].filter((value) => value !== key)
+  const index = node.type === 'link' ? (caseOnly.length > 0 ? 0 : 1) : (caseOnly.length > 0 ? 2 : 3)
+  reportNode('unresolved-reference-link', node, item.path, context,
+    { rawRef, caseOnlyPhrase: `the label ${caseOnly[0] ?? ''} differs only in case` }, index)
+}
+
+function reportUnusedReferences(context: LintContext): void {
+  if (context.options.rules?.['unused-link-reference-definition'] === 'off') return
+  for (const item of context.state.referenceDefinitions) {
+    if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
+      reportNode('unused-link-reference-definition', item.node, item.path, context)
     }
   }
+}
+
+function finishReferences(context: LintContext): void {
+  for (const item of context.state.unresolvedReferences) reportUnresolvedReference(item, context)
+  reportUnusedReferences(context)
 }
 
 function finishFootnotes(context: LintContext): void {

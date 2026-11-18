@@ -184,6 +184,25 @@ function startsBlock(text: string): boolean {
   return text.startsWith('[') && text.includes(']:')
 }
 
+function openerName(text: string): string {
+  if (text.startsWith('#') || text.startsWith('=')) return 'a heading'
+  if (text.startsWith('>')) return 'a quote'
+  if (text.startsWith('{')) return 'an attribute line'
+  if (text.startsWith('::')) return 'a term'
+  return text.startsWith(':') ? 'a description' : 'a definition'
+}
+
+function openerWidth(text: string): number {
+  if (text.startsWith('{')) return text.length
+  if (text.startsWith('::')) return 2
+  if (text.startsWith('[')) return text.indexOf(']:') + 2
+  return 1
+}
+
+function quoteContinues(line: Line, previous: Line, context: LintContext): boolean {
+  return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
+}
+
 function openerWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
@@ -194,15 +213,9 @@ function openerWithoutBlank(line: Line, context: LintContext): void {
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
   // In a quote the mark on both lines is the quote's own; outside one it opens a quote (C2-B-019).
-  if (text.startsWith('> ') && previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')) return
-  const opener = text.startsWith('#') || text.startsWith('=') ? 'a heading'
-    : text.startsWith('>') ? 'a quote'
-      : text.startsWith('{') ? 'an attribute line'
-        : text.startsWith('::') ? 'a term'
-          : text.startsWith(':') ? 'a description' : 'a definition'
-  const marker = text.startsWith('{') ? text.length : text.startsWith('::') ? 2
-    : text.startsWith('[') ? text.indexOf(']:') + 2 : 1
-  context.report('block-opener-without-blank-line', start, start + marker, line.path, { opener })
+  if (text.startsWith('> ') && quoteContinues(line, previous, context)) return
+  context.report('block-opener-without-blank-line', start, start + openerWidth(text), line.path,
+    { opener: openerName(text) })
 }
 
 function listWithoutBlank(line: Line, context: LintContext): void {
@@ -369,6 +382,16 @@ function descriptionColumn(line: Line, context: LintContext): void {
       'host.column': String(first.start - host.start + 1) })
 }
 
+const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+
+function colonKind(type: string, opener: string): string {
+  if (type === 'admonition') return 'admonition'
+  if (type === 'figure_group') return 'figure group'
+  if (type === 'line_block') return 'line block'
+  if (type === 'block_quote') return 'quote fence'
+  return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
+}
+
 function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
   const open: { width: number, start: number, kind: string }[] = []
   for (const [path, layout] of context.layouts) {
@@ -379,13 +402,10 @@ function colonContainers(start: number, context: LintContext): { width: number, 
     const run = /^:{3,}/.exec(context.source.slice(from))?.[0]
     if (run === undefined) continue
     const type = context.nodeTypes.get(path)
+    if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) continue
     const line = context.lines[(context.offsetLines[from] ?? 1) - 1]
     const openerText = line?.text.slice(from - line.start) ?? ''
-    const kind = type === 'admonition' ? 'admonition' : type === 'figure_group' ? 'figure group'
-      : type === 'line_block' ? 'line block' : type === 'block_quote' ? 'quote fence'
-        : /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(openerText) ? 'hard-break block' : 'div'
-    if (type === 'div' || type === 'admonition' || type === 'figure_group' || type === 'line_block'
-      || type === 'block_quote') open.push({ width: run.length, start: from, kind })
+    open.push({ width: run.length, start: from, kind: colonKind(type, openerText) })
   }
   return open.sort((a, b) => b.start - a.start)
 }

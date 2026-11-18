@@ -52,6 +52,11 @@ export function generateIncludeTables(includes: string, limits: string, lintRule
       return `  [${JSON.stringify(rule.id)},\n    ${JSON.stringify(typeof first === 'string' ? first : first.text)}],`
     })
   const optionMessages = lintRows.find((rule) => rule.id === 'include-option-invalid')?.messages ?? []
+  const optionMessageLines = optionMessages.flatMap((item) => {
+    const text = typeof item === 'string' ? item : item.text
+    const split = text.lastIndexOf(' ', 90) + 1
+    return [`  ${JSON.stringify(text.slice(0, split))}`, `    + ${JSON.stringify(text.slice(split))},`]
+  })
   const causes = [...data.causes].sort((a, b) => a.rank - b.rank)
   const lines = [
     '// Generated from data/includes.json, data/limits.json and data/lint-rules.json by',
@@ -91,8 +96,9 @@ export function generateIncludeTables(includes: string, limits: string, lintRule
     '])',
     '',
     '/** C2-B-206: one message for each invalid include option cause, in catalog order. */',
-    `export const INCLUDE_OPTION_MESSAGES: readonly string[] = ${JSON.stringify(optionMessages.map((item) =>
-      typeof item === 'string' ? item : item.text))}`,
+    'export const INCLUDE_OPTION_MESSAGES: readonly string[] = [',
+    ...optionMessageLines,
+    ']',
     '',
   ]
   return lines.join('\n')

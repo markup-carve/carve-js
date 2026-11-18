@@ -745,18 +745,21 @@ export function resolve(
  * C2-A-109: a reference in a footnote definition that no reference uses, or that a duplicate lost to (C2-B-085), still
  * resolves, although the note is not written. Only its references are read: it takes no number and no id.
  */
+function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Scope): void {
+  walk.scope = walk.scopes.get(footnote) ?? scope
+  const pending: Node[] = [...footnote.children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+    if (node.type === 'xref') walk.xrefs.push(node)
+    if (node.type === 'table') alignColumns(node)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
 function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): void {
   for (const child of children) {
     if (child.type === 'include') visitUnwritten(walk, child.children ?? [], walk.scopes.get(child) ?? scope)
-    if (child.type !== 'footnote' || walk.resolution.noteOf.has(child)) continue
-    walk.scope = walk.scopes.get(child) ?? scope
-    const pending: Node[] = [...child.children]
-    for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-      if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
-      if (node.type === 'xref') walk.xrefs.push(node)
-      if (node.type === 'table') alignColumns(node)
-      forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
-    }
+    if (child.type === 'footnote' && !walk.resolution.noteOf.has(child)) resolveUnwrittenFootnote(walk, child, scope)
   }
 }
 
