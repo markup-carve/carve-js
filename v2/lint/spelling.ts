@@ -1,4 +1,5 @@
 import { isAttributeLine } from '../src/lines.ts'
+import { type NodeLayout } from '../src/layout.ts'
 import { type Line, type LintContext, type Rule } from './types.ts'
 
 function trimmed(line: Line): { text: string, start: number } {
@@ -392,15 +393,45 @@ function colonKind(type: string, opener: string): string {
   return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
 }
 
+function childCoversColonRun(path: string, start: number, end: number, context: LintContext): boolean {
+  for (const [childPath, child] of context.layouts) {
+    if (!childPath.startsWith(`${path}/`)) continue
+    const childStart = context.chars[child.startByte] ?? 0
+    const childEnd = context.chars[child.endByte] ?? 0
+    if (childStart <= start && childEnd >= end) return true
+  }
+  return false
+}
+
+/** A layout without closerRaw may still have consumed a bare run before this line (C2-L-054). */
+function hasOwnEarlierCloser(path: string, layout: NodeLayout, width: number, context: LintContext): boolean {
+  const from = context.chars[layout.startByte] ?? 0
+  const to = context.chars[layout.endByte] ?? 0
+  const firstLine = context.offsetLines[from] ?? 1
+  const lastLine = context.offsetLines[Math.max(from, to - 1)] ?? firstLine
+  for (let number = firstLine + 1; number <= lastLine; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined) break
+    const { text, start } = contentLine(line)
+    if (!/^:{3,}$/.test(text) || text.length < width || start + text.length > to) continue
+    if (!childCoversColonRun(path, start, start + text.length, context)) return true
+  }
+  return false
+}
+
+function closedBeforeRun(path: string, layout: NodeLayout, width: number, context: LintContext): boolean {
+  return layout.closerRaw === undefined ? hasOwnEarlierCloser(path, layout, width, context) : layout.closerRaw !== ''
+}
+
 function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
   const open: { width: number, start: number, kind: string }[] = []
   for (const [path, layout] of context.layouts) {
     const from = context.chars[layout.startByte] ?? 0
     const to = context.chars[layout.endByte] ?? 0
     if (from >= start || to < start - 1) continue
-    if (to < start && layout.closerRaw) continue
     const run = /^:{3,}/.exec(context.source.slice(from))?.[0]
     if (run === undefined) continue
+    if (to < start && closedBeforeRun(path, layout, run.length, context)) continue
     const type = context.nodeTypes.get(path)
     if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) continue
     const line = context.lines[(context.offsetLines[from] ?? 1) - 1]
