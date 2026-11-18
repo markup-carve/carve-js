@@ -19,6 +19,7 @@ export function newMapRange(input: string, id: string): { startOffset: number; e
 }
 
 interface ReplayChoice { id: string; when: (input: string, old: string, next: string) => boolean; pattern: RegExp }
+interface ReplayRange { id: string; range: { startOffset: number; endOffset: number } }
 
 const CHOICES: readonly ReplayChoice[] = [
     { id: 'U-378', when: (input, old, next) => old.includes('<dd></dd>') && next.includes('<dd') && input.includes('[^'),
@@ -29,7 +30,8 @@ const CHOICES: readonly ReplayChoice[] = [
       pattern: /\[(?:\/[^\]\n]+\/|`[^\]\n]+`)\]/u },
     { id: 'U-382', when: (_input, old, next) => old.includes('<div class="inner">') && next.includes('class="inner"'),
       pattern: /%%[^\n]*\n[ \t]*[^\n]+/u },
-    { id: 'U-382', when: (input, old, next) => input.includes('- :::') && old.includes('</ul>') && next.includes('<p'),
+    { id: 'U-382',
+      when: (input, old, next) => input.includes('- :::') && old.includes('</ul>') && next.includes('<p'),
       pattern: /%{3,}[^\n]*\n(?:[^\n]*\n)?[ \t]*[^\n]+/u },
     { id: 'U-383', when: (input, old, next) => old.includes('<pre>') && next.includes('<pre') && input.includes('%%%'),
       pattern: /%%%[\s\S]*?```/u },
@@ -42,7 +44,7 @@ const CHOICES: readonly ReplayChoice[] = [
 ]
 
 /** Finds a source construct when a longer document reaches one of the replay causes. */
-export function replayMapRange(input: string, old: string, next: string): { id: string; range: { startOffset: number; endOffset: number } } | null {
+export function replayMapRange(input: string, old: string, next: string): ReplayRange | null {
   for (const choice of CHOICES) {
     if (!choice.when(input, old, next)) continue
     const match = choice.pattern.exec(input)

@@ -22,23 +22,23 @@ const REPORT_IDS = new Set([
 const BY_SOURCE = new Map(map.source.filter((row) => REWRITE_IDS.has(row.id)).map((row) => [row.from, row]))
 const REPORTS = new Map(map.source.filter((row) => REPORT_IDS.has(row.id)).map((row) => [row.from, row]))
 
+function rendersLikeOld(input: string, candidate: string): boolean {
+  try { return compareHtmlExact(html01(input), html02(candidate, false)).equal } catch { return false }
+}
+
 /** Exact catalog examples have a promised spelling; accept it only when both renderers confirm it. */
 export function mappedRewrite(input: string): { output: string; record: ReportRecord } | null {
   const row = BY_SOURCE.get(input)
   const additional = newMapCandidates(input)
   if (row === undefined && additional.length === 0) return null
   // A candidate is unnecessary when the authored spelling already has the old HTML.
-  if (row === undefined) {
-    try { if (compareHtmlExact(html01(input), html02(input, false)).equal) return null } catch { /* Check candidates below. */ }
-  }
+  if (row === undefined && rendersLikeOld(input, input)) return null
   const candidates = row !== undefined && row.to !== input
     ? [{ id: row.id, output: row.to }, ...additional] : additional
   for (const candidate of candidates) {
-    try {
-      if (!compareHtmlExact(html01(input), html02(candidate.output, false)).equal) continue
-      return { output: candidate.output, record: recordOf(candidate.id, 1,
-        row?.id === candidate.id ? row.meaning02 : 'the source has a preserving 0.2 spelling') }
-    } catch { /* A candidate is not accepted without both engine renders. */ }
+    if (!rendersLikeOld(input, candidate.output)) continue
+    return { output: candidate.output, record: recordOf(candidate.id, 1,
+      row?.id === candidate.id ? row.meaning02 : 'the source has a preserving 0.2 spelling') }
   }
   return null
 }
