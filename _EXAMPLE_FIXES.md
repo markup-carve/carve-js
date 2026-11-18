@@ -203,3 +203,17 @@ Stated in the corpus: the code span past the nesting bound is written `` `x` ``,
 C2-H-165, as changed by the P1-a ruling: "a `code`, a `literal_inline` and a `math` node give their value", and C2-H-166 makes the span a degraded node. CC-006 was changed by the same ruling for math; CC-005 was not.
 
 Clause-correct: `<blockquote><p>x</p></blockquote>` as the innermost quote, the rest as stated.
+
+## F17. `html.md` Example 60: `expected.html`
+
+Input:
+
+```carve
+# fn1
+
+a[^x]
+
+[^x]: n
+```
+
+Stated in the corpus pinned at `6bdc5a26`: the heading section and the note both carry `id="fn1"`, and the reference links `#fn1`. The specification at `81d28464` replaces that rule: C2-H-202 allocates note ids after the heading ids, so the note is `<li id="fn1-2">` and the reference links `#fn1-2`, which the engine writes. The hold goes when the pin reaches `81d28464`, where Example 60 states this result.

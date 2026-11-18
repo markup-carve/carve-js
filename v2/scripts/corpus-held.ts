@@ -16,6 +16,7 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['html-34', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F14: a degraded resolved cross-reference writes its link text (C2-H-165)' }],
   ['CC-005', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F15: a degraded code span gives its value (C2-H-165)' }],
   ['CC-287', { fields: ['children'], fix: '_EXAMPLE_FIXES.md F11: c then d is an alphabetic list from 3, as its HTML says (C2-B-042)' }],
+  ['html-60', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F17: a note id that a heading took gets the suffix -2 (C2-H-202)' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

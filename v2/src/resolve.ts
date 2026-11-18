@@ -27,6 +27,7 @@ export { type Diagnostic } from './diagnostics.ts'
 /** One numbered footnote: a definition that a reference uses, or an inline footnote. */
 export interface Note {
   number: number
+  id: string
   definition: FootnoteNode | null
   inline: InlineFootnoteNode | null
   /** The ids of its references in the order of the document, for the backlinks (C2-H-091). */
@@ -85,6 +86,7 @@ interface Walk {
   xrefs: XrefNode[]
   captions: CaptionUse[]
   identified: Node[]
+  noteRefs: { node: FootnoteRefNode | InlineFootnoteNode, note: Note, ordinal: number, authored: boolean }[]
   /** C2-H-156: the titled admonitions and the titled top-level `footnotes` directives, in the order of the walk. */
   titled: (AdmonitionNode | DirectiveNode)[]
   /** C2-H-093: the first top-level `footnotes` directive. */
@@ -117,13 +119,15 @@ function useNote(walk: Walk, node: FootnoteRefNode | InlineFootnoteNode, definit
   const resolution = walk.resolution
   let note = definition === null ? undefined : resolution.noteOf.get(definition)
   if (note === undefined) {
-    note = { number: resolution.notes.length + 1, definition, inline: node.type === 'inline_footnote' ? node : null, refIds: [] }
+    const number = resolution.notes.length + 1
+    note = { number, id: `fn${number}`, definition, inline: node.type === 'inline_footnote' ? node : null, refIds: [] }
     resolution.notes.push(note)
     if (definition !== null) resolution.noteOf.set(definition, note)
   }
   const ordinal = note.refIds.length + 1
   const id = node.attrs?.id ?? (ordinal === 1 ? `fnref${note.number}` : `fnref${note.number}-${ordinal}`)
   note.refIds.push(id)
+  walk.noteRefs.push({ node, note, ordinal, authored: node.attrs?.id !== undefined })
   resolution.noteOf.set(node, note)
   resolution.refIds.set(node, id)
   node.number = note.number
@@ -564,6 +568,23 @@ function generateLabelIds(walk: Walk, taken: Set<string>): void {
   }
 }
 
+/** C2-H-202: note and reference ids take the next free suffix after all other generated ids. */
+function generateNoteIds(walk: Walk, taken: Set<string>): void {
+  function free(base: string): string {
+    let id = base
+    for (let suffix = 2; taken.has(id); suffix++) id = `${base}-${suffix}`
+    taken.add(id)
+    return id
+  }
+  for (const { node, note, ordinal, authored } of walk.noteRefs) {
+    if (ordinal === 1) note.id = free(`fn${note.number}`)
+    if (authored) continue
+    const id = free(ordinal === 1 ? `fnref${note.number}` : `fnref${note.number}-${ordinal}`)
+    note.refIds[ordinal - 1] = id
+    walk.resolution.refIds.set(node, id)
+  }
+}
+
 /** C2-A-107: sets or clears the destination of `reference`: `href` of a link, `src` of an image. */
 function setDestination(reference: Reference, destination: string | undefined): void {
   if (reference.type === 'link') {
@@ -712,6 +733,7 @@ export function resolve(
   const taken = reserveIds(walk)
   generateIds(walk, mode, taken)
   generateLabelIds(walk, taken)
+  generateNoteIds(walk, taken)
   setDestinations(walk, targets)
   resolveXrefs(walk)
   // C2-N-006: a tree in which expansion ran keeps it among its stages.
@@ -750,7 +772,7 @@ function newWalk(
   return {
     declarations: document.extensions ?? [], resolution, footnotes,
     scope: { outer: null, definitions: resolution.definitions, footnotes, abbreviations: new Map() }, scopes: new Map(),
-    headings: [], references: [], xrefs: [], captions: [], identified: [], titled: [],
+    headings: [], references: [], xrefs: [], captions: [], identified: [], noteRefs: [], titled: [],
     notesDirective: null, numberedFigures: 0, symbols, resolvableLeaves: facts?.resolvableLeaves ?? null, parent: null,
     markupLine: facts?.markupLine ?? null, renderers, admitted, rendered: false, extensionDepth: 0,
   }
