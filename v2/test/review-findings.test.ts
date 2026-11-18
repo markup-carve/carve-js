@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length,
+  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, stringOffsetOfByte,
+  treesEqual, utf8Length,
   writeWithDiagnostics,
 } from '../src/index.ts'
 import { CarveOptionError, checkType } from '../src/options.ts'
@@ -239,6 +240,27 @@ it('C2-B-024: lazy line-block comments grow with source length', () => {
     return best
   }
   const times = [2000, 4000, 8000].map(fastest)
+  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(3.8)
+})
+
+it('C2-H-201: capped cross-references grow with their count', () => {
+  const sizes = [2000, 4000, 8000]
+  const trees = sizes.map((n) => {
+    const tree = parse(`{#h}\n# ${'T'.repeat(n)}\n\n${'</#h> '.repeat(n)}\n`)
+    tree.srcByteLength = 0
+    return tree
+  })
+  renderWithDiagnostics(trees[2]!)
+  const times = trees.map((tree) => {
+    let best = Infinity
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now()
+      const result = renderWithDiagnostics(tree)
+      expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
+      best = Math.min(best, performance.now() - started)
+    }
+    return best
+  })
   expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(3.8)
 })
 

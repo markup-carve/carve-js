@@ -20,12 +20,12 @@ export function derivedTextBudget(document: DocumentNode, source: string | numbe
  * Draws `text` on the budget of the render and returns true, or returns false where it does not fit what remains; the
  * first node that does not fit is reported, once per render.
  */
-export function drawDerivedText(r: Render, node: Node, text: string): boolean {
+export function drawDerivedText(r: Render, node: Node, text: string, knownCost?: number): boolean {
   if (r.derivedBudget < 0) {
     r.derivedBudget = derivedTextBudget(r.document, r.source)
     r.derivedLeft = r.derivedBudget
   }
-  const cost = utf8Length(text)
+  const cost = knownCost ?? utf8Length(text)
   if (cost <= r.derivedLeft) {
     r.derivedLeft -= cost
     return true

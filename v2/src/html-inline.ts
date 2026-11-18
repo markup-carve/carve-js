@@ -14,6 +14,7 @@ import { smartGlyph } from './ast-text.ts'
 import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
 import { withoutUnpairedSurrogates } from './unicode.ts'
+import { utf8Length } from './positions.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -232,9 +233,15 @@ function xref(node: XrefNode, r: Render): string {
   // C2-H-086: unresolved, the characters as typed.
   if (href === undefined || r.resolution.goneTargets?.has(href) === true) return escapeText(`</#${node.key}>`)
   // C2-H-096: the generated text is plain text.
-  const generated = escapeText(r.resolution.xrefText.get(node) ?? '')
+  const raw = r.resolution.xrefText.get(node) ?? ''
+  let cached = r.xrefTextCache.get(raw)
+  if (cached === undefined) {
+    const escaped = escapeText(raw)
+    cached = { escaped, bytes: utf8Length(escaped) }
+    r.xrefTextCache.set(raw, cached)
+  }
   // C2-H-201: past the budget the key stands for the generated text.
-  const text = drawDerivedText(r, node, generated) ? generated : escapeText(node.key)
+  const text = drawDerivedText(r, node, cached.escaped, cached.bytes) ? cached.escaped : escapeText(node.key)
   if (r.linkDepth > 0) return text
   const structural: Pair[] = [['href', href]]
   if (r.settings.roundtrip) structural.push(['data-carve-xref', null])

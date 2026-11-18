@@ -42,6 +42,7 @@ export interface Render {
   derivedBudget: number
   derivedLeft: number
   derivedReported: boolean
+  xrefTextCache: Map<string, { escaped: string, bytes: number }>
 }
 
 /** An attribute name and its value. A null value writes the bare name (C2-H-117). */
