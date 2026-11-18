@@ -12,7 +12,6 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['syntax-blocks-278', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
   ['syntax-blocks-282', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
   ['html-81', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F12: under ascii an ASCII heading keeps its case, as its HTML says (C2-H-147)' }],
-  ['html-80', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F13: abbr and ABBR are one key of the block (C2-A-035), so title is b' }],
   ['html-34', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F14: a degraded resolved cross-reference writes its link text (C2-H-165)' }],
   ['CC-005', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F15: a degraded code span gives its value (C2-H-165)' }],
   ['CC-287', { fields: ['children'], fix: '_EXAMPLE_FIXES.md F11: c then d is an alphabetic list from 3, as its HTML says (C2-B-042)' }],

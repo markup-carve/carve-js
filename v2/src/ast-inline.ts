@@ -307,7 +307,7 @@ function closePart(ctx: TreeContext, spans: number[], node: InlineFrame, host: I
   if (node.kind === LABEL) host.aux = node.end
   if (node.kind === ATTRIBUTE_BLOCK) {
     host.attributes ??= emptyAttributes()
-    readAttributeBlock(ctx.src, node.start, node.end, emptyMemo(), attributeSink(host.attributes))
+    readAttributeBlock(ctx.src, node.start, node.end, emptyMemo(), attributeSink(host.attributes, host.kind === BRACKET_SPAN))
   } else if (node.kind === DESTINATION) {
     host.destination = destinationValue(value, ctx.inline.cell)
   } else if (node.kind === TITLE) {
