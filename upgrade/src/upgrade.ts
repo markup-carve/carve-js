@@ -13,6 +13,7 @@ import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
 import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, hasTaskPresentationDifference,
+  moveTrailingSigilHyphen,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
 import { removeListMarkerTab } from './html-list-tab.ts'
@@ -263,12 +264,25 @@ function reportShortItemComment(done: Rewritten): void {
   }
 }
 
+function reportTrailingSigil(done: Rewritten): void {
+  for (const { node } of done.context.visits) {
+    if (node.pos === undefined) continue
+    const name = node.type === 'tag' ? node.name : node.type === 'mention' ? node.user : undefined
+    if (typeof name !== 'string' || !name.endsWith('-')) continue
+    const range = { startOffset: node.pos.startOffset, endOffset: node.pos.endOffset }
+    const existing = done.records.find((record) => record.entry === 'U-170' && record.range === undefined)
+    if (existing !== undefined) existing.range = range
+    else done.records.push({ ...recordOf('U-170', node.pos.startLine, 'a trailing sigil hyphen becomes text in 0.2'), range })
+  }
+}
+
 function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
   reportShortTableWidths(done, old, next)
   reportEmptyClass(done, old)
   reportNestedEditorial(done)
   reportShortItemComment(done)
+  reportTrailingSigil(done)
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
   if (normalized.gainedParagraphs > 0) {
@@ -322,6 +336,11 @@ function applyCitedStep(old: string, next: string, records: ReportRecord[]): Ret
     const classes = dropEmptyClasses(transformed.html, next)
     transformed.html = classes.html
     transformed.applied.push(...classes.applied)
+  }
+  if (records.some((record) => record.entry === 'U-170' && record.range !== undefined)) {
+    const sigil = moveTrailingSigilHyphen(transformed.html, next)
+    transformed.html = sigil.html
+    transformed.applied.push(...sigil.applied)
   }
   return transformed
 }

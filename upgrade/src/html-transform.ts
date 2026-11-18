@@ -200,6 +200,30 @@ export function dropEmptyClasses(old: string, next: string): Result {
   return { html: source.join(''), applied: changed ? ['U-282'] : [] }
 }
 
+export function moveTrailingSigilHyphen(old: string, next: string): Result {
+  const source = htmlTokens(old)
+  const target = htmlTokens(next)
+  for (let at = 1; at + 3 < source.length; at++) {
+    const before = source[at]
+    if (source[at - 1] !== '<strong>' || before === undefined || !before.endsWith('-')
+      || source[at + 1] !== '</strong>' || source[at + 2] !== '</span>'
+      || before.slice(0, -1) !== target[at]) continue
+    const after = source[at + 3]
+    const written = target[at + 3]
+    if (written === '-' && after?.startsWith('</')) {
+      source[at] = before.slice(0, -1)
+      source.splice(at + 3, 0, '-')
+      return { html: source.join(''), applied: ['U-170'] }
+    }
+    if (after !== undefined && written === `-${after}`) {
+      source[at] = before.slice(0, -1)
+      source[at + 3] = written
+      return { html: source.join(''), applied: ['U-170'] }
+    }
+  }
+  return { html: old, applied: [] }
+}
+
 export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
   const tokens = htmlTokens(old)
   const target = htmlTokens(next)
