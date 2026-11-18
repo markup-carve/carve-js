@@ -24,6 +24,13 @@ function refusal(json: unknown): string | null {
 
 const DIGEST = `sha256:${'0'.repeat(64)}`
 
+it('C2-W-002, C2-W-011: an already spelled strong span with a slash keeps its tree', () => {
+  const source = '*%{/%/}/*\n'
+  const written = formatWithDiagnostics(source)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+})
+
 function inParagraph(...children: unknown[]): Record<string, unknown> {
   return { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children }] }
 }

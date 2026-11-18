@@ -689,6 +689,8 @@ function unspelledSpace(w: Writer, node: Node): string {
  */
 function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, before: number): string {
   const node = nodes[at]!
+  const mark = node.type === 'emphasis' ? '/' : node.type === 'strong' ? '*' : null
+  if (mark !== null && nodes[end]?.type === 'text' && nodes[end].value.startsWith(mark)) w.forms.set(node, 1)
   const part = writePart(w, nodes, at, end, flags)
   if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
   w.forms.set(node, 1)
