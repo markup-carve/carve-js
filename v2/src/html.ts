@@ -24,6 +24,7 @@ import { NODE_TABLE } from './ast-validate.ts'
 import { writeTree } from './write.ts'
 import { type ExtensionRenderHost } from './extensions/types.ts'
 import { append } from './append.ts'
+import { percentageText } from './decimal.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
 type BlockWriters = { [T in keyof NodeOfType]?: (r: Render, node: NodeOfType[T], level: number) => void }
@@ -712,23 +713,13 @@ function writeGroups(r: Render, layout: TableLayout, groups: readonly TableGroup
   }
 }
 
-const PERCENT_DIGITS = 10
-
-/** C2-H-152: the width times 100 as a decimal number without trailing zeros. */
-function percentText(width: number): string {
-  const text = (width * 100).toFixed(PERCENT_DIGITS)
-  let end = text.length
-  while (text[end - 1] === '0') end--
-  return text.slice(0, text[end - 1] === '.' ? end - 1 : end)
-}
-
 /** C2-H-152: one `<col>` per column when at least one column has a width. */
 function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level: number): void {
   if (!columns.some((column) => column.width !== undefined)) return
   line(r, level, '<colgroup>')
   for (const column of columns) {
     const width = column.width
-    line(r, level + 1, width === undefined ? '<col>' : `<col style="width: ${percentText(width)}%;">`)
+    line(r, level + 1, width === undefined ? '<col>' : `<col style="width: ${percentageText(width)}%;">`)
   }
   line(r, level, '</colgroup>')
 }

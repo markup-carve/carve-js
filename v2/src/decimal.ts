@@ -14,3 +14,12 @@ export function plainDecimal(value: number): string {
   if (shifted >= digits.length) return `${sign}${digits}${'0'.repeat(shifted - digits.length)}`
   return `${sign}${digits.slice(0, shifted)}.${digits.slice(shifted)}`
 }
+
+/** The shortest plain decimal percentage that reads back as the supplied width. */
+export function percentageText(width: number): string {
+  for (let digits = 1; digits < 17; digits++) {
+    const text = plainDecimal(Number((width * 100).toPrecision(digits)))
+    if (Number(text) / 100 === width) return text
+  }
+  return plainDecimal(width * 100)
+}
