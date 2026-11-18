@@ -264,6 +264,23 @@ it('C2-H-201: capped cross-references grow with their count', () => {
   expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(3.8)
 })
 
+it('C2-W-010: line comment closers grow with source length', () => {
+  for (const shape of [(n: number): string => 'x\n%% ]\n'.repeat(n),
+    (n: number): string => '[x %% ]\n'.repeat(n)]) {
+    formatWithDiagnostics(shape(4000))
+    const times = [1000, 2000, 4000].map((n) => {
+      let best = Infinity
+      for (let run = 0; run < 3; run++) {
+        const started = performance.now()
+        formatWithDiagnostics(shape(n))
+        best = Math.min(best, performance.now() - started)
+      }
+      return best
+    })
+    expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(5.2)
+  }
+})
+
 type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
 
 /** The texts of the cells of the first row of the table that `source` opens. */

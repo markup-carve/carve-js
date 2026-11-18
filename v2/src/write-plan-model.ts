@@ -64,6 +64,8 @@ export interface Leaf {
   textOpener: boolean
   /** The number of marks of the tree open at the unit in the scan. */
   openDepth: number
+  openBrackets: number
+  openBraces: number
   /** C2-W-016: the nodes whose value holds a CR at a line end, which no spelling keeps. */
   lostValues: Node[]
   /** C2-I-089: per unit, whether it stands inside an inline footnote, once a caret asked. */
@@ -75,7 +77,8 @@ export function createLeaf(): Leaf {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
     extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
+    textMark: false, textOpener: false, openDepth: 0, openBrackets: 0, openBraces: 0,
+    lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
   }
 }
 
@@ -96,6 +99,13 @@ export function inNote(leaf: Leaf, at: number): boolean {
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
+  const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds.at(-1) !== ESCAPE)
+  if (read) {
+    if (code === 91) leaf.openBrackets++
+    else if (code === 93 && leaf.openBrackets > 0) leaf.openBrackets--
+    else if (code === 123) leaf.openBraces++
+    else if (code === 125 && leaf.openBraces > 0) leaf.openBraces--
+  }
   if (code === 96 && kind === ATOM) leaf.lastAtomTick = leaf.codes.length
   if (code === 93) leaf.lastBracket = leaf.codes.length
   leaf.codes.push(code)
@@ -251,23 +261,10 @@ function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean
   const opener = leaf.codes.length - (lineStart ? 1 : 2)
   const emptyImage = node.value === '' && leaf.codes[opener] === 91 && leaf.codes[opener - 1] === 33
   const bracket = (node.value.includes(']') || node.value.endsWith('\\') || emptyImage)
-    && openDepth(leaf, 91, 93) > 0
-  if (!bracket && !(BRACED_CLOSER.test(node.value) && openDepth(leaf, 123, 125) > 0)) return false
+    && leaf.openBrackets > 0
+  if (!bracket && !(BRACED_CLOSER.test(node.value) && leaf.openBraces > 0)) return false
   undecide(leaf, 'comment bracket')
   return true
-}
-
-/** The openers `open` of the units so far that no `close` has closed, of text read bare or of the tree's marks. */
-function openDepth(leaf: Leaf, open: number, close: number): number {
-  let depth = 0
-  for (let at = 0; at < leaf.codes.length; at++) {
-    const kind = leaf.kinds[at]
-    const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds[at - 1] !== ESCAPE)
-    if (!read) continue
-    if (leaf.codes[at] === open) depth++
-    else if (leaf.codes[at] === close && depth > 0) depth--
-  }
-  return depth
 }
 
 const BRACED_CLOSER = /[*+,\-/=^_~]\}/

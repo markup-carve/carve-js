@@ -988,67 +988,58 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
  * is a bracket or a braced form, which the spelling of the node decides; the plan leaves such a group to the repair.
  */
 function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
-  for (let at = 1; at < leaf.codes.length; at++) {
+  const depth = { brackets: 0, textBrackets: 0, textBraces: 0, bracesByMark: new Uint32Array(128) }
+  for (let at = 0; at < leaf.codes.length; at++) {
+    if (at === 0) {
+      advanceCommentDepth(leaf, at, escaped, depth)
+      continue
+    }
     const before = leaf.owners[at - 1]
-    if (before?.type !== 'comment' || before.form !== 'line' || leaf.owners[at] === before) continue
-    if (leaf.kinds[at] === CLOSE ? !closesAfterComment(leaf, at, escaped) : endsAComment(leaf, at, escaped)) {
+    if (before?.type === 'comment' && before.form === 'line' && leaf.owners[at] !== before
+      && (leaf.kinds[at] === CLOSE ? !closesAfterComment(leaf, at, depth) : endsAComment(leaf, at, depth))) {
       return undecide(leaf, 'comment before a closer')
     }
+    advanceCommentDepth(leaf, at, escaped, depth)
   }
 }
 
-/** The `[` before `at` that the reader reads as brackets and that no `]` before `at` closes. */
-function openBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
-  let depth = 0
-  for (let unit = 0; unit < at; unit++) {
-    const kind = leaf.kinds[unit]
-    if (kind !== OPEN && kind !== CLOSE && (kind !== TEXT || isLiteral(leaf, unit, escaped))) continue
-    if (leaf.codes[unit] === 91) depth++
-    else if (leaf.codes[unit] === 93 && depth > 0) depth--
+type CommentDepth = { brackets: number, textBrackets: number, textBraces: number, bracesByMark: Uint32Array }
+
+function advanceCommentDepth(leaf: Leaf, at: number, escaped: Uint8Array, depth: CommentDepth): void {
+  const kind = leaf.kinds[at]
+  const code = leaf.codes[at]!
+  const read = kind === OPEN || kind === CLOSE || (kind === TEXT && !isLiteral(leaf, at, escaped))
+  if (read && code === 91) depth.brackets++
+  else if (read && code === 93 && depth.brackets > 0) depth.brackets--
+  if (kind !== TEXT || !read) return
+  if (code === 91) depth.textBrackets++
+  else if (code === 93 && depth.textBrackets > 0) depth.textBrackets--
+  if (at === 0 || leaf.kinds[at - 1] !== TEXT || !BRACED_MARKS.includes(String.fromCharCode(code))) return
+  if (leaf.codes[at - 1] === 123 && !isLiteral(leaf, at - 1, escaped)) {
+    depth.bracesByMark[code] = depth.bracesByMark[code]! + 1
+    depth.textBraces++
+  } else if (leaf.codes[at + 1] === 125 && depth.bracesByMark[code]! > 0) {
+    depth.bracesByMark[code] = depth.bracesByMark[code]! - 1
+    depth.textBraces--
   }
-  return depth
 }
 
 /**
  * Whether the comment ends before the closing mark at `at`: a bracket, or the closer of a braced form where no
  * bracket of text the reader reads is open, which would be the innermost form.
  */
-function closesAfterComment(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
-  if (leaf.codes[at] === 93) return openTextBraces(leaf, at, escaped) === 0
-  return (leaf.codes[at] === 125 || leaf.codes[at + 1] === 125) && openTextBrackets(leaf, at, escaped) === 0
-}
-
-/** The braced openers of text the reader reads before `at` that no closer of their mark closes. */
-function openTextBraces(leaf: Leaf, at: number, escaped: Uint8Array): number {
-  const open: number[] = []
-  for (let unit = 1; unit < at; unit++) {
-    if (leaf.kinds[unit] !== TEXT || leaf.kinds[unit - 1] !== TEXT || isLiteral(leaf, unit, escaped)) continue
-    const mark = leaf.codes[unit]!
-    if (!BRACED_MARKS.includes(String.fromCharCode(mark))) continue
-    if (leaf.codes[unit - 1] === 123 && !isLiteral(leaf, unit - 1, escaped)) open.push(mark)
-    else if (leaf.codes[unit + 1] === 125 && open.includes(mark)) open.splice(open.lastIndexOf(mark), 1)
-  }
-  return open.length
-}
-
-/** The `[` of text the reader reads as brackets before `at` that no `]` closes. */
-function openTextBrackets(leaf: Leaf, at: number, escaped: Uint8Array): number {
-  let depth = 0
-  for (let unit = 0; unit < at; unit++) {
-    if (leaf.kinds[unit] !== TEXT || isLiteral(leaf, unit, escaped)) continue
-    if (leaf.codes[unit] === 91) depth++
-    else if (leaf.codes[unit] === 93 && depth > 0) depth--
-  }
-  return depth
+function closesAfterComment(leaf: Leaf, at: number, depth: CommentDepth): boolean {
+  if (leaf.codes[at] === 93) return depth.textBraces === 0
+  return (leaf.codes[at] === 125 || leaf.codes[at + 1] === 125) && depth.textBrackets === 0
 }
 
 /**
  * Whether text behind a comment starts with a braced closer, or with a bracket that the comment would take: one no
  * bracket the reader reads is open at.
  */
-function endsAComment(leaf: Leaf, at: number, escaped: Uint8Array): boolean {
+function endsAComment(leaf: Leaf, at: number, depth: CommentDepth): boolean {
   if (leaf.kinds[at] !== TEXT || leaf.codes[at] === LF) return false
-  if (leaf.codes[at] === 93) return openBrackets(leaf, at, escaped) === 0
+  if (leaf.codes[at] === 93) return depth.brackets === 0
   return BRACED_MARKS.includes(String.fromCharCode(leaf.codes[at]!)) && leaf.codes[at + 1] === 125
 }
 
