@@ -62,6 +62,8 @@ export interface Leaf {
   textMark: boolean
   /** Whether a character of text that can open a construct came before the unit in the scan. */
   textOpener: boolean
+  /** Whether a line comment in this leaf can need a closer check. */
+  hasLineComment: boolean
   /** The number of marks of the tree open at the unit in the scan. */
   openDepth: number
   openBrackets: number
@@ -77,7 +79,7 @@ export function createLeaf(): Leaf {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
     extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, openBrackets: 0, openBraces: 0,
+    textMark: false, textOpener: false, hasLineComment: false, openDepth: 0, openBrackets: 0, openBraces: 0,
     lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
   }
 }
@@ -261,13 +263,27 @@ function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean
   const opener = leaf.codes.length - (lineStart ? 1 : 2)
   const emptyImage = node.value === '' && leaf.codes[opener] === 91 && leaf.codes[opener - 1] === 33
   const bracket = (node.value.includes(']') || node.value.endsWith('\\') || emptyImage)
-    && leaf.openBrackets > 0
+    && leaf.openBrackets > 0 && !insideFootnoteLabel(leaf)
   if (!bracket && !(BRACED_CLOSER.test(node.value) && leaf.openBraces > 0)) return false
   undecide(leaf, 'comment bracket')
   return true
 }
 
+function insideFootnoteLabel(leaf: Leaf): boolean {
+  const bracket = leaf.codes.lastIndexOf(91)
+  return bracket >= 0 && leaf.kinds[bracket] === TEXT && leaf.codes[bracket + 1] === 94
+}
+
+function commentBeforeTextCloser(leaf: Leaf, node: Node, after: Node | undefined): boolean {
+  return node.type === 'comment' && node.form === 'line' && after?.type === 'text'
+    && after.value.startsWith(']') && leaf.openBraces > 0
+}
+
 const BRACED_CLOSER = /[*+,\-/=^_~]\}/
+
+function markLineComment(leaf: Leaf, node: Node): void {
+  leaf.hasLineComment ||= node.type === 'comment' && node.form === 'line'
+}
 
 /** The units of `nodes`, as `writeInlines` writes them. */
 export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {
@@ -275,6 +291,9 @@ export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
     const node = nodes[at]!
     const size = leaf.codes.length
     const lineStart = size === 0 || leaf.codes[size - 1] === LF
+    const after = nodes[at + 1]
+    markLineComment(leaf, node)
+    if (commentBeforeTextCloser(leaf, node, after)) return undecide(leaf, 'comment before a closer')
     if (node.type === 'comment' && node.form !== 'braced' && lineComment(leaf, node, lineStart)) return
     if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) return undecide(leaf, 'continuation row')
     if (joinsNextCode(nodes, at)) return undecide(leaf, 'code run')

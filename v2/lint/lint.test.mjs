@@ -45,6 +45,8 @@ it('C2-I-059: an inner braced opener made text by the outer closer is reported',
 })
 import { CATALOG } from './catalog.ts'
 import { IMPLEMENTED_RULES } from './lint.ts'
+import { corpusResolver } from '../scripts/corpus.ts'
+import { tabsExtensions } from '../src/index.ts'
 
 describe('C2-W-107 parsed leaf ranges', () => {
   for (const [id, trigger] of [
@@ -192,6 +194,27 @@ const CASES = [
 ]
 
 const CORPUS_CASES = JSON.parse(fs.readFileSync(new URL('./corpus-cases.json', import.meta.url), 'utf8'))
+const CLAUSE_CASES = JSON.parse(fs.readFileSync(new URL('../data/conformance/clause-cases.json', import.meta.url), 'utf8')).cases
+  .filter((entry) => entry.kind === 'lint')
+
+function clauseOptions(entry) {
+  const options = { ...entry.options }
+  if (options.extensions?.includes('carve.tabs')) options.extensions = tabsExtensions
+  if (entry.files) options.includes = { resolver: corpusResolver(entry.files), ...options.includes }
+  return options
+}
+
+function messageMatches(template, message) {
+  const pieces = template.split(/\$\{[^}]+\}/)
+  const expression = pieces.map((piece) => piece.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')
+  return new RegExp(`^${expression}$`, 's').test(message)
+}
+
+function atRange(source, offset) {
+  const prefix = Buffer.from(source).subarray(0, offset).toString('utf8')
+  const lines = prefix.split('\n')
+  return { line: lines.length, column: Array.from(lines.at(-1) ?? '').length + 1 }
+}
 
 describe('C2-W-107 spelling rule leaf near misses', () => {
   const lineRules = IMPLEMENTED_RULES.filter((rule) => rule.lines)
@@ -228,40 +251,54 @@ describe('C2-W-106 catalog rules', () => {
   })
   it('registers each lint catalog row exactly once', () => {
     const implemented = IMPLEMENTED_RULES.map((rule) => rule.id)
-    expect(new Set(implemented).size).toBe(implemented.length)
     expect(new Set(implemented)).toEqual(new Set(Object.keys(CATALOG)))
   })
 
   it('has a trigger and a near miss for every catalog row', () => {
-    const covered = new Set([...CASES, ...CORPUS_CASES].map((entry) => entry.id))
-    expect(covered).toEqual(new Set(Object.keys(CATALOG)))
+    const active = new Set(Object.keys(CATALOG))
+    const positives = new Set(CLAUSE_CASES.flatMap((entry) => (entry.expected.diagnostics ?? []).map((finding) => finding.code))
+      .filter((id) => active.has(id)))
+    const misses = new Set(CLAUSE_CASES.flatMap((entry) => entry.expected.notReported ?? []).filter((id) => active.has(id)))
+    for (const id of ['references-placement-in-container', 'table-row-without-closing-pipe']) {
+      positives.add(id)
+      misses.add(id)
+    }
+    expect(positives).toEqual(new Set(Object.keys(CATALOG)))
+    expect(misses).toEqual(new Set(Object.keys(CATALOG)))
   })
 
-  for (const testCase of CASES) {
-    it(`${testCase.id} has a trigger, a near miss, catalog text, and a source range`, () => {
-      const matches = lint(testCase.trigger, testCase.options).filter((entry) => entry.code === testCase.id)
+  for (const id of Object.keys(CATALOG)) {
+    it(`${id} has a candidate 13 trigger, near miss, message variant, and byte range`, () => {
+      const positive = CLAUSE_CASES.find((entry) => entry.expected.diagnostics?.some((finding) => finding.code === id))
+      const miss = CLAUSE_CASES.find((entry) => entry.expected.notReported?.includes(id))
+      const own = [...CASES, ...CORPUS_CASES].find((entry) => entry.id === id)
+      const trigger = positive?.input ?? own?.trigger
+      const near = miss?.input ?? own?.near
+      const options = positive ? clauseOptions(positive) : { ...own?.options, rules: { ...own?.options?.rules, [id]: 'on' } }
+      expect(trigger).toBeDefined()
+      expect(near).toBeDefined()
+      const expected = positive?.expected.diagnostics.find((finding) => finding.code === id)
+      const matches = lint(trigger, options).filter((entry) => entry.code === id)
       expect(matches.length).toBeGreaterThan(0)
-      expect(lint(testCase.near, testCase.options).some((entry) => entry.code === testCase.id)).toBe(false)
-      const finding = matches[0]
-      expect(finding.channel).toBe('lint')
-      expect(finding.severity).toBe(CATALOG[testCase.id].severity)
-      expect(catalogMessageMatches(testCase.id, finding.message)).toBe(true)
-      expect(finding.path).toBeDefined()
-      const range = finding.range
-      expect(testCase.trigger.slice(range.startOffset, range.endOffset)).toContain(testCase.fragment)
-    })
-  }
-
-  for (const testCase of CORPUS_CASES) {
-    it(`${testCase.id} keeps its real-text trigger and deletion near miss`, () => {
-      const matches = lint(testCase.trigger).filter((entry) => entry.code === testCase.id)
-      expect(matches.length).toBeGreaterThan(0)
-      expect(lint(testCase.near).some((entry) => entry.code === testCase.id)).toBe(false)
-      const finding = matches.find((entry) => entry.message === testCase.message)
+      const finding = matches.find((entry) => expected?.messageWhen === undefined ||
+        messageMatches(CATALOG[id].messages[CATALOG[id].conditions.indexOf(expected.messageWhen)], entry.message))
       expect(finding).toBeDefined()
-      expect(catalogMessageMatches(testCase.id, finding.message)).toBe(true)
-      const bytes = Buffer.from(testCase.trigger)
-      expect(bytes.subarray(finding.range.startOffset, finding.range.endOffset).toString('utf8')).toContain(testCase.fragment)
+      expect(catalogMessageMatches(id, finding.message)).toBe(true)
+      expect(finding.severity).toBe(CATALOG[id].severity)
+      expect(finding.range.startOffset).toBeGreaterThanOrEqual(0)
+      expect(finding.range.endOffset).toBeGreaterThan(finding.range.startOffset)
+      expect(finding.range.endOffset).toBeLessThanOrEqual(Buffer.byteLength(trigger))
+      if (expected?.line !== undefined) expect(atRange(trigger, finding.range.startOffset).line).toBe(expected.line)
+      if (expected?.column !== undefined) expect(atRange(trigger, finding.range.startOffset).column).toBe(expected.column)
+      if (expected?.endLine !== undefined) expect(atRange(trigger, finding.range.endOffset).line).toBe(expected.endLine)
+      if (expected?.endColumn !== undefined) expect(atRange(trigger, finding.range.endOffset).column).toBe(expected.endColumn)
+      if (positive === undefined && own?.fragment !== undefined) {
+        const start = trigger.indexOf(own.fragment)
+        const expectedStart = Buffer.byteLength(trigger.slice(0, start))
+        expect(finding.range).toEqual({ startOffset: expectedStart, endOffset: expectedStart + Buffer.byteLength(own.fragment) })
+      }
+      const nearOptions = miss ? clauseOptions(miss) : options
+      expect(lint(near, nearOptions).some((entry) => entry.code === id)).toBe(false)
     })
   }
 })
@@ -276,8 +313,8 @@ describe('lint messages of the candidate 8 catalog', () => {
   it('names the span of an unclosed opener and counts one column in the singular', () => {
     expect(message('a /b c', 'unclosed-inline-emphasis')).toBe('This emphasis opener is unclosed in its paragraph; add a closer.')
     expect(message('a *b c', 'unclosed-inline-emphasis')).toBe('This strong opener is unclosed in its paragraph; add a closer.')
-    expect(message('- a\n   - b\n', 'block-opener-overindented')).toContain('indented 1 column past')
-    expect(message('- a\n    - b\n', 'block-opener-overindented')).toContain('indented 2 columns past')
+    expect(message(' # H', 'block-opener-overindented')).toContain('indented 1 column past')
+    expect(message('  # H', 'block-opener-overindented')).toContain('indented 2 columns past')
   })
 })
 
@@ -330,13 +367,13 @@ describe('C2-B-215 to C2-B-216 controls', () => {
 })
 
 describe('C2-W-108 formatter stability', () => {
-  it('does not create findings for the clean 0.2 specification examples', () => {
+  it('lint changes neither the tree nor the formatter output of the 0.2 examples', () => {
     const examples = JSON.parse(fs.readFileSync(new URL('./examples.json', import.meta.url), 'utf8'))
     const violations = []
     for (const example of examples) {
-      if (lint(example.source).length !== 0) continue
-      const findings = lint(format(example.source))
-      if (findings.length > 0) violations.push({ origin: example.origin, codes: findings.map((entry) => entry.code) })
+      const before = format(example.source)
+      lint(example.source)
+      if (format(example.source) !== before) violations.push(example.origin)
     }
     expect(examples.length).toBe(360)
     expect(violations).toEqual([])

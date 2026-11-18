@@ -207,14 +207,24 @@ function footnoteReading(leaf: Leaf, at: number, escaped: Uint8Array): number {
   if (leaf.lastBracket <= at + 2) return NO_REFERENCE
   const opened = openedBefore(leaf, at, escaped)
   if (opened >= 0) return opened
+  return readFootnoteLabel(leaf, at)
+}
+
+function readFootnoteLabel(leaf: Leaf, at: number): number {
   let blank = true
   for (let unit = at + 2; unit < leaf.codes.length; unit++) {
     const value = leaf.codes[unit]!
+    if (lineCommentAt(leaf, unit)) return NO_REFERENCE
     if ((leaf.kinds[unit] !== TEXT && leaf.kinds[unit] !== ESCAPE) || value === 37) return UNREAD
     if (value === 93 && leaf.kinds[unit - 1] !== ESCAPE) return blank ? NO_REFERENCE : REFERENCE
     if (value !== 32 && value !== 9 && value !== LF) blank = false
   }
   return NO_REFERENCE
+}
+
+function lineCommentAt(leaf: Leaf, at: number): boolean {
+  const owner = leaf.owners[at]
+  return owner?.type === 'comment' && owner.form === 'line'
 }
 
 /** Whether the plan decided the text `[` at `at` before a caret: escaped as a footnote reference, or bare as none. */
@@ -988,6 +998,7 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
  * is a bracket or a braced form, which the spelling of the node decides; the plan leaves such a group to the repair.
  */
 function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
+  if (!leaf.hasLineComment) return
   const depth = { brackets: 0, textBrackets: 0, textBraces: 0, bracesByMark: new Uint32Array(128) }
   for (let at = 0; at < leaf.codes.length; at++) {
     if (at === 0) {
@@ -1014,6 +1025,11 @@ function advanceCommentDepth(leaf: Leaf, at: number, escaped: Uint8Array, depth:
   if (kind !== TEXT || !read) return
   if (code === 91) depth.textBrackets++
   else if (code === 93 && depth.textBrackets > 0) depth.textBrackets--
+  advanceCommentBraces(leaf, at, escaped, depth)
+}
+
+function advanceCommentBraces(leaf: Leaf, at: number, escaped: Uint8Array, depth: CommentDepth): void {
+  const code = leaf.codes[at]!
   if (at === 0 || leaf.kinds[at - 1] !== TEXT || !BRACED_MARKS.includes(String.fromCharCode(code))) return
   if (leaf.codes[at - 1] === 123 && !isLiteral(leaf, at - 1, escaped)) {
     depth.bracesByMark[code] = depth.bracesByMark[code]! + 1

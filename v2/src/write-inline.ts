@@ -189,9 +189,13 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
   return (w, node, flags) => {
     const content = contentOf(w, node, flags | inside)
     if (content === null) return ''
-    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
+    const braced = bracedPair(w, node, flags, bit, inside)
     return braced ? `{${mark}${content}${mark}}` : `${mark}${content}${mark}`
   }
+}
+
+function bracedPair(w: Writer, node: InlineParent, flags: number, bit: number, inside: number): boolean {
+  return (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
 }
 
 /** C2-W-071, C2-W-116: a span that has only a braced form. */
@@ -702,29 +706,50 @@ export function lineStartBreak(node: Node, lineStart: boolean): string | null {
   return node.type === 'hard_break' && lineStart ? '\\\n' : null
 }
 
-/** The escapes a node takes from its neighbors before it is written. */
+function braceBeforeCommentCloser(w: Writer, node: TextNode, comment: Node | undefined, after: Node | undefined, flags: number): void {
+  if (comment?.type !== 'comment' || comment.form !== 'line' || after !== undefined || (flags & (IN_NOTE | IN_BRACKET)) === 0) return
+  const braces = unclosedBraces(node.value, 0)
+  if (braces.length === 0) return
+  const escapes = w.escapes.get(node) ?? []
+  w.escapes.set(node, [...new Set([...escapes, ...braces])].sort((a, b) => a - b))
+}
+
+function unclosedBraces(value: string, start: number): number[] {
+  const open: { mark: string, at: number }[] = []
+  for (let at = start; at + 1 < value.length; at++) {
+    if (value[at] === '\\' && isAsciiPunctuation(value.charCodeAt(at + 1))) { at++; continue }
+    if (value[at] === '{' && '*/-='.includes(value[at + 1]!)) open.push({ mark: value[at + 1]!, at })
+    else if (value[at + 1] === '}' && open.at(-1)?.mark === value[at]) open.pop()
+  }
+  return open.map((entry) => entry.at)
+}
+
+function spanClosingBracket(w: Writer, node: TextNode, before: Node | undefined): void {
+  if (before?.type !== 'strong' && before?.type !== 'emphasis') return
+  if (!node.value.includes(']') || !before.children.some((child) => child.type === 'text' && /^\^\[[^\]]*\[/.test(child.value))) return
+  const closing = node.value.indexOf(']')
+  const escapes = w.escapes.get(node) ?? []
+  if (!escapes.includes(closing)) w.escapes.set(node, [...escapes, closing].sort((a, b) => a - b))
+}
+
+function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, atEnd: boolean, flags: number): void {
+  const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG)
+    : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS)
+  const pairedEnd = atEnd && (flags & (IN_STRONG | IN_EMPHASIS)) !== 0
+  if (!node.value.endsWith('{') || (!pairedNext && !pairedEnd)) return
+  const at = node.value.length - 1
+  const escapes = w.escapes.get(node) ?? []
+  if (!escapes.includes(at)) w.escapes.set(node, [...escapes, at].sort((a, b) => a - b))
+}
+
 function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, afterBang: boolean): void {
   const node = nodes[at]!
   if (node.type === 'text') {
     doubleLastBackslash(w, node, nodes, end, flags)
     escapeGluedBacktick(w, node, nodes[at - 1])
-    const next = nodes[end]
-    if (next?.type === 'comment' && next.form === 'line' && next.value.includes(']')) {
-      const open: number[] = []
-      for (let index = 0; index < node.value.length; index++) {
-        if (node.value[index] === '[') open.push(index)
-        else if (node.value[index] === ']' && open.length > 0) open.pop()
-      }
-      const escapes = w.escapes.get(node) ?? []
-      w.escapes.set(node, [...new Set([...escapes, ...open])].sort((a, b) => a - b))
-    }
-    const before = nodes[at - 1]
-    if ((before?.type === 'strong' || before?.type === 'emphasis') && node.value.includes(']')
-      && before.children.some((child) => child.type === 'text' && /\^\[[^\]]*$/.test(child.value))) {
-      const closing = node.value.indexOf(']')
-      const escapes = w.escapes.get(node) ?? []
-      if (!escapes.includes(closing)) w.escapes.set(node, [...escapes, closing].sort((a, b) => a - b))
-    }
+    braceBeforeCommentCloser(w, node, nodes[end], nodes[end + 1], flags)
+    spanClosingBracket(w, node, nodes[at - 1])
+    braceBesidePair(w, node, nodes[end], end === nodes.length, flags)
   }
   // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
   if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)

@@ -66,3 +66,18 @@ describe('the gates on comments at the start and the end of a span', () => {
     }
   })
 })
+
+describe('the escape procedure beside a line comment', () => {
+  it('C2-W-088: bracket text is escaped only when the comment closer changes its reading', () => {
+    const unnecessary = ['[{*%%]', '[{/%%]', '[{-%%]', '[{=%%]', '[%%\\]', '[%%[]', '[%%![]', '[%%^[]', '[%%[^]', '[%%:n[]']
+    for (const source of [...unnecessary.flatMap((part) => [`x${part}`, `x!${part}`]),
+      'x#}\n%}\\[\\+ %% ]', 'x[\\{* %%]', 'x[\\{/ %%]', 'x[\\{- %%]', 'x[\\{= %%]',
+      'x[{*[ %% ]', 'x[^a %% ]', 'x[^! %% ]', 'x[^^ %% ]', 'x{*[^ %% ]', 'xa[^ %% ]', 'x^[\\{* %% ]',
+      'x[\\{*[^ %% ]', 'x[\\{*\\{*a %% ]', 'x^[][ %% ]',
+      'x[\\{*\\{*a\\{* %% ]', 'x[\\{*^[] %% ]',
+      'x[\\{*][a] %% ]', 'x[\\{*\\{*a[] %% ]', 'x[\\{*\\{*a[^ %% ]',
+      'x^[\\{*\\{*a\\{* %% ]']) {
+      expect(checkWriter(source, []), source).toBeNull()
+    }
+  })
+})

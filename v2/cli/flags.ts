@@ -111,7 +111,7 @@ function commandAt(arg: string | undefined): Command | undefined {
 }
 
 /** C2-T-016, C2-T-030, C2-T-033: the combinations a command refuses. */
-function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
+function checkFormatCombinations(parsed: ParsedArgs): void {
   const values = parsed.values
   if (parsed.command === 'fmt' && values['check'] === true && values['diff'] === true) {
     throw new UsageError('--check cannot be combined with --diff')
@@ -119,6 +119,11 @@ function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
   if (values['write'] === true && (values['check'] === true || values['diff'] === true) && parsed.command === 'fmt') {
     throw new UsageError('--write cannot be combined with --check or --diff')
   }
+}
+
+function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
+  checkFormatCombinations(parsed)
+  const values = parsed.values
   if (values['from-ast'] === true && values['normalize'] === true) throw new UsageError('--normalize needs source input')
   const losses = values['report-losses']
   const includes = values['report-includes']

@@ -372,7 +372,7 @@ describe('fence opener whitespace', () => {
     expect(result.document.children[0]).toMatchObject({ type: 'code_block' })
     expect(result.document.children[0]).not.toHaveProperty('syntax')
     expect(result.diagnostics.map((entry) => entry.code)).toEqual(['fence-title-syntax'])
-    expect(result.diagnostics[0]?.message).toContain('The block opens with no language (use: "``` b")')
+    expect(result.diagnostics[0]?.message).toContain('The block opens with no language; write "``` b"')
   })
 })
 

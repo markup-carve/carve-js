@@ -92,7 +92,7 @@ export function locateFindings(document: DocumentNode, findings: Findings): Diag
     const place = node === null ? undefined : found.get(node)
     entry.path = (place?.pointer ?? '') + (findings.steps?.get(entry) ?? '')
     const pos = place === undefined || node === null ? undefined : node.pos
-    if (pos !== undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
+    if (pos !== undefined && entry.range === undefined) entry.range = { startOffset: pos.startOffset, endOffset: pos.endOffset }
     // C2-N-063: the range is counted in the file of the node, which the include around it names.
     if (place?.file !== undefined) entry.file = place.file
   })

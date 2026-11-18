@@ -501,10 +501,12 @@ function blockExtension(r: Render, node: BlockExtensionNode, level: number): voi
   const rendered = r.renderExtension(node)
   if (rendered !== null) { line(r, level, rendered); return }
   loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
-  const fallback = rendererHost(r).blocks(node.fallback)
   // C2-X-035: the attributes of the node go on a div around its fallback.
   const tag = attributes(r, node, {})
-  line(r, level, tag === '' ? fallback : `<div${tag}>\n${fallback}\n</div>`)
+  if (tag === '') return writeBlocks(r, node.fallback, level)
+  line(r, level, `<div${tag}>`)
+  writeBody(r, node.fallback, level + 1)
+  line(r, level, '</div>')
 }
 
 function isBlockNode(node: Node): node is Block {
@@ -527,6 +529,7 @@ function rendererHost(r: Render): ExtensionRenderHost {
         for (const node of nodes.filter(isBlockNode)) {
           r.out = ''
           writeBlocks(r, [node], 0)
+          if (html !== '' && r.out !== '') html += '\n'
           html += r.out.slice(1)
         }
         return html

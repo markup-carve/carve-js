@@ -159,17 +159,16 @@ describe('the parse channel', () => {
 
   it('C2-B-122: further words on an opener are reported, and typographic quotes are named', () => {
     expect(messages('```js “T”\nx\n```')[0]).toBe(
-      'The title after "js" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before Carve parsed it. '
-      + 'A fence title needs straight double quotes: ``` js "T".')
+      'The title after "js" uses typographic quotes. Check whether a smart quote filter changed the source; '
+      + 'a fence title needs straight double quotes: ``` js "T".')
     expect(messages('```js T [L]\nx\n```')[0]).toBe(
-      'Text after the "js" fence type must be a quoted "title" or a [label]; unquoted it is not read as a title, and the block opens. '
-      + 'Did you mean ``` js "T" [L]?')
-    expect(reports('```=html x\n<b>\n```')).toEqual(['fence-title-syntax /children/0 0-18'])
+      'Text after "js" must be a quoted title or a [label]; it is not read as a title. Write ``` js "T" [L].')
+    expect(reports('```=html x\n<b>\n```')).toEqual(['fence-title-syntax /children/0 9-10'])
     expect(reports('```js "T" [L]\nx\n```')).toEqual([])
   })
 
   it('C2-B-181: a delimited table with an unclosed quote is reported and stays a table', () => {
-    expect(reports('{table=""}\n```csv\na,"b\n```')).toEqual(['delimited-table-malformed /children/0 0-26'])
+    expect(reports('{table=""}\n```csv\na,"b\n```')).toEqual(['delimited-table-malformed /children/0 20-21'])
   })
 
   it('C2-A-172: the parse findings come beside the HTML too, and a parse that asks for none carries none', () => {

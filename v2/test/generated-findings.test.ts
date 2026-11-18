@@ -79,7 +79,7 @@ describe('generated parser findings', () => {
   })
 
   it('C2-X-051: a claim preparation failure retains the core tabs node', () => {
-    const body = readFileSync(join(import.meta.dirname, '../proptest/fixtures/writer-cycle.crv'), 'utf8')
+    const body = readFileSync(join(import.meta.dirname, 'fixtures/plan-quote-depth.crv'), 'utf8')
     const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
     const options = { extensions: [tabExtension, tabsExtension] }
     const parsed = parseWithDiagnostics(source, options)
@@ -130,7 +130,7 @@ describe('generated parser findings', () => {
 
   it('C2-X-035: the fallback of an extension node with attributes stands in an element that carries them', () => {
     const rendered = renderWithDiagnostics('{#t .k}\n::: failure\nBody\n:::\n', { extensions: [failureExtension] })
-    expect(rendered.html).toBe('<div id="t" class="k">\n<p>Body</p>\n</div>')
+    expect(rendered.html).toBe('<div id="t" class="k">\n  <p>Body</p>\n</div>')
   })
 
   it('C2-X-050: a failed renderer does not duplicate findings from its partial output', () => {

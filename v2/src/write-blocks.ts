@@ -97,7 +97,7 @@ function openerTail(
   w: Writer, node: CodeBlockNode | DivNode | AdmonitionNode | DirectiveNode, title: string | null, spelled: string,
 ): string {
   let out = ''
-  if (title !== null && (title.includes('"') || title.includes('\n'))) lose(w, node, 'title')
+  if (title !== null && title.includes('\n')) lose(w, node, 'title')
   else if (title !== null) out += ` "${spelled}"`
   const label = node.groupLabel
   if (label === undefined) return out
@@ -362,9 +362,10 @@ function titleTail(w: Writer, node: DivNode | AdmonitionNode | DirectiveNode, fl
 }
 
 /** C2-W-039: the name of a plain div is its first class, where that class can be a name with no other meaning. */
-function divName(node: DivNode): string | null {
+function divName(w: Writer, node: DivNode): string | null {
   const first = node.attrs?.classes?.[0]
-  return first !== undefined && isName(first) && !DIV_KINDS.has(first) ? first : null
+  if (first === undefined || !isName(first) || DIV_KINDS.has(first)) return null
+  return w.extensions.some((extension) => extension.matcher?.form === 'div' && extension.matcher.name === first) ? null : first
 }
 
 /** C2-W-081: the opener of a hard-break block stands for the class, which it adds last (C2-A-068). */
@@ -382,7 +383,7 @@ function div(w: Writer, node: DivNode, prefix: string, flags: number): void {
     return fenced(w, node, prefix, ' \\', true, () => writeBlocks(w, node.children, prefix, flags | BARE_BREAKS, false))
   }
   const write = (): void => writeBlocks(w, node.children, prefix, flags, false)
-  const named = divName(node)
+  const named = divName(w, node)
   const name = w.prewrittenAttributes === node && named !== null && braceBlock(node, { skipClasses: [0] }) === ''
     ? null : named
   attributeLine(w, node, prefix, name === null ? {} : { skipClasses: [0] })
@@ -672,7 +673,7 @@ export function followingAttributes(w: Writer, node: Node | undefined): string {
   if (node?.type === 'div') {
     const classes = node.attrs?.classes ?? NONE
     if (usesHardBreakOpener(w, node)) return braceBlock(node, { skipClasses: [classes.length - 1] })
-    const name = divName(node)
+    const name = divName(w, node)
     const block = braceBlock(node, name === null ? {} : { skipClasses: [0] })
     return block === '' && name !== null ? braceBlock(node) : block
   }

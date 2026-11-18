@@ -2,6 +2,7 @@
 import { type Block, type BlockExtensionNode, type DocumentNode, type InlineExtensionNode, type Node, type ParagraphNode } from './ast.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
 import { DEFAULT_DENIED_SCHEMES } from './option-tables.ts'
+import { stringOffsetOfByte, utf8Length } from './positions.ts'
 import { type Settings, type UrlPolicy } from './options.ts'
 import { DROPPED_NAMES, DROPPED_PREFIXES, PROBE_REMOVED, STYLE_PATTERNS, URL_LIST_ATTRIBUTES } from './render-tables.ts'
 import { type Resolution } from './resolve.ts'
@@ -299,6 +300,17 @@ export function destination(r: Render, url: string, node: Node): string {
 export function isDenied(r: Render, url: string, node: Node): boolean {
   if (schemePasses(r, url)) return false
   loss(r, node, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
+  const entry = r.losses.entries.at(-1)!
+  const field = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : undefined
+  if (field !== undefined) {
+    r.losses.steps ??= new Map()
+    r.losses.steps.set(entry, `/${field}`)
+  }
+  if (typeof r.source === 'string' && node.pos !== undefined) {
+    const start = r.source.indexOf(url, stringOffsetOfByte(r.source, node.pos.startOffset))
+    if (start >= 0) entry.range = { startOffset: utf8Length(r.source.slice(0, start)),
+      endOffset: utf8Length(r.source.slice(0, start + url.length)) }
+  }
   return true
 }
 
@@ -479,7 +491,13 @@ function addKeyValue(
   const name = key.toLowerCase()
   if (isBlockedName(name) || list.has(name)) return
   if (CARRIERS.has(name)) {
-    return loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
+    loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
+    if (typeof r.source === 'string' && origin?.pos !== undefined) {
+      const start = r.source.indexOf(key, stringOffsetOfByte(r.source, origin.pos.startOffset))
+      if (start >= 0) r.losses.entries.at(-1)!.range = { startOffset: utf8Length(r.source.slice(0, start)),
+        endOffset: utf8Length(r.source.slice(0, start + key.length + (value === '' ? 0 : value.length + 1))) }
+    }
+    return
   }
   if (name === 'style') return list.add(key, styleValue(value, style.declarations, parts.styleFirst === true))
   if (name !== 'align' || parts.alignStyle !== true || !ALIGN_VALUES.includes(foldedAlign(value))) {

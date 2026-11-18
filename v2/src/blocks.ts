@@ -652,18 +652,25 @@ function nextMarkerStyle(state: BlockState, first: number, end: number): number 
     const matched = matchContainers(state, lineStart, lineEnd)
     const blank = cursor.pos >= lineEnd
     if (matched < depth && !blank) break
-    if (blank) blanks = matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
+    if (blank) blanks = markerBlankCount(matched, depth, blanks)
     else if (!isLineComment(src, cursor.pos, lineEnd)) {
-      if (cursor.column - cursor.origin <= column) {
-        style = settledStyle(src, first, cursor.pos, lineEnd)
-        break
-      }
+      const settled = styleAtMarkerLine(state, first, lineEnd, column)
+      if (settled !== null) { style = settled; break }
       blanks = 0
     }
     lineStart = next + 1
   }
   Object.assign(cursor, saved)
   return style
+}
+
+function markerBlankCount(matched: number, depth: number, blanks: number): number {
+  return matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
+}
+
+function styleAtMarkerLine(state: BlockState, first: number, lineEnd: number, column: number): number | null {
+  const cursor = state.cursor
+  return cursor.column - cursor.origin <= column ? settledStyle(state.src, first, cursor.pos, lineEnd) : null
 }
 
 function trimCr(src: string, start: number, end: number): number {

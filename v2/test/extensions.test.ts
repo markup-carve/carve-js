@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
 import {
-  CarveOptionError, CarveTreeError, decodeTree, format, parse, parseTree, parseWithLayout, render,
+  CarveOptionError, CarveTreeError, decodeTree, format, lint, parse, parseTree, parseWithLayout, render,
   parseWithDiagnostics,
   renderWithDiagnostics, tabsExtensions, tabsRenderer, treesEqual, validateLayout, validateTree,
   writeWithDiagnostics, type BlockExtensionNode, type DocumentNode, type ExtensionDefinition,
@@ -14,7 +14,7 @@ const html = '<div class="tabs" role="group" aria-label="Tabs"><input type="radi
   + '<label for="tabs-1-0">Install</label><input type="radio" name="tabs-1" id="tabs-1-1"><label for="tabs-1-1">Use</label>'
   + '<div class="tab-panel" role="group" aria-label="Install"><p>Run setup.</p></div>'
   + '<div class="tab-panel" role="group" aria-label="Use"><p>Open the app.</p></div></div>'
-const fallbackHtml = '<p><strong>Install</strong></p><p>Run setup.</p><p><strong>Use</strong></p><p>Open the app.</p>'
+const fallbackHtml = '<p><strong>Install</strong></p>\n<p>Run setup.</p>\n<p><strong>Use</strong></p>\n<p>Open the app.</p>'
 
 function paragraph(value: string) {
   return { type: 'paragraph' as const, children: [{ type: 'text' as const, value }] }
@@ -38,6 +38,16 @@ function outer(document: DocumentNode): BlockExtensionNode {
 }
 
 describe('the extension interface', () => {
+  it('C2-W-107: an ordinary attribute named for a registered inline matcher remains on a span', () => {
+    const samp: ExtensionDefinition = { ...calloutExtension, name: 'test.samp', matcher: { form: 'inline', name: 'samp' } }
+    const input = '[x]{samp=a}'
+    const document = parseTree(input, { extensions: [samp], positions: false }).document
+    expect(document.children[0]).toMatchObject({ type: 'paragraph', children: [
+      { type: 'span', attrs: { keyValues: [['samp', 'a']] } },
+    ] })
+    expect(lint(input, { extensions: [samp] }).filter((entry) => entry.code === 'semantic-attribute-value-ignored')).toEqual([])
+  })
+
   it('C2-X-023: an unknown extension source form is written without a loss when its body is canonical', () => {
     const bare = { type: 'document', astVersion: '2.0', extensions: [
       { name: 'ex.box', version: '1', required: false, slots: ['s'] },
@@ -366,7 +376,8 @@ describe('the extension interface', () => {
       metadata: { headers: [{ placement: 'default', children: [paragraph('Report')] }], footers: [] } }
     expect(renderWithDiagnostics(document)).toEqual({ html: '', diagnostics: [], suppressedDiagnostics: 0 })
     expect(writeWithDiagnostics(document).diagnostics).toMatchObject([
-      { code: 'structure-unspellable', path: '/metadata/headers/0' },
+      { code: 'field-unspellable', path: '/metadata/headers' },
+      { code: 'field-unspellable', path: '/metadata/footers' },
     ])
   })
 })

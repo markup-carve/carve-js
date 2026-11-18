@@ -455,6 +455,7 @@ export function delimitedTableNode(ctx: TreeContext, node: BlockNode): TableNode
   })
   const table = tableOf(ctx, groups, attributes, true)
   // C2-B-181: a quote that never closes is reported, and the block stays a table.
-  if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node, from: 0 })
+  if (source.malformed) ctx.notes.push({ what: DELIMITED_MALFORMED, node: table, block: node,
+    from: source.malformedSourceAt })
   return table
 }

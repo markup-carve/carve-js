@@ -145,6 +145,7 @@ jobs:
 
       - run: npm ci
       - run: npm run test:lint:v2
+      - run: npm run build
 
       # The corpus of the specification at the pinned commit: every example, clause case, refused and
       # positive tree and layout sidecar. Prints the table per kind and fails on an entry that is not held.

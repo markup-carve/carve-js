@@ -614,8 +614,9 @@ function checkSlot(name: string, slot: Value, path: string, walk: Walk, node: Fi
   const content = rule === undefined ? unknownSlotContent(node) : slotContent(rule)
   checkList(slot, at, content, walk, { name: String(node['name']), slot: name })
   if (rule?.minItems !== undefined && Array.isArray(slot) && slot.length < rule.minItems) fail(at, 'too few slot items')
-  if (rule?.name !== undefined && Array.isArray(slot) && slot.some((item) => !isRecord(item) || item['name'] !== rule.name)) {
-    fail(at, 'wrong extension in slot')
+  if (rule?.name !== undefined && Array.isArray(slot)) {
+    const wrong = slot.findIndex((item) => !isRecord(item) || item['name'] !== rule.name)
+    if (wrong >= 0) fail(`${at}/${wrong}`, 'wrong extension in slot')
   }
 }
 

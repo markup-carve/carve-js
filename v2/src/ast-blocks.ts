@@ -114,13 +114,13 @@ function frontmatterNode(ctx: TreeContext, node: BlockNode): FrontmatterNode {
  * C2-B-122: further words on the opener do not stop the block from opening. C2-B-105: an attribute block
  * behind a fence language or an admonition name is reported as such; C2-B-225: so is one glued to any name.
  */
-function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo, named: boolean): void {
+function noteFurtherWords(ctx: TreeContext, node: BlockNode, out: Node, info: OpenerInfo): void {
   if (!info.extra) return
   const src = ctx.src
   const lineEnd = lineFeedAt(src, node.start)
   const at = info.extraStart
   const glued = info.wordStart >= 0 && at === info.wordEnd
-  const attribute = (named || glued) && src.charCodeAt(at) === BRACE_OPEN && attributeBlocksEnd(src, at, lineEnd) > at
+  const attribute = glued && src.charCodeAt(at) === BRACE_OPEN && attributeBlocksEnd(src, at, lineEnd) > at
   ctx.notes.push({ what: attribute ? ATTRIBUTE_FALLBACK : TITLE_SYNTAX, node: out, block: node, from: at })
 }
 
@@ -152,7 +152,7 @@ function codeNode(ctx: TreeContext, node: BlockNode): Block {
     return raw
   }
   const out: CodeBlockNode = { type: 'code_block', value }
-  noteFurtherWords(ctx, node, out, info, word !== '')
+  noteFurtherWords(ctx, node, out, info)
   if (word !== '') out.syntax = word
   if (info.titleStart >= 0) {
     const value = openerTitle(src, info.titleStart, info.titleEnd)
@@ -356,7 +356,7 @@ function namedDiv(ctx: TreeContext, node: BlockNode, flow: number, attributes: A
     const inner = attributes.classes.includes(HARD_BREAKS_CLASS) ? FLOW_HARD_BREAKS : flow
     out = { type: 'div', ...head, children: blockChildren(ctx, node.children!, inner) }
   }
-  noteFurtherWords(ctx, node, out, info, out.type === 'admonition')
+  noteFurtherWords(ctx, node, out, info)
   if (name !== '') ctx.sourceNames?.set(out, name)
   return out
 }
@@ -370,7 +370,7 @@ function divNode(ctx: TreeContext, node: BlockNode, flow: number, taken: Attribu
     noteSigilWords(ctx, node, out)
   } else if ((node.flags & FLAG_FIGURE) !== 0) {
     out = { type: 'figure_group', children: blockChildren(ctx, node.children!, flow) }
-    noteFurtherWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux), false)
+    noteFurtherWords(ctx, node, out, readOpenerInfo(ctx.src, node.start + node.aux))
   } else if ((node.flags & FLAG_HARD_BREAKS) !== 0) {
     // C2-A-068: the opener form adds the class after the classes the author wrote.
     attributes.classes.push(HARD_BREAKS_CLASS)

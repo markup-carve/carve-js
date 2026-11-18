@@ -7,14 +7,10 @@
  * corpus is corrected, and every other field of the example is still checked.
  */
 export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string }> = new Map([
-  ['includes-38', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F8: the copy in the child carries its note number (C2-N-074, C2-A-100)' }],
-  ['syntax-blocks-231', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F9: a region marker line ends the paragraph above it (C2-B-137)' }],
-  ['syntax-blocks-278', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
-  ['syntax-blocks-282', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F10: no expansion ran, so no includeExpansion stage (C2-N-006)' }],
-  ['html-81', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F12: under ascii an ASCII heading keeps its case, as its HTML says (C2-H-147)' }],
-  ['html-34', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F14: a degraded resolved cross-reference writes its link text (C2-H-165)' }],
-  ['CC-005', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F15: a degraded code span gives its value (C2-H-165)' }],
-  ['CC-287', { fields: ['children'], fix: '_EXAMPLE_FIXES.md F11: c then d is an alphabetic list from 3, as its HTML says (C2-B-042)' }],
+  ['includes-38', { fields: ['tree'], fix: '_EXAMPLE_FIXES.md F1: the copy in the child carries its note number (C2-N-074, C2-A-100)' }],
+  ['CC-1048', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F2: sections are on by default (C2-H-026, C2-H-127)' }],
+  ['CC-1142', { fields: ['diagnostics:unresolved-reference-link'],
+    fix: '_EXAMPLE_FIXES.md F3: a render reports its parse and render losses, while unresolved-reference-link belongs to lint' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */

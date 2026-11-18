@@ -7,6 +7,7 @@ import { addFinding, type Findings } from './diagnostics.ts'
 import { CODE, COMMENT_BLOCK, DIV, FRONTMATTER, LINE_BLOCK } from './kinds.ts'
 import { braceBlocksEnd } from './lines.ts'
 import { readOpenerInfo } from './opener.ts'
+import { unitBytes } from './positions.ts'
 import { isSpaceOrTab, lineFeedAt } from './source.ts'
 import type { BlockNode } from './tree.ts'
 
@@ -106,6 +107,46 @@ function isCurlyTitle(text: string): boolean {
   return text !== '' && CURLY_QUOTES.includes(text.charAt(0))
 }
 
+const TITLE_MESSAGES = [
+  'These words are not part of the anonymous div opener; it opens without them. Remove the words or use a named div.',
+  'These words follow a valid title and are not part of the code fence opener. Remove them or put them in the block body.',
+  'The title after "${type}" uses typographic quotes. Check whether a smart quote filter changed the source; '
+    + 'a fence title needs straight double quotes: ${fence} ${type} "${title}"${label}.',
+  'Text after "${type}" must be a quoted title or a [label]; it is not read as a title. '
+    + 'Write ${fence} ${type} "${title}"${label}.',
+  'These further words are not read as a title, label or attributes. The block opens without them. '
+    + 'Use "${correctedOpener}" for the same block with only valid opener parts; put attributes on their own line above it.',
+  'The whitespace in this fence opener is invalid: at most one space follows the fence, and info-string parts use spaces, '
+    + 'never tabs. The block opens with no language; write "${respaced}".',
+  'The tab does not separate valid info-string parts; the block keeps its language, but does not keep the later title or label. '
+    + 'Use "${respaced}" with spaces between parts.',
+  'These further words are not part of the fence opener. Remove them or place them in the block body.',
+]
+
+const ATTRIBUTE_MESSAGES = [
+  'A code or raw fence carries no inline attributes, so "${attributes}" after its language or format is not attached. '
+    + 'The block opens without them. Put "${attributes}" on its own line directly above "${opener}".',
+  'A div carries no inline attributes, so "${attributes}" after its name is not attached. '
+    + 'The block opens without them. Put "${attributes}" on its own line directly above "${opener}".',
+]
+
+function catalogMessage(id: 'fence-title-syntax' | 'fence-opener-fallback', index: number,
+  values: Record<string, string>): string {
+  const template = (id === 'fence-title-syntax' ? TITLE_MESSAGES : ATTRIBUTE_MESSAGES)[index] ?? ''
+  return template.replace(/\$\{([^}]+)\}/g, (placeholder, key: string) => values[key] ?? placeholder)
+}
+
+function titleVariant(src: string, note: ParseNote, info: ReturnType<typeof readOpenerInfo>,
+  run: string, type: string, text: string, lineEnd: number): number {
+  if (isCurlyTitle(text)) return 2
+  if (note.block.kind === DIV && type === '') return 0
+  if (/^"[^"\n]*"[ \t]+\S/.test(src.slice(info.wordEnd, lineEnd).trimStart())) return 1
+  if (text.startsWith('{') || note.block.kind === DIV || (note.block.kind !== CODE && type !== '')) return 4
+  if (type === '' && note.block.kind === CODE && misspaced(src, note.block.start + run.length)) return 5
+  if (src.slice(info.wordEnd, lineEnd).startsWith('\t')) return 6
+  return 3
+}
+
 /** C2-B-122: the opener with its further words read as the quoted title the author meant. */
 function titleMessage(src: string, note: ParseNote): string {
   const block = note.block
@@ -120,17 +161,14 @@ function titleMessage(src: string, note: ParseNote): string {
   const rest = note.from < 0 ? (space < 0 ? '' : line.slice(space).trim()) : src.slice(note.from, lineEnd).trim()
   const [text, label] = note.from < 0 ? [rest, ''] : splitLabel(rest)
   const opener = type === '' ? run : `${run} ${type}`
-  if (isCurlyTitle(text)) {
+  const values = { type, fence: run, title: text.replace(/^"|"$/g, ''), label,
+    correctedOpener: opener, respaced: line === '' ? run : `${run} ${line.replace(/\s+/g, ' ')}` }
+  const variant = titleVariant(src, note, info, run, type, text, lineEnd)
+  if (variant === 2) {
     const title = text.slice(1, CURLY_QUOTES.includes(text.charAt(text.length - 1)) ? -1 : undefined)
-    return `The title after "${type || run}" uses typographic quotes - usually a CMS "smart quote" filter rewrote the source before `
-      + `Carve parsed it. A fence title needs straight double quotes: ${opener} "${title}"${label}.`
+    return catalogMessage('fence-title-syntax', 2, { ...values, title })
   }
-  if (type === '' && block.kind === CODE && misspaced(src, block.start + run.length)) {
-    return 'The whitespace in this fence opener is not valid: at most one space follows the fence, and the parts of the info string '
-      + `are separated by spaces, never tabs. The block opens with no language (use: "${run} ${line}").`
-  }
-  return `Text after the "${type || run}" fence type must be a quoted "title" or a [label]; unquoted it is not read as a title, and `
-    + `the block opens. Did you mean ${opener} "${text}"${label}?`
+  return catalogMessage('fence-title-syntax', variant, values)
 }
 
 /** C2-B-105: an attribute block after a fence language or an admonition name, which the block does not take. */
@@ -139,20 +177,15 @@ function attributeMessage(src: string, note: ParseNote): string {
   const blockEnd = braceBlocksEnd(src, note.from, lineEnd)
   const attributes = src.slice(note.from, blockEnd)
   const opener = `${src.slice(note.block.start, note.from)}${src.slice(blockEnd, lineEnd)}`.trim()
-  if (note.node.type === 'div' || note.node.type === 'directive') {
-    return `A ${note.node.type} carries no inline attributes, so "${attributes}" after the name is not valid. The block opens without `
-      + `them (use: "${attributes}" on its own line directly above the opener, then "${opener}").`
-  }
-  if (note.block.kind === CODE) {
-    return `A code fence carries no inline attributes, so "${attributes}" after the info string is not valid. The block opens `
-      + `without them (use: "${attributes}" on its own line directly above the fence, then "${opener}").`
-  }
-  return `An admonition carries no inline attributes, so "${attributes}" after the name is not valid. The block opens without `
-    + `them (use: "${attributes}" on its own line directly above the opener, then "${opener}").`
+  const index = note.block.kind === CODE ? 0 : 1
+  return catalogMessage('fence-opener-fallback', index, { attributes, opener })
 }
 
 /** Adds the findings of `notes`, in document order, to `findings`. */
 export function addParseFindings(src: string, notes: readonly ParseNote[], findings: Findings): void {
+  if (notes.length === 0) return
+  const offsets = new Uint32Array(src.length + 1)
+  for (let at = 0; at < src.length; at++) offsets[at + 1] = offsets[at]! + unitBytes(src, at)
   // A block is noted once its children are built, so an inner block may come first.
   const ordered = [...notes].sort((a, b) => a.block.start - b.block.start)
   for (const note of ordered) {
@@ -161,12 +194,21 @@ export function addParseFindings(src: string, notes: readonly ParseNote[], findi
       addFinding(findings, note.node, { code, severity: 'error', channel: 'parse', message })
     } else if (note.what === ATTRIBUTE_FALLBACK) {
       const message = attributeMessage(src, note)
-      addFinding(findings, note.node, { code: 'fence-opener-fallback', severity: 'error', channel: 'parse', message })
+      const end = braceBlocksEnd(src, note.from, lineFeedAt(src, note.block.start))
+      const range = { startOffset: offsets[note.from]!, endOffset: offsets[end]! }
+      addFinding(findings, note.node, { code: 'fence-opener-fallback', severity: 'error', channel: 'parse', message, range })
     } else if (note.what === TITLE_SYNTAX) {
       const message = titleMessage(src, note)
-      addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message })
+      let start = note.from < 0 ? note.block.start : note.from
+      while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
+      const end = lineFeedAt(src, note.block.start)
+      const range = { startOffset: offsets[start]!, endOffset: offsets[end]! }
+      addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message, range })
     } else {
-      addFinding(findings, note.node, { code: 'delimited-table-malformed', severity: 'error', channel: 'parse', message: MALFORMED })
+      const start = Math.max(0, note.from)
+      const range = { startOffset: offsets[start]!, endOffset: offsets[start + 1]! }
+      addFinding(findings, note.node, { code: 'delimited-table-malformed', severity: 'error', channel: 'parse', message: MALFORMED,
+        range })
     }
   }
 }

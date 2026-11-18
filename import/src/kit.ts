@@ -11,7 +11,7 @@ export interface ImportResult { document: DocumentNode, source: string, diagnost
 export class ImportInputError extends Error {
   readonly code = 'import-input-error'
   readonly foreignType: string
-  constructor(message: string, foreignType: string) { super(message); this.foreignType = foreignType }
+  constructor(message: string, foreignType: string) { super(message); this.name = 'ImportInputError'; this.foreignType = foreignType }
 }
 
 /** C2-A-026: foreign parsers can produce deeper trees than the engine can accept. */

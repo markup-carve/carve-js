@@ -36,7 +36,7 @@ describe('C2-B-117/119: an opener word is the longest run of its characters', ()
     expect(first('::: note{start=9}\ntext\n:::\n')).not.toHaveProperty('attrs')
     expect(first('::: note {start=9}\ntext\n:::\n')).toMatchObject({ type: 'admonition', kind: 'note' })
     expect(findings('::: note{start=9}\ntext\n:::\n')).toEqual(['fence-opener-fallback'])
-    expect(findings('::: tip {.x}\ntext\n:::\n')).toEqual(['fence-opener-fallback'])
+    expect(findings('::: tip {.x}\ntext\n:::\n')).toEqual(['fence-title-syntax'])
     expect(first('::: toc{x}\n:::\n')).toMatchObject({ type: 'directive', kind: 'toc' })
   })
 

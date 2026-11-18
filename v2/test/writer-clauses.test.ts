@@ -479,10 +479,10 @@ describe('canonical forms: blocks', () => {
     expect(format('```=html\n<b>\n```')).toBe('```=html\n<b>\n```\n')
   })
 
-  it('C2-W-040: a title with a double quote and a label with a closing bracket are left out and reported', () => {
+  it('C2-W-040: a quote in a title is escaped, while a closing bracket in a label is reported', () => {
     const title = edited('::: tip "T" [l]\nx\n:::', (blocks) => { ofType(blocks[0], 'admonition').title = [text('a "b"')] })
-    expect(nearest(title)).toBe('::: tip [l]\nx\n:::\n')
-    expect(losses(title)).toEqual(['field-unspellable /children/0/title'])
+    expect(nearest(title)).toBe('::: tip "a \\"b\\"" [l]\nx\n:::\n')
+    expect(losses(title)).toEqual([])
     const label = edited('::: box "T" [l]\nx\n:::', (blocks) => { ofType(blocks[0], 'div').groupLabel = 'a]b' })
     expect(nearest(label)).toBe('::: box "T"\nx\n:::\n')
     expect(losses(label)).toEqual(['field-unspellable /children/0/groupLabel'])

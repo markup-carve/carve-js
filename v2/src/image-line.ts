@@ -116,13 +116,9 @@ function bracketClose(line: ImageLine, pos: number): number {
       p = skipped
     } else if (code === BRACKET_OPEN) {
       const reference = footnoteReferenceEnd(line, p)
-      if (reference === p) depth++
+      depth += Number(reference === p)
       p = Math.max(reference, p + 1)
-    } else if (code === BRACE_OPEN && p + 1 < line.end && BRACED_MARKS.includes(src[p + 1]!)) {
-      line.braced.push({ mark: src.charCodeAt(p + 1), contentStart: p + 2 })
-      p += 2
-    } else if (line.braced.at(-1)?.mark === code && src.charCodeAt(p + 1) === BRACE_CLOSE) {
-      line.braced.pop()
+    } else if (bracedMarkEnd(line, p) > p) {
       p += 2
     } else if (code !== BRACKET_CLOSE) {
       p++
@@ -134,6 +130,20 @@ function bracketClose(line: ImageLine, pos: number): number {
     }
   }
   return NONE
+}
+
+function bracedMarkEnd(line: ImageLine, at: number): number {
+  const src = line.src
+  const code = src.charCodeAt(at)
+  if (code === BRACE_OPEN && at + 1 < line.end && BRACED_MARKS.includes(src[at + 1]!)) {
+    line.braced.push({ mark: src.charCodeAt(at + 1), contentStart: at + 2 })
+    return at + 2
+  }
+  if (line.braced.at(-1)?.mark === code && src.charCodeAt(at + 1) === BRACE_CLOSE) {
+    line.braced.pop()
+    return at + 2
+  }
+  return at
 }
 
 /** The offset behind the atom at `p`, `p` where none starts; C2-I-024: a line comment ends before its bracket's closer. */
