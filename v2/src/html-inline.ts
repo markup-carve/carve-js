@@ -234,14 +234,23 @@ function xref(node: XrefNode, r: Render): string {
   if (href === undefined || r.resolution.goneTargets?.has(href) === true) return escapeText(`</#${node.key}>`)
   // C2-H-096: the generated text is plain text.
   const raw = r.resolution.xrefText.get(node) ?? ''
-  let cached = r.xrefTextCache.get(raw)
-  if (cached === undefined) {
-    const escaped = escapeText(raw)
-    cached = { escaped, bytes: utf8Length(escaped) }
-    r.xrefTextCache.set(raw, cached)
+  let escaped: string
+  let bytes: number | undefined
+  // Short generated figure labels are usually unique, so caching each one costs more than counting its bytes.
+  if (raw.length < 24) {
+    escaped = escapeText(raw)
+  } else {
+    let cached = r.xrefTextCache.get(raw)
+    if (cached === undefined) {
+      const text = escapeText(raw)
+      cached = { escaped: text, bytes: utf8Length(text) }
+      r.xrefTextCache.set(raw, cached)
+    }
+    escaped = cached.escaped
+    bytes = cached.bytes
   }
   // C2-H-201: past the budget the key stands for the generated text.
-  const text = drawDerivedText(r, node, cached.escaped, cached.bytes) ? cached.escaped : escapeText(node.key)
+  const text = drawDerivedText(r, node, escaped, bytes) ? escaped : escapeText(node.key)
   if (r.linkDepth > 0) return text
   const structural: Pair[] = [['href', href]]
   if (r.settings.roundtrip) structural.push(['data-carve-xref', null])
