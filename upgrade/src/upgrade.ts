@@ -248,11 +248,27 @@ function reportNestedEditorial(done: Rewritten): void {
   }
 }
 
+function reportShortItemComment(done: Rewritten): void {
+  for (const visit of done.context.visits) {
+    const node = visit.node
+    const item = visit.parent
+    if (node.type !== 'comment' || node.pos === undefined || item?.node.type !== 'list_item'
+      || item.node.pos === undefined || item.index + 1 >= item.siblings.length) continue
+    const before = visit.siblings[visit.index - 1]
+    if (before?.pos === undefined || node.pos.startLine < before.pos.endLine + 2
+      || node.pos.startColumn >= item.node.pos.startColumn + 2) continue
+    done.records.push({ ...recordOf('U-362', node.pos.startLine,
+      'the short comment line after a blank changes list item ownership in 0.2'),
+    range: { startOffset: node.pos.startOffset, endOffset: node.pos.endOffset } })
+  }
+}
+
 function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
   reportShortTableWidths(done, old, next)
   reportEmptyClass(done, old)
   reportNestedEditorial(done)
+  reportShortItemComment(done)
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
   if (normalized.gainedParagraphs > 0) {
