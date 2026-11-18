@@ -36,7 +36,8 @@ priority. The remaining `line start |` cases require a planner rule that models 
 precedence together. The repair loop remains intact.
 
 The deep quote image plan-check miss now enters the repair, which reports `structure-unspellable` for its
-unspellable image. A verified long plan check is still required on the final code.
+unspellable image. The later long plan check found one line comment with a trailing backslash before a
+bracket closer; that group now enters repair too. The final 1,020,898-input plan check has zero misses.
 
 ## Specification and lint pin
 
