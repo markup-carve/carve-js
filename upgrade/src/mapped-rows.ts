@@ -52,12 +52,14 @@ export function mappedReport(input: string): ReportRecord | null {
 }
 
 /** A residual HTML difference in a larger source can still cite its mapped construct. */
-export function mappedRemainderReport(input: string, old: string, next: string): ReportRecord | null {
+export function mappedRemainderReport(input: string, old: string, next: string, differenceLine: number): ReportRecord | null {
   const found = replayMapRange(input, old, next)
   if (found === null) return null
   const row = map.source.find((item) => item.id === found.id)
   if (row === undefined) return null
-  return { ...recordOf(found.id, lineOf(readLines(input), found.range.startOffset), row.meaning02), range: found.range }
+  const line = lineOf(readLines(input), found.range.startOffset)
+  if (differenceLine > 0 && Math.abs(line - differenceLine) > 5) return null
+  return { ...recordOf(found.id, line, row.meaning02), range: found.range }
 }
 
 /** U-249 remains an explicit review row even though HTML names now compare without case. */

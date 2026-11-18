@@ -421,11 +421,11 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
     return 'explained'
   }
   markUnusedReports(records, new Set(transformed.applied))
-  const mappedRemainder = mappedRemainderReport(input, old, next)
-  if (mappedRemainder !== null && !hasEntry(records, mappedRemainder.entry)) records.push(mappedRemainder)
   const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
   const { line, expected, actual } = remainder
   const sourceLine = placeOf(input, done, line)
+  const mappedRemainder = mappedRemainderReport(input, old, next, sourceLine)
+  if (mappedRemainder !== null && !hasEntry(records, mappedRemainder.entry)) records.push(mappedRemainder)
   const source = readLines(input)
   const citedRange = records.find((record) => record.entry === 'U-130' && record.range !== undefined)?.range
   const range = citedRange ?? (sourceLine === 0 ? { startOffset: 0, endOffset: input.length }
