@@ -4,7 +4,7 @@ import { html01, html02 } from './engines.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 
 const REWRITE_IDS = new Set([
-  'U-265', 'U-267', 'U-273', 'U-274', 'U-278', 'U-280', 'U-281',
+  'U-278', 'U-280', 'U-281',
   'U-284', 'U-285', 'U-286', 'U-290', 'U-300', 'U-304', 'U-305', 'U-340', 'U-365', 'U-366',
   'U-367', 'U-368', 'U-369',
 ])

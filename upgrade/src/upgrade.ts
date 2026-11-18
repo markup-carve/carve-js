@@ -63,8 +63,6 @@ function rewrite(input: string): Rewritten {
   for (const finding of ctx.findings) {
     if (finding.edit === null || kept.has(finding.edit)) records.push(finding.record)
     else if (!accepted.has(finding.edit)) records.push(conflict(finding))
-    else if (finding.record.entry === 'U-037') records.push({ ...finding.record, class: 'none',
-      message: 'brace tail kept because removing it has no HTML effect in either engine' })
   }
   const output = applyEdits(input, edits)
   if (output !== input && !edits.some((edit) => edit.diagnosed === true) && noHtmlEffect(input, output, records)) {

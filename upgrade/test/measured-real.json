@@ -2213,9 +2213,9 @@
     "path": "resources/examples/edge-cases/0576-an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text.md",
     "line": 21,
     "input": "*/a // b/*\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {

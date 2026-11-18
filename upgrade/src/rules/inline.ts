@@ -69,6 +69,11 @@ function bareSpan(ctx: Context, node: Node01, bare: Bare): void {
   // C2-B-171: a brace block glued to a cell's pipe is the attribute block of the cell, so a space goes between.
   change(ctx, bare.entry, start, start, ctx.src[start - 1] === '|' ? ' {' : '{', `bare ${bare.name} put in braces`)
   change(ctx, bare.entry, end, end, '}', `bare ${bare.name} put in braces`)
+  if (bare.entry !== 'U-065') return
+  const source = ctx.src.slice(start, end)
+  if (!/^_[A-Za-z_][A-Za-z0-9_-]*=[^\s{}=]+_$/u.test(source)) return
+  const equal = start + source.indexOf('=')
+  change(ctx, 'U-267', equal, equal, '\\', 'equals sign escaped so the braced underline is not an attribute')
 }
 
 /** U-068: 0.1 read `/*` as one token of strong around emphasis; 0.2 nests as written (C2-I-052). */
@@ -149,6 +154,41 @@ function escapedBrace(src: string, at: number): boolean {
   return count % 2 === 1
 }
 
+function bracedSameKind(ctx: Context, node: Node01): void {
+  const { startOffset: start, endOffset: end } = node.pos!
+  if (!ctx.src.startsWith('{*', start) || !ctx.src.startsWith('*}', end - 2)) return
+  for (const child of node.children ?? []) {
+    if (child.type !== 'text' || child.pos === undefined) continue
+    for (let at = child.pos.startOffset; at < child.pos.endOffset; at++) {
+      if (ctx.src[at] === '*' && !escapedBrace(ctx.src, at)) {
+        change(ctx, 'U-274', at, at, '\\', 'bare strong mark kept as text inside the 0.1 braced strong span')
+      }
+    }
+  }
+}
+
+function escapeTextSlashes(ctx: Context, node: Node01): boolean {
+  if (node.type !== 'text' || node.pos === undefined) return false
+  let escaped = false
+  for (let at = node.pos.startOffset; at < node.pos.endOffset; at++) {
+    if (ctx.src[at] !== '/' || escapedBrace(ctx.src, at)) continue
+    change(ctx, 'U-273', at, at, '\\', 'slash kept as text by the 0.1 bare emphasis parse')
+    escaped = true
+  }
+  return escaped
+}
+
+function bareSameKind(ctx: Context, visit: Visit): void {
+  const node = visit.node
+  const { startOffset: start, endOffset: end } = node.pos!
+  if (ctx.src[start] !== '/' || ctx.src[end - 1] !== '/') return
+  let inside = false
+  for (const child of node.children ?? []) inside = escapeTextSlashes(ctx, child) || inside
+  if (!inside) return
+  const after = visit.siblings[visit.index + 1]
+  if (after !== undefined) escapeTextSlashes(ctx, after)
+}
+
 function hasUnattachedNeighbors(ctx: Context, visit: Visit, start: number, end: number): boolean {
   const before = visit.siblings[visit.index - 1]
   const after = visit.siblings[visit.index + 1]
@@ -193,7 +233,8 @@ function inlineNode(ctx: Context, visit: Visit): void {
   if (node.pos === undefined) return
   const bare = BARE[node.type]
   if (bare !== undefined) bareSpan(ctx, node, bare)
-  else if (node.type === 'strong') boldItalic(ctx, node)
+  else if (node.type === 'strong') { boldItalic(ctx, node); bracedSameKind(ctx, node) }
+  else if (node.type === 'emphasis') bareSameKind(ctx, visit)
   else if (node.type === 'substitution') substitution(ctx, node)
   else if (node.type === 'smart_punctuation') demotedQuote(ctx, node)
   else if (node.type === 'critic_comment') editorialComment(ctx, node)
@@ -215,4 +256,32 @@ export function inline(ctx: Context): void {
 
 export function unclosedRuns(ctx: Context): void {
   for (const visit of ctx.visits) unclosedRun(ctx, visit)
+}
+
+function lineBlockVisibleEnds(ctx: Context): Map<number, number> {
+  const ends = new Map<number, number>()
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.pos === undefined || ancestor(visit, 'line_block') === null || Array.isArray(node.children)) continue
+    if (node.type === 'non_breaking_space' || node.type === 'hard_break' || node.type === 'comment') continue
+    ends.set(node.pos.startLine, Math.max(ends.get(node.pos.startLine) ?? 0, node.pos.endOffset))
+  }
+  return ends
+}
+
+export function lineBlockSpaces(ctx: Context): void {
+  const visibleEnds = lineBlockVisibleEnds(ctx)
+  let line = 0
+  let seenVisible = false
+  for (const visit of ctx.visits) {
+    const node = visit.node
+    if (node.pos === undefined || ancestor(visit, 'line_block') === null || Array.isArray(node.children)) continue
+    if (node.pos.startLine !== line) { line = node.pos.startLine; seenVisible = false }
+    if (node.type === 'non_breaking_space' && seenVisible && ctx.src[node.pos.startOffset] === ' '
+      && node.pos.startOffset < (visibleEnds.get(line) ?? 0)) {
+      change(ctx, 'U-265', node.pos.startOffset, node.pos.startOffset, '\\', 'interior line block space kept as nonbreaking')
+    } else if (node.type !== 'non_breaking_space' && node.type !== 'hard_break' && node.type !== 'comment') {
+      seenVisible = true
+    }
+  }
 }

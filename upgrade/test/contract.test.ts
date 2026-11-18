@@ -48,7 +48,6 @@ const DOES_NOT_HOLD: Record<string, { output?: string; entry?: string; check: st
   // C2-I-089 makes a reference in an inline note text, and C2-H-058 withholds an authored rowspan.
   'U-154#0': { output: '^[ [^1]]\n\n[^1]: n', entry: 'U-005', check: 'pass' },
   // Candidate 8 rows the tool reaches with an older entry or spelling (_OPEN.md, upgrade). The 0.2 HTML still holds.
-  'U-037#0': { entry: 'U-037', check: 'pass' },
   'U-216#1': { output: '{.c}\n![a](x.png)\n', entry: 'U-216', check: 'pass' },
   'U-207#0': { output: 'Text[^a]\\{.c}{#i}.\n', entry: 'U-207', check: 'pass' },
   'U-184#0': { entry: 'U-019', check: 'explained' },

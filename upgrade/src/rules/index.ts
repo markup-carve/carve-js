@@ -4,7 +4,7 @@ import { blankLines } from './blank-lines.ts'
 import { definitions } from './definitions.ts'
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
-import { inline, unclosedRuns } from './inline.ts'
+import { inline, lineBlockSpaces, unclosedRuns } from './inline.ts'
 import { lists } from './lists.ts'
 import { orderedTasks } from './ordered-tasks.ts'
 import { shortcuts } from './shortcuts.ts'
@@ -12,4 +12,4 @@ import { includes, tables } from './tables.ts'
 
 /** Every rule, in the order of the contract's groups. The order does not decide which edit wins. */
 export const RULES: readonly Rule[] = [blankLines, includes, lists, orderedTasks, attributeLines, openers, definitions, fences, tables,
-  inline, escapes, shortcuts, unclosedRuns]
+  inline, lineBlockSpaces, escapes, shortcuts, unclosedRuns]
