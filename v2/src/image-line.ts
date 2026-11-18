@@ -8,6 +8,8 @@ import {
 import { emailEnd, urlEnd } from './inline-atoms.ts'
 import { attributeBlocksEnd, BacktickRuns, quotedEnd, runLength, skipSpaces } from './lines.ts'
 import { isBoundarySpace, isWhitespace } from './unicode.ts'
+import { BRACED_MARKS } from './inline-tables.ts'
+import { bracedCloserAt } from './inline-brackets.ts'
 
 const NONE = -1
 
@@ -16,6 +18,7 @@ interface ImageLine {
   src: string
   end: number
   runs: BacktickRuns | null
+  braced: { mark: number, contentStart: number }[]
 }
 
 /** C2-I-023: a line comment starts at `p`. */
@@ -57,7 +60,8 @@ function atomEnd(line: ImageLine, p: number): number {
   if (code === BACKTICK) return codeSpanEnd(line, p)
   if (code === LESS) return angleEnd(src, p, line.end)
   if (code === BRACE_OPEN && src.charCodeAt(p + 1) === PERCENT) return bracedCommentEnd(src, p, line.end)
-  return isLineComment(src, p) ? NONE : p
+  const atContentStart = line.braced.at(-1)?.contentStart === p && code === PERCENT && src.charCodeAt(p + 1) === PERCENT
+  return isLineComment(src, p) || atContentStart ? NONE : p
 }
 
 /** C2-I-076, C2-I-077: the offset of the `]` that ends the label whose `[` is at `p`, or NONE. */
@@ -114,6 +118,12 @@ function bracketClose(line: ImageLine, pos: number): number {
       const reference = footnoteReferenceEnd(line, p)
       if (reference === p) depth++
       p = Math.max(reference, p + 1)
+    } else if (code === BRACE_OPEN && p + 1 < line.end && BRACED_MARKS.includes(src[p + 1]!)) {
+      line.braced.push({ mark: src.charCodeAt(p + 1), contentStart: p + 2 })
+      p += 2
+    } else if (line.braced.at(-1)?.mark === code && src.charCodeAt(p + 1) === BRACE_CLOSE) {
+      line.braced.pop()
+      p += 2
     } else if (code !== BRACKET_CLOSE) {
       p++
     } else if (--depth === 0) {
@@ -134,6 +144,11 @@ function skipAtom(line: ImageLine, p: number): number {
 
 /** The offset of the `]` that closes the innermost open bracket behind a line comment, read with code spans, or NONE. */
 function commentCloser(line: ImageLine, from: number): number {
+  const braced = line.braced.at(-1)
+  if (braced !== undefined) {
+    const close = bracedCloserAt(line.src, braced.mark, from, line.end)
+    return close === line.end ? NONE : close
+  }
   const src = line.src
   let depth = 0
   for (let p = from; p < line.end; p++) {
@@ -195,7 +210,7 @@ function imageLabelEnd(line: ImageLine, altStart: number, close: number): number
 /** C2-B-197: exactly one image form, `![alt](destination)` or `![alt][label]`, with optional glued brace blocks. */
 export function isImageOnly(src: string, pos: number, end: number): boolean {
   if (pos + 1 >= end || src.charCodeAt(pos) !== BANG || src.charCodeAt(pos + 1) !== BRACKET_OPEN) return false
-  const line: ImageLine = { src, end, runs: null }
+  const line: ImageLine = { src, end, runs: null, braced: [] }
   const close = bracketClose(line, pos + 1)
   if (close === NONE || close + 1 >= end) return false
   const code = src.charCodeAt(close + 1)

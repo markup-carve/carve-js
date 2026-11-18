@@ -348,7 +348,7 @@ export function commentEnd(state: InlineState, from: number, end: number): numbe
   return end
 }
 
-function bracedCloserAt(text: string, mark: number, from: number, end: number): number {
+export function bracedCloserAt(text: string, mark: number, from: number, end: number): number {
   let depth = 0
   for (let p = from; p < end; p++) {
     const code = text.charCodeAt(p)
