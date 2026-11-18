@@ -224,6 +224,30 @@ export function moveTrailingSigilHyphen(old: string, next: string): Result {
   return { html: old, applied: [] }
 }
 
+function emptyRunMarkup(literal: string): string[] | null {
+  if (/^\$\$`+$/u.test(literal)) return ['<span class="math display" role="math">', '\\[\\]', '</span>']
+  if (/^\$`+$/u.test(literal)) return ['<span class="math inline" role="math">', '\\(\\)', '</span>']
+  if (/^`+$/u.test(literal)) return ['<code>', '</code>']
+  return null
+}
+
+/** U-258: the parsed empty run has no adjacent closer spelling, so cite its literal 0.2 reading. */
+export function explainEmptyRuns(old: string, literals: readonly string[]): Result {
+  const tokens = htmlTokens(old)
+  let changed = false
+  for (const literal of literals) {
+    const before = emptyRunMarkup(literal)
+    if (before === null) continue
+    for (let at = 0; at <= tokens.length - before.length; at++) {
+      if (!before.every((token, offset) => tokens[at + offset] === token)) continue
+      tokens.splice(at, before.length, literal)
+      changed = true
+      break
+    }
+  }
+  return { html: changed ? tokens.join('') : old, applied: changed ? ['U-258'] : [] }
+}
+
 export function applyHtmlTransformations(old: string, next: string, entries: readonly string[]): Result {
   const tokens = htmlTokens(old)
   const target = htmlTokens(next)

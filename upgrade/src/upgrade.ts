@@ -12,7 +12,8 @@ import { rescueCombinedInline } from './combined-inline-rescue.ts'
 import { rescueHeadingBraceTag } from './heading-brace-rescue.ts'
 import { rescuePercent } from './percent-rescue.ts'
 import { measuredReport, TASK_PRESENTATION_MESSAGE } from './measured-reports.ts'
-import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, hasTaskPresentationDifference,
+import { addShortTableColumns, addTaskPresentation, applyHtmlTransformations, dropEmptyClasses, explainEmptyRuns,
+  hasTaskPresentationDifference,
   moveTrailingSigilHyphen,
   wrapLaterItemParagraphs } from './html-transform.ts'
 import { explainDescriptionPlusFenceEof } from './html-plus-eof.ts'
@@ -382,12 +383,15 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
 function applyExtraHtml(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
   const cited = applyCitedHtml(old, next, done.records)
-  const eof = explainDescriptionPlusFenceEof(input, done.output, cited.html, next)
+  const empty = done.records.filter((record) => record.entry === 'U-258' && record.class === 'report' && record.range !== undefined)
+    .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))
+  const runs = explainEmptyRuns(cited.html, empty)
+  const eof = explainDescriptionPlusFenceEof(input, done.output, runs.html, next)
   const tab = hasEntry(done.records, 'U-153') ? removeListMarkerTab(input, eof.html, next)
     : { html: eof.html, applied: [] }
   const line = hasEntry(done.records, 'U-130') ? removeTrailingLineBlockSpaces(input, tab.html, next)
     : { html: tab.html, applied: [] }
-  return { html: line.html, applied: [...cited.applied, ...eof.applied, ...tab.applied, ...line.applied] }
+  return { html: line.html, applied: [...cited.applied, ...runs.applied, ...eof.applied, ...tab.applied, ...line.applied] }
 }
 
 function markUnusedReports(records: ReportRecord[], applied: Set<string>): void {

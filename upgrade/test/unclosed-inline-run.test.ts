@@ -6,7 +6,7 @@ describe('U-258: an unclosed 0.1 inline run', () => {
     'reports an empty value that a closing run cannot spell: %s', (source) => {
       const result = upgrade(source)
       expect(result.output).toBe(source)
-      expect(result.check).toBe('mismatch')
+      expect(result.check).toBe('explained')
       expect(result.records).toContainEqual(expect.objectContaining({ entry: 'U-258', class: 'report', line: 1,
         range: { startOffset: 0, endOffset: source.trimEnd().length } }))
     },
@@ -19,8 +19,22 @@ describe('U-258: an unclosed 0.1 inline run', () => {
     expect(result.records.map((record) => record.entry)).toContain('U-258')
   })
 
+  it('explains two empty parsed runs without changing the source', () => {
+    const source = '$`\n\n$$``\n'
+    const result = upgrade(source)
+    expect(result.output).toBe(source)
+    expect(result.check).toBe('explained')
+    expect(result.records.filter((record) => record.entry === 'U-258')).toHaveLength(2)
+  })
+
   it('leaves the same bytes inside a fenced code block', () => {
     const source = '```\n$`x\n```\n'
     expect(upgrade(source).output).toBe(source)
+  })
+
+  it('keeps an authored closed run distinct from the empty report case', () => {
+    const result = upgrade('$` x`\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).not.toContain('U-258')
   })
 })
