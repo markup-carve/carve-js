@@ -226,6 +226,22 @@ const ESCAPED_RUN = `\\${BACKTICK}${BACKTICK}`
 // A quadratic pass over the inputs below takes a minute; a linear one a few dozen milliseconds.
 const LINEAR_BUDGET_MS = 3000
 
+it('C2-B-024: lazy line-block comments grow with source length', () => {
+  const shape = (n: number): string => `- ::: |\n  a\n${'%% c\nb\n'.repeat(n)}`
+  parse(shape(8000))
+  const fastest = (n: number): number => {
+    let best = Infinity
+    for (let run = 0; run < 4; run++) {
+      const started = performance.now()
+      parse(shape(n))
+      best = Math.min(best, performance.now() - started)
+    }
+    return best
+  }
+  const times = [2000, 4000, 8000].map(fastest)
+  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(3.8)
+})
+
 type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
 
 /** The texts of the cells of the first row of the table that `source` opens. */
