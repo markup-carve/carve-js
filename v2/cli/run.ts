@@ -226,14 +226,15 @@ function renderFile(path: string, display: string, bytes: Uint8Array, args: Pars
   // C2-T-026: the allow list is applied before strictLosses, so the gate is the command's.
   const result = renderWithDiagnostics(input, { ...settings, strictLosses: false })
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
-  const file: FileResult = { status: 0, losses: { file: display, diagnostics: located(source, retained), suppressed } }
+  const file: FileResult = { status: 0, losses: { file: display,
+    diagnostics: located(source, retained, fromAst ? undefined : bytes), suppressed } }
   if (args.values['report-includes'] !== undefined) {
     const document = fromAst ? input as DocumentNode : parseWithDiagnostics(bytes, includesOf(path, args)).document
     file.includes = includeEntry(display, document)
   }
   const strict = settings.strictLosses === true && losses.length > 0
   if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
-  process.stderr.write(lines(display, source, retained))
+  process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))
   if (strict) return { ...file, status: 1 }
   rawHtmlEscaped ||= settings.rawHtml !== true && hasRawHtml(fromAst ? input as DocumentNode : parse(bytes))
   process.stdout.write(`${result.html}\n`)
@@ -318,8 +319,8 @@ function diagnosticsFile(path: string, display: string, bytes: Uint8Array, args:
   const source = lenientText(bytes)
   const result = parseWithDiagnostics(bytes, includesOf(path, args))
   const entries = result.diagnostics.filter((entry) => entry.channel === 'parse')
-  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries))
-  const report = { file: display, diagnostics: located(source, entries), suppressed: result.suppressedDiagnostics }
+  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries, bytes))
+  const report = { file: display, diagnostics: located(source, entries, bytes), suppressed: result.suppressedDiagnostics }
   return { status: 0, diagnostics: report, includes: includeEntry(display, result.document) }
 }
 
