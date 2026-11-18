@@ -79,6 +79,12 @@ describe('the public 0.2 entry', () => {
     optionError(() => write(parse('a'), { normalize: true } as never), 'normalize')
     optionError(() => write(parse('a'), { alignTables: 1 } as never), 'alignTables')
     optionError(() => writeWithDiagnostics(parse('a'), { layout: [] } as never), 'layout')
+    for (const nodes of [[null], [{}], ['x'], [{ path: '', wraps: [{}] }], [{ path: '', bare: 'yes' }]]) {
+      optionError(() => write(parse('a'), { layout: { nodes } } as never), 'layout')
+      optionError(() => writeDocument('carve', parse('a'), { layout: { nodes } }), 'layout')
+    }
+    const sidecar = parseWithLayout('a\nb\n')
+    expect(write(sidecar.document, { layout: sidecar.layout })).toBe('a\nb\n')
     optionError(() => write(parse('a'), { extensions: [{}] } as never), 'extensions')
     expect(refusal(() => write({ type: 'document' } as never))).toBeInstanceOf(CarveTreeError)
     const unspellable = { type: 'document', astVersion: AST_VERSION, children: [{ type: 'paragraph', children: [
