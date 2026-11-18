@@ -545,14 +545,15 @@ interface Walk {
 
 // C2-B-190, C2-I-118: the containers a block pass opens one each, and the inline nodes that each take an inline level.
 const BLOCK_LEVELS: ReadonlySet<string> = new Set([
-  'block_quote', 'list_item', 'div', 'admonition', 'directive', 'footnote', 'definition_description', 'figure_group',
+  'block_quote', 'list', 'list_item', 'definition_list', 'div', 'admonition', 'directive', 'footnote',
+  'definition_description', 'figure_group',
   'block_extension',
 ])
 const CONTENT_HOLDERS: ReadonlySet<string> = new Set([
   'paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line', 'citation_definition',
 ])
 const INLINE_LEVELS: ReadonlySet<string> = new Set(
-  INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type) && type !== 'inline_footnote'),
+  INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type)),
 )
 
 /** C2-A-171: the open blocks and inline levels at a node of type `type` below `blocks` and `inlines`. */
