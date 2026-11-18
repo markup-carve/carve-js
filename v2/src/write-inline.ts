@@ -708,6 +708,16 @@ function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number
   if (node.type === 'text') {
     doubleLastBackslash(w, node, nodes, end, flags)
     escapeGluedBacktick(w, node, nodes[at - 1])
+    const next = nodes[end]
+    if (next?.type === 'comment' && next.form === 'line' && next.value.includes(']')) {
+      const open: number[] = []
+      for (let index = 0; index < node.value.length; index++) {
+        if (node.value[index] === '[') open.push(index)
+        else if (node.value[index] === ']' && open.length > 0) open.pop()
+      }
+      const escapes = w.escapes.get(node) ?? []
+      w.escapes.set(node, [...new Set([...escapes, ...open])].sort((a, b) => a - b))
+    }
     const before = nodes[at - 1]
     if ((before?.type === 'strong' || before?.type === 'emphasis') && node.value.includes(']')
       && before.children.some((child) => child.type === 'text' && /\^\[[^\]]*$/.test(child.value))) {
