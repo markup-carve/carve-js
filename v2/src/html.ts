@@ -809,7 +809,7 @@ function writeNote(r: Render, note: Note, level: number): void {
   const last = visible[visible.length - 1]
   r.backlinks = backlinksHtml(r, note)
   r.backlinkHost = isTextParagraph(last) ? last : null
-  line(r, level, `<li id="fn${note.number}"${noteCarriers(r, note)}>`)
+  line(r, level, `<li id="${note.id}"${noteCarriers(r, note)}>`)
   writeBlocks(r, blocks, level + 1)
   if (r.backlinkHost === null) line(r, level + 1, `<p>${r.backlinks}</p>`)
   r.backlinkHost = null

@@ -246,7 +246,8 @@ function footnoteInline(node: Html.Element, context: HtmlContext): Inline[] | un
   const hash = href.indexOf('#')
   if (note === undefined && (hash < 0 || footnoteKey(href.slice(hash + 1)) === '')) return undefined
   const label = attr(node, 'data-carve-footnote-label')
-  const mapped = attrs(context, node, [...(isGeneratedRefId(attr(node, 'id'), href) ? ['id'] : []), 'href', 'role', 'data-footnote-ref'])
+  const generated = isGeneratedRefId(attr(node, 'id'), href, plain(node))
+  const mapped = attrs(context, node, [...(generated ? ['id'] : []), 'href', 'role', 'data-footnote-ref'])
   if (note?.inline === true && label === undefined) {
     return [{ type: 'inline_footnote', children: noteInline(note.item, context), ...mapped }]
   }
@@ -269,13 +270,18 @@ function noteKey(node: Html.Element, label: string | undefined, note: NoteEntry 
   return note?.label ?? footnoteKey(href)
 }
 
-/** C2-H-088: the id a render gives the Nth reference to note `#fnK`, `fnrefK` and then `fnrefK-N`; any other id was authored. */
-function isGeneratedRefId(id: string | undefined, href: string): boolean {
+/**
+ * C2-H-088, C2-H-202: the id a render gives the Nth reference to note K is `fnrefK`, then `fnrefK-N`, each with a
+ * suffix `-2`, `-3` when taken; K is the number the reference shows or the one its `#fnK` names. Any other id was authored.
+ */
+function isGeneratedRefId(id: string | undefined, href: string, shown: string): boolean {
   if (id === undefined || !href.startsWith('#fn')) return true
-  const stem = `fnref${href.slice(3)}`
-  if (id === stem) return true
-  const tail = id.startsWith(`${stem}-`) ? id.slice(stem.length + 1) : ''
-  return tail !== '' && String(Number(tail)) === tail && Number(tail) > 1
+  return [`fnref${href.slice(3)}`, `fnref${shown}`].some(stem => id === stem || suffixed(id, stem))
+}
+
+function suffixed(id: string, stem: string): boolean {
+  if (!id.startsWith(`${stem}-`)) return false
+  return id.slice(stem.length + 1).split('-').every(part => String(Number(part)) === part && Number(part) > 1)
 }
 
 /** C2-H-090: the body of an inline footnote is one paragraph. */

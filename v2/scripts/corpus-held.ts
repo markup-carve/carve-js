@@ -11,6 +11,7 @@ export const HELD: ReadonlyMap<string, { fields: readonly string[], fix: string 
   ['CC-1048', { fields: ['html'], fix: '_EXAMPLE_FIXES.md F2: sections are on by default (C2-H-026, C2-H-127)' }],
   ['CC-1142', { fields: ['diagnostics:unresolved-reference-link'],
     fix: '_EXAMPLE_FIXES.md F3: a render reports its parse and render losses, while unresolved-reference-link belongs to lint' }],
+  ['html-60', { fields: ['html'], fix: 'pin predates C2-H-202: a note id that a heading took gets the suffix -2' }],
 ])
 
 /** The field each refused tree is refused at: the field its clauses decide. */
