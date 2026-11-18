@@ -284,14 +284,20 @@ function locateAuthoredId(entry: Diagnostic, node: Node, parsed: ParsedTree, sou
   entry.range = { startOffset, endOffset: startOffset + utf8Length(marker) }
 }
 
-/** C2-B-085: the duplicate's range ends at the unescaped `]:` of its marker. */
-function footnoteMarkerEnd(source: Uint8Array, start: number, limit: number): number {
-  for (let at = start + 2; at + 1 < limit; at++) {
+/** C2-B-085: the definition marker follows any attached attribute lines. */
+function footnoteMarkerRange(source: Uint8Array, start: number, limit: number): { startOffset: number, endOffset: number } {
+  let marker = start
+  while (marker + 1 < limit && (source[marker] !== 91 || source[marker + 1] !== 94)) {
+    while (marker < limit && source[marker] !== 10) marker++
+    marker++
+  }
+  if (marker + 1 >= limit) return { startOffset: start, endOffset: limit }
+  for (let at = marker + 2; at + 1 < limit; at++) {
     if (source[at] === 92) { at++; continue }
-    if (source[at] === 93 && source[at + 1] === 58) return at + 2
+    if (source[at] === 93 && source[at + 1] === 58) return { startOffset: marker, endOffset: at + 2 }
     if (source[at] === 10 || source[at] === 13) break
   }
-  return limit
+  return { startOffset: marker, endOffset: limit }
 }
 
 function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnostic[] {
@@ -310,7 +316,7 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
     const pos = node?.pos
     if (node === undefined || node === null || pos === undefined) return
     if (entry.code === 'duplicate-footnote-definition') {
-      entry.range = { startOffset: pos.startOffset, endOffset: footnoteMarkerEnd(source, pos.startOffset, pos.endOffset) }
+      entry.range = footnoteMarkerRange(source, pos.startOffset, pos.endOffset)
       return
     }
     if (entry.code === 'duplicate-id') locateAuthoredId(entry, node, parsed, source)

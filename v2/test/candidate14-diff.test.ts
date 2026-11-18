@@ -64,6 +64,8 @@ it('C2-B-085, C2-W-138: a duplicate footnote ranges only its marker', () => {
     '[^a]: +\n[^a]: +\n- b\n\n[^a]\n',
     '[^é]: first\n\n[^é]: second\n',
     '[^a\\]b]: first\n\n[^a\\]b]: second\n',
+    '{.x}\n[^a]: first\n\n{.y}\n[^a]: second\n',
+    '[^a\\]b]: first\n\n{.y}\n[^a\\]b]: second\n',
   ]) {
     const finding = parseWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'duplicate-footnote-definition')
     const start = source.indexOf('[^', source.indexOf('[^') + 2)
