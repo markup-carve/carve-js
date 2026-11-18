@@ -418,7 +418,7 @@ function codeBlock(r: Render, node: CodeBlockNode, level: number): void {
 /** C2-H-050, C2-H-053, C2-H-054, C2-H-134. */
 function rawBlock(r: Render, node: RawBlockNode, level: number): void {
   if (node.format !== 'html') {
-    loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format} is not written to HTML`)
+    loss(r, node, 'raw-format-dropped', `Dropped block raw format "${node.format}" while rendering HTML`)
     return
   }
   if (!r.settings.rawHtml) {

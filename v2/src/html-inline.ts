@@ -287,7 +287,7 @@ function math(node: MathNode, r: Render): string {
 /** C2-H-051, C2-H-053, C2-H-054: raw HTML is escaped unless `rawHtml` is on, and any other format is dropped. */
 function rawInline(node: RawInlineNode, r: Render): string {
   if (node.format !== 'html') {
-    loss(r, node, 'raw-format-dropped', `raw content in the format ${node.format} is not written to HTML`)
+    loss(r, node, 'raw-format-dropped', `Dropped inline raw format "${node.format}" while rendering HTML`)
     return ''
   }
   // C2-H-051: with `rawHtml` on the payload is verbatim, with no carrier also under `roundtrip`.

@@ -228,8 +228,34 @@ function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnosti
   const found = resolved.resolution.findings
   const noted: Findings = { entries: [], nodes: [] }
   parsed.facts?.addFindings(noted)
-  if (noted.entries.length === 0) return locateFindings(resolved.document, found)
-  return locateFindings(resolved.document, { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] })
+  const findings = noted.entries.length === 0 ? found
+    : { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] }
+  const diagnostics = locateFindings(resolved.document, findings)
+  if (typeof parsed.source !== 'string') return diagnostics
+  const encoder = new TextEncoder()
+  const source = encoder.encode(parsed.source)
+  diagnostics.forEach((entry, index) => {
+    if (entry.file !== undefined) return
+    const node = findings.nodes[index]
+    const pos = node?.pos
+    if (pos === undefined) return
+    if (entry.code === 'duplicate-footnote-definition') {
+      let end = pos.startOffset
+      while (end < pos.endOffset && source[end] !== 10 && source[end] !== 13) end++
+      entry.range = { startOffset: pos.startOffset, endOffset: end }
+      return
+    }
+    if (entry.code !== 'duplicate-id') return
+    const id = node?.attrs?.id
+    if (id === undefined) return
+    const raw = new TextDecoder().decode(source.subarray(pos.startOffset, pos.endOffset))
+    const marker = `#${id}`
+    const at = raw.indexOf(marker)
+    if (at < 0) return
+    const startOffset = pos.startOffset + encoder.encode(raw.slice(0, at)).length
+    entry.range = { startOffset, endOffset: startOffset + encoder.encode(marker).length }
+  })
+  return diagnostics
 }
 
 const CAUSE_CODES: ReadonlySet<string> = new Set([...INCLUDE_CAUSES.values()].map((cause) => cause.code))

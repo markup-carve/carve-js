@@ -272,7 +272,8 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
       idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
-      usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], footnoteDefinitions: [] },
+      usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], unresolvedReferences: [],
+      footnoteDefinitions: [] },
     report(id, start, end, path, values = {}, index = 0) {
       const boundedStart = Math.max(0, Math.min(start, source.length))
       const boundedEnd = Math.max(boundedStart, Math.min(end, source.length))

@@ -77,8 +77,7 @@ function unclosedMessage(src: string, note: ParseNote): [string, string] {
     return ['unclosed-code-fence', `${message}Add a closing ${run} where the code should stop.`]
   }
   if (block.kind === COMMENT_BLOCK) {
-    const hidden = toEnd ? 'the document' : 'its container'
-    const message = `The ${run} comment fence opened here has no closing fence and hides everything to the end of ${hidden}. `
+    const message = `The ${run} comment fence opened here has no closing fence and hides everything to the end of its container (or: the document). `
     return ['unclosed-comment-fence', `${message}Add a closing ${run} where the comment should stop.`]
   }
   if (block.kind === FRONTMATTER) {
@@ -200,7 +199,9 @@ export function addParseFindings(src: string, notes: readonly ParseNote[], findi
     } else if (note.what === TITLE_SYNTAX) {
       const message = titleMessage(src, note)
       let start = note.from < 0 ? note.block.start : note.from
-      while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
+      const bareTab = note.block.kind === CODE && src[start] === '\t'
+        && start === note.block.start + openerRun(src, note.block.start).length
+      if (!bareTab) while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
       const end = lineFeedAt(src, note.block.start)
       const range = { startOffset: offsets[start]!, endOffset: offsets[end]! }
       addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message, range })

@@ -52,8 +52,9 @@ export const CATALOG = {
   ] },
   "block-opener-without-blank-line": { severity: "warning", default: "on", messages: [
     [
-      "This line looks like a (kind) but directly follows text, so it is pa",
-      "rt of the paragraph or caption above it. Add a blank line before it.",
+      "This line looks like ${opener} but directly follows text, so it is p",
+      "art of the paragraph or caption above it. Add a blank line before it",
+      ".",
     ].join(''),
   ], conditions: [
     "",
@@ -180,16 +181,28 @@ export const CATALOG = {
   "colon-fence-length-mismatch": { severity: "warning", default: "on", messages: [
     [
       "Bare ${authoredWidth}-colon fence does not close the innermost ${exp",
-      "ectedWidth}-colon ${kind} opened at ${line}:${column}; it ${outcome}",
-      ".",
+      "ectedWidth}-colon ${kind} opened at ${line}:${column}; it opens an a",
+      "nonymous div.",
+    ].join(''),
+    [
+      "Bare ${authoredWidth}-colon fence does not close the innermost ${exp",
+      "ectedWidth}-colon ${kind} opened at ${line}:${column}; it closes an ",
+      "enclosing container and every container inside it.",
     ].join(''),
     [
       "Bare ${authoredWidth}-colon fence has a different width from the inn",
       "ermost ${expectedWidth}-colon ${kind} opened at ${line}:${column}; i",
-      "t ${outcome}.",
+      "t closes the container.",
     ].join(''),
   ], conditions: [
-    "the bare run is shorter than the innermost opener",
+    [
+      "the bare run is shorter than the innermost opener and long enough fo",
+      "r no open div",
+    ].join(''),
+    [
+      "the bare run is shorter than the innermost opener and long enough fo",
+      "r an enclosing open container",
+    ].join(''),
     "the bare run is longer than the innermost opener",
   ] },
   "comment-fence-closer-with-text": { severity: "warning", default: "on", messages: [
@@ -946,12 +959,30 @@ export const CATALOG = {
   ] },
   "table-span-marker-blocked": { severity: "warning", default: "on", messages: [
     [
-      "The \"${marker}\" span marker cannot extend a cell. ${reason} It is a ",
-      "cell that holds \"${marker}\" as text; escape it as \"\\${marker}\" to sa",
-      "y so, or remove it.",
+      "The \"<\" span marker cannot extend a cell. There is no cell to its le",
+      "ft in its row. It is a cell that holds \"<\" as text; escape it as \"\\<",
+      "\" to say so, or remove it.",
+    ].join(''),
+    [
+      "The \"<\" span marker cannot extend a cell. The cell to its left is co",
+      "vered by a row span from above. It is a cell that holds \"<\" as text;",
+      " escape it as \"\\<\" to say so, or remove it.",
+    ].join(''),
+    [
+      "The \"^\" span marker cannot extend a cell. It stands in the first row",
+      " of its group: head, body or foot. It is a cell that holds \"^\" as te",
+      "xt; escape it as \"\\^\" to say so, or remove it.",
+    ].join(''),
+    [
+      "The \"^\" span marker cannot extend a cell. The cell above it spans mo",
+      "re than one column. It is a cell that holds \"^\" as text; escape it a",
+      "s \"\\^\" to say so, or remove it.",
     ].join(''),
   ], conditions: [
-    "",
+    "the `<` stands in the first column",
+    "the cell to the left of the `<` is covered by a row span from above",
+    "the `^` stands in the first row of its group",
+    "the cell above the `^` spans more than one column",
   ] },
   "table-width-total": { severity: "warning", default: "on", messages: [
     "The specified table column widths total more than 100%.",

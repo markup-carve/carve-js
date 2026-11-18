@@ -450,9 +450,8 @@ const ABBREVIATION_DUPLICATE = (): string => 'Duplicate abbreviation definition 
 /** C2-B-085: a losing footnote definition takes its content with it, which the message counts past the first line. */
 function footnoteDuplicate(facts: ParseFacts | null): (node: FootnoteNode) => string {
   return (node) => {
-    const lines = facts?.footnoteLines(node) ?? 0
-    const lost = lines > 1 ? ` Its ${lines} lines of content are lost with it.` : ''
-    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.${lost}`
+    void facts
+    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.`
   }
 }
 
@@ -517,7 +516,7 @@ function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
 }
 
 function duplicateIdMessage(id: string): string {
-  return `Duplicate id "${id}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`
+  return `Duplicate authored id "${id}": the first node in document order wins id lookup. Change one id.`
 }
 
 /**
