@@ -242,7 +242,10 @@ function visitInclude(node: IncludeNode, walk: Walk): void {
   const children = node.children
   // C2-N-074: the caption of an unexpanded include is numbered where it stands; that of an expanded one is not.
   if (children === undefined) {
-    if (node.caption !== undefined) walk.captions.push({ caption: node.caption, host: node, panel: false })
+    if (node.caption !== undefined) {
+      walk.captions.push({ caption: node.caption, host: node, panel: false })
+      visit(walk, node.caption, node)
+    }
     return
   }
   const outer = walk.scope
