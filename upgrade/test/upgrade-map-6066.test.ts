@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import map from '../../v2/data/upgrade-map.json' with { type: 'json' }
-import { canWriteUpgrade, upgrade } from '../src/upgrade.ts'
+import { canWriteUpgrade, needsAttention, upgrade } from '../src/upgrade.ts'
 
 const rows = map.source.filter((row) => Number(row.id.slice(2)) >= 375)
 
@@ -30,6 +30,15 @@ describe('the pinned replay map rows', () => {
     expect(result.output).toBe(source)
     expect(result.check).toBe('pass')
     expect(result.records.some((record) => record.entry === 'upgrade-mismatch')).toBe(false)
+  })
+
+  it('keeps an independent math report beside a verified source rewrite', () => {
+    const result = upgrade('x–"q" $`m`{CLASS=y}\n')
+    expect(result.records.map((record) => record.entry)).toContain('U-375')
+    expect(result.records.map((record) => record.entry)).toContain('U-249')
+    expect(result.records.find((record) => record.entry === 'U-249')?.range).toEqual({ startOffset: 10, endOffset: 19 })
+    expect(needsAttention(result)).toBe(true)
+    expect(result.check).toBe('pass')
   })
 
   it.each([

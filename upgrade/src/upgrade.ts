@@ -485,10 +485,20 @@ function rescueMismatch(input: string, output: string, mismatch: ReportRecord): 
   return null
 }
 
+function preservingMappedResult(input: string, mapped: { output: string; record: ReportRecord }): UpgradeResult {
+  // A preserving spelling still needs every independent report found in the original source.
+  const done = rewrite(input)
+  const records = done.records.filter((record) => record.class === 'report' || record.class === 'none'
+    || record.entry === 'upgrade-error')
+  const mathClass = mathClassReport(done.context)
+  if (mathClass !== null && !hasEntry(records, 'U-249')) records.push(mathClass)
+  return { output: mapped.output, changed: mapped.output !== input, records: [mapped.record, ...records],
+    check: 'pass', engine01: ENGINE_01_VERSION }
+}
+
 function upgradeCore(input: string): UpgradeResult {
   const mapped = mappedRewrite(input)
-  if (mapped !== null) return { output: mapped.output, changed: true, records: [mapped.record],
-    check: 'pass', engine01: ENGINE_01_VERSION }
+  if (mapped !== null) return preservingMappedResult(input, mapped)
   const manual = mappedReport(input)
   if (manual !== null) {
     const done: Rewritten = { output: input, records: [manual], edits: [], context: makeContext(input) }
