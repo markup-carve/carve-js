@@ -50,6 +50,7 @@ export interface LintContext {
     usedReferences: Set<string>
     usedFootnotes: Set<string>
     referenceDefinitions: { node: Node, path: string }[]
+    unresolvedReferences: { node: Node, path: string }[]
     footnoteDefinitions: { node: Node, path: string }[]
   }
   report: (id: RuleId, start: number, end: number, path: string, values?: Record<string, string>, message?: number) => void

@@ -450,9 +450,8 @@ const ABBREVIATION_DUPLICATE = (): string => 'Duplicate abbreviation definition 
 /** C2-B-085: a losing footnote definition takes its content with it, which the message counts past the first line. */
 function footnoteDuplicate(facts: ParseFacts | null): (node: FootnoteNode) => string {
   return (node) => {
-    const lines = facts?.footnoteLines(node) ?? 0
-    const lost = lines > 1 ? ` Its ${lines} lines of content are lost with it.` : ''
-    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.${lost}`
+    void facts
+    return `Duplicate footnote definition [^${node.key}] is ignored; the first definition for a label wins.`
   }
 }
 
@@ -517,7 +516,7 @@ function findTargets(walk: Walk, mode: HeadingIds): Map<Reference, Target> {
 }
 
 function duplicateIdMessage(id: string): string {
-  return `Duplicate id "${id}": the repeated HTML id is invalid, and cross-references to it resolve to the first occurrence.`
+  return `Duplicate authored id "${id}": the first node in document order wins id lookup. Change one id.`
 }
 
 /**
@@ -746,16 +745,21 @@ export function resolve(
  * C2-A-109: a reference in a footnote definition that no reference uses, or that a duplicate lost to (C2-B-085), still
  * resolves, although the note is not written. Only its references are read: it takes no number and no id.
  */
+function resolveUnwrittenFootnote(walk: Walk, footnote: FootnoteNode, scope: Scope): void {
+  walk.scope = walk.scopes.get(footnote) ?? scope
+  const pending: Node[] = [...footnote.children]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
+    if (node.type === 'xref') walk.xrefs.push(node)
+    if (node.type === 'table') alignColumns(node)
+    forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
+  }
+}
+
 function visitUnwritten(walk: Walk, children: readonly Node[], scope: Scope): void {
   for (const child of children) {
     if (child.type === 'include') visitUnwritten(walk, child.children ?? [], walk.scopes.get(child) ?? scope)
-    if (child.type !== 'footnote' || walk.resolution.noteOf.has(child)) continue
-    walk.scope = walk.scopes.get(child) ?? scope
-    const pending: Node[] = [...child.children]
-    for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-      if (node.type === 'link' || node.type === 'image') visitReference(node, walk)
-      forEachSlot(node, (nodes) => { for (const below of nodes) pending.push(below) })
-    }
+    if (child.type === 'footnote' && !walk.resolution.noteOf.has(child)) resolveUnwrittenFootnote(walk, child, scope)
   }
 }
 

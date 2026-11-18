@@ -71,7 +71,7 @@ export const INCLUDE_MESSAGES: ReadonlyMap<string, string> = new Map([
   ["include-not-found",
     "Include \"${path}\" was not expanded: the file does not exist."],
   ["include-option-invalid",
-    "The include option ${option} ${reason}, so the include is not expanded. Correct it or remove it."],
+    "The include option ${option} has a key that is not an include option, so the include is not expanded. Correct it or remove it."],
   ["include-outside-root",
     "Include \"${path}\" was not expanded: the path leads outside the include root."],
   ["include-region-invalid",
@@ -87,3 +87,15 @@ export const INCLUDE_MESSAGES: ReadonlyMap<string, string> = new Map([
   ["include-unresolved",
     "Include \"${path}\" could not be resolved."],
 ])
+
+/** C2-B-206: one message for each invalid include option cause, in catalog order. */
+export const INCLUDE_OPTION_MESSAGES: readonly string[] = [
+  "The include option ${option} has a key that is not an include option, so the include is "
+    + "not expanded. Correct it or remove it.",
+  "The include option ${option} repeats a key that stands earlier in the directive, so the "
+    + "include is not expanded. Correct it or remove it.",
+  "The include option ${option} needs a value, so the include is not expanded. Correct it or "
+    + "remove it.",
+  "The include option ${option} has a value outside the shape of its key, so the include is "
+    + "not expanded. Correct it or remove it.",
+]

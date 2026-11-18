@@ -299,7 +299,8 @@ export function destination(r: Render, url: string, node: Node): string {
 /** C2-H-160: whether the policy denies `url`, which is then reported on `node`. */
 export function isDenied(r: Render, url: string, node: Node): boolean {
   if (schemePasses(r, url)) return false
-  loss(r, node, 'destination-denied', `the destination ${url} is denied by the URL policy`, 'error')
+  loss(r, node, 'destination-denied', node.type === 'image'
+    ? 'Blanked a denied image source' : 'Blanked a denied destination scheme', 'error')
   const entry = r.losses.entries.at(-1)!
   const field = node.type === 'link' ? 'href' : node.type === 'image' ? 'src' : undefined
   if (field !== undefined) {
@@ -353,7 +354,7 @@ function urlListValue(r: Render, name: string, value: string, origin: Node | nul
   const commas = URL_LIST_ATTRIBUTES.get(name)
   if (commas === undefined || value === '') return value
   if (!listHas(value, commas, (start, end) => !schemePasses(r, value.slice(start, end)))) return value
-  loss(r, origin, 'destination-denied', `the destination ${value} is denied by the URL policy`, 'error')
+  loss(r, origin, 'destination-denied', 'Blanked a denied destination scheme', 'error')
   return ''
 }
 
@@ -491,7 +492,8 @@ function addKeyValue(
   const name = key.toLowerCase()
   if (isBlockedName(name) || list.has(name)) return
   if (CARRIERS.has(name)) {
-    loss(r, origin, 'carrier-attribute-dropped', `the attribute ${key} has the name of a carrier`)
+    loss(r, origin, 'carrier-attribute-dropped',
+      `Dropped the authored attribute ${key}: the name is reserved for roundtrip import`)
     if (typeof r.source === 'string' && origin?.pos !== undefined) {
       const start = r.source.indexOf(key, stringOffsetOfByte(r.source, origin.pos.startOffset))
       if (start >= 0) r.losses.entries.at(-1)!.range = { startOffset: utf8Length(r.source.slice(0, start)),

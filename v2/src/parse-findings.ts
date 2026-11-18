@@ -77,8 +77,8 @@ function unclosedMessage(src: string, note: ParseNote): [string, string] {
     return ['unclosed-code-fence', `${message}Add a closing ${run} where the code should stop.`]
   }
   if (block.kind === COMMENT_BLOCK) {
-    const hidden = toEnd ? 'the document' : 'its container'
-    const message = `The ${run} comment fence opened here has no closing fence and hides everything to the end of ${hidden}. `
+    const message = `The ${run} comment fence opened here has no closing fence and hides everything `
+      + 'to the end of its container (or: the document). '
     return ['unclosed-comment-fence', `${message}Add a closing ${run} where the comment should stop.`]
   }
   if (block.kind === FRONTMATTER) {
@@ -181,6 +181,18 @@ function attributeMessage(src: string, note: ParseNote): string {
   return catalogMessage('fence-opener-fallback', index, { attributes, opener })
 }
 
+/** Records the title diagnostic at its authored source range. */
+function addTitleFinding(src: string, note: ParseNote, offsets: Uint32Array, findings: Findings): void {
+  const message = titleMessage(src, note)
+  let start = note.from < 0 ? note.block.start : note.from
+  const bareTab = note.block.kind === CODE && src[start] === '\t'
+    && start === note.block.start + openerRun(src, note.block.start).length
+  if (!bareTab) while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
+  const end = lineFeedAt(src, note.block.start)
+  const range = { startOffset: offsets[start]!, endOffset: offsets[end]! }
+  addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message, range })
+}
+
 /** Adds the findings of `notes`, in document order, to `findings`. */
 export function addParseFindings(src: string, notes: readonly ParseNote[], findings: Findings): void {
   if (notes.length === 0) return
@@ -198,12 +210,7 @@ export function addParseFindings(src: string, notes: readonly ParseNote[], findi
       const range = { startOffset: offsets[note.from]!, endOffset: offsets[end]! }
       addFinding(findings, note.node, { code: 'fence-opener-fallback', severity: 'error', channel: 'parse', message, range })
     } else if (note.what === TITLE_SYNTAX) {
-      const message = titleMessage(src, note)
-      let start = note.from < 0 ? note.block.start : note.from
-      while (start < src.length && (src[start] === ' ' || src[start] === '\t')) start++
-      const end = lineFeedAt(src, note.block.start)
-      const range = { startOffset: offsets[start]!, endOffset: offsets[end]! }
-      addFinding(findings, note.node, { code: 'fence-title-syntax', severity: 'warning', channel: 'parse', message, range })
+      addTitleFinding(src, note, offsets, findings)
     } else {
       const start = Math.max(0, note.from)
       const range = { startOffset: offsets[start]!, endOffset: offsets[start + 1]! }

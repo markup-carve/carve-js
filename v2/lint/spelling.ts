@@ -67,8 +67,9 @@ function deprecatedContinuation(line: Line, context: LintContext): void {
   const { text, start } = contentLine(line)
   const marker = text === '+' ? start : /^[-*] \+\s*$/.test(text) ? start + 2 : -1
   if (marker < 0) return
+  const markerLine = /^[-*] \+\s*$/.test(text)
   const inside = hasAncestor(line.path, context, 'list_item')
-  context.report('deprecated-continuation-marker', marker, marker + 1, line.path, {}, inside ? 1 : 0)
+  context.report('deprecated-continuation-marker', marker, marker + 1, line.path, {}, markerLine ? 2 : inside ? 1 : 0)
 }
 
 function thematicBreak(line: Line, context: LintContext): void {
@@ -99,12 +100,18 @@ function opensAttributes(code: number): boolean {
 }
 
 function tildeFence(line: Line, context: LintContext): void {
-  const text = trimmed(line).text
   if (!line.paragraph) return
-  if (text.startsWith('~~~')) return reportLine('block-marker-as-text', line, context, { what: 'a tilde fence' })
-  if (/^:{3,}\S/.test(text)) return reportLine('block-marker-as-text', line, context, { what: 'a colon fence' })
+  const layoutStart = context.layouts.get(line.path)?.startByte
+  const first = layoutStart === undefined ? undefined : context.chars[layoutStart]
+  const candidate = first !== undefined && first >= line.start && first < line.end
+    ? { text: line.text.slice(first - line.start).trimEnd(), start: first }
+    : contentLine(line)
+  const { text, start } = candidate
+  const report = (what: string): void => context.report('block-marker-as-text', start, start + text.length, line.path, { what })
+  if (text.startsWith('~~~')) return report('a tilde fence')
+  if (/^:{3,}\S/.test(text)) return report('a colon fence')
   if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)) {
-    reportLine('block-marker-as-text', line, context, { what: 'an attribute line' })
+    report('an attribute line')
   }
 }
 
@@ -145,7 +152,9 @@ function emptyReference(line: Line, context: LintContext): void {
   const { text, start } = trimmed(line)
   const match = /^\[([^\]\n]+)\]:[ \t]*$/.exec(text)
   if (match === null || match[1]!.trim() === '' || match[1] === '^' || !line.paragraph) return
-  context.report('empty-reference-definition', start, start + match[0].indexOf(':') + 1, line.path)
+  const footnote = match[1]!.startsWith('^')
+  context.report('empty-reference-definition', start, start + match[0].indexOf(':') + 1, line.path,
+    { label: match[1]! }, footnote ? 1 : 0)
 }
 
 function tableShaped(line: Line, context: LintContext): void {
@@ -175,16 +184,38 @@ function startsBlock(text: string): boolean {
   return text.startsWith('[') && text.includes(']:')
 }
 
+function openerName(text: string): string {
+  if (text.startsWith('#') || text.startsWith('=')) return 'a heading'
+  if (text.startsWith('>')) return 'a quote'
+  if (text.startsWith('{')) return 'an attribute line'
+  if (text.startsWith('::')) return 'a term'
+  return text.startsWith(':') ? 'a description' : 'a definition'
+}
+
+function openerWidth(text: string): number {
+  if (text.startsWith('{')) return text.length
+  if (text.startsWith('::')) return 2
+  if (text.startsWith('[')) return text.indexOf(']:') + 2
+  return 1
+}
+
+function quoteContinues(line: Line, previous: Line, context: LintContext): boolean {
+  return previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')
+}
+
 function openerWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
+  const owner = context.nodeTypes.get(line.path)
+  if (owner !== 'paragraph' && owner !== 'caption' && owner !== 'cell_paragraph') return
   const { text, start } = trimmed(line)
   if (!startsBlock(text)) return
   if (text.startsWith('{') && !text.endsWith('}')) return
   if (text.startsWith('[') && hasAncestor(line.path, context, 'footnote')) return
   // In a quote the mark on both lines is the quote's own; outside one it opens a quote (C2-B-019).
-  if (text.startsWith('> ') && previous.text.trimStart().startsWith('> ') && hasAncestor(line.path, context, 'block_quote')) return
-  context.report('block-opener-without-blank-line', start, start + text.length, line.path)
+  if (text.startsWith('> ') && quoteContinues(line, previous, context)) return
+  context.report('block-opener-without-blank-line', start, start + openerWidth(text), line.path,
+    { opener: openerName(text) })
 }
 
 function listWithoutBlank(line: Line, context: LintContext): void {
@@ -288,7 +319,7 @@ function foldedTerm(line: Line, context: LintContext): void {
   const marker = /^::?[ \t]+/.exec(text)?.[0]
   if (marker === undefined) return
   const body = text.slice(marker.length)
-  if (startsBlock(body) || isListMarker(body)) context.report('definition-term-block-folded',
+  if (/^(?:>[ \t]|[-*][ \t]|[0-9]{1,9}[.)][ \t])/.test(body)) context.report('definition-term-block-folded',
     start + marker.length, start + text.length, line.path)
 }
 
@@ -351,33 +382,48 @@ function descriptionColumn(line: Line, context: LintContext): void {
       'host.column': String(first.start - host.start + 1) })
 }
 
-function innerColonContainer(start: number, context: LintContext): { width: number, start: number } | undefined {
-  let opener: { width: number, start: number } | undefined
-  for (const layout of context.layouts.values()) {
-    if (!/^:{3,}$/.test(layout.openerRaw ?? '')) continue
+const COLON_CONTAINER_KINDS: ReadonlySet<string> = new Set(['div', 'admonition', 'figure_group', 'line_block', 'block_quote'])
+
+function colonKind(type: string, opener: string): string {
+  if (type === 'admonition') return 'admonition'
+  if (type === 'figure_group') return 'figure group'
+  if (type === 'line_block') return 'line block'
+  if (type === 'block_quote') return 'quote fence'
+  return /^:{3,}[ \t]+\\(?:[ \t]|$)/.test(opener) ? 'hard-break block' : 'div'
+}
+
+function colonContainers(start: number, context: LintContext): { width: number, start: number, kind: string }[] {
+  const open: { width: number, start: number, kind: string }[] = []
+  for (const [path, layout] of context.layouts) {
     const from = context.chars[layout.startByte] ?? 0
     const to = context.chars[layout.endByte] ?? 0
     if (from >= start || to < start - 1) continue
     if (to < start && layout.closerRaw) continue
-    if (opener !== undefined && from <= opener.start) continue
-    opener = { width: layout.openerRaw!.length, start: from }
+    const run = /^:{3,}/.exec(context.source.slice(from))?.[0]
+    if (run === undefined) continue
+    const type = context.nodeTypes.get(path)
+    if (type === undefined || !COLON_CONTAINER_KINDS.has(type)) continue
+    const line = context.lines[(context.offsetLines[from] ?? 1) - 1]
+    const openerText = line?.text.slice(from - line.start) ?? ''
+    open.push({ width: run.length, start: from, kind: colonKind(type, openerText) })
   }
-  return opener
+  return open.sort((a, b) => b.start - a.start)
 }
 
 function colonFenceLength(line: Line, context: LintContext): void {
   const { text, start } = contentLine(line)
   if (!/^:{3,}$/.test(text)) return
-  const opener = innerColonContainer(start, context)
+  const open = colonContainers(start, context)
+  const opener = open[0]
   if (opener === undefined || opener.width === text.length) return
   const openedAt = context.offsetLines[opener.start] ?? 1
   const openedLine = context.lines[openedAt - 1]
   const column = opener.start - (openedLine?.start ?? opener.start) + 1
+  const variant = text.length > opener.width ? 2
+    : open.slice(1).some((container) => container.width <= text.length) ? 1 : 0
   context.report('colon-fence-length-mismatch', start, start + text.length, line.path,
-    { authoredWidth: String(text.length), expectedWidth: String(opener.width), kind: 'div',
-      line: String(openedAt), column: String(column),
-      outcome: text.length < opener.width ? 'opens an anonymous div' : 'closes the container' },
-    text.length < opener.width ? 0 : 1)
+    { authoredWidth: String(text.length), expectedWidth: String(opener.width), kind: opener.kind,
+      line: String(openedAt), column: String(column) }, variant)
 }
 
 function rowWithoutPipe(line: Line, context: LintContext): void {

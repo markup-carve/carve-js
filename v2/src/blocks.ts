@@ -271,7 +271,10 @@ function lazyStanzaLine(state: BlockState, matched: number, lineStart: number, e
   }
   if (headingLevel(src, pos, end) > 0 || isQuoteMark(src, pos, end) || isAttributeLine(src, pos, end)) return false
   if (isDefinition(src, pos, end)) return false
-  writeEvent(state, SPAN_TAG, pos, end)
+  // A lazy line did not carry the item's content-column prefix. Its leading spaces are verse content.
+  const prefix = state.cursor.prefixEnd
+  const start = prefix > lineStart && src[prefix] === ' ' ? prefix + 1 : prefix
+  writeEvent(state, SPAN_TAG, start, end)
   state.contentEnd = end
   return true
 }

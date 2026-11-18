@@ -26,7 +26,7 @@ interface LintRule {
   id: string
   status: string
   channel?: string
-  messages?: string[]
+  messages?: (string | { when: string, text: string })[]
 }
 
 const LIMITS = ['include_bytes', 'include_depth']
@@ -44,9 +44,19 @@ export function generateIncludeTables(includes: string, limits: string, lintRule
   codes.add('include-unresolved')
   codes.add('include-heading-clamp')
   codes.add('include-expanded-roundtrip')
-  const messages = (JSON.parse(lintRules) as { rules: LintRule[] }).rules
+  const lintRows = (JSON.parse(lintRules) as { rules: LintRule[] }).rules
+  const messages = lintRows
     .filter((rule) => codes.has(rule.id) && rule.status !== 'obsolete' && rule.messages !== undefined)
-    .map((rule) => `  [${JSON.stringify(rule.id)},\n    ${JSON.stringify(rule.messages![0])}],`)
+    .map((rule) => {
+      const first = rule.messages![0]!
+      return `  [${JSON.stringify(rule.id)},\n    ${JSON.stringify(typeof first === 'string' ? first : first.text)}],`
+    })
+  const optionMessages = lintRows.find((rule) => rule.id === 'include-option-invalid')?.messages ?? []
+  const optionMessageLines = optionMessages.flatMap((item) => {
+    const text = typeof item === 'string' ? item : item.text
+    const split = text.lastIndexOf(' ', 90) + 1
+    return [`  ${JSON.stringify(text.slice(0, split))}`, `    + ${JSON.stringify(text.slice(split))},`]
+  })
   const causes = [...data.causes].sort((a, b) => a.rank - b.rank)
   const lines = [
     '// Generated from data/includes.json, data/limits.json and data/lint-rules.json by',
@@ -84,6 +94,11 @@ export function generateIncludeTables(includes: string, limits: string, lintRule
     'export const INCLUDE_MESSAGES: ReadonlyMap<string, string> = new Map([',
     ...messages,
     '])',
+    '',
+    '/** C2-B-206: one message for each invalid include option cause, in catalog order. */',
+    'export const INCLUDE_OPTION_MESSAGES: readonly string[] = [',
+    ...optionMessageLines,
+    ']',
     '',
   ]
   return lines.join('\n')

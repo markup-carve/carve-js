@@ -3,14 +3,14 @@
 import { DEFINITION_TYPES, type DocumentNode, forEachSlot, type IncludeNode, type Node, type Position } from './ast.ts'
 import { type OuterScope, type ParseFacts, type ParsedTree } from './ast-blocks.ts'
 import { addFinding, type Findings } from './diagnostics.ts'
-import { INCLUDE_KEY_REPEATED, optionProblem } from './include.ts'
+import { INCLUDE_KEY_REPEATED, INCLUDE_KEY_UNKNOWN, INCLUDE_VALUE_MISSING, INCLUDE_VALUE_SHAPE, optionProblem } from './include.ts'
 import { codeChildren, isTableInclude } from './include-code.ts'
 import { type IncludeAnswer, type IncludeError, type IncludeRequest, type IncludeSettings } from './include-settings.ts'
 import {
   fileLines, type FileLines, type LineRange, lineRange, RECORD_QUOTED, recordKinds, regionRange,
 } from './include-source.ts'
 import { applyShifts, selectSection } from './include-select.ts'
-import { INCLUDE_CAUSES, INCLUDE_CONFLICTS, INCLUDE_MESSAGES } from './include-tables.ts'
+import { INCLUDE_CAUSES, INCLUDE_CONFLICTS, INCLUDE_MESSAGES, INCLUDE_OPTION_MESSAGES } from './include-tables.ts'
 import { type HeadingIds } from './options.ts'
 import { utf8Length } from './positions.ts'
 
@@ -55,7 +55,11 @@ export interface Selected {
 
 /** The message of an include code, with the values its template names. */
 export function includeMessage(code: string, values: Readonly<Record<string, string>>): string {
-  const template = INCLUDE_MESSAGES.get(code) ?? code
+  const reason = values['reason']
+  const optionIndex = reason === INCLUDE_KEY_UNKNOWN ? 0 : reason === INCLUDE_KEY_REPEATED ? 1
+    : reason === INCLUDE_VALUE_MISSING ? 2 : reason === INCLUDE_VALUE_SHAPE ? 3 : 0
+  const template = code === 'include-option-invalid' ? INCLUDE_OPTION_MESSAGES[optionIndex] ?? code
+    : INCLUDE_MESSAGES.get(code) ?? code
   let out = ''
   let at = 0
   for (let open = template.indexOf('${'); open >= 0; open = template.indexOf('${', at)) {

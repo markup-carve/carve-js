@@ -146,7 +146,7 @@ function checkRoot(record: Fields): void {
 }
 
 // The slots of a node in the order in which the source holds them.
-const SLOT_ORDER = ['title', 'children', 'caption']
+const SLOT_ORDER = ['title', 'children', 'caption', 'columns']
 
 function compareSegments(a: string, b: string): number {
   const numberA = Number(a)
@@ -215,6 +215,17 @@ export function validateLayout(value: unknown): SourceLayout {
   let previous: string | null = null
   ;(value['nodes'] as unknown[]).forEach((entry, index) => {
     const path = checkEntry(entry, `/nodes/${index}`, length)
+    const node = entry as Fields
+    if (Array.isArray(node['wraps'])) {
+      for (let wrapIndex = 0; wrapIndex < node['wraps'].length; wrapIndex++) {
+        const wrap = node['wraps'][wrapIndex] as Fields
+        const offset = wrap['offset'] as number
+        // Migration without source has a synthetic empty span while the wrap still indexes a text value.
+        if (length > 0 && offset > (node['endByte'] as number) - (node['startByte'] as number)) {
+          fail(`/nodes/${index}/wraps/${wrapIndex}/offset`, 'is past the source span of its cell')
+        }
+      }
+    }
     // C2-L-011: in document order, each path once.
     if (previous !== null && compareDocumentOrder(path, previous) <= 0) {
       fail(`/nodes/${index}/path`, path === previous ? 'is a duplicate path' : 'is not in document order')

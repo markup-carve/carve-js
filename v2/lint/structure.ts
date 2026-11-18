@@ -386,12 +386,17 @@ function frontmatterQuote(node: Node, path: string, context: LintContext): void 
   for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
     const line = context.lines[number - 1]
     if (line === undefined || !/^>[^ ]/.test(line.text) || line.text.length < 2) continue
-    context.report('blockquote-marker-without-space', line.start, line.end, path, { text: line.text.slice(1) })
+    context.report('blockquote-marker-without-space', line.start, line.start + 1, path,
+      { text: line.text.slice(1) }, 1)
   }
 }
 
+function isBidiControl(code: number): boolean {
+  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)
+}
+
 function bidiControl(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'text' && node.type !== 'code' && node.type !== 'code_block') return
+  if (node.type !== 'text' && node.type !== 'code' && node.type !== 'code_block' && node.type !== 'math') return
   if (node.type === 'text' && path.includes('/title/')
     && context.nodeTypes.get(path.slice(0, path.indexOf('/title/'))) === 'code_block') return
   const range = bounds(node, context)
@@ -400,7 +405,7 @@ function bidiControl(node: Node, path: string, context: LintContext): void {
   const from = node.type === 'code_block' && context.layouts.size > 0 ? text.indexOf('\n') + 1 : 0
   for (let at = from; at < text.length; at++) {
     const code = text.charCodeAt(at)
-    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) {
+    if (isBidiControl(code)) {
       context.report('bidi-control-in-source', range[0] + at, range[0] + at + 1, path,
         { code: code.toString(16).toUpperCase().padStart(4, '0') })
     }
@@ -484,7 +489,7 @@ function semanticValue(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'span') return
   for (const [name, value] of node.attrs?.keyValues ?? []) {
     if (value !== '' && name === 'kbd') {
-      reportNode('semantic-attribute-value-ignored', node, path, context, { name })
+      reportAttribute('semantic-attribute-value-ignored', node, path, context, name, true, { name })
     }
   }
 }
@@ -614,8 +619,11 @@ function markerRunPadding(node: Node, path: string, context: LintContext): void 
   const marker = source[close + 1]
   if (close < 2 || marker === undefined || !'<>~'.includes(marker)) return
   const block = source.slice(0, close + 1)
-  reportNode('table-marker-run-padding', node, path, context,
-    { spelling: block + marker, marker, block })
+  const range = bounds(node, context)
+  if (range === null) return
+  const start = range[0] + raw(node, context).indexOf(block)
+  context.report('table-marker-run-padding', start, start + block.length + 1, path,
+    { spelling: block + marker, marker, block, correctedPrefix: `{${marker} ${block.slice(1, -1)}}` })
 }
 
 function fenceCloserIndent(node: Node, path: string, context: LintContext): void {
@@ -704,9 +712,7 @@ function delimitedWideRow(node: Node, path: string, context: LintContext): void 
   if (!state.wide) return
   const range = bounds(node, context)
   if (range === null) return
-  const match = /^(`{3,}|~{3,})/m.exec(raw(node, context))
-  if (match !== null) context.report('delimited-table-wide-row', range[0] + match.index,
-    range[0] + match.index + match[1]!.length, path)
+  context.report('delimited-table-wide-row', range[0], range[1], path)
 }
 
 function checkWideSection(section: Node, state: { width: number, wide: boolean }): void {
@@ -748,6 +754,26 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
       path, { ch }, 0)
     at = end
   }
+}
+
+function hasUnescapedMarker(source: string, marker: string, close: number): boolean {
+  for (let at = 1; at < close; at++) if (source[at] === marker && !escaped(source, at)) return true
+  return false
+}
+
+function spanMarkerBeforeAttrs(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'strong' && node.type !== 'emphasis') return
+  const source = raw(node, context)
+  const marker = node.type === 'strong' ? '*' : '/'
+  const attrs = /\{(?:[.#_]|[A-Za-z])[^}]*\}$/.exec(source)
+  if (attrs === null) return
+  const close = attrs.index - 1
+  if (source[0] !== marker || source[close] !== marker || escaped(source, close)
+    || !hasUnescapedMarker(source, marker, close)) return
+  const range = bounds(node, context)
+  if (range !== null) context.report('emphasis-marker-before-attributes', range[0] + close,
+    range[0] + close + 1, path, { marker, name: node.type, line: String(node.pos?.startLine ?? 1),
+      column: String(node.pos?.startColumn ?? 1) }, 1)
 }
 
 function carveVersion(node: Node, path: string, context: LintContext): void {
@@ -843,7 +869,8 @@ function tightBlankLine(node: Node, path: string, context: LintContext): void {
     if (item === undefined || !item.children.some((child) => child.type === 'paragraph')) continue
     for (let inner = 0; inner < item.children.length - 1; inner++) {
       const childPath = `${path}/children/${at}/children/${inner}`
-      if ((context.layouts.get(childPath)?.blankLinesAfter ?? 0) > 0) {
+      if ((context.layouts.get(childPath)?.blankLinesAfter ?? 0) > 0
+        && item.children.slice(inner + 1).some((child) => child.type !== 'comment')) {
         reportNode('tight-list-item-with-blank-line', node, path, context)
         return
       }
@@ -864,7 +891,7 @@ function templateComment(node: Node, path: string, context: LintContext): void {
 function regionComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'comment' || node.form !== 'line' || !/^#(?:end)?region(?![A-Za-z0-9_])/i.test(node.value)) return
   if (/^#(?:end)?region(?![A-Za-z0-9_])/.test(node.value)) return
-  reportNode('region-marker-renders-as-text', node, path, context)
+  reportNode('region-marker-renders-as-text', node, path, context, {}, 1)
 }
 
 function unclosedBracedComment(node: Node, path: string, context: LintContext): void {
@@ -1128,6 +1155,11 @@ function orderedRightAligned(node: Node, path: string, context: LintContext): vo
 }
 
 /** C2-B-173: a span mark that joins nothing is the text of its cell, whatever prefix the cell has. */
+function blockedSpanVariant(marker: string, cellIndex: number, rowIndex: number): number {
+  if (marker === '<') return cellIndex === 0 ? 0 : 1
+  return rowIndex === 0 ? 2 : 3
+}
+
 function spanMarkerBlocked(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_cell' || node.span !== undefined) return
   const content = node.children[0]
@@ -1136,10 +1168,11 @@ function spanMarkerBlocked(node: Node, path: string, context: LintContext): void
   if (marker !== '<' && marker !== '^') return
   // An escaped mark is text by the author's choice.
   if (raw(node, context).trimEnd().endsWith(`\\${marker}`)) return
-  const reason = marker === '<'
-    ? 'There is no cell to its left in its row.'
-    : 'There is no cell of one column above it in its group: head, body or foot.'
-  reportNode('table-span-marker-blocked', node, path, context, { marker, reason })
+  const parts = path.split('/children/')
+  const cellIndex = Number(parts.at(-1) ?? 0)
+  const rowIndex = Number(parts.at(-2) ?? 0)
+  const variant = blockedSpanVariant(marker, cellIndex, rowIndex)
+  reportNode('table-span-marker-blocked', node, path, context, {}, variant)
 }
 
 /**
@@ -1185,9 +1218,7 @@ function unresolvedReference(node: Node, path: string, context: LintContext): vo
   if (node.key === undefined) return
   const resolved = node.type === 'link' ? node.href !== undefined : node.src !== undefined
   if (resolved) return
-  const rawRef = context.layouts.get(path)?.rawRef ?? raw(node, context)
-  const message = node.type === 'link' ? 1 : 3
-  reportNode('unresolved-reference-link', node, path, context, { rawRef }, message)
+  context.state.unresolvedReferences.push({ node, path })
 }
 
 function unusedReference(node: Node, path: string, context: LintContext): void {
@@ -1249,21 +1280,46 @@ function finishCrossrefs(context: LintContext): void {
   }
 }
 
-function finishReferences(context: LintContext): void {
-  if (context.options.rules?.['unused-link-reference-definition'] !== 'off') {
-    for (const item of context.state.referenceDefinitions) {
-      if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
-        reportNode('unused-link-reference-definition', item.node, item.path, context)
-      }
+function reportUnresolvedReference(item: { node: Node, path: string }, context: LintContext): void {
+  const { node } = item
+  if (node.type !== 'link' && node.type !== 'image') return
+  const rawRef = context.layouts.get(item.path)?.rawRef ?? raw(node, context)
+  const key = node.key ?? ''
+  const matches = context.state.referenceDefinitions.filter(({ node: definition }) =>
+    definition.type === 'link_reference_definition' && definition.key.toLowerCase() === key.toLowerCase())
+  const headings = node.type === 'link' ? [...context.state.idOwners.keys()].filter((id) =>
+    id.toLowerCase() === key.toLowerCase()) : []
+  const caseOnly = [...matches.map(({ node: definition }) => definition.type === 'link_reference_definition'
+    ? definition.key : ''), ...headings].filter((value) => value !== key)
+  const index = node.type === 'link' ? (caseOnly.length > 0 ? 0 : 1) : (caseOnly.length > 0 ? 2 : 3)
+  reportNode('unresolved-reference-link', node, item.path, context,
+    { rawRef, caseOnlyPhrase: `the label ${caseOnly[0] ?? ''} differs only in case` }, index)
+}
+
+function reportUnusedReferences(context: LintContext): void {
+  if (context.options.rules?.['unused-link-reference-definition'] === 'off') return
+  for (const item of context.state.referenceDefinitions) {
+    if (item.node.type === 'link_reference_definition' && !context.state.usedReferences.has(item.node.key)) {
+      reportNode('unused-link-reference-definition', item.node, item.path, context)
     }
   }
+}
+
+function finishReferences(context: LintContext): void {
+  for (const item of context.state.unresolvedReferences) reportUnresolvedReference(item, context)
+  reportUnusedReferences(context)
 }
 
 function finishFootnotes(context: LintContext): void {
   if (context.options.rules?.['unused-footnote-definition'] !== 'off') {
     for (const item of context.state.footnoteDefinitions) {
       if (item.node.type === 'footnote' && !context.state.usedFootnotes.has(item.node.key)) {
-        reportNode('unused-footnote-definition', item.node, item.path, context, { label: item.node.key })
+        const range = bounds(item.node, context)
+        if (range === null) continue
+        const key = `[^${item.node.key}]`
+        const at = context.source.slice(range[0], range[1]).indexOf(key)
+        if (at >= 0) context.report('unused-footnote-definition', range[0] + at,
+          range[0] + at + key.length, item.path, { label: item.node.key })
       }
     }
   }
@@ -1338,7 +1394,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('frontmatter-shaped-thematic-break', ['frontmatter'], frontmatterBreak),
   nodeRule('blockquote-marker-without-space', ['frontmatter'], frontmatterQuote),
   nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
-  nodeRule('bidi-control-in-source', ['text', 'code', 'code_block'], bidiControl),
+  nodeRule('bidi-control-in-source', ['text', 'code', 'code_block', 'math'], bidiControl),
   nodeRule('description-term-multi-line', ['definition_term'], multilineTerm),
   nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
   nodeRule('figure-group-nested', ['div'], figureNested),
@@ -1371,6 +1427,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('delimited-table-wide-row', ['table'], delimitedWideRow),
   nodeRule('djot-intraword-underscore', ['text'], intrawordUnderscore),
   nodeRule('emphasis-marker-before-attributes', ['text'], emphasisBeforeAttrs),
+  nodeRule('emphasis-marker-before-attributes', ['strong', 'emphasis'], spanMarkerBeforeAttrs),
   nodeRule('carve-version-unsupported', ['frontmatter'], carveVersion),
   nodeRule('blank-reference-label', ['text'], blankReferenceLabel),
   nodeRule('comment-fence-closer-with-text', ['comment'], commentFenceCloserText),

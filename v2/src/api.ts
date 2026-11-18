@@ -18,6 +18,7 @@ import { type Resolution, resolve } from './resolve.ts'
 import { applyExtensions, declareExtensions } from './extensions/claims.ts'
 import { base64, mapPositions, type SourceText, sourceText } from './byte-source.ts'
 import { append } from './append.ts'
+import { emptyMemo, readAttributeBlock } from './attributes.ts'
 
 export { type ParsedTree } from './ast-blocks.ts'
 
@@ -224,12 +225,89 @@ export function renderTree(resolved: ResolvedTree): string {
  * C2-A-172: the findings of the parse channel, each with its position: those the tree builder noted, in document
  * order, then those of resolution. The notes get their messages here, so a parse that asks for none writes none.
  */
+/** The authored id part of one parsed attribute block, excluding quoted values that resemble an id. */
+function idPartInBlock(raw: string, open: number, end: number, id: string): number {
+  let quote = ''
+  for (let at = open + 1; at < end - 1; at++) {
+    const ch = raw[at]
+    if (quote !== '') {
+      if (ch === '\\') at++
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue }
+    if (ch === '#' && raw.slice(at + 1, at + 1 + id.length) === id
+      && (raw[at - 1] === '{' || raw[at - 1] === ' ')
+      && (raw[at + 1 + id.length] === '}' || raw[at + 1 + id.length] === ' ')) return at
+  }
+  return -1
+}
+
+/** Find the id in parsed attribute blocks, not an earlier marker-shaped piece of text. */
+function authoredIdAt(raw: string, id: string, limit: number, leading: boolean): number {
+  let found = -1
+  for (let open = raw.indexOf('{'); open >= 0 && open < limit; open = raw.indexOf('{', open + 1)) {
+    const end = readAttributeBlock(raw, open, limit, emptyMemo(), null)
+    if (end < 0) continue
+    const at = idPartInBlock(raw, open, end, id)
+    if (at >= 0) {
+      if (leading) return at
+      found = at
+    }
+    open = end - 1
+  }
+  return found
+}
+
+function attributeLimit(raw: string, startLine: number, markupLine: number | undefined): number {
+  if (markupLine === undefined || markupLine <= startLine) return raw.length
+  let at = 0
+  for (let remaining = markupLine - startLine; remaining > 0; remaining--) {
+    const next = raw.indexOf('\n', at)
+    if (next < 0) return raw.length
+    at = next + 1
+  }
+  return at
+}
+
+function locateAuthoredId(entry: Diagnostic, node: Node, parsed: ParsedTree, source: Uint8Array): void {
+  const id = node.attrs?.id
+  const pos = node.pos
+  if (id === undefined || pos === undefined) return
+  const raw = new TextDecoder().decode(source.subarray(pos.startOffset, pos.endOffset))
+  const marker = `#${id}`
+  const markupLine = parsed.facts?.markupLine(node)
+  const limit = attributeLimit(raw, pos.startLine, markupLine)
+  const at = authoredIdAt(raw, id, limit, limit < raw.length)
+  if (at < 0) return
+  const startOffset = pos.startOffset + utf8Length(raw.slice(0, at))
+  entry.range = { startOffset, endOffset: startOffset + utf8Length(marker) }
+}
+
 function parseDiagnostics(resolved: ResolvedTree, parsed: ParsedTree): Diagnostic[] {
   const found = resolved.resolution.findings
   const noted: Findings = { entries: [], nodes: [] }
   parsed.facts?.addFindings(noted)
-  if (noted.entries.length === 0) return locateFindings(resolved.document, found)
-  return locateFindings(resolved.document, { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] })
+  const findings = noted.entries.length === 0 ? found
+    : { entries: [...noted.entries, ...found.entries], nodes: [...noted.nodes, ...found.nodes] }
+  const diagnostics = locateFindings(resolved.document, findings)
+  if (typeof parsed.source !== 'string') return diagnostics
+  const encoder = new TextEncoder()
+  const source = encoder.encode(parsed.source)
+  diagnostics.forEach((entry, index) => {
+    if (entry.file !== undefined) return
+    const node = findings.nodes[index]
+    const pos = node?.pos
+    if (node === undefined || node === null || pos === undefined) return
+    if (entry.code === 'duplicate-footnote-definition') {
+      let end = pos.startOffset
+      while (end < pos.endOffset && source[end] !== 10 && source[end] !== 13) end++
+      entry.range = { startOffset: pos.startOffset, endOffset: end }
+      return
+    }
+    if (entry.code === 'duplicate-id') locateAuthoredId(entry, node, parsed, source)
+  })
+  return diagnostics
 }
 
 const CAUSE_CODES: ReadonlySet<string> = new Set([...INCLUDE_CAUSES.values()].map((cause) => cause.code))
