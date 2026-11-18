@@ -50,7 +50,7 @@ describe('the derived text budget', () => {
     expect(json.length).toBeLessThan(500_000)
     expect(renderWithDiagnostics(tree).html.match(/<a href="#h">h<\/a>/g)).toBeNull()
     const decoded = decodeTree(json)
-    expect(decoded.srcByteLength).toBeLessThanOrEqual(Buffer.byteLength(json))
+    expect(decoded.srcByteLength).toBe(2_000_000)
     expect(renderWithDiagnostics(decoded).html.match(/<a href="#h">h<\/a>/g)?.length).toBe(2)
   })
 })
