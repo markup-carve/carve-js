@@ -729,8 +729,8 @@ const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows',
 /** C2-H-153: the five keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
 function withoutTableKeys(node: TableNode): TableNode {
   const keyValues = node.attrs?.keyValues
-  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key))) return node
-  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key)) } }
+  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key.toLowerCase()))) return node
+  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key.toLowerCase())) } }
 }
 
 function table(r: Render, node: TableNode, level: number): void {
