@@ -1772,6 +1772,138 @@
       "name": "At nested braced boundaries, C2-I-058 and C2-I-059 pair the first matching cl...",
       "class": "report",
       "lint": []
+    },
+    {
+      "id": "U-375",
+      "name": "<p>a=“b”\n:“q”\n-”q”\n/”q”\n(“q”)</p> The opening quotes after a hyphen and a slash become closing quotes under C2-I-104 and",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-376",
+      "name": "<p><abbr title=\" Hyper Text\">HTML</abbr></p> The second separator space becomes part of the abbreviation title under C2-",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-377",
+      "name": "<table>\n  <colgroup>\n    <col style=\"width: 25%;\">\n    <col style=\"width: 50%;\">\n    <col style=\"width: 25%;\">\n  </colgr",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-378",
+      "name": "<dl>\n  <dt>t</dt>\n  <dd>[^f]: note\ncont\ntail</dd>\n</dl> A footnote-shaped definition in a description and its following ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-379",
+      "name": "<dl>\n  <dt>c\nmore</dt>\n</dl> A comment after a definition term is removed, and the following line continues that term un",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-380",
+      "name": "<aside class=\"admonition note\" aria-label=\"Note\">\n  <p class=\"div-label\">%% hidden</p>\n  <p>body</p>\n</aside> The bracke",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-381",
+      "name": "<aside class=\"admonition note\" aria-label=\"Note\">\n  <p class=\"div-label\">/i/</p>\n  <p>body</p>\n</aside> The bracketed di",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-382",
+      "name": "<ul>\n  <li>\n    <div class=\"inner\">\n      <p>text</p>\n    </div>\n  </li>\n</ul> A line after a comment stays inside a clo",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-383",
+      "name": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>inner\n            <pre><code>code\n</code",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-384",
+      "name": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>\n            <div class=\"inner\">\n       ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-385",
+      "name": "<blockquote>\n  <blockquote>\n    <ul>\n      <li>\n        <div class=\"box\">\n          <ul>\n            <li>inner\n         ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-386",
+      "name": "<blockquote>\n  <ul>\n    <li>\n      <div class=\"box\">\n        <ul>\n          <li>\n            <div class=\"line-block\">\n  ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-387",
+      "name": "<ul>\n  <li>\n    <dl>\n      <dt>t</dt>\n      <dd>\n        <p>para</p>\n        <ul>\n          <li>li</li>\n        </ul>\n  ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-388",
+      "name": "<p><a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-label=\"Footnotes",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-389",
+      "name": "<p>={_a=b_}</p> The braced opener and its nested closer pair differently under C2-I-035 and C2-I-043. Report the source ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-390",
+      "name": "<p><del></del></p> A comment marker inside a deletion removes its following text under C2-I-023 and C2-I-024. Escape bot",
+      "class": "rewrite",
+      "lint": []
+    },
+    {
+      "id": "U-391",
+      "name": "<p>tail</p>\n<p>r<a id=\"fnref1\" href=\"#fn1\" role=\"doc-noteref\"><sup>1</sup></a></p>\n<section role=\"doc-endnotes\" aria-lab",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-392",
+      "name": "<div class=\"z line-block\">\n  <p>verse</p>\n</div> Attribute names are written once in their canonical case under C2-H-012",
+      "class": "none",
+      "lint": []
+    },
+    {
+      "id": "U-393",
+      "name": "<p><s>a</s> d</p> A comment marker inside a substitution changes which arrow and closer survive under C2-I-023 and C2-I-",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-394",
+      "name": "<blockquote>\n\n</blockquote>\n<blockquote>\n\n</blockquote>\n<p>z</p> The quoted comment fence uses its live container under ",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-395",
+      "name": "<ul>\n  <li>p\n{% a</li>\n</ul>\n<p>plain</p> A comment-fence-shaped line inside a braced comment changes which lines the li",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-396",
+      "name": "<p>a $`</p> C2-I-017 reads a backtick run with no closer of its length as text, and 0.1 wrote an empty math span. An adj",
+      "class": "report",
+      "lint": []
     }
   ],
   "extensions": [

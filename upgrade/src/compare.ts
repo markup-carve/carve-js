@@ -71,6 +71,16 @@ function nameEnd(body: string): number {
   return at
 }
 
+function lowerAttributeName(part: string): string {
+  const equal = part.indexOf('=')
+  const end = equal < 0 ? part.length : equal
+  for (let at = 0; at < end; at++) {
+    const code = part.charCodeAt(at)
+    if (code >= 0x41 && code <= 0x5a) return part.slice(0, end).toLowerCase() + part.slice(end)
+  }
+  return part
+}
+
 const TASK_CLASS = 'task'
 
 function isTaskItem(parts: readonly string[]): boolean {
@@ -122,6 +132,10 @@ function readTag(html: string, start: number, end: number, line: number, normali
   const split = nameEnd(body)
   const name = body.slice(0, split)
   const parts = splitAttributes(body, split)
+  // HTML attribute names are ASCII case insensitive. Preserve values byte for byte.
+  for (let index = 0; index < parts.length; index++) {
+    parts[index] = lowerAttributeName(parts[index]!)
+  }
   const own = takeSourceLine(parts)
   if (normalizeTask && name === 'li' && isTaskItem(parts)) { dropTaskClass(parts); dropTaskStyle(parts) }
   parts.sort()

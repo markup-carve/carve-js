@@ -33,7 +33,8 @@ The tool reads the input with the 0.1 engine of this repository (the build of `s
 `dist/`, so run `npm ci` or `npm run build` at the repository root first), collects edits from
 the 0.1 tree and its positions, and applies them from the end of the text backward. It changes
 only the spans a contract entry names. It then renders the input with the 0.1 engine and the
-output with the 0.2 engine (`v2/`). The check sorts attributes and drops layout whitespace between
+output with the 0.2 engine (`v2/`). The check sorts attributes, lowercases HTML attribute names,
+and drops layout whitespace between
 tags. `explained` requires the cited entries' HTML transformations to reproduce the 0.2 result
 exactly. The transformations are in `data/html-transformations.json`; U-019 and U-021 also have
 rules for list paragraph wrappers. U-133 handles task item presentation, and U-154 moves a
@@ -49,6 +50,8 @@ exists. A report whose HTML change has no applicable transformation becomes
 self-check adds one
 `U-019` summary line that counts the later paragraphs of list items that gain a paragraph
 element in 0.2.
+An unexplained HTML difference with no mapped upgrade row carries the blocking JSON status
+`no mapped row` and the differing source range.
 
 The entries `X-001` and `X-002` are the tool's own `none` entries. The 0.2 engine handles
 bidirectional controls and U+0000 itself (C2-H-172, C2-B-218), so the tool leaves their source unchanged.
