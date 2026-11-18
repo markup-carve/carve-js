@@ -1,0 +1,175 @@
+[
+  {
+    "id": "LI-01",
+    "title": "plain label",
+    "clauses": [],
+    "input01": "::: list-table [plain]\n- - a\n  - b\n:::",
+    "html01": "<p class=\"div-label\">plain</p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table [plain]\n- - a\n  - b\n:::",
+    "html02": "<p class=\"div-label\">plain</p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-02",
+    "title": "caption and label",
+    "clauses": [],
+    "input01": "::: list-table \"Cap\" [plain]\n- - a\n  - b\n:::",
+    "html01": "<p class=\"div-label\">plain</p>\n<table>\n  <caption>Cap</caption>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table \"Cap\" [plain]\n- - a\n  - b\n:::",
+    "html02": "<p class=\"div-label\">plain</p>\n<table>\n  <caption>Cap</caption>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-03",
+    "title": "formatted label",
+    "clauses": [
+      "C2-X-009",
+      "C2-H-042"
+    ],
+    "input01": "::: list-table [/em/]\n- - a\n  - b\n:::",
+    "html01": "<p class=\"div-label\"><em>em</em></p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table [/em/]\n- - a\n  - b\n:::",
+    "html02": "<p class=\"div-label\">/em/</p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-04",
+    "title": "label at group boundary",
+    "clauses": [
+      "C2-B-174"
+    ],
+    "input01": "{header-rows=1}\n::: list-table [g]\n- - A\n  - B\n- - ^\n  - y\n:::",
+    "html01": "<p class=\"div-label\">g</p>\n<table>\n  <tbody>\n    <tr><th scope=\"col\" rowspan=\"2\">A</th><th scope=\"col\">B</th></tr>\n    <tr><td>y</td></tr>\n  </tbody>\n</table>",
+    "input02": "{header-rows=1}\n::: list-table [g]\n- - A\n  - B\n- - ^\n  - y\n:::",
+    "html02": "<p class=\"div-label\">g</p>\n<table>\n  <thead>\n    <tr><th scope=\"col\">A</th><th scope=\"col\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td>^</td><td>y</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-05",
+    "title": "nested label",
+    "clauses": [],
+    "input01": "::: wrap\n\n::: list-table [inner]\n- - a\n  - b\n:::\n\n:::",
+    "html01": "<div class=\"wrap\">\n  <p class=\"div-label\">inner</p>\n  <table>\n    <tbody>\n      <tr><td>a</td><td>b</td></tr>\n    </tbody>\n  </table>\n</div>",
+    "input02": "::: wrap\n\n::: list-table [inner]\n- - a\n  - b\n:::\n\n:::",
+    "html02": "<div class=\"wrap\">\n  <p class=\"div-label\">inner</p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n</div>",
+    "sourceRewrite": false,
+    "held": true
+  },
+  {
+    "id": "LI-06",
+    "title": "empty label",
+    "clauses": [],
+    "input01": "::: list-table []\n- - a\n  - b\n:::",
+    "html01": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table []\n- - a\n  - b\n:::",
+    "html02": "<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-07",
+    "title": "malformed labeled table",
+    "clauses": [],
+    "input01": "::: list-table [plain]\n- not a cell row\n:::",
+    "html01": "<div class=\"list-table\">\n  <p class=\"div-label\">plain</p>\n  <ul>\n    <li>not a cell row</li>\n  </ul>\n</div>",
+    "input02": "::: list-table [plain]\n- not a cell row\n:::",
+    "html02": "<div class=\"list-table\">\n  <p class=\"div-label\">plain</p>\n  <ul>\n    <li>not a cell row</li>\n  </ul>\n</div>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-08",
+    "title": "cell spanning both ways",
+    "clauses": [
+      "C2-B-172",
+      "C2-B-173"
+    ],
+    "input01": "::: list-table\n- - A\n  - <\n  - B\n- - ^\n  - ^\n  - ^\n:::",
+    "html01": "<table>\n  <tbody>\n    <tr><td rowspan=\"2\" colspan=\"2\">A</td><td rowspan=\"2\">B</td></tr>\n    <tr></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table\n- - A\n  - <\n  - B\n- - ^\n  - ^\n  - ^\n:::",
+    "html02": "<table>\n  <tbody>\n    <tr><td colspan=\"2\">A</td><td rowspan=\"2\">B</td></tr>\n    <tr><td>^</td><td>^</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-09",
+    "title": "column metadata",
+    "clauses": [],
+    "input01": "{header-rows=1 footer-rows=1 aligns=\"left,right\" valigns=\"top,bottom\" widths=\"30,70\"}\n::: list-table\n- - A\n  - B\n- - C\n  - D\n- - E\n  - F\n:::",
+    "html01": "<table>\n  <colgroup>\n    <col style=\"width: 30%;\">\n    <col style=\"width: 70%;\">\n  </colgroup>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: top;\">A</th><th scope=\"col\" style=\"text-align: right; vertical-align: bottom;\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: left; vertical-align: top;\">C</td><td style=\"text-align: right; vertical-align: bottom;\">D</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td style=\"text-align: left; vertical-align: top;\">E</td><td style=\"text-align: right; vertical-align: bottom;\">F</td></tr>\n  </tfoot>\n</table>",
+    "input02": "{header-rows=1 footer-rows=1 aligns=\"left,right\" valigns=\"top,bottom\" widths=\"30,70\"}\n::: list-table\n- - A\n  - B\n- - C\n  - D\n- - E\n  - F\n:::",
+    "html02": "<table>\n  <colgroup>\n    <col style=\"width: 30%;\">\n    <col style=\"width: 70%;\">\n  </colgroup>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: top;\">A</th><th scope=\"col\" style=\"text-align: right; vertical-align: bottom;\">B</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: left; vertical-align: top;\">C</td><td style=\"text-align: right; vertical-align: bottom;\">D</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td style=\"text-align: left; vertical-align: top;\">E</td><td style=\"text-align: right; vertical-align: bottom;\">F</td></tr>\n  </tfoot>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-10",
+    "title": "hostile cell attribute",
+    "clauses": [],
+    "input01": "::: list-table\n- -{onclick=\"x\"} A\n  - B\n:::",
+    "html01": "<table>\n  <tbody>\n    <tr><td>A</td><td>B</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table\n- -{onclick=\"x\"} A\n  - B\n:::",
+    "html02": "<table>\n  <tbody>\n    <tr><td>A</td><td>B</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-11",
+    "title": "26-list-table-caption-inline",
+    "clauses": [],
+    "input01": "::: list-table \"Q *totals*\"\n- - A\n  - B\n:::\n",
+    "html01": "<table>\n  <caption>Q <strong>totals</strong></caption>\n  <tbody>\n    <tr><td>A</td><td>B</td></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table \"Q *totals*\"\n- - A\n  - B\n:::\n",
+    "html02": "<table>\n  <caption>Q <strong>totals</strong></caption>\n  <tbody>\n    <tr><td>A</td><td>B</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-12",
+    "title": "42-list-table-header-rows-cols",
+    "clauses": [],
+    "input01": "{header-rows=1}\n{header-cols=1}\n::: list-table\n- - Region\n  - Q1\n- - EMEA\n  - 10\n:::\n",
+    "html01": "<table>\n  <thead>\n    <tr><th scope=\"col\">Region</th><th scope=\"col\">Q1</th></tr>\n  </thead>\n  <tbody>\n    <tr><th scope=\"row\">EMEA</th><td>10</td></tr>\n  </tbody>\n</table>",
+    "input02": "{header-rows=1}\n{header-cols=1}\n::: list-table\n- - Region\n  - Q1\n- - EMEA\n  - 10\n:::\n",
+    "html02": "<table>\n  <thead>\n    <tr><th scope=\"col\">Region</th><th scope=\"col\">Q1</th></tr>\n  </thead>\n  <tbody>\n    <tr><th scope=\"row\">EMEA</th><td>10</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-13",
+    "title": "44-list-table-columns-and-foot",
+    "clauses": [],
+    "input01": "{header-rows=1 footer-rows=1 aligns=\"left,right\" valigns=\"top,bottom\" widths=\"30,70\"}\n::: list-table\n- - Region\n  - Total\n- -{align=center valign=middle} North\n  - 11\n- - All\n  - 33\n:::\n",
+    "html01": "<table>\n  <colgroup>\n    <col style=\"width: 30%;\">\n    <col style=\"width: 70%;\">\n  </colgroup>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: top;\">Region</th><th scope=\"col\" style=\"text-align: right; vertical-align: bottom;\">Total</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: center; vertical-align: middle;\">North</td><td style=\"text-align: right; vertical-align: bottom;\">11</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td style=\"text-align: left; vertical-align: top;\">All</td><td style=\"text-align: right; vertical-align: bottom;\">33</td></tr>\n  </tfoot>\n</table>",
+    "input02": "{header-rows=1 footer-rows=1 aligns=\"left,right\" valigns=\"top,bottom\" widths=\"30,70\"}\n::: list-table\n- - Region\n  - Total\n- -{align=center valign=middle} North\n  - 11\n- - All\n  - 33\n:::\n",
+    "html02": "<table>\n  <colgroup>\n    <col style=\"width: 30%;\">\n    <col style=\"width: 70%;\">\n  </colgroup>\n  <thead>\n    <tr><th scope=\"col\" style=\"text-align: left; vertical-align: top;\">Region</th><th scope=\"col\" style=\"text-align: right; vertical-align: bottom;\">Total</th></tr>\n  </thead>\n  <tbody>\n    <tr><td style=\"text-align: center; vertical-align: middle;\">North</td><td style=\"text-align: right; vertical-align: bottom;\">11</td></tr>\n  </tbody>\n  <tfoot>\n    <tr><td style=\"text-align: left; vertical-align: top;\">All</td><td style=\"text-align: right; vertical-align: bottom;\">33</td></tr>\n  </tfoot>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-14",
+    "title": "45-list-table-local-headers",
+    "clauses": [],
+    "input01": "::: list-table\n- -{header-row} Name\n  - Value\n- - Alpha\n  - 1\n- -{header-row} Name again\n  - Value again\n- - Beta\n  -{header} Total\n:::\n",
+    "html01": "<table>\n  <tbody>\n    <tr><th scope=\"col\">Name</th><th scope=\"col\">Value</th></tr>\n    <tr><td>Alpha</td><td>1</td></tr>\n  </tbody>\n  <tbody>\n    <tr><th scope=\"col\">Name again</th><th scope=\"col\">Value again</th></tr>\n    <tr><td>Beta</td><th scope=\"row\">Total</th></tr>\n  </tbody>\n</table>",
+    "input02": "::: list-table\n- -{header-row} Name\n  - Value\n- - Alpha\n  - 1\n- -{header-row} Name again\n  - Value again\n- - Beta\n  -{header} Total\n:::\n",
+    "html02": "<table>\n  <tbody>\n    <tr><th scope=\"col\">Name</th><th scope=\"col\">Value</th></tr>\n    <tr><td>Alpha</td><td>1</td></tr>\n  </tbody>\n  <tbody>\n    <tr><th scope=\"col\">Name again</th><th scope=\"col\">Value again</th></tr>\n    <tr><td>Beta</td><th scope=\"row\">Total</th></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  },
+  {
+    "id": "LI-15",
+    "title": "equivalent pipe table source",
+    "clauses": [],
+    "input01": "{header-rows=1}\n::: list-table\n- - Region\n  - Q1\n  - Q2\n- - EMEA\n  - 10\n  - 12\n- - ^\n  - 14\n  - 16\n- - Total\n  - <\n  - <\n:::",
+    "html01": "<table>\n  <thead>\n    <tr><th scope=\"col\">Region</th><th scope=\"col\">Q1</th><th scope=\"col\">Q2</th></tr>\n  </thead>\n  <tbody>\n    <tr><td rowspan=\"2\">EMEA</td><td>10</td><td>12</td></tr>\n    <tr><td>14</td><td>16</td></tr>\n    <tr><td colspan=\"3\">Total</td></tr>\n  </tbody>\n</table>",
+    "input02": "{header-rows=1}\n::: list-table\n- - Region\n  - Q1\n  - Q2\n- - EMEA\n  - 10\n  - 12\n- - ^\n  - 14\n  - 16\n- - Total\n  - <\n  - <\n:::",
+    "html02": "<table>\n  <thead>\n    <tr><th scope=\"col\">Region</th><th scope=\"col\">Q1</th><th scope=\"col\">Q2</th></tr>\n  </thead>\n  <tbody>\n    <tr><td rowspan=\"2\">EMEA</td><td>10</td><td>12</td></tr>\n    <tr><td>14</td><td>16</td></tr>\n    <tr><td colspan=\"3\">Total</td></tr>\n  </tbody>\n</table>",
+    "sourceRewrite": false,
+    "held": false
+  }
+]
