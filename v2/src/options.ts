@@ -4,6 +4,7 @@ import {
 } from './option-tables.ts'
 import { type ExtensionDefinition, type ExtensionRenderer } from './extensions/types.ts'
 import { includeSettings, type IncludeSettings } from './include-settings.ts'
+import { type CodeBlockNode } from './ast.ts'
 
 export type HeadingIds = 'off' | 'keep-case' | 'lower' | 'ascii' | 'ascii-lower' | 'ascii-strict' | 'ascii-strict-lower'
 export type Mode = 'interactive' | 'static'
@@ -37,6 +38,8 @@ export interface Options {
   headingIds?: HeadingIds
   mode?: Mode
   renderers?: Readonly<Record<string, ExtensionRenderer>>
+  /** Trusted host HTML for ordinary code blocks; undefined selects the core HTML. */
+  codeBlockRenderer?: (node: Readonly<CodeBlockNode>, defaultHtml: string) => string | undefined
   symbols?: Readonly<Record<string, string>>
   labels?: Readonly<Record<string, string>>
   social?: Social | null
@@ -68,6 +71,7 @@ export interface Settings {
   /** C2-N-003: the resolver and the two limits, or null when nothing is expanded. */
   includes: IncludeSettings | null
   renderers: Readonly<Record<string, ExtensionRenderer>>
+  codeBlockRenderer: ((node: Readonly<CodeBlockNode>, defaultHtml: string) => string | undefined) | undefined
   urlPolicy: UrlPolicy
   headingIds: HeadingIds
   mode: Mode
@@ -225,6 +229,8 @@ function checkValues(given: OptionMap, names: readonly string[], stage: 'parse' 
   for (const name of names) {
     if (name === 'positions' && stage === 'parse') {
       if (given[name] !== undefined && typeof given[name] !== 'boolean') throw new CarveOptionError(name, 'not a boolean')
+    } else if (name === 'codeBlockRenderer') {
+      if (given[name] !== undefined && typeof given[name] !== 'function') throw new CarveOptionError(name, 'not a function')
     } else if (OPTION_KINDS.has(name)) checkType(name, given[name])
     else throw new CarveOptionError(name, 'unknown option')
   }
@@ -235,7 +241,7 @@ function checkNames(given: OptionMap, stage: 'parse' | 'render'): void {
   const names = Object.keys(given)
   checkValues(given, names, stage)
   for (const name of names) {
-    const kind = OPTION_KINDS.get(name)
+    const kind = name === 'codeBlockRenderer' ? 'render' : OPTION_KINDS.get(name)
     if (kind === 'format' || kind === 'lint' || (stage === 'parse' && kind === 'render')) {
       throw new CarveOptionError(name, `not an option of ${stage}`)
     }
@@ -329,6 +335,7 @@ export function readOptions(options: object | undefined, stage: 'parse' | 'rende
     extensions: extensionsValue(given['extensions']),
     includes: includeSettings(given['includes'], (reason) => new CarveOptionError('includes', reason)),
     renderers: renderersValue(given['renderers']),
+    codeBlockRenderer: given['codeBlockRenderer'] as Settings['codeBlockRenderer'],
     urlPolicy: policy,
     headingIds: enumValue(given, 'headingIds') as HeadingIds,
     mode: enumValue(given, 'mode') as Mode,

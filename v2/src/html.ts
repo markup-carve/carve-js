@@ -413,7 +413,10 @@ function preHtml(r: Render, node: CodeBlockNode | RawBlockNode, language: string
 function codeBlock(r: Render, node: CodeBlockNode, level: number): void {
   // C2-H-048: a supplied tree may hold any inline title, which the attribute takes as plain text (C2-H-143).
   const title = node.title === undefined ? undefined : plainText(node.title)
-  line(r, level, preHtml(r, node, node.syntax, title, node.groupLabel))
+  const defaultHtml = preHtml(r, node, node.syntax, title, node.groupLabel)
+  const html = r.settings.codeBlockRenderer?.(node, defaultHtml)
+  if (html !== undefined && typeof html !== 'string') throw new TypeError('codeBlockRenderer returned a value that is not a string')
+  line(r, level, html ?? defaultHtml)
 }
 
 /** C2-H-050, C2-H-053, C2-H-054, C2-H-134. */
