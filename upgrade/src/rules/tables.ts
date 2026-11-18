@@ -192,11 +192,27 @@ function tableReports(ctx: Context, table: Node01): void {
   }
 }
 
+function blockedSpanMarkers(ctx: Context, table: Node01): void {
+  rowsOf(table).forEach((row, rowIndex) => {
+    cellsOf(row).forEach((cell, column) => {
+      if (cell.span !== 'rowspan' && cell.span !== 'colspan') return
+      const text = ctx.src.slice(cell.pos!.startOffset, cell.pos!.endOffset)
+      const content = text.trim().replace(/^=/u, '').trim()
+      const blockedCaret = content === '^' && cell.span === 'rowspan' && rowIndex === 0
+      const blockedLeft = content === '<' && cell.span === 'colspan' && column === 0
+      if (!blockedCaret && !blockedLeft) return
+      const at = cell.pos!.startOffset + text.indexOf(content)
+      change(ctx, 'U-259', at, at + 1, '', 'blocked table span marker removed to retain the empty 0.1 cell')
+    })
+  })
+}
+
 function table(ctx: Context, node: Node01): void {
   separatorRow(ctx, node)
   joinedMarks(ctx, node)
   headerRows(ctx, node)
   tableReports(ctx, node)
+  blockedSpanMarkers(ctx, node)
   for (const row of rowsOf(node)) {
     if (row.pos === undefined) continue
     escapedLastPipe(ctx, row)

@@ -4,7 +4,8 @@ import { join, relative } from 'node:path'
 import { carveToAstJson, carveToHtml } from '../../dist/index.js'
 import { compareHtml } from '../../upgrade/src/compare.ts'
 import { AST_RESULTS } from '../src/ast-tables.ts'
-import { formatWithDiagnostics, migrateTree, parse, render, treesEqual, type Diagnostic, writeWithDiagnostics } from '../src/index.ts'
+import { CarveTreeError, formatWithDiagnostics, migrateTree, parse, render, treesEqual, type Diagnostic,
+  writeWithDiagnostics } from '../src/index.ts'
 import { object } from '../migrate/shared.ts'
 import { CARVE_SOURCES } from './corpus.ts'
 
@@ -181,8 +182,10 @@ function run(all: Input[]): void {
   let equalBytes = 0
   let equalTreeBytes = 0
   let migrationErrors = 0
+  let migrationRefusals = 0
   let writerRefusals = 0
   const refusalCases: RefusalCase[] = []
+  const migrationRefusalCases: string[] = []
   const findings = new Map<string, Finding>()
   for (const input of all) {
     try {
@@ -199,15 +202,18 @@ function run(all: Input[]): void {
         add(findings, fieldGroup(migrated.document, path), input, path)
       }
       const writing = compareWritten(migrated, input, findings, refusalCases)
-      if (writing === 'refused') writerRefusals++
-      else if (writing === 'equal') {
-        equalBytes++
-        if (equal) equalTreeBytes++
-      }
-    } catch (error) { migrationErrors++; add(findings, `error/${String(error).slice(0, 140)}`, input) }
+      writerRefusals += Number(writing === 'refused')
+      equalBytes += Number(writing === 'equal')
+      equalTreeBytes += Number(writing === 'equal' && equal)
+    } catch (error) {
+      if (error instanceof CarveTreeError && error.reason === 'the tree is nested deeper than a parser can produce') {
+        migrationRefusals++
+        migrationRefusalCases.push(input.name)
+      } else { migrationErrors++; add(findings, `error/${String(error).slice(0, 140)}`, input) }
+    }
   }
   console.log(JSON.stringify({ inputs: all.length, sameReading, equalTrees, equalBytes, equalTreeBytes, migrationErrors,
-    writerRefusals, refusalCases,
+    migrationRefusals, migrationRefusalCases, writerRefusals, refusalCases,
     differing: [...findings].map(
       ([group, item]) => ({ group, path: item.path, count: item.count, example: item.example.name,
         source: process.argv.includes('--minimize') ? lineMinimal(item.example.source, group) : item.example.source }),

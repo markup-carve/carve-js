@@ -14,6 +14,7 @@ export interface DelimitedTable {
   declared: boolean
   // C2-B-181: a quote that never closes. Its cell holds the rest of the body.
   malformed: boolean
+  malformedSourceAt: number
 }
 
 export function readDelimitedTable(src: string, node: BlockNode): DelimitedTable {
@@ -23,8 +24,17 @@ export function readDelimitedTable(src: string, node: BlockNode): DelimitedTable
   const lines: string[] = []
   for (let at = 0; at < spans.length; at += 2) lines.push(src.slice(spans[at], spans[at + 1]))
   const count = headRows(src, node)
-  const table: DelimitedTable = { rows: [], headRows: count < 0 ? 1 : count, declared: count >= 0, malformed: false }
+  const table: DelimitedTable = { rows: [], headRows: count < 0 ? 1 : count, declared: count >= 0,
+    malformed: false, malformedSourceAt: -1 }
   readRows(lines.join('\n'), separator, table)
+  if (table.malformedSourceAt >= 0) {
+    let remaining = table.malformedSourceAt
+    for (let at = 0; at < spans.length; at += 2) {
+      const length = spans[at + 1]! - spans[at]!
+      if (remaining <= length) { table.malformedSourceAt = spans[at]! + remaining; break }
+      remaining -= length + 1
+    }
+  }
   return table
 }
 
@@ -53,6 +63,7 @@ function quotedPart(cursor: Cursor, table: DelimitedTable): string {
     const quote = body.indexOf('"', at)
     if (quote < 0) {
       table.malformed = true
+      table.malformedSourceAt = cursor.at
       cursor.at = body.length
       return cell + body.slice(at)
     }

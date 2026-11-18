@@ -36,6 +36,10 @@ includeDependencies(tree) // [{ path: 'chapter.crv', file: 'chapter.crv', read: 
 
 A resolver receives the decoded `path`, the `section`, the valid `options` and `from`, the id of the including file. It returns the whole text (a string or UTF-8 bytes) with an id, or one error: `not_found`, `outside_root`, `unreadable` or `non_text`. The object form also takes `file`, the id of the top-level document for the cycle check, and lowered `depth` (at most 16) and `bytes` (at most 8388608) limits. An expanded include keeps its node, with `file` and `children`; `fmt` and `write` write the directive, never the children. `lint(source, { includes })` lints the included files too.
 
+## Extension render host
+
+A registered `ExtensionRenderer` receives a trusted `ExtensionRenderHost`. Its `blocks` and `inlines` helpers render resolved children, `escapeText` and `escapeAttribute` escape values, and `nextId` reserves a document-scoped id. `attributes(node, { block: true })` writes a node's authored attributes in core order and adds `data-source-line` last when `sourceLines` is on. Use `{ bare: true }` for an element that takes only the generated source line from a node. The host exposes `sourceLines` and `blockDepth`; an HTML fragment returned for a block is inserted with its first line indented by the core renderer, so a renderer indents each later line by two spaces per `blockDepth`. The host also exposes the rendering profile, URL policy and labels.
+
 ## Command line
 
 The program follows `spec/0.2/tooling.md`; its commands and flags are the rows of `data/cli.json`. Run the source entry point with Node, or use the package bin `carve2`. Omit a file or use `-` for standard input. `--help` lists the flags of each command; `--version` prints the package version.

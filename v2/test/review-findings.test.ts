@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, stringOffsetOfByte, treesEqual, utf8Length,
+  CarveTreeError, decodeTree, foldLabel, format, formatWithDiagnostics, parse, render, renderWithDiagnostics, stringOffsetOfByte,
+  treesEqual, utf8Length,
   writeWithDiagnostics,
 } from '../src/index.ts'
 import { CarveOptionError, checkType } from '../src/options.ts'
@@ -22,6 +23,20 @@ function refusal(json: unknown): string | null {
 }
 
 const DIGEST = `sha256:${'0'.repeat(64)}`
+
+it('C2-W-002, C2-W-011: an already spelled strong span with a slash keeps its tree', () => {
+  const source = '*%{/%/}/*\n'
+  const written = formatWithDiagnostics(source)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+})
+
+it('C2-W-002, C2-W-011: an open note-shaped bracket keeps its strong span', () => {
+  const source = '*^[[^*>\\]\n'
+  const written = formatWithDiagnostics(source)
+  expect(written.diagnostics).toEqual([])
+  expect(treesEqual(parse(written.source), parse(source))).toBe(true)
+})
 
 function inParagraph(...children: unknown[]): Record<string, unknown> {
   return { type: 'document', astVersion: '2.0', children: [{ type: 'paragraph', children }] }
@@ -226,6 +241,64 @@ const ESCAPED_RUN = `\\${BACKTICK}${BACKTICK}`
 // A quadratic pass over the inputs below takes a minute; a linear one a few dozen milliseconds.
 const LINEAR_BUDGET_MS = 3000
 
+it('C2-B-024: lazy line-block comments grow with source length', () => {
+  const shape = (n: number): string => `- ::: |\n  a\n${'%% c\nb\n'.repeat(n)}`
+  parse(shape(8000))
+  const fastest = (n: number): number => {
+    let best = Infinity
+    for (let run = 0; run < 4; run++) {
+      const started = performance.now()
+      parse(shape(n))
+      best = Math.min(best, performance.now() - started)
+    }
+    return best
+  }
+  const times = [2000, 4000, 8000].map(fastest)
+  const details = times.map((time) => time.toFixed(1)).join(', ')
+  expect(times[2]! / Math.max(times[0]!, 0.5), details).toBeLessThan(7)
+  expect(times[2]! / Math.max(times[1]!, 0.5), details).toBeLessThan(3.5)
+})
+
+it('C2-H-201: capped cross-references grow with their count', () => {
+  const sizes = [2000, 4000, 8000]
+  const trees = sizes.map((n) => {
+    const tree = parse(`{#h}\n# ${'T'.repeat(n)}\n\n${'</#h> '.repeat(n)}\n`)
+    tree.srcByteLength = 0
+    return tree
+  })
+  renderWithDiagnostics(trees[2]!)
+  const times = trees.map((tree) => {
+    let best = Infinity
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now()
+      const result = renderWithDiagnostics(tree)
+      expect(result.diagnostics.map((entry) => entry.code)).toContain('derived-text-budget')
+      best = Math.min(best, performance.now() - started)
+    }
+    return best
+  })
+  expect(times[2]! / Math.max(times[0]!, 0.5), times.map((time) => time.toFixed(1)).join(', ')).toBeLessThan(5.5)
+})
+
+it('C2-W-010: line comment closers grow with source length', () => {
+  for (const shape of [(n: number): string => 'x\n%% ]\n'.repeat(n),
+    (n: number): string => '[x %% ]\n'.repeat(n)]) {
+    formatWithDiagnostics(shape(4000))
+    const times = [1000, 2000, 4000].map((n) => {
+      let best = Infinity
+      for (let run = 0; run < 3; run++) {
+        const started = performance.now()
+        formatWithDiagnostics(shape(n))
+        best = Math.min(best, performance.now() - started)
+      }
+      return best
+    })
+    const details = times.map((time) => time.toFixed(1)).join(', ')
+    expect(times[2]! / Math.max(times[0]!, 0.5), details).toBeLessThan(7)
+    expect(times[2]! / Math.max(times[1]!, 0.5), details).toBeLessThan(3.5)
+  }
+})
+
 type Nested = { type: string, value?: string, children: Nested[], [key: string]: unknown }
 
 /** The texts of the cells of the first row of the table that `source` opens. */
@@ -386,7 +459,7 @@ describe('what the random writer gates found', () => {
 
   it('C2-W-092: of the later lines inside an inline node, the one that opens a block takes the escape', () => {
     expect(format('[^a]: *a\n{*\n- (*')).toBe(`[^a]: *a\n  {*\n  ${BACKSLASH}- (*\n`)
-    expect(format('[^a]: /)\n}\n- \\{/')).toBe(`[^a]: {/)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/}\n`)
+    expect(format('[^a]: /)\n}\n- \\{/')).toBe(`[^a]: /)\n  }\n  ${BACKSLASH}- ${BACKSLASH}{/\n`)
   })
 
   it('C2-W-125, case three: the colon of a name sigil before the bracket of a footnote reference takes the backslash', () => {
@@ -498,7 +571,7 @@ describe('what the four-token writer gate found', () => {
   })
 
   it('C2-W-088, C2-W-093: a closing mark behind the node is escaped, and a brace inside it, so the node closes where it should', () => {
-    expect(format(`x(/u)${BACKSLASH}{/${BACKSLASH}/`)).toBe(`x(/u)${BACKSLASH}{/${BACKSLASH}/\n`)
+    expect(format(`x(/u)${BACKSLASH}{/${BACKSLASH}/`)).toBe(`x({/u)${BACKSLASH}{/}/\n`)
     expect(format(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+`)).toBe(`x${BACKSLASH}${BACKSLASH}+-${BACKSLASH}+\n`)
   })
 

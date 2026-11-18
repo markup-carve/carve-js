@@ -10,6 +10,7 @@ import { emit, lose, loseKey, type Writer } from './write-state.ts'
 import { type Wrap } from './layout.ts'
 import { longestBareRun } from './write-fences.ts'
 import { displayWidth } from './width.ts'
+import { percentageText } from './decimal.ts'
 
 const ALIGN_MARKS = new Map([['left', '<'], ['right', '>'], ['center', '~']])
 const VALIGN_MARKS = new Map([['top', '^'], ['middle', '~'], ['bottom', 'v']])
@@ -37,22 +38,11 @@ function rowsOf(table: TableNode, type: 'table_head' | 'table_body' | 'table_foo
   return rows
 }
 
-const MAX_DIGITS = 17
-
-/** C2-B-212: the entry of `widths` that reads back as `width`, a share of the table width: the shortest percentage. */
-function percentage(width: number): string {
-  for (let digits = 1; digits < MAX_DIGITS; digits++) {
-    const text = String(Number((width * 100).toPrecision(digits)))
-    if (Number(text) / 100 === width) return text
-  }
-  return String(width * 100)
-}
-
 function columnEntry(column: TableColumnNode, field: 'align' | 'valign' | 'width'): string {
   if (field === 'align') return column.align ?? ''
   if (field === 'valign') return column.valign === 'baseline' ? '' : column.valign ?? ''
   const width = column.width
-  return width === undefined ? '' : percentage(width)
+  return width === undefined ? '' : percentageText(width)
 }
 
 /** The value of `aligns`, `valigns` or `widths`: one entry per column up to the last column that has one (C2-B-211, C2-B-212). */

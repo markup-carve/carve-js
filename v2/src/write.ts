@@ -8,7 +8,7 @@ import { addFinding, type Diagnostic, locateFindings } from './diagnostics.ts'
 import { afterComments, blankLinesBetween, followingAttributes, writeBlocks } from './write-blocks.ts'
 import { type Check, compareBlocks, createCheck, escapeOpeners, exhausted, extendChains, parseChunk } from './write-check.ts'
 import { type Wrap } from './layout.ts'
-import { isSecondHalf, unitBytes } from './positions.ts'
+import { isSecondHalf, unitBytes, utf8Length } from './positions.ts'
 import { createWriter, lose, type Writer, type WriterFacts } from './write-state.ts'
 import { createPlan, notePlaces, type Plan } from './write-plan.ts'
 import { type ExtensionDefinition } from './extensions/types.ts'
@@ -800,10 +800,10 @@ function writeDocument(w: Writer, run: WriterRun, document: DocumentNode): strin
 
 function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): void {
   for (const name of ['headers', 'footers'] as const) {
-    document.metadata?.[name]?.forEach((_entry, index) => diagnostics.push({
-      code: 'structure-unspellable', severity: 'warning', channel: 'render-loss',
-      message: `a root ${name.slice(0, -1)} has no spelling in Carve source`, path: `/metadata/${name}/${index}`,
-    }))
+    if (document.metadata?.[name] !== undefined) diagnostics.push({
+      code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
+      message: `root metadata.${name} has no spelling in Carve source`, path: `/metadata/${name}`,
+    })
   }
   for (const name of ['abstract', 'keywords'] as const) if (document.metadata?.[name] !== undefined) diagnostics.push({
     code: 'field-unspellable', severity: 'warning', channel: 'render-loss',
@@ -821,8 +821,22 @@ function rootMetadataLosses(document: DocumentNode, diagnostics: Diagnostic[]): 
 }
 
 /** C2-W-088, C2-W-125: only these opener shapes can lose a backslash without changing the ordered repair. */
-function prunableOpener(source: string, at: number): boolean {
+/** A star after a break inside a pair can be a stale repair escape; one before a sibling pair can be a C2-W-125 seed. */
+function starAfterBreak(nodes: readonly Node[], byte: number, parent: Node | null): boolean {
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]!
+    const pos = node.pos
+    if (pos === undefined || byte < pos.startOffset || byte >= pos.endOffset) continue
+    if (node.type === 'text') return (parent?.type === 'emphasis' || parent?.type === 'strong') &&
+      nodes[index - 1]?.type === 'soft_break'
+    if (starAfterBreak(childNodes(node), byte, node)) return true
+  }
+  return false
+}
+
+function prunableOpener(w: Writer, source: string, at: number): boolean {
   const next = source[at + 1]
+  if (next === '*') return w.parsed !== null && starAfterBreak(w.parsed.children, utf8Length(source.slice(0, at)), null)
   if (next === '[') {
     if (source.startsWith('^]', at + 2)) return true
     if (!source.startsWith('----', at + 2)) return false
@@ -831,7 +845,7 @@ function prunableOpener(source: string, at: number): boolean {
     return source[at - 1] !== '^' || close < 0 || (lineEnd >= 0 && close > lineEnd)
   }
   if (next !== '{') return false
-  if (source[at + 2] === '/') return true
+  if (source[at + 2] === '/' || source[at + 2] === '*') return true
   if (source[at + 2] !== '#') return false
   const close = source.indexOf('}', at + 3)
   const escapedDash = source.indexOf('\\-', at + 3)
@@ -849,14 +863,15 @@ function pruneGroupEscapes(w: Writer, group: readonly Node[], first: boolean): v
       if (host !== undefined) refuseRepair(w, host)
       break
     }
-    if (prunableOpener(source, at)) {
+    if (prunableOpener(w, source, at)) {
       const candidate = source.slice(0, at) + source.slice(at + 1)
-      const parsed = parseChunk(w, candidate).children
-      if (parsed.length === group.length && parsed.every((node, index) => {
+      const parsed = parseChunk(w, candidate)
+      if (parsed.children.length === group.length && parsed.children.every((node, index) => {
         const expected = group[index]
         return expected !== undefined && treesEqual(node, expected)
       })) {
         source = candidate
+        w.parsed = parsed
         at = source.indexOf('\\', at)
         continue
       }

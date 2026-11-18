@@ -1,7 +1,7 @@
 // The conformance corpus of the pinned specification as the conformance gate of this engine
 // (spec/0.2/conformance/README.md): every example, clause case, refused tree, positive tree and layout
 // sidecar. The HTML import examples run in import/test/corpus.test.ts.
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -13,6 +13,7 @@ import {
 import { HELD, REFUSED_AT } from '../scripts/corpus-held.ts'
 import { CORPUS_DIRECTORIES } from '../scripts/pin-spec.ts'
 import { decodeTree } from '../src/index.ts'
+import { newCaseMismatches } from '../scripts/corpus-new.mjs'
 
 function fields(mismatches: readonly Mismatch[]): string[] {
   return mismatches.map((entry) => entry.field)
@@ -46,15 +47,16 @@ describe('the examples of the specification', () => {
 })
 
 describe('the clause cases of the specification', () => {
-  it('holds 308 cases, each with the sentence that decides it', () => {
-    expect(CLAUSE_CASES).toHaveLength(308)
+  it('holds 1100 cases, each with the sentence that decides it', () => {
+    expect(CLAUSE_CASES).toHaveLength(1100)
     for (const entry of CLAUSE_CASES) expect(entry.why.length).toBeGreaterThan(0)
   })
 
   for (const entry of CLAUSE_CASES) {
     const held = HELD.get(entry.id)
     it(`${entry.clauses.join(', ')}: ${entry.id}, ${entry.summary}`, () => {
-      expect(fields(clauseCaseMismatches(entry)), held?.fix).toEqual(held?.fields ?? [])
+      const mismatches = entry.kind === undefined ? clauseCaseMismatches(entry) : newCaseMismatches(entry)
+      expect(fields(mismatches), held?.fix).toEqual(held?.fields ?? [])
     })
   }
 })
@@ -92,11 +94,9 @@ describe('the trees of the specification', () => {
   })
 })
 
-// The checkout of the specification: the directory CARVE_SPEC_DIR names. Without one the copies are not compared.
-const specDir = process.env['CARVE_SPEC_DIR']
-const spec = specDir === undefined ? '' : join(specDir, 'spec/0.2')
+const spec = join(process.env['CARVE_SPEC_DIR'] ?? join(import.meta.dirname, '..', '..', 'spec'), 'spec/0.2')
 
-it.skipIf(spec === '' || !existsSync(join(spec, 'conformance')))(
+it(
   `data/ holds the corpus and the trees of the specification at ${SPEC_PIN.slice(0, 8)}`,
   () => {
     for (const directory of CORPUS_DIRECTORIES) {

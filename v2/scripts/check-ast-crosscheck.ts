@@ -82,6 +82,8 @@ const BEYOND_SCHEMA = [
 function explained(finding: Failure & { classification?: string }): string | null {
   if (finding.classification === 'schema wrong') {
     const error = finding.engineError ?? ''
+    // C2-A-035 gives keys context-dependent equality that the schema cannot express.
+    if (error.includes('/attrs/keyValues: the key ') && error.includes(' occurs twice')) return 'duplicate attribute key'
     return BEYOND_SCHEMA.find((reason) => error.includes(reason)) ?? null
   }
   return schemaGap(finding.tree ?? finding.mutant)

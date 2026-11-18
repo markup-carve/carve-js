@@ -52,9 +52,9 @@ describe('the gates of the writer on its own token alphabet', () => {
 describe('the gates on the comments of candidate 8', () => {
   it('C2-I-024, C2-W-002: a line comment that a bracket or a braced closer would end is not written silently past its reading', () => {
     for (const source of ['x#}\n%}\\[\\+ %% ]', '>{/-\n-{.c}%%\n%% a\\[(/u)/}\n- ```\n  %% a-}\n***--}\n: d-}']) {
-      // A failure with a reported loss is no silent failure (C2-W-011).
       const result = checkGates(source)
-      expect(result.failure === null || result.losses !== null, source).toBe(true)
+      expect(result.failure, source).toBeNull()
+      expect(result.losses, source).toBeNull()
     }
   })
 })
@@ -62,6 +62,21 @@ describe('the gates on the comments of candidate 8', () => {
 describe('the gates on comments at the start and the end of a span', () => {
   it('C2-I-023, C2-I-024, C2-W-002: a span that starts or ends with a line comment, or a note-shaped bracket around one, reads back', () => {
     for (const source of ['x {*%%*}', 'x {/%%/}', 'x\n{*%%*}', 'x[{/%%/}', 'x\\^[%%]', 'x {*a %%*}', 'x(/u)\\{/%%', 'x\\{*%%*']) {
+      expect(checkWriter(source, []), source).toBeNull()
+    }
+  })
+})
+
+describe('the escape procedure beside a line comment', () => {
+  it('C2-W-088: bracket text is escaped only when the comment closer changes its reading', () => {
+    const unnecessary = ['[{*%%]', '[{/%%]', '[{-%%]', '[{=%%]', '[%%\\]', '[%%[]', '[%%![]', '[%%^[]', '[%%[^]', '[%%:n[]']
+    for (const source of [...unnecessary.flatMap((part) => [`x${part}`, `x!${part}`]),
+      'x#}\n%}\\[\\+ %% ]', 'x[\\{* %%]', 'x[\\{/ %%]', 'x[\\{- %%]', 'x[\\{= %%]',
+      'x[{*[ %% ]', 'x[^a %% ]', 'x[^! %% ]', 'x[^^ %% ]', 'x{*[^ %% ]', 'xa[^ %% ]', 'x^[\\{* %% ]',
+      'x[\\{*[^ %% ]', 'x[\\{*\\{*a %% ]', 'x^[][ %% ]',
+      'x[\\{*\\{*a\\{* %% ]', 'x[\\{*^[] %% ]',
+      'x[\\{*][a] %% ]', 'x[\\{*\\{*a[] %% ]', 'x[\\{*\\{*a[^ %% ]',
+      'x^[\\{*\\{*a\\{* %% ]']) {
       expect(checkWriter(source, []), source).toBeNull()
     }
   })

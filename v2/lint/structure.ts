@@ -1,5 +1,6 @@
-import { forEachSlot, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
+import { forEachSlot, INLINE_PARENTS, type Node, type TableCellNode, type TableColumnNode } from '../src/ast.ts'
 import { NODE_SLOTS } from '../src/ast-tables.ts'
+import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
@@ -18,8 +19,26 @@ function raw(node: Node, context: LintContext): string {
   return range === null ? '' : context.source.slice(range[0], range[1])
 }
 
+function attributeRange(node: Node, context: LintContext, key: string, whole = false): [number, number] | null {
+  const range = bounds(node, context)
+  if (range === null) return null
+  const source = context.source.slice(range[0], range[1])
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = new RegExp(`(?:^|[\\s{])(${escapedKey})(?:=("[^"]*"|'[^']*'|[^\\s}]+))?(?=[\\s}])`).exec(source)
+  if (match === null) return null
+  const start = range[0] + match.index + match[0].indexOf(key)
+  return [start, start + key.length + (whole && match[2] !== undefined ? match[2].length + 1 : 0)]
+}
+
+function reportAttribute(id: Rule['id'], node: Node, path: string, context: LintContext, key: string,
+  whole = false, values?: Record<string, string>): void {
+  const range = attributeRange(node, context, key, whole)
+  if (range !== null) context.report(id, range[0], range[1], path, values)
+  else reportNode(id, node, path, context, values)
+}
+
 function isWord(ch: string | undefined): boolean {
-  return ch !== undefined && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'))
+  return ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
 }
 
 // 0.1 read U+FEFF as content, which String.prototype.trim would strip.
@@ -32,20 +51,37 @@ function escaped(text: string, at: number): boolean {
   return slashes % 2 === 1
 }
 
-function paired(text: string, mark: string, visit: (start: number, end: number) => void): void {
+function nextCloser(text: string, mark: string, from: number): number {
+  let end = text.indexOf(mark, from)
+  while (end >= 0 && (/[\p{Zs}\t\n\r]/u.test(text[end - 1] ?? '') || escaped(text, end))) {
+    end = text.indexOf(mark, end + mark.length)
+  }
+  return end
+}
+
+function validDjotPair(text: string, mark: string, start: number, end: number): boolean {
+  return text[start - 1] !== '{' && text[end + mark.length] !== '}'
+    && text[start - 1] !== mark && text[start + 1] !== mark
+}
+
+function validPair(text: string, mark: string, id: Rule['id'], start: number, end: number): boolean {
+  const inside = text.slice(start + mark.length, end)
+  if (escaped(text, start) || inside === '' || EDGE_SPACE.test(inside)) return false
+  if (inside[0] === mark[0] || inside.at(-1) === mark[0]) return false
+  if (mark === '**' && inside.includes('*')) return false
+  if (id === 'djot-subscript-tilde' || id === 'djot-superscript-caret') return validDjotPair(text, mark, start, end)
+  if (id === 'markdown-strong-double-star' || id === 'markdown-strikethrough-double-tilde') return true
+  return !isWord(text[start - 1]) && !isWord(text[end + mark.length])
+}
+
+function paired(text: string, mark: string, id: Rule['id'], visit: (start: number, end: number) => void): void {
   let at = 0
   while (at < text.length) {
     const start = text.indexOf(mark, at)
     if (start < 0) return
-    const end = text.indexOf(mark, start + mark.length + 1)
+    const end = nextCloser(text, mark, start + mark.length + 1)
     if (end < 0) return
-    const before = text[start - 1]
-    const after = text[end + mark.length]
-    const inside = text.slice(start + mark.length, end)
-    if (before !== '\\' && !escaped(text, end) && inside[0] !== mark[0] && inside.at(-1) !== mark[0] &&
-      !EDGE_SPACE.test(inside) && inside !== '' && !isWord(before) && !isWord(after)) {
-      visit(start, end + mark.length)
-    }
+    if (validPair(text, mark, id, start, end)) visit(start, end + mark.length)
     at = end + mark.length
   }
 }
@@ -55,11 +91,24 @@ function textPair(mark: string, id: Rule['id']): (node: Node, path: string, cont
 }
 
 function checkTextPair(node: Node, path: string, context: LintContext, mark: string, id: Rule['id']): void {
-  if (node.type !== 'text') return
-  const range = bounds(node, context)
-  if (range === null) return
-  const text = context.source.slice(range[0], range[1])
-  paired(text, mark, (start, end) => context.report(id, range[0] + start, range[0] + end, path))
+  if (!INLINE_PARENTS.includes(node.type as typeof INLINE_PARENTS[number]) || !('children' in node)) return
+  if (path.includes('/title/') && context.nodeTypes.get(path.slice(0, path.indexOf('/title/'))) === 'code_block') return
+  let first: number | undefined
+  let last = 0
+  const flush = (): void => {
+    if (first === undefined) return
+    const begin = first
+    paired(context.source.slice(begin, last), mark, id, (start, end) => context.report(id, begin + start, begin + end, path))
+    first = undefined
+  }
+  for (const child of node.children) {
+    if (child.type !== 'text' && child.type !== 'soft_break') { flush(); continue }
+    const range = bounds(child, context)
+    if (range === null) continue
+    first ??= range[0]
+    last = range[1]
+  }
+  flush()
 }
 
 function imageAlt(node: Node, path: string, context: LintContext): void {
@@ -98,7 +147,7 @@ function invalidTableAttribute(node: Node, path: string, context: LintContext): 
     if (!keptTableKeys(node).includes(key)) continue
     // C2-B-186: a valid count of `header-rows` on a pipe table is deprecated, not invalid.
     if (pipe && key === 'header-rows' && /^\d*$/.test(value)) continue
-    reportNode('table-attribute-invalid', node, path, context, { key })
+    reportAttribute('table-attribute-invalid', node, path, context, key, true, { key })
   }
 }
 
@@ -201,14 +250,14 @@ function headingLevel(node: Node, path: string, context: LintContext): void {
   context.state.headingLevel = node.level
 }
 
-function headingKind(node: Node, path: string, context: LintContext): void {
+function headingKind(node: Node, _path: string, context: LintContext): void {
   if (node.type !== 'heading') return
   const source = raw(node, context)
   const kind = source.trimStart()[0]
   if (kind === '#' || kind === '=') {
     context.state.headingKinds.add(kind)
     if (context.state.headingKinds.size === 2 && !context.state.mixedReported) {
-      reportNode('heading-marker-mixed', node, path, context)
+      context.report('heading-marker-mixed', 0, 1, '')
       context.state.mixedReported = true
     }
   }
@@ -217,6 +266,7 @@ function headingKind(node: Node, path: string, context: LintContext): void {
 function headingClosing(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading') return
   const source = raw(node, context)
+  if (!source.trimStart().startsWith('#')) return
   const end = source.trimEnd()
   const hash = end.lastIndexOf(' #')
   if (hash >= 0 && isHashRun(end.slice(hash + 1))) {
@@ -230,7 +280,7 @@ function headingTrailing(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'heading') return
   const end = raw(node, context).trimEnd()
   const brace = end.lastIndexOf(' {')
-  if (brace >= 0 && end.endsWith('}')) {
+  if (brace >= 0 && /^\{\s*[.#][^{}]*\}$/.test(end.slice(brace + 1))) {
     const block = end.slice(brace + 1)
     const range = bounds(node, context)
     if (range !== null) context.report('heading-trailing-attribute', range[0] + brace + 1, range[0] + end.length,
@@ -252,22 +302,25 @@ function duplicateReferenceUrl(node: Node, path: string, context: LintContext): 
 
 function separatorRow(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_row' || node.children.length === 0) return
+  if (!path.endsWith('/children/1')) return
   const line = raw(node, context).trim()
   if (!line.startsWith('|') || !line.endsWith('|')) return
   const cells = line.slice(1, -1).split('|')
   if (cells.length < 1 || !cells.every(isSeparatorCell)) return
+  const previous = context.lines[(node.pos?.startLine ?? 1) - 2]?.text.trim() ?? ''
+  if (!previous.startsWith('|') || previous.slice(1, -1).split('|').every(isSeparatorCell)) return
   reportNode('deprecated-separator-row', node, path, context)
 }
 
 function isSeparatorCell(value: string): boolean {
   const text = value.trim()
-  if (text.length < 3) return false
+  if (text.length < 1) return false
   let hyphens = 0
   for (const ch of text) {
     if (ch === '-') hyphens++
     else if (ch !== ':') return false
   }
-  return hyphens >= 3
+  return hyphens >= 1
 }
 
 function tableRows(node: Node, path: string, context: LintContext): void {
@@ -290,7 +343,7 @@ function tableRows(node: Node, path: string, context: LintContext): void {
 
 /** C2-A-084: a child of a group that carries a caption; C2-B-127: a nested figure group is a group of its own, no panel. */
 function isPanel(child: Node): boolean {
-  return child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined
+  return child.type === 'table' || (child.type !== 'figure_group' && 'caption' in child && child.caption !== undefined)
 }
 
 function panelCount(node: Node): number {
@@ -308,22 +361,44 @@ function figureSingle(node: Node, path: string, context: LintContext): void {
 }
 
 function substitutionArrow(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'strike' || !raw(node, context).includes('~>')) return
-  reportNode('deprecated-substitution-arrow', node, path, context)
+  if (node.type !== 'strike') return
+  for (const child of node.children) {
+    if (child.type !== 'text') continue
+    const range = bounds(child, context)
+    if (range === null) continue
+    const source = raw(child, context)
+    for (let at = source.indexOf('~>'); at >= 0; at = source.indexOf('~>', at + 2)) {
+      if (!escaped(source, at)) return reportNode('deprecated-substitution-arrow', node, path, context)
+    }
+  }
 }
 
 function frontmatterBreak(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'frontmatter') return
+  if (!raw(node, context).startsWith('---\n')) return
   const value = node.value.trim()
-  if (value === '' || !value.includes(':')) reportNode('frontmatter-shaped-thematic-break', node, path, context)
+  const first = node.value.split('\n', 1)[0]?.trim() ?? ''
+  if (first === '' || value === '' || !value.includes(':')) reportNode('frontmatter-shaped-thematic-break', node, path, context)
+}
+
+function frontmatterQuote(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'frontmatter' || node.pos === undefined) return
+  for (let number = node.pos.startLine; number <= node.pos.endLine; number++) {
+    const line = context.lines[number - 1]
+    if (line === undefined || !/^>[^ ]/.test(line.text) || line.text.length < 2) continue
+    context.report('blockquote-marker-without-space', line.start, line.end, path, { text: line.text.slice(1) })
+  }
 }
 
 function bidiControl(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text' && node.type !== 'code' && node.type !== 'code_block') return
+  if (node.type === 'text' && path.includes('/title/')
+    && context.nodeTypes.get(path.slice(0, path.indexOf('/title/'))) === 'code_block') return
   const range = bounds(node, context)
   if (range === null) return
   const text = context.source.slice(range[0], range[1])
-  for (let at = 0; at < text.length; at++) {
+  const from = node.type === 'code_block' && context.layouts.size > 0 ? text.indexOf('\n') + 1 : 0
+  for (let at = from; at < text.length; at++) {
     const code = text.charCodeAt(at)
     if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) {
       context.report('bidi-control-in-source', range[0] + at, range[0] + at + 1, path,
@@ -335,7 +410,11 @@ function bidiControl(node: Node, path: string, context: LintContext): void {
 function multilineTerm(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'definition_term' || node.pos === undefined || node.pos.endLine <= node.pos.startLine) return
   const line = context.lines[node.pos.startLine]
-  if (line !== undefined) context.report('description-term-multi-line', line.start, line.end, path)
+  if (line !== undefined) {
+    const text = line.text.trimStart()
+    const start = line.start + line.text.length - text.length
+    context.report('description-term-multi-line', start, line.end, path)
+  }
 }
 
 function headingContinuation(node: Node, path: string, context: LintContext): void {
@@ -374,7 +453,7 @@ function figurePanelNumber(node: Node, path: string, context: LintContext): void
     const panel = node.children[at]
     if (panel === undefined || !isPanel(panel) || !('caption' in panel) || panel.caption === undefined) continue
     if (hasCaptionNumber(panel.caption)) {
-      reportNode('figure-group-panel-number', panel.caption, `${path}/children/${at}/caption`, context)
+      reportNode('figure-group-panel-number', panel, `${path}/children/${at}`, context)
     }
   }
 }
@@ -391,9 +470,11 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
 
 function semanticOutside(node: Node, path: string, context: LintContext): void {
   if (node.type === 'span') return
-  for (const [name, value] of node.attrs?.keyValues ?? []) {
-    if (name === 'abbr' || name === 'time' || name === 'kbd') {
-      reportNode('semantic-attribute-outside-span', node, path, context, { name, type: node.type, value })
+  for (const name of ['abbr', 'time', 'kbd']) {
+    const value = node.attrs?.keyValues?.find(([key]) => key.toLowerCase() === name)?.[1]
+    const range = attributeRange(node, context, name)
+    if (value !== undefined && range !== null) {
+      context.report('semantic-attribute-outside-span', range[0], range[1], path, { name, type: node.type, value })
     }
   }
 }
@@ -401,7 +482,7 @@ function semanticOutside(node: Node, path: string, context: LintContext): void {
 function semanticValue(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'span') return
   for (const [name, value] of node.attrs?.keyValues ?? []) {
-    if (value !== '' && (name === 'mark' || name === 'kbd' || name === 'samp')) {
+    if (value !== '' && name === 'kbd') {
       reportNode('semantic-attribute-value-ignored', node, path, context, { name })
     }
   }
@@ -414,7 +495,7 @@ function tableColumnArity(node: Node, path: string, context: LintContext): void 
     // C2-B-211: an invalid list sets no column, and table-attribute-invalid reports it.
     if (value === undefined || keptTableKeys(node).includes(key)) continue
     const count = value.split(',').length
-    if (count < node.columns.length) reportNode('table-column-arity', node, path, context,
+    if (count < node.columns.length) reportAttribute('table-column-arity', node, path, context, key, false,
       { key, count: String(count), widest: String(node.columns.length) })
   }
 }
@@ -423,11 +504,12 @@ function tableWidth(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table') return
   let total = 0
   for (const column of node.columns) total += column.width ?? 0
-  if (total > 1) reportNode('table-width-total', node, path, context)
+  if (total > 1) reportAttribute('table-width-total', node, path, context, 'widths')
 }
 
 function rowAttributeCell(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'table_row') return
+  if (node.children.at(-1)?.attrs !== undefined) return
   const source = raw(node, context)
   const last = source.lastIndexOf('|')
   const before = source.lastIndexOf('|', last - 1)
@@ -437,18 +519,36 @@ function rowAttributeCell(node: Node, path: string, context: LintContext): void 
 }
 
 function emphasizedHeading(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'paragraph' || node.children.length !== 1 || node.children[0]?.type !== 'emphasis') return
+  if (node.type !== 'paragraph') return
+  const visible = node.children.filter((child) => child.type !== 'comment' && (child.type !== 'text' || child.value.trim() !== ''))
+  if (visible.length !== 1 || (visible[0]?.type !== 'emphasis' && visible[0]?.type !== 'strong')) return
   reportNode('emphasis-as-heading', node, path, context)
 }
 
 function commentEmphasis(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'emphasis' && raw(node, context).startsWith('/*') && raw(node, context).endsWith('*/')) {
+  const source = raw(node, context)
+  if ((node.type === 'emphasis' && (source.startsWith('/*') || source.endsWith('*/')))
+    || (node.type === 'strong' && (source.startsWith('*/') || source.endsWith('/*')))) {
     reportNode('comment-shaped-emphasis', node, path, context)
   }
 }
 
+function multilineHtmlComment(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'paragraph') return
+  const range = bounds(node, context)
+  if (range === null) return
+  const source = raw(node, context)
+  for (let at = source.indexOf('<!--'); at >= 0; at = source.indexOf('<!--', at + 4)) {
+    const end = source.indexOf('-->', at + 4)
+    if (end < 0 || !source.slice(at, end).includes('\n') || escaped(source, at)) continue
+    context.report('html-comment-renders-as-text', range[0] + at, range[0] + end + 3, path)
+  }
+}
+
 function globStrong(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'strong' && raw(node, context).includes('*.' )) reportNode('glob-shaped-strong', node, path, context)
+  if (node.type === 'strong' && raw(node, context).startsWith('*.') && raw(node, context).endsWith('*')) {
+    reportNode('glob-shaped-strong', node, path, context)
+  }
 }
 
 function djotBracedStrike(node: Node, path: string, context: LintContext): void {
@@ -465,13 +565,19 @@ function djotBracedHighlight(node: Node, path: string, context: LintContext): vo
 
 function unattachedInline(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
+  const parent = path.slice(0, path.lastIndexOf('/children/'))
+  if (context.nodeTypes.get(parent) !== 'paragraph') return
   const source = raw(node, context)
-  const at = source.indexOf('{.')
-  if (at < 1) return
-  const end = source.indexOf('}', at + 2)
   const range = bounds(node, context)
-  if (end > at && range !== null) context.report('unattached-inline-attribute', range[0] + at,
-    range[0] + end + 1, path)
+  if (range === null) return
+  for (let at = source.indexOf('{'); at >= 0; at = source.indexOf('{', at + 1)) {
+    const end = source.indexOf('}', at + 1)
+    if (at < 1 || end < 0 || escaped(source, at)) continue
+    const block = source.slice(at, end + 1)
+    if (isAttributeLine(block, 0, block.length)) context.report('unattached-inline-attribute',
+      range[0] + at, range[0] + end + 1, path)
+    at = end
+  }
 }
 
 /** The 0.1.13 glued alignment prefix of a cell: a horizontal mark or `?`, then an optional vertical mark (C2-B-182). */
@@ -492,7 +598,11 @@ function deprecatedCellAlignment(node: Node, path: string, context: LintContext)
   const after = source[prefix.length]
   if (after !== ' ' && after !== '\t') return
   if (source.slice(prefix.length).trim() === '') return
-  reportNode('deprecated-cell-alignment', node, path, context, { prefix, braced: `{${prefix}}` })
+  const range = bounds(node, context)
+  if (range !== null) {
+    const at = raw(node, context).indexOf(prefix)
+    context.report('deprecated-cell-alignment', range[0] + at, range[0] + at + prefix.length, path, { prefix, braced: `{${prefix}}` })
+  }
 }
 
 function markerRunPadding(node: Node, path: string, context: LintContext): void {
@@ -515,7 +625,7 @@ function fenceCloserIndent(node: Node, path: string, context: LintContext): void
   const opener = first.text.indexOf('```')
   const closer = last.text.indexOf('```')
   if (opener < 0 || closer < 0 || opener === closer) return
-  if (!last.text.slice(closer).startsWith('```')) return
+  if (last.text.slice(0, closer).trim() !== '' || !/^`{3,}[ \t]*$/.test(last.text.slice(closer))) return
   context.report('fence-closer-indented', last.start + closer, last.end, path)
 }
 
@@ -535,7 +645,7 @@ function commentInLineBlock(node: Node, path: string, context: LintContext): voi
 
 function brokenCrossref(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'xref' || node.namespace !== 'heading' || node.href !== undefined) return
-  reportNode('broken-crossref', node, path, context, { target: node.key }, 2)
+  context.state.crossrefs.push({ node, path })
 }
 
 function collectFragment(node: Node, path: string, context: LintContext): void {
@@ -585,26 +695,26 @@ function delimitedWideRow(node: Node, path: string, context: LintContext): void 
   if (node.type !== 'table') return
   const format = context.layouts.get(path)?.sourceFormat
   if (format !== 'csv' && format !== 'tsv') return
-  const state = { width: -1, records: 0 }
+  const state = { width: -1, wide: false }
   for (let sectionIndex = 0; sectionIndex < node.children.length; sectionIndex++) {
     const section = node.children[sectionIndex]
-    if (section !== undefined) checkWideSection(section, sectionIndex, path, context, state, node.pos?.startLine ?? 1)
+    if (section !== undefined) checkWideSection(section, state)
   }
+  if (!state.wide) return
+  const range = bounds(node, context)
+  if (range === null) return
+  const match = /^(`{3,}|~{3,})/m.exec(raw(node, context))
+  if (match !== null) context.report('delimited-table-wide-row', range[0] + match.index,
+    range[0] + match.index + match[1]!.length, path)
 }
 
-function checkWideSection(section: Node, index: number, path: string, context: LintContext,
-  state: { width: number, records: number }, firstLine: number): void {
+function checkWideSection(section: Node, state: { width: number, wide: boolean }): void {
   if (section.type !== 'table_body' && section.type !== 'table_head' && section.type !== 'table_foot') return
   for (let rowIndex = 0; rowIndex < section.children.length; rowIndex++) {
     const row = section.children[rowIndex]
     if (row?.type !== 'table_row') continue
     if (state.width < 0) state.width = row.children.length
-    else if (row.children.length > state.width) {
-      const line = context.lines[firstLine + 1 + state.records]
-      if (line !== undefined) context.report('delimited-table-wide-row', line.start, line.end,
-        `${path}/children/${index}/children/${rowIndex}`)
-    }
-    state.records++
+    else if (row.children.length > state.width) state.wide = true
   }
 }
 
@@ -616,7 +726,7 @@ function intrawordUnderscore(node: Node, path: string, context: LintContext): vo
   for (let at = 1; at < source.length - 2; at++) {
     if (source[at] !== '_' || !isWord(source[at - 1])) continue
     const end = source.indexOf('_', at + 2)
-    if (end < 0 || !isWord(source[end + 1])) continue
+    if (end < 0 || !isWord(source[at + 1]) || !isWord(source[end - 1]) || !isWord(source[end + 1])) continue
     context.report('djot-intraword-underscore', range[0] + at, range[0] + end + 1, path)
     at = end
   }
@@ -628,8 +738,8 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
   const range = bounds(node, context)
   if (range === null) return
   for (let at = 0; at < source.length - 2; at++) {
-    const ch = source[at]
-    if ((ch !== '*' && ch !== '/') || source[at + 1] !== '{') continue
+    const ch = source[at] ?? ''
+    if (!'*_/~='.includes(ch) || source[at + 1] !== '{' || escaped(source, at)) continue
     const end = source.indexOf('}', at + 2)
     if (end < 0) continue
     context.report('emphasis-marker-before-attributes', range[0] + at, range[0] + end + 1,
@@ -640,13 +750,16 @@ function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): vo
 
 function carveVersion(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'frontmatter') return
-  for (const line of node.value.split('\n')) {
-    const key = /^(carve|carve-version):/.exec(line)
-    if (key === null) continue
-    const version = line.slice(key[0].length).trim()
-    if (version === '' || version === '0.2' || version === '0.2.0') return
-    reportNode('carve-version-unsupported', node, path, context, { version: jsonText(version), SPEC_VERSION: '0.2' },
-      version.startsWith('0.') ? 0 : 1)
+  const range = bounds(node, context)
+  if (range === null) return
+  const source = raw(node, context)
+  for (const match of source.matchAll(/^[ \t]*(?:carve|carve-version):[ \t]*([^\s]+)[ \t]*$/gm)) {
+    const version = match[1]!
+    const parts = /^\d+(?:\.\d+)*$/.test(version) ? version.split('.').map(Number) : null
+    if (parts !== null && parts[0] === 0 && (parts[1] ?? 0) <= 2 && parts.slice(2).every((part) => part === 0)) continue
+    const start = range[0] + match.index + match[0].indexOf(version)
+    context.report('carve-version-unsupported', start, start + version.length, path,
+      { version: jsonText(version), SPEC_VERSION: '0.2' }, parts === null ? 0 : 1)
     return
   }
 }
@@ -679,7 +792,7 @@ function commentInLabel(node: Node, path: string, context: LintContext): void {
   if (open < 0 || before.indexOf(']', open) >= 0) return
   // C2-I-077: only a comment that takes the label's closer leaves the label unclosed; `[ %%` had none to take.
   if (!context.source.slice(range[0], line.end).includes(']')) return
-  context.report('comment-in-reference-label', line.start + open, range[1], path)
+  context.report('comment-in-reference-label', range[0], range[1], path)
 }
 
 /** A value as it stands inside a JSON string, its quotes and backslashes escaped. */
@@ -709,7 +822,10 @@ function tableColumnOverlap(node: Node, path: string, context: LintContext): voi
   if (first?.type !== 'table_row') return
   node.columns.forEach((column, at) => {
     // C2-A-095: the column fields carry the fact that `aligns` or `valigns` wrote them.
-    if (overlaps(column, first.children[at])) reportNode('table-column-overlap', node, path, context, { n: String(at + 1) })
+    if (overlaps(column, first.children[at])) {
+      const key = column.align !== undefined && first.children[at]?.align !== undefined ? 'aligns' : 'valigns'
+      reportAttribute('table-column-overlap', node, path, context, key, false, { n: String(at + 1) })
+    }
   })
 }
 
@@ -722,12 +838,12 @@ function tightBlankLine(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'list' || node.spacing !== 'tight') return
   for (let at = 0; at < node.children.length; at++) {
     const item = node.children[at]
-    if (item === undefined) continue
+    if (item === undefined || !item.children.some((child) => child.type === 'paragraph')) continue
     for (let inner = 0; inner < item.children.length - 1; inner++) {
-      const child = item.children[inner]
       const childPath = `${path}/children/${at}/children/${inner}`
-      if (child?.type === 'paragraph' && (context.layouts.get(childPath)?.blankLinesAfter ?? 0) > 0) {
-        reportNode('tight-list-item-with-blank-line', child, childPath, context)
+      if ((context.layouts.get(childPath)?.blankLinesAfter ?? 0) > 0) {
+        reportNode('tight-list-item-with-blank-line', node, path, context)
+        return
       }
     }
   }
@@ -736,10 +852,17 @@ function tightBlankLine(node: Node, path: string, context: LintContext): void {
 function templateComment(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'comment' || node.form !== 'braced') return
   const source = raw(node, context)
-  const content = source.startsWith('{%') ? source.slice(2).trimStart() : ''
-  if (['if ', 'for ', 'endif', 'endfor', 'assign ', 'set ', 'include '].some((word) => content.startsWith(word))) {
+  const content = source.startsWith('{%') ? source.slice(2, -2).trim() : ''
+  if (['raw', 'endraw', 'endif', 'endfor', 'endblock'].includes(content)
+    || /^(?:if|for|block)\s+\S/.test(content)) {
     reportNode('braced-comment-in-a-template-source', node, path, context)
   }
+}
+
+function regionComment(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'comment' || node.form !== 'line' || !/^#(?:end)?region(?![A-Za-z0-9_])/i.test(node.value)) return
+  if (/^#(?:end)?region(?![A-Za-z0-9_])/.test(node.value)) return
+  reportNode('region-marker-renders-as-text', node, path, context)
 }
 
 function unclosedBracedComment(node: Node, path: string, context: LintContext): void {
@@ -761,7 +884,8 @@ function unclosedEmphasis(node: Node, path: string, context: LintContext): void 
   if (range === null) return
   for (let at = 0; at < source.length - 1; at++) {
     const ch = source[at]!
-    if ((ch !== '*' && ch !== '/') || !isWord(source[at + 1]) || !OPENER_BEFORE.test(source[at - 1] ?? ' ')) continue
+    if ((ch !== '*' && ch !== '/') || !isWord(source[at + 1]) || source[at - 1] === '{'
+      || !OPENER_BEFORE.test(source[at - 1] ?? ' ')) continue
     if (source.indexOf(ch, at + 1) >= 0) continue
     context.report('unclosed-inline-emphasis', range[0] + at, range[0] + at + 1, path, { span: ch === '*' ? 'strong' : 'emphasis' })
     return
@@ -799,7 +923,7 @@ function orderedKindSplit(node: Node, path: string, context: LintContext): void 
     const next = bounds(after, context)
     if (first === null || next === null || !ROMAN_LETTER.test(context.source.slice(first[0]).trimStart())) continue
     if (context.source.slice(first[1], next[0]).split('\n').length - 2 >= 3) continue
-    reportNode('ordered-list-kind-split', after, `${path}/children/${at}`, context)
+    reportNode('ordered-list-kind-split', before, `${path}/children/${at - 1}`, context)
   }
 }
 
@@ -812,8 +936,9 @@ function sigilAfterLetter(node: Node, path: string, context: LintContext): void 
     const sigil = source[at]
     if (sigil !== '@' && sigil !== '#') continue
     const before = source.charCodeAt(at - 1)
-    if (!(isWord(source[at - 1]) || before >= 128) || !isWord(source[at + 1])) continue
-    if (sigil !== '#' || !isDigit(source[at + 1])) {
+    if (before < 128 || !/[\p{L}\p{N}]/u.test(source[at - 1]!) || !isWord(source[at + 1])) continue
+    const name = /^[\p{L}\p{N}_-]+/u.exec(source.slice(at + 1))?.[0] ?? ''
+    if (/[\p{L}]/u.test(name)) {
       context.report('sigil-after-letter', range[0] + at, range[0] + at + 1, path)
     }
   }
@@ -854,7 +979,7 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
   if (content === undefined || marker === undefined) return
   for (let at = 0; at < node.children.length; at++) {
     const child = node.children[at]
-    if (child === undefined || child.type === 'paragraph' || child.pos === undefined) continue
+    if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
     const line = context.lines[child.pos.startLine - 1]
     const column = itemColumn(node, marker, child)
     if (line === undefined || column === undefined || column <= content) continue
@@ -891,6 +1016,20 @@ function leftMarkers(node: Node, path: string, context: LintContext,
 }
 
 function listMarkerBelowColumn(node: Node, path: string, context: LintContext): void {
+  if (node.type !== 'list') return
+  const split = path.lastIndexOf('/children/')
+  const owner = path.slice(0, split)
+  const index = Number(path.slice(split + '/children/'.length))
+  if (context.nodeTypes.get(owner) === 'list_item' && index > 0) {
+    const previous = `${owner}/children/${index - 1}`
+    const outer = context.layouts.get(owner)?.markerColumn
+    const deeper = context.layouts.get(`${previous}/children/0`)?.markerColumn
+    const column = context.layouts.get(`${path}/children/0`)?.markerColumn
+    if (outer !== undefined && deeper !== undefined && column !== undefined && outer < column && column < deeper) {
+      reportNode('list-marker-below-content-column', node.children[0]!, `${path}/children/0`, context,
+        { column: String(column + 1), contentColumn: String(deeper + 1), baseColumn: String(outer + 1) })
+    }
+  }
   leftMarkers(node, path, context, (at, column, deeper, outer) => {
     const item = node.type === 'list' ? node.children[at] : undefined
     if (item === undefined || outer === undefined || column <= outer) return
@@ -899,11 +1038,31 @@ function listMarkerBelowColumn(node: Node, path: string, context: LintContext): 
   })
 }
 
+function ownerContentColumn(ownerPath: string, ownerType: string, context: LintContext): number {
+  const ownerLayout = context.layouts.get(ownerPath)
+  if (ownerType !== 'block_quote') return ownerLayout?.contentColumn ?? 0
+  const ownerStart = context.chars[ownerLayout?.startByte ?? 0] ?? 0
+  const ownerLine = context.lines[(context.offsetLines[ownerStart] ?? 1) - 1]
+  return ownerStart - (ownerLine?.start ?? ownerStart) + 2
+}
+
 function blockOverindent(node: Node, path: string, context: LintContext): void {
-  overindentedBlocks(node, path, context, (at, child, start, end, past) => context.report('block-opener-overindented', start, end,
-    `${path}/children/${at}`, {
-      kind: child.type.replaceAll('_', ' '), past: String(past), columns: past === 1 ? 'column' : 'columns', owner: 'list item',
-    }))
+  if (node.pos === undefined) return
+  const split = path.lastIndexOf('/children/')
+  const ownerPath = split < 0 ? '' : path.slice(0, split)
+  const ownerType = context.nodeTypes.get(ownerPath) ?? 'document'
+  if (ownerType === 'list_item') return
+  const start = context.chars[node.pos.startOffset] ?? 0
+  const line = context.lines[node.pos.startLine - 1]
+  if (line === undefined) return
+  const column = start - line.start
+  const content = ownerContentColumn(ownerPath, ownerType, context)
+  if (column <= content) return
+  const kind = node.type === 'block_quote' ? 'quote' : node.type.replaceAll('_', ' ')
+  const width = node.type === 'definition_term' ? 2 : node.type === 'div' ? 3 : 1
+  const past = column - content
+  context.report('block-opener-overindented', start, start + width, path,
+    { kind, past: String(past), columns: past === 1 ? 'column' : 'columns', owner: ownerType.replaceAll('_', ' ') })
 }
 
 function bracedSpanAsText(node: Node, path: string, context: LintContext): void {
@@ -916,38 +1075,40 @@ function bracedSpanAsText(node: Node, path: string, context: LintContext): void 
   const openers = [source.indexOf('{*'), source.indexOf('{/')].filter((at) => at >= 0)
   const at = openers.length === 0 ? -1 : Math.min(...openers)
   const range = bounds(node, context)
-  if (at >= 0 && range !== null) context.report('braced-span-opener-as-text', range[0] + at,
+  const closer = source[at + 1] === '*' ? '*}' : '/}'
+  const after = range === null ? '' : context.source.slice(range[0] + at + 2)
+  if (at >= 0 && range !== null && after.includes(closer)) context.report('braced-span-opener-as-text', range[0] + at,
     range[0] + at + 2, path)
 }
 
-function colonFenceMismatch(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'div' && node.type !== 'admonition' && node.type !== 'figure_group') return
-  const layout = context.layouts.get(path)
-  const opener = layout?.openerRaw
-  const closer = layout?.closerRaw
-  if (opener === undefined || closer === undefined || opener.length === closer.length || node.pos === undefined) return
-  if (!allColons(opener) || !allColons(closer)) return
-  const endLine = context.lines[node.pos.endLine - 1]
-  if (endLine === undefined) return
-  if (endLine.text.trim() !== closer) return
-  context.report('colon-fence-length-mismatch', endLine.start, endLine.end, path,
-    { authoredWidth: String(closer.length), expectedWidth: String(opener.length), kind: node.type.replaceAll('_', ' '),
-      line: String(node.pos.startLine), column: String(node.pos.startColumn), outcome: 'closes the container' })
+function nearTable(word: string): boolean {
+  const lower = word.toLowerCase()
+  if (lower === 'table') return word !== 'table'
+  if (Math.abs(lower.length - 5) > 1) return false
+  if (lower.length === 5) {
+    const wrong = [...lower].filter((char, index) => char !== 'table'[index]).length
+    if (wrong === 1) return true
+    for (let at = 0; at < 4; at++) {
+      const swapped = `${lower.slice(0, at)}${lower[at + 1]}${lower[at]}${lower.slice(at + 2)}`
+      if (swapped === 'table') return true
+    }
+    return false
+  }
+  const short = lower.length < 5 ? lower : 'table'
+  const long = lower.length < 5 ? 'table' : lower
+  for (let at = 0; at < long.length; at++) if (long.slice(0, at) + long.slice(at + 1) === short) return true
+  return false
 }
-
-function allColons(value: string): boolean {
-  if (value.length < 3) return false
-  for (const ch of value) if (ch !== ':') return false
-  return true
-}
-
-const NEAR_MISSES = new Map([['align', 'aligns'], ['width', 'widths']])
 
 function consumedNearMiss(node: Node, path: string, context: LintContext): void {
-  if (node.type !== 'table') return
-  for (const [word] of node.attrs?.keyValues ?? []) {
-    const key = NEAR_MISSES.get(word)
-    if (key !== undefined) reportNode('consumed-key-near-miss', node, path, context, { word, key })
+  if (node.type !== 'code_block' || (node.syntax !== 'csv' && node.syntax !== 'tsv')) return
+  const range = bounds(node, context)
+  if (range === null) return
+  const opener = /^`{3,}/m.exec(context.source.slice(range[0], range[1]))
+  if (opener === null) return
+  for (const [word, value] of node.attrs?.keyValues ?? []) {
+    if (value === '' && nearTable(word)) context.report('consumed-key-near-miss', range[0] + opener.index,
+      range[1], path, { word, key: 'table' })
   }
 }
 
@@ -1008,7 +1169,7 @@ function nonDescriptiveLink(node: Node, path: string, context: LintContext): voi
   if (node.type !== 'link' || node.children.length !== 1) return
   const child = node.children[0]
   if (child?.type !== 'text') return
-  const value = child.value.toLowerCase().trim()
+  const value = child.value.toLowerCase().trim().replace(/\s+/g, ' ')
   if (value === 'here' || value === 'click here' || value === 'read more') {
     reportNode('non-descriptive-link-text', node, path, context)
   }
@@ -1042,14 +1203,44 @@ function unusedFootnote(node: Node, path: string, context: LintContext): void {
   else if (node.type === 'footnote_ref') context.state.usedFootnotes.add(node.key)
 }
 
+function fragmentNames(href: string): [string, string] {
+  const fragment = href.slice(1).split(':~:', 1)[0] ?? ''
+  try { return [fragment, decodeURIComponent(fragment)] }
+  catch { return [fragment, fragment] }
+}
+
+function brokenFragment(item: { node: Node, path: string }, context: LintContext): void {
+  if (item.node.type !== 'link' || item.node.href === undefined) return
+  const href = item.node.href
+  const [fragment, decoded] = fragmentNames(href)
+  if (fragment === '' || fragment.toLowerCase() === 'top') return
+  if (context.state.ids.has(fragment) || context.state.ids.has(decoded)) return
+  const caseOnly = [...context.state.ids].find((id) => id.toLowerCase() === fragment.toLowerCase()
+    || id.toLowerCase() === decoded.toLowerCase())
+  reportNode('broken-fragment-link', item.node, item.path, context, { href, caseOnly: caseOnly ?? '' },
+    caseOnly === undefined ? 1 : 0)
+}
+
 function finishFragments(context: LintContext): void {
-  if (context.options.rules?.['broken-fragment-link'] !== 'off') {
-    for (const item of context.state.fragmentLinks) {
-      if (item.node.type !== 'link' || item.node.href === undefined) continue
-      if (!context.state.ids.has(item.node.href.slice(1))) {
-        reportNode('broken-fragment-link', item.node, item.path, context, { href: item.node.href }, 1)
-      }
+  if (context.options.rules?.['broken-fragment-link'] === 'off' || (context.options.extensions?.length ?? 0) > 0) return
+  for (const item of context.state.fragmentLinks) brokenFragment(item, context)
+}
+
+function finishCrossrefs(context: LintContext): void {
+  for (const item of context.state.crossrefs) {
+    if (item.node.type !== 'xref') continue
+    const target = item.node.key
+    const exact = context.state.idOwners.get(target)
+    if (exact !== undefined && exact !== 'heading' && exact !== 'caption') {
+      reportNode('broken-crossref', item.node, item.path, context, { target, id: target, kind: exact }, 0)
+      continue
     }
+    const caseOnly = [...context.state.idOwners].filter(([id, type]) => (type === 'heading' || type === 'caption')
+      && id.toLowerCase() === target.toLowerCase()).map(([id]) => id)
+    const phrase = caseOnly.length === 1 ? `the id ${caseOnly[0]} differs only in case`
+      : `the ids ${caseOnly.join(', ')} differ only in case`
+    reportNode('broken-crossref', item.node, item.path, context,
+      { target, caseOnlyPhrase: phrase }, caseOnly.length === 0 ? 2 : 1)
   }
 }
 
@@ -1075,8 +1266,17 @@ function finishFootnotes(context: LintContext): void {
 
 export function finishStructure(context: LintContext): void {
   finishFragments(context)
+  finishCrossrefs(context)
   finishReferences(context)
   finishFootnotes(context)
+  for (let at = context.diagnostics.length - 1; at >= 0; at--) {
+    const entry = context.diagnostics[at]!
+    if (entry.code !== 'platform-issue-reference' && entry.code !== 'platform-mention-token') continue
+    const footnote = [...context.state.footnoteKeys].find(([path]) => entry.path?.startsWith(`${path}/`))
+    if (footnote === undefined || context.state.usedFootnotes.has(footnote[1])) continue
+    context.diagnostics.splice(at, 1)
+    context.findingLines.splice(at, 1)
+  }
 }
 
 /** C2-N-072: the attribute line above an include without `code` applies to nothing. */
@@ -1091,7 +1291,14 @@ function includeLinesTableRows(node: Node, path: string, context: LintContext): 
   if (node.type !== 'include' || node.options?.lines === undefined) return
   const code = node.options.code
   const table = node.attrs?.keyValues?.some(([key]) => key === 'table') === true
-  if (table && (code === 'csv' || code === 'tsv')) reportNode('include-lines-table-rows-hint', node, path, context)
+  if (table && (code === 'csv' || code === 'tsv')) {
+    const range = bounds(node, context)
+    if (range === null) return
+    const source = raw(node, context)
+    const start = source.indexOf('@lines:')
+    if (start >= 0) context.report('include-lines-table-rows-hint', range[0] + start,
+      range[0] + start + source.slice(start).split(/[\s}]/, 1)[0]!.length, path)
+  }
 }
 
 function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: NonNullable<Rule['checkNode']>): Rule {
@@ -1101,14 +1308,14 @@ function nodeRule(id: Rule['id'], nodes: readonly Node['type'][] , checkNode: No
 export const NODE_RULES: readonly Rule[] = [
   nodeRule('include-attributes-unused', ['include'], includeAttributesUnused),
   nodeRule('include-lines-table-rows-hint', ['include'], includeLinesTableRows),
-  nodeRule('deprecated-bare-underline', ['text'], textPair('_', 'deprecated-bare-underline')),
-  nodeRule('deprecated-bare-strike', ['text'], textPair('~', 'deprecated-bare-strike')),
-  nodeRule('deprecated-bare-highlight', ['text'], textPair('=', 'deprecated-bare-highlight')),
-  nodeRule('markdown-strong-double-star', ['text'], textPair('**', 'markdown-strong-double-star')),
-  nodeRule('markdown-strikethrough-double-tilde', ['text'], textPair('~~', 'markdown-strikethrough-double-tilde')),
-  nodeRule('djot-emphasis-underscore', ['text'], textPair('_', 'djot-emphasis-underscore')),
-  nodeRule('djot-subscript-tilde', ['text'], textPair('~', 'djot-subscript-tilde')),
-  nodeRule('djot-superscript-caret', ['text'], textPair('^', 'djot-superscript-caret')),
+  nodeRule('deprecated-bare-underline', INLINE_PARENTS, textPair('_', 'deprecated-bare-underline')),
+  nodeRule('deprecated-bare-strike', INLINE_PARENTS, textPair('~', 'deprecated-bare-strike')),
+  nodeRule('deprecated-bare-highlight', INLINE_PARENTS, textPair('=', 'deprecated-bare-highlight')),
+  nodeRule('markdown-strong-double-star', INLINE_PARENTS, textPair('**', 'markdown-strong-double-star')),
+  nodeRule('markdown-strikethrough-double-tilde', INLINE_PARENTS, textPair('~~', 'markdown-strikethrough-double-tilde')),
+  nodeRule('djot-emphasis-underscore', INLINE_PARENTS, textPair('_', 'djot-emphasis-underscore')),
+  nodeRule('djot-subscript-tilde', INLINE_PARENTS, textPair('~', 'djot-subscript-tilde')),
+  nodeRule('djot-superscript-caret', INLINE_PARENTS, textPair('^', 'djot-superscript-caret')),
   nodeRule('a11y/image-alt', ['image'], imageAlt),
   nodeRule('empty-link-destination', ['link'], emptyDestination),
   nodeRule('deprecated-loose-attribute', ['list'], looseAttribute),
@@ -1124,6 +1331,8 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('figure-group-single-panel', ['figure_group'], figureSingle),
   nodeRule('deprecated-substitution-arrow', ['strike'], substitutionArrow),
   nodeRule('frontmatter-shaped-thematic-break', ['frontmatter'], frontmatterBreak),
+  nodeRule('blockquote-marker-without-space', ['frontmatter'], frontmatterQuote),
+  nodeRule('html-comment-renders-as-text', ['paragraph'], multilineHtmlComment),
   nodeRule('bidi-control-in-source', ['text', 'code', 'code_block'], bidiControl),
   nodeRule('description-term-multi-line', ['definition_term'], multilineTerm),
   nodeRule('deprecated-indented-line-under-heading', ['heading'], headingContinuation),
@@ -1140,7 +1349,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('table-width-total', ['table'], tableWidth),
   nodeRule('table-row-attribute-as-cell', ['table_row'], rowAttributeCell),
   nodeRule('emphasis-as-heading', ['paragraph'], emphasizedHeading),
-  nodeRule('comment-shaped-emphasis', ['emphasis'], commentEmphasis),
+  nodeRule('comment-shaped-emphasis', ['emphasis', 'strong'], commentEmphasis),
   nodeRule('glob-shaped-strong', ['strong'], globStrong),
   nodeRule('djot-subscript-tilde-braced', ['strike'], djotBracedStrike),
   nodeRule('djot-highlight-braces', ['highlight'], djotBracedHighlight),
@@ -1165,6 +1374,7 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('table-column-overlap', ['table'], tableColumnOverlap),
   nodeRule('tight-list-item-with-blank-line', ['list'], tightBlankLine),
   nodeRule('braced-comment-in-a-template-source', ['comment'], templateComment),
+  nodeRule('region-marker-renders-as-text', ['comment'], regionComment),
   nodeRule('unclosed-braced-comment', ['text'], unclosedBracedComment),
   nodeRule('unclosed-inline-emphasis', ['text'], unclosedEmphasis),
   nodeRule('ordered-list-kind-split', ['document', 'block_quote', 'list_item', 'div', 'footnote', 'admonition'], orderedKindSplit),
@@ -1172,10 +1382,10 @@ export const NODE_RULES: readonly Rule[] = [
   nodeRule('list-item-body-below-content-column', ['list_item'], listItemBodyColumn),
   nodeRule('list-item-block-overindented', ['list_item'], listItemBlockIndent),
   nodeRule('list-marker-below-content-column', ['list'], listMarkerBelowColumn),
-  nodeRule('block-opener-overindented', ['list_item'], blockOverindent),
+  nodeRule('block-opener-overindented', ['block_quote', 'div', 'code_block', 'line_block', 'definition_term', 'heading',
+    'thematic_break', 'table'], blockOverindent),
   nodeRule('braced-span-opener-as-text', ['text'], bracedSpanAsText),
-  nodeRule('colon-fence-length-mismatch', ['div', 'admonition', 'figure_group'], colonFenceMismatch),
-  nodeRule('consumed-key-near-miss', ['table'], consumedNearMiss),
+  nodeRule('consumed-key-near-miss', ['code_block'], consumedNearMiss),
   nodeRule('ordered-marker-right-aligned', ['list'], orderedRightAligned),
   nodeRule('table-span-marker-blocked', ['table_cell'], spanMarkerBlocked),
   nodeRule('table-span-marker-attribute', ['table_cell'], spanMarkerAttribute),

@@ -14,6 +14,7 @@ import { isAttributeKey, isClassWord } from './attributes.ts'
 import { DIV_KINDS } from './tree-tables.ts'
 import { isAsciiNameCharacter } from './unicode.ts'
 import { type ExtensionDefinition, type ExtensionSlot } from './extensions/types.ts'
+import { keyIdentity } from './ast-attributes.ts'
 
 /** A tree that a reader refuses. `path` is an RFC 6901 pointer to the node or the field. */
 export class CarveTreeError extends Error {
@@ -272,7 +273,7 @@ function checkOptions(value: Value, path: string): void {
 }
 
 /** C2-A-032, C2-A-034: an optional id, a list of classes and a list of pairs; `id` and `class` are no keys. */
-function checkAttrs(value: Value, path: string): void {
+function checkAttrs(value: Value, path: string, span = false): void {
   if (!isRecord(value)) fail(path, 'attrs is not an object')
   // C2-A-058: absent attributes have one encoding, so an empty object or list is refused.
   if (Object.keys(value).length === 0) fail(path, 'an empty attrs')
@@ -285,10 +286,10 @@ function checkAttrs(value: Value, path: string): void {
     if (classes.length === 0) fail(`${path}/classes`, 'an empty list of classes')
     classes.forEach((name, index) => requireString(name, `${path}/classes/${index}`))
   }
-  if (value['keyValues'] !== undefined) checkKeyValues(value['keyValues'], `${path}/keyValues`)
+  if (value['keyValues'] !== undefined) checkKeyValues(value['keyValues'], `${path}/keyValues`, span)
 }
 
-function checkKeyValues(value: Value, path: string): void {
+function checkKeyValues(value: Value, path: string, span: boolean): void {
   checkPairs(value, path)
   const pairs = value as [string, string][]
   if (pairs.length === 0) fail(path, 'an empty list of key-value pairs')
@@ -296,10 +297,10 @@ function checkKeyValues(value: Value, path: string): void {
   pairs.forEach(([key], index) => {
     // C2-A-035: a key occurs once, compared without ASCII letter case, and is a key by C2-I-030.
     if (!isAttributeKey(key)) fail(`${path}/${index}/0`, `${JSON.stringify(key)} is no key`)
-    const name = key.toLowerCase()
+    const name = keyIdentity(key, span)
     if (seen.has(name)) fail(path, `the key ${key} occurs twice`)
     seen.add(name)
-    if (name === 'id' || name === 'class') fail(path, `the key ${key} folds into the id or the classes`)
+    if (name === 'ordinary:id' || name === 'ordinary:class') fail(path, `the key ${key} folds into the id or the classes`)
   })
 }
 
@@ -545,14 +546,15 @@ interface Walk {
 
 // C2-B-190, C2-I-118: the containers a block pass opens one each, and the inline nodes that each take an inline level.
 const BLOCK_LEVELS: ReadonlySet<string> = new Set([
-  'block_quote', 'list_item', 'div', 'admonition', 'directive', 'footnote', 'definition_description', 'figure_group',
+  'block_quote', 'list', 'list_item', 'definition_list', 'div', 'admonition', 'directive', 'footnote',
+  'definition_description', 'figure_group',
   'block_extension',
 ])
 const CONTENT_HOLDERS: ReadonlySet<string> = new Set([
   'paragraph', 'heading', 'definition_term', 'cell_paragraph', 'line', 'citation_definition',
 ])
 const INLINE_LEVELS: ReadonlySet<string> = new Set(
-  INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type) && type !== 'inline_footnote'),
+  INLINE_PARENTS.filter((type) => !CONTENT_HOLDERS.has(type)),
 )
 
 /** C2-A-171: the open blocks and inline levels at a node of type `type` below `blocks` and `inlines`. */
@@ -612,8 +614,9 @@ function checkSlot(name: string, slot: Value, path: string, walk: Walk, node: Fi
   const content = rule === undefined ? unknownSlotContent(node) : slotContent(rule)
   checkList(slot, at, content, walk, { name: String(node['name']), slot: name })
   if (rule?.minItems !== undefined && Array.isArray(slot) && slot.length < rule.minItems) fail(at, 'too few slot items')
-  if (rule?.name !== undefined && Array.isArray(slot) && slot.some((item) => !isRecord(item) || item['name'] !== rule.name)) {
-    fail(at, 'wrong extension in slot')
+  if (rule?.name !== undefined && Array.isArray(slot)) {
+    const wrong = slot.findIndex((item) => !isRecord(item) || item['name'] !== rule.name)
+    if (wrong >= 0) fail(`${at}/${wrong}`, 'wrong extension in slot')
   }
 }
 
@@ -854,7 +857,6 @@ function checkSource(value: Value, path: string): void {
 }
 
 const FIELD_CHECKS = new Map<string, FieldCheck>([
-  ['attrs', checkAttrs],
   ['pos', checkPosition],
   ['segments', (value, path, walk) => requireArray(value, path).forEach((range, index) => checkPosition(range, `${path}/${index}`, walk))],
   ['data', checkData],
@@ -1152,7 +1154,8 @@ function checkField(node: Fields, type: string, rule: Rule, name: string, path: 
   const at = `${path}/${name}`
   if (!COMMON.includes(name) && !required.includes(name) && !optional.includes(name)) fail(at, `not a field of ${type}`)
   if (value === null || value === undefined) fail(at, 'a field without a value')
-  if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, walk, node)
+  if (name === 'attrs') checkAttrs(value, at, type === 'span')
+  else if (!checkScalar(type, name, value, at)) FIELD_CHECKS.get(name)?.(value, at, walk, node)
   // C2-A-131: an image names a resource by its id; the string check above holds for it.
   if (name === 'resourceId') addReference(value, at, walk)
 }

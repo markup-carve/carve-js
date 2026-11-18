@@ -7,6 +7,15 @@ function trimmed(line: Line): { text: string, start: number } {
   return { text: line.text.slice(at).trimEnd(), start: line.start + at }
 }
 
+function contentLine(line: Line): { text: string, start: number } {
+  let { text, start } = trimmed(line)
+  while (text.startsWith('> ')) {
+    text = text.slice(2).trimStart()
+    start = line.start + line.text.indexOf(text, start - line.start)
+  }
+  return { text, start }
+}
+
 function isRun(text: string, chars: string, minimum: number): boolean {
   if (text.length < minimum || !chars.includes(text[0] ?? '\0')) return false
   const char = text[0]
@@ -55,22 +64,28 @@ function reportLine(id: Rule['id'], line: Line, context: LintContext, values?: R
 }
 
 function deprecatedContinuation(line: Line, context: LintContext): void {
-  if (trimmed(line).text === '+') reportLine('deprecated-continuation-marker', line, context)
+  const { text, start } = contentLine(line)
+  const marker = text === '+' ? start : /^[-*] \+\s*$/.test(text) ? start + 2 : -1
+  if (marker < 0) return
+  const inside = hasAncestor(line.path, context, 'list_item')
+  context.report('deprecated-continuation-marker', marker, marker + 1, line.path, {}, inside ? 1 : 0)
 }
 
 function thematicBreak(line: Line, context: LintContext): void {
-  const text = trimmed(line).text
+  const { text, start } = contentLine(line)
   if (!isRun(text, '-_', 3)) return
   const previous = prior(line, context)
   if (text[0] === '-' && previous !== undefined && previous.text.trim() !== '' && previous.paragraph) return
-  reportLine('thematic-break-spelling', line, context, { raw: text })
+  if (line.number === 1 && text === '---') return
+  context.report('thematic-break-spelling', start, start + text.length, line.path, { raw: text })
 }
 
 function setextHeading(line: Line, context: LintContext): void {
-  const text = trimmed(line).text
+  const { text, start } = contentLine(line)
   const previous = prior(line, context)
-  if (isRun(text, '-', 3) && previous !== undefined && previous.paragraph && previous.text.trim() !== '') {
-    reportLine('setext-heading-underline', line, context)
+  if (previous !== undefined && previous.paragraph && previous.text.trim() !== ''
+    && (isRun(text, '=', 3) || isRun(text, '-', 3))) {
+    context.report('setext-heading-underline', start, start + text.length, line.path)
   }
 }
 
@@ -87,6 +102,7 @@ function tildeFence(line: Line, context: LintContext): void {
   const text = trimmed(line).text
   if (!line.paragraph) return
   if (text.startsWith('~~~')) return reportLine('block-marker-as-text', line, context, { what: 'a tilde fence' })
+  if (/^:{3,}\S/.test(text)) return reportLine('block-marker-as-text', line, context, { what: 'a colon fence' })
   if (text.startsWith('{') && opensAttributes(text.charCodeAt(1)) && !isAttributeLine(text, 0, text.length)) {
     reportLine('block-marker-as-text', line, context, { what: 'an attribute line' })
   }
@@ -127,27 +143,27 @@ function bareHtml(line: Line, context: LintContext): void {
 
 function emptyReference(line: Line, context: LintContext): void {
   const { text, start } = trimmed(line)
-  if (!text.startsWith('[') || !text.endsWith(']:') || text.length < 4) return
-  if (text.indexOf(']') !== text.length - 2) return
-  context.report('empty-reference-definition', start, start + text.length, line.path)
+  const match = /^\[([^\]\n]+)\]:[ \t]*$/.exec(text)
+  if (match === null || match[1]!.trim() === '' || match[1] === '^' || !line.paragraph) return
+  context.report('empty-reference-definition', start, start + match[0].indexOf(':') + 1, line.path)
 }
 
 function tableShaped(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
+  const { text, start } = contentLine(line)
   if (text.startsWith('|') && !text.endsWith('|') && line.paragraph) {
     context.report('table-shaped-paragraph', start, start + text.length, line.path)
   }
 }
 
 function quoteWithoutSpace(line: Line, context: LintContext): void {
-  const { text, start } = trimmed(line)
-  if (!text.startsWith('>') || text.length < 2 || text[1] === ' ' || text[1] === '\t') return
-  context.report('blockquote-marker-without-space', start, start + text.length, line.path, { text: text.slice(1) })
+  const text = line.text.trimEnd()
+  if (!line.paragraph || !text.startsWith('>') || text.length < 2 || text[1] === ' ') return
+  context.report('blockquote-marker-without-space', line.start, line.start + text.length, line.path, { text: text.slice(1) })
 }
 
 function isListMarker(text: string): boolean {
   if (text.length < 2) return false
-  if ('-*+'.includes(text[0] ?? '\0') && text[1] === ' ') return true
+  if ('-*'.includes(text[0] ?? '\0') && text[1] === ' ') return true
   let at = 0
   while (at < text.length && at < 9 && text[at]! >= '0' && text[at]! <= '9') at++
   return at > 0 && (text[at] === '.' || text[at] === ')') && text[at + 1] === ' '
@@ -174,11 +190,18 @@ function openerWithoutBlank(line: Line, context: LintContext): void {
 function listWithoutBlank(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || previous.path !== line.path || previous.text.trim() === '') return
-  if (isListMarker(trimmed(line).text)) reportLine('list-marker-without-blank-line', line, context)
+  const { text, start } = contentLine(line)
+  const own = context.nodeTypes.get(line.path)
+  const term = own === 'definition_term' || own === 'definition_description'
+    || hasAncestor(line.path, context, 'definition_term') || hasAncestor(line.path, context, 'definition_description')
+  if (isListMarker(text)) context.report('list-marker-without-blank-line', start, start + text.length, line.path,
+    {}, term ? 1 : 0)
 }
 
 function indentedCode(line: Line, context: LintContext): void {
-  if (line.paragraph && line.path.split('/').length <= 3 && line.text.startsWith('    ') && line.text.trim() !== '') {
+  const previous = prior(line, context)
+  if (line.number > 1 && previous?.text.trim() === '' && line.paragraph && firstLineOfPath(line.path, context) === line.number
+    && line.path.split('/').length <= 3 && line.text.startsWith('    ') && line.text.trim() !== '') {
     reportLine('indented-code-block', line, context)
   }
 }
@@ -202,12 +225,15 @@ function unattachedCaption(line: Line, context: LintContext): void {
 function unattachedAttribute(line: Line, context: LintContext): void {
   const { text, start } = trimmed(line)
   if (!line.paragraph || !text.startsWith('{') || !text.endsWith('}') || text.length < 3) return
-  const second = text[1]
-  if (second !== '.' && second !== '#' && !(second !== undefined && second >= 'a' && second <= 'z')) return
+  if (!attributeLead(text[1])) return
   if (context.state.attachedLines.has(line.number)) return
   const next = context.lines[line.number]
   if (next !== undefined && next.text.trim() !== '' && next.paragraph === false) return
-  context.report('unattached-block-attribute', start, start + text.length, line.path)
+  context.report('unattached-block-attribute', start, start + text.length, line.path, {}, next?.text.trim() === '' ? 1 : 0)
+}
+
+function attributeLead(second: string | undefined): boolean {
+  return second === '.' || second === '#' || (second !== undefined && second >= 'a' && second <= 'z')
 }
 
 function markdownDefinition(line: Line, context: LintContext): void {
@@ -219,19 +245,21 @@ function markdownDefinition(line: Line, context: LintContext): void {
 }
 
 function emptyInclude(line: Line, context: LintContext): void {
-  const at = line.text.indexOf('{{')
-  if (at < 0 || !line.paragraph) return
-  const end = line.text.indexOf('}}', at + 2)
-  if (end < 0) return
-  const path = line.text.slice(at + 2, end).trim()
-  if (path !== '' && !/^(?:""|“”)(?:\s|$)/u.test(path)) return
-  const text = line.text.slice(at, end + 2)
-  context.report('empty-include-path', line.start + at, line.start + end + 2, line.path, { text })
+  if (!line.paragraph) return
+  for (const match of line.text.matchAll(/\{\{([^{}]*)\}\}/g)) {
+    const body = match[1]!
+    if (body.trim() !== '' && !/^\s+(?:""|“”|[#@])/.test(body)) continue
+    context.report('empty-include-path', line.start + match.index, line.start + match.index + match[0].length,
+      line.path, { text: match[0] })
+  }
 }
 
 function linkGap(line: Line, context: LintContext): void {
-  const at = line.text.indexOf('] (')
-  if (at >= 0 && line.paragraph) context.report('link-gap-before-destination', line.start + at, line.start + at + 3, line.path)
+  if (!line.paragraph) return
+  for (const match of line.text.matchAll(/\[([^\]\n]+)\][ \t]+\(([^)\n]*)\)/g)) {
+    if (match[2]!.trim() === '') continue
+    context.report('link-gap-before-destination', line.start + match.index, line.start + match.index + match[0].length, line.path)
+  }
 }
 
 function djotPlus(line: Line, context: LintContext): void {
@@ -250,26 +278,33 @@ function definitionInContainer(line: Line, context: LintContext): void {
   if (!line.paragraph || !text.startsWith('[') || close <= 1 || close + 2 >= text.length) return
   if (hasAncestor(line.path, context, 'footnote')) return
   if (line.text[0] !== ' ' && line.text[0] !== '\t' && line.path.split('/').length <= 3) return
-  context.report('definition-in-container', start, start + text.length, line.path)
+  context.report('definition-in-container', start, start + close + 2, line.path)
 }
 
 function foldedTerm(line: Line, context: LintContext): void {
   if (context.nodeTypes.get(line.path) !== 'definition_term') return
-  if (firstLineOfPath(line.path, context) === line.number) return
-  const { text, start } = trimmed(line)
-  if (startsBlock(text)) context.report('definition-term-block-folded', start, start + text.length, line.path)
+  if (firstLineOfPath(line.path, context) !== line.number) return
+  const { text, start } = contentLine(line)
+  const marker = /^::?[ \t]+/.exec(text)?.[0]
+  if (marker === undefined) return
+  const body = text.slice(marker.length)
+  if (startsBlock(body) || isListMarker(body)) context.report('definition-term-block-folded',
+    start + marker.length, start + text.length, line.path)
 }
 
 function githubAlert(line: Line, context: LintContext): void {
-  const at = line.text.indexOf('[!')
-  if (at < 0 || !line.text.slice(at).includes(']') || !line.text.trimStart().startsWith('>')) return
+  const match = /^\s*>[ \t]*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/.exec(line.text)
+  if (match === null || !line.paragraph) return
+  const at = match[0].indexOf('[!')
   context.report('github-alert-marker', line.start + at, line.end, line.path)
 }
 
 function djotHeadingContinuation(line: Line, context: LintContext): void {
   const previous = prior(line, context)
   if (previous === undefined || !line.paragraph || line.text.trim() === '') return
-  if (previous.text.startsWith('# ') && !line.text.startsWith(' ')) reportLine('djot-heading-continuation', line, context)
+  if (previous.text.startsWith('# ') && !line.text.startsWith(' ')) {
+    context.report('djot-heading-continuation', previous.start, line.end, line.path)
+  }
 }
 
 function quoteFenceSibling(line: Line, context: LintContext): void {
@@ -280,31 +315,69 @@ function quoteFenceSibling(line: Line, context: LintContext): void {
 
 function regionAsText(line: Line, context: LintContext): void {
   const { text, start } = trimmed(line)
-  if (line.paragraph && (text.startsWith('#region ') || text.startsWith('#endregion'))) {
+  if (line.paragraph && /^(?:(?:\/\/|--|\/\*|<!--)[ \t]*)?#(?:end)?region(?![A-Za-z0-9_])/i.test(text)) {
     context.report('region-marker-renders-as-text', start, start + text.length, line.path)
   }
 }
 
 function captionLooking(line: Line, context: LintContext): void {
   if (!line.paragraph) return
-  const previous = prior(line, context)
-  if (previous === undefined || !previous.text.trimStart().startsWith('|')) return
-  const { text, start } = trimmed(line)
-  if (text.startsWith('Table:') || text.startsWith('Figure:')) {
-    context.report('caption-looking-paragraph', start, start + text.length, line.path)
-  }
+  const { text, start } = contentLine(line)
+  if (!/^(?:\*?\s*(?:Caption|Table|Tabelle|Figure|Image)(?:\s+\d+)?\s*:|:\s+\S)/i.test(text)) return
+  const below = [1, 2].some((offset) => context.lines[line.number - 1 + offset]?.text.trimStart().startsWith('|'))
+  const above = [-2, -1].some((offset) => {
+    const source = context.lines[line.number - 1 + offset]?.text ?? ''
+    return source.trimStart().startsWith('|') || source.includes('![')
+  })
+  if (below || above) context.report('caption-looking-paragraph', start, start + 1, line.path, {}, below ? 0 : 1)
 }
 
 function descriptionColumn(line: Line, context: LintContext): void {
-  const previous = prior(line, context)
   const { text, start } = trimmed(line)
-  if (previous === undefined || !line.paragraph || (!text.startsWith(': ') && !text.startsWith(':: '))) return
-  const host = trimmed(previous)
-  if (!host.text.startsWith(': ') && !host.text.startsWith(':: ')) return
-  if (start - line.start <= host.start - previous.start) return
+  if (!line.paragraph || (!text.startsWith(': ') && !text.startsWith(':: '))) return
+  if (!hasAncestor(line.path, context, 'list_item')) return
+  let host: Line | undefined
+  for (let at = line.number - 2; at >= 0; at--) {
+    const candidate = context.lines[at]
+    if (candidate === undefined) break
+    if (line.number - candidate.number > 4) break
+    if (trimmed(candidate).text.startsWith(':: ')) { host = candidate; break }
+  }
+  if (host === undefined) return
+  const first = trimmed(host)
+  if (!first.text.startsWith(':: ') || start - line.start >= first.start - host.start) return
   context.report('description-separator-below-content-column', start, start + text.length, line.path,
     { name: text.startsWith('::') ? 'term' : 'description', column: String(start - line.start + 1),
-      'host.column': String(host.start - previous.start + 1) })
+      'host.column': String(first.start - host.start + 1) })
+}
+
+function innerColonContainer(start: number, context: LintContext): { width: number, start: number } | undefined {
+  let opener: { width: number, start: number } | undefined
+  for (const layout of context.layouts.values()) {
+    if (!/^:{3,}$/.test(layout.openerRaw ?? '')) continue
+    const from = context.chars[layout.startByte] ?? 0
+    const to = context.chars[layout.endByte] ?? 0
+    if (from >= start || to < start - 1) continue
+    if (to < start && layout.closerRaw) continue
+    if (opener !== undefined && from <= opener.start) continue
+    opener = { width: layout.openerRaw!.length, start: from }
+  }
+  return opener
+}
+
+function colonFenceLength(line: Line, context: LintContext): void {
+  const { text, start } = contentLine(line)
+  if (!/^:{3,}$/.test(text)) return
+  const opener = innerColonContainer(start, context)
+  if (opener === undefined || opener.width === text.length) return
+  const openedAt = context.offsetLines[opener.start] ?? 1
+  const openedLine = context.lines[openedAt - 1]
+  const column = opener.start - (openedLine?.start ?? opener.start) + 1
+  context.report('colon-fence-length-mismatch', start, start + text.length, line.path,
+    { authoredWidth: String(text.length), expectedWidth: String(opener.width), kind: 'div',
+      line: String(openedAt), column: String(column),
+      outcome: text.length < opener.width ? 'opens an anonymous div' : 'closes the container' },
+    text.length < opener.width ? 0 : 1)
 }
 
 function rowWithoutPipe(line: Line, context: LintContext): void {
@@ -345,6 +418,7 @@ export const LINE_RULES: readonly Rule[] = [
   spacedRule('quote-fence-ends-the-quote-above', quoteFenceSibling),
   spacedRule('region-marker-renders-as-text', regionAsText),
   spacedRule('caption-looking-paragraph', captionLooking),
+  spacedRule('colon-fence-length-mismatch', colonFenceLength),
   spacedRule('description-separator-below-content-column', descriptionColumn),
   spacedRule('table-row-without-closing-pipe', rowWithoutPipe),
 ]

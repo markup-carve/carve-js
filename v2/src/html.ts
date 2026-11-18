@@ -24,6 +24,7 @@ import { NODE_TABLE } from './ast-validate.ts'
 import { writeTree } from './write.ts'
 import { type ExtensionRenderHost } from './extensions/types.ts'
 import { append } from './append.ts'
+import { percentageText } from './decimal.ts'
 
 /** A writer per block type, each of which reads a node of its own type. */
 type BlockWriters = { [T in keyof NodeOfType]?: (r: Render, node: NodeOfType[T], level: number) => void }
@@ -497,13 +498,15 @@ function include(r: Render, node: IncludeNode, level: number): void {
 
 /** C2-X-004: an extension this engine does not know renders through its fallback. */
 function blockExtension(r: Render, node: BlockExtensionNode, level: number): void {
-  const rendered = r.renderExtension(node)
+  const rendered = r.renderExtension(node, level)
   if (rendered !== null) { line(r, level, rendered); return }
   loss(r, node, 'extension-fallback-rendered', `the extension ${node.name} is rendered through its fallback`)
-  const fallback = rendererHost(r).blocks(node.fallback)
   // C2-X-035: the attributes of the node go on a div around its fallback.
   const tag = attributes(r, node, {})
-  line(r, level, tag === '' ? fallback : `<div${tag}>\n${fallback}\n</div>`)
+  if (tag === '') return writeBlocks(r, node.fallback, level)
+  line(r, level, `<div${tag}>`)
+  writeBody(r, node.fallback, level + 1)
+  line(r, level, '</div>')
 }
 
 function isBlockNode(node: Node): node is Block {
@@ -514,7 +517,7 @@ function isInlineNode(node: Node): node is Inline {
   return NODE_TABLE.INLINES.includes(node.type)
 }
 
-function rendererHost(r: Render): ExtensionRenderHost {
+function rendererHost(r: Render, blockDepth: number): ExtensionRenderHost {
   return {
     blocks: (nodes) => {
       const previous = r.out
@@ -526,6 +529,7 @@ function rendererHost(r: Render): ExtensionRenderHost {
         for (const node of nodes.filter(isBlockNode)) {
           r.out = ''
           writeBlocks(r, [node], 0)
+          if (html !== '' && r.out !== '') html += '\n'
           html += r.out.slice(1)
         }
         return html
@@ -544,10 +548,13 @@ function rendererHost(r: Render): ExtensionRenderHost {
     plainText: (nodes) => plainText(nodes.filter(isInlineNode)),
     escapeText,
     escapeAttribute,
+    attributes: (node, options) => attributes(r, node, options ?? {}),
     nextId: (prefix) => nextExtensionId(r, prefix),
     labels: r.settings.labels,
     profile: r.settings.profile,
     urlPolicy: r.settings.urlPolicy,
+    sourceLines: r.settings.sourceLines,
+    blockDepth,
   }
 }
 
@@ -712,23 +719,13 @@ function writeGroups(r: Render, layout: TableLayout, groups: readonly TableGroup
   }
 }
 
-const PERCENT_DIGITS = 10
-
-/** C2-H-152: the width times 100 as a decimal number without trailing zeros. */
-function percentText(width: number): string {
-  const text = (width * 100).toFixed(PERCENT_DIGITS)
-  let end = text.length
-  while (text[end - 1] === '0') end--
-  return text.slice(0, text[end - 1] === '.' ? end - 1 : end)
-}
-
 /** C2-H-152: one `<col>` per column when at least one column has a width. */
 function writeColumnGroup(r: Render, columns: readonly TableColumnNode[], level: number): void {
   if (!columns.some((column) => column.width !== undefined)) return
   line(r, level, '<colgroup>')
   for (const column of columns) {
     const width = column.width
-    line(r, level + 1, width === undefined ? '<col>' : `<col style="width: ${percentText(width)}%;">`)
+    line(r, level + 1, width === undefined ? '<col>' : `<col style="width: ${percentageText(width)}%;">`)
   }
   line(r, level, '</colgroup>')
 }
@@ -738,8 +735,8 @@ const TABLE_KEYS = ['aligns', 'valigns', 'widths', 'header-rows', 'footer-rows',
 /** C2-H-153: the five keys a table reads are no HTML attributes, consumed or kept in `attrs` (C2-B-227). */
 function withoutTableKeys(node: TableNode): TableNode {
   const keyValues = node.attrs?.keyValues
-  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key))) return node
-  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key)) } }
+  if (keyValues === undefined || !keyValues.some(([key]) => TABLE_KEYS.includes(key.toLowerCase()))) return node
+  return { ...node, attrs: { ...node.attrs, keyValues: keyValues.filter(([key]) => !TABLE_KEYS.includes(key.toLowerCase())) } }
 }
 
 function table(r: Render, node: TableNode, level: number): void {
@@ -947,11 +944,11 @@ export function renderDocument(
     settings, resolution, out: '', count: 0, losses, linkRel: rule?.linkRel ?? '', linksAllowed, linkDepth: 0,
     linkNotes: [], abbrDepth: 0,
     backlinkHost: null, backlinks: '', bidi, longDescriptions: [], extensionIds: 0,
-    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false,
+    document, source, derivedBudget: -1, derivedLeft: 0, derivedReported: false, xrefTextCache: new Map(),
     usedIds: Object.keys(settings.renderers).length === 0 ? { ids: new Set(), prefixes: new Set(), log: [] } : authoredIds(document),
     renderExtension: () => null,
   }
-  r.renderExtension = (node) => {
+  r.renderExtension = (node, level = 0) => {
     const renderer = settings.renderers[node.name]
     if (renderer === undefined || renderer.version !== node.version) return null
     const before = { out: r.out, count: r.count, bidi: r.bidi, extensionIds: r.extensionIds,
@@ -959,7 +956,7 @@ export function renderDocument(
       linkDepth: r.linkDepth, linkNotes: r.linkNotes.slice(), abbrDepth: r.abbrDepth,
       backlinkHost: r.backlinkHost, backlinks: r.backlinks, longDescriptions: r.longDescriptions.slice() }
     try {
-      const result: unknown = renderer.render(node, rendererHost(r))
+      const result: unknown = renderer.render(node, rendererHost(r, level))
       if (typeof result !== 'string') throw new TypeError('renderer returned a value that is not a string')
       return result
     } catch (error) {

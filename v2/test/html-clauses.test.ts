@@ -278,7 +278,7 @@ describe('links, images and references', () => {
     expect(renderWithDiagnostics('[a](javascript:x)').diagnostics).toEqual([
       {
         code: 'destination-denied', severity: 'error', channel: 'render-loss', message: 'the destination javascript:x is denied by the URL policy',
-        path: '/children/0/children/0',
+        path: '/children/0/children/0/href', range: { startOffset: 4, endOffset: 16 },
       },
     ])
   })

@@ -2,6 +2,7 @@ import { recordOf, type ReportRecord } from './report.ts'
 import measuredExamples from '../data/measured-reports.json' with { type: 'json' }
 import transformations from '../data/html-transformations.json' with { type: 'json' }
 import { matchMeasured } from './measured-matchers.ts'
+import { type Context } from './context.ts'
 
 export const MEASURED_REPORT_IDS: readonly string[] = measuredExamples.map((item) => item.id)
 export const TASK_PRESENTATION_MESSAGE =
@@ -91,14 +92,15 @@ function itemDefinition(input: string, expected: string, actual: string): boolea
     || nestedItemDefinition(input)
 }
 
-function legacyMeasured(input: string, expected: string, actual: string, line: number): ReportRecord | null {
+function legacyMeasured(ctx: Context, input: string, expected: string, actual: string, line: number): ReportRecord | null {
   if (tableTab(input, expected, actual)) return recordOf('U-140', line,
     'C2-B-171 treats a leading or trailing cell tab as syntax padding')
   if (quoteDefinition(input, expected, actual)) return recordOf('U-134', line,
     'C2-B-032 and C2-B-081 read the definition-shaped quote line as quote text')
   if (itemDefinition(input, expected, actual)) return recordOf('U-131', line,
     'C2-B-081 and C2-B-083 read a definition-shaped item line as text')
-  if (input.includes('::: |')) return recordOf('U-130', line,
+  if (ctx.visits.some((visit) => visit.node.type === 'line_block' && visit.node.pos !== undefined
+    && visit.node.pos.startLine <= line && line <= visit.node.pos.endLine)) return recordOf('U-130', line,
     input.includes('```')
       ? 'C2-B-123 and C2-B-130 change code fence ownership inside the line block body'
       : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace')
@@ -157,25 +159,27 @@ function unresolvedContinuation(input: string): boolean {
   return false
 }
 
-function lateMeasuredReport(input: string, expected: string, actual: string, line: number): ReportRecord | null {
-  const legacy = legacyMeasured(input, expected, actual, line)
+function lateMeasuredReport(ctx: Context, input: string, expected: string, actual: string, line: number): ReportRecord | null {
+  const legacy = legacyMeasured(ctx, input, expected, actual, line)
   if (legacy !== null) return legacy
-  if (unresolvedContinuation(input)) return recordOf('U-209', line,
+  if (unresolvedContinuation(visibleSource(ctx))) return recordOf('U-209', line,
     'C2-B-059 changes continuation ownership here, and no preserving 0.2 rewrite was verified for this source')
   return null
 }
 
 /** Reports the measured, clause-backed HTML changes that have no source rewrite. */
-export function measuredReport(input: string, expected: string, actual: string, line: number,
+export function measuredReport(ctx: Context, expected: string, actual: string, line: number,
   remainder = false): ReportRecord | null {
-  const exact = exactMeasuredReport(input, line)
+  const exact = exactMeasuredReport(ctx.src, line)
   if (exact !== null) return exact
+  const input = ctx.src
   if (wrappedLinkTitle(input, expected)) return recordOf('U-221', line,
     'C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified')
   const boundary = boundaryReport(input, expected, actual, line)
   if (boundary !== null) return boundary
   if (unresolvedEngineShape(input, expected, actual)) return null
-  if (input.includes('{{') && input.includes('}}')) return recordOf('U-011', line,
+  if (ctx.visits.some((visit) => visit.node.type === 'text' && String(visit.node.value).includes('{{')
+    && String(visit.node.value).includes('}}'))) return recordOf('U-011', line,
     'C2-B-201 and C2-B-206 read the include-looking directive as an include')
   if (input.includes('{table') && input.includes('```csv')) return recordOf('U-061', line,
     'the delimited table with malformed quoting changes ownership under the 0.2 table rules')
@@ -188,5 +192,17 @@ export function measuredReport(input: string, expected: string, actual: string, 
     const example = measuredExamples.find((item) => item.id === measuredId)
     if (example !== undefined) return recordOf(example.id, line, example.message)
   }
-  return lateMeasuredReport(input, expected, actual, line)
+  return lateMeasuredReport(ctx, input, expected, actual, line)
+}
+
+const OPAQUE: readonly string[] = ['code', 'code_block', 'raw_inline', 'raw_block', 'comment', 'literal_inline', 'frontmatter']
+
+function visibleSource(ctx: Context): string {
+  const chars = ctx.src.split('')
+  for (const visit of ctx.visits) {
+    if (!OPAQUE.includes(visit.node.type) || visit.node.pos === undefined) continue
+    const { startOffset, endOffset } = visit.node.pos
+    for (let at = startOffset; at < endOffset; at++) if (chars[at] !== '\n') chars[at] = ' '
+  }
+  return chars.join('')
 }

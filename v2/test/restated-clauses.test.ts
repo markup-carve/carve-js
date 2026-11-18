@@ -358,9 +358,10 @@ describe('the table attributes', () => {
       '{aligns=x widths=y header-rows=z footer-rows=w header-cols=1 k=v}\n| a |', '<table header-cols="1" k="v">\n  <tbody>\n    <tr><td>a</td></tr>\n  </tbody>\n</table>'],
   ])
 
-  it('C2-H-152: a supplied width is written with at most ten decimal places', () => {
+  it('C2-H-152: a supplied width is written as a decimal number without trailing zeros', () => {
     const table: TableNode = { type: 'table', columns: [{ type: 'table_column', width: 0.07 }, { type: 'table_column', width: 1 / 3 }], children: [] }
-    expect(render(documentOf(table))).toBe('<table>\n  <colgroup>\n    <col style="width: 7%;">\n    <col style="width: 33.3333333333%;">\n  </colgroup>\n</table>')
+    expect(render(documentOf(table))).toBe('<table>\n  <colgroup>\n    <col style="width: 7%;">\n'
+      + '    <col style="width: 33.33333333333333%;">\n  </colgroup>\n</table>')
     expect(() => render(documentOf({ type: 'table', columns: [{ type: 'table_column', width: 1.5 }], children: [] }))).toThrow('not a fraction')
   })
 })
@@ -441,7 +442,7 @@ describe('the URL filter', () => {
     const output = renderWithDiagnostics('[a *b*](javascript:x){href=/y} ![alt](data:x){src=/z} <vbscript:q>')
     expect(output.html).toBe('<p><a href="">a <strong>b</strong></a> <img src="" alt="alt"> <a href="">vbscript:q</a></p>')
     expect(output.diagnostics.map((entry) => [entry.code, entry.severity, entry.path])).toEqual([
-      ['destination-denied', 'error', '/children/0/children/0'], ['destination-denied', 'error', '/children/0/children/2'],
+      ['destination-denied', 'error', '/children/0/children/0/href'], ['destination-denied', 'error', '/children/0/children/2/src'],
       ['destination-denied', 'error', '/children/0/children/4'],
     ])
   })
@@ -540,6 +541,7 @@ describe('the profiles', () => {
     expect(renderWithDiagnostics('a [b](c)', { profile: 'minimal' }).diagnostics[0]).toEqual({
       code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss',
       message: 'Degraded a construct the profile "minimal" does not allow: link', path: '/children/0/children/1',
+      range: { startOffset: 2, endOffset: 8 },
     })
     expect(() => render('# h', { profile: 'minimal', strictLosses: true })).toThrow('profile-construct-degraded')
     expect(degraded('a *b*', 'minimal')).toEqual([])

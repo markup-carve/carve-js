@@ -84,6 +84,7 @@ export interface LineCursor {
 
 export interface BlockState {
   src: string
+  frontmatterOpens: boolean
 
   // The output: events and the line-start table, which the tree builder reads.
   events: Int32Array
@@ -102,6 +103,7 @@ export interface BlockState {
 function createState(): BlockState {
   return {
     src: '',
+    frontmatterOpens: true,
     events: new Int32Array(INITIAL_EVENTS),
     eventLength: 0,
     lineStarts: new Int32Array(INITIAL_LINES),
@@ -136,6 +138,7 @@ export function acquireState(): BlockState {
 /** Gives a state back. Its events and line table must not be read after this. */
 export function releaseState(state: BlockState): void {
   state.src = ''
+  state.frontmatterOpens = true
   if (pool.length < POOL_SIZE) pool.push(state)
 }
 

@@ -29,6 +29,7 @@ const BACKSLASH = 92
 const EXCLAMATION = 33
 const PIPE = 124
 const SPACE = 32
+const TAB = 9
 const BACKTICK = 96
 
 /** A writer per inline node type, each of which reads a node of its own type. */
@@ -189,9 +190,13 @@ function paired(mark: string, bit: number, inside: number): InlineWriter {
   return (w, node, flags) => {
     const content = contentOf(w, node, flags | inside)
     if (content === null) return ''
-    const braced = (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
+    const braced = bracedPair(w, node, flags, bit, inside)
     return braced ? `{${mark}${content}${mark}}` : `${mark}${content}${mark}`
   }
+}
+
+function bracedPair(w: Writer, node: InlineParent, flags: number, bit: number, inside: number): boolean {
+  return (flags & inside) !== 0 || (kindsBelow(w, node) & bit) !== 0 || (w.forms.get(node) ?? 0) > 0 || edgeComment(node)
 }
 
 /** C2-W-071, C2-W-116: a span that has only a braced form. */
@@ -689,6 +694,8 @@ function unspelledSpace(w: Writer, node: Node): string {
  */
 function gluedPart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, before: number): string {
   const node = nodes[at]!
+  const mark = node.type === 'emphasis' ? '/' : node.type === 'strong' ? '*' : null
+  if (mark !== null && nodes[end]?.type === 'text' && nodes[end].value.startsWith(mark)) w.forms.set(node, 1)
   const part = writePart(w, nodes, at, end, flags)
   if ((node.type !== 'emphasis' && node.type !== 'strong') || part === '' || part.charCodeAt(0) !== before) return part
   w.forms.set(node, 1)
@@ -700,15 +707,61 @@ export function lineStartBreak(node: Node, lineStart: boolean): string | null {
   return node.type === 'hard_break' && lineStart ? '\\\n' : null
 }
 
-/** The escapes a node takes from its neighbors before it is written. */
+function braceBeforeCommentCloser(w: Writer, node: TextNode, comment: Node | undefined, after: Node | undefined, flags: number): void {
+  if (comment?.type !== 'comment' || comment.form !== 'line' || after !== undefined || (flags & (IN_NOTE | IN_BRACKET)) === 0) return
+  const braces = unclosedBraces(node.value, 0)
+  if (braces.length === 0) return
+  const escapes = w.escapes.get(node) ?? []
+  w.escapes.set(node, [...new Set([...escapes, ...braces])].sort((a, b) => a - b))
+}
+
+function unclosedBraces(value: string, start: number): number[] {
+  const open: { mark: string, at: number }[] = []
+  for (let at = start; at + 1 < value.length; at++) {
+    if (value[at] === '\\' && isAsciiPunctuation(value.charCodeAt(at + 1))) { at++; continue }
+    if (value[at] === '{' && '*/-='.includes(value[at + 1]!)) open.push({ mark: value[at + 1]!, at })
+    else if (value[at + 1] === '}' && open.at(-1)?.mark === value[at]) open.pop()
+  }
+  return open.map((entry) => entry.at)
+}
+
+function spanClosingBracket(w: Writer, node: TextNode, before: Node | undefined): void {
+  if (before?.type !== 'strong' && before?.type !== 'emphasis') return
+  if (!node.value.includes(']') || !before.children.some((child) => child.type === 'text' && /^\^\[[^\]]*\[/.test(child.value))) return
+  const closing = node.value.indexOf(']')
+  const escapes = w.escapes.get(node) ?? []
+  if (!escapes.includes(closing)) w.escapes.set(node, [...escapes, closing].sort((a, b) => a - b))
+}
+
+function braceBesidePair(w: Writer, node: TextNode, next: Node | undefined, atEnd: boolean, flags: number): void {
+  const pairedNext = next?.type === 'strong' ? !bracedPair(w, next, flags, 2, IN_STRONG)
+    : next?.type === 'emphasis' && !bracedPair(w, next, flags, 1, IN_EMPHASIS)
+  const pairedEnd = atEnd && (flags & (IN_STRONG | IN_EMPHASIS)) !== 0
+  if (!node.value.endsWith('{') || (!pairedNext && !pairedEnd)) return
+  const at = node.value.length - 1
+  const escapes = w.escapes.get(node) ?? []
+  if (!escapes.includes(at)) w.escapes.set(node, [...escapes, at].sort((a, b) => a - b))
+}
+
 function placeEscapes(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number, afterBang: boolean): void {
   const node = nodes[at]!
   if (node.type === 'text') {
     doubleLastBackslash(w, node, nodes, end, flags)
     escapeGluedBacktick(w, node, nodes[at - 1])
+    braceBeforeCommentCloser(w, node, nodes[end], nodes[end + 1], flags)
+    spanClosingBracket(w, node, nodes[at - 1])
+    braceBesidePair(w, node, nodes[end], end === nodes.length, flags)
   }
   // Behind an unescaped `!` the bracket reads as span text whatever the caret starts.
   if (node.type === 'span' && !afterBang) escapeLeadingCaret(w, node.children, flags)
+}
+
+function inlinePart(w: Writer, nodes: readonly Node[], at: number, end: number, flags: number,
+  last: number, lineStart: boolean): string {
+  const first = lineStartBreak(nodes[at]!, lineStart)
+  if (first !== null) return first
+  if (nodes[at]?.type === 'hard_break' && (flags & BARE_BREAKS) !== 0 && (last === SPACE || last === TAB)) return '\\\n'
+  return gluedPart(w, nodes, at, end, flags, last)
 }
 
 export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): string {
@@ -732,7 +785,7 @@ export function writeInlines(w: Writer, nodes: readonly Node[], flags: number): 
     }
     const end = partEnd(w, nodes, at)
     placeEscapes(w, nodes, at, end, flags, last === EXCLAMATION && out.charCodeAt(out.length - 2) !== BACKSLASH)
-    const part: string = lineStartBreak(node, lineStart) ?? gluedPart(w, nodes, at, end, flags, last)
+    const part = inlinePart(w, nodes, at, end, flags, last, lineStart)
     out += part
     last = part === '' ? last : part.charCodeAt(part.length - 1)
     lineStart = last === 10 || (lineStart && part === '')
@@ -783,7 +836,8 @@ export function writeContent(w: Writer, nodes: readonly Node[], flags: number): 
   // block that line ending alone is no break at the end of the content, so the backslash stays (C2-I-102).
   if (last?.type !== 'hard_break' || !out.endsWith('\n')) return out
   // A break that starts a line was written with its backslash (lineStartBreak).
-  const spelled = out.endsWith('\\\n') && (out.length === 2 || out[out.length - 3] === '\n')
+  const before = out.charCodeAt(out.length - 3)
+  const spelled = out.endsWith('\\\n') && (out.length === 2 || before === 10 || before === SPACE || before === TAB)
   return (flags & BARE_BREAKS) !== 0 && !spelled ? `${out.slice(0, -1)}\\` : out.slice(0, -1)
 }
 

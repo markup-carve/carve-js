@@ -5,6 +5,8 @@ import { CarveTreeError, validateEnvelope, validateTree } from './ast-validate.t
 import { type ExtensionDefinition } from './extensions/types.ts'
 import { utf8Length } from './positions.ts'
 
+export const JSON_SOURCE_LENGTH = Symbol('jsonSourceLength')
+
 /** The bare tree as JSON, every field included (C2-A-165). */
 export function encodeTree(document: Node): string {
   return JSON.stringify(document)
@@ -48,7 +50,7 @@ export function decodeTree(json: string, source?: string, extensions: readonly E
     if (envelope !== null && error instanceof CarveTreeError) throw new CarveTreeError(`/document${error.path}`, error.reason)
     throw error
   }
-  if (document.srcByteLength !== undefined) document.srcByteLength = Math.min(document.srcByteLength, utf8Length(json))
+  Object.defineProperty(document, JSON_SOURCE_LENGTH, { value: utf8Length(json) })
   return document
 }
 

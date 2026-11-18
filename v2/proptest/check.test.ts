@@ -75,23 +75,14 @@ void test('C2-W-088: an escape before a dash run is removed when unasked', () =>
   for (const source of cases) assert.equal(format(source), `${source.replace('\\[', '[')}\n`)
 })
 
-void test('C2-W-133: a repeated writer repair state is reported', () => {
+void test('C2-W-088: a former repair cycle reaches its canonical form', () => {
   const source = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8')
-  const script = 'const r = require("./v2/src/index.ts").formatWithDiagnostics(process.env.CARVE_SOURCE);' +
-    'process.stdout.write(JSON.stringify(r.diagnostics.map((entry) => entry.code)))'
-  const result = spawnSync(process.execPath, ['-e', script], {
-    cwd: join(import.meta.dirname, '../..'), encoding: 'utf8', timeout: 2000,
-    env: { ...process.env, CARVE_SOURCE: source },
-  })
-  assert.equal(result.error, undefined)
-  assert.equal(result.status, 0)
-  assert.match(result.stdout, /writer-refused/)
-  const diagnostic = formatWithDiagnostics(source).diagnostics.find((entry) => entry.code === 'writer-refused')
-  assert.equal(diagnostic?.path, '/children/0')
-  assert.throws(() => format(source), CarveWriteError)
-  assert.throws(() => write(parse(source)), CarveWriteError)
-  assert.equal(checkWriter(source), 'refused')
-  assert.equal(checkGates(source).refused, true)
+  const output = formatWithDiagnostics(source)
+  assert.deepEqual(output.diagnostics, [])
+  assert.equal(format(source), output.source)
+  assert.equal(write(parse(source)), output.source)
+  assert.equal(checkWriter(source), null)
+  assert.equal(checkGates(source).refused, false)
 })
 
 void test('C2-W-134: source-only writer calls refuse an unspellable field', () => {
@@ -110,12 +101,14 @@ void test('C2-W-134: a source-only write refuses an unspellable structure', () =
     error.diagnostics.some((entry) => entry.code === 'structure-unspellable'))
 })
 
-void test('C2-W-134: source-only formatting refuses a loss in an extension claim', () => {
-  const body = readFileSync(join(import.meta.dirname, 'fixtures/writer-cycle.crv'), 'utf8').trimEnd()
+void test('C2-X-051, C2-W-134: a failed claim keeps the core node and source-only formatting refuses a loss', () => {
+  const body = readFileSync(join(import.meta.dirname, '../test/fixtures/plan-quote-depth.crv'), 'utf8').trimEnd()
   const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
   const result = formatWithDiagnostics(source, { extensions: tabsExtensions })
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'extension-transform-failed'), true)
   assert.equal(result.diagnostics.some((entry) => entry.code === 'structure-unspellable'), true)
-  assert.throws(() => format(source, { extensions: tabsExtensions }), CarveWriteError)
+  assert.throws(() => format(source, { extensions: tabsExtensions }), (error: unknown) => error instanceof CarveWriteError &&
+    error.diagnostics.some((entry) => entry.code === 'structure-unspellable'))
 })
 
 void test('C2-X-051: a lossy tabs claim keeps its core fallback', () => {
@@ -132,4 +125,12 @@ void test('C2-W-011: an unspellable field is reported before checking stability'
 
 void test('C2-W-011: an unspellable structure is reported before checking stability', () => {
   assert.equal(check('format', 'x{/^[/}@\\`\\]\\`"\'', random(1))?.kind, 'writer-accounting')
+})
+
+void test('C2-W-066: a bare CSV cell whose value is a space is valid', () => {
+  assert.equal(check('format', '{table}\n```csv\n \n`', random(1)), null)
+})
+
+void test('C2-W-080: a hard break keeps text before it in a hard-break block', () => {
+  assert.equal(check('format', '::: \\\n: \\\nt', random(1)), null)
 })

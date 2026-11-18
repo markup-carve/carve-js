@@ -62,8 +62,12 @@ export interface Leaf {
   textMark: boolean
   /** Whether a character of text that can open a construct came before the unit in the scan. */
   textOpener: boolean
+  /** Whether a line comment in this leaf can need a closer check. */
+  hasLineComment: boolean
   /** The number of marks of the tree open at the unit in the scan. */
   openDepth: number
+  openBrackets: number
+  openBraces: number
   /** C2-W-016: the nodes whose value holds a CR at a line end, which no spelling keeps. */
   lostValues: Node[]
   /** C2-I-089: per unit, whether it stands inside an inline footnote, once a caret asked. */
@@ -75,7 +79,8 @@ export function createLeaf(): Leaf {
     codes: [], kinds: [], owners: [], offsets: [], undecided: null, respell: [], cursor: 0, where: 0, opaque: null,
     angleFailEnd: -1, inCell: false, inTitle: false, inLine: false, lastAtomTick: -1, ticks: null, closes: null, opens: null,
     extensions: new Map(),
-    textMark: false, textOpener: false, openDepth: 0, lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
+    textMark: false, textOpener: false, hasLineComment: false, openDepth: 0, openBrackets: 0, openBraces: 0,
+    lastBracket: -1, braceFailEnd: -1, lostValues: [], notes: null,
   }
 }
 
@@ -96,6 +101,13 @@ export function inNote(leaf: Leaf, at: number): boolean {
 }
 
 function push(leaf: Leaf, code: number, kind: number, owner: Node, offset: number): void {
+  const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds.at(-1) !== ESCAPE)
+  if (read) {
+    if (code === 91) leaf.openBrackets++
+    else if (code === 93 && leaf.openBrackets > 0) leaf.openBrackets--
+    else if (code === 123) leaf.openBraces++
+    else if (code === 125 && leaf.openBraces > 0) leaf.openBraces--
+  }
   if (code === 96 && kind === ATOM) leaf.lastAtomTick = leaf.codes.length
   if (code === 93) leaf.lastBracket = leaf.codes.length
   leaf.codes.push(code)
@@ -232,7 +244,9 @@ function nodeUnits(w: Writer, leaf: Leaf, node: Node, flags: number, lineStart: 
   if (node.type === 'text') return textUnits(w, leaf, node, flags)
   if (node.type === 'soft_break') return push(leaf, LF, ATOM, node, -1)
   if (node.type === 'hard_break') {
-    return pushString(leaf, lineStartBreak(node, lineStart) ?? ((flags & BARE_BREAKS) !== 0 ? '\n' : '\\\n'), ATOM, node)
+    const previous = leaf.codes[leaf.codes.length - 1]
+    const bare = (flags & BARE_BREAKS) !== 0 && previous !== SPACE && previous !== TAB
+    return pushString(leaf, lineStartBreak(node, lineStart) ?? (bare ? '\n' : '\\\n'), ATOM, node)
   }
   if (node.type === 'inline_extension' && node.name.includes('.')) return undecide(leaf, 'extension')
   if (!containerUnits(w, leaf, node.type, node, flags)) return pushString(leaf, writeInline(w, node, flags), ATOM, node)
@@ -251,26 +265,27 @@ function lineComment(leaf: Leaf, node: CommentNode, lineStart: boolean): boolean
   const opener = leaf.codes.length - (lineStart ? 1 : 2)
   const emptyImage = node.value === '' && leaf.codes[opener] === 91 && leaf.codes[opener - 1] === 33
   const bracket = (node.value.includes(']') || node.value.endsWith('\\') || emptyImage)
-    && openDepth(leaf, 91, 93) > 0
-  if (!bracket && !(BRACED_CLOSER.test(node.value) && openDepth(leaf, 123, 125) > 0)) return false
+    && leaf.openBrackets > 0 && !insideFootnoteLabel(leaf)
+  if (!bracket && !(BRACED_CLOSER.test(node.value) && leaf.openBraces > 0)) return false
   undecide(leaf, 'comment bracket')
   return true
 }
 
-/** The openers `open` of the units so far that no `close` has closed, of text read bare or of the tree's marks. */
-function openDepth(leaf: Leaf, open: number, close: number): number {
-  let depth = 0
-  for (let at = 0; at < leaf.codes.length; at++) {
-    const kind = leaf.kinds[at]
-    const read = kind === OPEN || kind === CLOSE || (kind === TEXT && leaf.kinds[at - 1] !== ESCAPE)
-    if (!read) continue
-    if (leaf.codes[at] === open) depth++
-    else if (leaf.codes[at] === close && depth > 0) depth--
-  }
-  return depth
+function insideFootnoteLabel(leaf: Leaf): boolean {
+  const bracket = leaf.codes.lastIndexOf(91)
+  return bracket >= 0 && leaf.kinds[bracket] === TEXT && leaf.codes[bracket + 1] === 94
+}
+
+function commentBeforeTextCloser(leaf: Leaf, node: Node, after: Node | undefined): boolean {
+  return node.type === 'comment' && node.form === 'line' && after?.type === 'text'
+    && after.value.startsWith(']') && leaf.openBraces > 0
 }
 
 const BRACED_CLOSER = /[*+,\-/=^_~]\}/
+
+function markLineComment(leaf: Leaf, node: Node): void {
+  leaf.hasLineComment ||= node.type === 'comment' && node.form === 'line'
+}
 
 /** The units of `nodes`, as `writeInlines` writes them. */
 export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flags: number): void {
@@ -278,6 +293,9 @@ export function modelInlines(w: Writer, leaf: Leaf, nodes: readonly Node[], flag
     const node = nodes[at]!
     const size = leaf.codes.length
     const lineStart = size === 0 || leaf.codes[size - 1] === LF
+    const after = nodes[at + 1]
+    markLineComment(leaf, node)
+    if (commentBeforeTextCloser(leaf, node, after)) return undecide(leaf, 'comment before a closer')
     if (node.type === 'comment' && node.form !== 'braced' && lineComment(leaf, node, lineStart)) return
     if ((flags & IN_CELL) !== 0 && w.wrapStarts?.has(node) === true) return undecide(leaf, 'continuation row')
     if (joinsNextCode(nodes, at)) return undecide(leaf, 'code run')

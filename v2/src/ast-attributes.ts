@@ -36,17 +36,25 @@ function sameName(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase()
 }
 
-function keyIndexOf(keyValues: readonly [string, string][]): Map<string, number> {
+const SEMANTIC_KEYS = new Set(['abbr', 'time', 'kbd'])
+
+/** C2-A-035: lowercase semantic span keys are distinct from ordinary attribute names. */
+export function keyIdentity(key: string, span: boolean): string {
+  const lower = key.toLowerCase()
+  return span && key === lower && SEMANTIC_KEYS.has(lower) ? `semantic:${lower}` : `ordinary:${lower}`
+}
+
+function keyIndexOf(keyValues: readonly [string, string][], span: boolean): Map<string, number> {
   const index = new Map<string, number>()
   keyValues.forEach(([key], at) => {
-    const name = key.toLowerCase()
+    const name = keyIdentity(key, span)
     if (!index.has(name)) index.set(name, at)
   })
   return index
 }
 
 /** C2-I-039, C2-I-042: adds the parts of one block to `attributes`. */
-export function attributeSink(attributes: Attributes): AttributeSink {
+export function attributeSink(attributes: Attributes, span = false): AttributeSink {
   const sink: AttributeSink = {
     id: (name) => {
       attributes.id = name
@@ -64,8 +72,8 @@ export function attributeSink(attributes: Attributes): AttributeSink {
         return
       }
       // A later key replaces an earlier one of the same name, at its first place (C2-A-035).
-      const index = attributes.keyIndex ??= keyIndexOf(attributes.keyValues)
-      const name = key.toLowerCase()
+      const index = attributes.keyIndex ??= keyIndexOf(attributes.keyValues, span)
+      const name = keyIdentity(key, span)
       const earlier = index.get(name)
       if (earlier === undefined) {
         index.set(name, attributes.keyValues.length)

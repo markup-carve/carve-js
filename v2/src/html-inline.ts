@@ -13,6 +13,8 @@ import { inlinesText } from './profile.ts'
 import { smartGlyph } from './ast-text.ts'
 import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
+import { withoutUnpairedSurrogates } from './unicode.ts'
+import { utf8Length } from './positions.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -89,8 +91,8 @@ function authoredKey(node: Node, name: string): string | undefined {
 }
 
 /** A copy of `node` without the keys `names`, which an element takes as its name; they match in lower case only (C2-H-075). */
-function withoutKeys<N extends Node>(node: N, names: string[]): N {
-  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(key))
+function withoutKeys<N extends Node>(node: N, names: string[], caseInsensitive = false): N {
+  const keyValues = (node.attrs?.keyValues ?? []).filter(([key]) => !names.includes(caseInsensitive ? key.toLowerCase() : key))
   return { ...node, attrs: { ...node.attrs, keyValues } }
 }
 
@@ -160,10 +162,10 @@ function referenceCarriers(r: Render, node: LinkNode | ImageNode, key: string | 
 function withRel<N extends Node>(r: Render, node: N, structural: Pair[]): N {
   const authored = authoredKey(node, 'rel')
   if (authored === undefined && r.linkRel === '') return node
-  const words = authored === undefined ? [] : keyValue('rel', authored).split(' ').filter((word) => word !== '')
+  const words = authored === undefined ? [] : keyValue('rel', authored).split(/[\t\n\f\r ]+/).filter((word) => word !== '')
   for (const word of r.linkRel.split(' ')) if (word !== '' && !words.includes(word)) words.push(word)
   if (words.length > 0) structural.push(['rel', words.join(' ')])
-  return authored === undefined ? node : withoutKeys(node, ['rel'])
+  return authored === undefined ? node : withoutKeys(node, ['rel'], true)
 }
 
 /** C2-N-054: a reference in an included file takes the definition resolution chose for it. */
@@ -231,9 +233,15 @@ function xref(node: XrefNode, r: Render): string {
   // C2-H-086: unresolved, the characters as typed.
   if (href === undefined || r.resolution.goneTargets?.has(href) === true) return escapeText(`</#${node.key}>`)
   // C2-H-096: the generated text is plain text.
-  const generated = escapeText(r.resolution.xrefText.get(node) ?? '')
+  const raw = r.resolution.xrefText.get(node) ?? ''
+  let cached = r.xrefTextCache.get(raw)
+  if (cached === undefined) {
+    const escaped = escapeText(raw)
+    cached = { escaped, bytes: utf8Length(escaped) }
+    r.xrefTextCache.set(raw, cached)
+  }
   // C2-H-201: past the budget the key stands for the generated text.
-  const text = drawDerivedText(r, node, generated) ? generated : escapeText(node.key)
+  const text = drawDerivedText(r, node, cached.escaped, cached.bytes) ? cached.escaped : escapeText(node.key)
   if (r.linkDepth > 0) return text
   const structural: Pair[] = [['href', href]]
   if (r.settings.roundtrip) structural.push(['data-carve-xref', null])
@@ -281,7 +289,7 @@ function rawInline(node: RawInlineNode, r: Render): string {
 }
 
 function templateUrl(template: string | undefined, name: string): string | null {
-  return template === undefined ? null : template.replaceAll('{name}', encodeURIComponent(name))
+  return template === undefined ? null : template.replaceAll('{name}', encodeURIComponent(withoutUnpairedSurrogates(name)))
 }
 
 /** C2-H-126: the URL that `social` gives for a mention or a tag, or null. A resolver is final, and its error stays inside. */

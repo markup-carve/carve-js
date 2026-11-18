@@ -290,6 +290,16 @@ function escapeContentStart(c: Check, e: Node): boolean {
   return mark !== undefined && mark !== ']' && first?.type === 'text' && first.value.startsWith(mark) && escapeAt(c, first, 0)
 }
 
+function escapeFootnoteBrace(c: Check, e: Node): boolean {
+  if (e.type !== 'inline_footnote') return false
+  const first = e.children[0]
+  const last = e.children.at(-1)
+  if (first?.type !== 'text' || last?.type !== 'comment' || last.form !== 'line') return false
+  if (!e.children.some((node) => node.type === 'strong' || node.type === 'emphasis')) return false
+  const brace = first.value.search(/\{[*/]/)
+  return brace >= 0 && escapeAt(c, first, brace)
+}
+
 /**
  * Asks for the escape of the first character of the text behind `es[i]`, which can read on into its
  * markup: a name character behind a mention or a tag, a mark behind a closing mark, or the neighbor
@@ -348,6 +358,7 @@ type RespellStep = (c: Check, es: readonly Node[], i: number, attempt: Attempt) 
 const RESPELL_STEPS: readonly RespellStep[] = [
   escapeBefore,
   (c, es, i) => escapeContentStart(c, es[i]!),
+  (c, es, i) => escapeFootnoteBrace(c, es[i]!),
   (c, es, i) => escapeContentConstruct(c, es[i]!),
   escapeAcrossCloser,
   escapeInside,
@@ -1086,10 +1097,52 @@ function matchNode(c: Check, e: Node, es: readonly Node[], as: readonly Node[], 
     return true
   }
   if (readsNeighbor(c, e, es, at.i, a)) return false
+  repairCommentCloser(c, es, at.i, e, a)
   compareInline(c, e, a)
   at.i++
   at.j++
   return true
+}
+
+function repairCommentCloser(c: Check, es: readonly Node[], at: number, expected: Node, actual: Node): void {
+  if (expected.type !== 'comment' || actual.type !== 'comment' || expected.form !== 'line') return
+  if (!expected.value.includes(']') && actual.value.includes(']')) {
+    if (!repairBracketBeforeComment(c, es, at)) repairBraceBeforeComment(c, es, at)
+    return
+  }
+  if (!expected.value.includes(']') || actual.value.includes(']')) return
+  const before = es[at - 1]
+  if (before?.type !== 'text') return
+  for (const bracket of bracketsBeforeComment(before.value)) if (escapeAt(c, before, bracket)) return
+}
+
+/** The adjacent open braces remain text when the final bracket or caret keeps the comment inside its bracket. */
+function repairBracketBeforeComment(c: Check, es: readonly Node[], at: number): boolean {
+  const before = es[at - 1]
+  if (before?.type !== 'text' || !before.value.includes('[{*{*')) return false
+  if (before.value.slice(before.value.lastIndexOf('[')).includes('{*')) return false
+  const last = before.value.length - 1
+  return (before.value[last] === ']' || before.value[last] === '^') && escapeAt(c, before, last)
+}
+
+function bracketsBeforeComment(value: string): number[] {
+  const open: number[] = []
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '[') open.push(index)
+    else if (value[index] === ']' && open.length > 0) open.pop()
+  }
+  return open
+}
+
+function repairBraceBeforeComment(c: Check, es: readonly Node[], at: number): void {
+  for (let index = at - 1; index >= 0; index--) {
+    const node = es[index]
+    if (node?.type === 'soft_break' || node?.type === 'hard_break') return
+    if (node?.type !== 'text') continue
+    for (let brace = node.value.length - 2; brace >= 0; brace--) {
+      if (node.value[brace] === '{' && '*/-='.includes(node.value[brace + 1]!) && escapeAt(c, node, brace)) return
+    }
+  }
 }
 
 /** Notes the place of the cursor where both lists start a node there. A line break ends the line the offsets hold on. */

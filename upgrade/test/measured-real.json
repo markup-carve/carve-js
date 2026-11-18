@@ -2213,9 +2213,9 @@
     "path": "resources/examples/edge-cases/0576-an-at-sign-before-a-space-and-a-doubled-delimiter-inside-bold-italic-are-text.md",
     "line": 21,
     "input": "*/a // b/*\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-145"
+      "U-273"
     ]
   },
   {
@@ -2448,10 +2448,9 @@
     "path": "resources/examples/edge-cases/0082-blockquote-lazy-continuation.md",
     "line": 107,
     "input": "> [f]: ~\n/\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
-      "U-038",
-      "U-134"
+      "U-038"
     ]
   },
   {
@@ -2463,7 +2462,7 @@
     "check": "mismatch",
     "entries": [
       "U-038",
-      "U-134"
+      "U-209"
     ]
   },
   {
@@ -2475,7 +2474,7 @@
     "check": "mismatch",
     "entries": [
       "U-038",
-      "U-134"
+      "U-209"
     ]
   },
   {

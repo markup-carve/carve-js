@@ -20,6 +20,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  extension-migration:
+    name: extension migration typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check:extension-migration
+
   ast-schema-crosscheck:
     name: 0.2 AST schema agreement, 100,000 mutants
     runs-on: ubuntu-latest
@@ -145,6 +158,7 @@ jobs:
 
       - run: npm ci
       - run: npm run test:lint:v2
+      - run: npm run build
 
       # The corpus of the specification at the pinned commit: every example, clause case, refused and
       # positive tree and layout sidecar. Prints the table per kind and fails on an entry that is not held.

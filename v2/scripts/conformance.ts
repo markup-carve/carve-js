@@ -8,6 +8,7 @@ import {
 import { clauseCaseMismatches, exampleMismatches, exampleTreeMismatches, layoutMismatches, refusalPath } from './corpus-checks.ts'
 import { HELD, REFUSED_AT } from './corpus-held.ts'
 import { decodeTree } from '../src/index.ts'
+import { newCaseMismatches } from './corpus-new.mjs'
 
 interface Row {
   total: number
@@ -50,9 +51,9 @@ for (const example of CORPUS_EXAMPLES) {
   else if (failed.length > 0) failures.push(`${example.id}: ${failed.join(', ')}`)
 }
 for (const entry of CLAUSE_CASES) {
-  const failed = clauseCaseMismatches(entry).map((mismatch) => mismatch.field)
+  const failed = (entry.kind === undefined ? clauseCaseMismatches(entry) : newCaseMismatches(entry)).map((mismatch) => mismatch.field)
   const held = HELD.get(entry.id)
-  const row = count('clause cases', failed)
+  const row = count(`clause cases, ${entry.kind ?? 'render'}`, failed)
   if (held !== undefined && failed.join() === held.fields.join()) row.held++
   else if (failed.length > 0) failures.push(`${entry.id}: ${failed.join(', ')}`)
 }

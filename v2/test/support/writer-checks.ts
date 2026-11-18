@@ -510,13 +510,38 @@ function show(text: string): string {
   return JSON.stringify(text)
 }
 
+/** C2-W-075 retains a recorded reference verbatim, including text escapes C2-W-088 would otherwise remove. */
+function outsideRawReferences(source: string, reference: string, original: string): boolean {
+  const links = (text: string): Node[] => placedNodes(parse(text))
+    .map(({ node }) => node).filter((node) => (node.type === 'link' || node.type === 'image') && node.key !== undefined)
+  const writtenLinks = links(source)
+  const referenceLinks = links(reference)
+  if (writtenLinks.length === 0 || writtenLinks.length !== referenceLinks.length) return false
+  const mask = (text: string, nodes: readonly Node[], requireRaw: boolean): string | null => {
+    const offsets = stringOffsets(text)
+    let result = text
+    for (let at = nodes.length - 1; at >= 0; at--) {
+      const pos = nodes[at]?.pos
+      const start = pos === undefined ? undefined : offsets.get(pos.startOffset)
+      const end = pos === undefined ? undefined : offsets.get(pos.endOffset)
+      if (start === undefined || end === undefined) return null
+      if (requireRaw && !original.includes(text.slice(start, end))) return null
+      result = `${result.slice(0, start)}\u0000${result.slice(end)}`
+    }
+    return result
+  }
+  const a = mask(source, writtenLinks, true)
+  const b = mask(reference, referenceLinks, false)
+  return a !== null && a === b
+}
+
 /**
  * The gates on one written form: it parses to `tree` (C2-W-002) and its escapes are those of the procedure
  * (C2-W-088), byte for byte. Where neither the procedure nor C2-W-125 reaches the tree, the clauses do not
  * decide the form; such an input is added to `undecided` and only C2-W-002 and C2-W-003 hold for it.
  */
 function checkWritten(
-  tree: DocumentNode, written: string, losses: readonly Diagnostic[], path: string, undecided: string[],
+  tree: DocumentNode, written: string, losses: readonly Diagnostic[], path: string, undecided: string[], original?: string,
 ): string | null {
   if (losses.length > 0) {
     const reported = losses.map((entry) => `${entry.code} at ${show(entry.path ?? '')}`).join(', ')
@@ -526,7 +551,9 @@ function checkWritten(
   // C2-W-088: the written form is the one the procedure gives, byte for byte.
   const reference = referenceForm(written, tree)
   if ('gap' in reference) undecided.push(`${path}: ${show(written)}: ${reference.gap}`)
-  else if (reference.form !== written) return `${path}: C2-W-088, written ${show(written)}, the procedure gives ${show(reference.form)}`
+  else if (reference.form !== written && !(original !== undefined && outsideRawReferences(written, reference.form, original))) {
+    return `${path}: C2-W-088, written ${show(written)}, the procedure gives ${show(reference.form)}`
+  }
   // C2-W-003 on the formatter path, and a canonical input stays as it is.
   const again = format(written)
   return again === written ? null : `${path}: the canonical form ${show(written)} is formatted to ${show(again)}`
@@ -540,7 +567,7 @@ export function checkWriter(src: string, undecided: string[] = []): string | nul
   const losses = formatted.diagnostics.filter((entry) => entry.channel === 'render-loss')
   const recordedRefusal = isRefusal(tree, losses)
   const plainRefusal = isRefusal(tree, plain.diagnostics)
-  const failure = (recordedRefusal ? null : checkWritten(tree, formatted.source, losses, 'with the record', undecided))
+  const failure = (recordedRefusal ? null : checkWritten(tree, formatted.source, losses, 'with the record', undecided, src))
     ?? (plainRefusal ? null : checkWritten(tree, plain.source, plain.diagnostics, 'without the record', undecided))
   if (failure !== null) return failure
   if (recordedRefusal || plainRefusal) return 'refused'

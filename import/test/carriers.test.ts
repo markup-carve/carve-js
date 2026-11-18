@@ -34,15 +34,15 @@ const rendered = examples.map(source => ({ source, html: roundTrip(source).html 
 const GAPS = ['table_column.authored: lost', 'table_body.headRows: lost']
 
 /**
- * Examples whose difference no carrier of C2-H-011 can carry, each in _SPEC_GAPS.md: a key typed in another normal
- * form than the id it names (C2-I-097), and the bodies and row header columns of `body-rows` (C2-B-230).
+ * Examples whose difference no carrier of C2-H-011 can carry: a key typed in another normal form than the id it names
+ * (C2-I-097), the bodies and row header columns of `body-rows` (C2-B-230), and attribute name case (C2-H-195 row 13).
  */
 const HELD_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
   ['# Caf\u00e9\n\nSee </#Cafe\u0301>.', ['xref.key']],
   ['{body-rows=1,1 body-header-rows=0,1 body-header-cols=1,0 footer-rows=1}\n|= Item |= Qty |\n| tea | 2 |\n| Later | |\n'
     + '| milk | 1 |\n| Total | 3 |', ['table_body.rowHeadColumns: lost', 'table_cell.header']],
-  // An HTML parser lowers attribute names, so the ordinary key KBD of C2-H-013 reads back as the key kbd (_SPEC_GAPS.md G-H3).
-  ['[x]{KBD} and [y]{abbr="a" ABBR="b"}', ['span.attrs.keyValues: value']],
+  // C2-H-195 row 13: HTML lowers KBD and ABBR, and KBD then selects the semantic span key of C2-H-075.
+  ['[x]{KBD} and [y]{abbr="a" ABBR="b"}', ['span.attrs.keyValues: lost object', 'span.attrs.keyValues: value']],
 ])
 
 /** Every example whose `roundtrip` render holds `marker` imports back to its tree, after the specified losses and gaps. */

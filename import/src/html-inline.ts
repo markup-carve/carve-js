@@ -118,7 +118,11 @@ function trimTrailing(children: Inline[]): boolean {
 export function trimInlineEdges(children: Inline[], node: Html.ChildNode, context: HtmlContext): Inline[] {
   const leading = trimLeading(children)
   const trailing = trimTrailing(children)
-  if (leading || trailing) report(context, node, 'import-whitespace-normalized', 'Whitespace at the edge of a block removed')
+  if (leading || trailing) {
+    const raw = isElement(node) ? content(node) : [node]
+    report(context, leading ? raw[0] ?? node : raw.at(-1) ?? node,
+      'import-whitespace-normalized', 'Whitespace at the edge of a block removed')
+  }
   return children
 }
 

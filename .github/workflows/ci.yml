@@ -21,7 +21,7 @@ concurrency:
 jobs:
   # THE PIN RESOLVES BY SHA, SO NOTHING ELSE HERE CAN SEE A DANGLING ONE. Every
   # other job checks the spec submodule out and runs against whatever tree the
-  # pin names, which works just as well for a commit that is not on spec `main`
+  # pin names, which works just as well for a commit that is not on the lane's spec branch
   # as for one that is - right up until the commit is collected and the checkout
   # itself starts failing (markup-carve/carve#1740). Seconds, so it runs first
   # and on every PR.
@@ -32,7 +32,7 @@ jobs:
   # engines pin the SAME commit is the spec repo's
   # scripts/fleet-spec-pin-check.mjs, run from pre-tag-check.sh at tag time.
   spec-pin:
-    name: spec pin is reachable from spec main
+    name: spec pin is reachable from the matching spec branch
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -43,6 +43,8 @@ jobs:
           fetch-depth: 0
 
       - name: Spec pin ancestry
+        env:
+          SPEC_DEFAULT_BRANCH: ${{ (github.ref_name == 'next2' || github.base_ref == 'next2') && 'next2' || 'main' }}
         run: ./scripts/check-spec-pin-ancestry.sh spec
 
   typecheck:

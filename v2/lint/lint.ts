@@ -1,5 +1,5 @@
 import { forEachSlot, type Node, SOURCE_ORDER } from '../src/ast.ts'
-import { parseWithDiagnostics, parseWithLayout } from '../src/api.ts'
+import { parseWithLayout } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { CarveOptionError } from '../src/options.ts'
 import { CATALOG, type RuleId } from './catalog.ts'
@@ -22,16 +22,7 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** C2-H-137, C2-W-109: validate the lint options before reading any value. */
-function validateOptions(options: unknown): asserts options is LintOptions {
-  if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
-  for (const name of Object.keys(options)) {
-    if (name !== 'rules' && name !== 'platforms' && name !== 'includes') throw new CarveOptionError(name, 'unknown option')
-  }
-  const platforms = options['platforms']
-  if (platforms !== undefined && (!Array.isArray(platforms) || !platforms.every((item) => item === 'github'))) {
-    throw new CarveOptionError('platforms', 'not a list of supported platform names')
-  }
-  const rules = options['rules']
+function validateRuleSettings(rules: unknown): void {
   if (rules === undefined) return
   if (!plainRecord(rules)) throw new CarveOptionError('rules', 'not a map')
   for (const [name, value] of Object.entries(rules)) {
@@ -39,6 +30,20 @@ function validateOptions(options: unknown): asserts options is LintOptions {
       throw new CarveOptionError('rules', `invalid rule ${name}`)
     }
   }
+}
+
+function validateOptions(options: unknown): asserts options is LintOptions {
+  if (!plainRecord(options)) throw new CarveOptionError('lint', 'not an object')
+  for (const name of Object.keys(options)) {
+    if (name !== 'rules' && name !== 'platforms' && name !== 'includes' && name !== 'extensions') {
+      throw new CarveOptionError(name, 'unknown option')
+    }
+  }
+  const platforms = options['platforms']
+  if (platforms !== undefined && (!Array.isArray(platforms) || !platforms.every((item) => item === 'github'))) {
+    throw new CarveOptionError('platforms', 'not a list of supported platform names')
+  }
+  validateRuleSettings(options['rules'])
 }
 
 function active(id: RuleId, options: LintOptions): boolean {
@@ -120,9 +125,16 @@ function visitChildren(node: Node, path: string, context: LintContext, controls:
 
 function visit(node: Node, path: string, context: LintContext, controls: Control[][]): void {
   context.nodeTypes.set(path, node.type)
-  if (node.attrs?.id !== undefined) context.state.ids.add(node.attrs.id)
+  if (node.type === 'footnote') context.state.footnoteKeys.set(path, node.key)
+  if (node.attrs?.id !== undefined) {
+    context.state.ids.add(node.attrs.id)
+    context.state.idOwners.set(node.attrs.id, node.type)
+  }
   if (node.attrs !== undefined && node.pos !== undefined) context.state.attachedLines.add(node.pos.startLine)
-  if (node.type === 'heading' && node.generatedId !== undefined) context.state.ids.add(node.generatedId)
+  if (node.type === 'heading' && node.generatedId !== undefined) {
+    context.state.ids.add(node.generatedId)
+    context.state.idOwners.set(node.generatedId, node.type)
+  }
   const pos = node.pos
   if (pos !== undefined) markNodeLines(context.lines, node.type === 'comment' && node.form === 'block' ? 'comment_block' :
     node.type, path, pos.startLine, pos.endLine)
@@ -152,7 +164,12 @@ function maskLine(line: Line, mask: Uint8Array): Line {
   const chars = line.text.split('')
   let changed = false
   for (let at = 0; at < chars.length; at++) {
-    if (mask[line.start + at] !== 1) continue
+    const code = line.text.charCodeAt(at)
+    const punct = (code >= 33 && code <= 47) || (code >= 58 && code <= 64) || (code >= 91 && code <= 96)
+      || (code >= 123 && code <= 126)
+    let slashes = 0
+    if (punct) while (line.text[at - 1 - slashes] === '\\') slashes++
+    if (mask[line.start + at] !== 1 && slashes % 2 === 0) continue
     chars[at] = '\0'
     changed = true
   }
@@ -226,20 +243,10 @@ function positionOrder(context: LintContext, diagnostics: Diagnostic[]): Diagnos
 export function lint(source: string, options: LintOptions = {}): Diagnostic[] {
   validateOptions(options)
   const own = lintSource(source, options)
-  if (options.includes === undefined) return withoutResolver(source, own)
+  if (options.includes === undefined) return own
   const rest: LintOptions = { ...options }
-  delete rest.includes
   return [...own, ...lintIncludes(source, options.includes, (text) => lintSource(text, rest),
     (text, node, path) => lintPayload(text, node, path, rest))]
-}
-
-/** C2-N-085: without a resolver each include reports `include-no-resolver`, as in any parse. */
-function withoutResolver(source: string, own: Diagnostic[]): Diagnostic[] {
-  if (!source.includes('{{')) return own
-  const found = parseWithDiagnostics(source).diagnostics.filter((entry) => entry.code === 'include-no-resolver')
-  if (found.length === 0) return own
-  const all = [...own, ...found]
-  return all.sort((a, b) => (a.range?.startOffset ?? 0) - (b.range?.startOffset ?? 0))
 }
 
 function createContext(source: string, options: LintOptions, layouts: LintContext['layouts']): LintContext {
@@ -248,7 +255,7 @@ function createContext(source: string, options: LintOptions, layouts: LintContex
     source, ...position, leafMask: new Uint8Array(source.length), options, layouts, nodeTypes: new Map(),
     diagnostics: [], findingLines: [],
     state: { headingLevel: 0, headingKinds: new Set(), mixedReported: false, referenceUrls: new Set(), ids: new Set(),
-      fragmentLinks: [], footnoteLabels: new Map(), attachedLines: new Set(),
+      idOwners: new Map(), fragmentLinks: [], crossrefs: [], footnoteLabels: new Map(), footnoteKeys: new Map(), attachedLines: new Set(),
       usedReferences: new Set(), usedFootnotes: new Set(), referenceDefinitions: [], footnoteDefinitions: [] },
     report(id, start, end, path, values = {}, index = 0) {
       const boundedStart = Math.max(0, Math.min(start, source.length))
@@ -276,7 +283,7 @@ export function lintPayload(text: string, node: Node, path: string, options: Lin
 }
 
 function lintSource(source: string, options: LintOptions): Diagnostic[] {
-  const parsed = parseWithLayout(source)
+  const parsed = parseWithLayout(source, options.extensions === undefined ? undefined : { extensions: options.extensions })
   const context = createContext(source, options, new Map(parsed.layout.nodes.map((entry) => [entry.path, entry])))
   const controls: Control[][] = Array.from({ length: context.lines.length + 1 }, () => [])
   visit(parsed.document, '', context, controls)
@@ -288,7 +295,8 @@ function lintSource(source: string, options: LintOptions): Diagnostic[] {
       if (active(rule.id, options)) rule.checkLine?.(line, context)
     }
   }
-  return positionOrder(context, filterControls(context, controls))
+  const parseFindings = parsed.diagnostics.filter((entry) => options.includes === undefined || entry.code !== 'include-no-resolver')
+  return positionOrder(context, [...parseFindings, ...filterControls(context, controls)])
 }
 
 export const IMPLEMENTED_RULES: readonly Rule[] = [...LINE_RULES, ...NODE_RULES]

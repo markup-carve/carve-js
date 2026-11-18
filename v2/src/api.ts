@@ -122,8 +122,8 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
  */
 function parseSource(src: string, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
   const names = settings.extensions.length > 0
-  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false): ParsedTree => applyExtensions(
-    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer), settings.extensions,
+  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true): ParsedTree => applyExtensions(
+    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens), settings.extensions,
   )
   const parsed = parse(src, null)
   const facts = parsed.facts
@@ -153,12 +153,12 @@ function parseInput(source: SourceText, settings: Settings, positions: boolean, 
 }
 
 /** The parse stage of a render: source is parsed, and a supplied tree is validated first. */
-function inputStage(input: string | Uint8Array | DocumentNode, settings: Settings): ParsedTree {
+function inputStage(input: string | Uint8Array | DocumentNode, settings: Settings, diagnostics = false): ParsedTree {
   if (typeof input === 'string' || input instanceof Uint8Array) {
     const source = sourceText(input)
     checkLength(source.text, settings)
     // C2-H-016: only the source lines need positions.
-    return parseInput(source, settings, settings.sourceLines)
+    return parseInput(source, settings, settings.sourceLines || diagnostics)
   }
   validateTree(input, undefined, undefined, settings.extensions)
   return { document: input, facts: null }
@@ -291,7 +291,7 @@ function sourceLayout(source: SourceText, document: DocumentNode, trace: LayoutT
  */
 export function renderWithDiagnostics(input: string | Uint8Array | DocumentNode, options?: RenderOptions): RenderOutput {
   const settings = readOptions(options, 'render')
-  const parsed = inputStage(input, settings)
+  const parsed = inputStage(input, settings, true)
   const resolved = resolveStage(parsed, settings)
   const rendered = renderStage(resolved)
   const diagnostics = [...parseDiagnostics(resolved, parsed), ...locateFindings(resolved.document, rendered.losses)]

@@ -1,0 +1,1274 @@
+[
+  {
+    "id": "TB-001",
+    "origin": "php-parity-extensions.test.ts:168:12",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab\n### First Tab\n\nContent for the first tab.\n:::\n\n::: tab\n### Second Tab\n\nContent for the second tab.\n:::\n\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First Tab</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second Tab</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First Tab\">\n<p>Content for the first tab.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second Tab\">\n<p>Content for the second tab.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab\n### First Tab\n\nContent for the first tab.\n:::\n\n::: tab\n### Second Tab\n\nContent for the second tab.\n:::\n\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First-Tab\">First Tab</h3>\n    <p>Content for the first tab.</p>\n  </div>\n  <div class=\"tab\">\n    <h3 id=\"Second-Tab\">Second Tab</h3>\n    <p>Content for the second tab.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-002",
+    "origin": "php-parity-extensions.test.ts:183:12",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n{label=\"First Tab\"}\n::: tab\nContent here.\n:::\n\n{label=\"Second Tab\" selected}\n::: tab\nThis tab is selected.\n:::\n\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First Tab</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second Tab</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First Tab\">\n<p>Content here.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second Tab\">\n<p>This tab is selected.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n{label=\"First Tab\"}\n::: tab\nContent here.\n:::\n\n{label=\"Second Tab\" selected}\n::: tab\nThis tab is selected.\n:::\n\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\" label=\"First Tab\">\n    <p>Content here.</p>\n  </div>\n  <div class=\"tab\" label=\"Second Tab\" selected=\"\">\n    <p>This tab is selected.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-003",
+    "origin": "php-parity-extensions.test.ts:198:12",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab\n### First\n\nContent one.\n:::\n\n::: tab\n### Second\n\nContent two.\n:::\n\n::::",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Second</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab\n### First\n\nContent one.\n:::\n\n::: tab\n### Second\n\nContent two.\n:::\n\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First\">First</h3>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <h3 id=\"Second\">Second</h3>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-004",
+    "origin": "php-parity-extensions.test.ts:210:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab\n### First\n\nPara one.\n\nPara two.\n:::\n\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Para one.</p>\n<p>Para two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab\n### First\n\nPara one.\n\nPara two.\n:::\n\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First\">First</h3>\n    <p>Para one.</p>\n    <p>Para two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-005",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Second</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"Second\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-006",
+    "origin": "static-render-mode.test.ts:47:21",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Installation</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Usage</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Installation\">\n<p><code>npm i @markup-carve/carve</code></p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Usage\">\n<p><code>carveToHtml(src)</code></p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>"
+  },
+  {
+    "id": "TB-007",
+    "origin": "static-render-mode.test.ts:48:22",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Installation</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Usage</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Installation\">\n<p><code>npm i @markup-carve/carve</code></p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Usage\">\n<p><code>carveToHtml(src)</code></p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>",
+    "renderMode": "interactive"
+  },
+  {
+    "id": "TB-008",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"Second\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-009",
+    "origin": "an-imported-container-comes-back-as-the-container.test.ts:74:20",
+    "clauses": [],
+    "input01": "::: tabs\n:::: tabs-panel\na\n::::\n:::\n",
+    "html01": "<div class=\"tabs\">\n  <div class=\"tabs-panel\">\n    <p>a</p>\n  </div>\n</div>",
+    "input02": "::: tabs\n:::: tabs-panel\na\n::::\n:::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tabs-panel\">\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-010",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\" tabindex=\"-1\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\">Second</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-3\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-3\" class=\"tabs-label\" tabindex=\"-1\">Third</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\" hidden>\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\">\n<p>Content two.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-3\" aria-labelledby=\"tabset-1-tab-3\" class=\"tabs-panel\" hidden>\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-011",
+    "origin": "static-render-mode.test.ts:55:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Installation</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Usage</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Installation\">\n<p><code>npm i @markup-carve/carve</code></p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Usage\">\n<p><code>carveToHtml(src)</code></p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>",
+    "renderMode": "interactive"
+  },
+  {
+    "id": "TB-012",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-3\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-3\" class=\"tabs-label\">Third</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Third\">\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+  },
+  {
+    "id": "TB-013",
+    "origin": "code-fence-header.test.ts:54:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n::: tab [Second]\nContent two.\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n::: tab [Second]\nContent two.\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n::: tab \"Second\"\nContent two.\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-014",
+    "origin": "static-render-mode.test.ts:63:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">Installation</h3>\n<p><code>npm i @markup-carve/carve</code></p>\n  </section>\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">Usage</h3>\n<p><code>carveToHtml(src)</code></p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>",
+    "renderMode": "static"
+  },
+  {
+    "id": "TB-015",
+    "origin": "code-fence-header.test.ts:72:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab \"Inner Title\" [First]\nContent one.\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p class=\"admonition-title\">Inner Title</p>\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab \"Inner Title\" [First]\nContent one.\n:::\n::::",
+    "html02": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Inner Title</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Inner Title\"><p>Content one.</p></div></div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-016",
+    "origin": "code-fence-header.test.ts:81:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab \"Only Title\"\nBody.\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Tab 1</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 1\">\n<p class=\"admonition-title\">Only Title</p>\n<p>Body.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab \"Only Title\"\nBody.\n:::\n::::",
+    "html02": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Only Title</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Only Title\"><p>Body.</p></div></div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-017",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Second</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"Second\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-018",
+    "origin": "code-fence-header.test.ts:89:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048",
+      "C2-H-005"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\n### Visible Heading\nContent one.\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<h3 id=\"Visible-Heading\">Visible Heading</h3>\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\n### Visible Heading\nContent one.\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <h3 id=\"Visible-Heading\">Visible Heading</h3>\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\n### Visible Heading\nContent one.\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><h3 id=\"Visible-Heading\">Visible Heading</h3>\n<p>Content one.</p></div></div>"
+  },
+  {
+    "id": "TB-019",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [Second]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"Second\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-020",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\" tabindex=\"-1\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\">Second</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-3\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-3\" class=\"tabs-label\" tabindex=\"-1\">Third</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\" hidden>\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\">\n<p>Content two.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-3\" aria-labelledby=\"tabset-1-tab-3\" class=\"tabs-panel\" hidden>\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-021",
+    "origin": "an-imported-container-comes-back-as-the-container.test.ts:119:36",
+    "clauses": [],
+    "input01": "::: tabs\n:::: tabs-panel\na\n::::\n:::\n",
+    "html01": "<div class=\"tabs\">\n  <div class=\"tabs-panel\">\n    <p>a</p>\n  </div>\n</div>",
+    "input02": "::: tabs\n:::: tabs-panel\na\n::::\n:::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tabs-panel\">\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-022",
+    "origin": "security-attributes.test.ts:97:7",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{onclick=\"alert(1)\" style=\"x:expression(1)\"}\n:::: tabs\n::: tab\nx\n:::\n::::",
+    "html01": "<div style=\"\" class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Tab 1</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 1\">\n<p>x</p>\n</div>\n</div>",
+    "input02": "{onclick=\"alert(1)\" style=\"x:expression(1)\"}\n:::: tabs\n::: tab\nx\n:::\n::::",
+    "html02": "<div class=\"tabs\" style=\"\">\n  <div class=\"tab\">\n    <p>x</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-023",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\" tabindex=\"-1\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\">Second</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-3\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-3\" class=\"tabs-label\" tabindex=\"-1\">Third</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\" hidden>\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\">\n<p>Content two.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-3\" aria-labelledby=\"tabset-1-tab-3\" class=\"tabs-panel\" hidden>\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-024",
+    "origin": "a-tab-control-is-a-button-and-one-item-is-selected.test.ts:101:3",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-3\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-3\" class=\"tabs-label\">Third</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Third\">\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+  },
+  {
+    "id": "TB-025",
+    "origin": "static-render-mode.test.ts:370:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Installation</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Usage</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Installation\">\n<p><code>npm i @markup-carve/carve</code></p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Usage\">\n<p><code>carveToHtml(src)</code></p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [Installation]\n`npm i @markup-carve/carve`\n:::\n::: tab [Usage]\n`carveToHtml(src)`\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Installation</p>\n    <p><code>npm i @markup-carve/carve</code></p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Usage</p>\n    <p><code>carveToHtml(src)</code></p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"Installation\"\n`npm i @markup-carve/carve`\n:::\n::: tab \"Usage\"\n`carveToHtml(src)`\n:::\n::::",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Installation</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Usage</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Installation\"><p><code>npm i @markup-carve/carve</code></p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Usage\"><p><code>carveToHtml(src)</code></p></div></div>",
+    "renderMode": "interactive"
+  },
+  {
+    "id": "TB-026",
+    "origin": "smart-typography-quotes-only.test.ts:55:12",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab\n# Don't \"guess\"... a--b\n\nBody.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Don't \"guess\"… a–b</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Don&apos;t &quot;guess&quot;… a–b\">\n<p>Body.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab\n# Don't \"guess\"... a--b\n\nBody.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h1 id=\"Don-t-guess-a-b\">Don’t “guess”… a–b</h1>\n    <p>Body.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-027",
+    "origin": "extension-group-roundtrip.test.ts:17:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Two</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\" data-carve-label=\"One\">\n<p>first</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Two\" data-carve-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "renderMode": "interactive",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-028",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:55:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-029",
+    "origin": "invalid-container-metadata.test.ts:7:16",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab Install\nBody one.\n:::\n::: tab Configure\nBody two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Tab 1</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Tab 2</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 1\">\n<p>Body one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 2\">\n<p>Body two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab Install\nBody one.\n:::\n::: tab Configure\nBody two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p>Body one.</p>\n  </div>\n  <div class=\"tab\">\n    <p>Body two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-030",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:75:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-031",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:82:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-032",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:83:13",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-033",
+    "origin": "extension-group-roundtrip.test.ts:17:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">One</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Two</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\" data-carve-label=\"One\">\n<p>first</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden data-carve-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "tabsMode01": "aria",
+    "renderMode": "interactive",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-034",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:84:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-035",
+    "origin": "extension-id-namespace.test.ts:36:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{#tabset-1}\nReserved.\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html01": "<p id=\"tabset-1\">Reserved.</p>\n<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1-2\" id=\"tabset-1-2-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-2-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content.</p>\n</div>\n</div>",
+    "input02": "{#tabset-1}\nReserved.\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html02": "<p id=\"tabset-1\">Reserved.</p>\n<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First\">First</h3>\n    <p>Content.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-036",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:90:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">R&amp;D \"core\" &lt;x&gt;</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-037",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:108:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">R&amp;D \"core\" &lt;x&gt;</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-038",
+    "origin": "extension-id-namespace.test.ts:45:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{#tabset-1}\nReserved.\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html01": "<p id=\"tabset-1\">Reserved.</p>\n<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-2-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-2-panel-1\" class=\"tabs-label\">First</button>\n<div role=\"tabpanel\" id=\"tabset-1-2-panel-1\" aria-labelledby=\"tabset-1-2-tab-1\" class=\"tabs-panel\">\n<p>Content.</p>\n</div>\n</div>",
+    "input02": "{#tabset-1}\nReserved.\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html02": "<p id=\"tabset-1\">Reserved.</p>\n<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First\">First</h3>\n    <p>Content.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-039",
+    "origin": "extension-id-namespace.test.ts:55:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "# tabset 1\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html01": "<section id=\"tabset-1\">\n  <h1>tabset 1</h1>\n  <div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1-2\" id=\"tabset-1-2-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-2-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content.</p>\n</div>\n  </div>\n</section>",
+    "input02": "# tabset 1\n\n:::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html02": "<section id=\"tabset-1\">\n  <h1>tabset 1</h1>\n  <div class=\"tabs\">\n    <div class=\"tab\">\n      <h3 id=\"First\">First</h3>\n      <p>Content.</p>\n    </div>\n  </div>\n</section>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-040",
+    "origin": "extension-group-roundtrip.test.ts:17:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" data-carve-label=\"One\" data-carve-selected>\n  <h3 class=\"tabs-label\">One</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "renderMode": "static",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-041",
+    "origin": "extension-id-namespace.test.ts:61:18",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab\n### First\n\nContent.\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h3 id=\"First\">First</h3>\n    <p>Content.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-042",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:184:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">First</h3>\n<p>Content one.</p>\n  </section>\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</h3>\n<p>Content two.</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "renderMode": "static"
+  },
+  {
+    "id": "TB-043",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:184:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">First</h3>\n<p>Content one.</p>\n  </section>\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</h3>\n<p>Content two.</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "renderMode": "static"
+  },
+  {
+    "id": "TB-044",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:184:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">First</h3>\n<p>Content one.</p>\n  </section>\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</h3>\n<p>Content two.</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "renderMode": "static"
+  },
+  {
+    "id": "TB-045",
+    "origin": "a-css-panel-is-named-and-an-aria-panel-is-bound.test.ts:184:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">First</h3>\n<p>Content one.</p>\n  </section>\n  <section class=\"tabs-panel\">\n  <h3 class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</h3>\n<p>Content two.</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "renderMode": "static"
+  },
+  {
+    "id": "TB-046",
+    "origin": "extension-group-roundtrip.test.ts:31:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Two</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>first</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>"
+  },
+  {
+    "id": "TB-047",
+    "origin": "extension-group-roundtrip.test.ts:39:22",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Two</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\" id=\"mytab\" data-carve-explicit-id=\"1\" data-carve-label=\"One\">\n<p>first</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Two\" data-carve-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "renderMode": "interactive",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-048",
+    "origin": "extension-group-roundtrip.test.ts:39:22",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n<button type=\"button\" role=\"tab\" id=\"mytab-tab\" aria-selected=\"true\" aria-controls=\"mytab\" class=\"tabs-label\">One</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Two</button>\n<div role=\"tabpanel\" id=\"mytab\" aria-labelledby=\"mytab-tab\" class=\"tabs-panel\" data-carve-explicit-id=\"1\" data-carve-label=\"One\">\n<p>first</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden data-carve-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "tabsMode01": "aria",
+    "renderMode": "interactive",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-049",
+    "origin": "extension-group-roundtrip.test.ts:39:22",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" id=\"mytab\" data-carve-explicit-id=\"1\" data-carve-label=\"One\" data-carve-selected>\n  <h3 class=\"tabs-label\">One</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "renderMode": "static",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-050",
+    "origin": "extension-group-roundtrip.test.ts:39:22",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" id=\"mytab\" data-carve-explicit-id=\"1\" data-carve-label=\"One\" data-carve-selected>\n  <h3 class=\"tabs-label\">One</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n{#mytab}\n::: tab [One]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div id=\"mytab\" class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n{#mytab}\n::: tab \"One\"\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "tabsMode01": "aria",
+    "renderMode": "static",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-051",
+    "origin": "extension-group-roundtrip.test.ts:48:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048",
+      "C2-H-005"
+    ],
+    "input01": ":::: tabs\n::: tab [One]\n### Head\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" data-carve-label=\"One\" data-carve-selected>\n  <h3 class=\"tabs-label\">One</h3>\n<h3 data-carve-generated-id=\"1\" id=\"Head\">Head</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [One]\n### Head\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <h3 data-carve-generated-id id=\"Head\">Head</h3>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"One\"\n### Head\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><h3 data-carve-generated-id id=\"Head\">Head</h3>\n<p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "renderMode": "static",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-052",
+    "origin": "extension-group-roundtrip.test.ts:57:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [A\\]b]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">A\\]b</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Two</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"A\\]b\" data-carve-label=\"A\\]b\">\n<p>first</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Two\" data-carve-label=\"Two\">\n<p>second</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [A\\]b]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">A\\</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"A\\\"b]\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"admonition-title\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "renderMode": "interactive",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-053",
+    "origin": "extension-group-roundtrip.test.ts:57:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [A\\]b]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" data-carve-label=\"A\\]b\" data-carve-selected>\n  <h3 class=\"tabs-label\">A\\]b</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
+    "input02": ":::: tabs\n::: tab [A\\]b]\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">A\\</p>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"A\\\"b]\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"admonition-title\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
+    "renderMode": "static",
+    "roundtrip": true
+  },
+  {
+    "id": "TB-054",
+    "origin": "accessible-names-tier3.test.ts:55:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::: tab [Two]\nb\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Two</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Two\">\n<p>b</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::: tab [Two]\nb\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>b</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"One\"\na\n:::\n\n::: tab \"Two\"\nb\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>b</p></div></div>"
+  },
+  {
+    "id": "TB-055",
+    "origin": "accessible-names-tier3.test.ts:61:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::: tab [Two]\nb\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">One</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">Two</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>a</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>b</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::: tab [Two]\nb\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>b</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"One\"\na\n:::\n\n::: tab \"Two\"\nb\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>b</p></div></div>"
+  },
+  {
+    "id": "TB-056",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:84:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div></div>"
+  },
+  {
+    "id": "TB-057",
+    "origin": "accessible-names-tier3.test.ts:75:17",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{aria-label=\"Mine\"}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div aria-label=\"Mine\" class=\"tabs\" role=\"group\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": "{aria-label=\"Mine\"}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\" aria-label=\"Mine\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": "{aria-label=\"Mine\"}\n:::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-058",
+    "origin": "accessible-names-tier3.test.ts:85:12",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{#t1}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div id=\"t1\" class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": "{#t1}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div id=\"t1\" class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": "{#t1}\n:::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-059",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:112:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div></div>",
+    "labels": {
+      "tabsGroup": "Registerkarten"
+    }
+  },
+  {
+    "id": "TB-060",
+    "origin": "accessible-names-tier3.test.ts:171:19",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Eins</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Eins\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Eins</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"Eins\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Eins</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Eins\"><p>a</p></div></div>",
+    "labels": {
+      "footnoteBacklink": "Zurück zur Referenz",
+      "indexBackref": "Zurück zu",
+      "tabsGroup": "Registerkarten",
+      "codeGroup": "Codebeispiele"
+    }
+  },
+  {
+    "id": "TB-061",
+    "origin": "accessible-names-tier3.test.ts:184:17",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Explicit\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Eins</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Eins\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Eins</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"Eins\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Eins</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Eins\"><p>a</p></div></div>",
+    "labels": {
+      "footnoteBacklink": "Zurück zur Referenz",
+      "indexBackref": "Zurück zu",
+      "tabsGroup": "Registerkarten",
+      "codeGroup": "Codebeispiele"
+    }
+  },
+  {
+    "id": "TB-062",
+    "origin": "accessible-names-tier3.test.ts:328:9",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-063",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:164:20",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div></div>",
+    "tabsMode01": "css"
+  },
+  {
+    "id": "TB-064",
+    "origin": "accessible-names-tier3.test.ts:328:9",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Sentinel-tabsGroup\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Sentinel-tabsGroup\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>",
+    "labels": {
+      "tabsGroup": "Sentinel-tabsGroup"
+    }
+  },
+  {
+    "id": "TB-065",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:433:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div></div>"
+  },
+  {
+    "id": "TB-066",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:440:20",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "::: tabs\n:::: tab\nContent one.\n::::\n:::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Tab 1</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 1\">\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": "::: tabs\n:::: tab\nContent one.\n::::\n:::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p>Content one.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "labels": {
+      "tabsGroup": "Registerkarten"
+    }
+  },
+  {
+    "id": "TB-067",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:475:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Eins</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Eins\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Eins</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"Eins\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Eins</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Eins\"><p>a</p></div></div>",
+    "labels": {
+      "tabsGroup": "Registerkarten",
+      "codeGroup": "Codebeispiele"
+    }
+  },
+  {
+    "id": "TB-068",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:483:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Eins</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Eins\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Eins</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"Eins\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Registerkarten\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Eins</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Eins\"><p>a</p></div></div>",
+    "labels": {
+      "tabsGroup": "Registerkarten",
+      "codeGroup": "Codebeispiele"
+    }
+  },
+  {
+    "id": "TB-069",
+    "origin": "a-derived-accessible-name-does-not-come-back.test.ts:489:18",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Eins</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Eins\">\n<p>a</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n\n::: tab [Eins]\na\n:::\n\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">Eins</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n\n::: tab \"Eins\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Eins</label><div class=\"tab-panel\" role=\"group\" aria-label=\"Eins\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-070",
+    "origin": "accessible-names-tier3.test.ts:485:14",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{#g k=v}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div id=\"g\" k=\"v\" class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": "{#g k=v}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div id=\"g\" class=\"tabs\" k=\"v\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": "{#g k=v}\n:::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-071",
+    "origin": "accessible-names-tier3.test.ts:492:17",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{#g role=navigation}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div id=\"g\" role=\"navigation\" class=\"tabs\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": "{#g role=navigation}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div id=\"g\" class=\"tabs\" role=\"navigation\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": "{#g role=navigation}\n:::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-072",
+    "origin": "accessible-names-tier3.test.ts:509:7",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": "{.foo #g}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html01": "<div class=\"tabs foo\" id=\"g\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">One</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"One\">\n<p>a</p>\n</div>\n</div>",
+    "input02": "{.foo #g}\n:::: tabs\n\n::: tab [One]\na\n:::\n\n::::\n",
+    "html02": "<div id=\"g\" class=\"tabs foo\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <p>a</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": "{.foo #g}\n:::: tabs\n\n::: tab \"One\"\na\n:::\n\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><p>a</p></div></div>"
+  },
+  {
+    "id": "TB-073",
+    "origin": "optional-corpus.test.ts:116:29",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab \"Inner *Title*\" [First]\nContent one.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p class=\"admonition-title\">Inner <strong>Title</strong></p>\n<p>Content one.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab \"Inner *Title*\" [First]\nContent one.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">Inner <strong>Title</strong></label><div class=\"tab-panel\" role=\"group\" aria-label=\"Inner Title\"><p>Content one.</p></div></div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-074",
+    "origin": "optional-corpus.test.ts:116:29",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">R&amp;D \"core\" &lt;x&gt;</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"R&amp;D &quot;core&quot; &lt;x&gt;\">\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>"
+  },
+  {
+    "id": "TB-075",
+    "origin": "optional-corpus.test.ts:134:36",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\" tabindex=\"-1\">R&amp;D \"core\" &lt;x&gt;</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\">\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\" hidden>\n<p>Content two.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n::: tab [R&D \"core\" <x>]\nContent two.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">R&amp;D \"core\" &lt;x&gt;</p>\n    <p>Content two.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n::: tab \"R&D \"core\" <x>\"\nContent two.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">R&amp;D</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"R&amp;D\"><p>Content two.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-076",
+    "origin": "optional-corpus.test.ts:134:36",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"tablist\" aria-label=\"Tabs\">\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-1\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-1\" class=\"tabs-label\" tabindex=\"-1\">First</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-2\" aria-selected=\"true\" aria-controls=\"tabset-1-panel-2\" class=\"tabs-label\">Second</button>\n<button type=\"button\" role=\"tab\" id=\"tabset-1-tab-3\" aria-selected=\"false\" aria-controls=\"tabset-1-panel-3\" class=\"tabs-label\" tabindex=\"-1\">Third</button>\n<div role=\"tabpanel\" id=\"tabset-1-panel-1\" aria-labelledby=\"tabset-1-tab-1\" class=\"tabs-panel\" hidden>\n<p>Content one.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-2\" aria-labelledby=\"tabset-1-tab-2\" class=\"tabs-panel\">\n<p>Content two.</p>\n</div>\n<div role=\"tabpanel\" id=\"tabset-1-panel-3\" aria-labelledby=\"tabset-1-tab-3\" class=\"tabs-panel\" hidden>\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>",
+    "tabsMode01": "aria"
+  },
+  {
+    "id": "TB-077",
+    "origin": "optional-corpus.test.ts:116:29",
+    "clauses": [
+      "C2-X-040",
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Second</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-3\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-3\" class=\"tabs-label\">Third</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<p>Content one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Second\">\n<p>Content two.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Third\">\n<p>Content three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab [First]\nContent one.\n:::\n\n{selected}\n::: tab [Second]\nContent two.\n:::\n\n{selected}\n::: tab [Third]\nContent three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <p>Content one.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Second</p>\n    <p>Content two.</p>\n  </div>\n  <div class=\"tab\" selected=\"\">\n    <p class=\"div-label\">Third</p>\n    <p>Content three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false,
+    "rewrittenInput": ":::: tabs\n::: tab \"First\"\nContent one.\n:::\n\n{selected}\n::: tab \"Second\"\nContent two.\n:::\n\n{selected}\n::: tab \"Third\"\nContent three.\n:::\n::::\n",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Second</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-2\"><label for=\"tabs-1-2\">Third</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><p>Content one.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Second\"><p>Content two.</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Third\"><p>Content three.</p></div></div>"
+  },
+  {
+    "id": "TB-078",
+    "origin": "optional-corpus.test.ts:116:29",
+    "clauses": [
+      "C2-X-043",
+      "C2-X-048"
+    ],
+    "input01": ":::: tabs\n::: tab Install\nBody one.\n:::\n::: tab Configure\n# Actual heading\n\nBody two.\n:::\n{label=\"Legacy\"}\n::: tab Ignored title\nBody three.\n:::\n::::\n",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">Tab 1</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-2\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-2\" class=\"tabs-label\">Actual heading</label>\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-3\" class=\"tabs-radio\">\n<label for=\"tabset-1-tab-3\" class=\"tabs-label\">Legacy</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Tab 1\">\n<p>Body one.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Actual heading\">\n<p>Body two.</p>\n</div>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"Legacy\">\n<p>Body three.</p>\n</div>\n</div>",
+    "input02": ":::: tabs\n::: tab Install\nBody one.\n:::\n::: tab Configure\n# Actual heading\n\nBody two.\n:::\n{label=\"Legacy\"}\n::: tab Ignored title\nBody three.\n:::\n::::\n",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p>Body one.</p>\n  </div>\n  <div class=\"tab\">\n    <h1 id=\"Actual-heading\">Actual heading</h1>\n    <p>Body two.</p>\n  </div>\n  <div class=\"tab\" label=\"Legacy\">\n    <p>Body three.</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  },
+  {
+    "id": "TB-079",
+    "origin": "0.1 class-only form probe",
+    "clauses": [
+      "C2-X-008",
+      "C2-X-040"
+    ],
+    "input01": "{.tabs}\n::::\n{.tab}\n:::\n# A\nHi\n:::\n::::",
+    "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">A</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"A\">\n<p>Hi</p>\n</div>\n</div>",
+    "input02": "{.tabs}\n::::\n{.tab}\n:::\n# A\nHi\n:::\n::::",
+    "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <h1 id=\"A\">A</h1>\n    <p>Hi</p>\n  </div>\n</div>",
+    "sourceRewrite": false
+  }
+]

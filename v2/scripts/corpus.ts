@@ -40,6 +40,7 @@ export interface CorpusExample {
 /** One entry of `conformance/clause-cases.json`. */
 export interface ClauseCase {
   id: string
+  kind?: string
   clauses: string[]
   why: string
   summary: string
@@ -145,5 +146,5 @@ export const EXAMPLES: readonly SpecExample[] = CORPUS_EXAMPLES.flatMap((example
 /** Every Carve source of the corpus: the inputs of the render, write, lint and include examples and of the clause cases. */
 export const CARVE_SOURCES: readonly { id: string, input: string }[] = [
   ...CORPUS_EXAMPLES.flatMap((example) => (example.input === undefined ? [] : [{ id: example.id, input: example.input }])),
-  ...CLAUSE_CASES.map((entry) => ({ id: entry.id, input: entry.input })),
+  ...CLAUSE_CASES.flatMap((entry) => typeof entry.input === 'string' ? [{ id: entry.id, input: entry.input }] : []),
 ]

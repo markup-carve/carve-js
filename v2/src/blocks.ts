@@ -49,19 +49,6 @@ const CONTAINER_SHAPES = SHAPE_QUOTE | MARKER_SHAPES | SHAPE_DESCRIPTION | SHAPE
 const LEAF_SHAPES = FENCE_SHAPES | SHAPE_COMMENT_ONLY | SHAPE_HEADING | SHAPE_THEMATIC_BREAK | SHAPE_TERM |
   SHAPE_ATTRIBUTE_LINE | SHAPE_INCLUDE | SHAPE_LINK_DEFINITION | SHAPE_ABBREVIATION_DEFINITION | SHAPE_TABLE_ROW
 
-// C2-N-020: a selection that starts after line 1 of its file opens no frontmatter.
-let frontmatterOpens = true
-
-/** Runs `parse` with line 1 read as an ordinary line, as a selection that starts later in its file. */
-export function withoutFrontmatter<T>(parse: () => T): T {
-  frontmatterOpens = false
-  try {
-    return parse()
-  } finally {
-    frontmatterOpens = true
-  }
-}
-
 /** Writes the block events of `src` into `state`, with the line-start table. */
 export function scanBlocks(state: BlockState, src: string): void {
   state.src = src
@@ -88,7 +75,9 @@ export function scanBlocks(state: BlockState, src: string): void {
     addLine(state, lineStart)
     if (lineStart > 0) scanLine(state, lineStart, lineEnd)
     // C2-B-165: a byte-order mark is skipped before line 1 is read, whatever the line holds.
-    else if (!frontmatterOpens || !openFrontmatter(state, lineEnd)) scanLine(state, src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0, lineEnd)
+    else if (!state.frontmatterOpens || !openFrontmatter(state, lineEnd)) {
+      scanLine(state, src.charCodeAt(0) === BYTE_ORDER_MARK ? 1 : 0, lineEnd)
+    }
     lineStart = next
   }
   closeTo(state, 1)
@@ -663,15 +652,25 @@ function nextMarkerStyle(state: BlockState, first: number, end: number): number 
     const matched = matchContainers(state, lineStart, lineEnd)
     const blank = cursor.pos >= lineEnd
     if (matched < depth && !blank) break
-    if (blank) blanks = matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
-    else if (!isLineComment(src, cursor.pos, lineEnd) && cursor.column - cursor.origin <= column) {
-      style = settledStyle(src, first, cursor.pos, lineEnd)
-      break
-    } else blanks = 0
+    if (blank) blanks = markerBlankCount(matched, depth, blanks)
+    else if (!isLineComment(src, cursor.pos, lineEnd)) {
+      const settled = styleAtMarkerLine(state, first, lineEnd, column)
+      if (settled !== null) { style = settled; break }
+      blanks = 0
+    }
     lineStart = next + 1
   }
   Object.assign(cursor, saved)
   return style
+}
+
+function markerBlankCount(matched: number, depth: number, blanks: number): number {
+  return matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
+}
+
+function styleAtMarkerLine(state: BlockState, first: number, lineEnd: number, column: number): number | null {
+  const cursor = state.cursor
+  return cursor.column - cursor.origin <= column ? settledStyle(state.src, first, cursor.pos, lineEnd) : null
 }
 
 function trimCr(src: string, start: number, end: number): number {

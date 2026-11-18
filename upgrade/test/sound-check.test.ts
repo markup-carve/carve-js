@@ -76,7 +76,7 @@ describe('C2-W-100: the upgrade self-check', () => {
     expect(result.records.map((record) => record.entry)).toContain('U-131')
   })
 
-  it('C2-B-105: a brace tail that 0.2 reports as fence-opener-fallback is removed, though no HTML changes', () => {
+  it('C2-B-105: a discarded brace tail is removed under U-037', () => {
     const result = upgrade('```js {.x}\na\n```\n')
     expect(result.output).toBe('```js\na\n```\n')
     expect(result.check).toBe('pass')

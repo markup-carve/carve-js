@@ -10,6 +10,7 @@ import {
 } from '../src/index.ts'
 import { forEachSlot, isRecord, type DocumentNode, type Node } from '../src/ast.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
+import { type SourceLayout } from '../src/layout.ts'
 import { type Random } from './generate.ts'
 import { type Target } from './targets.ts'
 
@@ -287,8 +288,36 @@ function verbatimRanges(document: DocumentNode): { start: number, end: number }[
   return ranges
 }
 
+function delimitedBodyRanges(source: string, layout: SourceLayout): { start: number, end: number }[] {
+  const ranges: { start: number, end: number }[] = []
+  const bytes = Buffer.from(source)
+  for (const entry of layout.nodes) {
+    if (entry.sourceFormat !== 'csv' && entry.sourceFormat !== 'tsv') continue
+    const lines = bytes.subarray(entry.startByte, entry.endByte).toString('utf8').split('\n')
+    let offset = entry.startByte
+    let opener: string | null = null
+    let bodyStart = -1
+    for (const line of lines) {
+      if (opener === null) {
+        const match = /(`{3,})(csv|tsv)$/.exec(line)
+        if (match !== null) {
+          opener = line.slice(0, match.index) + match[1]
+          bodyStart = offset + Buffer.byteLength(line) + 1
+        }
+      } else if (line === opener) {
+        ranges.push({ start: bodyStart, end: offset })
+        break
+      }
+      offset += Buffer.byteLength(line) + 1
+    }
+  }
+  return ranges
+}
+
 function hasTrailingSpaces(source: string, document: DocumentNode): boolean {
+  // C2-W-066 writes bare CSV and TSV cell values, including a value that ends in a space.
   const ranges = verbatimRanges(document)
+  let delimited: { start: number, end: number }[] | null = null
   let offset = 0
   for (const line of source.split('\n')) {
     let end = line.endsWith('\r') ? line.length - 1 : line.length
@@ -296,7 +325,10 @@ function hasTrailingSpaces(source: string, document: DocumentNode): boolean {
     while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) end--
     const escaped = before - end === 1 && line[end - 1] === '\\'
     const byte = offset + Buffer.byteLength(line.slice(0, end))
-    if (end < before && !escaped && !ranges.some((range) => range.start <= byte && byte < range.end)) return true
+    if (end < before && !escaped && !ranges.some((range) => range.start <= byte && byte < range.end)) {
+      delimited ??= delimitedBodyRanges(source, parseWithLayout(source).layout)
+      if (!delimited.some((range) => range.start <= byte && byte < range.end)) return true
+    }
     offset += Buffer.byteLength(line) + 1
   }
   return false
@@ -322,7 +354,9 @@ function checkFormatMode(source: string, normalize: boolean): Finding | null {
   if (!output.source.endsWith('\n') || output.source.endsWith('\n\n') || output.source.endsWith('\r\n')) {
     return finding('format-no-final-lf', `normalize=${normalize}`)
   }
-  if (hasTrailingSpaces(output.source, formattedTree)) return finding('format-trailing-space', `normalize=${normalize}`)
+  if (hasTrailingSpaces(output.source, formattedTree)) {
+    return finding('format-trailing-space', `normalize=${normalize}`)
+  }
   return accounting
 }
 
