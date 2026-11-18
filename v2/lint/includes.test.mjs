@@ -1,11 +1,61 @@
 // Lint through includes (C2-N-085 to C2-N-088).
 import { describe, expect, it } from 'vitest'
+import { parse } from '../src/api.ts'
 import { lint } from './lint.ts'
 
 const resolver = (files) => (request) => Object.hasOwn(files, request.path)
   ? { text: files[request.path], id: request.path } : { error: 'not_found' }
 
 describe('lint and includes', () => {
+  it('C2-N-054, C2-N-055: a child uses its parent link and note definitions', () => {
+    const source = 'Parent.\n\n[up]: /UP\n\n[^p]: Parent note.\n\n{{ child.crv }}\n'
+    const files = { 'child.crv': 'Child [up][] and a note.[^p]\n' }
+    expect(lint(source, { includes: resolver(files) })).toEqual([])
+  })
+
+  it('C2-N-054, C2-N-055: lookup reaches a grandparent and a child definition shadows it', () => {
+    const files = {
+      'middle.crv': '{{ leaf.crv }}\n',
+      'leaf.crv': 'Leaf [up][] and [^p].\n',
+    }
+    const root = '[up]: /UP\n\n[^p]: Parent note.\n\n{{ middle.crv }}\n'
+    expect(lint(root, { includes: resolver(files) })).toEqual([])
+
+    const shadowed = {
+      ...files,
+      'leaf.crv': 'Leaf [up][] and [^p].\n\n[up]: /LOCAL\n\n[^p]: Local note.\n',
+    }
+    const found = lint(root, { includes: resolver(shadowed) })
+    expect(found.filter((entry) => entry.code.startsWith('unused-')).map((entry) => [entry.file, entry.code]))
+      .toEqual([[undefined, 'unused-link-reference-definition'], [undefined, 'unused-footnote-definition']])
+  })
+
+  it('C2-N-054: definitions do not reach inward into an included file', () => {
+    const source = 'Parent [up][].\n\n{{ child.crv }}\n'
+    const files = { 'child.crv': '[up]: /CHILD\n' }
+    expect(lint(source, { includes: resolver(files) }).map((entry) => [entry.file, entry.code]))
+      .toEqual([[undefined, 'unresolved-reference-link'], ['child.crv', 'unused-link-reference-definition']])
+  })
+
+  it('C2-N-054, C2-N-087: a repeated child still reports a reference unresolved in one scope', () => {
+    const source = '{{ a.crv }}\n\n{{ b.crv }}\n'
+    const files = {
+      'a.crv': '[up]: /A\n\n{{ leaf.crv }}\n',
+      'b.crv': '{{ leaf.crv }}\n',
+      'leaf.crv': '[up][]\n',
+    }
+    expect(lint(source, { includes: resolver(files) }).filter((entry) => entry.code === 'unresolved-reference-link'))
+      .toEqual([expect.objectContaining({ file: 'leaf.crv' })])
+  })
+
+  it('C2-N-023, C2-N-055: an abbreviation defined by the parent is available in the child', () => {
+    const source = '*[HTML]: HyperText Markup Language\n\n{{ child.crv }}\n'
+    const files = { 'child.crv': 'HTML\n' }
+    expect(lint(source, { includes: resolver(files) })).toEqual([])
+    expect(parse(source, { includes: resolver(files) }).children[1].children[0].children[0].expansion)
+      .toBe('HyperText Markup Language')
+  })
+
   it('C2-N-085: without a resolver no include target is read', () => {
     expect(lint('{{ child.crv }}').filter((entry) => entry.file !== undefined)).toEqual([])
   })

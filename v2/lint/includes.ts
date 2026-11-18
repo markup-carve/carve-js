@@ -1,6 +1,6 @@
 // Lint through includes (C2-N-085 to C2-N-087): every Carve include the expansion accepted is linted over the source it
 // parsed, and each finding names its file, a range in that file and a tree path through the includes that reached it.
-import { forEachSlot, type IncludeNode, type Node } from '../src/ast.ts'
+import { forEachSlot, type DocumentNode, type IncludeNode, type Node } from '../src/ast.ts'
 import { parse, parseWithDiagnostics } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type IncludeConfig, includeSettings, type IncludeResolver, type IncludeSettings } from '../src/include-settings.ts'
@@ -44,9 +44,98 @@ interface Visit {
   texts: ReadonlyMap<string, string>
   lintFile: (source: string) => Diagnostic[]
   lintPayload: (text: string, node: Node, path: string) => Diagnostic[]
+  references: ReferenceFindings
   seen: Set<string>
   out: Diagnostic[]
   codePaths: string[]
+}
+
+interface ReferenceScope {
+  outer: ReferenceScope | null
+  links: Map<string, { node: Node, file: string }>
+  notes: Map<string, { node: Node, file: string }>
+}
+
+interface ReferenceFindings {
+  observed: Set<string>
+  unresolved: Set<string>
+  used: Set<string>
+}
+
+function referenceKey(file: string, node: Node, code: string): string | null {
+  return node.pos === undefined ? null : `${file}\u0000${node.pos.startOffset}\u0000${code}`
+}
+
+function diagnosticKey(entry: Diagnostic): string {
+  return `${entry.file ?? ''}\u0000${entry.range?.startOffset ?? 0}\u0000${entry.code}`
+}
+
+function scopeOf(children: readonly Node[], file: string, outer: ReferenceScope | null): ReferenceScope {
+  const scope: ReferenceScope = { outer, links: new Map(), notes: new Map() }
+  for (const node of children) {
+    if (node.type === 'link_reference_definition' && !scope.links.has(node.key)) scope.links.set(node.key, { node, file })
+    if (node.type === 'footnote' && !scope.notes.has(node.key)) scope.notes.set(node.key, { node, file })
+  }
+  return scope
+}
+
+function definition(scope: ReferenceScope, key: string, kind: 'links' | 'notes'): { node: Node, file: string } | undefined {
+  for (let at: ReferenceScope | null = scope; at !== null; at = at.outer) {
+    const found = at[kind].get(key)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+function recordReference(node: Node, file: string, scope: ReferenceScope, found: ReferenceFindings): void {
+  if (node.type !== 'link' && node.type !== 'image' && node.type !== 'footnote_ref') return
+  const note = node.type === 'footnote_ref'
+  const location = referenceKey(file, node, note ? 'unresolved-footnote' : 'unresolved-reference-link')
+  if (location === null) return
+  found.observed.add(location)
+  const resolved = note ? node.number !== undefined : node.type === 'link' ? node.href !== undefined : node.src !== undefined
+  if (!resolved) {
+    found.unresolved.add(location)
+    return
+  }
+  if (node.key === undefined) return
+  const target = definition(scope, node.key, note ? 'notes' : 'links')
+  if (target === undefined) return
+  const used = referenceKey(target.file, target.node,
+    note ? 'unused-footnote-definition' : 'unused-link-reference-definition')
+  if (used !== null) found.used.add(used)
+}
+
+function walkReferences(node: Node, file: string, scope: ReferenceScope, found: ReferenceFindings): void {
+  recordReference(node, file, scope, found)
+  if (node.type === 'include' && node.children !== undefined) {
+    const innerFile = node.file ?? file
+    const inner = scopeOf(node.children, innerFile, scope)
+    forEachSlot(node, (nodes, step) => {
+      for (const child of nodes) walkReferences(child, step === 'children' ? innerFile : file,
+        step === 'children' ? inner : scope, found)
+    })
+    return
+  }
+  forEachSlot(node, (nodes) => { for (const child of nodes) walkReferences(child, file, scope, found) })
+}
+
+/** The resolved expansion decides which file's definition a reference actually uses (C2-N-054, C2-N-055). */
+function referenceFindings(document: DocumentNode): ReferenceFindings {
+  const found: ReferenceFindings = { observed: new Set(), unresolved: new Set(), used: new Set() }
+  walkReferences(document, '', scopeOf(document.children, '', null), found)
+  return found
+}
+
+function reconciled(entry: Diagnostic, found: ReferenceFindings): boolean {
+  const key = diagnosticKey(entry)
+  if (entry.code === 'unresolved-reference-link' || entry.code === 'unresolved-footnote') {
+    return !found.observed.has(key) || found.unresolved.has(key)
+  }
+  if (entry.code === 'unused-link-reference-definition' || entry.code === 'unused-footnote-definition') {
+    return !found.used.has(key)
+  }
+  return true
 }
 
 function lineOfByte(text: string, byte: number): number {
@@ -147,7 +236,7 @@ function lintInclude(visit: Visit, node: IncludeNode, path: string): void {
   const part = lintedPart(node, text)
   for (const entry of visit.lintFile(part.source)) {
     const found = located(visit, node, text, part, entry, path)
-    if (found !== null) visit.out.push(found)
+    if (found !== null && reconciled(found, visit.references)) visit.out.push(found)
   }
 }
 
@@ -174,16 +263,17 @@ function walk(visit: Visit, node: Node, path: string): void {
 }
 
 /** C2-N-085: the findings in the included files of `source`, after an expansion with the caller's resolver. */
-export function lintIncludes(source: string, value: unknown, lintFile: (source: string) => Diagnostic[],
+export function lintIncludes(source: string, value: unknown, own: Diagnostic[], lintFile: (source: string) => Diagnostic[],
   lintPayload: Visit['lintPayload']): Diagnostic[] {
   const config = includeSettings(value, (reason) => new CarveOptionError('includes', reason))
-  if (config === null) return []
+  if (config === null) return own
   const texts = new Map<string, string>()
   const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
-  const visit: Visit = { texts, lintFile, lintPayload, seen: new Set(), out: [], codePaths: [] }
+  const references = referenceFindings(expanded.document)
+  const visit: Visit = { texts, lintFile, lintPayload, references, seen: new Set(), out: [], codePaths: [] }
   walk(visit, expanded.document, '')
   // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
   const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
     visit.codePaths.some((path) => entry.path?.startsWith(path) === true))
-  return [...expansion, ...visit.out]
+  return [...own.filter((entry) => reconciled(entry, references)), ...expansion, ...visit.out]
 }
