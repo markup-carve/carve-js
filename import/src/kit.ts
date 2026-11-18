@@ -14,6 +14,23 @@ export class ImportInputError extends Error {
   constructor(message: string, foreignType: string) { super(message); this.name = 'ImportInputError'; this.foreignType = foreignType }
 }
 
+/** C2-M-006, C2-M-082: runs one import; a refusal becomes `ImportInputError` and `strictLosses` makes each loss an error. */
+export function runImport(format: Format, strictLosses: boolean, run: () => ImportResult): ImportResult {
+  try {
+    const result = run()
+    if (strictLosses) for (const entry of result.diagnostics) {
+      if (entry.channel === 'render-loss') entry.severity = 'error'
+    }
+    return result
+  } catch (error) {
+    if (error instanceof ImportInputError) throw error
+    if (error instanceof RangeError && error.message.includes('stack')) {
+      throw new ImportInputError(`Foreign input exceeds the engine tree depth limit of ${MAX_TREE_DEPTH}`, format)
+    }
+    throw new ImportInputError(error instanceof Error ? error.message : String(error), format)
+  }
+}
+
 /** C2-A-026: foreign parsers can produce deeper trees than the engine can accept. */
 export function ensureForeignDepth(root: unknown, format: Format): void {
   const pending: { value: unknown, depth: number }[] = [{ value: root, depth: 0 }]

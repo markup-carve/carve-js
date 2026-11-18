@@ -30,6 +30,21 @@ npx carve fmt README.crv
 npx carve migrate --from html page.html
 ```
 
+## Carve 0.2
+
+The Carve 0.2 engine is published beside the 0.1 API as `@markup-carve/carve/v2`, for browsers, Node and
+bundlers, with `@markup-carve/carve/v2/node` for the file system include resolver. The package root stays 0.1.
+
+```ts
+import { parse, render } from '@markup-carve/carve/v2'
+
+const html = render('= Hello /Carve/')
+const document = parse('= Hello /Carve/')
+```
+
+The [0.2 API guide](docs/v2-api.md) lists every call and its errors, and maps each 0.1 call to its 0.2 replacement.
+The Markdown, plain-text and ANSI writers of 0.1 are being ported to 0.2.
+
 ## Documentation
 
 - [Carve documentation](https://markup-carve.github.io/carve/)

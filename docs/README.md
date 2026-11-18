@@ -16,6 +16,7 @@ Start with the [Carve documentation](https://markup-carve.github.io/carve/) for 
 - [File inclusion](includes.md)
 - [Running it for people (CI, hooks, Prettier)](integrations.md)
 - [JavaScript library API](library.md)
+- [Carve 0.2 library API and migration from 0.1](v2-api.md)
 - [Shared migration results](migration-results.md)
 - [Migration and linting](migration.md)
 - [Rendering behavior](rendering.md)

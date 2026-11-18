@@ -43,6 +43,14 @@
       "import": "./dist/prettier.js",
       "types": "./dist/prettier.d.ts"
     },
+    "./v2": {
+      "types": "./dist/v2/types/v2/public/index.d.ts",
+      "import": "./dist/v2/index.js"
+    },
+    "./v2/node": {
+      "types": "./dist/v2/types/v2/public/node.d.ts",
+      "import": "./dist/v2/node.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -56,7 +64,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && npm ci --prefix import --ignore-scripts --silent && node v2/cli/build.mjs",
+    "build": "tsc && npm ci --prefix import --ignore-scripts --silent && node v2/cli/build.mjs && node v2/public/build.mjs",
     "build:browser": "node scripts/build-browser.mjs",
     "drift": "node scripts/published-drift.mjs",
     "prepare": "npm run build",
