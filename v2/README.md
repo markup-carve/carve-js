@@ -1,6 +1,6 @@
 # Carve 0.2
 
-The 0.2 engine is in `v2/src`. Its public TypeScript entry point is `v2/src/index.ts`.
+The 0.2 engine is in `v2/src`. The package publishes it as `@markup-carve/carve/v2`, built from `v2/public/index.ts`; [docs/v2-api.md](../docs/v2-api.md) is its reference. `v2/src/index.ts` is the internal entry that the tests, scripts and command line use, and it also exports the scanner and event helpers.
 
 ## Conformance
 

@@ -1,4 +1,4 @@
-// Declaration emit for the 0.2 public entry with the installed compiler and TypeScript 5.9.
+// Declaration emit for the 0.2 entries with the installed compiler and TypeScript 5.9.
 //   node v2/scripts/check-public-types.ts
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -17,7 +17,8 @@ function check(name: string): void {
   const output = mkdtempSync(join(tmpdir(), 'carve-public-types-'))
   try {
     const args = [
-      compiler(name), 'v2/src/index.ts', '--declaration', '--emitDeclarationOnly', '--outDir', output,
+      compiler(name), 'v2/src/index.ts', 'v2/public/index.ts', 'v2/public/node.ts',
+      '--declaration', '--emitDeclarationOnly', '--outDir', output,
       '--strict', '--skipLibCheck', 'false', '--noEmitOnError', '--module', 'ESNext', '--moduleResolution', 'Bundler',
       '--target', 'ES2022', '--lib', 'ES2022', '--types', 'node', '--allowImportingTsExtensions',
       '--verbatimModuleSyntax', '--exactOptionalPropertyTypes', '--noUncheckedIndexedAccess',
