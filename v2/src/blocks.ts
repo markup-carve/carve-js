@@ -664,10 +664,13 @@ function nextMarkerStyle(state: BlockState, first: number, end: number): number 
     const blank = cursor.pos >= lineEnd
     if (matched < depth && !blank) break
     if (blank) blanks = matched < depth ? LIST_BOUNDARY_BLANKS : blanks + 1
-    else if (!isLineComment(src, cursor.pos, lineEnd) && cursor.column - cursor.origin <= column) {
-      style = settledStyle(src, first, cursor.pos, lineEnd)
-      break
-    } else blanks = 0
+    else if (!isLineComment(src, cursor.pos, lineEnd)) {
+      if (cursor.column - cursor.origin <= column) {
+        style = settledStyle(src, first, cursor.pos, lineEnd)
+        break
+      }
+      blanks = 0
+    }
     lineStart = next + 1
   }
   Object.assign(cursor, saved)
