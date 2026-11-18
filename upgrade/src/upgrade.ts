@@ -1,7 +1,7 @@
 import { compareHtml, compareHtmlExact, dropOnlyItemParagraphs } from './compare.ts'
 import { type Context, type Finding, makeContext, type Rule } from './context.ts'
 import { applyEdits, type Edit, offsetBefore, selectEdits } from './edits.ts'
-import { ENGINE_01_VERSION, html01, html02 } from './engines.ts'
+import { ENGINE_01_VERSION, html01, html02, type Node01 } from './engines.ts'
 import { ENTRIES, needsPerson, recordOf, type ReportRecord } from './report.ts'
 import { rescuePlus } from './plus-rescue.ts'
 import { rescueQuote } from './quote-rescue.ts'
@@ -203,10 +203,56 @@ function reportEmptyClass(done: Rewritten, old: string): void {
   }
 }
 
+function editorialCloser(type: string): string | null {
+  if (type === 'delete') return '-}'
+  if (type === 'insert') return '+}'
+  if (type === 'underline') return '_}'
+  if (type === 'substitution') return '~}'
+  return null
+}
+
+function editorialChildren(node: Node01): Node01[] {
+  const children = node.children ?? []
+  const old = Array.isArray(node.old) ? node.old as Node01[] : []
+  const next = Array.isArray(node.new) ? node.new as Node01[] : []
+  return [...children, ...old, ...next]
+}
+
+function nestedEditorialCloser(children: Node01[]): boolean {
+  const stack = [...children]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (node.type === 'text' && typeof node.value === 'string' && /[-+_~]\}/u.test(node.value)) return true
+    if (node.type === 'code' || node.type === 'code_block' || node.type === 'raw_inline'
+      || node.type === 'raw_block' || node.type === 'comment' || node.type === 'literal_inline') continue
+    stack.push(...editorialChildren(node))
+  }
+  return false
+}
+
+function reportNestedEditorial(done: Rewritten): void {
+  for (const { node } of done.context.visits) {
+    if (node.pos === undefined) continue
+    const closer = editorialCloser(node.type)
+    if (closer === null) continue
+    const { startOffset: start, endOffset: end, startLine: line } = node.pos
+    const children = editorialChildren(node)
+    const nested = children.some((child) => editorialCloser(child.type) !== null
+      || child.type === 'text' && typeof child.value === 'string' && /\{[-+_~]/u.test(child.value))
+    if (!nested) continue
+    const innerCloser = nestedEditorialCloser(children)
+    const tail = done.context.src.slice(end, lineEnd(done.context.lines, node.pos.endLine))
+    if (!innerCloser && !tail.includes(closer)) continue
+    done.records.push({ ...recordOf('U-374', line, 'nested editorial closers pair differently in 0.2'),
+      range: { startOffset: start, endOffset: end } })
+  }
+}
+
 function addDifferenceReports(input: string, done: Rewritten, old: string, next: string): void {
   const { records } = done
   reportShortTableWidths(done, old, next)
   reportEmptyClass(done, old)
+  reportNestedEditorial(done)
   const normalized = compareHtml(old, next)
   reportTaskHtml(old, next, records)
   if (normalized.gainedParagraphs > 0) {

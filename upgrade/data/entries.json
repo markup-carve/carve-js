@@ -1260,6 +1260,12 @@
       "lint": []
     },
     {
+      "id": "U-224",
+      "name": "<ul>\n  <li>\n    <div class=\"box\">\n\n    </div>\n  </li>\n</ul>\n<p>x</p> A commen...",
+      "class": "report",
+      "lint": []
+    },
+    {
       "id": "U-225",
       "name": "caption caret followed by an empty comment",
       "class": "escape",
@@ -1746,6 +1752,24 @@
     {
       "id": "U-371",
       "name": "<p>[x][no]{#i .c}</p> An unresolved reference writes its glued attribute bloc...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-372",
+      "name": "0.2 reports each marker-shaped paragraph line; 0.1 reported only the first li...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-373",
+      "name": "0.2 reports each table-shaped paragraph line; 0.1 reported only the first lin...",
+      "class": "report",
+      "lint": []
+    },
+    {
+      "id": "U-374",
+      "name": "At nested braced boundaries, C2-I-058 and C2-I-059 pair the first matching cl...",
       "class": "report",
       "lint": []
     }
