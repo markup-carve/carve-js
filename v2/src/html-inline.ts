@@ -160,7 +160,7 @@ function referenceCarriers(r: Render, node: LinkNode | ImageNode, key: string | 
 function withRel<N extends Node>(r: Render, node: N, structural: Pair[]): N {
   const authored = authoredKey(node, 'rel')
   if (authored === undefined && r.linkRel === '') return node
-  const words = authored === undefined ? [] : keyValue('rel', authored).split(' ').filter((word) => word !== '')
+  const words = authored === undefined ? [] : keyValue('rel', authored).split(/[\t\n\f\r ]+/).filter((word) => word !== '')
   for (const word of r.linkRel.split(' ')) if (word !== '' && !words.includes(word)) words.push(word)
   if (words.length > 0) structural.push(['rel', words.join(' ')])
   return authored === undefined ? node : withoutKeys(node, ['rel'], true)
