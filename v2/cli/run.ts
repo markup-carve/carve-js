@@ -100,33 +100,62 @@ function includesOf(path: string, args: ParsedArgs): { includes?: IncludeConfig 
   return { includes: { ...config, resolver: recorded } }
 }
 
-/** C2-T-019: LINE and COLUMN of the start of the range, counted in the text the range is counted in. */
-function location(text: string, entry: Diagnostic): { line: number, column: number } | null {
-  if (entry.range === undefined) return null
-  const prefix = Buffer.from(text, 'utf8').subarray(0, entry.range.startOffset).toString('utf8')
-  const lines = prefix.split('\n')
-  return { line: lines.length, column: Array.from(lines[lines.length - 1] ?? '').length + 1 }
+interface LocationIndex {
+  bytes: Uint8Array
+  starts: number[]
 }
 
-function textOf(entry: Diagnostic, input: string): string {
-  return entry.file === undefined ? input : includedTexts.get(entry.file) ?? ''
+/** C2-T-019: index line starts once in the original bytes of a file. */
+function locationIndex(input: string | Uint8Array): LocationIndex {
+  const bytes = typeof input === 'string' ? Buffer.from(input, 'utf8') : input
+  const starts = [0]
+  for (let at = 0; at < bytes.length; at++) if (bytes[at] === 0x0a) starts.push(at + 1)
+  return { bytes, starts }
+}
+
+function location(index: LocationIndex, entry: Diagnostic): { line: number, column: number } | null {
+  if (entry.range === undefined) return null
+  const offset = Math.min(entry.range.startOffset, index.bytes.length)
+  let low = 0
+  let high = index.starts.length
+  while (low + 1 < high) {
+    const middle = (low + high) >>> 1
+    if (index.starts[middle]! <= offset) low = middle
+    else high = middle
+  }
+  const prefix = new TextDecoder().decode(index.bytes.subarray(index.starts[low], offset))
+  return { line: low + 1, column: Array.from(prefix).length + 1 }
+}
+
+function indexFor(entry: Diagnostic, own: LocationIndex, included: Map<string, LocationIndex>): LocationIndex {
+  if (entry.file === undefined) return own
+  let index = included.get(entry.file)
+  if (index === undefined) {
+    index = locationIndex(includedTexts.get(entry.file) ?? '')
+    included.set(entry.file, index)
+  }
+  return index
 }
 
 /** C2-T-019: `FILE:LINE:COLUMN: SEVERITY CODE MESSAGE`, or `FILE: SEVERITY CODE MESSAGE` with no range. */
-function diagnosticLine(display: string, input: string, entry: Diagnostic): string {
-  const place = location(textOf(entry, input), entry)
+function diagnosticLine(display: string, entry: Diagnostic, index: LocationIndex): string {
+  const place = location(index, entry)
   const head = `${entry.file ?? display}${place === null ? '' : `:${place.line}:${place.column}`}`
   return `${head}: ${entry.severity} ${entry.code} ${entry.message}\n`
 }
 
-function lines(display: string, input: string, entries: readonly Diagnostic[]): string {
-  return entries.map((entry) => diagnosticLine(display, input, entry)).join('')
+function lines(display: string, input: string, entries: readonly Diagnostic[], bytes?: Uint8Array): string {
+  const own = locationIndex(bytes ?? input)
+  const included = new Map<string, LocationIndex>()
+  return entries.map((entry) => diagnosticLine(display, entry, indexFor(entry, own, included))).join('')
 }
 
 /** C2-T-020: an entry with `line` and `column` added where it has a range. */
-function located(input: string, entries: readonly Diagnostic[]): object[] {
+function located(input: string, entries: readonly Diagnostic[], bytes?: Uint8Array): object[] {
+  const own = locationIndex(bytes ?? input)
+  const included = new Map<string, LocationIndex>()
   return entries.map((entry) => {
-    const place = location(textOf(entry, input), entry)
+    const place = location(indexFor(entry, own, included), entry)
     return place === null ? { ...entry } : { ...entry, ...place }
   })
 }
