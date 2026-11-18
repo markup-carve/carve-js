@@ -90,6 +90,18 @@ function lastEnd(nodes: unknown, fallback: number): number {
   return last.pos === undefined ? fallback : last.pos.endOffset
 }
 
+function substitutionTextComments(ctx: Context, nodes: unknown): void {
+  if (!Array.isArray(nodes)) return
+  for (const node of nodes as Node01[]) {
+    if (node.type !== 'text' || node.pos === undefined) continue
+    for (let at = node.pos.startOffset; at + 1 < node.pos.endOffset; at++) {
+      if (!ctx.src.startsWith('%%', at) || escapedBrace(ctx.src, at)) continue
+      change(ctx, 'U-069', at, at, '\\', 'comment mark kept as text in the parsed 0.1 substitution')
+      at++
+    }
+  }
+}
+
 /** U-069: there is no arrow form in 0.2 (C2-I-062). */
 function substitution(ctx: Context, node: Node01): void {
   if (node.pos === undefined) return
@@ -110,6 +122,8 @@ function substitution(ctx: Context, node: Node01): void {
   change(ctx, 'U-069', start, start + 2, '{-', message)
   change(ctx, 'U-069', arrow, arrow + 2, '-}{+', message)
   change(ctx, 'U-069', end - 2, end, '+}', message)
+  substitutionTextComments(ctx, node.old)
+  substitutionTextComments(ctx, node.new)
 }
 
 /** C2-I-104: whitespace, a no-break space or opening punctuation before a quote opens it. */

@@ -57,6 +57,13 @@ function tableTab(input: string, expected: string, actual: string): boolean {
   return false
 }
 
+function unmappedHeaderSpan(ctx: Context, expected: string, actual: string): boolean {
+  if (!expected.includes('<th scope="col"></th>') || !actual.includes('<th scope="col">^</th>')) return false
+  return ctx.visits.some((visit) => visit.node.type === 'table_cell' && visit.node.span === 'rowspan'
+    && visit.node.header === true && visit.node.pos !== undefined
+    && ctx.src.slice(visit.node.pos.startOffset, visit.node.pos.endOffset).trim().replace(/^=/u, '').trim() === '^')
+}
+
 function missingTab(input: string, expected: string, actual: string): string | null {
   if (!expected.includes('\t') || actual.includes('\t')) return null
   if (input.split('\n').some((line) => line.trimStart().startsWith(':: ') && line.includes('\t')
@@ -172,6 +179,7 @@ export function measuredReport(ctx: Context, expected: string, actual: string, l
   remainder = false): ReportRecord | null {
   const exact = exactMeasuredReport(ctx.src, line)
   if (exact !== null) return exact
+  if (unmappedHeaderSpan(ctx, expected, actual)) return null
   const input = ctx.src
   if (wrappedLinkTitle(input, expected)) return recordOf('U-221', line,
     'C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified')
