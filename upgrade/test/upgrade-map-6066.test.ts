@@ -33,7 +33,7 @@ describe('the pinned replay map rows', () => {
   })
 
   it('keeps an independent math report beside a verified source rewrite', () => {
-    const result = upgrade('x–"q" $`m`{CLASS=y}\n')
+    const result = upgrade('x-"q" $`m`{CLASS=y}\n')
     expect(result.records.map((record) => record.entry)).toContain('U-375')
     expect(result.records.map((record) => record.entry)).toContain('U-249')
     expect(result.records.find((record) => record.entry === 'U-249')?.range).toEqual({ startOffset: 10, endOffset: 19 })
