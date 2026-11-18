@@ -260,7 +260,8 @@
     "clauses": [
       "C2-X-040",
       "C2-X-043",
-      "C2-X-048"
+      "C2-X-048",
+      "C2-H-005"
     ],
     "input01": ":::: tabs\n::: tab [First]\n### Visible Heading\nContent one.\n:::\n::::",
     "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\">\n<input type=\"radio\" name=\"tabset-1\" id=\"tabset-1-tab-1\" class=\"tabs-radio\" checked>\n<label for=\"tabset-1-tab-1\" class=\"tabs-label\">First</label>\n<div class=\"tabs-panel\" role=\"group\" aria-label=\"First\">\n<h3 id=\"Visible-Heading\">Visible Heading</h3>\n<p>Content one.</p>\n</div>\n</div>",
@@ -268,7 +269,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">First</p>\n    <h3 id=\"Visible-Heading\">Visible Heading</h3>\n    <p>Content one.</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"First\"\n### Visible Heading\nContent one.\n:::\n::::",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><h3 id=\"Visible-Heading\">Visible Heading</h3><p>Content one.</p></div></div>"
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">First</label><div class=\"tab-panel\" role=\"group\" aria-label=\"First\"><h3 id=\"Visible-Heading\">Visible Heading</h3>\n<p>Content one.</p></div></div>"
   },
   {
     "id": "TB-019",
@@ -785,7 +786,8 @@
     "clauses": [
       "C2-X-040",
       "C2-X-043",
-      "C2-X-048"
+      "C2-X-048",
+      "C2-H-005"
     ],
     "input01": ":::: tabs\n::: tab [One]\n### Head\nfirst\n:::\n::: tab [Two]\nsecond\n:::\n::::\n",
     "html01": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\" data-carve-ext=\"tabs\">\n  <section class=\"tabs-panel\" data-carve-label=\"One\" data-carve-selected>\n  <h3 class=\"tabs-label\">One</h3>\n<h3 data-carve-generated-id=\"1\" id=\"Head\">Head</h3>\n<p>first</p>\n  </section>\n  <section class=\"tabs-panel\" data-carve-label=\"Two\">\n  <h3 class=\"tabs-label\">Two</h3>\n<p>second</p>\n  </section>\n</div>",
@@ -793,7 +795,7 @@
     "html02": "<div class=\"tabs\">\n  <div class=\"tab\">\n    <p class=\"div-label\">One</p>\n    <h3 data-carve-generated-id id=\"Head\">Head</h3>\n    <p>first</p>\n  </div>\n  <div class=\"tab\">\n    <p class=\"div-label\">Two</p>\n    <p>second</p>\n  </div>\n</div>",
     "sourceRewrite": false,
     "rewrittenInput": ":::: tabs\n::: tab \"One\"\n### Head\nfirst\n:::\n::: tab \"Two\"\nsecond\n:::\n::::\n",
-    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><h3 data-carve-generated-id id=\"Head\">Head</h3><p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
+    "rewrittenHtml": "<div class=\"tabs\" role=\"group\" aria-label=\"Tabs\"><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-0\" checked><label for=\"tabs-1-0\">One</label><input type=\"radio\" name=\"tabs-1\" id=\"tabs-1-1\"><label for=\"tabs-1-1\">Two</label><div class=\"tab-panel\" role=\"group\" aria-label=\"One\"><h3 data-carve-generated-id id=\"Head\">Head</h3>\n<p>first</p></div><div class=\"tab-panel\" role=\"group\" aria-label=\"Two\"><p>second</p></div></div>",
     "renderMode": "static",
     "roundtrip": true
   },
