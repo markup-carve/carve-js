@@ -84,6 +84,15 @@ function boldItalic(ctx: Context, node: Node01): void {
   change(ctx, 'U-068', end - 2, end, '/*', 'emphasis outside strong respelled as strong outside emphasis')
 }
 
+function deletionTagName(ctx: Context, node: Node01): void {
+  const { startOffset: start, endOffset: end } = node.pos!
+  const [brace, tag] = node.children ?? []
+  if (brace?.type !== 'text' || brace.value !== '{' || brace.pos?.startOffset !== start + 2
+    || tag?.type !== 'tag' || tag.pos?.startOffset !== start + 3
+    || !ctx.src.startsWith('{-{#', start) || !ctx.src.startsWith('-}', end - 2)) return
+  change(ctx, 'U-365', start + 2, start + 2, '\\', 'inner brace escaped so the deletion closer remains visible')
+}
+
 function lastEnd(nodes: unknown, fallback: number): number {
   if (!Array.isArray(nodes) || nodes.length === 0) return fallback
   const last = nodes[nodes.length - 1] as Node01
@@ -250,6 +259,7 @@ function inlineNode(ctx: Context, visit: Visit): void {
   else if (node.type === 'strong') { boldItalic(ctx, node); bracedSameKind(ctx, node) }
   else if (node.type === 'emphasis') bareSameKind(ctx, visit)
   else if (node.type === 'substitution') substitution(ctx, node)
+  else if (node.type === 'delete') deletionTagName(ctx, node)
   else if (node.type === 'smart_punctuation') demotedQuote(ctx, node)
   else if (node.type === 'critic_comment') editorialComment(ctx, node)
   else if (node.type === 'tag') { sigil(ctx, node); unattachedId(ctx, visit) }
