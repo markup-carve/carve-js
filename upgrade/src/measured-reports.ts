@@ -99,11 +99,15 @@ function legacyMeasured(ctx: Context, input: string, expected: string, actual: s
     'C2-B-032 and C2-B-081 read the definition-shaped quote line as quote text')
   if (itemDefinition(input, expected, actual)) return recordOf('U-131', line,
     'C2-B-081 and C2-B-083 read a definition-shaped item line as text')
-  if (ctx.visits.some((visit) => visit.node.type === 'line_block' && visit.node.pos !== undefined
-    && visit.node.pos.startLine <= line && line <= visit.node.pos.endLine)) return recordOf('U-130', line,
-    input.includes('```')
+  const lineBlock = ctx.visits.find((visit) => visit.node.type === 'line_block' && visit.node.pos !== undefined
+    && visit.node.pos.startLine <= line && line <= visit.node.pos.endLine)
+  if (lineBlock?.node.pos !== undefined) {
+    const message = input.includes('```')
       ? 'C2-B-123 and C2-B-130 change code fence ownership inside the line block body'
-      : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace')
+      : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace'
+    return { ...recordOf('U-130', line, message), range: {
+      startOffset: lineBlock.node.pos.startOffset, endOffset: lineBlock.node.pos.endOffset } }
+  }
   if (!expected.includes('<td') && !actual.includes('<td') && hasDefinitionLine(input, '[')) return recordOf('U-132', line,
     'C2-B-081 and C2-B-083 read the empty or container-local definition as text')
   return null

@@ -294,8 +294,9 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   const { line, expected, actual } = remainder
   const sourceLine = placeOf(input, done, line)
   const source = readLines(input)
-  const range = sourceLine === 0 ? { startOffset: 0, endOffset: input.length }
-    : { startOffset: lineStart(source, sourceLine), endOffset: lineEnd(source, sourceLine) }
+  const citedRange = records.find((record) => record.entry === 'U-130' && record.range !== undefined)?.range
+  const range = citedRange ?? (sourceLine === 0 ? { startOffset: 0, endOffset: input.length }
+    : { startOffset: lineStart(source, sourceLine), endOffset: lineEnd(source, sourceLine) })
   const rows = [...new Set(records.filter((record) => /^U-\d+$/u.test(record.entry)).map((record) => record.entry))]
   const owner = rows.length === 0 ? 'no mapped row' : `mapped row ${rows.join(', ')}`
   const message = `${owner}: the HTML still differs after cited transformations: `
