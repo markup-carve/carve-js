@@ -469,11 +469,12 @@ function referencesPlacement(node: Node, path: string, context: LintContext): vo
 }
 
 function semanticOutside(node: Node, path: string, context: LintContext): void {
-  if (node.type === 'span') return
+  if (node.type === 'span' || node.attrs?.keyValues === undefined) return
   for (const name of ['abbr', 'time', 'kbd']) {
-    const value = node.attrs?.keyValues?.find(([key]) => key.toLowerCase() === name)?.[1]
-    const range = attributeRange(node, context, name)
-    if (value !== undefined && range !== null) {
+    const value = node.attrs.keyValues.find(([key]) => key.toLowerCase() === name)?.[1]
+    if (value !== undefined) {
+      const range = attributeRange(node, context, name)
+      if (range === null) continue
       context.report('semantic-attribute-outside-span', range[0], range[1], path, { name, type: node.type, value })
     }
   }
@@ -735,6 +736,7 @@ function intrawordUnderscore(node: Node, path: string, context: LintContext): vo
 function emphasisBeforeAttrs(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
+  if (!source.includes('{')) return
   const range = bounds(node, context)
   if (range === null) return
   for (let at = 0; at < source.length - 2; at++) {
@@ -880,6 +882,7 @@ const OPENER_BEFORE = /[\s([{]/
 function unclosedEmphasis(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
+  if (!source.includes('*') && !source.includes('/')) return
   const range = bounds(node, context)
   if (range === null) return
   for (let at = 0; at < source.length - 1; at++) {
@@ -899,6 +902,7 @@ const BLANK_LABEL = /\[\^[ \t\n]+\]|(?<=\])\[[ \t\n]+\]|^\[[ \t]+\]:/gm
 function blankReferenceLabel(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
+  if (!source.includes('[')) return
   const range = bounds(node, context)
   if (range === null) return
   for (const match of source.matchAll(BLANK_LABEL)) {
@@ -930,6 +934,7 @@ function orderedKindSplit(node: Node, path: string, context: LintContext): void 
 function sigilAfterLetter(node: Node, path: string, context: LintContext): void {
   if (node.type !== 'text') return
   const source = raw(node, context)
+  if (!source.includes('@') && !source.includes('#')) return
   const range = bounds(node, context)
   if (range === null) return
   for (let at = 1; at < source.length - 1; at++) {
