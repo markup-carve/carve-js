@@ -44,7 +44,8 @@ function unclosedRun(ctx: Context, visit: Visit): void {
     change(ctx, 'U-258', end, end, mark, 'unclosed 0.1 inline run closed at its content end')
     return
   }
-  const record = { ...recordOf('U-258', startLine, 'the empty 0.1 inline value has no verified 0.2 spelling'),
+  const record = { ...recordOf(node.type === 'math' ? 'U-396' : 'U-258', startLine,
+    'the empty 0.1 inline value has no verified 0.2 spelling'),
     class: 'report' as const, range: { startOffset: start, endOffset: end } }
   ctx.findings.push({ record, offset: start, edit: null })
 }

@@ -24,7 +24,7 @@ import { rescueTargeted } from './targeted-rescues.ts'
 import { rescueBacktick } from './backtick-rescue.ts'
 import { RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
-import { mappedReport, mappedRewrite } from './mapped-rows.ts'
+import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 
 export interface UpgradeResult {
   /** The Carve 0.2 source. */
@@ -383,7 +383,8 @@ function transformWithRemainderReports(input: string, done: Rewritten, old: stri
 function applyExtraHtml(input: string, done: Rewritten, old: string, next: string):
   ReturnType<typeof applyHtmlTransformations> {
   const cited = applyCitedHtml(old, next, done.records)
-  const empty = done.records.filter((record) => record.entry === 'U-258' && record.class === 'report' && record.range !== undefined)
+  const empty = done.records.filter((record) => (record.entry === 'U-258' || record.entry === 'U-396')
+    && record.class === 'report' && record.range !== undefined)
     .map((record) => input.slice(record.range!.startOffset, record.range!.endOffset))
   const runs = explainEmptyRuns(cited.html, empty)
   const eof = explainDescriptionPlusFenceEof(input, done.output, runs.html, next)
@@ -420,6 +421,8 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
     return 'explained'
   }
   markUnusedReports(records, new Set(transformed.applied))
+  const mappedRemainder = mappedRemainderReport(input, old, next)
+  if (mappedRemainder !== null && !hasEntry(records, mappedRemainder.entry)) records.push(mappedRemainder)
   const remainder = compareHtmlExact(transformed.html, next).difference ?? difference
   const { line, expected, actual } = remainder
   const sourceLine = placeOf(input, done, line)
@@ -431,7 +434,8 @@ function classifyDifference(input: string, done: Rewritten, old: string, next: s
   const owner = rows.length === 0 ? 'no mapped row' : `mapped row ${rows.join(', ')}`
   const message = `${owner}: the HTML still differs after cited transformations: `
     + `left ${JSON.stringify(expected)}, 0.2 ${JSON.stringify(actual)}`
-  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: sourceLine, range, message })
+  records.push({ entry: 'upgrade-mismatch', class: 'mismatch', line: sourceLine, range, message,
+    ...(rows.length === 0 ? { status: 'no mapped row' as const } : {}) })
   return 'mismatch'
 }
 
@@ -492,6 +496,8 @@ function upgradeCore(input: string): UpgradeResult {
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }
   const done = rewrite(input)
+  const mathClass = mathClassReport(input)
+  if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
   let check = selfCheck(input, done)
   if (check === 'mismatch') {

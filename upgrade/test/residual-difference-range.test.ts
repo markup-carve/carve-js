@@ -14,7 +14,7 @@ describe('residual HTML differences name their source', () => {
   })
 
   it('marks a difference with no tool row as a map finding', () => {
-    const source = '={_a=b_}\n'
+    const source = 'a------- b-------- c---------- d----------- e-------------\n'
     const mismatch = upgrade(source).records.find((record) => record.entry === 'upgrade-mismatch')
     expect(mismatch?.message).toContain('no mapped row')
     expect(mismatch?.range).toEqual({ startOffset: 0, endOffset: source.length - 1 })

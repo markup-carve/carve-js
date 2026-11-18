@@ -3636,7 +3636,7 @@
     "path": "resources/examples/edge-cases/0872-the-third-confirmation-round-s-model-findings.md",
     "line": 361,
     "input": "$`a`{CLASS=c}\n",
-    "check": "explained",
+    "check": "pass",
     "entries": [
       "U-249"
     ]
@@ -3647,7 +3647,7 @@
     "path": "tests/corpus/872-the-third-confirmation-round-s-model-findings-19.crv",
     "line": 1,
     "input": "$`a`{CLASS=c}\n",
-    "check": "explained",
+    "check": "pass",
     "entries": [
       "U-249"
     ]

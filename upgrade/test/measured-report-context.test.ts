@@ -11,7 +11,7 @@ describe('measured reports use the 0.1 parse', () => {
     'does not treat a code or comment spelling as a line block: %s', (source) => {
       const result = upgrade(source)
       expect(result.records.map((record) => record.entry)).not.toContain('U-130')
-      expect(result.records.map((record) => record.entry)).toContain('U-258')
+      expect(result.records.map((record) => record.entry)).toContain('U-396')
       expect(result.check).toBe('explained')
     },
   )

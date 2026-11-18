@@ -17,6 +17,8 @@ export interface ReportRecord {
   line: number
   /** UTF-16 source offsets of a construct that needs review. */
   range?: { startOffset: number; endOffset: number }
+  /** A machine-readable reason for a blocked residual difference. */
+  status?: 'no mapped row'
   message: string
   lint?: string
 }

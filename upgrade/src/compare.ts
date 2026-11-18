@@ -122,6 +122,12 @@ function readTag(html: string, start: number, end: number, line: number, normali
   const split = nameEnd(body)
   const name = body.slice(0, split)
   const parts = splitAttributes(body, split)
+  // HTML attribute names are ASCII case insensitive. Preserve values byte for byte.
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]!
+    const equal = part.indexOf('=')
+    parts[index] = equal < 0 ? part.toLowerCase() : part.slice(0, equal).toLowerCase() + part.slice(equal)
+  }
   const own = takeSourceLine(parts)
   if (normalizeTask && name === 'li' && isTaskItem(parts)) { dropTaskClass(parts); dropTaskStyle(parts) }
   parts.sort()
