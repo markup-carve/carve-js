@@ -57,6 +57,26 @@ if (result.diagnostics[0]?.channel !== 'render-loss') throw new Error('no loss r
 
 ## Options and errors
 
+### Host code block renderer
+
+`render` and `renderWithDiagnostics` accept an optional `codeBlockRenderer(node, defaultHtml)` callback.
+It runs for every ordinary code block, including blocks inside containers and expanded includes. `node` supplies
+the language in `syntax`, the source in `value`, and any `title`, `groupLabel` and `attrs`. Return HTML to replace
+the block, or return `undefined` to use `defaultHtml`, which has already escaped the source and applied the normal
+attributes. The callback is trusted host code: its returned HTML is inserted unchanged. This is useful for a
+syntax highlighter that emits a placeholder for languages it supports.
+
+```ts
+import { render } from '@markup-carve/carve/v2'
+
+const source = '```ts\nlet a = 1\n```\n'
+const html = render(source, {
+  codeBlockRenderer(node, defaultHtml) {
+    return node.syntax === 'ts' ? '<pre data-highlighted="ts">placeholder</pre>' : defaultHtml
+  },
+})
+```
+
 Every option is checked before anything is parsed. An unknown name, a value of the wrong type, or an option of
 another stage (`alignTables` on `render`) throws `CarveOptionError`, whose `option` names the option.
 

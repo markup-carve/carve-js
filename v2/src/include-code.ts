@@ -33,14 +33,30 @@ function longestRun(text: string, code: number): number {
 }
 
 /** C2-N-042: the block that a fence with the include's attribute line, language and `payload` gives. */
-function fencedBlock(node: IncludeNode, payload: string): { block: CodeBlockNode | TableNode, facts: ParseFacts | null } | null {
+function fencedBlock(node: IncludeNode, payload: string):
+  { block: CodeBlockNode | TableNode, facts: ParseFacts | null, payloadStart: number } | null {
   const fence = '`'.repeat(Math.max(MIN_FENCE, longestRun(payload, BACKTICK) + 1))
   const code = node.options?.code
   const brace = braceBlock(node)
-  const source = `${brace === '' ? '' : `${brace}\n`}${fence}${typeof code === 'string' ? code : ''}\n${payload}${fence}\n`
+  const prefix = `${brace === '' ? '' : `${brace}\n`}${fence}${typeof code === 'string' ? code : ''}\n`
+  const source = `${prefix}${payload}${fence}\n`
   const parsed = buildSource(source, false)
   const block = parsed.document.children[0]
-  return block?.type === 'code_block' || block?.type === 'table' ? { block, facts: parsed.facts } : null
+  return block?.type === 'code_block' || block?.type === 'table'
+    ? { block, facts: parsed.facts, payloadStart: utf8Length(prefix) } : null
+}
+
+/** A byte in a synthetic fence payload has the place of the same byte in the included file. */
+function fileOffset(text: string, lines: FileLines, range: LineRange, skip: (index: number) => boolean, offset: number): number {
+  let payloadAt = 0
+  for (let index = range.from; index < range.to; index++) {
+    if (skip(index)) continue
+    const start = lines.starts[index]!
+    const lineBytes = utf8Length(text.slice(start, lines.ends[index]))
+    if (offset <= payloadAt + lineBytes) return utf8Length(text.slice(0, start)) + offset - payloadAt
+    payloadAt += lineBytes + 1
+  }
+  return utf8Length(text)
 }
 
 function codePoints(text: string): number {
@@ -213,6 +229,23 @@ export function codeChildren(
   if (fenced === null) return { children: [], facts: null }
   if ('cause' in fenced) return fenced
   const child = fenced.block
+  if (fenced.facts !== null) {
+    const original = fenced.facts.addFindings
+    const table = isTableInclude(node)
+    const selected = table ? { from: 0, to: lines.starts.length } : range
+    const kinds = table ? recordKinds(text, lines, node.options?.code === 'tsv') : []
+    const skip = (index: number): boolean => table && kinds[index] === RECORD_MARKER
+    fenced.facts = { ...fenced.facts, addFindings(findings) {
+      const before = findings.entries.length
+      original(findings)
+      for (let at = before; at < findings.entries.length; at++) {
+        const entry = findings.entries[at]
+        if (entry?.code !== 'delimited-table-malformed' || entry.range === undefined) continue
+        const offset = fileOffset(text, lines, selected, skip, entry.range.startOffset - fenced.payloadStart)
+        entry.range = { startOffset: offset, endOffset: offset + 1 }
+      }
+    } }
+  }
   if (positions) child.pos = payloadPosition(text, lines, range)
   // C2-N-073: the child carries a copy of the caption, which is numbered and written in place of the include's own.
   // The copy was not produced by the included file, so it carries no position of it (C2-N-019).

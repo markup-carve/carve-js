@@ -1,7 +1,7 @@
 // Lint through includes (C2-N-085 to C2-N-087): every Carve include the expansion accepted is linted over the source it
 // parsed, and each finding names its file, a range in that file and a tree path through the includes that reached it.
-import { type DocumentNode, forEachSlot, type IncludeNode, type Node } from '../src/ast.ts'
-import { parse } from '../src/api.ts'
+import { forEachSlot, type IncludeNode, type Node } from '../src/ast.ts'
+import { parse, parseWithDiagnostics } from '../src/api.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
 import { type IncludeConfig, includeSettings, type IncludeResolver, type IncludeSettings } from '../src/include-settings.ts'
 import { fileLines, type LineRange, lineRange, regionRange } from '../src/include-source.ts'
@@ -46,6 +46,7 @@ interface Visit {
   lintPayload: (text: string, node: Node, path: string) => Diagnostic[]
   seen: Set<string>
   out: Diagnostic[]
+  codePaths: string[]
 }
 
 function lineOfByte(text: string, byte: number): number {
@@ -162,7 +163,10 @@ function lintCodeChild(visit: Visit, node: IncludeNode, text: string, path: stri
 }
 
 function walk(visit: Visit, node: Node, path: string): void {
-  if (node.type === 'include' && node.children !== undefined) lintInclude(visit, node, path)
+  if (node.type === 'include' && node.children !== undefined) {
+    if (node.options?.code !== undefined) visit.codePaths.push(`${path}/children/`)
+    lintInclude(visit, node, path)
+  }
   forEachSlot(node, (nodes, step, single) => {
     if (single) walk(visit, nodes[0]!, `${path}/${step}`)
     else nodes.forEach((child, index) => walk(visit, child, `${path}/${step}/${index}`))
@@ -175,8 +179,11 @@ export function lintIncludes(source: string, value: unknown, lintFile: (source: 
   const config = includeSettings(value, (reason) => new CarveOptionError('includes', reason))
   if (config === null) return []
   const texts = new Map<string, string>()
-  const document: DocumentNode = parse(source, { includes: recording(config, texts) })
-  const visit: Visit = { texts, lintFile, lintPayload, seen: new Set(), out: [] }
-  walk(visit, document, '')
-  return visit.out
+  const expanded = parseWithDiagnostics(source, { includes: recording(config, texts) })
+  const visit: Visit = { texts, lintFile, lintPayload, seen: new Set(), out: [], codePaths: [] }
+  walk(visit, expanded.document, '')
+  // The file lint pass selects source lines and sections. Keep only expansion findings that it cannot produce.
+  const expansion = expanded.diagnostics.filter((entry) => entry.code.startsWith('include-') ||
+    visit.codePaths.some((path) => entry.path?.startsWith(path) === true))
+  return [...expansion, ...visit.out]
 }
