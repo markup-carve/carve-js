@@ -13,6 +13,7 @@ import { inlinesText } from './profile.ts'
 import { smartGlyph } from './ast-text.ts'
 import { type SocialRequest } from './options.ts'
 import { drawDerivedText } from './derived-text.ts'
+import { withoutUnpairedSurrogates } from './unicode.ts'
 
 type InlineWriter = (node: InlineParent, r: Render) => string
 
@@ -281,7 +282,7 @@ function rawInline(node: RawInlineNode, r: Render): string {
 }
 
 function templateUrl(template: string | undefined, name: string): string | null {
-  return template === undefined ? null : template.replaceAll('{name}', encodeURIComponent(name))
+  return template === undefined ? null : template.replaceAll('{name}', encodeURIComponent(withoutUnpairedSurrogates(name)))
 }
 
 /** C2-H-126: the URL that `social` gives for a mention or a tag, or null. A resolver is final, and its error stays inside. */
