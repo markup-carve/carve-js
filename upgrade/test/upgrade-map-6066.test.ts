@@ -49,6 +49,13 @@ describe('the pinned replay map rows', () => {
     expect(upgrade(source).output).toBe(source)
   })
 
+  it.each(['`$`x`{CLASS=y}`\n', '```\n$`x`{CLASS=y}\n```\n'])(
+    'does not report a math class inside literal code', (source) => {
+      const result = upgrade(source)
+      expect(result.records.some((record) => record.entry === 'U-249')).toBe(false)
+    },
+  )
+
   it('keeps an unmapped difference blocked with a machine readable status', () => {
     const result = upgrade('a------- b-------- c---------- d----------- e-------------\n')
     expect(result.check).toBe('mismatch')

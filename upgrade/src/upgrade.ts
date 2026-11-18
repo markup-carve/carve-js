@@ -496,7 +496,7 @@ function upgradeCore(input: string): UpgradeResult {
     return { output: input, changed: false, records: done.records, check, engine01: ENGINE_01_VERSION }
   }
   const done = rewrite(input)
-  const mathClass = mathClassReport(input)
+  const mathClass = mathClassReport(done.context)
   if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
   let check = selfCheck(input, done)

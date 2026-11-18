@@ -1,6 +1,7 @@
 import map from '../../v2/data/upgrade-map.json' with { type: 'json' }
 import { compareHtmlExact } from './compare.ts'
 import { html01, html02 } from './engines.ts'
+import { type Context } from './context.ts'
 import { recordOf, type ReportRecord } from './report.ts'
 import { lineOf, readLines } from './source.ts'
 import { newMapCandidates } from './new-map-candidates.ts'
@@ -63,11 +64,17 @@ export function mappedRemainderReport(input: string, old: string, next: string, 
 }
 
 /** U-249 remains an explicit review row even though HTML names now compare without case. */
-export function mathClassReport(input: string): ReportRecord | null {
-  const match = /\$`[^`\n]*`(\{CLASS=[^}\n]+\})/u.exec(input)
-  if (match?.index === undefined || match[1] === undefined) return null
-  const startOffset = match.index + match[0].indexOf(match[1])
-  return { ...recordOf('U-249', lineOf(readLines(input), startOffset),
-    'the inline math class key uses its canonical lowercase name in 0.2'),
-  range: { startOffset, endOffset: startOffset + match[1].length } }
+export function mathClassReport(ctx: Context): ReportRecord | null {
+  for (const match of ctx.src.matchAll(/\$`[^`\n]*`(\{CLASS=[^}\n]+\})/gu)) {
+    if (match.index === undefined || match[1] === undefined) continue
+    const end = match.index + match[0].length
+    const parsedMath = ctx.visits.some(({ node }) => node.type === 'math'
+      && node.pos?.startOffset === match.index && node.pos.endOffset >= end)
+    if (!parsedMath) continue
+    const startOffset = end - match[1].length
+    return { ...recordOf('U-249', lineOf(ctx.lines, startOffset),
+      'the inline math class key uses its canonical lowercase name in 0.2'),
+    range: { startOffset, endOffset: end } }
+  }
+  return null
 }
