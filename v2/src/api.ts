@@ -122,8 +122,8 @@ function combinedFacts(top: ParseFacts, files: readonly ParseFacts[], found: Fin
  */
 function parseSource(src: string, settings: Settings, positions: boolean, trace: LayoutTrace | null = null): ParsedTree {
   const names = settings.extensions.length > 0
-  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false): ParsedTree => applyExtensions(
-    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer), settings.extensions,
+  const parse = (text: string, outer: ParseFacts['scope'] | null, forced = false, frontmatterOpens = true): ParsedTree => applyExtensions(
+    buildSource(text, positions || forced, null, outer === null ? trace : null, names, null, outer, frontmatterOpens), settings.extensions,
   )
   const parsed = parse(src, null)
   const facts = parsed.facts

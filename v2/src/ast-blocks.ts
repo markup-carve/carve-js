@@ -719,10 +719,12 @@ function buildDocument(ctx: TreeContext, root: BlockNode, source: string): Parse
 export function buildSource(
   src: string, positions: boolean, abbreviations: Map<string, string> | null = null, trace: LayoutTrace | null = null,
   collectSourceNames = false, linkKeys: ReadonlySet<string> | null = null, outer: OuterScope | null = null,
+  frontmatterOpens = true,
 ): ParsedTree {
   // C2-B-218: U+0000 and an unpaired surrogate are read as U+FFFD. All are one UTF-16 unit, so every string offset stays.
   const text = withoutUnpairedSurrogates(src.includes('\0') ? src.replaceAll('\0', '\uFFFD') : src)
   const blocks = acquireState()
+  blocks.frontmatterOpens = frontmatterOpens
   const inline = acquireInlineState()
   inline.bidi = false
   try {
