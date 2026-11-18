@@ -7,7 +7,7 @@ interface RuleRow {
   channel?: string
   status: string
   default?: string
-  messages?: string[]
+  messages?: (string | { when: string, text: string })[]
 }
 
 function messageLines(value: string): string[] {
@@ -28,7 +28,11 @@ export function generateCatalog(json: string): string {
   for (const row of rows) {
     lines.push(`  ${JSON.stringify(row.id)}: { severity: ${JSON.stringify(row.severity)}, ` +
       `default: ${row.default === undefined ? 'undefined' : JSON.stringify(row.default)}, messages: [`)
-    for (const message of row.messages ?? []) lines.push(...messageLines(message))
+    for (const message of row.messages ?? []) lines.push(...messageLines(typeof message === 'string' ? message : message.text))
+    lines.push('  ], conditions: [')
+    for (const message of row.messages ?? []) {
+      lines.push(...messageLines(typeof message === 'string' ? '' : message.when))
+    }
     lines.push('  ] },')
   }
   lines.push('} as const', '', 'export type RuleId = keyof typeof CATALOG', '')
