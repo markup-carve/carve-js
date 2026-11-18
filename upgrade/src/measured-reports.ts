@@ -92,6 +92,17 @@ function itemDefinition(input: string, expected: string, actual: string): boolea
     || nestedItemDefinition(input)
 }
 
+function lineBlockReport(ctx: Context, input: string, line: number): ReportRecord | null {
+  const block = ctx.visits.find((visit) => visit.node.type === 'line_block' && visit.node.pos !== undefined
+    && visit.node.pos.startLine <= line && line <= visit.node.pos.endLine)
+  if (block?.node.pos === undefined) return null
+  const message = input.includes('```')
+    ? 'C2-B-123 and C2-B-130 change code fence ownership inside the line block body'
+    : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace'
+  return { ...recordOf('U-130', line, message), range: {
+    startOffset: block.node.pos.startOffset, endOffset: block.node.pos.endOffset } }
+}
+
 function legacyMeasured(ctx: Context, input: string, expected: string, actual: string, line: number): ReportRecord | null {
   if (tableTab(input, expected, actual)) return recordOf('U-140', line,
     'C2-B-171 treats a leading or trailing cell tab as syntax padding')
@@ -99,15 +110,8 @@ function legacyMeasured(ctx: Context, input: string, expected: string, actual: s
     'C2-B-032 and C2-B-081 read the definition-shaped quote line as quote text')
   if (itemDefinition(input, expected, actual)) return recordOf('U-131', line,
     'C2-B-081 and C2-B-083 read a definition-shaped item line as text')
-  const lineBlock = ctx.visits.find((visit) => visit.node.type === 'line_block' && visit.node.pos !== undefined
-    && visit.node.pos.startLine <= line && line <= visit.node.pos.endLine)
-  if (lineBlock?.node.pos !== undefined) {
-    const message = input.includes('```')
-      ? 'C2-B-123 and C2-B-130 change code fence ownership inside the line block body'
-      : 'C2-B-123 and C2-B-130 read the line block body as text lines with retained whitespace'
-    return { ...recordOf('U-130', line, message), range: {
-      startOffset: lineBlock.node.pos.startOffset, endOffset: lineBlock.node.pos.endOffset } }
-  }
+  const lineBlock = lineBlockReport(ctx, input, line)
+  if (lineBlock !== null) return lineBlock
   if (!expected.includes('<td') && !actual.includes('<td') && hasDefinitionLine(input, '[')) return recordOf('U-132', line,
     'C2-B-081 and C2-B-083 read the empty or container-local definition as text')
   return null
@@ -181,6 +185,10 @@ export function measuredReport(ctx: Context, expected: string, actual: string, l
     'C2-I-068 leaves a wrapped link or image title unresolved by the current 0.2 parser; no preserving spelling was verified')
   const boundary = boundaryReport(input, expected, actual, line)
   if (boundary !== null) return boundary
+  if (actual.includes('<br>')) {
+    const lazyLine = lineBlockReport(ctx, input, line)
+    if (lazyLine !== null) return lazyLine
+  }
   if (unresolvedEngineShape(input, expected, actual)) return null
   if (ctx.visits.some((visit) => visit.node.type === 'text' && String(visit.node.value).includes('{{')
     && String(visit.node.value).includes('}}'))) return recordOf('U-011', line,
