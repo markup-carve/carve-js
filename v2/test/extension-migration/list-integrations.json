@@ -55,9 +55,9 @@
     "input01": "::: wrap\n\n::: list-table [inner]\n- - a\n  - b\n:::\n\n:::",
     "html01": "<div class=\"wrap\">\n  <p class=\"div-label\">inner</p>\n  <table>\n    <tbody>\n      <tr><td>a</td><td>b</td></tr>\n    </tbody>\n  </table>\n</div>",
     "input02": "::: wrap\n\n::: list-table [inner]\n- - a\n  - b\n:::\n\n:::",
-    "html02": "<div class=\"wrap\">\n  <p class=\"div-label\">inner</p>\n<table>\n  <tbody>\n    <tr><td>a</td><td>b</td></tr>\n  </tbody>\n</table>\n</div>",
+    "html02": "<div class=\"wrap\">\n  <p class=\"div-label\">inner</p>\n  <table>\n    <tbody>\n      <tr><td>a</td><td>b</td></tr>\n    </tbody>\n  </table>\n</div>",
     "sourceRewrite": false,
-    "held": true
+    "held": false
   },
   {
     "id": "LI-06",

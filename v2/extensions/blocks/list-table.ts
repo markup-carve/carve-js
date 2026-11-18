@@ -179,7 +179,8 @@ function rowHtml(cells: Cell[], row: number, head: number, headCols: number, row
   tableAttrs: Attrs | undefined, host: ExtensionRenderHost): string {
   const content = cells.map((cell, col) => cellHtml(cell, col, row, head, headCols, rowHead, tableAttrs, host)).join('')
   const padding = Array.from({ length: Math.max(0, width - cells.length) }, () => '<td></td>').join('')
-  return `    <tr>${content}${padding}</tr>`
+  const annotation = host.attributes(cells[0]?.item ?? null, { block: true, bare: true })
+  return `    <tr${annotation}>${content}${padding}</tr>`
 }
 
 function groupHtml(table: TableData, start: number, end: number, name: string, head: number, headCols: number,
@@ -187,7 +188,8 @@ function groupHtml(table: TableData, start: number, end: number, name: string, h
   if (start >= end) return ''
   const rendered = table.rows.slice(start, end).map((cells, index) =>
     rowHtml(cells, start + index, head, headCols, table.rowHeads[start + index] ?? false, width, table.attrs, host)).join('\n')
-  return `  <${name}>\n${rendered}\n  </${name}>\n`
+  const annotation = host.attributes(table.rows[start]?.[0]?.item ?? null, { block: true, bare: true })
+  return `  <${name}${annotation}>\n${rendered}\n  </${name}>\n`
 }
 
 function columnsHtml(attrs: Attrs | undefined, host: ExtensionRenderHost): string {
@@ -210,11 +212,15 @@ export const listTableRenderer: ExtensionRenderer = { version: '1', render(node,
   const label = table.label === undefined || table.label === '' ? '' :
     `<p class="div-label">${host.escapeText(table.label)}</p>\n`
   const caption = table.title.length === 0 ? '' : `  <caption>${host.inlines(table.title)}</caption>\n`
-  const attrs = authorAttrs(table.attrs, host, ['header-rows', 'header-cols', 'footer-rows', 'aligns', 'valigns', 'widths'])
+  const consumed = ['header-rows', 'header-cols', 'footer-rows', 'aligns', 'valigns', 'widths']
+  if (host.sourceLines) consumed.push('data-source-line')
+  const attrs = authorAttrs(table.attrs, host, consumed) + host.attributes(node, { block: true, bare: true })
   const bodies = boundaries.slice(0, -1).map((start, index) =>
     groupHtml(table, start, boundaries[index + 1] ?? start, 'tbody', head, headCols, width, host)).join('')
-  return `${label}<table${attrs}>\n${caption}${columnsHtml(table.attrs, host)}` +
+  const html = `${label}<table${attrs}>\n${caption}${columnsHtml(table.attrs, host)}` +
     groupHtml(table, 0, head, 'thead', head, headCols, width, host) +
     bodies +
     groupHtml(table, bodyEnd, table.rows.length, 'tfoot', head, headCols, width, host) + '</table>'
+  const indent = '  '.repeat(host.blockDepth)
+  return indent === '' ? html : html.replaceAll('\n', `\n${indent}`)
 } }
