@@ -1,5 +1,5 @@
-// One interface for every output of a resolved 0.2 tree. HTML and Carve are built in; the 0.1 Markdown, plain-text
-// and ANSI writers will be ported onto the 0.2 tree as built-in targets of these names, so a host cannot take them.
+// One interface for every output of a resolved 0.2 tree. HTML and Carve are built in. The Markdown, plain-text and
+// ANSI exports live in `@markup-carve/carve/export`, which registers them under their reserved targets.
 import { CarveRenderError, renderWithDiagnostics } from '../src/api.ts'
 import { type DocumentNode } from '../src/ast.ts'
 import { type Diagnostic } from '../src/diagnostics.ts'
@@ -36,8 +36,15 @@ export interface WriterRegistry {
   write(target: string, document: DocumentNode, options?: WriterOptions): WriterResult
 }
 
-/** Targets kept for the writers that are being ported from 0.1. */
-export const RESERVED_WRITER_TARGETS: readonly string[] = ['markdown', 'plain-text', 'ansi']
+/** Targets kept for the exports of `@markup-carve/carve/export`, which only they may register. */
+export const RESERVED_WRITER_TARGETS: readonly string[] = ['markdown', 'plain', 'ansi']
+
+/** Marks the writers of `@markup-carve/carve/export`; a symbol of the registry, so it holds across separate bundles. */
+export const EXPORT_WRITER: unique symbol = Symbol.for('@markup-carve/carve.exportWriter') as never
+
+function isExportWriter(writer: Writer): boolean {
+  return (writer as Writer & { [EXPORT_WRITER]?: unknown })[EXPORT_WRITER] === true
+}
 
 const TARGET = /^[a-z][a-z0-9-]*$/u
 
@@ -72,7 +79,9 @@ export function createWriterRegistry(): WriterRegistry {
       }
       const target: unknown = writer.target
       if (typeof target !== 'string' || !TARGET.test(target)) throw new CarveOptionError('writer', 'the target is not a lower-case name')
-      if (RESERVED_WRITER_TARGETS.includes(target)) throw new CarveOptionError('writer', `the target ${target} is reserved`)
+      if (RESERVED_WRITER_TARGETS.includes(target) && !isExportWriter(writer)) {
+        throw new CarveOptionError('writer', `the target ${target} is reserved`)
+      }
       if (writers.has(target)) throw new CarveOptionError('writer', `the target ${target} is taken`)
       writers.set(target, writer)
     },
@@ -80,7 +89,9 @@ export function createWriterRegistry(): WriterRegistry {
     targets: () => [...writers.keys()],
     write(target, document, options) {
       const writer = writers.get(target)
-      if (writer === undefined) throw new CarveOptionError('target', `unknown writer target ${JSON.stringify(target)}`)
+      if (writer === undefined) {
+        throw new CarveOptionError('target', `unknown writer target ${JSON.stringify(target)}; known targets: ${[...writers.keys()].join(', ')}`)
+      }
       return writer.write(document, options)
     },
   }

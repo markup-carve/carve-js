@@ -147,9 +147,9 @@ if (writers.write('shout', parse('a\n\nb')).output !== '2') throw new Error('wro
 if (writers.write('carve', parse('a')).output !== 'a\n') throw new Error('carve writer')
 ```
 
-The Markdown, plain-text and ANSI writers of 0.1 are being ported to the 0.2 tree. They will arrive as the built-in
-targets `markdown`, `plain-text` and `ansi` behind this same interface; those names are reserved
-(`RESERVED_WRITER_TARGETS`), and `register` refuses them.
+The Markdown, plain-text and ANSI exports live in their own entry, `@markup-carve/carve/export` ([exports](export.md)).
+Their targets `markdown`, `plain` and `ansi` are reserved (`RESERVED_WRITER_TARGETS`): `register` refuses them for any
+other writer, and `registerExports` from that entry adds them to a registry.
 
 ## Extensions (provisional)
 
@@ -184,9 +184,9 @@ says what to use instead. Of the 172 values, 95 map to a 0.2 call and 77 are gon
 | `carveToCarveWithReport` | `formatWithDiagnostics` |  |
 | `renderCarve` | `write` |  |
 | `renderCarveWithReport` | `writeWithDiagnostics` |  |
-| `carveToMarkdown`, `carveToMarkdownWithReport`, `renderMarkdown`, `renderMarkdownWithReport` | writer target `markdown` | reserved; the writer is being ported |
-| `carveToPlainText`, `carveToPlainTextWithReport`, `renderPlainText`, `renderPlainTextWithReport` | writer target `plain-text` | reserved; the writer is being ported |
-| `carveToAnsi`, `carveToAnsiWithReport`, `renderAnsi`, `renderAnsiWithReport` | writer target `ansi` | reserved; the writer is being ported |
+| `carveToMarkdown`, `carveToMarkdownWithReport`, `renderMarkdown`, `renderMarkdownWithReport` | `toMarkdown` (`@markup-carve/carve/export`) | one result with `output` and `diagnostics`; source goes through `parse` first; writer target `markdown` |
+| `carveToPlainText`, `carveToPlainTextWithReport`, `renderPlainText`, `renderPlainTextWithReport` | `toPlainText` (`@markup-carve/carve/export`) | as above; writer target `plain` |
+| `carveToAnsi`, `carveToAnsiWithReport`, `renderAnsi`, `renderAnsiWithReport` | `toAnsi` (`@markup-carve/carve/export`) | as above; writer target `ansi` |
 | `carveToAstJson` | `encodeTree(parse(source))` |  |
 | `toAstJson` | `encodeTree` |  |
 | `toAstEnvelope` | `encodeEnvelope` |  |

@@ -21,6 +21,8 @@ const ENGINE_COMMANDS: readonly Command[] = ['flatten']
 
 // C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade command.
 const EXTRA_FROM = ['markdown', 'gfm', 'djot', 'bbcode']
+// The engine's export targets of `render` (`@markup-carve/carve/export`).
+const RENDER_FLAGS: readonly Flag[] = [{ name: 'to', commands: ['render'], kind: 'enum', values: ['html', 'markdown', 'plain', 'ansi'] }]
 const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'check', commands: ['upgrade'], kind: 'switch' },
   { name: 'write', commands: ['upgrade'], kind: 'switch' },
@@ -49,6 +51,7 @@ function specified(row: (typeof cli.flags)[number]): Flag {
 /** C2-T-007 to C2-T-010: every flag of every command; `help` and `version` are read before the others. */
 export const FLAGS: readonly Flag[] = [
   ...cli.flags.filter((row) => row.name !== 'help' && row.name !== 'version').map(specified),
+  ...RENDER_FLAGS,
   ...UPGRADE_FLAGS,
   ...ENGINE_FLAGS,
 ]

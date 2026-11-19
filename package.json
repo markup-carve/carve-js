@@ -45,6 +45,10 @@
       "types": "./dist/types/public/formats.d.ts",
       "import": "./dist/import.js"
     },
+    "./export": {
+      "types": "./dist/types/public/export.d.ts",
+      "import": "./dist/export.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

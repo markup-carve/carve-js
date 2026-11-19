@@ -18,6 +18,7 @@ import { fixSource } from './fix.ts'
 import { flatten } from './flatten.ts'
 import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
 import includeTable from '../data/includes.json' with { type: 'json' }
+import { EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget } from '../src/export/index.ts'
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
 /** C2-T-040: the failure categories and their status. */
@@ -203,7 +204,12 @@ function options(args: ParsedArgs): Record<string, unknown> {
 
 function allowedLosses(args: ParsedArgs): ReadonlySet<string> {
   const names = (args.values['allow-loss'] as string[] | undefined) ?? []
-  for (const name of names) if (!LOSS_CODES.has(name)) throw new UsageError(`${name} is no code of the render-loss channel`)
+  const exporting = args.values['to'] !== undefined && args.values['to'] !== 'html'
+  for (const name of names) {
+    if (!LOSS_CODES.has(name) && !(exporting && EXPORT_LOSS_CODES.includes(name))) {
+      throw new UsageError(`${name} is no code of the render-loss channel`)
+    }
+  }
   return new Set(names)
 }
 
@@ -228,6 +234,28 @@ let rawHtmlEscaped = false
 
 function includeEntry(display: string, document: DocumentNode): object {
   return { file: display, dependencies: includeDependencies(document) }
+}
+
+/** `render --to markdown|plain|ansi`: the export of the file, with the loss gate of `render`. */
+function exportFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs, target: ExportTarget): FileResult {
+  const fromAst = args.values['from-ast'] === true
+  const document = fromAst ? tree(strictText(path, bytes)) : parse(bytes, includesOf(path, args))
+  const source = fromAst ? '' : lenientText(bytes)
+  const settings: ExportOptions = {}
+  if (args.values['smart-typography'] !== undefined) settings.smartTypography = args.values['smart-typography'] as boolean
+  if (args.values['url-policy'] !== undefined) settings.urlPolicy = args.values['url-policy'] as NonNullable<ExportOptions['urlPolicy']>
+  const result = exportTo(target, document, settings)
+  const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
+  const file: FileResult = { status: 0, losses: { file: display,
+    diagnostics: located(source, retained, fromAst ? undefined : bytes), suppressed } }
+  if (args.values['report-includes'] !== undefined) file.includes = includeEntry(display, document)
+  const strict = args.values['strict-losses'] === true && losses.length > 0
+  if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
+  process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))
+  if (strict) return { ...file, status: 1 }
+  file.status = strictStatus(args, retained)
+  emit(result.output)
+  return file
 }
 
 function renderFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
@@ -476,7 +504,10 @@ function executeFile(path: string, args: ParsedArgs): FileResult {
   const bytes = readBytes(path)
   const display = nameOf(path)
   switch (args.command) {
-    case 'render': return renderFile(path, display, bytes, args)
+    case 'render': {
+      const target = args.values['to'] as ExportTarget | 'html' | undefined
+      return target === undefined || target === 'html' ? renderFile(path, display, bytes, args) : exportFile(path, display, bytes, args, target)
+    }
     case 'ast': return astFile(path, display, bytes, args)
     case 'fmt': return fmtFile(path, display, bytes, args)
     case 'diagnostics': return diagnosticsFile(path, display, bytes, args)
