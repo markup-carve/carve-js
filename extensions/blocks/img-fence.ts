@@ -45,7 +45,7 @@ function mergeRoot(svg: string, attrs: string): string {
 export function createImgFence(options: ImgFenceOptions = {}): {
   extensions: readonly ExtensionDefinition[], renderers: Record<string, ExtensionRenderer>
 } {
-  const renderer: ExtensionRenderer = { version: '1', render(node, host) {
+  const renderImage: NonNullable<ExtensionRenderer['render']> = (node, host) => {
     const value = node.payload?.[0]?.value
     const source = typeof value === 'string' ? value : ''
     const sanitized = sanitizeSvg(source, { ...options, urlPolicy: host.urlPolicy })
@@ -62,7 +62,8 @@ export function createImgFence(options: ImgFenceOptions = {}): {
     // C2-X-060: this sink alone admits its own sanitized SVG URL; authored data URLs stay under C2-H-159.
     const alt = attrValue(node.attrs, 'alt') ?? svgTitle(sanitized.svg) ?? ''
     return `<img src="${host.escapeAttribute(src)}" alt="${host.escapeAttribute(alt)}"${attrs}>`
-  } }
+  }
+  const renderer: ExtensionRenderer = { version: '1', render: renderImage, buildTime: renderImage }
   return { extensions: imgFenceExtensions,
     renderers: { 'carve.imgFence.img': renderer, 'carve.imgFence.image': renderer } }
 }

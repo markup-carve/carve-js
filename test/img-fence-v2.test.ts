@@ -12,6 +12,7 @@ describe('public imgFence extension', () => {
       const source = fence('<svg/>', language)
       const registration = imgFence()
       expect(render(source, registration)).toBe(expected)
+      expect(render(source, { ...registration, mode: 'static' })).toBe(expected)
       expect(render(source, { extensions: imgFenceExtensions, renderers: imgFenceRenderers })).toBe(expected)
       expect(parse(source, { extensions: registration.extensions }).children[0]).toMatchObject({ name: `carve.imgFence.${language}` })
     }
