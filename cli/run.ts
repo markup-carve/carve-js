@@ -529,12 +529,16 @@ export function run(args: ParsedArgs): number {
   const collected: Collected = { diagnostics: [], losses: [], includes: [] }
   const output = args.values['output']
   product = typeof output === 'string' ? [] : null
-  try { return runFiles(files, args, collected) }
-  finally {
-    // C2-T-017: what the files before a failure produced stays written.
+  let finished = false
+  try {
+    const status = runFiles(files, args, collected)
+    finished = true
+    return status
+  } finally {
+    // C2-T-017: what the files before a failure produced stays written; a run that produced nothing keeps the file.
     const held = product
     product = null
-    if (held !== null) writeOut(output as string, held.join(''))
+    if (held !== null && (finished || held.length > 0)) writeOut(output as string, held.join(''))
   }
 }
 
