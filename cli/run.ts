@@ -248,6 +248,7 @@ function exportFile(path: string, display: string, bytes: Uint8Array, args: Pars
   const { losses, retained, suppressed } = lossesOf(args, result.diagnostics)
   const file: FileResult = { status: 0, losses: { file: display,
     diagnostics: located(source, retained, fromAst ? undefined : bytes), suppressed } }
+  if (args.values['report-includes'] !== undefined) file.includes = includeEntry(display, document)
   const strict = args.values['strict-losses'] === true && losses.length > 0
   if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
   process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))

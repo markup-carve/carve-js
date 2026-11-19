@@ -27,6 +27,12 @@ describe('render --to', () => {
     expect(allowed).toMatchObject({ status: 0, stdout: 'z\n' })
   })
 
+  it('writes the include report of an exported file', () => {
+    const report = cli(['render', '--to', 'plain', '--report-includes', '-'], 'a\n')
+    expect(report.status).toBe(0)
+    expect(report.stderr).toContain('"file": "<stdin>"')
+  })
+
   it('refuses a target it does not know', () => {
     const refused = cli(['render', '--to', 'pdf'], 'a\n')
     expect(refused.status).toBe(2)
