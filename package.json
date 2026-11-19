@@ -86,6 +86,7 @@
     "test:lint": "vitest run --config lint/vitest.config.mjs",
     "test:migrate": "node --test migrate/*.test.mts && tsc -p migrate/tsconfig.json",
     "test:package": "node scripts/check-package.mjs",
+    "test:archive": "node scripts/check-archive-build.mjs",
     "generate:lint-catalog": "node lint/generate-catalog.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p proptest/tsconfig.json && tsc -p upgrade/engine-0.1/tsconfig.json --noEmit && npm run lint",
     "lint": "npm ci --prefix import --ignore-scripts --silent && eslint 'src/**/*.ts' 'public/**/*.ts' 'cli/**/*.ts' 'test/**/*.ts' 'scripts/**/*.ts' 'lint/**/*.ts' 'migrate/**/*.ts' 'proptest/**/*.ts' 'import/**/*.ts' 'upgrade/**/*.ts' --ignore-pattern 'upgrade/engine-0.1/**' --ignore-pattern 'extensions/**' --ignore-pattern 'test/extension-migration/**' --max-warnings=0",
