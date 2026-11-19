@@ -61,7 +61,7 @@ jobs:
 
       - name: Spec pin ancestry
         env:
-          SPEC_DEFAULT_BRANCH: ${{ (github.ref_name == 'next2' || github.base_ref == 'next2') && 'next2' || 'main' }}
+          SPEC_DEFAULT_BRANCH: ${{ (github.ref_name == 'next2' || github.head_ref == 'next2' || github.base_ref == 'next2') && 'next2' || 'main' }}
         run: ./scripts/check-spec-pin-ancestry.sh spec
 
   typecheck:
