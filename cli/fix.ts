@@ -1,0 +1,200 @@
+// `carve lint --fix` and its alias `carve fix`: each lint finding whose catalog message documents one
+// replacement is rewritten to that replacement. An engine command, outside the specification (C2-T-003).
+import { type Node } from '../src/ast.ts'
+import { type Diagnostic } from '../src/diagnostics.ts'
+import { parse } from '../src/index.ts'
+import { lint } from '../lint/lint.ts'
+import { type RuleId } from '../lint/catalog.ts'
+import { type LintOptions } from '../lint/types.ts'
+
+interface Edit {
+  start: number
+  end: number
+  text: string
+}
+
+/** What a fix of one finding changes, and the node it must leave where the finding started. */
+interface Plan {
+  edits: Edit[]
+  /** The offset, in the source before the fix, that the node must cover after it. */
+  at: number
+  node: Node['type']
+  /** The node starts at `at`, rather than only covering it. */
+  starts: boolean
+}
+
+type Fixer = (bytes: Uint8Array, start: number, end: number) => Plan | null
+
+function pair(open: string, close: string, replaceOpen: string, replaceClose: string, node: Node['type']): Fixer {
+  return (bytes, start, end) => {
+    const text = Buffer.from(bytes.subarray(start, end)).toString('utf8')
+    if (end - start < open.length + close.length + 1 || !text.startsWith(open) || !text.endsWith(close)) return null
+    return { edits: [{ start, end: start + open.length, text: replaceOpen }, { start: end - close.length, end, text: replaceClose }],
+      at: start, node, starts: true }
+  }
+}
+
+function isBlank(byte: number | undefined): boolean {
+  return byte === 0x20 || byte === 0x09
+}
+
+/** The run with the spaces and tabs before it and after it on its line. */
+const closingHashes: Fixer = (bytes, start, end) => {
+  let from = start
+  while (isBlank(bytes[from - 1])) from--
+  let to = end
+  while (isBlank(bytes[to])) to++
+  if (from === start) return null
+  return { edits: [{ start: from, end: to, text: '' }], at: from, node: 'heading', starts: false }
+}
+
+const plusBullet: Fixer = (bytes, start) => (bytes[start] === 0x2b
+  ? { edits: [{ start, end: start + 1, text: '-' }], at: start, node: 'list_item', starts: true }
+  : null)
+
+const thematicBreak: Fixer = (_bytes, start, end) => ({ edits: [{ start, end, text: '***' }], at: start, node: 'thematic_break', starts: true })
+
+/** Each rule whose message names one replacement, and how a finding of it is rewritten. */
+export const FIXES: ReadonlyMap<RuleId, Fixer> = new Map<RuleId, Fixer>([
+  ['markdown-strong-double-star', pair('**', '**', '*', '*', 'strong')],
+  ['markdown-strikethrough-double-tilde', pair('~~', '~~', '{~', '~}', 'strike')],
+  ['djot-emphasis-underscore', pair('_', '_', '/', '/', 'emphasis')],
+  ['djot-intraword-underscore', pair('_', '_', '{/', '/}', 'emphasis')],
+  ['djot-subscript-tilde', pair('~', '~', '{,', ',}', 'subscript')],
+  ['djot-superscript-caret', pair('^', '^', '{^', '^}', 'superscript')],
+  ['deprecated-bare-strike', pair('~', '~', '{~', '~}', 'strike')],
+  ['deprecated-bare-highlight', pair('=', '=', '{=', '=}', 'highlight')],
+  ['djot-plus-bullet', plusBullet],
+  ['heading-closing-hashes', closingHashes],
+  ['thematic-break-spelling', thematicBreak],
+])
+
+export interface FixResult {
+  output: string
+  /** The fixes applied, by rule. */
+  applied: Map<string, number>
+}
+
+interface Candidate {
+  rule: string
+  plan: Plan
+}
+
+function sameEdits(left: Plan, right: Plan): boolean {
+  return left.edits.length === right.edits.length &&
+    left.edits.every((edit, index) => edit.start === right.edits[index]?.start && edit.end === right.edits[index]?.end &&
+      edit.text === right.edits[index]?.text)
+}
+
+function overlaps(edit: Edit, taken: readonly Edit[]): boolean {
+  return taken.some((other) => edit.start < other.end && other.start < edit.end)
+}
+
+/** Two rules that report one range with different replacements leave it to the author. */
+function candidates(bytes: Uint8Array, entries: readonly Diagnostic[]): Candidate[] {
+  const byRange = new Map<string, Candidate[]>()
+  for (const entry of entries) {
+    const fixer = FIXES.get(entry.code as RuleId)
+    if (fixer === undefined || entry.channel !== 'lint' || entry.file !== undefined || entry.range === undefined) continue
+    const plan = fixer(bytes, entry.range.startOffset, entry.range.endOffset)
+    if (plan === null) continue
+    const key = `${entry.range.startOffset}:${entry.range.endOffset}`
+    byRange.set(key, [...(byRange.get(key) ?? []), { rule: entry.code, plan }])
+  }
+  const result: Candidate[] = []
+  for (const group of byRange.values()) {
+    if (group.every((candidate) => sameEdits(candidate.plan, group[0]!.plan))) result.push(group[0]!)
+  }
+  return result
+}
+
+function select(found: readonly Candidate[]): Candidate[] {
+  const taken: Edit[] = []
+  const chosen: Candidate[] = []
+  for (const candidate of [...found].sort((a, b) => a.plan.at - b.plan.at)) {
+    if (candidate.plan.edits.some((edit) => overlaps(edit, taken))) continue
+    taken.push(...candidate.plan.edits)
+    chosen.push(candidate)
+  }
+  return chosen
+}
+
+function apply(bytes: Uint8Array, chosen: readonly Candidate[]): Uint8Array {
+  const edits = chosen.flatMap((candidate) => candidate.plan.edits).sort((a, b) => a.start - b.start)
+  const parts: Uint8Array[] = []
+  let at = 0
+  for (const edit of edits) {
+    parts.push(bytes.subarray(at, edit.start), Buffer.from(edit.text, 'utf8'))
+    at = edit.end
+  }
+  parts.push(bytes.subarray(at))
+  return Buffer.concat(parts)
+}
+
+function mapped(offset: number, chosen: readonly Candidate[]): number {
+  let shift = 0
+  for (const candidate of chosen) {
+    for (const edit of candidate.plan.edits) {
+      if (edit.end <= offset && edit.start < offset) shift += Buffer.byteLength(edit.text) - (edit.end - edit.start)
+    }
+  }
+  return offset + shift
+}
+
+interface Span { type: string, start: number, end: number }
+
+function spans(bytes: Uint8Array): Span[] {
+  const result: Span[] = []
+  const pending: unknown[] = [parse(bytes, { positions: true })]
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (typeof node !== 'object' || node === null) continue
+    const record = node as Record<string, unknown>
+    const pos = record['pos'] as { startOffset: number, endOffset: number } | undefined
+    if (typeof record['type'] === 'string' && pos !== undefined) result.push({ type: record['type'], start: pos.startOffset, end: pos.endOffset })
+    for (const value of Object.values(record)) if (Array.isArray(value)) pending.push(...(value as unknown[]))
+  }
+  return result
+}
+
+/** A fix holds only where its node stands in the fixed source; the others are left for the author. */
+function verified(bytes: Uint8Array, chosen: readonly Candidate[]): Candidate[] {
+  let kept = [...chosen]
+  for (let round = 0; round < 4 && kept.length > 0; round++) {
+    const found = spans(apply(bytes, kept))
+    const holding = kept.filter((candidate) => {
+      const at = mapped(candidate.plan.at, kept)
+      return found.some((span) => span.type === candidate.plan.node &&
+        (candidate.plan.starts ? span.start === at : span.start <= at && at <= span.end))
+    })
+    if (holding.length === kept.length) return kept
+    kept = holding
+  }
+  return []
+}
+
+/** The options of the lint run that finds what to fix: every fixable rule is on unless `rules` turns it off. */
+export function fixOptions(options: LintOptions): LintOptions {
+  const rules: Record<string, 'on' | 'off'> = {}
+  for (const id of FIXES.keys()) rules[id] = 'on'
+  return { ...options, rules: { ...rules, ...options.rules } }
+}
+
+const MAX_PASSES = 10
+
+/** The source with every fix applied that verifies, pass after pass until a pass changes nothing. */
+export function fixSource(source: string, options: LintOptions): FixResult {
+  const settings: LintOptions = { ...fixOptions(options) }
+  delete settings.includes
+  const applied = new Map<string, number>()
+  let bytes: Uint8Array = Buffer.from(source, 'utf8')
+  let changed = false
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const text = Buffer.from(bytes).toString('utf8')
+    const chosen = verified(bytes, select(candidates(bytes, lint(text, settings))))
+    if (chosen.length === 0) break
+    bytes = apply(bytes, chosen)
+    changed = true
+    for (const candidate of chosen) applied.set(candidate.rule, (applied.get(candidate.rule) ?? 0) + 1)
+  }
+  return { output: changed ? Buffer.from(bytes).toString('utf8') : source, applied }
+}

@@ -2,7 +2,7 @@
 import cli from '../data/cli.json' with { type: 'json' }
 import { resolve } from 'node:path'
 
-export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint'
+export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint' | 'flatten'
 export type ValueKind = 'switch' | 'enum' | 'json' | 'path' | 'code' | 'count'
 export interface Flag {
   name: string
@@ -11,9 +11,13 @@ export interface Flag {
   values?: readonly string[]
   /** The option of the library the flag sets (C2-T-010). */
   option?: string
+  /** Every value is collected, as for `--allow-loss` (C2-T-009). */
+  repeatable?: boolean
 }
 
 export const COMMANDS: readonly Command[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint']
+/** C2-T-003: the commands of the 0.1 command line that the reference engine keeps; `fix` is `lint --fix`. */
+const ENGINE_COMMANDS: readonly Command[] = ['flatten']
 
 // C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade command.
 const EXTRA_FROM = ['markdown', 'gfm', 'djot', 'bbcode']
@@ -22,12 +26,23 @@ const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'write', commands: ['upgrade'], kind: 'switch' },
   { name: 'json', commands: ['upgrade'], kind: 'switch' },
   { name: 'force', commands: ['upgrade'], kind: 'switch' },
+  { name: 'migrate', commands: ['upgrade'], kind: 'switch' },
+]
+// C2-T-003: the commands and flags of the 0.1 command line that the reference engine keeps.
+const ENGINE_FLAGS: readonly Flag[] = [
+  { name: 'include-root', commands: ['flatten'], kind: 'path' },
+  { name: 'fix', commands: ['lint'], kind: 'switch' },
+  { name: 'write', commands: ['lint'], kind: 'switch' },
+  { name: 'ignore', commands: ['lint'], kind: 'code', repeatable: true },
+  { name: 'strict', commands: ['render', 'lint'], kind: 'switch' },
+  { name: 'output', commands: ['render', 'fmt', 'import'], kind: 'path' },
 ]
 
 function specified(row: (typeof cli.flags)[number]): Flag {
   const flag: Flag = { name: row.name, commands: row.commands as Command[], kind: row.kind as ValueKind }
   if ('values' in row) flag.values = row.name === 'from' ? [...row.values, ...EXTRA_FROM] : row.values
   if ('option' in row) flag.option = row.option
+  if ('repeatable' in row && row.repeatable === true) flag.repeatable = true
   return flag
 }
 
@@ -35,6 +50,7 @@ function specified(row: (typeof cli.flags)[number]): Flag {
 export const FLAGS: readonly Flag[] = [
   ...cli.flags.filter((row) => row.name !== 'help' && row.name !== 'version').map(specified),
   ...UPGRADE_FLAGS,
+  ...ENGINE_FLAGS,
 ]
 
 export interface ParsedArgs {
@@ -75,7 +91,7 @@ function switchOption(flag: Flag, negated: boolean, equals: number, parsed: Pars
 
 /** C2-T-009: a flag given twice takes its last value, and `--allow-loss` collects every value. */
 function setValue(parsed: ParsedArgs, flag: Flag, value: string): void {
-  if (flag.name === 'allow-loss') {
+  if (flag.repeatable === true) {
     const collected = parsed.values[flag.name] as string[] | undefined
     parsed.values[flag.name] = [...(collected ?? []), value]
   } else parsed.values[flag.name] = readValue(flag, value)
@@ -83,7 +99,8 @@ function setValue(parsed: ParsedArgs, flag: Flag, value: string): void {
 
 function option(args: readonly string[], index: number, parsed: ParsedArgs): number {
   const arg = args[index] ?? ''
-  if (shortWrite(arg, parsed)) return index
+  const short = shortFlag(args, index, parsed)
+  if (short !== null) return short
   if (!arg.startsWith('--')) throw new UsageError(`unknown flag ${arg}`)
   const equals = arg.indexOf('=')
   const name = arg.slice(2, equals < 0 ? undefined : equals)
@@ -99,15 +116,22 @@ function option(args: readonly string[], index: number, parsed: ParsedArgs): num
   return equals >= 0 ? index : index + 1
 }
 
-/** C2-T-030: `-w` is `--write`. */
-function shortWrite(arg: string, parsed: ParsedArgs): boolean {
-  if (arg !== '-w' || (parsed.command !== 'fmt' && parsed.command !== 'upgrade')) return false
-  parsed.values['write'] = true
-  return true
+/** C2-T-030: `-w` is `--write`; `-o FILE` is `--output FILE`. */
+function shortFlag(args: readonly string[], index: number, parsed: ParsedArgs): number | null {
+  const arg = args[index]
+  if (arg === '-w' && flagFor(parsed.command, 'write') !== undefined) {
+    parsed.values['write'] = true
+    return index
+  }
+  if (arg !== '-o' || flagFor(parsed.command, 'output') === undefined) return null
+  const value = args[index + 1]
+  if (value === undefined) throw new UsageError('missing value for -o')
+  parsed.values['output'] = value
+  return index + 1
 }
 
 function commandAt(arg: string | undefined): Command | undefined {
-  return COMMANDS.find((command) => command === arg)
+  return [...COMMANDS, ...ENGINE_COMMANDS].find((command) => command === arg)
 }
 
 /** C2-T-016, C2-T-030, C2-T-033: the combinations a command refuses. */
@@ -121,8 +145,33 @@ function checkFormatCombinations(parsed: ParsedArgs): void {
   }
 }
 
+/** The engine flags (C2-T-003): `--write` of `lint` needs `--fix`, and `--output` takes the place of standard output. */
+function checkFixCombinations(parsed: ParsedArgs): void {
+  const values = parsed.values
+  if (parsed.command !== 'lint') return
+  if (values['write'] === true && values['fix'] !== true) throw new UsageError('--write needs --fix')
+  if (values['fix'] === true && values['json'] === true && values['write'] !== true) {
+    throw new UsageError('--fix writes the source on standard output; --json needs --write')
+  }
+}
+
+function checkEngineCombinations(parsed: ParsedArgs): void {
+  checkFixCombinations(parsed)
+  const values = parsed.values
+  const output = values['output']
+  if (typeof output !== 'string') return
+  if (parsed.command === 'fmt' && (values['write'] === true || values['check'] === true || values['diff'] === true)) {
+    throw new UsageError('--output cannot be combined with --write, --check or --diff')
+  }
+  for (const report of ['report-losses', 'report-includes']) {
+    const path = values[report]
+    if (typeof path === 'string' && path !== '-' && resolve(path) === resolve(output)) throw new UsageError('--output and a report cannot write the same path')
+  }
+}
+
 function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
   checkFormatCombinations(parsed)
+  checkEngineCombinations(parsed)
   const values = parsed.values
   if (values['from-ast'] === true && values['normalize'] === true) throw new UsageError('--normalize needs source input')
   const losses = values['report-losses']
@@ -134,10 +183,15 @@ function checkCombinations(parsed: ParsedArgs, files: readonly string[]): void {
 }
 
 /** C2-T-007, C2-T-008: `carve [COMMAND] [FLAG...] [FILE...]`, `render` without a command, `--` before files only. */
+/** The command of the first argument; `carve fix` is `carve lint --fix` (C2-T-003). */
+function commandOf(args: readonly string[]): ParsedArgs {
+  if (args[0] === 'fix') return { command: 'lint', files: [], values: { fix: true }, help: false, version: false }
+  return { command: commandAt(args[0]) ?? 'render', files: [], values: {}, help: false, version: false }
+}
+
 export function parseArgs(args: readonly string[]): ParsedArgs {
-  const command = commandAt(args[0]) ?? 'render'
-  const start = commandAt(args[0]) === undefined ? 0 : 1
-  const parsed: ParsedArgs = { command, files: [], values: {}, help: false, version: false }
+  const parsed = commandOf(args)
+  const start = args[0] === 'fix' || commandAt(args[0]) !== undefined ? 1 : 0
   for (let index = start; index < args.length; index++) {
     const arg = args[index] ?? ''
     if (arg === '--help') parsed.help = true
@@ -160,6 +214,6 @@ function usageOf(flag: Flag): string {
 export function help(command: Command): string {
   const lines = [`Usage: carve ${command} [FLAG...] [FILE...]`, '', 'Use - or omit FILE to read standard input.', '', 'Flags:']
   for (const flag of FLAGS.filter((entry) => entry.commands.includes(command))) lines.push(`  --${flag.name}${usageOf(flag)}`)
-  lines.push('  --help', '  --version', '', `Commands: ${COMMANDS.join(', ')}`)
+  lines.push('  --help', '  --version', '', `Commands: ${[...COMMANDS, ...ENGINE_COMMANDS, 'fix'].join(', ')}`)
   return `${lines.join('\n')}\n`
 }

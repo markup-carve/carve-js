@@ -5,7 +5,7 @@ import { CarveInputError, CarveLayoutError, CarveOptionError, CarveRenderError, 
   type DocumentNode, type FormatOptions, type RenderOptions, write } from '../src/index.ts'
 import { writerHasLoss } from '../src/write.ts'
 import { forEachSlot, type Node } from '../src/ast.ts'
-import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, upgrade } from '../upgrade/src/index.ts'
+import { canWriteUpgrade, ENGINE_01_VERSION, formatRecord, needsAttention, type ReportRecord, upgrade } from '../upgrade/src/index.ts'
 import { decodeUpgradeBytes } from '../upgrade/src/bytes.ts'
 import { importDocument, ImportInputError, type Format } from '../import/src/index.ts'
 import { migrateTree, type MigrationResult } from '../migrate/index.ts'
@@ -14,6 +14,10 @@ import lintRules from '../data/lint-rules.json' with { type: 'json' }
 import { FLAGS, type ParsedArgs, UsageError } from './flags.ts'
 import { cliIncludes } from './include-fs.ts'
 import { lint } from '../lint/lint.ts'
+import { fixSource } from './fix.ts'
+import { flatten } from './flatten.ts'
+import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
+import includeTable from '../data/includes.json' with { type: 'json' }
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
 /** C2-T-040: the failure categories and their status. */
@@ -67,6 +71,14 @@ function strictText(path: string, bytes: Uint8Array): string {
 
 function lenientText(bytes: Uint8Array): string {
   return new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
+}
+
+/** The product of the run, held for `--output` (C2-T-003); standard output otherwise (C2-T-014). */
+let product: string[] | null = null
+
+function emit(text: string): void {
+  if (product === null) process.stdout.write(text)
+  else product.push(text)
 }
 
 /** C2-T-040: a file of `--write` or a report that cannot be written is `output-unwritable`. */
@@ -236,14 +248,20 @@ function renderFile(path: string, display: string, bytes: Uint8Array, args: Pars
   if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
   process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))
   if (strict) return { ...file, status: 1 }
+  file.status = strictStatus(args, retained)
   rawHtmlEscaped ||= settings.rawHtml !== true && hasRawHtml(fromAst ? input as DocumentNode : parse(bytes))
-  process.stdout.write(`${result.html}\n`)
+  emit(`${result.html}\n`)
   return file
+}
+
+/** C2-T-003: `--strict` fails a file that wrote an entry, and still writes its output. */
+function strictStatus(args: ParsedArgs, written: readonly Diagnostic[]): number {
+  return args.values['strict'] === true && written.length > 0 ? 1 : 0
 }
 
 function astFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
   const document = parse(bytes, { positions: args.values['positions'] !== false, ...includesOf(path, args) })
-  process.stdout.write(`${args.values['envelope'] === true ? encodeEnvelope(document) : encodeTree(document)}\n`)
+  emit(`${args.values['envelope'] === true ? encodeEnvelope(document) : encodeTree(document)}\n`)
   return { status: 0, includes: includeEntry(display, document) }
 }
 
@@ -296,21 +314,76 @@ function fmtOutput(path: string, display: string, before: string, after: string,
   const changed = before !== after
   const check = args.values['check'] === true
   const diff = args.values['diff'] === true
-  if (check && changed && !diff) process.stdout.write(firstChange(display, before, after))
-  if (diff && changed) process.stdout.write(unified(display, before, after))
+  if (check && changed && !diff) emit(firstChange(display, before, after))
+  if (diff && changed) emit(unified(display, before, after))
   if (args.values['write'] === true && changed) writeOut(path, after)
-  if (!check && !diff && args.values['write'] !== true) process.stdout.write(after)
+  if (!check && !diff && args.values['write'] !== true) emit(after)
   return (check || diff) && changed ? 1 : 0
 }
 
-/** C2-T-031: status 1 for an entry of severity warning or error. */
+/** C2-T-031: status 1 for an entry of severity warning or error; with `--strict`, for any entry (C2-T-003). */
+function lintStatus(entries: readonly Diagnostic[], args: ParsedArgs): number {
+  if (args.values['strict'] === true) return strictStatus(args, entries)
+  return entries.some((entry) => entry.severity === 'warning' || entry.severity === 'error') ? 1 : 0
+}
+
+/** `--ignore`: the entries of a file whose id, or for the entry file its name, is listed (C2-T-003). */
+function notIgnored(display: string, entries: readonly Diagnostic[], args: ParsedArgs): Diagnostic[] {
+  const ignored = new Set((args.values['ignore'] as string[] | undefined) ?? [])
+  return ignored.size === 0 ? [...entries] : entries.filter((entry) => !ignored.has(entry.file ?? display))
+}
+
+type LintSettings = { rules?: Record<string, 'on' | 'off'>, platforms?: string[] }
+
+/** `--fix`: the source with each documented replacement (cli/fix.ts), written back or to the product. */
+function fixed(path: string, display: string, source: string, settings: LintSettings, args: ParsedArgs): string {
+  const result = fixSource(source, settings as Parameters<typeof fixSource>[1])
+  if (result.applied.size > 0) {
+    const counts = [...result.applied].map(([rule, count]) => `${rule} ${count}`).join(', ')
+    process.stderr.write(`${display}: fixed ${counts}\n`)
+  }
+  if (args.values['write'] !== true) emit(result.output)
+  else if (result.output !== source) writeOut(path, result.output)
+  return result.output
+}
+
 function lintFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
+  const settings = options(args) as LintSettings
+  const fix = args.values['fix'] === true
+  const source = fix ? fixed(path, display, lenientText(bytes), settings, args) : lenientText(bytes)
+  const all = lint(source, { ...settings, ...includesOf(path, args) } as Parameters<typeof lint>[1])
+  const entries = notIgnored(display, all, args)
+  const text = lines(display, source, entries)
+  // With `--fix` and no `--write` the product is the source, so the entries go to standard error.
+  if (fix && args.values['write'] !== true) process.stderr.write(text)
+  else if (args.values['json'] !== true) emit(text)
+  return { status: lintStatus(entries, args), diagnostics: { file: display, diagnostics: located(source, entries), suppressed: 0 } }
+}
+
+/** The codes of the causes that leave an include unexpanded (C2-N-061). */
+const INCLUDE_CAUSES: ReadonlySet<string> = new Set(includeTable.causes.map((cause) => cause.code))
+
+/** `flatten` (C2-T-003): the expanded tree as one Carve file; an include that did not expand refuses the file. */
+function flattenFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
   const source = lenientText(bytes)
-  const settings = options(args) as { rules?: Record<string, 'on' | 'off'>, platforms?: string[] }
-  const entries = lint(source, { ...settings, ...includesOf(path, args) } as Parameters<typeof lint>[1])
-  const status = entries.some((entry) => entry.severity === 'warning' || entry.severity === 'error') ? 1 : 0
-  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries))
-  return { status, diagnostics: { file: display, diagnostics: located(source, entries), suppressed: 0 } }
+  const result = parseWithDiagnostics(bytes, includesOf(path, args))
+  const failures = result.diagnostics.filter((entry) => INCLUDE_CAUSES.has(entry.code))
+  if (failures.length > 0) {
+    process.stderr.write(lines(display, source, failures, bytes))
+    throw new FileFailure('include-unresolved', `${display}: ${failures.length} includes did not expand`, { status: 1 })
+  }
+  let flat: ReturnType<typeof flatten>
+  try { flat = flatten(result.document) }
+  catch (error) {
+    if (!(error instanceof CarveWriteError)) throw error
+    const losses = error.diagnostics.filter((entry) => writerHasLoss([entry])).map((entry) => `${entry.code} at ${entry.path || '/'}`)
+    throw new FileFailure('writer-refused', `${display}: ${losses.join(', ')}`, { status: 1 })
+  }
+  if (!flat.same) {
+    throw new FileFailure('flatten-changed', `${display}: one file would render differently; a footnote, reference or abbreviation key is defined in more than one file`, { status: 1 })
+  }
+  emit(flat.source)
+  return { status: 0 }
 }
 
 /** C2-T-032: the entries of the parse channel, status 0 whatever they report. */
@@ -318,7 +391,7 @@ function diagnosticsFile(path: string, display: string, bytes: Uint8Array, args:
   const source = lenientText(bytes)
   const result = parseWithDiagnostics(bytes, includesOf(path, args))
   const entries = result.diagnostics.filter((entry) => entry.channel === 'parse')
-  if (args.values['json'] !== true) process.stdout.write(lines(display, source, entries, bytes))
+  if (args.values['json'] !== true) emit(lines(display, source, entries, bytes))
   const report = { file: display, diagnostics: located(source, entries, bytes), suppressed: result.suppressedDiagnostics }
   return { status: 0, diagnostics: report, includes: includeEntry(display, result.document) }
 }
@@ -341,7 +414,7 @@ function importFile(display: string, bytes: Uint8Array, args: ParsedArgs): FileR
   if (failure !== null) process.stderr.write(`carve[${failure}]: ${display}: the import lost content\n`)
   process.stderr.write(lines(display, html, [...others, ...retained]))
   if (failure !== null) return { ...file, status: 1 }
-  process.stdout.write(result.source)
+  emit(result.source)
   return file
 }
 
@@ -352,7 +425,7 @@ function migrateFile(path: string, display: string, bytes: Uint8Array): FileResu
   try { result = migrateTree(JSON.parse(text) as unknown) }
   catch (error) { throw new CliError('ast-json-invalid', error instanceof Error ? error.message : String(error)) }
   process.stderr.write(lines(display, text, result.diagnostics))
-  process.stdout.write(`${result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)}\n`)
+  emit(`${result.envelope === undefined ? encodeTree(result.document) : JSON.stringify(result.envelope)}\n`)
   return { status: 0 }
 }
 
@@ -361,15 +434,39 @@ function upgradeSource(display: string, bytes: Uint8Array): string {
   catch (error) { throw new CliError('input-unreadable', `${display}: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
+/**
+ * `--migrate`, the `fmt --migrate` of 0.1: a cross-reference or reference label that misses its target only by
+ * case is respelled in the 0.1 source when exactly one target matches it, before the upgrade reads it.
+ */
+function caseReferences(source: string): { source: string, records: ReportRecord[] } {
+  const respelled: string = migrateCaseOnlyReferences(source)
+  if (respelled === source) return { source, records: [] }
+  const before = source.split('\n')
+  const after = respelled.split('\n')
+  const records: ReportRecord[] = []
+  for (let line = 0; line < before.length; line++) {
+    if (before[line] === after[line]) continue
+    records.push({ entry: 'case-reference', class: 'rewrite', line: line + 1,
+      message: 'a reference that missed its target only by case is respelled to that target' })
+  }
+  return { source: respelled, records }
+}
+
+function upgraded(original: string, args: ParsedArgs): ReturnType<typeof upgrade> {
+  const migrated = args.values['migrate'] === true ? caseReferences(original) : { source: original, records: [] }
+  const result = upgrade(migrated.source)
+  return { ...result, changed: result.output !== original, records: [...migrated.records, ...result.records] }
+}
+
 /** The upgrade command of the reference engine (C2-T-003, UPGRADING.md). */
 function upgradeFile(path: string, display: string, bytes: Uint8Array, args: ParsedArgs): FileResult {
-  const result = upgrade(upgradeSource(display, bytes))
+  const result = upgraded(upgradeSource(display, bytes), args)
   const blocked = !canWriteUpgrade(result)
   if (blocked && args.values['force'] === true && args.values['check'] !== true) {
     process.stderr.write('carve[upgrade-force-ignored]: --force cannot override the HTML check\n')
   }
   if (args.values['write'] === true && result.changed && !blocked) writeOut(path, result.output)
-  else if (args.values['write'] !== true && args.values['check'] !== true && args.values['json'] !== true) process.stdout.write(result.output)
+  else if (args.values['write'] !== true && args.values['check'] !== true && args.values['json'] !== true) emit(result.output)
   if (args.values['json'] !== true) for (const entry of result.records) process.stderr.write(`${formatRecord(display, entry)}\n`)
   return { status: needsAttention(result) || (args.values['check'] === true && result.changed) ? 1 : 0,
     diagnostics: { file: display, changed: result.changed, check: result.check, records: result.records } }
@@ -387,6 +484,7 @@ function executeFile(path: string, args: ParsedArgs): FileResult {
     case 'upgrade': return upgradeFile(path, display, bytes, args)
     case 'migrate-ast': return migrateFile(path, display, bytes)
     case 'import': return importFile(display, bytes, args)
+    case 'flatten': return flattenFile(path, display, bytes, args)
   }
 }
 
@@ -420,7 +518,7 @@ function finishRun(args: ParsedArgs, collected: Collected): void {
   }
   if (args.values['json'] !== true) return
   const output = args.command === 'upgrade' ? { engine01: ENGINE_01_VERSION, files: collected.diagnostics } : { files: collected.diagnostics }
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
+  emit(`${JSON.stringify(output, null, 2)}\n`)
 }
 
 /** C2-T-011, C2-T-017: the files in order; a failure of status 2 stops the run, one of status 1 ends its file. */
@@ -429,6 +527,22 @@ export function run(args: ParsedArgs): number {
   includedTexts.clear()
   rawHtmlEscaped = false
   const collected: Collected = { diagnostics: [], losses: [], includes: [] }
+  const output = args.values['output']
+  product = typeof output === 'string' ? [] : null
+  let finished = false
+  try {
+    const status = runFiles(files, args, collected)
+    finished = true
+    return status
+  } finally {
+    // C2-T-017: what the files before a failure produced stays written; a run that produced nothing keeps the file.
+    const held = product
+    product = null
+    if (held !== null && (finished || held.length > 0)) writeOut(output as string, held.join(''))
+  }
+}
+
+function runFiles(files: readonly string[], args: ParsedArgs, collected: Collected): number {
   let status = 0
   for (const file of files) {
     let result: FileResult

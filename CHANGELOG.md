@@ -16,6 +16,10 @@ Releases up to 0.1.6 are in [CHANGELOG-0.1.md](CHANGELOG-0.1.md).
 - `dist/carve.iife.min.js` (the `carve` global, `unpkg` and `jsdelivr`) exposes the 0.2 API.
 - The GitHub Action drops the `from-djot` and `portable` inputs, and the pre-commit hooks `carve-lint-from-djot` and `carve-lint-portable` are removed: 0.2 has no Djot divergence lint.
 
+### Added
+
+- The 0.2 `carve` program brings back 0.1 commands: `carve flatten` writes a document with its includes expanded, `carve fix` (also `carve lint --fix`, with `--write`) rewrites Markdown and Djot habits to the replacement their lint rule names, and `carve upgrade --migrate` respells references that miss their target only by case. `-o/--output` on `render`, `fmt` and `import`, `--strict` on `render` and `lint`, and `lint --ignore FILE-ID` are back too. See [docs/cli.md](docs/cli.md).
+
 ## [0.1.17] - 2026-11-12
 
 This patch release restores the 0.1.15 speed of `carveToHtml` on nested lists after a blank line and fixes the position-free writer around comments in list items.

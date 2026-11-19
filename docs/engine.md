@@ -62,3 +62,5 @@ Standard output carries the product of a command and nothing else; diagnostics, 
 `render` and `import` write each render loss as a line on standard error. `--strict-losses` fails a file that has a loss, after the codes of `--allow-loss CODE` (repeatable) are taken out, and `--max-render-losses N` (default 100) keeps the first N losses of each file. `lint` exits 1 for an entry of severity warning or error, takes `--rules` and `--platforms` as JSON, and `fmt --check` prints the first changed line as `PATH:LINE`, `- old` and `+ new`.
 
 A failure writes `carve[CATEGORY]: MESSAGE` as its first line on standard error. Status 1 is `render-loss`, `writer-refused` or `import-tree-invalid` and ends its file; status 2 is `usage`, `input-unreadable`, `input-invalid`, `ast-json-invalid`, `import-input-invalid` or `output-unwritable` and stops the run. `upgrade` uses the separate rewrite engine in `upgrade/`; its report may require manual review.
+
+The commands `flatten` and `fix` (`lint --fix`), `upgrade --migrate`, and the flags `--output`, `--strict` and `lint --ignore` are features of this engine outside the specification; [cli.md](cli.md) describes them.
