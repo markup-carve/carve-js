@@ -28,6 +28,8 @@ describe('0.2 lint leaf ownership and visual columns', () => {
       }
     }
     expect(codes('> # H\n> \tmore\n')).toContain('deprecated-indented-line-under-heading')
+    expect(codes('# *H\n  more*\n')).toContain('deprecated-indented-line-under-heading')
+    expect(codes('# [H\n  more](/x)\n')).toContain('deprecated-indented-line-under-heading')
   })
 
   it('C2-B-025 and C2-B-027: a block past list content uses visual columns', () => {
@@ -45,5 +47,7 @@ describe('0.2 lint leaf ownership and visual columns', () => {
     }
     expect(codes('> - a\n> \t***\n')).not.toContain('list-item-block-overindented')
     expect(codes('> - a\n>     ***\n')).toContain('list-item-block-overindented')
+    expect(codes('- item\n\n\t```\n\t```\n')).toContain('list-item-block-overindented')
+    expect(codes('- item\n\n\t> q\n')).toContain('list-item-block-overindented')
   })
 })

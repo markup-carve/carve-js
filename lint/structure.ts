@@ -3,7 +3,7 @@ import { NODE_SLOTS } from '../src/ast-tables.ts'
 import { isAttributeLine } from '../src/lines.ts'
 import { type LintContext, type Rule } from './types.ts'
 import { CORE_SEMANTIC_KEYS } from '../src/options.ts'
-import { columnOf } from '../src/layout-lines.ts'
+import { columnOf, readPrefix } from '../src/layout-lines.ts'
 
 function bounds(node: Node, context: LintContext): [number, number] | null {
   if (node.pos === undefined) return null
@@ -434,10 +434,11 @@ function headingContinuation(node: Node, path: string, context: LintContext): vo
   if (first === undefined || second === undefined) return
   const marker = context.layouts.get(path)?.markerColumn
   if (marker === undefined) return
-  const firstInline = node.children.find((child) => child.pos?.startLine === second.number && child.type !== 'soft_break')
-  const content = firstInline?.pos === undefined ? undefined : context.chars[firstInline.pos.startOffset]
-  if (content === undefined) return
-  const indent = columnOf(context.source, content, quoteDepth(path, context))
+  const quotes = quoteDepth(path, context)
+  const prefix = readPrefix(context.source, second.start, second.end, quotes)
+  let content = prefix.pos
+  while (context.source[content] === ' ' || context.source[content] === '\t') content++
+  const indent = columnOf(context.source, content, quotes)
   if (indent > marker) context.report('deprecated-indented-line-under-heading', second.start, second.end, path)
 }
 
@@ -1047,7 +1048,9 @@ function overindentedBlocks(node: Node, path: string, context: LintContext,
     const child = node.children[at]
     if (child === undefined || child.type === 'paragraph' || child.type === 'list' || child.pos === undefined) continue
     const line = context.lines[child.pos.startLine - 1]
-    const column = context.layouts.get(`${path}/children/${at}`)?.markerColumn ?? itemColumn(node, marker, child)
+    const childPath = `${path}/children/${at}`
+    const start = context.chars[child.pos.startOffset]
+    const column = start === undefined ? undefined : columnOf(context.source, start, quoteDepth(childPath, context))
     if (line === undefined || column === undefined || column <= content) continue
     visit(at, child, line.start + child.pos.startColumn - 1, line.end, column - content, content)
   }
