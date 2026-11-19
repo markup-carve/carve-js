@@ -26,7 +26,7 @@ import { rescueDirectiveSocial } from './directive-social-rescue.ts'
 import { rescueBracedBoldItalic } from './bold-italic-rescue.ts'
 import { rescueEscape } from './escape-rescue.ts'
 import { rescueDashRun } from './dash-run-rescue.ts'
-import { LATE_RULES, RULES } from './rules/index.ts'
+import { LATE_VARIANTS, RULES } from './rules/index.ts'
 import { lineEnd, lineOf, lineStart, lineText, readLines } from './source.ts'
 import { mappedRemainderReport, mappedReport, mappedRewrite, mathClassReport } from './mapped-rows.ts'
 import { applyTabs, planTabs, sameHost } from './tabs.ts'
@@ -514,15 +514,21 @@ function keepIncludeReview(rescue: ReportRecord, checked: readonly ReportRecord[
   for (const record of checked) if (record.entry === 'U-011') records.push({ ...record, class: 'report' })
 }
 
-/** The first pass with the late rules added, kept only when it clears the self-check. */
+/** The first late variant whose output clears the self-check. */
 function latePass(input: string, first: string): UpgradeResult | null {
-  const done = rewrite(input, [...RULES, ...LATE_RULES])
-  if (done.output === first) return null
-  const mathClass = mathClassReport(done.context)
-  if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
-  const check = selfCheck(input, done)
-  if (check === 'mismatch') return null
-  return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+  const tried = new Set([first])
+  for (const rules of LATE_VARIANTS) {
+    const done = rewrite(input, rules)
+    if (tried.has(done.output)) continue
+    tried.add(done.output)
+    const mathClass = mathClassReport(done.context)
+    if (mathClass !== null && !hasEntry(done.records, 'U-249')) done.records.push(mathClass)
+    const check = selfCheck(input, done)
+    if (check !== 'mismatch') {
+      return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
+    }
+  }
+  return null
 }
 
 function upgradeSource(input: string): UpgradeResult {
@@ -540,10 +546,6 @@ function upgradeSource(input: string): UpgradeResult {
   const rewrittenRecords = done.records.map((record) => ({ ...record }))
   let check = selfCheck(input, done)
   if (check === 'mismatch') {
-    const late = latePass(input, done.output)
-    if (late !== null) return late
-  }
-  if (check === 'mismatch') {
     const mismatch = [...done.records].reverse().find((record) => record.entry === 'upgrade-mismatch')
     if (mismatch !== undefined) {
       const rescued = rescueMismatch(input, done.output, mismatch, done.records)
@@ -556,6 +558,10 @@ function upgradeSource(input: string): UpgradeResult {
       }
       check = selfCheck(input, done)
     }
+  }
+  if (check === 'mismatch') {
+    const late = latePass(input, done.output)
+    if (late !== null) return late
   }
   return { output: done.output, changed: done.output !== input, records: done.records, check, engine01: ENGINE_01_VERSION }
 }

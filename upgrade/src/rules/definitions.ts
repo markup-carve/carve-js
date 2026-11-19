@@ -133,8 +133,15 @@ function preserveEmptyItem(ctx: Context, id: string, span: Span, message: string
   return true
 }
 
+/** Cuts the definition of `span` and writes it at column 0 above the first line of the document. */
+function moveToTop(ctx: Context, id: string, span: Span, cut: number, message: string): void {
+  change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
+  change(ctx, id, 0, 0, withoutPrefix(ctx, span, cut) + '\n', message)
+}
+
 /** Cuts the definition of `span` and writes it at column 0 after the line `end`, set off by blank lines. */
 function moveAfter(ctx: Context, id: string, span: Span, cut: number, end: number, message: string): void {
+  if (top) { moveToTop(ctx, id, span, cut, message); return }
   change(ctx, id, lineStart(ctx.lines, span.first), lineStart(ctx.lines, span.last + 1), '', message)
   const after = lineText(ctx.lines, end + 1)
   const tail = end < ctx.lines.count && !isBlank(after) ? '\n' : ''
@@ -162,7 +169,8 @@ function hoist(ctx: Context, span: Span, ends: Map<number, number>): void {
   const end = containerEnd(ctx, span, depth, cut, ends)
   ends.set(span.first, end)
   if (end === span.last) {
-    if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
+    if (top) moveToTop(ctx, id, span, cut, message)
+    else if (!preserveEmptyItem(ctx, id, span, message) && !preserveEmptyQuote(ctx, id, span, message)) {
       hoistInPlace(ctx, id, span, cut, message)
     }
   }
@@ -204,10 +212,22 @@ function droppedLinkDefinitions(ctx: Context): void {
   }
 }
 
+/** Set while `definitionsAtTop` runs: a moved definition goes above the document instead of after its container. */
+let top = false
+
 export function definitions(ctx: Context): void {
   const spans = definitionSpans(ctx)
   const ends = new Map<number, number>()
   for (let index = spans.length - 1; index >= 0; index--) hoist(ctx, spans[index]!, ends)
   droppedLinkDefinitions(ctx)
   duplicates(ctx, 'abbreviation_def', 'abbr', 'U-041')
+}
+
+/**
+ * The late variant of `definitions`: after its container a definition can land in a block 0.2 leaves
+ * open to the end, such as an unclosed fence; above the first line it stands in no block (C2-B-081).
+ */
+export function definitionsAtTop(ctx: Context): void {
+  top = true
+  try { definitions(ctx) } finally { top = false }
 }
