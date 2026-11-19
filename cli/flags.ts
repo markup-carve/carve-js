@@ -2,7 +2,7 @@
 import cli from '../data/cli.json' with { type: 'json' }
 import { resolve } from 'node:path'
 
-export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint' | 'flatten'
+export type Command = 'render' | 'ast' | 'fmt' | 'diagnostics' | 'upgrade' | 'migrate-ast' | 'import' | 'lint' | 'flatten' | 'diff'
 export type ValueKind = 'switch' | 'enum' | 'json' | 'path' | 'code' | 'count'
 export interface Flag {
   name: string
@@ -16,10 +16,10 @@ export interface Flag {
 }
 
 export const COMMANDS: readonly Command[] = ['render', 'ast', 'fmt', 'diagnostics', 'upgrade', 'migrate-ast', 'import', 'lint']
-/** C2-T-003: the commands of the 0.1 command line that the reference engine keeps; `fix` is `lint --fix`. */
-const ENGINE_COMMANDS: readonly Command[] = ['flatten']
+/** C2-T-003: the commands of the 0.1 command line that the reference engine keeps, and `diff`; `fix` is `lint --fix`. */
+const ENGINE_COMMANDS: readonly Command[] = ['flatten', 'diff']
 
-// C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade command.
+// C2-T-003: the reference engine also imports Markdown, GFM, Djot and BBCode, and offers the upgrade and diff commands.
 const EXTRA_FROM = ['markdown', 'gfm', 'djot', 'bbcode']
 // The engine's export targets of `render` (`@markup-carve/carve/export`).
 const RENDER_FLAGS: readonly Flag[] = [{ name: 'to', commands: ['render'], kind: 'enum', values: ['html', 'markdown', 'plain', 'ansi'] }]
@@ -29,6 +29,7 @@ const UPGRADE_FLAGS: readonly Flag[] = [
   { name: 'json', commands: ['upgrade'], kind: 'switch' },
   { name: 'force', commands: ['upgrade'], kind: 'switch' },
   { name: 'migrate', commands: ['upgrade'], kind: 'switch' },
+  { name: 'json', commands: ['diff'], kind: 'switch' },
 ]
 // C2-T-003: the commands and flags of the 0.1 command line that the reference engine keeps.
 const ENGINE_FLAGS: readonly Flag[] = [

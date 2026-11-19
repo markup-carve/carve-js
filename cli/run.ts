@@ -19,6 +19,7 @@ import { flatten } from './flatten.ts'
 import { migrateCaseOnlyReferences } from '../build/engine-0.1/index.js'
 import includeTable from '../data/includes.json' with { type: 'json' }
 import { EXPORT_LOSS_CODES, exportTo, type ExportOptions, type ExportTarget } from '../src/export/index.ts'
+import { diffTree } from '../src/tree-patch.ts'
 import { type IncludeAnswer, type IncludeConfig, type IncludeRequest } from '../src/include-settings.ts'
 
 /** C2-T-040: the failure categories and their status. */
@@ -516,6 +517,7 @@ function executeFile(path: string, args: ParsedArgs): FileResult {
     case 'migrate-ast': return migrateFile(path, display, bytes)
     case 'import': return importFile(display, bytes, args)
     case 'flatten': return flattenFile(path, display, bytes, args)
+    case 'diff': throw new UsageError('diff takes two files')
   }
 }
 
@@ -552,8 +554,25 @@ function finishRun(args: ParsedArgs, collected: Collected): void {
   emit(`${JSON.stringify(output, null, 2)}\n`)
 }
 
+/**
+ * The diff command of the reference engine: the JSON Patch from the tree of the first file to that of the second,
+ * without positions. Status 0 when the trees are equal, 1 when they differ.
+ */
+function diffFiles(args: ParsedArgs): number {
+  if (args.files.length !== 2) throw new UsageError('diff takes two files')
+  const [before, after] = args.files.map((path) => parse(strictText(path, readBytes(path)), { positions: false }))
+  const patch = diffTree(before!, after!)
+  if (args.values['json'] === true) process.stdout.write(`${JSON.stringify(patch, null, 2)}\n`)
+  else for (const operation of patch) {
+    const value = 'value' in operation ? ` ${JSON.stringify(operation.value)}` : 'from' in operation ? ` from ${operation.from}` : ''
+    process.stdout.write(`${operation.op} ${operation.path === '' ? '/' : operation.path}${value}\n`)
+  }
+  return patch.length === 0 ? 0 : 1
+}
+
 /** C2-T-011, C2-T-017: the files in order; a failure of status 2 stops the run, one of status 1 ends its file. */
 export function run(args: ParsedArgs): number {
+  if (args.command === 'diff') return diffFiles(args)
   const files = args.files.length === 0 ? ['-'] : args.files
   includedTexts.clear()
   rawHtmlEscaped = false
