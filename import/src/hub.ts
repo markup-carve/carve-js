@@ -1,7 +1,7 @@
 // Markdown, GFM and Djot import through the HTML hub (ruling of 17 November): the reference library renders HTML and
 // the 0.2 HTML importer reads it. Hooks here only shape what the library's HTML cannot carry on its own.
 import { micromark } from 'micromark'
-import type { CompileContext, Handle, HtmlExtension, Token } from 'micromark-util-types'
+import type { CompileContext, Extension, Handle, HtmlExtension, Token } from 'micromark-util-types'
 import { gfm } from 'micromark-extension-gfm'
 import { gfmAutolinkLiteralHtml } from 'micromark-extension-gfm-autolink-literal'
 import { gfmFootnoteHtml } from 'micromark-extension-gfm-footnote'
@@ -209,6 +209,15 @@ function dropNoteLabelPointers(nodes: Html.ChildNode[]): void {
 }
 
 /** GFM's HTML without the tag filter: raw HTML stays raw in the tree, and the render decides what reaches the output. */
+/** Container directives only: text and leaf directives would claim ordinary prose such as `10:30` (CommonMark has none). */
+function containerDirectives(): Extension {
+  const flow = directive().flow?.[58]
+  const constructs = (Array.isArray(flow) ? flow : flow === undefined ? [] : [flow])
+    // The container construct is the only concrete one; the package does not export the constructs by name.
+    .filter(construct => construct.concrete === true)
+  return { flow: { 58: constructs } }
+}
+
 const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHtml(), gfmStrikethroughHtml(), gfmTableHtml(),
   gfmTaskListItemHtml()]
 
@@ -217,7 +226,7 @@ export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Si
   return micromark(input, {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [frontmatter(['yaml', 'toml']), math(), directive(), ...(format === 'gfm' ? [gfm()] : [])],
+    extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
   })
