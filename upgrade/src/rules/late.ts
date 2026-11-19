@@ -124,23 +124,25 @@ function escapeText(src: string, node: Node01, out: Planned[]): boolean {
   return true
 }
 
-/** The edits that spell the inline tree under `node` explicitly, or false when it holds a form other than text and plain spans. */
+const UNTOUCHED = /^(code|verbatim|math|raw_inline|link|image|span|footnote_reference|symbol|smart_punctuation)$/u
+const BREAK = /^(soft_break|hard_break)$/u
+
+/** The edits for one inline node, or false when it is a form the explicit spelling does not cover. */
+function explicitNode(src: string, child: Node01, out: Planned[]): boolean {
+  const pos = child.pos
+  if (pos === undefined) return false
+  if (BREAK.test(child.type)) return true
+  if (child.type === 'text') return escapeText(src, child, out)
+  const span = spanOf(src, child)
+  if (span === null) return UNTOUCHED.test(child.type)
+  out.push({ start: pos.startOffset, end: pos.startOffset + span.width, text: span.open, entry: span.entry })
+  out.push({ start: pos.endOffset - span.width, end: pos.endOffset, text: span.close, entry: span.entry })
+  return explicitEdits(src, span.inner, out)
+}
+
+/** The edits that spell the inline tree under `node` explicitly: spans braced, text escaped, UNTOUCHED forms kept. */
 function explicitEdits(src: string, node: Node01, out: Planned[]): boolean {
-  for (const child of node.children ?? []) {
-    const pos = child.pos
-    if (pos === undefined) return false
-    if (child.type === 'soft_break' || child.type === 'hard_break') continue
-    if (child.type === 'text') {
-      if (!escapeText(src, child, out)) return false
-      continue
-    }
-    const span = spanOf(src, child)
-    if (span === null) return false
-    out.push({ start: pos.startOffset, end: pos.startOffset + span.width, text: span.open, entry: span.entry })
-    out.push({ start: pos.endOffset - span.width, end: pos.endOffset, text: span.close, entry: span.entry })
-    if (!explicitEdits(src, span.inner, out)) return false
-  }
-  return true
+  return (node.children ?? []).every((child) => explicitNode(src, child, out))
 }
 
 interface Braced { width: number; open: string; close: string; inner: Node01; entry: string }
@@ -152,18 +154,18 @@ function boldItalicSpan(src: string, node: Node01, start: number, end: number): 
   return { width: 2, open: '{*{/', close: '/}*}', inner, entry: 'U-068' }
 }
 
-/** The braced spelling of a 0.1 strong or emphasis span with bare delimiters, and the node that holds its content. */
+/** The braced spelling of a 0.1 strong, emphasis or underline span with bare delimiters, and the node that holds its content. */
 function spanOf(src: string, node: Node01): Braced | null {
   const { startOffset: start, endOffset: end } = node.pos!
   if (node.attrs !== undefined) return null
   if (node.type === 'strong' && node.boldItalic === true) return boldItalicSpan(src, node, start, end)
-  const mark = node.type === 'strong' ? '*' : node.type === 'emphasis' ? '/' : null
+  const mark = node.type === 'strong' ? '*' : node.type === 'emphasis' ? '/' : node.type === 'underline' ? '_' : null
   if (mark === null || end - start < 2 || src[start] !== mark || src[end - 1] !== mark) return null
   return { width: 1, open: `{${mark}`, close: `${mark}}`, inner: node, entry: 'U-273' }
 }
 
 /**
- * C2-I-011, C2-I-049 to C2-I-052: a paragraph of text and plain strong and emphasis spans is written with
+ * C2-I-011, C2-I-049 to C2-I-052: a paragraph of text and plain strong, emphasis and underline spans is written with
  * braced spans and every delimiter character of its text escaped, so 0.2 pairs exactly the spans 0.1 read.
  * It replaces the edits other rules made inside the paragraph; the self-check decides whether it is kept.
  */
