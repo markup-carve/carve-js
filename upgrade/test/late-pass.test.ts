@@ -72,3 +72,12 @@ describe('U-258 empty runs in a quote', () => {
     expect(result.records.map((record) => record.entry)).toEqual(expect.arrayContaining(['U-002', 'U-258']))
   })
 })
+
+describe('U-192 language shorthand lines', () => {
+  it('C2-A-037 removes shorthand lines when 0.1 took a later lang line', () => {
+    const result = upgrade('{:fr}\n{:fr}\n {lang=de}\nText\n')
+    expect(result.output).toBe(' {lang=de}\nText\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-192')
+  })
+})
