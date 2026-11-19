@@ -2120,6 +2120,12 @@
       "name": "line comment that 0.1 ended before its line end",
       "class": "rewrite",
       "lint": []
+    },
+    {
+      "id": "U-433",
+      "name": "comment line that ended a 0.1 block",
+      "class": "rewrite",
+      "lint": []
     }
   ],
   "extensions": [

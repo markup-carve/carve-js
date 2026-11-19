@@ -1,7 +1,7 @@
 import { type Rule } from '../context.ts'
 import { attributeLines, openers } from './attributes.ts'
 import { blankLines } from './blank-lines.ts'
-import { lineComments, typedQuotes } from './late.ts'
+import { commentLineBreaks, lineComments, typedQuotes } from './late.ts'
 import { definitions, definitionsAtTop, definitionsKept } from './definitions.ts'
 import { escapes } from './escapes.ts'
 import { fences } from './fences.ts'
@@ -23,4 +23,5 @@ export const LATE_VARIANTS: readonly (readonly Rule[])[] = [
   [...RULES, ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsAtTop : rule), ...LATE_RULES],
   [...RULES.map((rule) => rule === definitions ? definitionsKept : rule), ...LATE_RULES],
+  [...RULES, ...LATE_RULES, commentLineBreaks],
 ]

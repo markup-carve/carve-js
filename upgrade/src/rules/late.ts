@@ -1,4 +1,7 @@
 import { change, type Context, type Visit } from '../context.ts'
+import { isBlank, lineStart, lineText } from '../source.ts'
+import { quotePrefix } from './blank-lines.ts'
+import { insideQuotes, quoteDepth } from './lines.ts'
 
 const MESSAGE = 'a line comment that 0.1 ended before the end of its line is written as a braced comment'
 
@@ -38,10 +41,10 @@ export function lineComments(ctx: Context): void {
     const node = visit.node
     if (node.type !== 'comment' || node.block !== false || node.pos === undefined) continue
     const { startOffset: start, endOffset: end } = node.pos
-    if (src.slice(start, start + 2) !== '%%' || src.charCodeAt(start + 2) === 0x25) continue
-    if (inTable(visit)) continue
+    if (src.slice(start, start + 2) !== '%%' || inTable(visit)) continue
     let lead = start
     while (lead > 0 && (src[lead - 1] === ' ' || src[lead - 1] === '\t') && !escaped(src, lead - 1)) lead--
+    if (src.charCodeAt(start + 2) === 0x25 && (lead === 0 || src[lead - 1] === '\n')) continue
     const lineStartOrSpace = lead < start || lead === 0 || src[lead - 1] === '\n'
     const atLineEnd = end >= src.length || src[end] === '\n' || src[end] === '\r'
     if (atLineEnd && lineStartOrSpace) continue
@@ -76,5 +79,21 @@ export function typedQuotes(ctx: Context): void {
     const opened = String(node.kind).startsWith('left_')
     if (opened === opens02(ctx.src, at)) continue
     change(ctx, 'U-375', at, at + 1, node.glyph, 'straight quote typed as the curly quote 0.1 printed')
+  }
+}
+
+/**
+ * U-433: 0.1 ended a paragraph or a description term at a comment line and read the next line as a
+ * new block; 0.2 skips the comment line (C2-B-137), so a blank line above it keeps the 0.1 blocks.
+ */
+export function commentLineBreaks(ctx: Context): void {
+  for (let line = 2; line <= ctx.lines.count; line++) {
+    const text = lineText(ctx.lines, line)
+    const body = insideQuotes(text).trimStart()
+    if (!body.startsWith('%%') || body.startsWith('%%%')) continue
+    if (isBlank(insideQuotes(lineText(ctx.lines, line - 1)))) continue
+    const at = lineStart(ctx.lines, line)
+    change(ctx, 'U-433', at, at, quotePrefix(text, quoteDepth(text)).trimEnd() + '\n',
+      'blank line written above the comment line that ended the 0.1 block')
   }
 }
