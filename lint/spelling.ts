@@ -238,6 +238,7 @@ function openerName(text: string): string {
 
 function openerWidth(text: string): number {
   if (text.startsWith('{')) return text.length
+  if (HEADING_MARK.test(text)) return text.indexOf(' ')
   if (text.startsWith('::')) return 2
   if (text.startsWith('[')) return text.indexOf(']:') + 2
   return 1
