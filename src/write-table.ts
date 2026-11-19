@@ -360,8 +360,8 @@ function headerRows(w: Writer | null, table: TableNode): number | undefined {
 function tableFormat(w: Writer, table: TableNode): string {
   const recorded = w.facts?.get(table)?.sourceFormat
   const rows = rowsOf(table, 'table_head').length + rowsOf(table, 'table_body').length + rowsOf(table, 'table_foot').length
-  // A pipe table needs a row (C2-L-036).
-  if (!fitsDelimited(table)) return 'pipe'
+  // C2-L-036: a pipe table needs a row, so a table with none is delimited even where that form loses some of it.
+  if (rows > 0 && !fitsDelimited(table)) return 'pipe'
   if (recorded === 'csv' || recorded === 'tsv') return recorded
   return rows === 0 || needsDelimited(table) ? 'csv' : 'pipe'
 }
@@ -394,8 +394,22 @@ function delimitedBody(table: TableNode, separator: string): string[] {
   return body
 }
 
+/** C2-L-036: what the delimited form of a table without rows cannot hold: a head, a foot, a comment, a body's attributes. */
+function loseEmptyGroups(w: Writer, table: TableNode): void {
+  for (const group of table.children) {
+    if (group.type !== 'table_body') lose(w, group, null)
+    else {
+      if (group.attrs !== undefined) lose(w, group, 'attrs')
+      for (const entry of group.children) lose(w, entry, null)
+    }
+  }
+}
+
 function delimitedTable(w: Writer, table: TableNode, prefix: string, format: string): void {
   const separator = format === 'tsv' ? '\t' : ','
+  if (table.children.every((group) => group.type === 'comment' || group.children.every((row) => row.type !== 'table_row'))) {
+    loseEmptyGroups(w, table)
+  }
   const first: (readonly [string, string])[] = [['table', '']]
   const declared = headerRows(w, table)
   if (declared !== undefined) first.push(['header-rows', String(declared)])
