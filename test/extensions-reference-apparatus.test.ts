@@ -173,18 +173,48 @@ describe('index', () => {
 const REFS = '::: references "References"\n:: doe\n: Doe, J. (2020). /A book/.\n\n:: roe\n: Roe, R. (2019). Paper.\n:::\n'
 
 describe('citations', () => {
-  it('numbers citations in order of first use and lists the cited entries in the directive', () => {
+  it('numbers citations by definition order and lists every entry in source order (C2-X-058)', () => {
     expect(html(`See :cite[roe] and :cite[doe; roe]{locator="p. 4"}.\n\n${REFS}`, citations())).toBe([
-      '<p>See [<a href="#ref-roe" data-cite-key="roe">1</a>] and [<a href="#ref-doe" data-cite-key="doe">2</a>, ' +
-        '<a href="#ref-roe" data-cite-key="roe">1</a>, p. 4].</p>',
+      '<p>See [<a href="#ref-roe" data-cite-key="roe">2</a>] and [<a href="#ref-doe" data-cite-key="doe">1</a>, ' +
+        '<a href="#ref-roe" data-cite-key="roe">2</a>, p. 4].</p>',
       '<div class="references">',
       '  <p class="admonition-title">References</p>',
       '  <ol class="references">',
-      '    <li id="ref-roe">Roe, R. (2019). Paper.</li>',
       '    <li id="ref-doe">Doe, J. (2020). <em>A book</em>.</li>',
+      '    <li id="ref-roe">Roe, R. (2019). Paper.</li>',
       '  </ol>',
       '</div>',
     ].join('\n'))
+  })
+
+  it('keeps an uncited definition in the claimed directive (C2-X-058)', () => {
+    const out = html(`See :cite[doe].\n\n${REFS}`, citations())
+    expect(out).toContain('<li id="ref-doe">Doe, J. (2020). <em>A book</em>.</li>')
+    expect(out).toContain('<li id="ref-roe">Roe, R. (2019). Paper.</li>')
+  })
+
+  it('renders each claimed directive from its own definitions without citation uses', () => {
+    const source = '::: references\n:: z\n: Last.\n\n:: a\n: First.\n:::\n\n::: bibliography\n:: b\n: Other.\n:::\n'
+    const out = html(source, citations({ mode: 'author-date' }))
+    expect(out.indexOf('id="ref-z"')).toBeLessThan(out.indexOf('id="ref-a"'))
+    expect(out.indexOf('id="ref-a"')).toBeLessThan(out.indexOf('id="ref-b"'))
+    expect(out.match(/<ul class="references">/gu)).toHaveLength(2)
+  })
+
+  it('keeps last-definition-wins with one id for a duplicate key', () => {
+    const source = 'See :cite[a].\n\n::: references\n:: a\n: Old.\n\n:: b\n: Other.\n\n:: a\n: New.\n:::\n'
+    const out = html(source, citations())
+    expect(out.match(/id="ref-a"/gu)).toHaveLength(1)
+    expect(out).toContain('<li id="ref-a">New.</li>')
+    expect(out).not.toContain('Old.')
+    expect(out.indexOf('id="ref-b"')).toBeLessThan(out.indexOf('id="ref-a"'))
+  })
+
+  it('starts a later numbered references list at its citation number', () => {
+    const source = 'See :cite[b].\n\n::: references\n:: a\n: First.\n:::\n\n::: references\n:: b\n: Second.\n:::\n'
+    const out = html(source, citations())
+    expect(out).toContain('<a href="#ref-b" data-cite-key="b">2</a>')
+    expect(out).toContain('<ol start="2" class="references">')
   })
 
   it('writes an undefined key as its text and gives it no number', () => {
@@ -209,7 +239,7 @@ describe('citations', () => {
 
   it('numbers citations in notes after the body', () => {
     const out = html(`A :cite[roe].[^n] B :cite[doe].\n\n[^n]: :cite[roe] again.\n\n${REFS}`, citations())
-    expect(out).toContain('B [<a href="#ref-doe" data-cite-key="doe">2</a>]')
+    expect(out).toContain('B [<a href="#ref-doe" data-cite-key="doe">1</a>]')
   })
 
   it('numbers citations in inline notes after the body', () => {

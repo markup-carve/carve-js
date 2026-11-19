@@ -109,11 +109,13 @@ export const CORE_SEMANTIC_KEYS: readonly (readonly [string, string | null])[] =
 /** An option that has an unknown name or value, or that this engine does not offer. */
 export class CarveOptionError extends Error {
   option: string
+  path: string
 
   constructor(option: string, message: string) {
     super(`option ${option}: ${message}`)
     this.name = 'CarveOptionError'
     this.option = option
+    this.path = `/${option.replaceAll('~', '~0').replaceAll('/', '~1')}`
   }
 }
 

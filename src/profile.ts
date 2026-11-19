@@ -261,15 +261,28 @@ export function admitsType(rule: ProfileRule, type: string, block: boolean): boo
   return allowed === null || allowed.includes(type)
 }
 
+function profileType(node: Node, block: boolean): string {
+  // C2-H-163: a captioned block is tested as its `<figure>`, a type that no allow list names.
+  return block && captionedLeaf(node) !== undefined ? 'figure' : node.type
+}
+
 function isOutside(filter: Filter, node: Node, block: boolean, depth: number): boolean {
   const rule = filter.rule
-  // C2-H-163: a captioned block is tested as its `<figure>`, a type that no allow list names.
-  const type = block && captionedLeaf(node) !== undefined ? 'figure' : node.type
+  const type = profileType(node, block)
   const denied = block ? rule.deniedBlock : rule.deniedInline
   if (denied?.includes(type) === true) return true
   const allowed = block ? rule.allowedBlock : rule.allowedInline
   if (allowed !== null && !allowed.includes(type)) return true
   return rule.maxNesting >= 0 && depth > rule.maxNesting
+}
+
+function degradationMessage(filter: Filter, node: Node, block: boolean): string {
+  const type = profileType(node, block)
+  if (!admitsType(filter.rule, type, block)) {
+    return `Degraded a construct the profile "${filter.name}" does not allow: ${type}.`
+  }
+  return `Degraded ${type} because it exceeds the nesting limit of profile "${filter.name}"; ` +
+    'move it to a shallower level or use a profile that permits the depth.'
 }
 
 /**
@@ -287,7 +300,7 @@ function filterList<N extends Node>(filter: Filter, list: N[], block: boolean, d
     } else if (isOutside(filter, node, block, depth)) {
       // C2-H-165: one report for the degraded node, which stays in the tree; the nodes inside it are not reported again.
       const out = degrade(node)
-      const message = `Degraded a construct the profile "${filter.name}" does not allow: ${node.type}`
+      const message = degradationMessage(filter, node, block)
       const entry = { code: 'profile-construct-degraded', severity: 'warning', channel: 'render-loss', message } as const
       addFinding(filter.findings, node, entry)
       noteGone(filter, node)
