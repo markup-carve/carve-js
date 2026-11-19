@@ -34,15 +34,15 @@ export interface ModelBlock {
   type: string
   path: string
   start: number
-  column: number
-  opener_column: number
+  readonly column: number
+  readonly opener_column: number
   attributed: boolean
   image_line: boolean
   index: number
-  after_quote_mark: boolean
+  readonly after_quote_mark: boolean
   line: ModelLine
-  owner: Container
-  parent: Container
+  readonly owner: Container
+  readonly parent: Container
 }
 
 export interface Container { type: string, content_column: number, marker_column: number | undefined }
@@ -51,6 +51,9 @@ export interface LineModel {
   lines: ModelLine[]
   blocks: ModelBlock[]
 }
+
+const INLINE_HOLDERS: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line',
+  'cell_paragraph', 'code_block', 'raw_block', 'frontmatter', 'comment', 'include'])
 
 const LEAF_TYPES: ReadonlySet<string> = new Set(['paragraph', 'caption', 'definition_term', 'heading', 'line', 'table_cell',
   'table_row', 'code_block', 'raw_block', 'frontmatter', 'comment_block'])
@@ -77,11 +80,21 @@ function trimEndAt(text: string): number {
   return end
 }
 
+const depths = new WeakMap<Map<string, string>, Map<string, number>>()
+
+/** The number of quotes that hold the node at `path`, the node itself left out. */
 function quoteDepth(path: string, types: Map<string, string>): number {
-  let depth = 0
-  for (let split = path.lastIndexOf('/children/'); split > 0; split = path.lastIndexOf('/children/', split - 1)) {
-    if (types.get(path.slice(0, split)) === 'block_quote') depth++
+  let cache = depths.get(types)
+  if (cache === undefined) {
+    cache = new Map<string, number>()
+    depths.set(types, cache)
   }
+  const known = cache.get(path)
+  if (known !== undefined) return known
+  const split = path.lastIndexOf('/children/')
+  const parent = split < 0 ? undefined : path.slice(0, split)
+  const depth = parent === undefined ? 0 : quoteDepth(parent, types) + (types.get(parent) === 'block_quote' ? 1 : 0)
+  cache.set(path, depth)
   return depth
 }
 
@@ -100,6 +113,8 @@ function walk(document: Node): Walked[] {
   const out: Walked[] = []
   const visit = (node: Node, path: string, parent: string, index: number): void => {
     out.push({ node, path, parent, index })
+    // Inline content holds no block and no line of its own.
+    if (INLINE_HOLDERS.has(node.type)) return
     forEachSlot(node, (nodes, step, single) => {
       if (single) {
         const child = nodes[0]
@@ -147,29 +162,77 @@ function ancestorTypes(path: string, types: Map<string, string>): string[] {
   return out
 }
 
+interface LineFields {
+  number: number, start: number, end: number, text: string, body: string, body_start: number, body_end: number
+  blank: boolean, leaf: string, leaf_id: string, leaf_first: boolean, attached_here: boolean, attribute_line: boolean
+  closes_container: boolean
+}
+
+class LineRecord {
+  readonly number: number
+  readonly start: number
+  readonly end: number
+  readonly text: string
+  readonly body: string
+  readonly body_start: number
+  readonly body_end: number
+  readonly blank: boolean
+  readonly leaf: string
+  readonly leaf_id: string
+  readonly leaf_first: boolean
+  readonly attached_here: boolean
+  readonly attribute_line: boolean
+  readonly closes_container: boolean
+  private ancestorsCache: string[] | undefined = undefined
+  private colonCache: ColonContainer[] | undefined = undefined
+  private readonly path: string
+  private readonly index: number
+  private readonly model: ModelLine[]
+  private readonly context: LintContext
+
+  constructor(fields: LineFields, path: string, index: number, model: ModelLine[], context: LintContext) {
+    this.number = fields.number
+    this.start = fields.start
+    this.end = fields.end
+    this.text = fields.text
+    this.body = fields.body
+    this.body_start = fields.body_start
+    this.body_end = fields.body_end
+    this.blank = fields.blank
+    this.leaf = fields.leaf
+    this.leaf_id = fields.leaf_id
+    this.leaf_first = fields.leaf_first
+    this.attached_here = fields.attached_here
+    this.attribute_line = fields.attribute_line
+    this.closes_container = fields.closes_container
+    this.path = path
+    this.index = index
+    this.model = model
+    this.context = context
+  }
+
+  get ancestors(): string[] { return (this.ancestorsCache ??= ancestorTypes(this.path, this.context.nodeTypes as Map<string, string>)) }
+  get open_colon(): ColonContainer[] { return (this.colonCache ??= openColon(this, this.context)) }
+  get prev(): ModelLine | undefined { return this.model[this.index - 1] }
+  get prev2(): ModelLine | undefined { return this.model[this.index - 2] }
+  get next(): ModelLine | undefined { return this.model[this.index + 1] }
+  get next2(): ModelLine | undefined { return this.model[this.index + 2] }
+}
+
 function lineRecord(line: Line, index: number, model: ModelLine[], found: Leaves, context: LintContext): ModelLine {
   const bodyStart = line.content !== undefined && line.content >= line.start && line.content <= line.end
     ? line.content : quotedStart(line)
   const rest = line.text.slice(bodyStart - line.start)
   const body = rest.slice(0, trimEndAt(rest))
-  let ancestors: string[] | undefined
-  let colon: ColonContainer[] | undefined
-  const record: ModelLine = {
+  const leaf = found.type[index]!
+  return new LineRecord({
     number: line.number, start: line.start, end: line.end, text: line.text,
     body, body_start: bodyStart, body_end: bodyStart + body.length,
-    blank: found.type[index] === 'none' && /^[\s>]*$/.test(line.text),
-    leaf: found.type[index]!, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
+    blank: leaf === 'none' && /^[\s>]*$/.test(line.text), leaf, leaf_id: found.id[index]!, leaf_first: found.first[index]!,
     attached_here: context.state.attachedLines.has(line.number),
     attribute_line: body.startsWith('{') && isAttributeLine(body, 0, body.length),
     closes_container: context.state.containerClosers.has(line.number),
-    get ancestors() { return (ancestors ??= ancestorTypes(line.path, context.nodeTypes as Map<string, string>)) },
-    get open_colon() { return (colon ??= openColon(record, context)) },
-    get prev() { return model[index - 1] },
-    get prev2() { return model[index - 2] },
-    get next() { return model[index + 1] },
-    get next2() { return model[index + 2] },
-  }
-  return record
+  }, line.path, index, model, context)
 }
 
 /** The owner of a block: its parent, a description list skipped, since its terms and descriptions own their lines. */
@@ -184,28 +247,60 @@ function ownerOf(parent: string, types: Map<string, string>): { path: string, ty
   return { path, type }
 }
 
+class BlockRecord {
+  private quotes: number | undefined = undefined
+  private columnCache: number | undefined = undefined
+  private ownerCache: Container | undefined = undefined
+  private parentCache: Container | undefined = undefined
+  readonly type: string
+  readonly path: string
+  readonly start: number
+  readonly index: number
+  readonly line: ModelLine
+  private readonly node: Node
+  private readonly parentPath: string
+  private readonly context: LintContext
+
+  constructor(item: Walked, line: ModelLine, start: number, context: LintContext) {
+    this.node = item.node
+    this.type = blockType(item.node)
+    this.path = item.path
+    this.parentPath = item.parent
+    this.start = start
+    this.index = item.index
+    this.line = line
+    this.context = context
+  }
+
+  get attributed(): boolean { return this.node.attrs !== undefined }
+  get image_line(): boolean {
+    return this.node.type === 'paragraph' && this.node.children.length === 1 && this.node.children[0]?.type === 'image'
+  }
+  private depth(): number { return (this.quotes ??= quoteDepth(this.path, this.context.nodeTypes as Map<string, string>)) }
+  private container(at: string, type: string): Container {
+    const layout = this.context.layouts.get(at)
+    return { type, content_column: ownerContent(type, layout, this.depth(), this.context), marker_column: layout?.markerColumn }
+  }
+  get column(): number { return (this.columnCache ??= columnOf(this.context.source, this.start, this.depth())) }
+  get opener_column(): number {
+    const marker = this.context.layouts.get(this.path)?.markerColumn
+    return marker !== undefined && this.node.attrs === undefined ? marker : this.column
+  }
+  get after_quote_mark(): boolean { return this.context.source.slice(this.line.start, this.start).endsWith('> ') }
+  get owner(): Container {
+    if (this.ownerCache === undefined) {
+      const found = ownerOf(this.parentPath, this.context.nodeTypes as Map<string, string>)
+      this.ownerCache = this.container(found.path, found.type)
+    }
+    return this.ownerCache
+  }
+  get parent(): Container {
+    return (this.parentCache ??= this.container(this.parentPath, this.context.nodeTypes.get(this.parentPath) ?? 'document'))
+  }
+}
+
 function blockRecord(item: Walked, line: ModelLine, start: number, context: LintContext): ModelBlock {
-  const { node, path, parent, index } = item
-  const types = context.nodeTypes as Map<string, string>
-  const quotes = quoteDepth(path, types)
-  const column = columnOf(context.source, start, quotes)
-  const marker = context.layouts.get(path)?.markerColumn
-  const container = (at: string, type: string): Container => {
-    const layout = context.layouts.get(at)
-    return { type, content_column: ownerContent(type, layout, quotes, context), marker_column: layout?.markerColumn }
-  }
-  const owner = ownerOf(parent, types)
-  return {
-    type: blockType(node), path, start, column,
-    opener_column: marker !== undefined && node.attrs === undefined ? marker : column,
-    attributed: node.attrs !== undefined,
-    image_line: node.type === 'paragraph' && node.children.length === 1 && node.children[0]?.type === 'image',
-    index,
-    after_quote_mark: context.source.slice(line.start, start).endsWith('> '),
-    line,
-    owner: container(owner.path, owner.type),
-    parent: container(parent, types.get(parent) ?? 'document'),
-  }
+  return new BlockRecord(item, line, start, context)
 }
 
 export function buildModel(document: Node, context: LintContext): LineModel {
