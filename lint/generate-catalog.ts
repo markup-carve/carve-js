@@ -26,7 +26,7 @@ export function generateCatalog(json: string): string {
   const lines = ['// C2-W-106: generated from data/lint-rules.json by lint/generate-catalog.ts. Do not edit.',
     'export const CATALOG = {']
   for (const row of rows) {
-    lines.push(`  ${JSON.stringify(row.id)}: { severity: ${JSON.stringify(row.severity)}, ` +
+    lines.push(`  ${JSON.stringify(row.id)}: { ${row.status === 'void' ? 'status: "void", ' : ''}severity: ${JSON.stringify(row.severity)}, ` +
       `default: ${row.default === undefined ? 'undefined' : JSON.stringify(row.default)}, messages: [`)
     for (const message of row.messages ?? []) lines.push(...messageLines(typeof message === 'string' ? message : message.text))
     lines.push('  ], conditions: [')
