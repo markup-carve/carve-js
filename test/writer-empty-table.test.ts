@@ -47,4 +47,16 @@ describe('C2-L-036, C2-W-066: a table without rows is written as a delimited tab
       }
     }
   })
+
+  it('reports a comment of the table or of an empty body, which the delimited form drops', () => {
+    const comment: Group = { type: 'comment', form: 'line', value: ' note' }
+    const shapes: [Group[], string[]][] = [
+      [[group('table_body', 'b'), comment], ['/children/0/children/0/attrs', '/children/0/children/1']],
+      [[{ type: 'table_body', children: [{ type: 'comment', form: 'line', value: ' note' }] }], ['/children/0/children/0/children/0']],
+    ]
+    for (const [shape, paths] of shapes) {
+      const found = writeWithDiagnostics(tableOf(shape)).diagnostics.map((entry) => entry.path)
+      for (const path of paths) expect(found, path).toContain(path)
+    }
+  })
 })

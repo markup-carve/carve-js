@@ -394,11 +394,14 @@ function delimitedBody(table: TableNode, separator: string): string[] {
   return body
 }
 
-/** C2-L-036: what the delimited form of a table without rows cannot hold, a head, a foot and the attributes of a group. */
+/** C2-L-036: what the delimited form of a table without rows cannot hold: a head, a foot, a comment, a body's attributes. */
 function loseEmptyGroups(w: Writer, table: TableNode): void {
   for (const group of table.children) {
-    if (group.type === 'table_head' || group.type === 'table_foot') lose(w, group, null)
-    else if (group.type === 'table_body' && group.attrs !== undefined) lose(w, group, 'attrs')
+    if (group.type !== 'table_body') lose(w, group, null)
+    else {
+      if (group.attrs !== undefined) lose(w, group, 'attrs')
+      for (const entry of group.children) lose(w, entry, null)
+    }
   }
 }
 
