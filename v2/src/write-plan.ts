@@ -964,8 +964,19 @@ function analyze(w: Writer, leaf: Leaf, start: number, flags: number, place: Lea
   if (leaf.undecided === null) checkBrackets(leaf, escaped, w.linkKeys.size > 0)
   if (leaf.undecided === null) bracesBeforeMarks(leaf, escaped)
   if (leaf.undecided === null) checkPairs(leaf, escaped)
+  if (leaf.undecided === null) percentsWithinTextOpeners(leaf, escaped)
   if (leaf.undecided === null) commentsBeforeClosers(leaf, escaped)
   return escaped
+}
+
+/** C2-I-023: an unpaired bracket or braced opener of text makes a later `%%` text, even after whitespace. */
+function percentsWithinTextOpeners(leaf: Leaf, escaped: Uint8Array): void {
+  const depth: CommentDepth = { brackets: 0, textBrackets: 0, textBraces: 0, bracesByMark: new Uint32Array(128) }
+  for (let at = 0; at < leaf.codes.length; at++) {
+    if (leaf.kinds[at] === TEXT && leaf.codes[at] === 37 && leaf.codes[at + 1] === 37 &&
+      (depth.textBrackets > 0 || depth.textBraces > 0)) escaped[at] = 0
+    advanceCommentDepth(leaf, at, escaped, depth)
+  }
 }
 
 /**
@@ -979,6 +990,11 @@ function commentsBeforeClosers(leaf: Leaf, escaped: Uint8Array): void {
     if (at === 0) {
       advanceCommentDepth(leaf, at, escaped, depth)
       continue
+    }
+    // C2-I-023, C2-I-024: an open bracket or braced form of text can reframe a later
+    // comment line after spelling repair. Let the repair compare the resulting trees.
+    if (startsCommentLine(leaf, at) && (depth.textBrackets > 0 || depth.textBraces > 0)) {
+      return undecide(leaf, 'comment after text opener')
     }
     const before = leaf.owners[at - 1]
     if (before?.type === 'comment' && before.form === 'line' && leaf.owners[at] !== before

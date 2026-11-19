@@ -53,6 +53,14 @@ describe('C2-X-053 to C2-X-055: document transforms', () => {
     expect(transformed.diagnostics).toEqual(baseline.diagnostics)
   })
 
+  it('reports a source diagnostic once when the transformed view resolves again', () => {
+    const source = '[a]{#x} [b]{#x}'
+    const baseline = renderWithDiagnostics(source)
+    const transformed = renderWithDocumentTransforms(source, [])
+    expect(baseline.diagnostics.filter((entry) => entry.code === 'duplicate-id')).toHaveLength(1)
+    expect(transformed.diagnostics).toEqual(baseline.diagnostics)
+  })
+
   it('treats a failed transform as a strict render loss', () => {
     const result = renderWithDocumentTransforms('hello', [
       { name: 'broken', transform: () => { throw new Error('broken') } },

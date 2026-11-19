@@ -455,7 +455,13 @@ export function renderWithDocumentTransforms(
   const sourceDiagnostics = parseDiagnostics(resolved, parsed)
   const { view, failures } = applyDocumentTransforms(structuredClone(resolved.document), transforms, settings.extensions)
   const rendered = renderWithDiagnostics(view, options)
-  const diagnostics = [...sourceDiagnostics, ...failures, ...rendered.diagnostics]
+  const sourceKeys = new Set(sourceDiagnostics.map((entry) => JSON.stringify([
+    entry.code, entry.channel, entry.message, entry.path,
+  ])))
+  const viewDiagnostics = rendered.diagnostics.filter((entry) => !sourceKeys.has(JSON.stringify([
+    entry.code, entry.channel, entry.message, entry.path,
+  ])))
+  const diagnostics = [...sourceDiagnostics, ...failures, ...viewDiagnostics]
   if (settings.strictLosses) for (const entry of diagnostics) {
     if (entry.channel === 'render-loss') entry.severity = 'error'
   }

@@ -71,6 +71,8 @@ const BEYOND_SCHEMA = [
   'a cell with no children',
   // C2-A-091, C2-A-188: a cell_paragraph that is not the only child of its cell is a reader check.
   'a cell_paragraph beside another block',
+  // C2-A-049, C2-A-188: the schema lists frontmatter children but cannot require that they come first.
+  'frontmatter is not the first child',
   // C2-A-086, C2-A-188: the order of the table groups is a reader check.
   'the table groups are out of order',
   // C2-A-098: the glyph and the source of a smart punctuation node follow its kind; the schema lists each field apart.

@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CarveWriteError, type DocumentNode, format, formatWithDiagnostics, parse, tabsExtensions, write } from '../src/index.ts'
+import { CarveWriteError, type DocumentNode, type ExtensionDefinition, format, formatWithDiagnostics, parse,
+  tabsExtensions, write } from '../src/index.ts'
 import { checkGates, checkWriter } from '../test/support/writer-checks.ts'
 import { check } from './check.ts'
 import { random } from './generate.ts'
@@ -101,14 +102,23 @@ void test('C2-W-134: a source-only write refuses an unspellable structure', () =
     error.diagnostics.some((entry) => entry.code === 'structure-unspellable'))
 })
 
-void test('C2-X-051, C2-W-134: a failed claim keeps the core node and source-only formatting refuses a loss', () => {
+void test('C2-X-051, D2: a line comment consuming every closer makes the tabs claim spellable', () => {
   const body = readFileSync(join(import.meta.dirname, '../test/fixtures/plan-quote-depth.crv'), 'utf8').trimEnd()
   const source = `:::: tabs\n::: tab "One"\n${body}\n:::\n::::\n`
   const result = formatWithDiagnostics(source, { extensions: tabsExtensions })
-  assert.equal(result.diagnostics.some((entry) => entry.code === 'extension-transform-failed'), true)
-  assert.equal(result.diagnostics.some((entry) => entry.code === 'structure-unspellable'), true)
-  assert.throws(() => format(source, { extensions: tabsExtensions }), (error: unknown) => error instanceof CarveWriteError &&
-    error.diagnostics.some((entry) => entry.code === 'structure-unspellable'))
+  assert.deepEqual(result.diagnostics, [])
+  assert.equal(format(source, { extensions: tabsExtensions }), result.source)
+  assert.equal(parse(source, { extensions: tabsExtensions }).children[0]?.type, 'block_extension')
+})
+
+void test('C2-X-051: a failed claim retains its core div and reports the extension', () => {
+  const broken: ExtensionDefinition = { name: 'ex.throw', version: '1', matcher: { form: 'div', name: 'box' },
+    props: {}, children: 'none', slots: {}, transform() { throw new Error('broken') } }
+  const source = '::: box\nx\n:::\n'
+  const result = formatWithDiagnostics(source, { extensions: [broken] })
+  assert.equal(result.diagnostics.some((entry) => entry.code === 'extension-transform-failed' &&
+    entry.message.includes('ex.throw')), true)
+  assert.equal(parse(source, { extensions: [broken] }).children[0]?.type, 'div')
 })
 
 void test('C2-X-051: a lossy tabs claim keeps its core fallback', () => {
