@@ -17,6 +17,21 @@ describe('Markdown and Djot through the HTML hub', () => {
     expect(source('<script>a()</script>\n', 'gfm')).toBe('```=html\n<script>a()</script>\n```\n')
   })
 
+  it('keeps a raw HTML block that follows text in a tight list item (C2-M-065)', () => {
+    for (const from of ['markdown', 'gfm'] as const) {
+      expect(source('- a\n  <!--x-->\n- b\n', from)).toBe('- a\n  `<!--x-->`{=html}\n- b\n')
+      expect(source('- a\n  <div>\n  x\n- b\n', from)).toBe('- a\n  `<div>\n  x`{=html}\n- b\n')
+    }
+  })
+
+  it('reads container directives only, so prose with a colon keeps its text', () => {
+    for (const from of ['markdown', 'gfm'] as const) {
+      expect(source('Ratio 1:2, see:here and time 10:30, <m:abc>\n', from))
+        .toBe('Ratio 1:2, see:here and time 10:30, \\<m:abc>\n')
+      expect(source('::name\n', from)).toBe('::name\n')
+    }
+  })
+
   it('keeps a tight list tight when an item holds a second block (C2-M-033)', () => {
     expect(source('* a\n  > b\n* c\n', 'markdown')).toBe('- a\n\n  > b\n- c\n')
   })

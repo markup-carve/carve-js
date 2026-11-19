@@ -1,7 +1,7 @@
 // Markdown, GFM and Djot import through the HTML hub (ruling of 17 November): the reference library renders HTML and
 // the 0.2 HTML importer reads it. Hooks here only shape what the library's HTML cannot carry on its own.
 import { micromark } from 'micromark'
-import type { CompileContext, Handle, HtmlExtension, Token } from 'micromark-util-types'
+import type { CompileContext, Extension, Handle, HtmlExtension, Token } from 'micromark-util-types'
 import { gfm } from 'micromark-extension-gfm'
 import { gfmAutolinkLiteralHtml } from 'micromark-extension-gfm-autolink-literal'
 import { gfmFootnoteHtml } from 'micromark-extension-gfm-footnote'
@@ -75,20 +75,30 @@ function frontmatterCapture(sink: Sink): HtmlExtension {
 interface Sink { format?: 'yaml' | 'toml', value?: string, raw: { format: string, value: string }[] }
 
 const RAW_PLACEHOLDER = /^<!--carve-hub-raw-(\d+)-->\n$/u
+const RAW_INLINE_PLACEHOLDER = /^<!--carve-hub-raw-(\d+)-->$/u
 
 /**
  * Raw HTML stays raw, as the 0.1 importer kept it: an inline run is the `data-carve-raw` carrier (C2-H-186), and a
  * block a placeholder comment (C2-M-065) the hub swaps back for the block's HTML after the import.
  */
 function rawHtmlCarrier(sink: Sink): HtmlExtension {
+  let slurp: boolean | undefined
   return {
     enter: {
-      htmlFlow(this: CompileContext) { this.lineEndingIfNeeded(); this.buffer(); this.setData('ignoreEncode', true) },
+      htmlFlow(this: CompileContext) {
+        this.lineEndingIfNeeded()
+        // A tight paragraph before the block leaves micromark slurping line endings; the block's own are its text.
+        slurp = this.getData('slurpAllLineEndings')
+        this.setData('slurpAllLineEndings')
+        this.buffer()
+        this.setData('ignoreEncode', true)
+      },
       htmlText(this: CompileContext) { this.buffer(); this.setData('ignoreEncode', true) },
     },
     exit: {
       htmlFlow(this: CompileContext) {
         this.setData('ignoreEncode')
+        this.setData('slurpAllLineEndings', slurp)
         this.tag(rawBlockPlaceholder(sink, 'html', this.resume()))
       },
       htmlText(this: CompileContext) {
@@ -104,16 +114,24 @@ function rawBlockPlaceholder(sink: Sink, format: string, value: string): string 
   return `<!--carve-hub-raw-${sink.raw.length - 1}-->`
 }
 
+/** The raw content a placeholder node stands for: a block ends in a line ending, inline content drops it. */
+function keptRaw(record: Record<string, unknown>, raw: Sink['raw']): { format: string, value: string } | undefined {
+  const block = record['type'] === 'raw_block'
+  // A block in inline position, such as one after text in a tight list item, reaches the tree as inline raw content.
+  if ((!block && record['type'] !== 'raw_inline') || typeof record['value'] !== 'string') return undefined
+  const index = (block ? RAW_PLACEHOLDER : RAW_INLINE_PLACEHOLDER).exec(record['value'])?.[1]
+  const kept = index === undefined ? undefined : raw[Number(index)]
+  if (kept === undefined) return undefined
+  if (block) return kept.value.endsWith('\n') ? kept : { format: kept.format, value: `${kept.value}\n` }
+  return { format: kept.format, value: kept.value.replace(/(?:\r?\n|\r)+$/u, '') }
+}
+
 function restoreRaw<T>(value: T, raw: Sink['raw']): T {
   if (Array.isArray(value)) return value.map((item: unknown) => restoreRaw(item, raw)) as T
   if (value === null || typeof value !== 'object') return value
   const record = value as Record<string, unknown>
-  if (record['type'] === 'raw_block' && typeof record['value'] === 'string') {
-    const index = RAW_PLACEHOLDER.exec(record['value'])?.[1]
-    const kept = index === undefined ? undefined : raw[Number(index)]
-    const html = kept?.value.endsWith('\n') === false ? `${kept.value}\n` : kept?.value
-    if (kept !== undefined) return { ...record, format: kept.format, value: html } as T
-  }
+  const kept = keptRaw(record, raw)
+  if (kept !== undefined) return { ...record, ...kept } as T
   if (Array.isArray(record['children'])) return { ...record, children: restoreRaw(record['children'], raw) } as T
   return value
 }
@@ -209,6 +227,15 @@ function dropNoteLabelPointers(nodes: Html.ChildNode[]): void {
 }
 
 /** GFM's HTML without the tag filter: raw HTML stays raw in the tree, and the render decides what reaches the output. */
+/** Container directives only: text and leaf directives would claim ordinary prose such as `10:30` (CommonMark has none). */
+function containerDirectives(): Extension {
+  const flow = directive().flow?.[58]
+  const constructs = (Array.isArray(flow) ? flow : flow === undefined ? [] : [flow])
+    // The container construct is the only concrete one; the package does not export the constructs by name.
+    .filter(construct => construct.concrete === true)
+  return { flow: { 58: constructs } }
+}
+
 const GFM_HTML = (): HtmlExtension[] => [gfmAutolinkLiteralHtml(), gfmFootnoteHtml(), gfmStrikethroughHtml(), gfmTableHtml(),
   gfmTaskListItemHtml()]
 
@@ -217,7 +244,7 @@ export function markdownHtml(input: string, format: 'markdown' | 'gfm', sink: Si
   return micromark(input, {
     allowDangerousHtml: true,
     allowDangerousProtocol: true,
-    extensions: [frontmatter(['yaml', 'toml']), math(), directive(), ...(format === 'gfm' ? [gfm()] : [])],
+    extensions: [frontmatter(['yaml', 'toml']), math(), containerDirectives(), ...(format === 'gfm' ? [gfm()] : [])],
     htmlExtensions: [frontmatterCapture(sink), rawHtmlCarrier(sink), mathHtml(), directiveHandlers(),
       ...(format === 'gfm' ? GFM_HTML() : [])],
   })
