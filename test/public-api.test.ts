@@ -36,11 +36,12 @@ describe('the public 0.2 entry', () => {
     expect(Object.keys(api).sort()).toEqual([
       'AST_VERSION', 'CarveInputError', 'CarveLayoutError', 'CarveOptionError', 'CarvePatchError', 'CarveRenderError', 'CarveTreeError',
       'CarveWriteError', 'DEFAULT_DENIED_SCHEMES', 'ImportInputError', 'LAYOUT_VERSION', 'MAX_TREE_DEPTH', 'NODE_TYPES',
-      'RESERVED_WRITER_TARGETS', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createWriterRegistry', 'decodeTree', 'diffTree',
-      'encodeEnvelope', 'encodeTree', 'fix', 'fixEdits', 'fixableRules', 'format', 'formatWithDiagnostics', 'headingId', 'importDocument', 'includeDependencies',
+      'RESERVED_WRITER_TARGETS', 'SMART_PUNCTUATION', 'SPEC_VERSION', 'VERSION', 'applyPatch', 'createWriterRegistry', 'decodeTree',
+      'diffTree', 'encodeEnvelope', 'encodeTree', 'fix', 'fixEdits', 'fixableRules', 'flatten', 'format', 'formatWithDiagnostics',
+      'headingId', 'importDocument', 'includeDependencies',
       'includeRegion', 'isUrlAllowed', 'lint', 'migrateTree', 'parse', 'parseWithDiagnostics', 'parseWithLayout', 'positionOf',
       'render', 'renderWithDiagnostics', 'renderWithDocumentTransforms', 'sourceFingerprint', 'stringOffsetOfByte',
-      'tabsExtensions', 'tabsRenderer', 'treeFingerprint', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write',
+      'tabsExtensions', 'tabsRenderer', 'treeFingerprint', 'treesEqual', 'urlScheme', 'utf8Length', 'validateLayout', 'validateTree', 'write',
       'writeDocument', 'writeWithDiagnostics',
     ].sort())
   })

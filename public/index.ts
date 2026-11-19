@@ -9,6 +9,8 @@ import { decodeTree as decodeTreeImpl } from '../src/ast-json.ts'
 import { CarveTreeError, validateTree as validateTreeImpl } from '../src/ast-validate.ts'
 import { migrateTree as migrateTreeImpl, type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 import { type DocumentNode } from '../src/ast.ts'
+import { type SmartPunctuationNode } from '../src/ast-nodes.ts'
+import { SMART_GLYPHS, SMART_KIND_NAMES, SMART_SOURCES } from '../src/inline-tables.ts'
 import { type ExtensionDefinition } from '../src/extensions/types.ts'
 import { CarveOptionError, type HeadingIds, readOptions } from '../src/options.ts'
 import { slugify } from '../src/slug.ts'
@@ -30,7 +32,7 @@ export {
   type IncludeOptions, type Marker, type Metadata, type MetadataValue, type Position, type Resource, type Task,
 } from '../src/ast.ts'
 export type * from '../src/ast-nodes.ts'
-export { encodeEnvelope, encodeTree } from '../src/ast-json.ts'
+export { encodeEnvelope, encodeTree, treesEqual } from '../src/ast-json.ts'
 export { type AnnotationRangeSidecar, CarveTreeError, MAX_TREE_DEPTH } from '../src/ast-validate.ts'
 export { type MigrateOptions, type MigrationResult } from '../migrate/index.ts'
 export { LAYOUT_VERSION, type NodeLayout, type SourceLayout, type Wrap } from '../src/layout.ts'
@@ -50,6 +52,7 @@ export {
   type IncludeAnswer, type IncludeConfig, type IncludeError, type IncludeRequest, type IncludeResolver,
 } from '../src/include-settings.ts'
 export { type IncludeDependency, includeDependencies, type IncludeDependencyOptions } from '../src/include-dependencies.ts'
+export { flatten, type Flattened } from '../src/flatten.ts'
 export { lint, type LintOptions } from '../lint/lint.ts'
 export { type FixEdit, type FixResult } from '../lint/fix.ts'
 export { isUrlAllowed, urlScheme } from '../src/html-attributes.ts'
@@ -231,3 +234,14 @@ export function fixEdits(source: string, diagnostic: Diagnostic): FixEdit[] | nu
   if (typeof diagnostic !== 'object' || diagnostic === null) throw new CarveOptionError('diagnostic', 'not a diagnostic')
   return fixEditsFor(source, diagnostic)
 }
+
+/** One kind of `smart_punctuation` (C2-A-098): its `kind`, the `glyph` it renders and the `source` it is written as. */
+export interface SmartPunctuationKind {
+  kind: SmartPunctuationNode['kind']
+  glyph: string
+  source: string
+}
+
+/** C2-A-098: every kind of `smart_punctuation`, in the order of the schema. */
+export const SMART_PUNCTUATION: readonly Readonly<SmartPunctuationKind>[] = Object.freeze(SMART_KIND_NAMES.map((kind, at) =>
+  Object.freeze({ kind, glyph: SMART_GLYPHS[at]!, source: SMART_SOURCES[at]! })))

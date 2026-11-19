@@ -32,10 +32,12 @@ HTML importer uses.
 | `fixEdits` | source, a diagnostic of `lint` | the edits that fix that finding, or null | `CarveOptionError` |
 | `importDocument` | HTML, `{ from: 'html', rawHtml, strictLosses, allowLosses, maxLosses }` | `{ document, source, diagnostics }` | `CarveOptionError`, `ImportInputError` |
 | `includeDependencies` | a tree, `{ ranges }` | its include dependencies; with `ranges`, each directive's byte range | |
+| `flatten` | an expanded tree | `{ source, same }`: one Carve file, and whether it renders as the tree does | `CarveTreeError`, `CarveWriteError` |
 | `includeRegion` | file text, a region name, `{ code }` | `{ ok, text, start, end }` or `{ ok: false, reason }` | `CarveOptionError` |
 | `positionOf` | source, a UTF-8 byte offset | `{ line, column }` as the command line counts them (C2-T-041) | `CarveOptionError` |
 | `headingId` | the plain text of a heading, `{ headingIds }` | the id the option generates, or null under `off` | `CarveOptionError` |
 | `diffTree` | two trees | a JSON Patch (RFC 6902) over `encodeTree` | `CarveTreeError` |
+| `treesEqual` | two trees or nodes | whether they are the same document (C2-A-161) | |
 | `applyPatch` | a tree, a patch, `{ fingerprint, extensions }` | the patched tree | `CarveOptionError`, `CarveTreeError`, `CarvePatchError` |
 | `sourceFingerprint`, `treeFingerprint` | source, or a tree | `sha256:` and a hex hash | `CarveOptionError`, `CarveTreeError` |
 | `encodeTree`, `encodeEnvelope` | a tree | JSON text | |
@@ -49,7 +51,8 @@ Helpers: `fixableRules` lists the lint rules that `fix` rewrites. `isUrlAllowed`
 URL policy (for an extension renderer that writes a link), `DEFAULT_DENIED_SCHEMES` is the default deny list, `utf8Length` and `stringOffsetOfByte` turn the byte
 ranges of diagnostics and positions into string offsets. `AST_VERSION`, `LAYOUT_VERSION` and `MAX_TREE_DEPTH` are
 the contract constants. `VERSION` is the package version, `SPEC_VERSION` is `{ version: '0.2', commit }` with the
-commit of the specification the engine pins, and `NODE_TYPES` holds the `block` and `inline` node type lists of the
+commit of the specification the engine pins, `SMART_PUNCTUATION` lists each `smart_punctuation` kind with its
+`glyph` and `source` (C2-A-098), and `NODE_TYPES` holds the `block` and `inline` node type lists of the
 pinned tree schema; the build writes all three. The node types (`DocumentNode`, `Block`, `Inline` and one interface per node) and the option
 types are exported as types.
 
@@ -155,6 +158,23 @@ command line does. `maxFileBytes` makes a larger file `unreadable` (it can lower
 `allowAbsolute: false` refuses an absolute include path with `outside_root`; by default an absolute path is read
 when it lies inside the root (C2-N-012).
 
+`flatten(tree)` writes a tree parsed with a resolver as one Carve file, as `carve flatten` does: each expanded
+include is replaced by the blocks of its file, and included frontmatter is dropped. An include that did not expand
+keeps its directive, so an editor can write the copy and name what is missing from the parse diagnostics. `same` is
+false where the file renders differently from the tree, because a footnote, link reference or abbreviation key is
+defined in more than one file (C2-N-054, C2-N-055).
+
+```ts
+import { flatten, parse } from '@markup-carve/carve'
+
+const parts: Record<string, string> = { 'intro.crv': '---\ntitle: Intro\n---\nHello.\n' }
+const includes = ({ path }: { path: string }) =>
+  Object.hasOwn(parts, path) ? { text: parts[path]!, id: path } : { error: 'not_found' as const }
+
+const { source, same } = flatten(parse('{{ intro.crv }}\n\n{{ missing.crv }}\n', { includes }))
+if (source !== 'Hello.\n\n{{ missing.crv }}\n' || !same) throw new Error(source)
+```
+
 `includeRegion(text, name, { code })` gives the region an `@region:name` directive selects, for an editor that jumps
 to it: the text, and its first and last line from 1. Where the directive would report `include-region-invalid`, the
 result is `{ ok: false, reason }`. `includeDependencies(tree, { ranges: true })` adds the UTF-8 byte range of each
@@ -194,6 +214,10 @@ const patch = diffTree(before, after)
 const patched = applyPatch(before, patch, { fingerprint: treeFingerprint(before) })
 if (diffTree(patched, after).length !== 0) throw new Error('patch')
 ```
+
+`treesEqual(a, b)` is tree equality as C2-A-161 defines it: adjacent text nodes are coalesced, and positions and the
+results of resolution are not compared. It differs from `diffTree(a, b).length === 0`, which compares the encoded
+JSON.
 
 ## Upgrade
 
@@ -361,7 +385,8 @@ says what to use instead. Of the 172 values, 118 map to a 0.2 call and 54 are go
 | `CANONICAL_BLOCK_TYPES`, `CANONICAL_INLINE_TYPES` | `NODE_TYPES` | `block` and `inline`, from the pinned schema |
 | `LIB_VERSION` | `VERSION` | |
 | `canonicalType`, `FOLDED_NODE_TYPES`, `CORE_AST_VOCABULARY` | gone | 0.2 has no folded or aliased types; the `Block` and `Inline` unions are the vocabulary |
-| `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS`, `SMART_PUNCTUATION_GLYPHS` | gone | fixed tables of the specification data, not of the API |
+| `SMART_PUNCTUATION_GLYPHS` | `SMART_PUNCTUATION` | one entry per kind with its `glyph` and `source` |
+| `CANONICAL_ADMONITION_KINDS`, `GENERATED_CONTENT_KINDS` | gone | fixed tables of the specification data, not of the API |
 | `formatProfileViolation`, `RenderDepthError` | gone | a profile loss is a diagnostic; a too deep tree is a `CarveTreeError` |
 | `imgFence`, `sanitizeSvg` | gone | 0.1 extensions; a host registers its own through the provisional `extensions` and `renderers` options |
 | `fileSystemResolver` (`./node`) | `fileSystemResolver` (`./node`) | takes the root directory and `{ maxFileBytes, allowAbsolute }` |

@@ -1,16 +1,19 @@
-// `carve flatten`: one Carve file with every include expanded in place. An engine command, outside the
-// specification (C2-T-003); C2-N-005 keeps `fmt` from expanding, so this is the command that does.
-import { type DocumentNode, render, write } from '../src/index.ts'
-import { type Node } from '../src/ast.ts'
+// `flatten` and `carve flatten`: one Carve file with every include expanded in place. An engine feature, outside the
+// specification (C2-T-003); C2-N-005 keeps `fmt` from expanding, so this is the call that does.
+import { render } from './api.ts'
+import { type DocumentNode, type Node } from './ast.ts'
+import { write } from './write.ts'
 
-/** The children of each expanded include in its place, recursively; included frontmatter renders nothing and goes. */
+/**
+ * The children of each expanded include in its place, recursively; included frontmatter renders nothing and goes.
+ * An include that did not expand has no `children` and stays, so it is written as its directive.
+ */
 function spliced(nodes: readonly Node[]): Node[] {
   const result: Node[] = []
   for (const node of nodes) {
-    if (node.type === 'include') {
-      const children = (node as { children?: Node[] }).children ?? []
-      result.push(...spliced(children.filter((child) => child.type !== 'frontmatter')))
-    } else result.push(withSplicedSlots(node))
+    const children = node.type === 'include' ? node.children : undefined
+    if (children !== undefined) result.push(...spliced(children.filter((child) => child.type !== 'frontmatter')))
+    else result.push(withSplicedSlots(node))
   }
   return result
 }
