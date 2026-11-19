@@ -196,7 +196,7 @@ function droppedFenceTitle(ctx: Context, node: Node01): void {
   const source = lineText(ctx.lines, line)
   const title = source.indexOf(' "')
   const close = source.indexOf('"', title + 2)
-  if (title < 0 || close <= title + 2 || !/^[ \t]/u.test(source.slice(close + 1))) return
+  if (title < 0 || close <= title + 2 || !/^[ \t"]/u.test(source.slice(close + 1))) return
   const entry = node.type === 'admonition' ? 'U-276' : 'U-277'
   change(ctx, entry, lineStart(ctx.lines, line) + title, lineEnd(ctx.lines, line), '',
     'fence title dropped because the 0.1 metadata slot did not parse it')

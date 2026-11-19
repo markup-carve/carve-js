@@ -86,3 +86,12 @@ describe('U-192 language shorthand lines', () => {
     expect(result.records.map((record) => record.entry)).toContain('U-192')
   })
 })
+
+describe('U-277 fence titles', () => {
+  it('C2-B-122 removes a title that 0.1 dropped before a stray quote', () => {
+    const result = upgrade('```php "src/Auth.php""\n```\n')
+    expect(result.output).toBe('```php\n```\n')
+    expect(result.check).toBe('pass')
+    expect(result.records.map((record) => record.entry)).toContain('U-277')
+  })
+})
