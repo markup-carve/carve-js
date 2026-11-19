@@ -14,9 +14,9 @@ import {
 import { pairDelimiters, scanBareMark, scanBracedMark } from './inline-delimiters.ts'
 import { writeEvents } from './inline-emit.ts'
 import {
-  type InlineState, NONE, OPEN_FOOTNOTE, setContent, TOKEN_A, TOKEN_C, TOKEN_OPEN, TOKEN_START, TOKEN_WIDTH,
+  type InlineState, NONE, OPEN_FOOTNOTE, OPEN_IMAGE, setContent, TOKEN_A, TOKEN_C, TOKEN_OPEN, TOKEN_START, TOKEN_WIDTH,
 } from './inline-state.ts'
-import { INLINE_FOOTNOTE } from './inline-kinds.ts'
+import { IMAGE, INLINE_FOOTNOTE } from './inline-kinds.ts'
 import { BARE_MARKS, BRACED_MARKS, CHARACTER_CLASSES, CLASS_SMART_TRIGGER } from './inline-tables.ts'
 import { isSpaceOrTab } from './source.ts'
 import { BIDI_FIRST, BIDI_LAST, holdsBidiControl, isBidiControl } from './unicode.ts'
@@ -150,6 +150,33 @@ function narrowsNotes(state: InlineState, closed: Set<number>): boolean {
   return changed
 }
 
+/** Keeps the images of the last pass that formed again, and returns whether that changed the set. */
+function narrowsImages(state: InlineState, formed: Set<number>): boolean {
+  const before = state.formedImages
+  if (before === null) {
+    state.formedImages = formed
+    return true
+  }
+  let changed = false
+  for (const start of before) {
+    if (formed.has(start)) continue
+    before.delete(start)
+    changed = true
+  }
+  return changed
+}
+
+function formedImages(state: InlineState): Set<number> {
+  const formed = new Set<number>()
+  const tokens = state.tokens
+  for (let at = 0; at < state.tokenLength; at += TOKEN_WIDTH) {
+    if (tokens[at] === TOKEN_OPEN && tokens[at + TOKEN_A] === OPEN_IMAGE && tokens[at + TOKEN_C] === IMAGE) {
+      formed.add(tokens[at + TOKEN_START]!)
+    }
+  }
+  return formed
+}
+
 function closedNotes(state: InlineState): Set<number> {
   const closed = new Set<number>()
   const tokens = state.tokens
@@ -179,12 +206,16 @@ export function scanInline(
   state.commentLines = null
   state.closedNotes = null
   state.caretInNote = false
+  state.formedImages = null
+  state.percentInImage = false
   scanPass(state)
   // C2-I-089: inside a note that closes, a caret pair opens nothing. The notes that close with every caret pair read
   // are taken first; a pass that reads them as text may leave one unclosed, and the next pass reads it as text.
-  for (let pass = 0; state.caretInNote && pass < MAX_NOTE_PASSES; pass++) {
-    const closed = closedNotes(state)
-    if (!narrowsNotes(state, closed)) break
+  // C2-I-074: images narrow the same way, so a `%%` stays alt source only inside an image that forms.
+  for (let pass = 0; (state.caretInNote || state.percentInImage) && pass < MAX_NOTE_PASSES; pass++) {
+    const notes = state.caretInNote && narrowsNotes(state, closedNotes(state))
+    const images = state.percentInImage && narrowsImages(state, formedImages(state))
+    if (!notes && !images) break
     scanPass(state)
   }
   failOpenBrackets(state)

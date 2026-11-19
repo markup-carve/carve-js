@@ -259,16 +259,28 @@ export function scanPercent(state: InlineState, pos: number): number {
   const text = state.text
   if (!state.lineComments || text.charCodeAt(pos + 1) !== PERCENT) return pos + 1
   if (!isBoundarySpace(pos > 0 ? text.charCodeAt(pos - 1) : NO_CHARACTER)) return pos + 1
-  // C2-I-074: an image's alt is source text, even when it contains nested brackets.
-  for (let at = state.bracketDepth - 1; at >= 0; at--) {
-    if (state.tokens[state.brackets[at]! + TOKEN_A] === OPEN_IMAGE) return pos + 1
-  }
+  if (inImageAlt(state)) return pos + 1
   let start = pos
   while (start > state.tokenEnd && isSpaceOrTab(text.charCodeAt(start - 1))) start--
   let lineEnd = text.indexOf('\n', pos)
   if (lineEnd < 0 || lineEnd > state.end) lineEnd = state.end
   pushToken(state, INLINE_COMMENT, start, lineEnd, pos + 2, lineEnd, 0, NONE)
   return lineEnd
+}
+
+/** C2-I-074, C2-I-024: an image's alt is source text, but an opener that forms no image leaves `%%` a comment. */
+function inImageAlt(state: InlineState): boolean {
+  const formed = state.formedImages
+  for (let at = state.bracketDepth - 1; at >= 0; at--) {
+    const open = state.brackets[at]!
+    if (state.tokens[open + TOKEN_A] !== OPEN_IMAGE) continue
+    if (formed === null) {
+      state.percentInImage = true
+      return true
+    }
+    if (formed.has(state.tokens[open + TOKEN_START]!)) return true
+  }
+  return false
 }
 
 /** C2-I-025, C2-I-063: a braced or an editorial comment, whose closer must follow in the content. */

@@ -532,6 +532,14 @@ describe('links and images', () => {
     expect(inline('x ![a `]` b](/u)')).toBe('"x " img(/u)"a `]` b"')
     expect(inline('*a ![b* c](/u)*')).toBe('strong["a " img(/u)"b* c"]')
   })
+
+  it('C2-I-074, C2-I-024: `%%` is alt source only in an image that forms', () => {
+    expect(inline('x ![a %% b](/u)')).toBe('"x " img(/u)"a %% b"')
+    expect(inline('x ![a %% b', 'c](/u)')).toBe('"x " img(/u)"a %% b|c"')
+    expect(inline('x ![ %%')).toBe('"x ![" %%""')
+    expect(inline('x ![', '%%')).toBe('"x ![" sb %%""')
+    expect(inline('![a %% ] b](/u)')).toBe('"![a" %%" ] b](/u)"')
+  })
 })
 
 describe('reference resolution', () => {

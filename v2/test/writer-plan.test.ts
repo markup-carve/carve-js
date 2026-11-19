@@ -78,6 +78,14 @@ describe('the planned writer', () => {
     expect(result.diagnostics).toEqual([])
   })
 
+  it('C2-W-011: a comment after an escaped bang and an unpaired bracket round-trips', () => {
+    for (const source of ['x\\![ %%', 'x\\![\n%%']) {
+      const result = formatWithDiagnostics(source)
+      expect(result.diagnostics).toEqual([])
+      expect(format(result.source)).toBe(result.source)
+    }
+  })
+
   it('C2-I-023: a percent run in an image label is text', () => {
     const source = '![[%%[\n]][]~'
     const result = formatWithDiagnostics(source, { normalize: true })
