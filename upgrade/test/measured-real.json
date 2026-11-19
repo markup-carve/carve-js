@@ -1244,8 +1244,10 @@
     "path": "resources/examples/edge-cases/0859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run.md",
     "line": 54,
     "input": ":foo[%% c] d\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-402"
+    ]
   },
   {
     "cause": "C37",
@@ -1405,10 +1407,10 @@
     "path": "resources/examples/edge-cases/0776-an-attribute-block-that-attaches-to-nothing-is-text-from-the-first-pass.md",
     "line": 56,
     "input": "_x /*a*/{.q} b/{c_} c_\n",
-    "check": "mismatch",
+    "check": "pass",
     "entries": [
       "U-065",
-      "U-145"
+      "U-068"
     ]
   },
   {
@@ -1426,8 +1428,10 @@
     "path": "resources/examples/edge-cases/0490-a-comment-inside-a-forced-span-or-the-combined-token-ends-at-its-closer.md",
     "line": 12,
     "input": "{*a %% b*} y\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-432"
+    ]
   },
   {
     "cause": "C47",
@@ -1808,8 +1812,10 @@
     "path": "tests/corpus/859-a-note-body-and-an-extension-s-content-hold-a-comment-s-run-5.crv",
     "line": 1,
     "input": "[a %% c] d\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-432"
+    ]
   },
   {
     "cause": "C65",
@@ -2774,8 +2780,10 @@
     "path": "resources/examples/edge-cases/0504-a-comment-or-a-definition-under-a-definition-term-folds-at-every-depth.md",
     "line": 27,
     "input": "> :: c\n>   %% note\n>   more\n",
-    "check": "mismatch",
-    "entries": []
+    "check": "pass",
+    "entries": [
+      "U-433"
+    ]
   },
   {
     "cause": "C64",

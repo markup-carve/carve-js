@@ -29,10 +29,20 @@ describe('replay rows of carve#6164', () => {
   })
 
   it.each([
-    ['U-393', '[a %% c] d\n', '%% c] d'],
-    ['U-393', '{~alpha %% hidden~>word~} tail\n', '%% hidden~>word~} tail'],
-    ['U-393', '{=a\\ %% c=} t\n', '%% c=} t'],
-    ['U-426', ':foo[%% c] d\n', '%% c]'],
+    ['U-432', '[a %% c] d\n', '[a{% c%}] d\n'],
+    ['U-432', '{~alpha %% hidden~>word~} tail\n', '{~alpha{% hidden~>word~}%} tail\n'],
+    ['U-401', '{=a\\ %% c=} t\n', '{=a\\ {% c%}=} t\n'],
+    ['U-402', ':foo[%% c] d\n', ':foo[{% c%}] d\n'],
+  ])('%s writes the line comment of %j that 0.1 ended early as a braced comment', (id, source, output) => {
+    const result = upgrade(source)
+    expect(result.output).toBe(output)
+    expect(result.check).toBe('pass')
+    expect(result.records.some((record) => record.entry === id)).toBe(true)
+  })
+
+  it.each([
+    ['U-393', '{+a\\ %% `+}` b+} c\n', '%% `+}` b+} c'],
+    ['U-426', ':foo[%% `c]` d\n', '%% `c]'],
   ])('%s reports the comment of %j from its marker', (id, source, span) => {
     const result = upgrade(source)
     const record = result.records.find((item) => item.entry === id)

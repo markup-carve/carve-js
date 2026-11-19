@@ -36,25 +36,34 @@ function escaped(src: string, at: number): boolean {
  * opener, so those comments become braced comments (C2-I-025), which 0.2 removes in place.
  */
 export function lineComments(ctx: Context): void {
-  const src = ctx.src
   for (const visit of ctx.visits) {
     const node = visit.node
     if (node.type !== 'comment' || node.block !== false || node.pos === undefined) continue
-    const { startOffset: start, endOffset: end } = node.pos
-    if (src.slice(start, start + 2) !== '%%' || inTable(visit)) continue
-    let lead = start
-    while (lead > 0 && (src[lead - 1] === ' ' || src[lead - 1] === '\t') && !escaped(src, lead - 1)) lead--
-    if (src.charCodeAt(start + 2) === 0x25 && (lead === 0 || src[lead - 1] === '\n')) continue
-    const lineStartOrSpace = lead < start || lead === 0 || src[lead - 1] === '\n'
-    const atLineEnd = end >= src.length || src[end] === '\n' || src[end] === '\r'
-    if (atLineEnd && lineStartOrSpace) continue
-    const text = src.slice(start + 2, end)
-    // A code or math span in the text is read before the braced comment can close.
-    if (/%\}|\n|`|\$/u.test(text)) continue
-    // 0.1 dropped the spaces before the comment; a braced comment keeps its neighbors, so they go too.
-    const from = lead === 0 || src[lead - 1] === '\n' ? start : lead
-    change(ctx, hostRow(visit), from, end, `{%${text}%}`, MESSAGE)
+    const found = earlyComment(ctx.src, node.pos.startOffset, node.pos.endOffset, visit)
+    if (found !== null) change(ctx, hostRow(visit), found.from, node.pos.endOffset, `{%${found.text}%}`, MESSAGE)
   }
+}
+
+/** The start of the unescaped spaces and tabs before `at`. */
+function spacesBefore(src: string, at: number): number {
+  let lead = at
+  while (lead > 0 && (src[lead - 1] === ' ' || src[lead - 1] === '\t') && !escaped(src, lead - 1)) lead--
+  return lead
+}
+
+/** Where the braced comment starts and what it holds, for a line comment 0.2 reads otherwise than 0.1. */
+function earlyComment(src: string, start: number, end: number, visit: Visit): { from: number; text: string } | null {
+  if (src.slice(start, start + 2) !== '%%' || inTable(visit)) return null
+  const lead = spacesBefore(src, start)
+  const lineStart = lead === 0 || src[lead - 1] === '\n'
+  if (src.charCodeAt(start + 2) === 0x25 && lineStart) return null
+  const atLineEnd = end >= src.length || src[end] === '\n' || src[end] === '\r'
+  if (atLineEnd && (lead < start || lineStart)) return null
+  const text = src.slice(start + 2, end)
+  // A code or math span in the text is read before the braced comment can close.
+  if (/%\}|\n|`|\$/u.test(text)) return null
+  // 0.1 dropped the spaces before the comment; a braced comment keeps its neighbors, so they go too.
+  return { from: lineStart ? start : lead, text }
 }
 
 const OPENING = new Set(['(', '[', '{', '=', ':', '“', '‘'])
