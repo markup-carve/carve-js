@@ -253,7 +253,8 @@ function exportFile(path: string, display: string, bytes: Uint8Array, args: Pars
   if (strict) process.stderr.write(`carve[render-loss]: ${display}: ${losses.length} render losses under --strict-losses\n`)
   process.stderr.write(lines(display, source, retained, fromAst ? undefined : bytes))
   if (strict) return { ...file, status: 1 }
-  process.stdout.write(result.output)
+  file.status = strictStatus(args, retained)
+  emit(result.output)
   return file
 }
 

@@ -1,4 +1,6 @@
 // `carve render --to markdown|plain|ansi`: the exports of `@markup-carve/carve/export` behind the render command.
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
@@ -31,6 +33,13 @@ describe('render --to', () => {
     const report = cli(['render', '--to', 'plain', '--report-includes', '-'], 'a\n')
     expect(report.status).toBe(0)
     expect(report.stderr).toContain('"file": "<stdin>"')
+  })
+
+  it('writes to --output', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'carve-export-'))
+    const file = join(dir, 'out.md')
+    expect(cli(['render', '--to', 'markdown', '--output', file], '*b*\n').status).toBe(0)
+    expect(readFileSync(file, 'utf8')).toBe('**b**\n')
   })
 
   it('refuses a target it does not know', () => {
